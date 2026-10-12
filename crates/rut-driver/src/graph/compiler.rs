@@ -438,9 +438,13 @@ impl<'a> GraphCompiler<'a> {
             ));
             return None;
         }
+        // the file layout BEFORE the parse: a failed parse's diags
+        // attribute the same way (the file ranges are byte
+        // arithmetic, text aside)
+        let layout = mod_inputs_of(module, files);
         let (ast, d) = parse(&combined, if is_decl { Mode::Decl } else { Mode::Impl });
         if !d.is_empty() {
-            self.diags.extend(d);
+            self.diags.extend(attribute_diags(d, spec, &layout));
             return None;
         }
         // phase-2 plumbing: collect the pkg's mounted module set —
@@ -460,10 +464,9 @@ impl<'a> GraphCompiler<'a> {
         // DEPS' mounted trees (uses are the cross-package door — each
         // segment must be a `pub mod` of the dep, the leaf names a
         // `pub` decl of the walked module). Flat uses skip the walk.
-        if !self.validate_qualified_uses(spec, &ast, &files) {
+        if !self.validate_qualified_uses(spec, &ast, &layout.files) {
             return None;
         }
-        let layout = mod_inputs_of(module, files);
         let uses = uses_of(&ast);
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays
@@ -502,7 +505,7 @@ impl<'a> GraphCompiler<'a> {
             self.requests.push((spec.to_string(), r.clone()));
         }
         if !out.diags.is_empty() || out.program.is_none() {
-            self.diags.extend(out.diags);
+            self.diags.extend(attribute_diags(out.diags, spec, &layout));
             if out.program.is_none() && self.diags.is_empty() {
                 self.diags.push(Diag::new(
                     Span::new(0, 0),
@@ -729,7 +732,7 @@ impl<'a> GraphCompiler<'a> {
             self.requests.push((owner.to_string(), r.clone()));
         }
         if !out.diags.is_empty() || out.program.is_none() {
-            self.diags.extend(out.diags);
+            self.diags.extend(attribute_diags(out.diags, owner, &layout));
             return;
         }
         self.programs[idx] = out.program.expect("checked above");
@@ -788,10 +791,16 @@ impl<'a> GraphCompiler<'a> {
         // parse + bind: the ridden source's uses resolve at their
         // load-time scopes — every foreign scope the mounted binary
         // references is already ensured (the compiled-mount arm ran
-        // them in ledger order before pushing this unit)
+        // them in ledger order before pushing this unit). The layout
+        // exists BEFORE the parse: a failed parse's diags attribute
+        // the same way (byte arithmetic, text aside)
+        let layout = module
+            .as_ref()
+            .map(|m| mod_inputs_of(m, files))
+            .unwrap_or_else(|| rut_lir::check::ModInputs::flat());
         let (ast, d) = parse(&text, Mode::Impl);
         if !d.is_empty() {
-            self.diags.extend(d);
+            self.diags.extend(attribute_diags(d, owner, &layout));
             return;
         }
         let mut uses = uses_of(&ast);
@@ -810,10 +819,6 @@ impl<'a> GraphCompiler<'a> {
             }
         }
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
-        let layout = module
-            .as_ref()
-            .map(|m| mod_inputs_of(m, files))
-            .unwrap_or_else(|| rut_lir::check::ModInputs::flat());
         let out = compile_program_resolved(
             &text,
             Mode::Impl,
@@ -828,7 +833,7 @@ impl<'a> GraphCompiler<'a> {
             self.requests.push((owner.to_string(), r.clone()));
         }
         if !out.diags.is_empty() || out.program.is_none() {
-            self.diags.extend(out.diags);
+            self.diags.extend(attribute_diags(out.diags, owner, &layout));
             return;
         }
         self.programs[idx] = out.program.expect("checked above");
@@ -924,6 +929,47 @@ pub(crate) fn mod_inputs_of(
         inputs.scopes.entry(path.clone()).or_default().parent = parent;
     }
     inputs
+}
+
+/// Tag + rebase a compile's diags at the unit-append boundary: the
+/// spans index the COMBINED text — the pkg's root file, its mod
+/// children, the peer groups concatenated — so each diag reads its
+/// file module off the layout (`ModInputs::file_of`: root file → the
+/// spec, a child → `spec/path`) and rebases its span and label spans
+/// to file-local bytes. A span-0 diag has no position to show and
+/// stays unattributed (the graph-level refusals' shape).
+fn attribute_diags(
+    diags: impl IntoIterator<Item = Diag>,
+    spec: &str,
+    layout: &rut_lir::check::ModInputs,
+) -> Vec<Diag> {
+    diags
+        .into_iter()
+        .map(|mut d| {
+            if d.span.lo == 0 && d.span.hi == 0 {
+                return d;
+            }
+            let path = layout.file_of(d.span.lo);
+            let start = layout
+                .files
+                .iter()
+                .rev()
+                .find(|(s, _)| *s <= d.span.lo)
+                .map(|(s, _)| *s)
+                .unwrap_or(0);
+            let rebase = |s: Span| Span::new(s.lo.saturating_sub(start), s.hi.saturating_sub(start));
+            d.span = rebase(d.span);
+            d.labels = std::mem::take(&mut d.labels)
+                .into_iter()
+                .map(|(s, m)| (rebase(s), m))
+                .collect();
+            if path.is_empty() {
+                d.in_file(spec)
+            } else {
+                d.in_file(format!("{spec}/{path}"))
+            }
+        })
+        .collect()
 }
 
 impl GraphCompiler<'_> {

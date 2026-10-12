@@ -76,9 +76,13 @@ pub(crate) fn fmt(args: &FmtArgs) {
             }
             Err(diags) => {
                 eprintln!("fmt: {} refuses — the source does not parse clean:", f.display());
-                for d in &diags {
-                    eprintln!("  {d}");
-                }
+                let label = f.display().to_string();
+                let mut sources = std::collections::BTreeMap::new();
+                sources.insert(label.clone(), src.as_str());
+                eprint!(
+                    "{}",
+                    rut_lexer::diag::render_diags_grouped(&diags, &sources, Some(&label))
+                );
                 std::process::exit(1);
             }
         }

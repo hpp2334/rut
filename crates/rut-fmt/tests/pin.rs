@@ -6,11 +6,11 @@ use rut_fmt::{format, Style};
 use rut_parser::Mode;
 
 fn fmt(src: &str) -> String {
-    format(src, Mode::Impl, &Style::default()).unwrap_or_else(|ds| panic!("refused: {}", ds[0]))
+    format(src, Mode::Impl, &Style::default()).unwrap_or_else(|ds| panic!("refused: {}", ds[0].msg))
 }
 
 fn fmt_style(src: &str, style: &Style) -> String {
-    format(src, Mode::Impl, style).unwrap_or_else(|ds| panic!("refused: {}", ds[0]))
+    format(src, Mode::Impl, style).unwrap_or_else(|ds| panic!("refused: {}", ds[0].msg))
 }
 
 // ---- comments ----

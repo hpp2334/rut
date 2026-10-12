@@ -261,3 +261,95 @@ fn a_dangling_entry_value_is_a_usage_error() {
     assert!(stderr.contains("--entry"), "{stderr}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+// ---- diagnostics name file, line, and column ----
+
+/// A parse error in the ROOT file renders rustc-style against the
+/// owning pkg's spec: `--> hello:2:13`, the 1-based line and char
+/// column, with the caret line under the offending text.
+#[test]
+fn a_root_parse_error_names_the_file_line_and_column() {
+    let root = scratch("diag-root");
+    let dir = root.join("hello");
+    write(
+        &dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello"}"#,
+    );
+    write(
+        &dir,
+        "mod.rut",
+        "entry fn main() -> nil {\n    let x = @@;\n    return;\n}\n",
+    );
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <broken root>");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--> hello:2:"), "{stderr}");
+    // the caret line: the gutter form, carets under the offending text
+    assert!(
+        stderr.lines().any(|l| l.contains('|') && l.contains('^')),
+        "expected a caret line, got: {stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A parse error inside a mounted `mod` child is labeled with the
+/// child's mod path under the spec (`spec/path`), rebased to the
+/// CHILD's own line numbering.
+#[test]
+fn an_error_in_a_mod_child_names_the_spec_path_label() {
+    let root = scratch("diag-child");
+    let dir = root.join("hello");
+    write(
+        &dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello"}"#,
+    );
+    write(&dir, "mod.rut", "mod layout;\nentry fn main() -> nil { return; }\n");
+    write(
+        &dir,
+        "layout/mod.rut",
+        "pub fn cell() -> i32 {\n    let = 7;\n}\n",
+    );
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <broken mod child>");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--> hello/layout:2:"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A parse error in a DEP is labeled with the dep's own spec — the
+/// walk attributes each unit's diags to their owning pkg, never to
+/// the consumer that pulled it in.
+#[test]
+fn an_error_in_a_dep_names_the_dep_spec_label() {
+    let root = scratch("diag-dep");
+    let hello = root.join("hello");
+    write(
+        &hello,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
+    );
+    write(&hello, "mod.rut", "use calc::{pi};\nentry fn main() -> nil { return; }\n");
+    let calc = root.join("calc");
+    write(
+        &calc,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "calc"}"#,
+    );
+    write(&calc, "mod.rut", "pub fn pi() -> f64 {\n    let = 7;\n}\n");
+    let out = Command::new(rut())
+        .args(["run", hello.to_str().unwrap()])
+        .output()
+        .expect("run rut run <broken dep>");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--> calc:2:"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&root);
+}

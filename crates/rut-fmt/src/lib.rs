@@ -27,6 +27,7 @@ pub mod style;
 pub use comments::CommentRun;
 pub use style::Style;
 
+use rut_lexer::diag::Diag;
 use rut_parser::Mode;
 
 /// Format one rut source.
@@ -35,18 +36,19 @@ use rut_parser::Mode;
 /// (`rut_lexer::lexer::normalize`), and spans index the NORMALIZED text,
 /// so the comment scan and the printer see the same offsets.
 ///
-/// Errors are the frontend's rendered diagnostics (lex + parse): a
-/// source with diags is refused, never guessed at — the formatter's
-/// input is a parsed-clean module.
-pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<String>> {
+/// Errors are the frontend's own diagnostics (lex + parse), spans into
+/// the normalized text: a source with diags is refused, never guessed
+/// at — the formatter's input is a parsed-clean module. The caller
+/// renders them (`rut fmt` labels the group with the real path).
+pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<Diag>> {
     let normalized = rut_lexer::lexer::normalize(src);
     let (toks, diags) = rut_lexer::lexer::lex_mode(&normalized);
     if !diags.is_empty() {
-        return Err(diags.iter().map(|d| d.msg.clone()).collect());
+        return Err(diags);
     }
     let (ast, diags) = rut_parser::parse(&normalized, mode);
     if !diags.is_empty() {
-        return Err(diags.iter().map(|d| d.msg.clone()).collect());
+        return Err(diags);
     }
     let runs = comments::scan_comment_runs(&normalized, &toks);
     let p = printer::P::new(&ast, &normalized, &toks, style, runs);
@@ -64,6 +66,9 @@ pub fn format_or_passthrough(src: &str, mode: Mode, style: &Style) -> String {
         // the refusal path — the formatted text is the ORIGINAL (the
         // caller decides what to do with the diags); where the CLI
         // still needs a String this keeps the file untouched
-        panic!("rut-fmt: refused to format: {}", ds.join(" | "))
+        panic!(
+            "rut-fmt: refused to format: {}",
+            ds.iter().map(|d| d.msg.as_str()).collect::<Vec<_>>().join(" | ")
+        )
     })
 }

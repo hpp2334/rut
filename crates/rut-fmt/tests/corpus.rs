@@ -57,7 +57,11 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
         let out = match rut_fmt::format(&src, mode, &rut_fmt::Style::default()) {
             Ok(o) => o,
             Err(ds) => {
-                failures.push(format!("{}: fmt refused: {}", f.display(), ds.first().cloned().unwrap_or_default()));
+                failures.push(format!(
+                    "{}: fmt refused: {}",
+                    f.display(),
+                    ds.first().map(|d| d.msg.clone()).unwrap_or_default()
+                ));
                 continue;
             }
         };
@@ -73,7 +77,11 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
         let out2 = match rut_fmt::format(&out, mode, &rut_fmt::Style::default()) {
             Ok(o) => o,
             Err(ds) => {
-                failures.push(format!("{}: fmt(fmt) refused: {}", f.display(), ds.first().cloned().unwrap_or_default()));
+                failures.push(format!(
+                    "{}: fmt(fmt) refused: {}",
+                    f.display(),
+                    ds.first().map(|d| d.msg.clone()).unwrap_or_default()
+                ));
                 continue;
             }
         };

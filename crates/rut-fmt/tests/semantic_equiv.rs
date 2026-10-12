@@ -67,12 +67,12 @@ fn probe(name: &str, src: &str) {
     let want = run(src).unwrap_or_else(|e| panic!("{name}: original does not run: {e}"));
     assert!(!want.is_empty(), "{name}: the probe logged nothing");
     let fmted = rut_fmt::format(src, rut_parser::Mode::Impl, &rut_fmt::Style::default())
-        .unwrap_or_else(|ds| panic!("{name}: fmt refused: {}", ds[0]));
+        .unwrap_or_else(|ds| panic!("{name}: fmt refused: {}", ds[0].msg));
     let got = run(&fmted).unwrap_or_else(|e| panic!("{name}: FORMATTED text does not run: {e}"));
     assert_eq!(want, got, "{name}: the VM output changed under formatting");
     // idempotence rides along (cheap here, asserted corpus-wide elsewhere)
     let again = rut_fmt::format(&fmted, rut_parser::Mode::Impl, &rut_fmt::Style::default())
-        .unwrap_or_else(|ds| panic!("{name}: fmt(fmt) refused: {}", ds[0]));
+        .unwrap_or_else(|ds| panic!("{name}: fmt(fmt) refused: {}", ds[0].msg));
     assert_eq!(fmted, again, "{name}: fmt(fmt(x)) != fmt(x)");
 }
 

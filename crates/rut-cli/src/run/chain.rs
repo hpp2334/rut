@@ -52,9 +52,10 @@ pub(crate) fn compile(loaded: &rut_driver::Loaded, symbols: Option<&str>) -> rut
         }
     };
     if !compiled.graph.diags.is_empty() {
-        for d in &compiled.graph.diags {
-            eprintln!("{}", d.msg);
-        }
+        eprint!(
+            "{}",
+            rut_lexer::diag::render_diags_grouped(&compiled.graph.diags, &loaded_sources(loaded), None)
+        );
         std::process::exit(1);
     }
     if compiled.graph.program.is_none() {
@@ -66,4 +67,24 @@ pub(crate) fn compile(loaded: &rut_driver::Loaded, symbols: Option<&str>) -> rut
         std::process::exit(1);
     }
     compiled
+}
+
+/// The diag renderer's file → text map over a loaded world: a pkg's
+/// body text keyed by its spec, each mounted mod child keyed by
+/// `spec/path` — the exact labels the graph compiler stamps on
+/// attributed diags. Loaded pkgs carry no filesystem paths, so the
+/// module NAME is the label there is.
+fn loaded_sources(
+    loaded: &rut_driver::Loaded,
+) -> std::collections::BTreeMap<String, &str> {
+    let mut out = std::collections::BTreeMap::new();
+    for pkg in &loaded.pkgs {
+        if let rut_driver::PkgBody::Source { text, .. } = &pkg.body {
+            out.insert(pkg.spec.clone(), text.as_str());
+        }
+        for m in pkg.mods.values() {
+            out.insert(format!("{}/{}", pkg.spec, m.path), m.text.as_str());
+        }
+    }
+    out
 }
