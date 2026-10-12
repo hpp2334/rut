@@ -16,6 +16,12 @@
 //!   rut_forget(uri)                            drop a closed doc
 //!   rut_hover(uri, line, ch) -> ptr            LSP Hover JSON or null
 //!   rut_complete(uri, line, ch) -> ptr         LSP CompletionItem array
+//!   rut_complete_in(uri, src, line, ch) -> ptr the same array over the
+//!                                              CURRENT text (stored
+//!                                              first — the doc-sync
+//!                                              lane; completion fires
+//!                                              on the keystroke, the
+//!                                              analyze lane debounces)
 //!   rut_definition(uri, line, ch) -> ptr       LSP Location array or null
 //!   rut_type_definition(uri, line, ch) -> ptr  LSP Location array or null
 //!   rut_inlay(uri, sl, sc, el, ec) -> ptr      LSP InlayHint array or null
@@ -215,6 +221,34 @@ pub extern "C" fn rut_hover(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u
 #[no_mangle]
 pub extern "C" fn rut_complete(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
+    complete_stored(uri, line, ch)
+}
+
+/// completions over the document's CURRENT text — the sync twin of
+/// `rut_complete`, `rut_analyze`'s uri+len+text+len shape: the passed
+/// bytes are stored FIRST, so the tiers lex the text the cursor sits
+/// in, dot included. The extension debounces `rut_analyze` (~200 ms)
+/// while completion fires on the keystroke — the stored-only read
+/// raced that window and answered a stale tail (typing `log.` hit the
+/// bare keyword dump when the stored doc still ended at `log`).
+#[no_mangle]
+pub extern "C" fn rut_complete_in(
+    uri_ptr: *const u8,
+    uri_len: usize,
+    src_ptr: *const u8,
+    src_len: usize,
+    line: u32,
+    ch: u32,
+) -> *mut u8 {
+    let uri = unsafe { read_str(uri_ptr, uri_len) };
+    let src = unsafe { read_str(src_ptr, src_len) };
+    state().docs.insert(uri.to_string(), src.to_string());
+    complete_stored(uri, line, ch)
+}
+
+/// the completion query over the stored doc — both completion entries'
+/// body (`rut_complete_in` has already re-stored the text)
+fn complete_stored(uri: &str, line: u32, ch: u32) -> *mut u8 {
     let Some(src) = state().docs.get(uri).cloned() else {
         return envelope(b"[]");
     };
@@ -770,6 +804,51 @@ mod tests {
         let mods = take(rut_complete(uri.as_ptr(), uri.len(), 0, 4));
         let names: Vec<&str> = mods.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
         assert!(names.contains(&"toolkit"), "the module name completes: {names:?}");
+    }
+
+    #[test]
+    fn complete_in_syncs_the_doc_and_the_dot_guard_holds() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        // ctor inference rides the embedded ink surface: `Logger("h")`
+        // types the binding, `log.` lists the impl methods. The stored
+        // doc is STALE on purpose (the tail still short the dot — the
+        // analyze debounce's window): the `_in` entry stores the
+        // CURRENT text first, so the member tier still answers.
+        let stale = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log\n}\n";
+        let fresh = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log.\n}\n";
+        let uri = b"file:///ws/sync.rut";
+        rut_begin();
+        take(rut_analyze(uri.as_ptr(), uri.len(), stale.as_ptr(), stale.len()));
+        rut_begin();
+        let items = take(rut_complete_in(
+            uri.as_ptr(),
+            uri.len(),
+            fresh.as_ptr(),
+            fresh.len(),
+            2,
+            8,
+        ));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        for want in ["new", "debug", "info", "warn", "error"] {
+            assert!(labels.contains(&want), "`{want}` completes through the ctor binding: {labels:?}");
+        }
+        // the bare tier's host fns never dump into a member position
+        assert!(!labels.contains(&"abs"), "no host-fn dump after a dot: {labels:?}");
+
+        // the dot guard: a receiver that is not a name (`probe().` — the
+        // token before the dot is a `)`) answers EMPTY, never the bare
+        // keyword/host-fn dump
+        let guarded = "fn go() -> nil {\n    let x = probe().\n}\n";
+        rut_begin();
+        let none = take(rut_complete_in(
+            uri.as_ptr(),
+            uri.len(),
+            guarded.as_ptr(),
+            guarded.len(),
+            1,
+            20,
+        ));
+        assert!(none.as_array().unwrap().is_empty(), "{none}");
     }
 
     #[test]

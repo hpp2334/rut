@@ -767,3 +767,40 @@ fn use_leaf_through_mods_hovers_and_the_mod_name_is_a_keyword_free_ident() {
     let md = hover_over_dep(doc, "Column", 1).unwrap();
     assert!(md.contains("struct Column"), "{md}");
 }
+
+#[test]
+fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
+    // a bodiless fn's parser span runs to the NEXT decl's end (the
+    // statement-span convention) — the verbatim slice must cut at the
+    // item's OWN `;` (the ModuleLet precedent), or `pub host fn
+    // abs(x: f64) -> f64;` rendered `...f64;pub` in the detail
+    let surf_src = "pub host fn abs(x: f64) -> f64;\npub host fn ceil(x: f64) -> f64;\n";
+    let s = rut_lexer::lexer::normalize(surf_src);
+    let (toks, _) = rut_lexer::lexer::lex(&s);
+    let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Decl);
+    let idx = index(&s, &ast, &toks);
+    // the surface decl span starts at `fn` (`pub` rides before it) — the
+    // old slice was `host fn abs(x: f64) -> f64;\npub`
+    assert_eq!(idx.fns[0].src, "host fn abs(x: f64) -> f64", "no `;pub` artifact");
+    assert_eq!(idx.fns[1].src, "host fn ceil(x: f64) -> f64", "each row cuts at its own `;`");
+}
+
+#[test]
+fn host_fn_hover_via_the_calc_surface_has_no_next_decl_artifact() {
+    // the embedded calc surface's `pub host fn abs(x: f64) -> f64;`
+    // used to render `...f64;pub` (the span ran into the next decl's
+    // `pub`) — the hover markdown carries the clean signature only
+    let doc = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
+    let s = rut_lexer::lexer::normalize(doc);
+    let (toks, _) = rut_lexer::lexer::lex(&s);
+    let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
+    let di = index(&s, &ast, &toks);
+    let std = crate::std_surface::indexes();
+    let mut chain: Vec<&DefIndex> = vec![&di];
+    chain.extend(std.iter());
+    let pos = s.find("abs(").unwrap() as u32;
+    let md = hover(&chain, &toks, &ast, pos).expect("abs hovers through the calc surface").markdown;
+    assert!(md.contains("host fn abs(x: f64) -> f64"), "{md}");
+    assert!(!md.contains(";pub"), "the next-decl artifact leaked: {md}");
+}
+

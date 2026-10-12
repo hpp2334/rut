@@ -12,7 +12,8 @@ use rut_ast::ast::*;
 use rut_lexer::token::IntSuffix;
 
 use super::bindings::{elem_ty, resolve, Binding};
-use super::types::{head_of_ty, ty_src, DefIndex, FnDef, LetDef};
+use super::lookup::find_ty;
+use super::types::{head_of_ty, ty_src, DefIndex, FnDef, LetDef, TyForm};
 
 /// the type an expression suggests, as display text
 pub(crate) fn expr_ty(
@@ -122,7 +123,10 @@ fn path_ty(
 }
 
 /// `f(..)` — a free fn's declared ret, unique match only (ambiguity is
-/// a miss, never a wrong type)
+/// a miss, never a wrong type); the constructor-call form — a single
+/// CAPITALIZED path segment the index knows as a class/struct — is the
+/// type itself (`let log = Logger("hello");` types `log` as `Logger`,
+/// the positional shape of the `Type::new(..)` arm below)
 fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: NodeHandle<AnyExpr>) -> Option<String> {
     if let ExprKind::Path { segs } = ast.expr(callee) {
         if segs.len() == 1 {
@@ -133,6 +137,20 @@ fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: NodeHandle<AnyExpr>) -> Option
                 .collect();
             if let [one] = hits.as_slice() {
                 return one.ret.clone();
+            }
+            // `Logger(..)` — the constructor call. Only an INDEXED
+            // class/struct answers: a capitalized name with no type
+            // head behind it (an enum, a plain unknown) stays a miss —
+            // never wrong text. The free-fn match keeps precedence.
+            if is_cap(name) {
+                if let Some((_, ty)) = find_ty(idxs, name) {
+                    if matches!(
+                        ty.form,
+                        TyForm::Class | TyForm::Struct | TyForm::HostStruct
+                    ) {
+                        return Some(name.to_string());
+                    }
+                }
             }
         }
         // `Type::new(..)` — the static constructor call (the `::`-law

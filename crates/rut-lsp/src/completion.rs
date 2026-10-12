@@ -109,6 +109,16 @@ pub fn complete(
         // context falls through to the tiers below
     }
     let Some((recv, prefix)) = recv_before(toks, pos) else {
+        // the dot guard: the request sits after a `.` the token tiers
+        // could not parse a `recv.` pair out of (the receiver's token is
+        // not a name — `f().`, `]` — or the text before the cursor ends
+        // `.` / `.` + a half-typed member). That is a MEMBER request
+        // with an unresolved receiver: a miss is an empty list, never
+        // the bare keyword/host-fn dump. Text-backed, so a stale sync
+        // (the tail still short the dot) cannot route around it.
+        if dot_context_before(src, pos) {
+            return Vec::new();
+        }
         let used = used_ifaces(ast);
         let mut out = bare_completions(idxs, &used);
         out.extend(auto_import_completions(idxs, ast, toks, pos, src));
@@ -145,6 +155,23 @@ fn recv_before(toks: &[Token], pos: u32) -> Option<(String, String)> {
         _ => return None,
     };
     Some((recv, prefix))
+}
+
+/// the dot context, text-backed: the source before `pos` ends with a
+/// `.` — right against the cursor (`recv.⏐`) or under one trailing
+/// identifier run (`recv.na⏐`). The token tiers' backstop: when the
+/// lexed stream carries no parsable `recv.` pair before the cursor (a
+/// receiver that is not a name, a snapshot whose tail is short the
+/// dot), this still tells a member request from a bare one. `pos` past
+/// the source (a stale snapshot's tail) clamps to the end.
+fn dot_context_before(src: &str, pos: u32) -> bool {
+    let end = (pos as usize).min(src.len());
+    let before = src[..end].trim_end();
+    if before.ends_with('.') {
+        return true;
+    }
+    let stripped = before.trim_end_matches(|c: char| c.is_ascii_alphanumeric() || c == '_');
+    before.len() > stripped.len() && stripped.ends_with('.')
 }
 
 /// Members of the receiver's type: on an interface receiver, exactly
@@ -1542,5 +1569,44 @@ entry fn main() -> nil {
             import_item(&items, "Vec").is_none(),
             "the already-imported name must not re-offer: {items:?}"
         );
+    }
+
+    // ---- constructor-call inference + the dot guard ----
+
+    #[test]
+    fn constructor_call_binding_completes_the_ink_surface() {
+        // `let log = Logger("h")` — the constructor-call form types the
+        // binding from the indexed class (the embedded ink surface), so
+        // `log.` lists the impl methods (new/debug/info/warn/error/log)
+        let doc = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log.\n}\n";
+        let items = complete_over_std(doc, "log.");
+        let ls = labels(&items);
+        for want in ["new", "debug", "info", "warn", "error"] {
+            assert!(ls.contains(&want), "`{want}` completes through the ctor binding: {ls:?}");
+        }
+        // the bare tier's host fns never dump into a member position
+        assert!(!ls.contains(&"abs"), "no host-fn dump after a dot: {ls:?}");
+    }
+
+    #[test]
+    fn dot_guard_unknown_receiver_is_empty() {
+        // `someUnknown.` — the receiver resolves to nothing: an EMPTY
+        // list, never the keyword/host-fn dump (a miss is an empty list)
+        let doc = "fn go() -> nil {\n    someUnknown.\n}\n";
+        let items = complete_over_std(doc, "someUnknown.");
+        assert!(
+            items.is_empty(),
+            "an unresolved receiver completes nothing: {:?}",
+            labels(&items)
+        );
+    }
+
+    #[test]
+    fn dot_guard_non_name_receiver_is_empty() {
+        // `probe().` — the token before the dot is not a name the tiers
+        // understand; the text-backed dot guard keeps the bare tier out
+        let doc = "fn go() -> nil {\n    let x = probe().\n}\n";
+        let items = complete_after(doc, "probe().");
+        assert!(items.is_empty(), "{:?}", labels(&items));
     }
 }

@@ -543,7 +543,11 @@ function registerCompletion(rut: RutWasm): vscode.Disposable {
         doc: vscode.TextDocument,
         position: vscode.Position
       ): vscode.CompletionItem[] {
-        return rut.complete(doc.uri.toString(), position.line, position.character).map(toCompletionItem);
+        // the CURRENT text rides the request (the doc-sync entry):
+        // completion fires on the keystroke while the analyze lane
+        // debounces ~200 ms — the stored doc may still be short the `.`
+        // this very request is about
+        return rut.complete(doc.uri.toString(), position.line, position.character, doc.getText()).map(toCompletionItem);
       },
     },
     '.', // trigger: member completion after a receiver dot

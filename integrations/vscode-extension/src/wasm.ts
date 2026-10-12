@@ -163,6 +163,9 @@ interface RutExports {
   rut_forget(uriPtr: number, uriLen: number): void;
   rut_hover(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_complete(uriPtr: number, uriLen: number, line: number, ch: number): number;
+  /// the doc-sync completion entry: the CURRENT text is stored before
+  /// the tiers run (completion fires on the keystroke, analyze debounces)
+  rut_complete_in(uriPtr: number, uriLen: number, srcPtr: number, srcLen: number, line: number, ch: number): number;
   rut_definition(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_type_definition(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_inlay(
@@ -240,9 +243,19 @@ export class RutWasm {
     });
   }
 
-  complete(uri: string, line: number, character: number): LspCompletionItem[] {
+  /// completions at an LSP position. `src` — the document's CURRENT
+  /// text — rides the doc-sync entry (`rut_complete_in`): the bytes are
+  /// stored before the tiers run, so the `.` the user just typed is in
+  /// the text they lex even while the analyze debounce is pending.
+  /// Without `src`, or against an older artifact without the entry, the
+  /// stored read (`rut_complete`) answers — backward compatible both ways.
+  complete(uri: string, line: number, character: number, src?: string): LspCompletionItem[] {
     return this.call(() => {
       const [u, ul] = this.put(uri);
+      if (src !== undefined && typeof this.e.rut_complete_in === 'function') {
+        const [s, sl] = this.put(src);
+        return this.e.rut_complete_in(u, ul, s, sl, line, character);
+      }
       return this.e.rut_complete(u, ul, line, character);
     });
   }

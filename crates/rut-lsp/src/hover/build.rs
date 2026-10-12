@@ -45,11 +45,20 @@ fn doc_before(src: &str, lo: u32) -> Vec<String> {
 }
 
 /// verbatim signature: source up to (not including) the body; bodiless
-/// decls keep their span minus the trailing `;`
-fn sig_src(src: &str, ast: &Ast, span: Span, body: Option<NodeHandle<BlockNode>>) -> String {
+/// decls cut at the item's OWN `;`. The parser's statement span runs to
+/// the NEXT token (`pop_fn` records the following decl's start), so an
+/// uncut slice renders the trailing `;pub`/next-decl artifact — VS Code
+/// flattens `pub host fn abs(x: f64) -> f64;\npub` into `...;pub`. The
+/// ModuleLet cut below is the precedent; tokens are in source order, so
+/// the first `;` at/after the span's start is the item's own terminator.
+fn sig_src(src: &str, ast: &Ast, toks: &[Token], span: Span, body: Option<NodeHandle<BlockNode>>) -> String {
     let hi = match body {
         Some(b) => ast.span(b.id()).lo,
-        None => span.hi,
+        None => toks
+            .iter()
+            .find(|t| t.tok == Tok::Semi && t.span.lo >= span.lo && t.span.hi <= span.hi)
+            .map(|t| t.span.hi)
+            .unwrap_or(span.hi),
     };
     src[span.lo as usize..hi as usize]
         .trim_end()
@@ -92,7 +101,7 @@ fn members_of(src: &str, ast: &Ast, toks: &[Token], methods: &[NodeHandle<Method
             if d.is_async {
                 pre.push_str("async ");
             }
-            let sig = format!("{pre}{}", sig_src(src, ast, sp, d.body));
+            let sig = format!("{pre}{}", sig_src(src, ast, toks, sp, d.body));
             let name = ast.name(d.name);
             member(src, toks, name, sig, d.ret.map(|r| ty_src(ast, r)), sp)
         })
@@ -335,7 +344,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     idx.fns.push(FnDef {
                         name: name.to_string(),
                         name_span: ident_span(toks, sp, name),
-                        src: sig_src(src, ast, sp, d.body),
+                        src: sig_src(src, ast, toks, sp, d.body),
                         ret: d.ret.map(|r| ty_src(ast, r)),
                         params: param_names(ast, &d.params),
                         doc: doc_before(src, sp.lo),
@@ -350,7 +359,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 idx.fns.push(FnDef {
                     name: ast.name(d.name).to_string(),
                     name_span: ident_span(toks, span, ast.name(d.name)),
-                    src: sig_src(src, ast, span, Some(d.body)),
+                    src: sig_src(src, ast, toks, span, Some(d.body)),
                     ret: d.ret.map(|r| ty_src(ast, r)),
                     params: param_names(ast, &d.params),
                     doc: doc_before(src, span.lo),
@@ -369,7 +378,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 idx.fns.push(FnDef {
                     name: ast.name(*name).to_string(),
                     name_span: ident_span(toks, span, ast.name(*name)),
-                    src: sig_src(src, ast, span, None),
+                    src: sig_src(src, ast, toks, span, None),
                     ret: None,
                     params: param_names(ast, params),
                     doc: doc_before(src, span.lo),

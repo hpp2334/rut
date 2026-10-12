@@ -281,6 +281,47 @@ async function main() {
     smokes++;
   }
 
+  // ---- member completion through a CONSTRUCTOR binding, with the
+  // completion lane's doc sync + dot guard (the completion-correctness
+  // phase): `let log = Logger("h")` types the binding from the ink
+  // surface's class (the ctor-call inference), `log.` offers the impl
+  // methods — and NEVER the bare tier's keyword/host-fn dump. The
+  // CURRENT text rides the request (rut.complete's src argument →
+  // rut_complete_in), so the dot is fresh without the analyze debounce. ----
+  {
+    const uri = 'file:///ws/e2e-ctor-completion.rut';
+    // the member NAMES after each dot keep the doc parsing clean; the
+    // request cursor sits right after the dot (prefix empty — the full
+    // member list), exactly the keystroke moment in the editor
+    const src = [
+      'fn go() -> nil {',
+      '    let log = Logger("h");',
+      '    log.info;',
+      '    someUnknown.x;',
+      '}',
+      '',
+    ].join('\n');
+    const a = rut.analyze(uri, src);
+    if (a.diags.length !== 0) {
+      bad.push(`ctor-completion probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
+    }
+    const [cline, cch] = posOf(src, 'log.'); // cursor right after the dot
+    const items = rut.complete(uri, cline, cch + 4, src);
+    const labels = items.map((i) => i.label);
+    for (const want of ['new', 'debug', 'info', 'warn', 'error']) {
+      if (!labels.includes(want)) bad.push(`ctor binding completion lacks '${want}' (got ${labels.join(', ')})`);
+    }
+    if (labels.includes('abs')) bad.push(`ctor binding completion leaked the host fn 'abs' (got ${labels.join(', ')})`);
+    // the dot guard: an unresolved receiver answers EMPTY, never the
+    // keyword table
+    const [uline, uch] = posOf(src, 'someUnknown.');
+    const guarded = rut.complete(uri, uline, uch + 'someUnknown.'.length, src);
+    if (guarded.length !== 0) {
+      bad.push(`dot guard failed: 'someUnknown.' completed ${guarded.length} item(s): ${guarded.slice(0, 8).map((i) => i.label).join(', ')}`);
+    }
+    smokes++;
+  }
+
   // ---- phase 1 (lsp-features): field DECL hover — hovering `item`
   // inside `struct Slot { item: ?Circle; }` answers with the field's
   // decl and its owning struct (the decl layer's token-recovered span) ----
@@ -1155,6 +1196,34 @@ async function main() {
     assert.ok(segHover && segHover.contents.value.includes('layout/mod.rut'),
       `segment hover missed: ${segHover && JSON.stringify(segHover.contents.value.slice(0, 80))}`);
     smokes++;
+
+    // ---- the completion lane's doc-sync ABI (rut_complete_in): the
+    // CURRENT text is stored BEFORE the tiers run, so a stale stored doc
+    // (the tail still short the dot — the analyze debounce's window)
+    // cannot mask the member tier, and the dot guard holds through the
+    // raw entry (an unresolved receiver answers [], never the dump). ----
+    assert.strictEqual(typeof e.rut_complete_in, 'function',
+      'rut_complete_in missing from the artifact — rebuild (npm run build:wasm)');
+    const syncUri = 'file:///ws/e2e-sync.rut';
+    const staleDoc = 'fn go() -> nil {\n    let log = Logger("h");\n    log\n}\n';
+    const freshDoc = 'fn go() -> nil {\n    let log = Logger("h");\n    log.\n}\n';
+    e.rut_begin();
+    take(e.rut_analyze(...put(syncUri), ...put(staleDoc)));
+    e.rut_begin();
+    const synced = take(e.rut_complete_in(...put(syncUri), ...put(freshDoc), 2, 8));
+    const syncedLabels = synced.map((i) => i.label);
+    for (const want of ['new', 'debug', 'info', 'warn', 'error']) {
+      assert.ok(syncedLabels.includes(want),
+        `doc-sync completion lacks '${want}' over the stale stored doc (got ${syncedLabels.join(', ')})`);
+    }
+    assert.ok(!syncedLabels.includes('abs'),
+      `doc-sync completion leaked the host fn 'abs' (got ${syncedLabels.join(', ')})`);
+    // the dot guard through the raw entry: `probe().` — [] exactly
+    const guardDoc = 'fn go() -> nil {\n    let x = probe().\n}\n';
+    e.rut_begin();
+    const guarded = take(e.rut_complete_in(...put(syncUri), ...put(guardDoc), 1, 20));
+    assert.deepStrictEqual(guarded, [], `dot guard through the raw entry: ${JSON.stringify(guarded)}`);
+    smokes++;
   }
 
   if (bad.length) {
@@ -1162,12 +1231,13 @@ async function main() {
     process.exit(1);
   }
   console.log(`e2e-wasm: PASS — ${files.length} corpus files, 0 false diagnostics, ${symbols} symbols, ` +
-    `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/postfix-removal/` +
+    `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/ctor-completion+dot-guard/postfix-removal/` +
     `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover/` +
     `def-within/def-cross/def-std/typeDefinition/` +
     `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
     `refs-shadow/refs-cross/sighelp/` +
-    `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface) ` +
+    `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface/` +
+    `complete-in-doc-sync) ` +
     `through bin/rut-lsp.wasm`);
 }
 
