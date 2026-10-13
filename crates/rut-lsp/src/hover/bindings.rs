@@ -341,6 +341,31 @@ pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle
             out.push(*scrut);
             arm_bodies(ast, arms, &mut out);
         }
+        ExprKind::If { cond, then, els } => {
+            out.push(*cond);
+            out.push((*then).into());
+            // `else if` links hold if STATEMENTS (the shared ElseBranch):
+            // flattened — each link's condition and block join the child
+            // list so the walk descends uniformly (blocks are expression
+            // nodes; the walker's Block arm resumes through them)
+            let mut link = *els;
+            while let Some(e) = link {
+                match e {
+                    ElseBranch::Block(b) => {
+                        out.push(b.into());
+                        break;
+                    }
+                    ElseBranch::If(h) => match ast.kind(h.id()) {
+                        Kind::Stmt(StmtKind::If { cond, then, els: next }) => {
+                            out.push(*cond);
+                            out.push((*then).into());
+                            link = *next;
+                        }
+                        _ => break,
+                    },
+                }
+            }
+        }
         ExprKind::Is { expr, .. } | ExprKind::Cast { expr, .. } => out.push(*expr),
         // `Block`/`Lambda` never reach here (the walker handles them);
         // literals and paths have no children. FStr holes are raw token

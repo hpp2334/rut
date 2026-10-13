@@ -77,7 +77,8 @@ fn statement_let_with_value_tail_afterwards() {
 #[test]
 fn if_branches_carry_tails_as_blocks() {
     // statement-if with tail arms: the arms are BLOCKS with tails —
-    // there is no `ExprKind::If` (the if atom is phase 2)
+    // the statement-leading if is the statement grammar's (the if ATOM
+    // claims only expression positions)
     let (ast, body) = fn_body("fn f(c: bool) -> i32 { if (c) { 1 } else { 2 } }");
     assert_eq!(ast.block(body).len(), 1, "the if is the body's one statement");
     let Kind::Stmt(StmtKind::If { then, els, .. }) = ast.kind(ast.block(body)[0].id()) else {

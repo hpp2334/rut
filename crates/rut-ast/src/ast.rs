@@ -628,6 +628,12 @@ pub enum ExprKind {
     /// type is not a value.
     ArrayRepeat { value: NodeHandle<AnyExpr>, count: NodeHandle<AnyExpr> },
     WhenExpr { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
+    /// `if (cond) { then } else { els }` as an EXPRESSION — the
+    /// statement-if's own field set (`else if` chains hold if STATEMENT
+    /// nodes, `ElseBranch::If`, exactly as the statement form does).
+    /// `if` atoms parse beside `when`: the `(` must follow, the
+    /// statement-leading `if` is claimed by the statement grammar first.
+    If { cond: NodeHandle<AnyExpr>, then: NodeHandle<BlockNode>, els: Option<ElseBranch> },
     Await { expr: NodeHandle<AnyExpr> },
     /// `async { .. }` — the async block, the async primitive (v20): ONE
     /// expression form, keyword before a block. Evaluating it MINTS the

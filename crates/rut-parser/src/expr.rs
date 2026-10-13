@@ -16,7 +16,7 @@ use rut_lexer::token::{FPart, FStrTok, Tok, Token};
 use rut_core::sym;
 use crate::frame::{Done, Frame, Step};
 use crate::item::ParamsFrame;
-use crate::stmt::{BlockFrame, WhenFrame};
+use crate::stmt::{BlockFrame, IfFrame, WhenFrame};
 use crate::ty::TypeFrame;
 use crate::{is_reserved_kw, Parser, EXPR_MAX};
 
@@ -431,6 +431,15 @@ impl AtomFrame {
             Tok::Ident(name) => {
                 if name == "when" && matches!(p.peek(1).tok, Tok::LParen) {
                     return Step::Push(Frame::When(WhenFrame::new()));
+                }
+                // `if (cond) { .. }` — the if ATOM (the expression form):
+                // same guard law as `when` (parens required), and the
+                // statement-leading `if` never reaches here (StmtFrame
+                // dispatches it before the atoms). The frame is the
+                // statement grammar's own IfFrame — the popped if node's
+                // field set IS the expression's.
+                if name == "if" && matches!(p.peek(1).tok, Tok::LParen) {
+                    return Step::Push(Frame::If(IfFrame::new()));
                 }
                 // `nil` — the empty value (pointer null; v1.2:
                 // the `nil` type's own value as well)
@@ -923,6 +932,25 @@ impl AtomFrame {
                 let node = p.expr(ExprKind::WhenExpr { scrut, arms }, self.lo.to(p.span()));
                 self.finish(p, node)
             }
+            Done::If(h) => {
+                debug_assert!(matches!(self.stage, AtomStage::Primary));
+                // the if frame minted the statement node; its field set
+                // IS the expression's (span included — the statement
+                // node's own span covers `if` .. last `}`), so extract
+                // and re-mint as an expression. An `else if` chain stays
+                // `ElseBranch::If` — statement handles all the way down,
+                // exactly like the statement form.
+                let (sp, kind) = {
+                    let n = &p.nodes[h.id().0 as usize];
+                    (n.span, n.kind.clone())
+                };
+                let (cond, then, els) = match kind {
+                    Kind::Stmt(StmtKind::If { cond, then, els }) => (cond, then, els),
+                    _ => unreachable!("the if frame minted an if statement"),
+                };
+                let node = p.expr(ExprKind::If { cond, then, els }, sp);
+                self.finish(p, node)
+            }
             Done::Failed => match self.stage {
                 AtomStage::Paren { first, .. } => {
                     // v1: a failed first element re-enters the loop top;
@@ -945,7 +973,7 @@ impl AtomFrame {
                 }
                 _ => Step::Pop(Done::Failed),
             },
-            _ => unreachable!("atom frame receives expressions, types, or when-parts"),
+            _ => unreachable!("atom frame receives expressions, types, or when/if parts"),
         }
     }
 }

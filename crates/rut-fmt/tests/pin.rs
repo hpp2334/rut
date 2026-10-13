@@ -251,6 +251,48 @@ fn statement_if_with_tail_arms_prints_multiline() {
     );
 }
 
+// ---- if expressions (the atom beside `when`) ----
+
+#[test]
+fn if_expression_in_let_prints_like_the_statement_spelling() {
+    // one spelling for both forms; the arms ride the let's flat window
+    assert_eq!(
+        fmt("fn f(c: bool) -> i32 { let x = if (c) { 1 } else { 2 }; x }"),
+        "fn f(c: bool) -> i32 {\n    let x = if (c) { 1 } else { 2 };\n    x\n}\n"
+    );
+}
+
+#[test]
+fn if_expression_chain_and_operand_shapes() {
+    // the else-if chain keeps the statement grammar's spelling
+    assert_eq!(
+        fmt("fn f(a: bool, b: bool) -> i32 { let x = if (a) { 1 } else if (b) { 2 } else { 3 }; x }"),
+        "fn f(a: bool, b: bool) -> i32 {\n    let x = if (a) { 1 } else if (b) { 2 } else { 3 };\n    x\n}\n"
+    );
+    // a binary operand needs no parens (prefix form, no ambiguity)
+    assert_eq!(
+        fmt("fn f(c: bool) -> i32 { let x = 1 + if (c) { 2 } else { 3 }; x }"),
+        "fn f(c: bool) -> i32 {\n    let x = 1 + if (c) { 2 } else { 3 };\n    x\n}\n"
+    );
+    // as a call argument the argument list's own break law applies
+    assert_eq!(
+        fmt("fn g(v: i32) -> i32 { v } fn f(c: bool) -> i32 { g(if (c) { 1 } else { 2 }) }"),
+        "fn g(v: i32) -> i32 {\n    v\n}\nfn f(c: bool) -> i32 {\n    g(\n        if (c) {\n            1\n        } else {\n            2\n        },\n    )\n}\n"
+    );
+}
+
+#[test]
+fn statement_if_trailing_semicolon_normalizes_away() {
+    // the `;` after the statement form only ever discards; the printer
+    // prints statement-ifs without one (round-trip stable)
+    let once = fmt("fn f(c: bool) -> i32 { if (c) { 1 } else { 2 }; 0 }");
+    assert_eq!(
+        once,
+        "fn f(c: bool) -> i32 {\n    if (c) {\n        1\n    } else {\n        2\n    }\n    0\n}\n"
+    );
+    assert_eq!(fmt(&once), once, "idempotent");
+}
+
 // ---- refusal ----
 
 #[test]

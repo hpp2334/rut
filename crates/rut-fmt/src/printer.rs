@@ -1518,7 +1518,7 @@ impl<'a> P<'a> {
 
     fn expr_flat(&self, h: NodeHandle<AnyExpr>) -> bool {
         match self.a.expr(h) {
-            ExprKind::Block { .. } | ExprKind::WhenExpr { .. } => false,
+            ExprKind::Block { .. } | ExprKind::WhenExpr { .. } | ExprKind::If { .. } => false,
             ExprKind::Lambda { body, .. } => self.a.narrow_block(*body).is_none(),
             _ => true,
         }
@@ -1850,6 +1850,12 @@ impl<'a> P<'a> {
                 self.text(")");
                 self.sp();
                 self.arms(&arms, self.a.span(h.id()));
+            }
+            ExprKind::If { cond, then, els } => {
+                // the expression form prints like the statement form (one
+                // spelling); `else if` links hold if STATEMENTS — the
+                // same recursion if_stmt already speaks
+                self.if_stmt(cond, then, els);
             }
             ExprKind::Await { expr } => {
                 self.text("await ");

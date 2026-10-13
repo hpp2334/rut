@@ -1157,6 +1157,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     kids(a.id(), out, self);
                 }
             }
+            // the if ATOM: cond + branch blocks; an `else if` link is an
+            // if STATEMENT — the statement walk resumes through it
+            Kind::Expr(ExprKind::If { cond, then, els }) => {
+                kids(cond.id(), out, self);
+                kids(then.id(), out, self);
+                if let Some(e) = els {
+                    match e {
+                        ElseBranch::If(h) => kids(h.id(), out, self),
+                        ElseBranch::Block(h) => kids(h.id(), out, self),
+                    }
+                }
+            }
         }
     }
 }
@@ -1346,6 +1358,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 walk(scrut.id(), inside, self, assigned, captured);
                 for a in arms {
                     walk(a.id(), inside, self, assigned, captured);
+                }
+            }
+            // the if ATOM: cond + branch blocks with the SAME `inside`
+            // law (a closure in an arm captures exactly like a
+            // statement's); an `else if` link is an if STATEMENT — the
+            // statement walk resumes through it
+            Kind::Expr(ExprKind::If { cond, then, els }) => {
+                walk(cond.id(), inside, self, assigned, captured);
+                walk(then.id(), inside, self, assigned, captured);
+                if let Some(e) = els {
+                    match e {
+                        ElseBranch::If(h) => walk(h.id(), inside, self, assigned, captured),
+                        ElseBranch::Block(h) => walk(h.id(), inside, self, assigned, captured),
+                    }
                 }
             }
         }

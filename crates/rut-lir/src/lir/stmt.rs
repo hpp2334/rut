@@ -82,7 +82,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// The tail-position `if` STATEMENT as the block's value — the
     /// statement-if with block tails reads as a value when its arms
     /// produce one (the `fact` shape; the if ATOM in expression
-    /// position is phase 2). compile_when's arm shape: producing arms
+    /// position is compile_if_expr's route). compile_when's arm shape:
+    /// producing arms
     /// agree on the type and spill into the shared out-register before
     /// their jump; a TERMINATING arm contributes no type (its `return`
     /// is the answer — the `!` coercion), so `if (c) { return a; }
@@ -195,6 +196,147 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         self.bind(l_end);
         Ok(value)
+    }
+
+    /// The if ATOM — the EXPRESSION form (`let a = if (c) { x } else { y };`).
+    /// compile_when minus the pattern tests: cond (bool hint) → Br, the
+    /// arms compile through the expression funnel (blocks are value
+    /// blocks; an `else if` chain recurses into the nested if STATEMENT's
+    /// field set). Producing arms agree on the type and spill into a
+    /// shared out-register before their jump; a TERMINATING arm
+    /// contributes nothing (the `!` coercion — its `return` is the
+    /// answer, and an all-arms-`return` chain contributes `None`); no
+    /// `else` types the whole `nil`. A producing result moves into a
+    /// fresh out-register after `l_end` (compile_when's ending — the
+    /// "value in last_reg" convention for the ENCLOSING expression).
+    /// `self.terminated` is never WRITTEN (the expression form is not a
+    /// statement terminator — the statement-tail route is
+    /// compile_if_value's law); each arm's verdict is snapshot/read/
+    /// restored so an inner `return` neither leaks out nor silences the
+    /// sibling arm's own value. `Ok(None)`: the if produces no value on
+    /// any path (both arms terminated).
+    pub(crate) fn compile_if_expr(
+        &mut self,
+        cond: NodeHandle<AnyExpr>,
+        then: NodeHandle<BlockNode>,
+        els: Option<ElseBranch>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<Option<TypeId>> {
+        self.compile_expr(cond, Some(TY_BOOL))?;
+        let cond_reg = self.last_reg;
+        let l_then = self.new_label();
+        let l_else = self.new_label();
+        let l_end = self.new_label();
+        self.br(cond_reg, l_then, l_else);
+        self.bind(l_then);
+        // per-arm snapshot/clear: the arm's `return` verdict is its own
+        let saved = self.terminated;
+        self.terminated = false;
+        let raw1 = self.compile_expr(then.into(), expected)?;
+        let r1 = self.last_reg;
+        let then_term = self.terminated;
+        self.terminated = false;
+        // the then arm: a terminating arm contributes nothing (the `!`
+        // coercion); a completing one spills its value into the shared
+        // out slot before the jump
+        let t1 = if then_term { None } else { Some(raw1) };
+        let out = match t1 {
+            Some(t) if t != TY_NIL => {
+                let o = self.new_reg(t);
+                self.mov_slot(o, r1, t, sp.lo);
+                Some(o)
+            }
+            _ => None,
+        };
+        self.jmp(l_end);
+        self.bind(l_else);
+        let t2 = match els {
+            Some(ElseBranch::Block(b)) => {
+                let t = self.compile_expr(b.into(), expected)?;
+                let term = self.terminated;
+                if term { None } else { Some(t) }
+            }
+            // an else-if chain: the nested if STATEMENT is the else arm;
+            // its own all-arms-terminated verdict IS the contribution
+            // (None — the chain's `return`s are the answers)
+            Some(ElseBranch::If(h)) => {
+                let sp2 = self.ctx.ast.span(h.id());
+                match self.ctx.ast.stmt(h.into()).clone() {
+                    StmtKind::If { cond, then, els } => {
+                        self.compile_if_expr(cond, then, els, expected, sp2)?
+                    }
+                    _ => unreachable!("ElseBranch::If is an if statement"),
+                }
+            }
+            // no `else`: the implicit else arm is the nil value
+            None => Some(TY_NIL),
+        };
+        self.terminated = saved;
+        // the else arm's value register (producing cases; the merge only
+        // reads it when a value was actually produced)
+        let r2 = self.last_reg;
+        // the merged value: producing arms agree on the type (nil arms
+        // produce the nil value); a terminating arm contributes nothing
+        let value: Option<TypeId> = match (t1, t2) {
+            (Some(a), Some(b)) => {
+                if a != b {
+                    let esp = match els {
+                        Some(ElseBranch::Block(b)) => self.ctx.ast.span(b.id()),
+                        Some(ElseBranch::If(h)) => self.ctx.ast.span(h.id()),
+                        None => sp,
+                    };
+                    self.ctx.err(esp, format!(
+                        "`if` arms must agree: `{}` vs `{}`",
+                        self.ctx.type_name(a),
+                        self.ctx.type_name(b)
+                    ));
+                }
+                if a != TY_NIL {
+                    if let Some(o) = out {
+                        if a == b {
+                            self.mov_slot(o, r2, b, sp.lo);
+                        }
+                        // the if's value is the shared out slot
+                        // (compile_when's "value in last_reg" convention)
+                        self.last_reg = o;
+                    }
+                }
+                Some(a)
+            }
+            (Some(a), None) => {
+                // the else arm diverges — the then-value is the merge's
+                // value (its spill already happened before the jump)
+                if a != TY_NIL {
+                    if let Some(o) = out {
+                        self.last_reg = o;
+                    }
+                }
+                Some(a)
+            }
+            (None, Some(b)) => {
+                // the then arm diverges — the else-value is the merge's
+                if b != TY_NIL {
+                    let o = self.new_reg(b);
+                    self.mov_slot(o, r2, b, sp.lo);
+                    self.last_reg = o;
+                }
+                Some(b)
+            }
+            (None, None) => None,
+        };
+        self.bind(l_end);
+        // fresh out-register so the convention holds for the enclosing
+        // expression (the shared slot was minted before the arms ran)
+        match value {
+            Some(t) if t != TY_NIL => {
+                let rr = self.last_reg;
+                let fresh = self.new_reg(t);
+                self.mov_slot(fresh, rr, t, sp.lo);
+                Ok(value)
+            }
+            _ => Ok(value),
+        }
     }
 
     /// The nil-context wrapper: statements in scope, an explicit tail
@@ -702,8 +844,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// The subtree walk over arm bodies and expressions: only
     /// statement-bearing shapes can carry a `break` — block
-    /// expressions and `when` arms; a lambda or `async {}` body is its
-    /// own fn frame and stops the walk.
+    /// expressions, `when` arms, and the if ATOM's branch blocks; a
+    /// lambda or `async {}` body is its own fn frame and stops the walk.
     fn binds_break_in_expr(&self, node: NodeId, depth: u32) -> bool {
         match self.ctx.ast.kind(node) {
             Kind::Expr(ExprKind::Block { stmts, tail }) => {
@@ -713,6 +855,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             Kind::Expr(ExprKind::WhenExpr { arms, .. }) => arms
                 .iter()
                 .any(|a| self.binds_break_in_arm(a.id(), depth)),
+            // the if ATOM: the branch blocks are statement bearers (the
+            // condition cannot be — expressions carry no `break` outside
+            // blocks). `else if` links are if STATEMENTS — the statement
+            // walk resumes through them
+            Kind::Expr(ExprKind::If { then, els, .. }) => {
+                if self.binds_break(then.id(), depth) {
+                    return true;
+                }
+                match els {
+                    Some(ElseBranch::If(h)) => self.binds_break(h.id(), depth),
+                    Some(ElseBranch::Block(b)) => self.binds_break(b.id(), depth),
+                    None => false,
+                }
+            }
             _ => false,
         }
     }
@@ -1228,6 +1384,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Lit(Lit::Bool(_)) => TY_BOOL,
             // a block hints at its tail (the block value law)
             ExprKind::Block { tail, .. } => tail.map_or(TY_NIL, |t| self.expr_type_hint(t)),
+            // an if ATOM hints at its then arm's tail (the completing-arm
+            // law; the compile-time agreement check does the rest)
+            ExprKind::If { then, .. } => {
+                self.ctx.ast.block_tail(*then).map_or(TY_NIL, |t| self.expr_type_hint(t))
+            }
             ExprKind::Struct { ty, .. } => self.resolve_type_now(*ty),
             _ => TY_NIL,
         }

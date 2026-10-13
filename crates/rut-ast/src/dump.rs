@@ -549,6 +549,18 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("arms", DumpVal::Nodes(arms.iter().map(|&x| node_dump(a, x.id())).collect())));
                 "WhenExpr"
             }
+            ExprKind::If { cond, then, els } => {
+                fields.push(field("cond", DumpVal::Node(Box::new(node_dump(a, cond.id())))));
+                fields.push(field("then", DumpVal::Node(Box::new(node_dump(a, then.id())))));
+                if let Some(e) = els {
+                    let id = match e {
+                        ElseBranch::If(h) => h.id(),
+                        ElseBranch::Block(h) => h.id(),
+                    };
+                    fields.push(field("els", DumpVal::Node(Box::new(node_dump(a, id)))));
+                }
+                "If"
+            }
             ExprKind::Await { expr } => {
                 fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, expr.id())))));
                 "Await"

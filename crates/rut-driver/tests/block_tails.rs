@@ -1,13 +1,14 @@
 //! Block tail expressions (phase 1): the last statement without `;`
 //! is the block's implicit value — Rust-style — and a trailing `if`
 //! STATEMENT with an else reads as the tail too (statement-if in tail
-//! position; the if ATOM in expression position is phase 2). The fn
-//! body's tail counts as the return for the definite-return law, the
-//! `when` arm blocks produce values, and the capture law sees closures
-//! inside tails. Pins: the run shapes (implicit return, recursion,
-//! scoped-binding tails, inlined tails, capture-on-tail) and the
-//! diagnostics (tail type mismatch, arm disagreement, missing return
-//! with a valueless tail).
+//! position; the if ATOM in expression position is phase 2's
+//! `ExprKind::If` — a different route that composes with these laws).
+//! The fn body's tail counts as the return for the definite-return law,
+//! the `when` arm blocks produce values, and the capture law sees
+//! closures inside tails. Pins: the run shapes (implicit return,
+//! recursion, scoped-binding tails, inlined tails, capture-on-tail) and
+//! the diagnostics (tail type mismatch, arm disagreement, missing
+//! return with a valueless tail).
 
 use rut_vm::interp::Vm;
 
@@ -67,7 +68,8 @@ entry fn main() -> i32 {
 #[test]
 fn recursion_through_tail_position_if() {
     // 2 — the plan's `fact`: the trailing `if` STATEMENT is the body's
-    // value (both arms produce); the if ATOM stays phase 2
+    // value (both arms produce); the if ATOM in expression position is
+    // phase 2's separate route
     let v = run_main(
         r#"
 fn fact(n: i32) -> i32 {

@@ -207,6 +207,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.compile_array_repeat(value, count, expected, sp)
             }
             ExprKind::WhenExpr { scrut, arms } => self.compile_when(scrut, &arms, expected, sp, false),
+            ExprKind::If { cond, then, els } => {
+                // the if ATOM — the expression form; `Ok(None)` (both arms
+                // terminated) reads as the nil value here, the funnel's
+                // business
+                self.compile_if_expr(cond, then, els, expected, sp).map(|v| v.unwrap_or(TY_NIL))
+            }
             ExprKind::Is { expr, ty } => {
                 let rt = self.compile_expr(expr, None)?;
                 let recv = self.last_reg;

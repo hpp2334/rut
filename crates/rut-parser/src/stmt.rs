@@ -332,8 +332,15 @@ impl StmtFrame {
                 StmtKind::WhenStmt { scrut, arms },
                 self.lo.to(p.span()),
             ))),
-            // the `if` child (pushed from Dispatch) completes the statement
-            (StmtStage::Dispatch, Done::If(h)) => Step::Pop(Done::Stmt(h.into())),
+            // the `if` child (pushed from Dispatch) completes the statement.
+            // The `;` decides (the expression law): a trailing `;` after
+            // the statement form only ever DISCARDS — the statement form
+            // keeps no value — so it eats quietly instead of stranding
+            // (the fmt prints statement-ifs without one; round-trip stable)
+            (StmtStage::Dispatch, Done::If(h)) => {
+                p.eat_punct(Tok::Semi);
+                Step::Pop(Done::Stmt(h.into()))
+            }
             (_, Done::Failed) => Step::Pop(Done::Failed),
             (_, d) => unreachable!("statement frame received the wrong child: {:?}", d),
         }
