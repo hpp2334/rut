@@ -48,17 +48,28 @@
 //!                                              the bundle's own sources;
 //!                                              envelope names module +
 //!                                              entry paths (or the error)
+//!   rut_extract_bundle(ptr, len) -> ptr        .rutbundle bytes -> the
+//!                                              editable surface envelope
+//!                                              {module, namespace,
+//!                                              consts, files:[{path,
+//!                                              src, mode, mod_path}]}
+//!                                              — NO indexing, JS owns
+//!                                              the disk
 //!
 //! Every result is `[u32 little-endian length][bytes]` at the returned
 //! ptr; every string argument is `(ptr, len)` written via `rut_alloc`.
 //!
-//! The last three are the deps face: the manifest/bundle plumbing runs
-//! through `rut_lsp::deps` (pure — bytes in, values out) into the SAME
+//! These are the deps face: the manifest/bundle plumbing runs through
+//! `rut_lsp::deps` (pure — bytes in, values out) into the SAME
 //! `state.defs` store `rut_add_def` writes, so a dep's surface resolves
 //! in hover/completion/definition exactly like a workspace file — one
-//! index, no drift. `rut_parse_manifest`/`rut_add_bundle` answer with an
-//! error envelope (`{"error": …}`) on bad bytes; the host surfaces it as
-//! a hint, never silent unparsed state.
+//! index, no drift. `rut_extract_bundle` is the same plumbing's extract
+//! lane — bytes in, the surface envelope out, NO index write (JS owns
+//! the disk; re-indexing goes back through `rut_add_def`/
+//! `rut_add_def_mod`). `rut_parse_manifest`/`rut_add_bundle`/
+//! `rut_extract_bundle` answer with an error envelope (`{"error": …}`)
+//! on bad bytes; the host surfaces it as a hint, never silent unparsed
+//! state.
 //!
 //! One deviation from `rut-wasm`'s one-shot model: an LSP serves a
 //! long-lived editing session, so a monotonic arena would exhaust 16 MB
@@ -639,6 +650,44 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
     }))
 }
 
+/// unpack one `.rutbundle` into the envelope WITHOUT indexing — the
+/// pure-extract twin of `rut_add_bundle`: bytes in, the editable
+/// surface out as `{ module, namespace, consts, files: [{ path, src,
+/// mode, mod_path }] }`. JS owns the disk: the extension writes the
+/// files and re-indexes them through `rut_add_def`/`rut_add_def_mod`
+/// (real `file://` origins, the go-to-definition face), so this lane
+/// has NO index side effect. `mod_path` rides per file
+/// (`deps::bundle_file_mod_path` — the rows-lane root spells `""`, a
+/// mounted child its `<path>`; a flat file stays `null`), so the host
+/// never re-derives the mount rule in TypeScript. A corrupt/foreign
+/// archive is the error envelope, never bytes.
+#[no_mangle]
+pub extern "C" fn rut_extract_bundle(ptr: *const u8, len: usize) -> *mut u8 {
+    let bytes = unsafe { read_bytes(ptr, len) };
+    let b = match rut_lsp::deps::bundle_sources(bytes) {
+        Ok(b) => b,
+        Err(e) => return json_envelope(serde_json::json!({ "error": e })),
+    };
+    let files: Vec<serde_json::Value> = b
+        .files
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "path": f.path,
+                "src": f.src,
+                "mode": mode_str(f.mode),
+                "mod_path": rut_lsp::deps::bundle_file_mod_path(&f.path),
+            })
+        })
+        .collect();
+    json_envelope(serde_json::json!({
+        "module": b.module,
+        "namespace": b.namespace,
+        "consts": b.consts,
+        "files": files,
+    }))
+}
+
 /// an open doc's stored text — the smoke test's round-trip check
 #[no_mangle]
 pub extern "C" fn rut_doc_len(uri_ptr: *const u8, uri_len: usize) -> usize {
@@ -998,5 +1047,58 @@ mod tests {
         let md = h["contents"]["value"].as_str().unwrap();
         assert!(md.contains("file module"), "{md}");
         assert!(md.contains("layout/mod.rut"), "{md}");
+    }
+
+    /// the extract lane — `rut_add_bundle`'s unpack WITHOUT the index
+    /// write: the file list mirrors `bundle_sources` byte-for-byte,
+    /// every file spells its own mod path (the host never re-derives
+    /// the mount rule), and the defs store ends the call untouched
+    #[test]
+    fn extract_bundle_names_the_surface_and_never_indexes() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        let origins_before: std::collections::BTreeSet<String> =
+            state().defs.iter().map(|d| d.origin.clone()).collect();
+        rut_begin();
+        let out = take(rut_extract_bundle(POUCH_BUNDLE.as_ptr(), POUCH_BUNDLE.len()));
+        assert_eq!(out["module"], "pouch");
+        assert!(out["namespace"].is_null());
+        // the file list mirrors `bundle_sources`' own unpack
+        let b = rut_lsp::deps::bundle_sources(POUCH_BUNDLE).expect("the pouch bundle unpacks");
+        let paths: Vec<&str> = out["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["path"].as_str().unwrap())
+            .collect();
+        let want: Vec<&str> = b.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, want, "the envelope's files ride bundle_sources'");
+        // the real source rides, mode + mod path spelled
+        let f = &out["files"][0];
+        assert_eq!(f["path"], "mod.rut");
+        assert_eq!(f["mode"], "Impl");
+        assert_eq!(f["mod_path"], "");
+        assert!(f["src"].as_str().unwrap().contains("class Vec"), "the real pouch source rides");
+        // NO indexing side effect — the defs store ends where it started
+        let origins_after: std::collections::BTreeSet<String> =
+            state().defs.iter().map(|d| d.origin.clone()).collect();
+        assert_eq!(origins_before, origins_after, "the extract lane never writes the index");
+
+        // a mod tree spells each file's mount path (the root `""`, each
+        // child its `<path>`); a corrupt archive stays the error
+        // envelope, never bytes
+        let bytes = kit_bundle();
+        rut_begin();
+        let out = take(rut_extract_bundle(bytes.as_ptr(), bytes.len()));
+        let spells: Vec<(&str, &str)> = out["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| (f["path"].as_str().unwrap(), f["mod_path"].as_str().unwrap()))
+            .collect();
+        assert_eq!(spells, vec![("mod.rut", ""), ("layout/mod.rut", "layout")]);
+        rut_begin();
+        let junk = b"definitely not a zip";
+        let err = take(rut_extract_bundle(junk.as_ptr(), junk.len()));
+        assert!(err["error"].as_str().unwrap().contains("not a zip"), "{err}");
     }
 }
