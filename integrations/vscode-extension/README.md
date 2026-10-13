@@ -132,7 +132,19 @@ manifests, JS only moves bytes) and walks its dependency rows:
 - Auto-import completions offer foreign public names with the
   `use mod::Name;` insert (`additionalTextEdits`) and sort after the
   locals (`sortText`) — accepting an item never ungates members, the
-  engine's law; the extension only maps the edits through.
+  engine's law; the extension only maps the edits through. The tier
+  is gated to the open document's DIRECT deps: the root manifest's
+  rows are handed to the wasm (`rut_set_direct_deps`) when the walk
+  parses it, and a transitive-only dep never offers — the compiler's
+  closure check refuses `use` of a mounted-but-undeclared package,
+  so completing one would write a D5 error. The std surface rides
+  every chain as the ambient dep lane. The bare list itself stays
+  honest: the document's own decls, the ambient `prelude builtin`
+  rows, and the names the document already `use`s — everything else
+  lives on this tier only. Annotation positions (`let x: ⏐`,
+  `id: u⏐`, `-> T⏐`) get the type tier instead — primitives +
+  document/imported types, no keywords, fns, or locals — and `{` is
+  a trigger key for the brace form of a use (`use pouch::{ ⏐`).
 - `rut.jsonc` is schema-validated (`schemas/rut.manifest.schema.json`,
   contributed via `jsonValidation`): every field's `description` is the
   hover in the jsonc editor.

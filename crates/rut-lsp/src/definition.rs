@@ -124,8 +124,11 @@ pub(crate) fn matches_pkg(i: &DefIndex, pkg: &str) -> bool {
         .any(|seg| seg.strip_suffix(".rut").unwrap_or(seg) == pkg)
 }
 
-/// the document's import map: imported name -> its `use` pkg
-fn import_map(doc: &DefIndex) -> HashMap<&str, &str> {
+/// the document's import map: imported name -> its `use` pkg — the
+/// (name, pkg) set shape the completion tiers match foreign names
+/// against (the bare tier's imported gate and the auto-import tier's
+/// dedup)
+pub(crate) fn import_map(doc: &DefIndex) -> HashMap<&str, &str> {
     doc.uses
         .iter()
         .map(|u| (u.name.as_str(), u.pkg.as_str()))

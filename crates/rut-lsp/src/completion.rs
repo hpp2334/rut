@@ -1,5 +1,6 @@
 //! Completions — member completion after `recv.`, bare-position
-//! completion, the use-path tiers, the `::` tiers (module members by
+//! completion, the type tier at annotation boundaries, the use-path
+//! tiers, the `::` tiers (module members by
 //! tier, then the type-head lists: enum members, namespace statics, a
 //! type's associated fns), and the auto-import tier, over the
 //! same definition index hover uses. One rule for
@@ -12,12 +13,14 @@
 //! The use-path tiers: at `use <cursor>` the chain's module names
 //! compete (every named index, std surface included — std is not
 //! special); at `use mod::<cursor>` that module's exported public
-//! names. The auto-import tier: bare position, after the local results
-//! (unchanged order), foreign public names matching the prefix ride
-//! with an additional text edit inserting `use mod::Name;` after the
-//! last leading `use` (none → top of file body, after leading
-//! comments) — a fresh line, no merge (`rut fmt` owns tidying). Names
-//! already imported are never re-offered.
+//! names. The bare position rides the compiler's bare-name law: the
+//! fn-local bindings ahead of the keyword table, then the document's
+//! own decls + the chain's ambient builtin rows + the names the
+//! document already `use`s — every other foreign name rides only the
+//! auto-import tier (with the `use mod::Name;` insert, sorted after
+//! the local items). Annotation boundaries (`let x: ⏐`, `-> T⏐`) get
+//! the type tier: primitives + document/imported types, never
+//! keywords, fns, or locals.
 
 use std::collections::HashSet;
 
@@ -75,9 +78,11 @@ pub enum CompletionKind {
 /// Completions at `pos`: use-path tiers inside a `use` statement
 /// (walking a package's mod namespaces), qualified-position tiers
 /// after `modname::` in the package's own files, member items after
-/// `recv.` (filtered by the typed prefix), otherwise the visible
+/// `recv.` (filtered by the typed prefix), the type tier at an
+/// annotation boundary, otherwise the visible
 /// fn-local bindings ahead of the keyword table plus the visible decls
-/// plus the auto-import tier. `src` is the NORMALIZED source — the
+/// under the bare-name law plus the auto-import tier, deduped by
+/// label. `src` is the NORMALIZED source — the
 /// auto-import edits' coordinates ride the same text the tokens were
 /// lexed from. `doc` is the open document's file-module context (the
 /// face's knowledge; the default keeps position-path completion off).
@@ -95,12 +100,14 @@ pub fn complete(
     if let Some((segs, prefix)) = use_path_before(toks, pos) {
         return use_path_completions(idxs, &segs, &prefix);
     }
-    // a lone `:` under the cursor is the annotation boundary (`let c:
-    // ⏐`) — the `::` completion trigger rides the colon key, and here
-    // no member list makes sense (types ride `::`, values ride `.`);
-    // an honest empty beats the bare keyword table popping up
-    if colon_boundary_before(toks, pos) {
-        return Vec::new();
+    // a lone `:` (or the `->` arrow) under the cursor is the
+    // annotation boundary — the type tier answers it: the primitive
+    // table, the document's types, and the imported foreign types
+    // (no keywords, fns, or locals — values never ride a type
+    // position). `Vec<⏐` stays ambiguous at token level (`<` vs the
+    // comparison) and is not this tier.
+    if let Some(prefix) = annotation_boundary_before(toks, pos) {
+        return type_tier_completions(idxs, &prefix);
     }
     if let Some((segs, prefix)) = qualified_path_before(toks, pos) {
         if let Some(out) = position_path_completions(idxs, doc, &segs, &prefix) {
@@ -126,12 +133,19 @@ pub fn complete(
         if dot_context_before(src, pos) {
             return Vec::new();
         }
-        let used = used_ifaces(ast);
         // the locals tier rides AHEAD of the keyword table — the name
         // being typed is most often a binding just declared
         let mut out = local_completions(&binds, pos);
-        out.extend(bare_completions(idxs, &used));
+        out.extend(bare_completions(idxs));
         out.extend(auto_import_completions(idxs, ast, toks, pos, src));
+        // one final retain-by-label over the merged list (A4): the
+        // extend order IS the precedence — locals > keywords >
+        // document decls > imported > auto-import — so the first
+        // occurrence of a label wins and a name reachable two ways
+        // (e.g. bare via a `use`, and again via the auto-import tier)
+        // offers exactly one item.
+        let mut seen: HashSet<String> = HashSet::new();
+        out.retain(|c| seen.insert(c.label.clone()));
         return out;
     };
     // the qualified-position spelling: positions qualify with `::` —
@@ -302,26 +316,40 @@ fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<Completio
 }
 
 /// Bare position: the keyword table (the grammar's reserved
-/// set, one canonical list), then the visible decls — the open document
-/// first, then the std surface and the workspace. Free fns and types
-/// only; methods are reached through a receiver, not named bare.
-/// The import-gated builtin names (`pub builtin` — the core disposal
-/// pair) stay off the list unless the document's `use` names them: the
-/// same ambient split the compiler binds by (offering a name the
-/// compiler then rejects is a trap).
-fn bare_completions(idxs: &[&DefIndex], used: &HashSet<String>) -> Vec<CompletionOut> {
+/// set, one canonical list), then the visible decls under the
+/// compiler's own bare-name law: the open document's decls
+/// (`idxs[0]`), the chain's AMBIENT builtin rows (`prelude builtin` —
+/// bound in every unit, no `use` needed), and the names the document
+/// already `use`s (matched `(name, pkg)` against `idxs[0].uses` — the
+/// same set shape the auto-import tier dedups against). Every other
+/// foreign name rides ONLY the auto-import tier (with the `use`
+/// insert edit): a plain offer the compile would reject is a trap.
+/// Free fns and types only; methods are reached through a receiver,
+/// not named bare.
+fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for kw in rut_parser::RESERVED_KW {
         out.push(CompletionOut::plain((*kw).to_string(), String::new(), Vec::new(), CompletionKind::Keyword));
     }
-    let gated: HashSet<&str> = idxs
-        .iter()
-        .flat_map(|i| i.pub_gated.iter().map(|s| s.as_str()))
-        .collect();
-    let offered = |name: &str| !gated.contains(name) || used.contains(name);
+    let doc = idxs[0];
+    let imported = crate::definition::import_map(doc);
     for i in idxs {
+        let own = std::ptr::eq(*i, doc);
+        // the names this document's `use`s bound FROM this index's
+        // package — the same (name, pkg) match the definition layer's
+        // use-graph walk reads (`matches_pkg`, module name first, the
+        // origin/stem derivation on an unnamed index)
+        let used_from: HashSet<&str> = imported
+            .iter()
+            .filter(|(_, pkg)| crate::definition::matches_pkg(i, pkg))
+            .map(|(name, _)| *name)
+            .collect();
+        // the bare gate per row: own decls always; foreign rows only
+        // when the ambient linkage bound them or the document's `use`
+        // named them from this package
+        let offered = |name: &str, ambient: bool| own || ambient || used_from.contains(name);
         for t in &i.types {
-            if !offered(&t.name) {
+            if !offered(&t.name, t.ambient) {
                 continue;
             }
             push_item(
@@ -341,7 +369,7 @@ fn bare_completions(idxs: &[&DefIndex], used: &HashSet<String>) -> Vec<Completio
             if f.owner.is_some() {
                 continue;
             }
-            if !offered(&f.name) {
+            if !offered(&f.name, f.ambient) {
                 continue;
             }
             push_item(
@@ -387,10 +415,21 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
     }
     // no `::` typed yet — still the module-NAME tier (the partial
     // ident is the prefix, the segments stay empty); a `::` anywhere
-    // switches to the names tier of the spelled path
-    let has_sep = seg.iter().any(|t| matches!(t.tok, Tok::Colon | Tok::Colon2));
-    let segments: Vec<String> = if has_sep {
-        seg.iter()
+    // switches to the names tier of the spelled path. The BRACE form
+    // (`use pkg::{ A, B⏐`) splits at the `{`: the path is what runs
+    // before it — the names inside the braces are the use-leaf list,
+    // never path segments (`use gadgets::{ tag, ⏐` still answers the
+    // root exports) — and the typed prefix is the list's trailing
+    // ident, if any.
+    let brace = seg.iter().rposition(|t| t.tok == Tok::LBrace);
+    let (path_seg, list_seg) = match brace {
+        Some(b) => (&seg[..b], &seg[b + 1..]),
+        None => (&seg[..], &seg[..]),
+    };
+    let has_sep = path_seg.iter().any(|t| matches!(t.tok, Tok::Colon | Tok::Colon2));
+    let mut segments: Vec<String> = if has_sep {
+        path_seg
+            .iter()
             .filter_map(|t| match &t.tok {
                 Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => Some(s.clone()),
                 _ => None,
@@ -399,7 +438,16 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
     } else {
         Vec::new()
     };
-    let prefix = match seg.last() {
+    // the flat spelling's trailing ident is the prefix carrier, never
+    // a segment to walk (`use pkg::layout::Co⏐` walks `layout` only);
+    // the brace form's path never carries one (the list's partial
+    // leaf is the prefix alone)
+    if let Some(Token { tok: Tok::Ident(s), .. }) = path_seg.last() {
+        if !rut_parser::is_reserved_kw(s) {
+            segments.pop();
+        }
+    }
+    let prefix = match list_seg.last() {
         Some(Token { tok: Tok::Ident(s), span }) if !rut_parser::is_reserved_kw(s) => {
             let end = (pos as usize).min(span.hi as usize).max(span.lo as usize);
             s.get(..end - span.lo as usize).unwrap_or(s).to_string()
@@ -446,15 +494,15 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     // resolve the walked module: the flat spelling answers the root —
     // for a mod-carrying package that is the ROOT index only (members
     // live under their module path), for a flat package today's whole
-    // chain; deeper segments walk the pub edges. The typed prefix is a
-    // trailing PARTIAL ident — never a segment to walk (`use pkg::V⏐`
+    // chain; deeper segments walk the pub edges (`use_path_before`
+    // stripped the trailing PARTIAL ident already — `use pkg::V⏐`
     // offers the root; `use pkg::layout::Co⏐` walks `layout` only)
     let carrying = chain.iter().any(|i| i.mod_path.is_some());
-    let interior: &[String] = if prefix.is_empty() {
-        &segs[1..]
-    } else {
-        &segs[1..segs.len() - 1]
-    };
+    // the walked interior: the segments minus the pkg head —
+    // `use_path_before` already stripped the trailing PARTIAL ident
+    // (`use pkg::layout::Co⏐` walks `layout` only; the brace form's
+    // path never carries one)
+    let interior: &[String] = &segs[1..];
     let walked = if interior.is_empty() {
         Some(String::new())
     } else {
@@ -606,14 +654,75 @@ fn qualified_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, Strin
     Some((segs, prefix))
 }
 
-/// the annotation boundary: the token immediately before the cursor is
-/// a lone `:` (one colon — `::` lexes as its own Colon2). Type
-/// annotation positions get an honest empty from the trigger key.
-fn colon_boundary_before(toks: &[Token], pos: u32) -> bool {
-    match toks.iter().rposition(|t| t.span.lo < pos) {
-        Some(i) => toks[i].tok == Tok::Colon,
-        None => false,
+/// the annotation boundary: a lone `:` (one colon — `::` lexes as its
+/// own Colon2) or the `->` arrow immediately before the cursor, with
+/// at most a partial ident riding it (`let c: ⏐`, `id: u⏐`,
+/// `fn f() -> T⏐`). Returns the typed partial ident (possibly empty) —
+/// the type tier's prefix. Any other shape is not a type position.
+fn annotation_boundary_before(toks: &[Token], pos: u32) -> Option<String> {
+    let i = toks.iter().rposition(|t| t.span.lo < pos)?;
+    match &toks[i].tok {
+        Tok::Colon | Tok::Arrow => Some(String::new()),
+        Tok::Ident(s) if !rut_parser::is_reserved_kw(s) && i >= 1 => {
+            // the ident's predecessor must be the boundary itself
+            if !(toks[i - 1].tok == Tok::Colon || toks[i - 1].tok == Tok::Arrow) {
+                return None;
+            }
+            let span = toks[i].span;
+            let end = (pos as usize).min(span.hi as usize).max(span.lo as usize);
+            Some(s.get(..end - span.lo as usize).unwrap_or(s).to_string())
+        }
+        _ => None,
     }
+}
+
+/// The type tier at an annotation boundary — `let x: ⏐`, `id: u⏐`,
+/// `fn f() -> ⏐`: the parser's primitive table (the ONE
+/// `PRIMITIVE_TYS` — enumerated, never a duplicated list), the open
+/// document's own types, the chain's AMBIENT builtin rows, and the
+/// foreign types the document already `use`s. Keywords, fns, and
+/// locals stay off: values never ride a type position.
+fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut> {
+    let mut out: Vec<CompletionOut> = Vec::new();
+    for p in rut_parser::PRIMITIVE_TYS {
+        push_item(
+            &mut out,
+            CompletionOut::plain((*p).to_string(), "primitive".to_string(), Vec::new(), CompletionKind::Type),
+        );
+    }
+    let doc = idxs[0];
+    let imported = crate::definition::import_map(doc);
+    for i in idxs {
+        let own = std::ptr::eq(*i, doc);
+        let used_from: HashSet<&str> = imported
+            .iter()
+            .filter(|(_, pkg)| crate::definition::matches_pkg(i, pkg))
+            .map(|(name, _)| *name)
+            .collect();
+        for t in &i.types {
+            // the same bare gate the decl tiers read: own types always,
+            // foreign types when ambient or imported from this package
+            if !own && !t.ambient && !used_from.contains(t.name.as_str()) {
+                continue;
+            }
+            push_item(
+                &mut out,
+                CompletionOut::plain(
+                    t.name.clone(),
+                    format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
+                    t.doc.clone(),
+                    match t.form {
+                        TyForm::Interface => CompletionKind::Interface,
+                        TyForm::Namespace => CompletionKind::Module,
+                        _ => CompletionKind::Type,
+                    },
+                ),
+            );
+        }
+    }
+    out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    out
 }
 
 /// Member completions after `<TypeHead>::` — the `::` law's member
@@ -804,10 +913,15 @@ fn position_path_completions(
 /// the bare prefix, each carrying the `use mod::Name;` insert — after
 /// the local results (the caller extends bare_completions' output), so
 /// `sortText` sorts them after everything already offered. Names the
-/// document already imports are NOT re-offered, and the `pub builtin`
+/// document already imports are NOT re-offered, the `pub builtin`
 /// gate keeps holding (an import offer for a gated name would complete
 /// a name the compile still rejects until the use lands — the gate is
-/// the compiler's ambient split, mirrored).
+/// the compiler's ambient split, mirrored), and a TRANSITIVE-only dep
+/// stays off: the compiler's closure check
+/// (`Session::resolve_use` → `declares`) refuses `use` of a
+/// mounted-but-undeclared package, so only indexes stamped
+/// `direct_dep` (the open document's own manifest rows, plus the std
+/// surface) ride this tier.
 fn auto_import_completions(
     idxs: &[&DefIndex],
     ast: &Ast,
@@ -829,6 +943,9 @@ fn auto_import_completions(
     let mut out: Vec<CompletionOut> = Vec::new();
     for i in idxs.iter().skip(1) {
         let Some(m) = &i.module else { continue };
+        if !i.direct_dep {
+            continue; // a transitive-only dep — `use` of it is the D5 error
+        }
         let mut foreign = |name: &str, doc: &[String], kind: CompletionKind| {
             if imported.contains(&(name, m.as_str())) {
                 return; // already imported — never re-offered
@@ -1137,7 +1254,11 @@ return c.;
         let c2 = rut_lexer::lexer::normalize(core_src);
         let (ctoks, _) = rut_lexer::lexer::lex(&c2);
         let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
-        let core = crate::hover::index(&c2, &cast, &ctoks);
+        let mut core = crate::hover::index(&c2, &cast, &ctoks);
+        // the manifest module name — the stamp every face lays down
+        // (deps::index_dep, std_surface), and what the bare tier's
+        // `(name, pkg)` imported gate matches against
+        core.module = Some("core".to_string());
 
         let mk = |doc: &str| {
             let d2 = rut_lexer::lexer::normalize(doc);
@@ -1165,6 +1286,126 @@ return c.;
         assert!(ls.contains(&"DisposalContext"), "the imported class completes: {ls:?}");
         assert!(ls.contains(&"Iterable"), "the imported generic builtin class completes: {ls:?}");
         assert!(ls.contains(&"Weak"), "the imported weak reference completes: {ls:?}");
+    }
+
+    // ---- the honest bare scope (A2): a foreign decl is a PLAIN bare
+    // item only when the document's own `use` names it — every other
+    // foreign name rides only the auto-import tier (the `use` insert
+    // edit rides the item), and a transitive-only dep never offers. ----
+
+    /// a direct dep index — the `gadgets` pkg with one pub fn and one
+    /// pub struct, built the way the dep walk does (`index_dep`:
+    /// module stamped; the direct-dep marker stamped — the root
+    /// manifest's own dep row)
+    fn tag_dep() -> DefIndex {
+        let mut dep = crate::deps::index_dep(
+            "gadgets",
+            "file:///deps/gadgets/lib.rut",
+            "pub struct Widget {\nid: i32;\n}\npub fn tag() -> i32 { return 1; }\n",
+            rut_parser::Mode::Impl,
+            None,
+            &[],
+        );
+        dep.direct_dep = true;
+        dep
+    }
+
+    /// completions over `doc` with `dep` in the chain, the cursor at
+    /// the end of the document
+    fn complete_with_dep(doc: &str, dep: &DefIndex) -> Vec<CompletionOut> {
+        let d2 = rut_lexer::lexer::normalize(doc);
+        let (toks, _) = rut_lexer::lexer::lex(&d2);
+        let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
+        let di = crate::hover::index(&d2, &ast, &toks);
+        let idxs = [&di, dep];
+        complete(&idxs, &toks, &ast, d2.len() as u32, &d2, &DocMods::default())
+    }
+
+    #[test]
+    fn a_foreign_dep_fn_rides_only_the_import_tier_until_used() {
+        let dep = tag_dep();
+        // bare doc: `tag` is NOT a plain bare item — the only offer is
+        // the auto-import one (the `use gadgets::tag;` edit rides it)
+        let items = complete_with_dep("entry fn main() -> nil { }\n", &dep);
+        assert!(
+            items.iter().all(|c| c.label != "tag" || !c.additional_text_edits.is_empty()),
+            "the dep fn must not complete plain: {:?}",
+            labels(&items)
+        );
+        let imp = import_item(&items, "tag").expect("the direct dep's fn auto-imports");
+        assert_eq!(imp.detail, "gadgets::tag — import");
+
+        // after the `use`, `tag` IS a plain bare item — and the
+        // auto-import tier never re-offers it
+        let items = complete_with_dep("use gadgets::{ tag };\nentry fn main() -> nil { }\n", &dep);
+        let plain = items
+            .iter()
+            .find(|c| c.label == "tag")
+            .expect("the imported fn completes bare");
+        assert!(
+            plain.additional_text_edits.is_empty(),
+            "the imported fn completes plain, no insert: {plain:?}"
+        );
+        assert!(import_item(&items, "tag").is_none(), "never re-offered: {:?}", labels(&items));
+    }
+
+    #[test]
+    fn a_transitive_only_dep_never_auto_imports() {
+        // the compiler's closure check (`Session::resolve_use` →
+        // `declares`) refuses `use` of a mounted-but-undeclared
+        // package — the auto-import tier mirrors it: an index NOT
+        // stamped `direct_dep` never rides the tier
+        let mut dep = tag_dep();
+        dep.direct_dep = false; // mounted, but the doc's manifest doesn't declare it
+        let items = complete_with_dep("entry fn main() -> nil { }\n", &dep);
+        assert!(
+            import_item(&items, "tag").is_none(),
+            "a transitive-only dep's fn must not auto-import: {:?}",
+            labels(&items)
+        );
+        assert!(
+            items.iter().all(|c| c.label != "tag"),
+            "and no plain offer either: {:?}",
+            labels(&items)
+        );
+    }
+
+    #[test]
+    fn a_name_reachable_two_ways_offers_exactly_one_item() {
+        // A4: `tag` completes bare (the doc's `use` names it) AND the
+        // auto-import tier would offer it — the merged list retains
+        // the plain one, exactly one item by the label
+        let dep = tag_dep();
+        let items = complete_with_dep("use gadgets::{ tag };\nentry fn main() -> nil { }\n", &dep);
+        let count = items.iter().filter(|c| c.label == "tag").count();
+        assert_eq!(count, 1, "one `tag` item, got {count}: {:?}", labels(&items));
+        let the = items.iter().find(|c| c.label == "tag").unwrap();
+        assert!(the.additional_text_edits.is_empty(), "the plain (bare) item wins: {the:?}");
+    }
+
+    // ---- the brace-form use-path shapes (A6 regression pins — the
+    // `{` trigger char's tier shapes) ----
+
+    #[test]
+    fn the_brace_form_rides_the_names_tier() {
+        // `use gadgets::{⏐` — exports; the comma form too
+        let dep = tag_dep();
+        for doc in ["use gadgets::{", "use gadgets::{ tag, "] {
+            let items = complete_with_dep(doc, &dep);
+            let ls = labels(&items);
+            assert!(ls.contains(&"Widget"), "exports complete in `{doc}`: {ls:?}");
+            assert!(ls.contains(&"tag"), "{ls:?}");
+        }
+        // `use gadgets::{ Widget, ⏐` — still the full exports
+        let items = complete_with_dep("use gadgets::{ Widget, ", &dep);
+        assert!(labels(&items).contains(&"tag"), "{:?}", labels(&items));
+        // `use gadgets::{ Widget, ta⏐` — the prefix filters
+        let items = complete_with_dep("use gadgets::{ Widget, ta", &dep);
+        let ls = labels(&items);
+        assert!(ls.contains(&"tag"), "{ls:?}");
+        assert!(!ls.contains(&"Widget"), "the prefix filters the brace form: {ls:?}");
+        // an unmounted head stays an honest empty
+        assert!(complete_with_dep("use ghost::{", &dep).is_empty());
     }
 
     #[test]
@@ -1530,13 +1771,124 @@ entry fn main() -> nil {
         assert!(complete_after(src, "Color::Red::").is_empty());
     }
 
+    // ---- the type tier at annotation boundaries (A3) ----
+
     #[test]
-    fn the_annotation_colon_completes_nothing() {
-        // `let c: ⏐` — the lone colon is the annotation boundary; the
-        // `::` trigger rides the colon key, and no member list makes
-        // sense here (an honest empty, never the keyword table)
+    fn the_type_tier_answers_a_struct_field_annotation() {
+        // `id: u⏐` — the primitive table rides the prefix filter; the
+        // keyword table, the doc's fns, and the fn-locals stay OFF
+        // (values never ride a type position)
+        let src = "\
+struct Slot {
+id: u
+}
+fn go(ready: bool) -> nil {
+    let count = 1;
+    count
+}
+";
+        let items = complete_after(src, "id: u");
+        let ls = labels(&items);
+        for want in ["u8", "u16", "u32", "u64"] {
+            assert!(ls.contains(&want), "primitive `{want}` completes at the annotation: {ls:?}");
+        }
+        assert!(!ls.contains(&"i32"), "the prefix filters the tier: {ls:?}");
+        assert!(!ls.contains(&"use"), "no keyword tier at a type position: {ls:?}");
+        assert!(!ls.contains(&"fn") && !ls.contains(&"let"), "{ls:?}");
+        assert!(!ls.contains(&"go"), "no fns at a type position: {ls:?}");
+        assert!(!ls.contains(&"ready") && !ls.contains(&"count"), "no locals at a type position: {ls:?}");
+        let u32 = items.iter().find(|c| c.label == "u32").unwrap();
+        assert!(matches!(u32.kind, CompletionKind::Type), "{:?}", u32.kind);
+    }
+
+    #[test]
+    fn the_type_tier_answers_the_bare_colon_boundary() {
+        // `let c: ⏐` — the lone colon (the upgrade of the old honest
+        // empty): the full tier, the doc's own types included
         let src = "enum Color { Red }\nentry fn main() -> nil {\n    let c: \n}\n";
-        assert!(complete_after(src, "let c:").is_empty());
+        let items = complete_after(src, "let c:");
+        let ls = labels(&items);
+        for want in ["bool", "str", "f64", "i32", "nil"] {
+            assert!(ls.contains(&want), "primitive `{want}` completes: {ls:?}");
+        }
+        let color = items.iter().find(|c| c.label == "Color").expect("the doc's type completes");
+        assert!(matches!(color.kind, CompletionKind::Type), "{:?}", color.kind);
+        assert!(!ls.contains(&"fn") && !ls.contains(&"let"), "no keywords: {ls:?}");
+        assert!(!ls.contains(&"main"), "no fns: {ls:?}");
+    }
+
+    #[test]
+    fn the_type_tier_answers_the_arrow_boundary() {
+        // `fn f() -> ⏐` — the return annotation rides the same tier …
+        let src = "struct Thing {\nx: i32;\n}\nfn f() -> \n";
+        let items = complete_after(src, "-> ");
+        let ls = labels(&items);
+        assert!(ls.contains(&"i32") && ls.contains(&"Thing"), "{ls:?}");
+        assert!(!ls.contains(&"fn") && !ls.contains(&"f"), "no keywords, no fns: {ls:?}");
+        // … with the partial ident prefix-filtering: `-> T⏐`
+        let src = "struct Thing {\nx: i32;\n}\nfn f() -> T\n";
+        let items = complete_after(src, "-> T");
+        let ls = labels(&items);
+        assert!(ls.contains(&"Thing"), "{ls:?}");
+        assert!(!ls.contains(&"i32"), "the prefix filters the primitives: {ls:?}");
+    }
+
+    #[test]
+    fn the_type_tier_answers_a_param_annotation() {
+        // `fn f(x: u⏐` — parameter annotations are type positions too
+        let src = "fn f(x: u) -> nil { }\n";
+        let items = complete_after(src, "x: u");
+        let ls = labels(&items);
+        assert!(ls.contains(&"u32") && ls.contains(&"u64"), "{ls:?}");
+        assert!(!ls.contains(&"fn"), "{ls:?}");
+    }
+
+    #[test]
+    fn the_type_tier_enumerates_exactly_the_primitive_table() {
+        // the tier's primitive rows ARE the parser's one PRIMITIVE_TYS
+        // table — never a duplicated, drifting list
+        let src = "entry fn main() -> nil {\n    let c: \n}\n";
+        let items = complete_after(src, "let c:");
+        let mut got: Vec<&str> = labels(&items)
+            .into_iter()
+            .filter(|l| rut_parser::is_primitive_ty(l))
+            .collect();
+        got.sort_unstable();
+        let mut want = rut_parser::PRIMITIVE_TYS.to_vec();
+        want.sort_unstable();
+        assert_eq!(got, want, "the tier's primitives are exactly PRIMITIVE_TYS");
+    }
+
+    #[test]
+    fn the_type_tier_offers_the_ambient_and_imported_foreign_types() {
+        // a foreign doc: its own types plus the ambient builtin row
+        // complete; the `pub builtin` gated row completes only once the
+        // document's `use` names it
+        let core_src = "pub builtin class Weak { }\nprelude builtin class StackTrace { }\n";
+        let c2 = rut_lexer::lexer::normalize(core_src);
+        let (ctoks, _) = rut_lexer::lexer::lex(&c2);
+        let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
+        let mut core = crate::hover::index(&c2, &cast, &ctoks);
+        core.module = Some("core".to_string());
+
+        let mk = |doc: &str| {
+            let d2 = rut_lexer::lexer::normalize(doc);
+            let (toks, _) = rut_lexer::lexer::lex(&d2);
+            let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
+            let di = crate::hover::index(&d2, &ast, &toks);
+            let idxs = [&di, &core];
+            let pos = d2.rfind("let e:").unwrap() as u32 + "let e:".len() as u32;
+            complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
+        };
+
+        let items = mk("entry fn main() -> nil {\n    let e: \n}\n");
+        let ls = labels(&items);
+        assert!(ls.contains(&"StackTrace"), "the ambient builtin type completes: {ls:?}");
+        assert!(!ls.contains(&"Weak"), "the gated builtin type stays off: {ls:?}");
+
+        let items = mk("use core::{ Weak };\nentry fn main() -> nil {\n    let e: \n}\n");
+        let ls = labels(&items);
+        assert!(ls.contains(&"Weak"), "the imported builtin type completes: {ls:?}");
     }
 
     // ---- the auto-import tier ----

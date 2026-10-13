@@ -191,6 +191,13 @@ impl<'a> Walk<'a> {
         }
     }
 
+    /// stamp the direct-dep marker the walk computed for a manifest's
+    /// indexes (the auto-import tier's gate)
+    fn mark(mut idx: DefIndex, direct: bool) -> DefIndex {
+        idx.direct_dep = direct;
+        idx
+    }
+
     /// one manifest: its own entry sources index under the module name
     /// (the uri is the file's real path so F12 jumps land), then its
     /// mod tree mounts (see [`Walk::mount_mod_tree`]), then its dep
@@ -198,11 +205,17 @@ impl<'a> Walk<'a> {
     /// (the loader's law: a dep's dev table never enters a consumer's
     /// world), `peer-deps` only when locally resolvable (the consumer
     /// supplies them; an unresolvable peer is the normal state, not a
-    /// failure).
+    /// failure). Every index this call mounts stamps `direct_dep`:
+    /// `true` at depth 1 (the workspace root — the open document's own
+    /// package) and 2 (the root manifest's own dep rows — the deps a
+    /// `use` in the doc may legally spell, the closure check's
+    /// `declares` allowlist), `false` deeper — a transitive-only dep's
+    /// names never ride the auto-import tier.
     fn manifest(&mut self, dir: &Path, depth: usize) {
         if depth > MAX_DEP_DEPTH || self.files == 0 {
             return;
         }
+        let direct = depth <= 2;
         let dir = normalize_path(dir);
         if !self.seen.insert(dir.clone()) {
             return;
@@ -240,7 +253,7 @@ impl<'a> Walk<'a> {
             // same rule `rut_add_def_named` speaks) — a dep needing them
             // mounts through a bundle
             let idx = deps::index_dep(&module, &uri, &src, e.mode, None, &[]);
-            self.insert(idx);
+            self.insert(Self::mark(idx, direct));
         }
         // the mod tree — the pkg's file modules index under the same
         // name with their mod paths stamped (the editor face of the
@@ -251,9 +264,9 @@ impl<'a> Walk<'a> {
         // the entries loop indexed the root `.d.rut`).
         let root_indexed = table.entries.iter().any(|e| e.mode == Mode::Impl);
         if table.host {
-            self.mount_decl_tree(&dir, &module, &table);
+            self.mount_decl_tree(&dir, &module, &table, direct);
         } else {
-            self.mount_mod_tree(&dir, &module, root_indexed);
+            self.mount_mod_tree(&dir, &module, root_indexed, direct);
         }
         let at_root = depth == 1;
         let rows = table
@@ -268,7 +281,9 @@ impl<'a> Walk<'a> {
             }
             match &row.source {
                 DepSource::Url { url, sha256, cache_path } => {
-                    self.mount_url(&row.name, url, sha256.as_deref(), cache_path);
+                    // a url row of the ROOT manifest is a direct dep;
+                    // a dep's own url rows mount transitively
+                    self.mount_url(&row.name, url, sha256.as_deref(), cache_path, depth == 1);
                 }
                 DepSource::Path { dir: rel } => {
                     let dep_dir = normalize_path(&dir.join(rel));
@@ -307,7 +322,7 @@ impl<'a> Walk<'a> {
                                         None,
                                         &[],
                                     );
-                                    self.insert(idx);
+                                    self.insert(Self::mark(idx, direct));
                                 }
                             }
                         }
@@ -324,7 +339,7 @@ impl<'a> Walk<'a> {
     /// deliberate asymmetry — the extension's job), so an unpinned row,
     /// a miss, or a poisoned cache is ONE info hint naming the CLI
     /// alternative, never silent, never network.
-    fn mount_url(&mut self, name: &str, url: &str, pin: Option<&str>, cache_path: &str) {
+    fn mount_url(&mut self, name: &str, url: &str, pin: Option<&str>, cache_path: &str, direct: bool) {
         let Some(pin) = pin else {
             self.hint_once(
                 format!("unpinned:{url}"),
@@ -397,7 +412,7 @@ impl<'a> Walk<'a> {
                             &b.consts,
                         ),
                     };
-                    self.insert(idx);
+                    self.insert(Self::mark(idx, direct));
                 }
             }
             Err(e) => {
@@ -419,7 +434,7 @@ impl<'a> Walk<'a> {
     /// surface-only dev state) mounts nothing. A mount failure is ONE
     /// loud error hint (the loader's diagnostics, mirrored), never
     /// silent bytes.
-    fn mount_mod_tree(&mut self, dir: &Path, module: &str, root_indexed: bool) {
+    fn mount_mod_tree(&mut self, dir: &Path, module: &str, root_indexed: bool, direct: bool) {
         let p = dir.join("mod.rut");
         let Ok(root_text) = std::fs::read_to_string(&p) else {
             return; // no root module — the surface-only dev state; nothing mounts
@@ -428,7 +443,7 @@ impl<'a> Walk<'a> {
             self.files -= 1;
             let uri = p.to_string_lossy().into_owned();
             let idx = deps::index_dep_mod(module, &uri, "", &root_text, Mode::Impl, None, &[]);
-            self.insert(idx);
+            self.insert(Self::mark(idx, direct));
         }
         let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
             Ok(fs_child_lookup(dir, parent, name, "mod.rut"))
@@ -444,7 +459,7 @@ impl<'a> Walk<'a> {
                     let child_file = dir.join(format!("{path}/mod.rut"));
                     let uri = child_file.to_string_lossy().into_owned();
                     let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Impl, None, &[]);
-                    self.insert(idx);
+                    self.insert(Self::mark(idx, direct));
                 }
             }
             Err(e) => {
@@ -466,7 +481,7 @@ impl<'a> Walk<'a> {
     /// (`use myhost::net::{ connect }`) resolves through exactly these
     /// stamps. A surface pkg whose Decl row cannot be read mounts
     /// nothing.
-    fn mount_decl_tree(&mut self, dir: &Path, module: &str, table: &deps::DepTable) {
+    fn mount_decl_tree(&mut self, dir: &Path, module: &str, table: &deps::DepTable, direct: bool) {
         let Some(entry) = table.entries.iter().find(|e| e.mode == Mode::Decl) else {
             return;
         };
@@ -489,7 +504,7 @@ impl<'a> Walk<'a> {
                     let child = dir.join(format!("{path}/{child_file}"));
                     let uri = child.to_string_lossy().into_owned();
                     let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Decl, None, &[]);
-                    self.insert(idx);
+                    self.insert(Self::mark(idx, direct));
                 }
             }
             Err(e) => {
@@ -726,9 +741,10 @@ impl LanguageServer for Backend {
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 completion_provider: Some(CompletionOptions {
                     // `.` — member completion after a receiver; `:` —
-                    // the `::` tiers fire on the colon key (the lone
-                    // annotation `:` answers an honest empty)
-                    trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
+                    // the `::` tiers and the type tier at an annotation
+                    // boundary; `{` — the brace form of a use
+                    // (`use pkg::{ ⏐`)
+                    trigger_characters: Some(vec![".".to_string(), ":".to_string(), "{".to_string()]),
                     ..Default::default()
                 }),
                 signature_help_provider: Some(SignatureHelpOptions {

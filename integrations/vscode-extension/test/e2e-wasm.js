@@ -241,8 +241,12 @@ async function main() {
     smokes++;
   }
 
-  // ---- bare nmapset/nmap_host completion (std surface, M3's acceptance:
-  // what a user project with no workspace index gets) ----
+  // ---- bare completion over the std surface (A2's honest bare scope):
+  // a foreign name is a PLAIN bare item only when the doc's `use` names
+  // it — every other foreign name rides the AUTO-IMPORT tier (the
+  // `use pkg::Name;` insert rides the item). The std surface is the
+  // editor's ambient dep lane, so the family pair still completes at a
+  // bare position — as import offers, sorted after the locals. ----
   {
     const uri = 'file:///ws/e2e-std.rut';
     const src = 'fn main() -> nil {\n}\n';
@@ -253,18 +257,25 @@ async function main() {
     const bareItems = rut.complete(uri, 0, 0);
     const labels = bareItems.map((i) => i.label);
     // the type-name-law batch: the completion pin offers the family
-    // pair — the class pair itself (the alias-row form is repealed, so
-    // the `pub type HashMap<K, ..>` rows that used to sit beside the
-    // class in the index are gone; the completion detail is the CLASS)
+    // pair — now through the auto-import tier (the alias-row form is
+    // repealed, so the `pub type HashMap<K, ..>` rows that used to sit
+    // beside the class in the index are gone)
     for (const want of ['HashMap', 'HashSet']) {
       if (!labels.includes(want)) bad.push(`bare completion lacks nmapset's '${want}' (${labels.length} items)`);
     }
     for (const nm of ['HashMap', 'HashSet']) {
       const hit = bareItems.find((i) => i.label === nm);
-      if (hit && !/^class /.test(hit.detail || '')) bad.push(`bare completion '${nm}' is not the class: '${hit.detail}'`);
-    }
-    for (const absent of ['PrimMapI64', 'PrimMapU64', 'PrimMapF64']) {
-      if (labels.includes(absent)) bad.push(`bare completion still offers the internal '${absent}'`);
+      if (!hit) continue;
+      if (!/^nmapset::.+ — import$/.test(hit.detail || '')) {
+        bad.push(`bare completion '${nm}' is not the import offer: '${hit.detail}'`);
+      }
+      const edits = hit.additionalTextEdits || [];
+      if (edits.length !== 1 || !/use nmapset::\{? ?/.test(edits[0].newText || '')) {
+        bad.push(`bare completion '${nm}' carries no use-insert edit: ${JSON.stringify(edits)}`);
+      }
+      if (!hit.sortText || !hit.sortText.startsWith('~')) {
+        bad.push(`import offer '${nm}' must sort after the locals: ${JSON.stringify(hit.sortText)}`);
+      }
     }
     // nmap-host: the width moved INTO the name (no overloading) — the
     // keyed-lane fn is `map_hput` now (the `_i` spelling is gone with
@@ -279,6 +290,41 @@ async function main() {
     for (const want of ['encodeJson', 'decodeJson', 'decodeJsonBytes', 'JsonSerialize', 'JsonDeserialize', 'JsonReader', 'JsonWriter']) {
       if (!labels.includes(want)) bad.push(`bare completion lacks json's '${want}' (${labels.length} items)`);
     }
+    // the ambient core rows stay PLAIN bare offers (the `prelude
+    // builtin` spellings bind in every unit — no import edit on them)
+    for (const want of ['StackTrace', 'panic']) {
+      const hit = bareItems.find((i) => i.label === want);
+      if (!hit) bad.push(`bare completion lacks the ambient core row '${want}'`);
+      else if ((hit.additionalTextEdits || []).length !== 0) {
+        bad.push(`ambient core row '${want}' must complete plain, no import edit`);
+      }
+    }
+    smokes++;
+  }
+
+  // ---- plan3 phase 2 (A3): the TYPE TIER at an annotation boundary —
+  // `let v: u⏐` offers the primitive table (u8..u64), never the
+  // keyword table, fns, or locals; and (A6 pin) the brace form of a
+  // use — `use pouch::{ ⏐` — offers the module's exports. ----
+  {
+    const uri = 'file:///ws/e2e-type-tier.rut';
+    const src = 'fn go() -> nil {\n    let v: u\n}\n';
+    const items = rut.complete(uri, 1, '    let v: u'.length, src);
+    const labels = items.map((i) => i.label);
+    for (const want of ['u8', 'u16', 'u32', 'u64']) {
+      if (!labels.includes(want)) bad.push(`type tier lacks '${want}' (got ${labels.join(', ')})`);
+    }
+    for (const absent of ['fn', 'let', 'go']) {
+      if (labels.includes(absent)) bad.push(`type tier leaked '${absent}' (got ${labels.join(', ')})`);
+    }
+
+    // A6 pin: the brace form rides the names tier (`{` is a trigger
+    // char — the extension fires the request on the keystroke)
+    const bsrc = 'use pouch::{\nfn main() -> nil {\n}\n';
+    const buri = 'file:///ws/e2e-use-brace.rut';
+    const bitems = rut.complete(buri, 0, 'use pouch::{'.length, bsrc);
+    const blabels = bitems.map((i) => i.label);
+    if (!blabels.includes('Vec')) bad.push(`use brace form lacks pouch's 'Vec' (got ${blabels.join(', ')})`);
     smokes++;
   }
 

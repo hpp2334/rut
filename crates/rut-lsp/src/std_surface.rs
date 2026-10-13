@@ -134,6 +134,13 @@ fn std_index(
     // speaks for open documents); the definition layer's
     // body-over-decl preference reads it
     idx.mode = Some(mode);
+    // the std surface rides every chain as an ambient DEP lane: the
+    // auto-import tier offers its names wherever the doc's manifest
+    // stands (the editor's std is the dist's public face — the same
+    // shape a direct dep's mount answers with). The direct-dep marker
+    // gates the MOUNTED dep walks (transitive-only deps stay off);
+    // this surface is not one of them.
+    idx.direct_dep = true;
     idx
 }
 

@@ -315,6 +315,24 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
     return;
   }
   const module = table.name ?? path.basename(dirKey);
+  // the ROOT manifest's own rows are the doc's DIRECT deps — the
+  // compiler's closure check (`Session::resolve_use` → `declares`)
+  // refuses `use` of a mounted-but-undeclared package, so the auto-
+  // import tier gates on this set: hand it to the wasm BEFORE mounting
+  // anything (the dep indexes stamp the marker at index time). The
+  // doc's own package name rides too — uses may spell it. Names
+  // accumulate in the wasm's set (multi-folder walks, re-walks).
+  if (depth === 1) {
+    const stamped = ctx.rut.setDirectDeps([
+      ...(table.name ? [table.name] : []),
+      ...table.deps.map((r) => r.name),
+      ...table.peer_deps.map((r) => r.name),
+      ...table.dev_deps.map((r) => r.name),
+    ]);
+    if (isEnvelope(stamped)) {
+      hintOnce(`direct:${dirKey}:${stamped.error}`, `rut: ${stamped.error}`, true);
+    }
+  }
   for (const entry of table.entries) {
     if (ctx.files <= 0) {
       ctx.truncated = true;
@@ -655,7 +673,9 @@ function registerCompletion(rut: RutWasm): vscode.Disposable {
     },
     '.', // trigger: member completion after a receiver dot
     ':', // trigger: the `::` tiers (module members, enum members,
-    // namespace statics, associated fns) fire on the colon key
+    // namespace statics, associated fns) and the type tier at an
+    // annotation boundary (`let x: ⏐`), both on the colon key
+    '{', // trigger: the brace form of a use (`use pouch::{ ⏐`)
   );
 }
 

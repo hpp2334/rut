@@ -518,6 +518,7 @@ pub fn index_dep(
             form: TyForm::Namespace,
             vis: Vis::Pub,
             is_pub: true,
+            ambient: false,
             generics: Vec::new(),
             fields,
             methods,

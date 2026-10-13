@@ -201,6 +201,9 @@ interface RutExports {
   rut_signature_help(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_add_def(uriPtr: number, uriLen: number, srcPtr: number, srcLen: number): void;
   rut_parse_manifest(ptr: number, len: number): number;
+  /// the direct-dep names (JSON array) — the stamp the dep indexes
+  /// carry for the auto-import tier's gate
+  rut_set_direct_deps(ptr: number, len: number): number;
   rut_add_def_named(
     uriPtr: number,
     uriLen: number,
@@ -343,6 +346,20 @@ export class RutWasm {
     return this.call(() => {
       const [p, l] = this.put(text);
       return this.e.rut_parse_manifest(p, l);
+    });
+  }
+
+  /// hand the wasm the direct-dep module names — the open document's
+  /// own package name plus every dep row its ROOT manifest declares.
+  /// Dep indexes named here stamp the direct-dep marker the
+  /// auto-import tier gates on (a transitive-only dep's `use` is the
+  /// compiler's D5 error), so the host calls this when it parses a
+  /// root manifest, BEFORE mounting its rows. Names accumulate in the
+  /// wasm's set (multi-folder walks, re-walks).
+  setDirectDeps(names: string[]): { direct: number } | Envelope {
+    return this.call(() => {
+      const [p, l] = this.put(JSON.stringify(names));
+      return this.e.rut_set_direct_deps(p, l);
     });
   }
 

@@ -25,8 +25,33 @@ What it provides (the LSP slice landed early; the
   traits, impl blocks
 - **hover** — types on identifiers (written annotation or inferred),
   fields, methods, enum members, and primitives, at decl and use sites
-- **completions** — member items through receiver inference; bare
-  context = keywords + the std surface
+- **completions** — tiered by context, each honest about what the
+  compiler would bind:
+  - after `recv.` — the receiver type's fields and methods (through
+    receiver inference: field reads, chained calls, constructor
+    bindings, loop variables)
+  - at a bare position — the fn-local bindings (shadow- and
+    scope-correct, LSP variable/parameter kinds) ahead of the keyword
+    table, then the document's own decls, the ambient `prelude
+    builtin` rows, and the names the document already `use`s; every
+    other foreign name rides the auto-import tier below, never the
+    plain list
+  - at an annotation boundary (`let x: ⏐`, `id: u⏐`, `-> T⏐`) — the
+    type tier: the primitive table plus the document's types and the
+    imported foreign types; no keywords, fns, or locals
+  - in a `use` — the chain's module names (`use ⏐`), a walked
+    package's public exports (`use pkg::mod::⏐`, the `{ A, B }` brace
+    form included, trigger key `{`)
+  - after `modname::` in a package's own file — the module's members
+    by visibility tier; after `Type::` — enum members, namespace
+    statics, a type's associated fns
+  - auto-import — foreign public names from the document's DIRECT
+    deps (and the std surface) matching the bare prefix, each
+    carrying the `use mod::Name;` insert (`additionalTextEdits`) and
+    sorted after the locals (`sortText`); a transitive-only dep never
+    offers (the compiler refuses `use` of a mounted-but-undeclared
+    package), already-imported names are never re-offered, and one
+    name reachable two ways offers exactly one item
 - **go-to-definition / go-to-type-definition** — locals, params, fields,
   fns, types, and use-imported names through the use graph, into dep
   sources included: every segment of a use path is clickable — the pkg

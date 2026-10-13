@@ -461,18 +461,21 @@ pub fn is_reserved_kw(s: &str) -> bool {
     RESERVED_KW.contains(&s)
 }
 
+/// The primitive type names, in canonical order — the ONE table:
+/// [`is_primitive_ty`] matches against it and the LSP's type-position
+/// completion enumerates it (no duplicated list can drift).
+/// `str` included — it is a primitive, not a class; its natives are
+/// the free `string_len`/`string_encode` host fns declared in core.
+/// `bytes` is the immutable binary primitive alongside `str`.
+pub const PRIMITIVE_TYS: &[&str] = &[
+    "bool", "str", "bytes", "nil", "f32", "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
+];
+
 /// The primitive types — contextual type names, matched by
 /// interner text. Public and canonical: surface decls and
-/// the LSP classifier share this one table. `str` included — it is a
-/// primitive, not a class; its natives are the free `string_len`/
-/// `string_encode` host fns declared in core. `bytes` is
-/// the immutable binary primitive alongside `str`.
+/// the LSP classifier share this one table.
 pub fn is_primitive_ty(s: &str) -> bool {
-    matches!(
-        s,
-        "bool" | "str" | "bytes" | "nil" | "f32" | "f64"
-            | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64"
-    )
+    PRIMITIVE_TYS.contains(&s)
 }
 
 use crate::frame::ModuleFrame;

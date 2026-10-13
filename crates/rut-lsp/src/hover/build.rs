@@ -233,6 +233,9 @@ fn ty_def(
         form,
         vis,
         is_pub: vis == Vis::Pub,
+        // plain decls are not ambient — the `prelude builtin` rows set
+        // the flag after this constructor builds them
+        ambient: false,
         generics,
         fields,
         methods,
@@ -349,6 +352,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                         params: param_names(ast, &d.params),
                         doc: doc_before(src, sp.lo),
                         vis: d.vis.unwrap_or(Vis::Pub),
+                        ambient: false,
                         owner: Some(target_head.clone()),
                         span: sp,
                         line: line_of(src, sp.lo),
@@ -364,6 +368,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     params: param_names(ast, &d.params),
                     doc: doc_before(src, span.lo),
                     vis: d.vis,
+                    ambient: false,
                     owner: None,
                     span,
                     line: line_of(src, span.lo),
@@ -383,6 +388,9 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     params: param_names(ast, params),
                     doc: doc_before(src, span.lo),
                     vis: *vis,
+                    // the ambient spelling (`prelude builtin fn`) binds
+                    // in every unit — completion offers it bare
+                    ambient: matches!(linkage, Linkage::Builtin { ambient: true }),
                     owner: None,
                     span,
                     line: line_of(src, span.lo),
@@ -393,7 +401,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     idx.pub_gated.push(ast.name(*name).to_string());
                 }
                 let ms = members_of(src, ast, toks, members);
-                idx.types.push(ty_def(
+                let mut def = ty_def(
                     src,
                     toks,
                     ast.name(*name),
@@ -403,14 +411,17 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     Vec::new(),
                     ms,
                     span,
-                ));
+                );
+                // `prelude builtin` — ambient, offered bare
+                def.ambient = *ambient;
+                idx.types.push(def);
             }
             ItemKind::BuiltinPrimitive { name, ambient, members, .. } => {
                 if !ambient {
                     idx.pub_gated.push(ast.name(*name).to_string());
                 }
                 let ms = members_of(src, ast, toks, members);
-                idx.types.push(ty_def(
+                let mut def = ty_def(
                     src,
                     toks,
                     ast.name(*name),
@@ -420,7 +431,9 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     Vec::new(),
                     ms,
                     span,
-                ));
+                );
+                def.ambient = *ambient;
+                idx.types.push(def);
             }
             ItemKind::SurfaceStruct { name, fields, .. } => {
                 let fs = field_members(src, ast, toks, fields);
@@ -450,6 +463,7 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                     form: TyForm::Alias,
                     vis: d.vis,
                     is_pub: d.vis == Vis::Pub,
+                    ambient: false,
                     generics: Vec::new(),
                     fields: Vec::new(),
                     methods: Vec::new(),

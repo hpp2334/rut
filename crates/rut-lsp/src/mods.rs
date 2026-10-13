@@ -241,6 +241,7 @@ mod tests {
             form: TyForm::Struct,
             vis,
             is_pub: vis == Vis::Pub,
+            ambient: false,
             generics: Vec::new(),
             fields: Vec::new(),
             methods: Vec::new(),

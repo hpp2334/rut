@@ -35,6 +35,11 @@
 //!                                              url→pin ledger
 //!                                              rut_parse_manifest stamps
 //!                                              onto url rows
+//!   rut_set_direct_deps(ptr, len) -> ptr       the root manifest's dep
+//!                                              names (JSON array) — the
+//!                                              direct-dep stamp the dep
+//!                                              indexes carry (the
+//!                                              auto-import tier's gate)
 //!   rut_add_def_named(uri, name, src)          index a dep source file
 //!                                              under its module NAME
 //!   rut_add_def_mod(uri, name, path, src)
@@ -98,6 +103,15 @@ struct State {
     /// grammar carries no pins). `rut_parse_manifest` stamps the rows
     /// onto its url deps.
     lock_pins: std::collections::BTreeMap<String, String>,
+    /// the direct-dep module names — the open document's own package
+    /// name plus every dep row its ROOT manifest declares (`deps` ∪
+    /// `peer-deps`, `dev-deps` at the walk root). The host hands the
+    /// set to `rut_set_direct_deps` when it parses a root manifest;
+    /// every dep index named here stamps `direct_dep`, the
+    /// auto-import tier's gate (a transitive-only dep's `use` is the
+    /// compiler's D5 error). Union-accumulating: multi-folder walks
+    /// and re-walks re-add the same names, never shrink the world.
+    direct_deps: std::collections::HashSet<String>,
 }
 
 static mut STATE: Option<State> = None;
@@ -110,6 +124,7 @@ fn state() -> &'static mut State {
                 docs: HashMap::new(),
                 defs: rut_lsp::std_surface::indexes(),
                 lock_pins: std::collections::BTreeMap::new(),
+                direct_deps: std::collections::HashSet::new(),
             });
         }
         STATE.as_mut().unwrap_unchecked()
@@ -498,13 +513,38 @@ pub extern "C" fn rut_set_lock(ptr: *const u8, len: usize) -> *mut u8 {
     }
 }
 
+/// hand the dep face the direct-dep module names — the open
+/// document's own package name plus every dep row its ROOT manifest
+/// declares. Every dep index named here stamps `direct_dep` (the
+/// auto-import tier's gate): `rut_add_def_named` / `rut_add_def_mod`
+/// / `rut_add_bundle` consult the set at index time, so the host
+/// calls this once per root manifest BEFORE mounting its rows. The
+/// bytes are a JSON array of names (`["pouch", "calc"]`); names
+/// ACCUMULATE (a set — multi-folder walks and re-walks re-add the
+/// same names). Answers `{"direct": N}` (the set size), or the error
+/// envelope for malformed JSON.
+#[no_mangle]
+pub extern "C" fn rut_set_direct_deps(ptr: *const u8, len: usize) -> *mut u8 {
+    let text = unsafe { read_str(ptr, len) };
+    match serde_json::from_str::<Vec<String>>(text) {
+        Ok(names) => {
+            let set = &mut state().direct_deps;
+            for n in names {
+                set.insert(n);
+            }
+            json_envelope(serde_json::json!({ "direct": set.len() }))
+        }
+        Err(e) => json_envelope(serde_json::json!({ "error": e.to_string() })),
+    }
+}
+
 /// index one dep source file under its module NAME — `deps::index_dep`
 /// into the same store `rut_add_def` writes (re-indexing an origin
 /// replaces its entry), so `use <name>::` resolves it like any index.
 /// The mode rides the URI convention (`mode_of`, identical to
 /// `rut_add_def`); namespace/consts have no ABI voice here — a dep
 /// needing them indexes through `rut_add_bundle`, whose manifest is in
-/// the bytes.
+/// the bytes. The direct-dep marker stamps from the host's set.
 #[no_mangle]
 pub extern "C" fn rut_add_def_named(
     uri_ptr: *const u8,
@@ -517,7 +557,8 @@ pub extern "C" fn rut_add_def_named(
     let uri = unsafe { read_str(uri_ptr, uri_len) };
     let name = unsafe { read_str(name_ptr, name_len) };
     let src = unsafe { read_str(src_ptr, src_len) };
-    let idx = rut_lsp::deps::index_dep(name, uri, src, rut_lsp::analysis::mode_of(uri), None, &[]);
+    let mut idx = rut_lsp::deps::index_dep(name, uri, src, rut_lsp::analysis::mode_of(uri), None, &[]);
+    idx.direct_dep = state().direct_deps.contains(name);
     let defs = &mut state().defs;
     match defs.iter().position(|d| d.origin == uri) {
         Some(slot) => defs[slot] = idx,
@@ -547,7 +588,7 @@ pub extern "C" fn rut_add_def_mod(
     let name = unsafe { read_str(name_ptr, name_len) };
     let mod_path = unsafe { read_str(mod_path_ptr, mod_path_len) };
     let src = unsafe { read_str(src_ptr, src_len) };
-    let idx = rut_lsp::deps::index_dep_mod(
+    let mut idx = rut_lsp::deps::index_dep_mod(
         name,
         uri,
         mod_path,
@@ -556,6 +597,7 @@ pub extern "C" fn rut_add_def_mod(
         None,
         &[],
     );
+    idx.direct_dep = state().direct_deps.contains(name);
     let decls: Vec<serde_json::Value> = idx
         .mods
         .iter()
@@ -610,6 +652,7 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
         Err(e) => return json_envelope(serde_json::json!({ "error": e })),
     };
     let mut paths = Vec::with_capacity(b.files.len());
+    let direct = state().direct_deps.contains(&b.module);
     let defs = &mut state().defs;
     for f in &b.files {
         let uri = format!("bundle:{}/{}", b.module, f.path);
@@ -617,7 +660,7 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
         // as `<path>/mod.d.rut`, the rows lane's root as `mod.rut`) —
         // its mod path stamps the index in the file's own mode; flat
         // files keep today's shape
-        let idx = match rut_lsp::deps::bundle_file_mod_path(&f.path) {
+        let mut idx = match rut_lsp::deps::bundle_file_mod_path(&f.path) {
             Some(p) => rut_lsp::deps::index_dep_mod(
                 &b.module,
                 &uri,
@@ -636,6 +679,7 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
                 &b.consts,
             ),
         };
+        idx.direct_dep = direct;
         match defs.iter().position(|d| d.origin == uri) {
             Some(slot) => defs[slot] = idx,
             None => defs.push(idx),
@@ -865,6 +909,103 @@ mod tests {
         let checked_at = arr.iter().position(|i| i["label"] == "checked").unwrap();
         let let_at = arr.iter().position(|i| i["label"] == "let").unwrap();
         assert!(checked_at < let_at, "locals ride ahead of the keywords");
+    }
+
+    #[test]
+    fn complete_in_answers_the_type_tier_at_an_annotation() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        // A3 through the raw ABI: `let v: u⏐` — the primitive table
+        // rides the prefix, the keyword table / fns / locals stay off
+        let doc = "fn go() -> nil {\n    let v: u\n}\n";
+        let uri = b"file:///ws/type-tier.rut";
+        rut_begin();
+        let items = take(rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), 1, 12));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        for want in ["u8", "u16", "u32", "u64"] {
+            assert!(labels.contains(&want), "primitive `{want}` completes at the annotation: {labels:?}");
+        }
+        for absent in ["fn", "let", "go"] {
+            assert!(!labels.contains(&absent), "`{absent}` must stay off a type position: {labels:?}");
+        }
+        // the bare colon boundary — the full tier, no keywords
+        let doc = "fn go() -> nil {\n    let v: \n}\n";
+        rut_begin();
+        let items = take(rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), 1, 11));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert!(labels.contains(&"i32") && labels.contains(&"str"), "the bare colon tier: {labels:?}");
+        assert!(!labels.contains(&"fn"), "no keyword table at the boundary: {labels:?}");
+    }
+
+    #[test]
+    fn the_bare_scope_gates_a_dep_until_used() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        // A2 through the raw ABI: a named dep's fn is NOT a plain bare
+        // item until the doc `use`s it — the only bare-doc offer rides
+        // the import edit, and the direct-dep set gates the tier
+        let (u, n, s) = (
+            b"file:///ws/kitdep/lib.rut".as_slice(),
+            b"kitdep".as_slice(),
+            &b"pub fn tag() -> i32 {\n    return 1;\n}\n"[..],
+        );
+        // a root manifest declaring ONLY the doc's own pkg — kitdep is
+        // mounted but NOT direct (the transitive-only shape)
+        rut_begin();
+        take(rut_set_direct_deps(
+            br#"["myapp"]"#.as_ptr(),
+            br#"["myapp"]"#.len(),
+        ));
+        rut_begin();
+        rut_add_def_named(u.as_ptr(), u.len(), n.as_ptr(), n.len(), s.as_ptr(), s.len());
+        let doc = "fn main() -> nil {\n}\n";
+        let uri = b"file:///ws/bare.rut";
+        rut_begin();
+        take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));
+        rut_begin();
+        let items = take(rut_complete(uri.as_ptr(), uri.len(), 1, 0));
+        let arr = items.as_array().unwrap();
+        assert!(
+            arr.iter().all(|i| i["label"] != "tag"),
+            "a transitive-only dep's fn must not offer at all: {:?}",
+            arr.iter().map(|i| &i["label"]).collect::<Vec<_>>()
+        );
+
+        // the direct-dep set gains kitdep (the root manifest's row):
+        // the bare doc offers `tag` ONLY through the import edit …
+        rut_begin();
+        take(rut_set_direct_deps(
+            br#"["myapp", "kitdep"]"#.as_ptr(),
+            br#"["myapp", "kitdep"]"#.len(),
+        ));
+        rut_begin();
+        rut_add_def_named(u.as_ptr(), u.len(), n.as_ptr(), n.len(), s.as_ptr(), s.len());
+        rut_begin();
+        let items = take(rut_complete(uri.as_ptr(), uri.len(), 1, 0));
+        let arr = items.as_array().unwrap();
+        let imp = arr
+            .iter()
+            .find(|i| i["label"] == "tag")
+            .expect("the direct dep's fn offers");
+        assert!(
+            imp["additionalTextEdits"].as_array().is_some_and(|e| !e.is_empty()),
+            "the offer carries the use-insert edit: {imp}"
+        );
+
+        // … and once the doc `use`s it, `tag` is a PLAIN bare item —
+        // exactly one, with no edit riding
+        let doc = "use kitdep::{ tag };\nfn main() -> nil {\n}\n";
+        let uri = b"file:///ws/bare-used.rut";
+        rut_begin();
+        take(rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()));
+        rut_begin();
+        let items = take(rut_complete(uri.as_ptr(), uri.len(), 1, 0));
+        let arr = items.as_array().unwrap();
+        let hits: Vec<&serde_json::Value> = arr.iter().filter(|i| i["label"] == "tag").collect();
+        assert_eq!(hits.len(), 1, "one `tag` item: {hits:?}");
+        assert!(
+            hits[0]["additionalTextEdits"].is_null(),
+            "the imported fn completes plain: {}",
+            hits[0]
+        );
     }
 
     #[test]

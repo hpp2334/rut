@@ -121,6 +121,12 @@ pub struct TyDef {
     /// (the hashmap-surface batch: nmapset's internal lane classes
     /// leave the bare-project surface)
     pub is_pub: bool,
+    /// the ambient builtin linkage (`prelude builtin`) — the name
+    /// binds in every compilation unit with no `use`, so completion
+    /// offers it bare from ANY index in the chain. `false` = a plain
+    /// decl or the import-gated spelling (`pub builtin`, mirrored in
+    /// `DefIndex::pub_gated`)
+    pub ambient: bool,
     pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
     pub methods: Vec<MemberSrc>,
@@ -147,6 +153,11 @@ pub struct FnDef {
     /// the declared visibility — the position-path completion's tier
     /// gate reads it (free fns; impl methods carry their member vis)
     pub vis: Vis,
+    /// the ambient builtin linkage (`prelude builtin fn`) — the name
+    /// binds in every compilation unit with no `use`, so completion
+    /// offers it bare from ANY index in the chain. `false` = a plain
+    /// decl or the import-gated spelling (`pub builtin`)
+    pub ambient: bool,
     /// the owning inherent impl's target type (`Circle` — inherent
     /// impls own their methods, so an impl method renders like the
     /// type's own surface), `None` for a free fn
@@ -235,6 +246,17 @@ pub struct DefIndex {
     /// definition layer prefers body hits over decl-surface hits when
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
+    /// the dep is a DIRECT dep of the open document's package —
+    /// declared in its own manifest (`deps` ∪ `peer-deps`, `dev-deps`
+    /// at the walk root). The compiler's closure check
+    /// (`Session::resolve_use` → `declares`) refuses `use` of a
+    /// mounted-but-undeclared package (the D5 diagnostic), so the
+    /// auto-import tier offers direct deps only: a transitive-only
+    /// dep's names would complete into a compile the program rejects.
+    /// The faces stamp it (the dep walks know the depth); unstamped
+    /// indexes — the embedded std surface, plain workspace files —
+    /// keep today's offer-everything shape. Never derived from text.
+    pub direct_dep: bool,
 }
 
 impl DefIndex {
