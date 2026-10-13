@@ -826,6 +826,48 @@ mod tests {
     }
 
     #[test]
+    fn complete_in_answers_locals_and_members_at_the_end_of_buffer() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        // plan3 phase 1 (A7): the doc ends EXACTLY at the incomplete
+        // stmt — the parser ends the block's span at the EOF token, the
+        // cursor sits ON `hi`, and before the scope extension the member
+        // tier dropped the receiver (an empty list). The fn body's scope
+        // extends through the source end, so the member tier answers
+        // through the doc-sync entry — never the bare keyword dump.
+        let doc = "class List {\n    items: i32;\n}\nimpl List {\n    fn count(self) -> i32 { return 0; }\n}\nfn go() -> nil {\n    let list = List.new();\n    list.";
+        let uri = b"file:///ws/eof-member.rut";
+        let last = doc.rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line = doc[..last].matches('\n').count() as u32;
+        let ch = (doc.len() - last) as u32;
+        rut_begin();
+        let items = take(rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), line, ch));
+        let labels: Vec<&str> = items.as_array().unwrap().iter().map(|i| i["label"].as_str().unwrap()).collect();
+        for want in ["items", "count"] {
+            assert!(labels.contains(&want), "member completion at EOF lacks '{want}': {labels:?}");
+        }
+        assert!(!labels.contains(&"fn"), "no keyword dump after a dot at EOF: {labels:?}");
+
+        // the locals tier (A1) at the same moment: `che⏐` after
+        // `let mut checked …` — the binding rides the variable kind
+        let doc = "fn go() -> nil {\n    let mut checked: str = \" \";\n    che";
+        let uri = b"file:///ws/eof-locals.rut";
+        let last = doc.rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line = doc[..last].matches('\n').count() as u32;
+        let ch = (doc.len() - last) as u32;
+        rut_begin();
+        let items = take(rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), line, ch));
+        let arr = items.as_array().unwrap();
+        let labels: Vec<&str> = arr.iter().map(|i| i["label"].as_str().unwrap()).collect();
+        assert!(labels.contains(&"checked"), "the local completes at EOF: {labels:?}");
+        let checked = arr.iter().find(|i| i["label"] == "checked").unwrap();
+        assert_eq!(checked["kind"], 6, "LSP VARIABLE kind: {}", checked["kind"]);
+        // ahead of the keyword table
+        let checked_at = arr.iter().position(|i| i["label"] == "checked").unwrap();
+        let let_at = arr.iter().position(|i| i["label"] == "let").unwrap();
+        assert!(checked_at < let_at, "locals ride ahead of the keywords");
+    }
+
+    #[test]
     fn add_def_named_feeds_the_use_path_tier() {
         let _lock = TEST_SERIAL.lock().unwrap();
         rut_begin();

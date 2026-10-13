@@ -323,6 +323,54 @@ async function main() {
     smokes++;
   }
 
+  // ---- plan3 phase 1 (A7+A1): END-OF-BUFFER completion — the doc ends
+  // EXACTLY at the incomplete statement, so the parser ends the
+  // enclosing block's span at the EOF token and the cursor sits ON it.
+  // Before the fn body's scope extension through the source end, every
+  // binding of the block dropped and `list.` answered EMPTY at the most
+  // common typing moment. The member tier answers through the real ABI
+  // path now, and the locals tier (A1) offers the fn-local bindings
+  // ahead of the keyword table. ----
+  {
+    const uri = 'file:///ws/e2e-eof.rut';
+    const src = [
+      'class List {',
+      '    items: i32;',
+      '}',
+      'impl List {',
+      '    fn count(self) -> i32 { return 0; }',
+      '}',
+      'fn go() -> nil {',
+      '    let list = List.new();',
+      '    list.',
+    ].join('\n');
+    // member completion at EOF: cursor right after the final dot, the
+    // CURRENT text riding the request (the editor's exact call)
+    const lastLine = src.slice(src.lastIndexOf('\n') + 1);
+    const items = rut.complete(uri, src.split('\n').length - 1, lastLine.length, src);
+    const labels = items.map((i) => i.label);
+    for (const want of ['items', 'count']) {
+      if (!labels.includes(want)) bad.push(`EOF member completion lacks '${want}' (got ${labels.join(', ')})`);
+    }
+    if (labels.includes('fn')) bad.push(`EOF member completion leaked the keyword table (got ${labels.join(', ')})`);
+
+    // the locals shape at EOF: `che⏐` after `let mut checked …` — the
+    // binding completes ahead of the keywords, riding LSP kind 6
+    // (VARIABLE; the extension maps kind - 1, unchanged)
+    const lsrc = 'fn go() -> nil {\n    let mut checked: str = " ";\n    che';
+    const luri = 'file:///ws/e2e-eof-locals.rut';
+    const litems = rut.complete(luri, 2, lsrc.slice(lsrc.lastIndexOf('\n') + 1).length, lsrc);
+    const checked = litems.find((i) => i.label === 'checked');
+    if (!checked) bad.push(`EOF locals completion lacks 'checked' (got ${litems.map((i) => i.label).join(', ')})`);
+    else if (checked.kind !== 6) bad.push(`EOF local 'checked' kind ${checked.kind} != 6 (VARIABLE)`);
+    const checkedAt = litems.findIndex((i) => i.label === 'checked');
+    const letAt = litems.findIndex((i) => i.label === 'let');
+    if (checkedAt >= 0 && letAt >= 0 && checkedAt > letAt) {
+      bad.push(`EOF local 'checked' rides behind the keyword table (${checkedAt} > ${letAt})`);
+    }
+    smokes++;
+  }
+
   // ---- phase 1 (lsp-features): field DECL hover — hovering `item`
   // inside `struct Slot { item: ?Circle; }` answers with the field's
   // decl and its owning struct (the decl layer's token-recovered span) ----
@@ -1344,6 +1392,7 @@ async function main() {
     `refs-shadow/refs-cross/sighelp/` +
     `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface/` +
     `extract-deps-leaf+head/path-dep-segments/` +
+    `eof-member+locals/` +
     `complete-in-doc-sync) ` +
     `through bin/rut-lsp.wasm`);
 }

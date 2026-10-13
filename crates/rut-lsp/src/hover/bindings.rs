@@ -55,7 +55,9 @@ pub struct Binding {
     pub decl_ident_span: Span,
     /// where the binding is visible: from the declaring ident to the
     /// end of its introducing block (fn/lambda body, loop, the whole
-    /// loop statement for a for-c counter)
+    /// loop statement for a for-c counter). A block the document ends
+    /// inside extends through the source end (`Cx::scope_of`) — the
+    /// cursor typing at the EOF stays inside its block's scope.
     pub scope_span: Span,
     pub kind: BindKind,
     /// display text of the declared or inferred type (`Circle`,
@@ -88,11 +90,14 @@ pub fn resolve<'b>(bs: &'b [Binding], pos: u32, name: &str) -> Option<&'b Bindin
 
 /// every fn-local binding in the document, in declaration order
 pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
-    let mut cx = Cx { ast, toks, idxs, out: Vec::new() };
+    // the source end — the lexer rides an EOF token last, its hi the
+    // normalized length; `scope_of` extends unterminated blocks past it
+    let src_end = toks.last().map(|t| t.span.hi).unwrap_or(0);
+    let mut cx = Cx { ast, toks, idxs, src_end, out: Vec::new() };
     for h in ast.module_items(ast.root) {
         match ast.item(*h) {
             ItemKind::Fn(d) => {
-                let scope = ast.span(d.body.id());
+                let scope = cx.scope_of(ast.span(d.body.id()));
                 cx.push_params(&d.params, scope);
                 cx.walk_block(d.body);
             }
@@ -103,7 +108,7 @@ pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
                 for m in methods {
                     let d = ast.method_decl(*m);
                     if let Some(body) = d.body {
-                        let scope = ast.span(body.id());
+                        let scope = cx.scope_of(ast.span(body.id()));
                         cx.push_params(&d.params, scope);
                         cx.walk_block(body);
                     }
@@ -119,6 +124,8 @@ struct Cx<'a> {
     ast: &'a Ast,
     toks: &'a [Token],
     idxs: &'a [&'a DefIndex],
+    /// the source end (the EOF token's hi) — `scope_of`'s extension target
+    src_end: u32,
     out: Vec<Binding>,
 }
 
@@ -132,6 +139,47 @@ impl Cx<'_> {
             ty,
             inferred,
         });
+    }
+
+    /// the visibility span for a binding introduced in `span`'s region —
+    /// the span's own hi, EXCEPT when the span still holds an open `{` at
+    /// its end. That is the end-of-buffer hole: a document that ends
+    /// inside an incomplete statement leaves its enclosing block
+    /// unclosed, the parser ends the block's span at the EOF token, and
+    /// the cursor typing at the source end sits exactly ON that hi —
+    /// which `contains`' exclusive test drops, so every binding of the
+    /// block (and with it member completion on the receiver, the locals
+    /// tier, go-to-def) resolves to nothing. Such a scope extends one
+    /// past the source end, so the EOF position stays inside; a block
+    /// that closed keeps its exact span — nothing leaks past a real `}`.
+    fn scope_of(&self, span: Span) -> Span {
+        let hi = if self.open_brace_at_end(span) { self.src_end + 1 } else { span.hi };
+        Span::new(span.lo, hi)
+    }
+
+    /// whether `span` ends with an unclosed `{`: counting the braces of
+    /// the token slice inside the span, the depth never returns to zero
+    /// after the first opener. Token-backed (like `ident_span`'s
+    /// recovery — no parser changes): comments never lex, strings and
+    /// f-strings ride as single tokens so their braces stay out, and a
+    /// closed block's own `}` IS inside the span (statement spans end at
+    /// the NEXT token). A span with no braces at all (an expression
+    /// lambda's body) is never "open" — depth zero means keep the span.
+    fn open_brace_at_end(&self, span: Span) -> bool {
+        let mut depth = 0i32;
+        for t in self.toks.iter().filter(|t| t.span.lo >= span.lo && t.span.hi <= span.hi) {
+            match t.tok {
+                Tok::LBrace => depth += 1,
+                Tok::RBrace => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        return false; // the block's own closer — closed
+                    }
+                }
+                _ => {}
+            }
+        }
+        depth > 0
     }
 
     /// params of a fn/method/lambda — visible through the whole body
@@ -149,7 +197,7 @@ impl Cx<'_> {
     }
 
     fn walk_block(&mut self, block: NodeHandle<BlockNode>) {
-        let span = self.ast.span(block.id());
+        let span = self.scope_of(self.ast.span(block.id()));
         for s in self.ast.block(block).to_vec() {
             self.walk_stmt(s, span);
         }
@@ -207,7 +255,7 @@ impl Cx<'_> {
                 self.walk_expr(*init); // lambdas in the initializer
             }
             Kind::Stmt(StmtKind::ForOf { var, iter, body }) => {
-                let body_span = self.ast.span(body.id());
+                let body_span = self.scope_of(self.ast.span(body.id()));
                 let text = self.ast.name(*var);
                 if let Some(decl) = ident_span(self.toks, sp, text) {
                     let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *iter).and_then(|t| elem_ty(&t));
@@ -223,8 +271,10 @@ impl Cx<'_> {
                     let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *init);
                     let inferred = raw.is_some();
                     // the counter is visible through cond + update too —
-                    // the scope is the whole loop statement
-                    self.push(text, decl, Span::new(decl.lo, sp.hi), BindKind::IterVar, raw, inferred);
+                    // the scope is the whole loop statement (extended
+                    // through an end-of-buffer truncation, `scope_of`)
+                    let scope = self.scope_of(sp);
+                    self.push(text, decl, Span::new(decl.lo, scope.hi), BindKind::IterVar, raw, inferred);
                 }
                 self.walk_expr(*init);
                 self.walk_expr(*cond);
@@ -275,7 +325,7 @@ impl Cx<'_> {
                 }
             }
             ExprKind::Lambda { params, body, ret: _ } => {
-                let span = self.ast.span(body.id());
+                let span = self.scope_of(self.ast.span(body.id()));
                 self.push_params(params, span);
                 self.walk_expr(*body);
             }

@@ -66,17 +66,21 @@ pub enum CompletionKind {
     Method,
     Field,
     EnumMember,
+    /// a fn-local `let` binding (or loop variable) at a bare position
+    Variable,
+    /// a fn-local parameter at a bare position
+    Parameter,
 }
 
 /// Completions at `pos`: use-path tiers inside a `use` statement
 /// (walking a package's mod namespaces), qualified-position tiers
 /// after `modname::` in the package's own files, member items after
-/// `recv.` (filtered by the typed prefix), otherwise the keyword table
-/// plus the visible decls plus the auto-import tier. `src` is the
-/// NORMALIZED source — the auto-import edits' coordinates ride the
-/// same text the tokens were lexed from. `doc` is the open document's
-/// file-module context (the face's knowledge; the default keeps
-/// position-path completion off).
+/// `recv.` (filtered by the typed prefix), otherwise the visible
+/// fn-local bindings ahead of the keyword table plus the visible decls
+/// plus the auto-import tier. `src` is the NORMALIZED source — the
+/// auto-import edits' coordinates ride the same text the tokens were
+/// lexed from. `doc` is the open document's file-module context (the
+/// face's knowledge; the default keeps position-path completion off).
 pub fn complete(
     idxs: &[&DefIndex],
     toks: &[Token],
@@ -85,6 +89,9 @@ pub fn complete(
     src: &str,
     doc: &DocMods,
 ) -> Vec<CompletionOut> {
+    // the binding pass, computed once: the member tier keys receivers on
+    // it and the bare position's locals tier enumerates it
+    let binds = crate::hover::bindings::collect(ast, toks, idxs);
     if let Some((segs, prefix)) = use_path_before(toks, pos) {
         return use_path_completions(idxs, &segs, &prefix);
     }
@@ -120,7 +127,10 @@ pub fn complete(
             return Vec::new();
         }
         let used = used_ifaces(ast);
-        let mut out = bare_completions(idxs, &used);
+        // the locals tier rides AHEAD of the keyword table — the name
+        // being typed is most often a binding just declared
+        let mut out = local_completions(&binds, pos);
+        out.extend(bare_completions(idxs, &used));
         out.extend(auto_import_completions(idxs, ast, toks, pos, src));
         return out;
     };
@@ -132,9 +142,9 @@ pub fn complete(
     if let Some(out) = position_path_completions(idxs, doc, std::slice::from_ref(&recv), &prefix) {
         return out;
     }
-    // the binding pass — member completion shares hover's receiver
-    // inference (field reads, chained calls, loop variables)
-    let binds = crate::hover::bindings::collect(ast, toks, idxs);
+    // the binding pass already ran at the top — member completion shares
+    // hover's receiver inference (field reads, chained calls, loop
+    // variables)
     member_completions(idxs, ast, &binds, pos, &recv, &prefix)
 }
 
@@ -239,6 +249,54 @@ fn member_completions(
     if !prefix.is_empty() {
         out.retain(|c| c.label.starts_with(prefix));
     }
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    out
+}
+
+/// The locals tier at a bare position: every fn-local binding visible at
+/// `pos`, under the same shadow-correct, scope-exit-correct rule the
+/// resolve rides — per NAME the innermost in-scope declaration wins (an
+/// inner re-decl replaces the outer inside its scope; past the block the
+/// name is gone), and a binding whose own declaring ident holds the
+/// cursor stays off (don't offer the name mid-typing at its own
+/// declaration). Emitted ahead of the keyword table — the name being
+/// typed is most often a binding just declared.
+fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<CompletionOut> {
+    let mut best: Vec<&crate::hover::Binding> = Vec::new();
+    for b in binds {
+        if b.decl_ident_span.lo > pos || !crate::hover::lookup::contains(b.scope_span, pos) {
+            continue; // declared later, or its scope ended before the cursor
+        }
+        if crate::hover::lookup::contains(b.decl_ident_span, pos) {
+            continue; // the cursor sits in the declaration's own ident
+        }
+        match best.iter().position(|x| x.name == b.name) {
+            Some(i) => {
+                if best[i].decl_ident_span.lo < b.decl_ident_span.lo {
+                    best[i] = b; // the inner shadow wins inside its scope
+                }
+            }
+            None => best.push(b),
+        }
+    }
+    let mut out: Vec<CompletionOut> = best
+        .into_iter()
+        .map(|b| {
+            let kind = match b.kind {
+                crate::hover::BindKind::Param => CompletionKind::Parameter,
+                crate::hover::BindKind::Let | crate::hover::BindKind::IterVar => CompletionKind::Variable,
+            };
+            CompletionOut::plain(
+                b.name.clone(),
+                match &b.ty {
+                    Some(ty) => format!("{} — {ty}", b.kind.label()),
+                    None => b.kind.label().to_string(),
+                },
+                Vec::new(),
+                kind,
+            )
+        })
+        .collect();
     out.sort_by(|a, b| a.label.cmp(&b.label));
     out
 }
@@ -944,6 +1002,9 @@ pub fn lsp_item(c: CompletionOut) -> CompletionItem {
             CompletionKind::Method => CompletionItemKind::METHOD,
             CompletionKind::Field => CompletionItemKind::FIELD,
             CompletionKind::EnumMember => CompletionItemKind::ENUM_MEMBER,
+            CompletionKind::Variable => CompletionItemKind::VARIABLE,
+            // LSP spells no parameter kind — the variable icon carries it
+            CompletionKind::Parameter => CompletionItemKind::VARIABLE,
         }),
         detail: (!c.detail.is_empty()).then_some(c.detail),
         documentation: (!c.doc.is_empty()).then(|| {
@@ -1608,5 +1669,199 @@ entry fn main() -> nil {
         let doc = "fn go() -> nil {\n    let x = probe().\n}\n";
         let items = complete_after(doc, "probe().");
         assert!(items.is_empty(), "{:?}", labels(&items));
+    }
+
+    // ---- the locals tier (plan3 phase 1, A1) ----
+
+    #[test]
+    fn locals_complete_at_a_bare_position_ahead_of_the_keywords() {
+        // `che⏐` mid-block: the fn-local `checked` and the param `ready`
+        // ride their own kinds, ahead of the keyword table
+        let src = "\
+fn go(ready: bool) -> nil {
+    let mut checked: str = \" \";
+    che
+}
+";
+        let items = complete_after(src, "    che\n");
+        let ls = labels(&items);
+        assert!(ls.contains(&"checked"), "the local completes: {ls:?}");
+        assert!(ls.contains(&"ready"), "the param completes: {ls:?}");
+        let checked = items.iter().find(|c| c.label == "checked").unwrap();
+        assert!(matches!(checked.kind, CompletionKind::Variable), "{:?}", checked.kind);
+        assert!(checked.detail.contains("let binding") && checked.detail.contains("str"), "{}", checked.detail);
+        let ready = items.iter().find(|c| c.label == "ready").unwrap();
+        assert!(matches!(ready.kind, CompletionKind::Parameter), "{:?}", ready.kind);
+        // ahead of the keyword table
+        let checked_at = items.iter().position(|c| c.label == "checked").unwrap();
+        let let_kw_at = items.iter().position(|c| c.label == "let").unwrap();
+        assert!(checked_at < let_kw_at, "locals ride ahead of the keywords");
+    }
+
+    #[test]
+    fn locals_offer_loop_variables_where_their_scope_reaches() {
+        // the for-of var inside its body; the for-c counter inside the
+        // cond/update too (its scope is the whole loop statement)
+        let src = "\
+fn go(xs: [i32]) -> nil {
+    for (let v of xs) {
+        vv
+    }
+}
+";
+        let items = complete_after(src, "        vv");
+        let v = items.iter().find(|c| c.label == "v").expect("the for-of var completes");
+        assert!(matches!(v.kind, CompletionKind::Variable), "{:?}", v.kind);
+        assert!(v.detail.contains("loop variable"), "{}", v.detail);
+
+        let src = "\
+fn go(n: i32) -> nil {
+    let sum = 0;
+    for (let i = 0; i < n; i += su) {
+        sum += i;
+    }
+}
+";
+        // `su` inside the UPDATE — the counter `i` and the outer `sum`
+        // both still in scope
+        let items = complete_after(src, "i += su");
+        let ls = labels(&items);
+        assert!(ls.contains(&"i"), "the counter completes in the update: {ls:?}");
+        assert!(ls.contains(&"sum"), "{ls:?}");
+        assert!(ls.contains(&"n"), "the param reaches the loop: {ls:?}");
+        let i = items.iter().find(|c| c.label == "i").unwrap();
+        assert!(i.detail.contains("i32"), "{}", i.detail);
+    }
+
+    #[test]
+    fn locals_shadow_inside_and_exit_their_scope() {
+        // inside the if-block the INNER `flag` wins (the i32 detail —
+        // one entry per name, the innermost in-scope declaration rides)
+        let src = "\
+fn go(ready: bool) -> nil {
+    let flag: str = \"a\";
+    if (ready) {
+        let flag: i32 = 1;
+        fl
+    }
+    fl
+}
+";
+        let items = complete_after(src, "        fl");
+        let flag = items.iter().find(|c| c.label == "flag").expect("the shadow completes");
+        assert!(flag.detail.contains("i32"), "the inner shadow wins inside its scope: {}", flag.detail);
+        // scope-exit: a binding declared INSIDE the block is gone past
+        // it, while the fn-wide param rides on
+        let src = "\
+fn go(ready: bool) -> nil {
+    if (ready) {
+        let tmp: i32 = 1;
+        tm
+    }
+    tm
+}
+";
+        let items = complete_after(src, "        tm");
+        assert!(labels(&items).contains(&"tmp"), "inside its block the local completes");
+        let items = complete_after(src, "    tm\n");
+        let ls = labels(&items);
+        assert!(!ls.contains(&"tmp"), "the binding does not leak past its block: {ls:?}");
+        assert!(ls.contains(&"ready"), "the fn-wide param rides past the block: {ls:?}");
+    }
+
+    #[test]
+    fn locals_skip_their_own_declaration_ident() {
+        // the cursor inside the declaring ident — `let ch⏐e` — never
+        // offers the name being typed; a use after the decl does
+        let src = "fn go() -> nil {\n    let che = 1;\n}\n";
+        let items = complete_after(src, "let ch");
+        assert!(!labels(&items).contains(&"che"), "the declaration's own ident stays off");
+        assert!(!labels(&items).contains(&"ch"), "the half-typed name stays off: {:?}", labels(&items));
+        let src = "fn go() -> nil {\n    let che = 1;\n    che\n}\n";
+        let items = complete_after(src, "    che\n");
+        assert!(labels(&items).contains(&"che"), "{:?}", labels(&items));
+    }
+
+    // ---- the end-of-buffer scope fix (plan3 phase 1, A7) — the doc
+    // ends at/inside the incomplete statement, the parser ends the
+    // block's span at the EOF token, the cursor sits ON `hi`; the fn
+    // body's scope extends through the source end so resolution keeps
+    // working at the most common typing moment. No scope leaks OUT of
+    // real (closed) blocks. ----
+
+    /// the List probe doc's head — a type with a field and an impl
+    /// method for the member tier to answer with
+    const EOF_LIST_HEAD: &str = "\
+class List {
+    items: i32;
+}
+impl List {
+    fn count(self) -> i32 { return 0; }
+}
+";
+
+    #[test]
+    fn member_completion_survives_the_end_of_buffer() {
+        // THE regression: the text ends EXACTLY at the incomplete stmt
+        let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.");
+        let items = complete_after(&src, "    list.");
+        let ls = labels(&items);
+        assert!(ls.contains(&"items"), "the field completes at EOF: {ls:?}");
+        assert!(ls.contains(&"count"), "the method completes at EOF: {ls:?}");
+        // never the bare keyword dump
+        assert!(!ls.contains(&"fn"), "no keyword dump after a dot: {ls:?}");
+
+        // one trailing newline — the same hole (the block span still
+        // ends at the EOF token)
+        let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.\n");
+        let items = complete_after(&src, "    list.");
+        let ls = labels(&items);
+        assert!(ls.contains(&"items") && ls.contains(&"count"), "the member list survives the newline: {ls:?}");
+
+        // last stmt before `}` — the closed-block shape guards today's
+        // behavior behind the fix
+        let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.\n}}\n");
+        let items = complete_after(&src, "    list.");
+        let ls = labels(&items);
+        assert!(ls.contains(&"items") && ls.contains(&"count"), "{ls:?}");
+    }
+
+    #[test]
+    fn locals_complete_at_the_end_of_buffer() {
+        // A1 at EOF (post-A7): the doc ends mid-statement
+        let src = "fn go() -> nil {\n    let mut checked: str = \" \";\n    che";
+        let items = complete_after(src, "    che");
+        let ls = labels(&items);
+        assert!(ls.contains(&"checked"), "the local completes at EOF: {ls:?}");
+
+        // the receiver itself still resolves for member completion when
+        // the receiver is the LAST thing before the cursor
+        let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    li");
+        let items = complete_after(&src, "    li");
+        assert!(labels(&items).contains(&"list"), "the local completes at EOF: {:?}", labels(&items));
+    }
+
+    #[test]
+    fn the_end_of_buffer_extension_never_leaks_a_closed_block() {
+        // a REAL `}` ends the scope exactly as before: the cursor past
+        // it (at the source end) sees no fn-local — no leak out of the
+        // closed block, with or without a trailing newline
+        for (src, needle) in [
+            ("fn go() -> nil {\n    let checked: str = \" \";\n}\n", "}\n"),
+            ("fn go() -> nil {\n    let checked: str = \" \";\n}", "}"),
+        ] {
+            let items = complete_after(src, needle);
+            let ls = labels(&items);
+            assert!(
+                !ls.contains(&"checked"),
+                "no leak past a closed block ({src:?}): {ls:?}"
+            );
+        }
+        // and a closed first fn never leaks into an unterminated second
+        let src = "fn a() -> nil {\n    let alpha: i32 = 1;\n}\nfn b() -> nil {\n    let beta: i32 = 2;\n    be";
+        let items = complete_after(src, "    be");
+        let ls = labels(&items);
+        assert!(ls.contains(&"beta"), "the unterminated fn's local completes: {ls:?}");
+        assert!(!ls.contains(&"alpha"), "the closed fn's local stays in: {ls:?}");
     }
 }

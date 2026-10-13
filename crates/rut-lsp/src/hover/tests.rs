@@ -577,6 +577,20 @@ return x.r;
 }
 
 #[test]
+fn hover_at_the_end_of_buffer_still_resolves_the_receiver() {
+    // the end-of-buffer scope fix's blast-radius guard: the doc ends at
+    // the incomplete statement, the cursor sits ON the block span's hi —
+    // the fn body's scope extends through the source end, so hovering
+    // the receiver (and its members) resolves exactly as mid-block
+    let src = "class List {\n    items: i32;\n}\nimpl List {\n    fn count(self) -> i32 { return 0; }\n}\nfn go() -> nil {\n    let list = List.new();\n    return list.count;";
+    let md = hover_at(src, "list").expect("the receiver hovers at EOF");
+    assert!(md.contains("let list: List"), "{md}");
+    // the member after the dot rides the same resolution
+    let md = hover_nth(src, "count", 1).expect("the member hovers at EOF");
+    assert!(md.contains("fn count(self) -> i32"), "{md}");
+}
+
+#[test]
 fn binding_decl_span_is_byte_exact() {
     // the span-first law: the record's decl_ident_span equals the
     // declaring ident's token span — phase 2's definition target
