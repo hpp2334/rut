@@ -33,6 +33,7 @@ use ls_types::Range;
 use rut_ast::ast::Ast;
 use rut_lexer::span::Span;
 use rut_lexer::token::{Tok, Token};
+use rut_parser::Mode;
 
 use crate::hover::lookup::{self, MemberHit, MemberTarget};
 use crate::hover::types::head_of_ty;
@@ -153,6 +154,27 @@ fn chain_for<'a>(
     }
 }
 
+/// body-over-decl: a package that indexes BOTH its `.d.rut` surface
+/// (`mode == Some(Decl)`) and its `mod.rut` body (`Impl` — or any
+/// index whose builder did not stamp) answers from the body; the
+/// surface hits ride only when they are all there is. The generic
+/// payload keeps one law for every shape the layers collect (spans,
+/// `&TyDef`s). A mono-file pkg — body-only (pouch) or surface-only
+/// (calc, the host surfaces) — is unchanged: all its hits are one
+/// kind.
+fn prefer_bodies<'a, T: Copy>(hits: &[(&'a DefIndex, T)]) -> Vec<(&'a DefIndex, T)> {
+    let bodies: Vec<(&DefIndex, T)> = hits
+        .iter()
+        .copied()
+        .filter(|(i, _)| i.mode != Some(Mode::Decl))
+        .collect();
+    if bodies.is_empty() {
+        hits.to_vec()
+    } else {
+        bodies
+    }
+}
+
 /// a type's definition target span — the declaring ident (token
 /// recovery at build time); the whole decl is the fallback when
 /// recovery failed on a degenerate parse
@@ -195,9 +217,10 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     // 2. use-statement names and path segments — the survey's
     //    use-graph edge: ctrl+click on `Vec` inside `use pouch::Vec;`
     //    jumps to the exporting module's decl (strictly inside the
-    //    named pkg, now strictly inside the walked mod path too), and
-    //    a MOD PATH segment jumps to the `mod NAME;` edge that mounts
-    //    it
+    //    named pkg, now strictly inside the walked mod path too), a
+    //    MOD PATH segment jumps to the `mod NAME;` edge that mounts
+    //    it, and the PKG HEAD jumps to the pkg's root index at the
+    //    file top
     if let Some(locs) = use_site_targets(ctx, t.span, name) {
         return locs;
     }
@@ -252,27 +275,36 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         }];
     }
 
-    // 6. module-let use sites — every hit (the candidate list)
+    // 6. module-let use sites — every hit (the candidate list), the
+    //    body over the decl surface (`prefer_bodies`)
     let chain = chain_for(&idxs, &imported, name);
-    let mut lets: Vec<DefLocation> = Vec::new();
+    let mut lets: Vec<(&DefIndex, Span)> = Vec::new();
     for i in &chain {
         for l in i.lets.iter().filter(|l| l.name == *name) {
-            lets.push(loc_at(ctx.doc_uri, i, l.name_span.unwrap_or(l.span)));
+            lets.push((*i, l.name_span.unwrap_or(l.span)));
         }
     }
+    let lets = prefer_bodies(&lets);
     if !lets.is_empty() {
-        return lets;
+        return lets
+            .into_iter()
+            .map(|(i, sp)| loc_at(ctx.doc_uri, i, sp))
+            .collect();
     }
 
     // 7. fn names — free fns and impl methods by name; ambiguity
-    //    returns every hit (a peek, not a guess)
-    let mut fns: Vec<DefLocation> = Vec::new();
+    //    returns every hit (a peek, not a guess), the body over the
+    //    decl surface (`prefer_bodies`)
+    let mut fns: Vec<(&DefIndex, Span)> = Vec::new();
     for i in &chain {
         for f in i.fns.iter().filter(|f| f.name == *name) {
-            fns.push(loc_at(ctx.doc_uri, i, fn_span(f)));
+            fns.push((*i, fn_span(f)));
         }
     }
-    fns
+    prefer_bodies(&fns)
+        .into_iter()
+        .map(|(i, sp)| loc_at(ctx.doc_uri, i, sp))
+        .collect()
 }
 
 /// `textDocument/typeDefinition` — the survey prices this cheap and it
@@ -349,6 +381,9 @@ fn ty_name_locations(
         .iter()
         .filter_map(|i| i.ty(name).map(|t| (*i, t)))
         .collect();
+    // the body over the decl surface (`prefer_bodies`), so a
+    // both-files dep's type lands in the body here too
+    let hits = prefer_bodies(&hits);
     match hits.as_slice() {
         [] => None,
         _ => Some(
@@ -397,12 +432,34 @@ fn use_graph_targets<'a>(
             out.push((i, fn_span(f)));
         }
     }
-    out
+    // the body over the decl surface (`prefer_bodies`): a pkg indexing
+    // both its `.d.rut` and its `mod.rut` resolves the leaf from the
+    // body — the surface is the fallback when it is all there is
+    prefer_bodies(&out)
+}
+
+/// the pkg's ROOT index — where a pkg-head click lands. Among the
+/// chain's `matches_pkg` indexes only the root-shaped ones count: the
+/// lib root `mod.rut` (`mod_path == Some("")` — how a dep walk /
+/// bundle loader stamps the root) first, then the flat roots
+/// (`mod_path == None` — how a host `calc.d.rut` and the std
+/// surface's root files index), tie-broken body-over-decl (the
+/// `prefer_bodies` law). No root-shaped index → `None` — an honest
+/// miss, never a wrong jump.
+fn pkg_root_index<'a>(idxs: &[&'a DefIndex], pkg: &str) -> Option<&'a DefIndex> {
+    let mut roots: Vec<&DefIndex> = idxs
+        .iter()
+        .copied()
+        .filter(|i| matches_pkg(i, pkg) && crate::mods::mod_path_of(i).is_empty())
+        .collect();
+    roots.sort_by_key(|i| (i.mod_path.is_none(), i.mode == Some(Mode::Decl)));
+    roots.into_iter().next()
 }
 
 /// the use-statement layer: the hovered ident is a leaf name (jump to
-/// the exporting decl through the walked mod path) or a path segment
-/// (jump to the `mod NAME;` edge that mounts it)
+/// the exporting decl through the walked mod path), the pkg head
+/// (jump to the pkg's root index at the file top), or a middle path
+/// segment (jump to the `mod NAME;` edge that mounts it)
 fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation>> {
     let doc = ctx.doc();
     for u in &doc.uses {
@@ -421,12 +478,21 @@ fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation
                     .collect(),
             );
         }
-        // a mod path segment
+        // a path segment — the pkg head included: `k == 0` opens the
+        // pkg's ROOT index at the file top (`Span::new(0, 0)`, the
+        // convention the minted namespace head uses too)
         for (k, sp) in u.path_spans.iter().enumerate() {
-            if k == 0 || *sp != Some(span) {
-                continue; // the pkg head has no edge to jump to
+            if *sp != Some(span) {
+                continue;
             }
             let pkg = &u.path[0];
+            if k == 0 {
+                return Some(
+                    pkg_root_index(ctx.idxs, pkg)
+                        .map(|i| vec![loc_at(ctx.doc_uri, i, Span::new(0, 0))])
+                        .unwrap_or_default(),
+                );
+            }
             let walked = crate::mods::walk_use_mods(ctx.idxs, pkg, &u.path[1..=k])?;
             let parent = crate::mods::find_mod(ctx.idxs, Some(pkg), crate::mods::parent_of(&walked))?;
             let edge = parent.mods.iter().find(|m| m.name == u.path[k])?;
@@ -753,6 +819,129 @@ mod tests {
         let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0].uri, WIDGET_URI);
+    }
+
+    // ---- the pkg's two files: the body over the decl surface ----
+
+    #[test]
+    fn a_both_files_dep_answers_from_the_body() {
+        // the dep walk indexes a pkg's `.d.rut` surface (Decl) AND its
+        // root `mod.rut` body (Impl): the leaf resolves to the BODY's
+        // declaring ident (a use site too), and the pkg head lands at
+        // the body root's file top (0:0)
+        let src = "use pkg::{ make };\nentry fn main() -> nil {\n    let x = make();\n}\n";
+        let d = doc(src);
+        let surface = crate::deps::index_dep(
+            "pkg",
+            "file:///deps/pkg/pkg.d.rut",
+            "pub host fn make() -> i32;\n",
+            Mode::Decl,
+            None,
+            &[],
+        );
+        let body = crate::deps::index_dep_mod(
+            "pkg",
+            "file:///deps/pkg/mod.rut",
+            "",
+            "pub fn make() -> i32 { return 1; }\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let extra = [surface, body];
+        let body_src = normalize("pub fn make() -> i32 { return 1; }\n");
+        let ix = LineIndex::new(&body_src);
+        // the use leaf: the body's `make`, not the surface's
+        let hits = def(&d, at(&d.src, "use pkg::{ make }", 1) + 11, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///deps/pkg/mod.rut");
+        let want = at(&body_src, "fn make()", 1) + 3;
+        assert_eq!(span_of(&body_src, &ix, &hits[0]), (want, want + 4));
+        // a use site rides the same preference
+        let hits = def(&d, at(&d.src, "= make();", 1) + 2, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///deps/pkg/mod.rut");
+        // the pkg head: the body root, file top
+        let hits = def(&d, at(&d.src, "use pkg::", 1) + 4, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///deps/pkg/mod.rut");
+        assert_eq!(span_of(&body_src, &ix, &hits[0]), (0, 0));
+    }
+
+    #[test]
+    fn a_decl_only_host_pkg_lands_in_the_surface() {
+        // a host pkg indexes its `.d.rut` surface ALONE (calc's
+        // shape): leaf and pkg head both land in it — the surface is
+        // all there is, so it is kept
+        let src = "use calc::{ sqrt };\nentry fn main() -> nil {\n    let x = sqrt(1.0);\n}\n";
+        let d = doc(src);
+        let surface = crate::deps::index_dep(
+            "calc",
+            "file:///deps/calc/calc.d.rut",
+            "pub host fn sqrt(x: f64) -> f64;\n",
+            Mode::Decl,
+            None,
+            &[],
+        );
+        let extra = [surface];
+        let surface_src = normalize("pub host fn sqrt(x: f64) -> f64;\n");
+        let ix = LineIndex::new(&surface_src);
+        let want = at(&surface_src, "fn sqrt", 1) + 3;
+        // the leaf
+        let hits = def(&d, at(&d.src, "use calc::{ sqrt }", 1) + 12, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///deps/calc/calc.d.rut");
+        assert_eq!(span_of(&surface_src, &ix, &hits[0]), (want, want + 4));
+        // the pkg head: the flat root, file top
+        let hits = def(&d, at(&d.src, "use calc::", 1) + 4, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///deps/calc/calc.d.rut");
+        assert_eq!(span_of(&surface_src, &ix, &hits[0]), (0, 0));
+    }
+
+    #[test]
+    fn a_middle_use_segment_jumps_to_the_mod_edge() {
+        // `use gadgets::layout::{ Column };` — the `layout` segment
+        // jumps to the declaring `pub mod layout;` edge in the pkg
+        // root's mod.rut (the dep lane; the e2e face re-covers it)
+        let src = "use gadgets::layout::{ Column };\nentry fn main() -> nil {\n}\n";
+        let d = doc(src);
+        let root = crate::deps::index_dep_mod(
+            "gadgets",
+            "file:///deps/gadgets/mod.rut",
+            "",
+            "pub mod layout;\npub fn tag() -> i32 { return 1; }\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let layout = crate::deps::index_dep_mod(
+            "gadgets",
+            "file:///deps/gadgets/layout/mod.rut",
+            "layout",
+            "pub struct Column {\n    w: i32;\n}\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let extra = [root, layout];
+        let root_src = normalize("pub mod layout;\npub fn tag() -> i32 { return 1; }\n");
+        let ix = LineIndex::new(&root_src);
+        // the `layout` segment (not the pkg head, not the leaf)
+        let hits = def(&d, at(&d.src, "gadgets::layout", 1) + 9, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///deps/gadgets/mod.rut");
+        let want = at(&root_src, "mod layout;", 1) + 4;
+        assert_eq!(span_of(&root_src, &ix, &hits[0]), (want, want + 6));
+    }
+
+    #[test]
+    fn a_pkg_head_with_no_indexed_pkg_is_an_honest_miss() {
+        // the use names a pkg the chain does not index: the head click
+        // answers empty — never a wrong jump
+        let src = "use ghost::{ Thing };\nentry fn main() -> nil {\n}\n";
+        let d = doc(src);
+        assert!(def(&d, at(&d.src, "use ghost::", 1) + 4, &[]).is_empty());
     }
 
     // ---- the module matcher (the explicit name, then the fallback) ----

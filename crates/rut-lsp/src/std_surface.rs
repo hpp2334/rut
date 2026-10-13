@@ -129,6 +129,11 @@ fn std_index(
     // special), and the use-graph matcher consults it first
     idx.module = Some(origin.to_string());
     idx.mod_path = mod_path.map(|p| p.to_string());
+    // the mode rides too — `Decl` for the `.d.rut` surfaces, `Impl`
+    // for the root-module bodies (the same split `analysis::mode_of`
+    // speaks for open documents); the definition layer's
+    // body-over-decl preference reads it
+    idx.mode = Some(mode);
     idx
 }
 

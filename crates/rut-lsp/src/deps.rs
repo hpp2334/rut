@@ -479,6 +479,11 @@ pub fn index_dep(
     let mut idx = crate::hover::index(&normalized, &ast, &toks);
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
+    // the parse mode rides the index — the definition layer's
+    // body-over-decl preference reads it (the manifest's entry key is
+    // the authoritative spelling, not the `.d.rut` filename convention
+    // `analysis::mode_of` speaks for open documents)
+    idx.mode = Some(mode);
     if let Some(head) = namespace {
         // the module's free fns become the head's methods — the
         // qualified-access surface the engine routes by the bound
@@ -736,6 +741,9 @@ pub host fn sqrt(x: f64) -> f64;
         // the explicit name rides the index …
         assert_eq!(idx.module.as_deref(), Some("calc"));
         assert_eq!(idx.origin, "file:///deps/calc.d.rut");
+        // … the parse mode rides too (the definition layer's
+        // body-over-decl preference reads it) …
+        assert_eq!(idx.mode, Some(Mode::Decl));
         // … the surface indexes …
         assert!(idx.fns.iter().any(|f| f.name == "sqrt" && f.owner.is_none()));
         // … the namespace head mints as a type row carrying the fns as

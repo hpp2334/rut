@@ -3,6 +3,7 @@
 
 use rut_ast::ast::{AnyTy, Ast, NodeHandle, TypeKind, Vis};
 use rut_lexer::span::Span;
+use rut_parser::Mode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TyForm {
@@ -227,6 +228,13 @@ pub struct DefIndex {
     /// mount a package's mod tree (the dep walk, the bundle loader);
     /// never derived from text.
     pub mod_path: Option<String>,
+    /// which parse mode this index was BUILT in — `Some(Decl)` marks a
+    /// `.d.rut` surface (a dep's `entry.type`, a host pkg's whole
+    /// file), `Some(Impl)` the body (`mod.rut`); `None` = unknown
+    /// (open documents, any builder that does not stamp). The
+    /// definition layer prefers body hits over decl-surface hits when
+    /// a package indexes both — never derived from text.
+    pub mode: Option<Mode>,
 }
 
 impl DefIndex {
