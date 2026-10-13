@@ -127,10 +127,14 @@ entry fn main() {
 n=5
 ```
 
-The loop variable is always spelled `let` and is fresh each iteration.
+The loop variable is a fresh binding each iteration — and a **normal**
+one: assigning it in the body takes `mut` in the header, like any
+`let`.
 
-**Indexed `for`** is the C shape. The induction variable is *loop-owned*:
-the update clause (and the body) may assign it without `mut`.
+**Indexed `for`** is the C shape. The header is a normal binding too:
+the update clause assigns the counter every iteration, so a written-to
+counter is spelled `for (let mut i = 0; ...)` — plain `let` there is a
+compile error.
 
 ```rut
 use ink::{ Logger };
@@ -140,7 +144,7 @@ entry fn main() {
     let xs = [3, 1, 4];
     let n = xs.len();
     let mut total = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         total += xs[i];
     }
     log.info(f"total={total}");

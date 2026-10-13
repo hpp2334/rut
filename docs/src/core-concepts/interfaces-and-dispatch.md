@@ -228,7 +228,7 @@ class CountUp {
 
 impl CountUp {
     [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {
-        for (let i = 1; i <= self.n; i += 1) {
+        for (let mut i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
     }

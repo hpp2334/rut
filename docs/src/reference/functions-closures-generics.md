@@ -81,9 +81,10 @@ add=3 area=3.1415927
   whole-value REASSIGNMENT — a captured-and-reassigned binding is
   promoted to a hidden shared-slot cell, so both frames stay linked
   for the binding's whole scope (a stash-then-reassign, a reassign
-  inside the closure, and the `for..of` loop variable all follow this
-  one law). Refcounting keeps captures alive; a closure is itself a
-  shared cell value.
+  inside the closure, and the `for..of` loop variable — one binding
+  reassigned per iteration, its write access gated by the header's
+  `mut` — all follow this one law). Refcounting keeps captures alive; a
+  closure is itself a shared cell value.
 
 ## Generics
 

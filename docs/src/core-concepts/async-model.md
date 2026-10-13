@@ -25,7 +25,7 @@ use futures::{ launch_future, sleep };
 use ink::{ Logger };
 
 async fn countdown(log: Logger, n: u32) -> nil {
-    for (let i = n; i > 0; i -= 1) {
+    for (let mut i = n; i > 0; i -= 1) {
         log.info(f"{i}");
         await sleep(1000);             // the only suspension spelling
     }

@@ -21,7 +21,7 @@ use pouch::{ Vec };
 fn sieve(limit: i32) -> Vec<i32> {
     let mut marks = Vec<u8>::filled(0, limit + 1);
     let primes: Vec<i32> = Vec::new();
-    for (let i = 2; i <= limit; i += 1) {
+    for (let mut i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);
             let mut m = i * i;

@@ -135,7 +135,7 @@ fn parse_hex(s: str) -> (bytes, str) {
     }
     let n = s.len() / 2;
     let mut buf: [u8] = [0u8; n];
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let hi = hex_digit(s.code_at(i * 2));
         let lo = hex_digit(s.code_at(i * 2 + 1));
         if (hi < 0 || lo < 0) {
@@ -179,8 +179,10 @@ boundary the same pair crosses field by field, which makes
   traffic. Algorithms that churn records and arrays pay aliasing, not
   copying.
 - **Loop variables share elements; the binding is one variable.** A
-  `for (let x of xs)` loop hands you the stored element; writes through it
-  mutate the sequence. The loop variable is ONE binding reassigned per
+  `for (let x of xs)` loop hands you the stored element: plain `let`
+  is a read-only view, and write access follows the header's `mut`
+  like any binding — a `let mut` loop variable's writes mutate the
+  sequence. The loop variable is ONE binding reassigned per
   iteration — `for..of` is sugar for a `while`-shaped loop, and the
   capture law treats it like any other ref-headed binding.
 - **Containers of primitives stay flat.** A fixed `[i32]` is a packed

@@ -445,7 +445,7 @@ msgid ""
 "fn sieve(limit: i32) -> Vec<i32> {\n"
 "    let mut marks = Vec<u8>::filled(0, limit + 1);\n"
 "    let primes: Vec<i32> = Vec::new();\n"
-"    for (let i = 2; i <= limit; i += 1) {\n"
+"    for (let mut i = 2; i <= limit; i += 1) {\n"
 "        if (marks[i] == 0) {\n"
 "            primes.push(i);\n"
 "            let mut m = i * i;\n"
@@ -1379,7 +1379,7 @@ msgstr "文本"
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:141
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:100
+#: src/reference/by-reference-and-nullable.md:102
 #: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
 #: src/reference/templates.md:19
 msgid "`str`"
@@ -1398,7 +1398,7 @@ msgstr "二进制"
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:103
 #: src/reference/value-boundary.md:38 src/reference/value-boundary.md:39
 msgid "`bytes`"
 msgstr "`bytes`"
@@ -1691,7 +1691,7 @@ msgstr "操作数"
 
 #: src/tutorial/values-and-variables.md:229
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:97
+#: src/reference/by-reference-and-nullable.md:99
 msgid "`==` means"
 msgstr "`==` 的含义"
 
@@ -1775,7 +1775,7 @@ msgid ""
 msgstr "这个二元组也是 rut 标准的错误通道——接下来的章节会不断用到它。"
 
 
-#: src/tutorial/values-and-variables.md:268 src/tutorial/control-flow.md:396
+#: src/tutorial/values-and-variables.md:268 src/tutorial/control-flow.md:400
 #: src/tutorial/functions.md:242 src/tutorial/types.md:283
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:280 src/tutorial/async.md:180
@@ -1914,14 +1914,9 @@ msgstr "`if` 也是表达式"
 
 #: src/tutorial/control-flow.md:44
 msgid ""
-"The same spelling produces a value wherever an expression goes: each arm is "
-"a block, and the arm's **tail** — the expression before the arm's `}`, with "
-"no `;` — is what the arm yields. The arms must agree on one type, and that "
-"type is the `if`'s:"
+"The same spelling produces a value wherever an expression goes: each arm is a block, and the arm's **tail** — the expression before the arm's `}`, with no `;` — is what the arm yields. The arms must agree on one type, and that type is the `if`'s:"
 msgstr ""
-"同一个拼写在任何表达式位置都能产出一个值：每个分支都是一个块，而分支的**尾表"
-"达式**（tail）——分支 `}` 之前、不带 `;` 的那个表达式——就是该分支的产出。各分"
-"支必须一致于同一个类型，这个类型就是 `if` 的类型："
+"同一个拼写在任何表达式位置都能产出一个值：每个分支都是一个块，而分支的**尾表达式**（tail）——分支 `}` 之前、不带 `;` 的那个表达式——就是该分支的产出。各分支必须一致于同一个类型，这个类型就是 `if` 的类型："
 
 
 #: src/tutorial/control-flow.md:49
@@ -1930,8 +1925,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "fn grade(n: i32) -> str {\n"
-"    let band = if (n > 90) { \"hi\" } else if (n > 50) { \"mid\" } else "
-"{ \"lo\" };\n"
+"    let band = if (n > 90) { \"hi\" } else if (n > 50) { \"mid\" } else { \"lo\" };\n"
 "    band\n"
 "}\n"
 "\n"
@@ -1948,16 +1942,9 @@ msgstr ""
 
 #: src/tutorial/control-flow.md:72
 msgid ""
-"No `else` and the whole `if` produces `nil` — that is the statement form "
-"above, running its arm for effect. A trailing `;` after the statement form "
-"discards quietly; without it, a trailing `if` statement with an `else` at "
-"the end of a block IS the block's value. That is the block tail law — see "
-"[`return`](#return) — and `if` in tail position is where it shines."
+"No `else` and the whole `if` produces `nil` — that is the statement form above, running its arm for effect. A trailing `;` after the statement form discards quietly; without it, a trailing `if` statement with an `else` at the end of a block IS the block's value. That is the block tail law — see [`return`](#return) — and `if` in tail position is where it shines."
 msgstr ""
-"没有 `else`，整个 `if` 就产出 `nil`——也就是上面的语句形式，只为效果运行它的分"
-"支。语句形式后面跟一个 `;`，值就被悄悄丢弃；不带 `;` 时，块末尾带 `else` 的 "
-"`if` 语句本身就是块的值。这就是块的尾表达式法则——参见 [`return`](#return)——而"
-"尾位置上的 `if` 正是它最出彩的地方。"
+"没有 `else`，整个 `if` 就产出 `nil`——也就是上面的语句形式，只为效果运行它的分支。语句形式后面跟一个 `;`，值就被悄悄丢弃；不带 `;` 时，块末尾带 `else` 的 `if` 语句本身就是块的值。这就是块的尾表达式法则——参见 [`return`](#return)——而尾位置上的 `if` 正是它最出彩的地方。"
 
 
 #: src/tutorial/control-flow.md:79
@@ -2018,17 +2005,19 @@ msgstr ""
 
 
 #: src/tutorial/control-flow.md:130
-msgid "The loop variable is always spelled `let` and is fresh each iteration."
-msgstr "循环变量永远写作 `let`，并且每次迭代都是崭新的。"
-
-
-#: src/tutorial/control-flow.md:132
 msgid ""
-"**Indexed `for`** is the C shape. The induction variable is _loop-owned_: the update clause (and the body) may assign it without `mut`."
-msgstr "**索引式 `for`** 是 C 的形状。归纳变量为_循环所拥有_：更新子句（以及循环体）不需要 `mut` 就能为它赋值。"
+"The loop variable is a fresh binding each iteration — and a **normal** one: assigning it in the body takes `mut` in the header, like any `let`."
+msgstr "循环变量每次迭代都是崭新的绑定——而且是**普通的**绑定：在循环体里给它赋值需要在循环头写 `mut`，与任何 `let` 一样。"
 
 
-#: src/tutorial/control-flow.md:135
+#: src/tutorial/control-flow.md:134
+msgid ""
+"**Indexed `for`** is the C shape. The header is a normal binding too: the update clause assigns the counter every iteration, so a written-to counter is spelled `for (let mut i = 0; ...)` — plain `let` there is a compile error."
+msgstr ""
+"**索引式 `for`** 是 C 的形状。它的循环头同样是普通绑定：更新子句每一轮都给计数器赋值，所以要被写入的计数器写作 `for (let mut i = 0; ...)`——那里用纯 `let` 是编译错误。"
+
+
+#: src/tutorial/control-flow.md:139
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2038,7 +2027,7 @@ msgid ""
 "    let xs = [3, 1, 4];\n"
 "    let n = xs.len();\n"
 "    let mut total = 0;\n"
-"    for (let i = 0; i < n; i += 1) {\n"
+"    for (let mut i = 0; i < n; i += 1) {\n"
 "        total += xs[i];\n"
 "    }\n"
 "    log.info(f\"total={total}\");\n"
@@ -2047,27 +2036,24 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:154
+#: src/tutorial/control-flow.md:158
 msgid ""
 "**`break` and `continue`** work in every loop form; there are no labels and no `do..while`."
 msgstr "**`break` 与 `continue`** 在每一种循环形式里都能用；没有标签，也没有 `do..while`。"
 
 
-#: src/tutorial/control-flow.md:157 src/reference/lexical-structure.md:44
+#: src/tutorial/control-flow.md:161 src/reference/lexical-structure.md:44
 msgid "`return`"
 msgstr "`return`"
 
 
-#: src/tutorial/control-flow.md:159
+#: src/tutorial/control-flow.md:163
 msgid ""
-"`return expr;` exits the function. If the function returns nothing, the "
-"arrow is omitted and `return;` (or simply falling off the end) returns:"
-msgstr ""
-"`return expr;` 退出函数。如果函数不返回任何东西，箭头就省掉，`return;`（或干"
-"脆执行到函数末尾）即返回："
+"`return expr;` exits the function. If the function returns nothing, the arrow is omitted and `return;` (or simply falling off the end) returns:"
+msgstr "`return expr;` 退出函数。如果函数不返回任何东西，箭头就省掉，`return;`（或干脆执行到函数末尾）即返回："
 
 
-#: src/tutorial/control-flow.md:162
+#: src/tutorial/control-flow.md:166
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -2090,21 +2076,14 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:185
+#: src/tutorial/control-flow.md:189
 msgid ""
-"A function WITH an arrow must produce its value on every path: spell "
-"`return`, or end the body with a **tail** — the last expression, written "
-"without `;`. The tail is the block's value, and a fn body's tail is the "
-"implicit return; a body that can still fall off the end without one "
-"diagnoses `missing return`. The two spellings mix freely:"
+"A function WITH an arrow must produce its value on every path: spell `return`, or end the body with a **tail** — the last expression, written without `;`. The tail is the block's value, and a fn body's tail is the implicit return; a body that can still fall off the end without one diagnoses `missing return`. The two spellings mix freely:"
 msgstr ""
-"带箭头的函数必须在每条路径上产出它的值：写出 `return`，或者让函数体以一个**尾"
-"表达式**收尾——最后一个表达式，不带 `;`。尾表达式是块的值，而 fn 体的尾表达式"
-"就是隐式返回（implicit return）；没有尾表达式、仍可能执行到末尾的函数体会诊"
-"断 `missing return`。两种写法可以随意混用："
+"带箭头的函数必须在每条路径上产出它的值：写出 `return`，或者让函数体以一个**尾表达式**收尾——最后一个表达式，不带 `;`。尾表达式是块的值，而 fn 体的尾表达式就是隐式返回（implicit return）；没有尾表达式、仍可能执行到末尾的函数体会诊断 `missing return`。两种写法可以随意混用："
 
 
-#: src/tutorial/control-flow.md:191
+#: src/tutorial/control-flow.md:195
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2129,31 +2108,26 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:216
+#: src/tutorial/control-flow.md:220
 msgid ""
-"The trailing `if` in `fact` is the statement form in tail position — its "
-"arms produce the body's answer. Tails are not special to fn bodies: any "
-"block's last expression without `;` is that block's value, which is exactly "
-"how the `if`\\-as-expression arms above yield theirs."
+"The trailing `if` in `fact` is the statement form in tail position — its arms produce the body's answer. Tails are not special to fn bodies: any block's last expression without `;` is that block's value, which is exactly how the `if`\\-as-expression arms above yield theirs."
 msgstr ""
-"`fact` 里末尾的 `if` 是尾位置上的语句形式——它的分支产出函数体的答案。尾表达式"
-"并非 fn 体独有：任何块中最后一个不带 `;` 的表达式就是该块的值，上文 `if` 表达"
-"式形式的分支正是这样产出值的。"
+"`fact` 里末尾的 `if` 是尾位置上的语句形式——它的分支产出函数体的答案。尾表达式并非 fn 体独有：任何块中最后一个不带 `;` 的表达式就是该块的值，上文 `if` 表达式形式的分支正是这样产出值的。"
 
 
-#: src/tutorial/control-flow.md:221
+#: src/tutorial/control-flow.md:225
 msgid "`when` — the one match"
 msgstr "`when`——唯一的匹配"
 
 
-#: src/tutorial/control-flow.md:223
+#: src/tutorial/control-flow.md:227
 msgid ""
 "`when (value) { pattern -> body, ... }` is an expression: the first matching arm produces the value. No fallthrough — exactly one arm runs."
 msgstr ""
 "`when (value) { pattern -> body, ... }` 是一个表达式：第一个匹配的分支产出那个值。没有贯穿——恰好只有一个分支运行。"
 
 
-#: src/tutorial/control-flow.md:226
+#: src/tutorial/control-flow.md:230
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2176,12 +2150,12 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:251
+#: src/tutorial/control-flow.md:255
 msgid "The arm body before the `,` is an expression; arms can also be blocks:"
 msgstr "`,` 之前的分支体是一个表达式；分支也可以是块："
 
 
-#: src/tutorial/control-flow.md:253
+#: src/tutorial/control-flow.md:257
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2204,49 +2178,44 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:276
+#: src/tutorial/control-flow.md:280
 msgid ""
-"Used as a statement, the `when`'s value is discarded — the block arms above "
-"run for effect. But block arms are value blocks: a block arm's tail is the "
-"arm's value, and expression and block arms mix freely under the same one-"
-"type law (see [below](#one-type-across-the-arms)):"
+"Used as a statement, the `when`'s value is discarded — the block arms above run for effect. But block arms are value blocks: a block arm's tail is the arm's value, and expression and block arms mix freely under the same one-type law (see [below](#one-type-across-the-arms)):"
 msgstr ""
-"用作语句时，`when` 的值会被丢弃——上面的块分支只为效果而运行。但块分支也是值"
-"块：块分支的尾表达式就是该分支的值，表达式分支与块分支在“各分支共用一个类型”"
-"的同一条法则下自由混用（参见[下文](#one-type-across-the-arms)）："
+"用作语句时，`when` 的值会被丢弃——上面的块分支只为效果而运行。但块分支也是值块：块分支的尾表达式就是该分支的值，表达式分支与块分支在“各分支共用一个类型”的同一条法则下自由混用（参见[下文](#one-type-across-the-arms)）："
 
 
-#: src/tutorial/control-flow.md:290 src/reference/control-flow.md:155
+#: src/tutorial/control-flow.md:294 src/reference/control-flow.md:180
 msgid "Patterns"
 msgstr "模式"
 
 
-#: src/tutorial/control-flow.md:292
+#: src/tutorial/control-flow.md:296
 msgid ""
 "The patterns are: enum members (`Light::Red`), literals (integers, floats, `bool`, `str`), comma-separated alternatives, and `else`. There are no ranges, no destructuring, and no guards — an `if` inside the arm body does that job."
 msgstr ""
 "模式有：枚举成员（`Light::Red`）、字面量（整数、浮点数、`bool`、`str`）、逗号分隔的多选一，以及 `else`。没有范围，没有解构，也没有守卫——分支体内的 `if` 承担这份工作。"
 
 
-#: src/tutorial/control-flow.md:297
+#: src/tutorial/control-flow.md:301
 msgid "Exhaustiveness is enforced"
 msgstr "穷尽性是强制检查的"
 
 
-#: src/tutorial/control-flow.md:299
+#: src/tutorial/control-flow.md:303
 msgid ""
 "**Enum scrutinee:** either cover every member or add `else`. A partial `when` over an enum is a compile error — when you add a member later, the compiler finds every `when` you must extend."
 msgstr ""
 "**枚举被匹配值：**要么覆盖每个成员，要么加上 `else`。对枚举的残缺 `when` 是编译错误——日后你新增成员时，编译器会找出每一个你必须扩展的 `when`。"
 
 
-#: src/tutorial/control-flow.md:302
+#: src/tutorial/control-flow.md:306
 msgid ""
 "**Any other scrutinee:** `else` is mandatory (integers and strings cannot be enumerated)."
 msgstr "**其他任何被匹配值：**`else` 是强制的（整数和字符串无法穷举）。"
 
 
-#: src/tutorial/control-flow.md:305
+#: src/tutorial/control-flow.md:309
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2282,12 +2251,12 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:343
+#: src/tutorial/control-flow.md:347
 msgid "`when` over a `bool` reads nicely as a two-arm check:"
 msgstr "对 `bool` 的 `when` 读起来像一个双分支检查："
 
 
-#: src/tutorial/control-flow.md:345
+#: src/tutorial/control-flow.md:349
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2306,25 +2275,25 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:364
+#: src/tutorial/control-flow.md:368
 msgid ""
 "Duplicate patterns — and arms made unreachable by an earlier one — are compile errors."
 msgstr "重复的模式——以及被更早的模式弄得不可达的分支——都是编译错误。"
 
 
-#: src/tutorial/control-flow.md:367
+#: src/tutorial/control-flow.md:371
 msgid "One type across the arms"
 msgstr "各分支共用一个类型"
 
 
-#: src/tutorial/control-flow.md:369
+#: src/tutorial/control-flow.md:373
 msgid ""
 "All arm expressions must agree: that shared type is the `when`'s type. A `when` that builds a value usually reads best wrapped in a function — the function's return type then pins every arm:"
 msgstr ""
 "所有分支表达式必须一致：那个共享的类型就是 `when` 的类型。构建值的 `when` 通常包进一个函数里读起来最好——函数的返回类型随之钉住每个分支："
 
 
-#: src/tutorial/control-flow.md:373
+#: src/tutorial/control-flow.md:377
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2347,7 +2316,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:398
+#: src/tutorial/control-flow.md:402
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2395,7 +2364,7 @@ msgid ""
 msgstr ""
 
 
-#: src/tutorial/control-flow.md:451
+#: src/tutorial/control-flow.md:455
 msgid "Next: [functions, closures, and generics](functions.md)."
 msgstr "下一章：[函数、闭包与泛型](functions.md)。"
 
@@ -2543,7 +2512,7 @@ msgstr ""
 
 
 #: src/tutorial/functions.md:126
-#: src/reference/functions-closures-generics.md:88
+#: src/reference/functions-closures-generics.md:89
 msgid "Generics"
 msgstr "泛型"
 
@@ -3552,7 +3521,7 @@ msgid ""
 "\n"
 "impl CountUp {\n"
 "    [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {\n"
-"        for (let i = 1; i <= self.n; i += 1) {\n"
+"        for (let mut i = 1; i <= self.n; i += 1) {\n"
 "            if (!emit(i)) { return; }   // false = stop\n"
 "        }\n"
 "    }\n"
@@ -5694,7 +5663,7 @@ msgid ""
 "    }\n"
 "    let n = s.len() / 2;\n"
 "    let mut buf: [u8] = [0u8; n];\n"
-"    for (let i = 0; i < n; i += 1) {\n"
+"    for (let mut i = 0; i < n; i += 1) {\n"
 "        let hi = hex_digit(s.code_at(i * 2));\n"
 "        let lo = hex_digit(s.code_at(i * 2 + 1));\n"
 "        if (hi < 0 || lo < 0) {\n"
@@ -5743,26 +5712,26 @@ msgstr "**重新赋值很便宜。**把容器搬来搬去——返回、存储�
 
 #: src/core-concepts/everything-is-a-value.md:181
 msgid ""
-"**Loop variables share elements; the binding is one variable.** A `for (let x of xs)` loop hands you the stored element; writes through it mutate the sequence. The loop variable is ONE binding reassigned per iteration — `for..of` is sugar for a `while`\\-shaped loop, and the capture law treats it like any other ref-headed binding."
+"**Loop variables share elements; the binding is one variable.** A `for (let x of xs)` loop hands you the stored element: plain `let` is a read-only view, and write access follows the header's `mut` like any binding — a `let mut` loop variable's writes mutate the sequence. The loop variable is ONE binding reassigned per iteration — `for..of` is sugar for a `while`\\-shaped loop, and the capture law treats it like any other ref-headed binding."
 msgstr ""
-"**循环变量共享元素；绑定是同一个变量。** `for (let x of xs)` 循环把存储的元素交给你；穿过它的写入会改动序列本身。循环变量是每一轮被重新赋值的同一个绑定——`for..of` 是 `while`\\-形循环的语法糖，捕获法则像对待其他以引用为头的绑定一样对待它。"
+"**循环变量共享元素；绑定是同一个变量。** `for (let x of xs)` 循环把存储的元素交给你：纯 `let` 是只读视图，写访问权跟随循环头的 `mut`，与任何绑定一样——`let mut` 循环变量的写入会改动序列本身。循环变量是每一轮被重新赋值的同一个绑定——`for..of` 是 `while`\\-形循环的语法糖，捕获法则像对待其他以引用为头的绑定一样对待它。"
 
 
-#: src/core-concepts/everything-is-a-value.md:186
+#: src/core-concepts/everything-is-a-value.md:188
 msgid ""
 "**Containers of primitives stay flat.** A fixed `[i32]` is a packed `i32` buffer; growable sequences of primitives store raw payloads with a one-byte nil tag — no per-element heap box."
 msgstr ""
 "**原始类型容器保持扁平。**定长 `[i32]` 就是一块打包的 `i32` 缓冲区；可增长的原始类型序列直接存储裸载荷，外加一个字节的 nil 标签——没有逐元素的堆盒。"
 
 
-#: src/core-concepts/everything-is-a-value.md:189
+#: src/core-concepts/everything-is-a-value.md:191
 msgid ""
 "**Erasure is a box.** `opaque(v)` mints an erasure box; recovery is `opaque::downcast<T>(o)`, checked against the runtime type. See [reified types](reified-types.md) and the reference on [`opaque`](../reference/opaque.md)."
 msgstr ""
 "**擦除是一个盒。**`opaque(v)` 铸造一个擦除盒；恢复靠 `opaque::downcast<T>(o)`，对照运行时类型检查。参见[具体化类型](reified-types.md)以及关于 [`opaque`](../reference/opaque.md) 的参考章节。"
 
 
-#: src/core-concepts/everything-is-a-value.md:194
+#: src/core-concepts/everything-is-a-value.md:196
 msgid ""
 "The memory machinery under all of this — refcounts, deterministic destructors, weak references — is the next chapter's subject: [memory](memory.md). The exact rules live in the reference on [by-reference and nullable](../reference/by-reference-and-nullable.md)."
 msgstr ""
@@ -6365,7 +6334,7 @@ msgid ""
 "\n"
 "impl CountUp {\n"
 "    [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {\n"
-"        for (let i = 1; i <= self.n; i += 1) {\n"
+"        for (let mut i = 1; i <= self.n; i += 1) {\n"
 "            if (!emit(i)) { return; }\n"
 "        }\n"
 "    }\n"
@@ -6538,7 +6507,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "async fn countdown(log: Logger, n: u32) -> nil {\n"
-"    for (let i = n; i > 0; i -= 1) {\n"
+"    for (let mut i = n; i > 0; i -= 1) {\n"
 "        log.info(f\"{i}\");\n"
 "        await sleep(1000);             // the only suspension spelling\n"
 "    }\n"
@@ -8141,7 +8110,7 @@ msgid ""
 "    let b = opaque::downcast<?Bank>(c);\n"
 "    let xs = b.data;\n"
 "    let mut out = \"[\";\n"
-"    for (let i = 0; i < xs.len(); i += 1) {\n"
+"    for (let mut i = 0; i < xs.len(); i += 1) {\n"
 "        if (i > 0) {\n"
 "            out = f\"{out}, \";\n"
 "        }\n"
@@ -8249,7 +8218,7 @@ msgid ""
 "    let mut b = opaque::downcast<?Bank>(c);\n"
 "    let fresh: Vec<i32> = Vec::new();\n"
 "    let mut x = seed | 1;         // the LCG needs an odd state\n"
-"    for (let i = 0; i < n as i32; i += 1) {\n"
+"    for (let mut i = 0; i < n as i32; i += 1) {\n"
 "        x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);\n"
 "        fresh.push((x % 1000) as i32);\n"
 "    }\n"
@@ -8506,7 +8475,7 @@ msgid ""
 "    let mut crc: u32 = 0xFFFFFFFFu32;\n"
 "    for (let b of data) {\n"
 "        crc = crc ^ b as u32;\n"
-"        for (let k = 0; k < 8; k += 1) {\n"
+"        for (let mut k = 0; k < 8; k += 1) {\n"
 "            if ((crc & 1) == 1) {\n"
 "                crc = (crc >> 1) ^ 0xEDB88320u32;\n"
 "            } else {\n"
@@ -8604,7 +8573,7 @@ msgid ""
 "            JTag::Str -> { w.write_str(self.str); },\n"
 "            JTag::Arr -> {\n"
 "                w.begin_array();\n"
-"                for (let i = 0; i < self.arr.len(); i += 1) {\n"
+"                for (let mut i = 0; i < self.arr.len(); i += 1) {\n"
 "                    let ae: Json = opaque::downcast<Json>(self.arr[i]);\n"
 "                    let e = ae.encode(w);\n"
 "                    if (e != nil) { return e; }\n"
@@ -8613,7 +8582,7 @@ msgid ""
 "            },\n"
 "            JTag::Obj -> {\n"
 "                w.begin_object();\n"
-"                for (let i = 0; i < self.keys.len(); i += 1) {\n"
+"                for (let mut i = 0; i < self.keys.len(); i += 1) {\n"
 "                    w.key(self.keys[i]);\n"
 "                    let ve: Json = opaque::downcast<Json>(self.vals[i]);\n"
 "                    let e = ve.encode(w);\n"
@@ -9840,19 +9809,9 @@ msgstr "这条链路的声明住在 std 树里；`rut run` 背后的运行器，
 
 #: src/examples/playground-corpus.md:3
 msgid ""
-"The classics: eighteen short, self-contained rut programs in `demo/src/"
-"examples/` that the web playground offers in its picker and runs in your "
-"browser. They are not copies — the playground imports the `.rut` files "
-"**raw**, so what you edit there is what this repo ships. The classics are "
-"the fastest way to see the language surface in working code: algorithms "
-"first, then the language-surface tours, then the memory shapes. The same "
-"order is the playground's."
+"The classics: eighteen short, self-contained rut programs in `demo/src/examples/` that the web playground offers in its picker and runs in your browser. They are not copies — the playground imports the `.rut` files **raw**, so what you edit there is what this repo ships. The classics are the fastest way to see the language surface in working code: algorithms first, then the language-surface tours, then the memory shapes. The same order is the playground's."
 msgstr ""
-"经典案例：十八个短小自包含的 rut 程序，位于 `demo/src/examples/`，web "
-"Playground 在选择器里提供它们，并在你的浏览器里运行。它们不是复制品——"
-"Playground **原样**导入这些 `.rut` 文件，所以你在那里编辑的就是本仓库交付的东"
-"西。经典案例是看语言表面在可运行代码中亮相的最快途径：先是算法，然后是语言表"
-"面巡礼，最后是内存形态。这个顺序也是 Playground 的顺序。"
+"经典案例：十八个短小自包含的 rut 程序，位于 `demo/src/examples/`，web Playground 在选择器里提供它们，并在你的浏览器里运行。它们不是复制品——Playground **原样**导入这些 `.rut` 文件，所以你在那里编辑的就是本仓库交付的东西。经典案例是看语言表面在可运行代码中亮相的最快途径：先是算法，然后是语言表面巡礼，最后是内存形态。这个顺序也是 Playground 的顺序。"
 
 
 #: src/examples/playground-corpus.md:13
@@ -10091,7 +10050,7 @@ msgstr "`point 1 2`"
 
 
 #: src/examples/playground-corpus.md:57 src/reference/lexical-structure.md:44
-#: src/reference/control-flow.md:128
+#: src/reference/control-flow.md:153
 msgid "`when`"
 msgstr "`when`"
 
@@ -10113,10 +10072,8 @@ msgstr "`if-expr`"
 
 #: src/examples/playground-corpus.md:58
 msgid ""
-"the if ATOM — `if (cond) { x } else { y }` as an expression — and block "
-"tails (implicit return)"
-msgstr ""
-"`if` 原子——`if (cond) { x } else { y }` 作为表达式——与块尾表达式（隐式返回）"
+"the if ATOM — `if (cond) { x } else { y }` as an expression — and block tails (implicit return)"
+msgstr "`if` 原子——`if (cond) { x } else { y }` 作为表达式——与块尾表达式（隐式返回）"
 
 
 #: src/examples/playground-corpus.md:58
@@ -10238,7 +10195,7 @@ msgid ""
 "fn partition(xs: Vec<i32>, lo: i32, hi: i32) -> i32 {\n"
 "    let pivot = xs[hi];\n"
 "    let mut i = lo - 1;\n"
-"    for (let j = lo; j < hi; j += 1) {\n"
+"    for (let mut j = lo; j < hi; j += 1) {\n"
 "        if (xs[j] <= pivot) {\n"
 "            i += 1;\n"
 "            swap(xs, i, j);\n"
@@ -10261,7 +10218,7 @@ msgid ""
 "    quicksort(xs, 0, xs.len() - 1);\n"
 "\n"
 "    let mut out = \"\";\n"
-"    for (let i = 0; i < xs.len(); i += 1) {\n"
+"    for (let mut i = 0; i < xs.len(); i += 1) {\n"
 "        out = f\"{out}{xs[i]} \";      // `mut`: rebinding; the f-string form builds in place\n"
 "    }\n"
 "    log.info(f\"sorted: {out}\");\n"
@@ -10351,9 +10308,7 @@ msgstr "每个案例都被**两道门禁**操练——原生与 wasm——跑在
 
 #: src/examples/playground-corpus.md:194
 msgid ""
-"Eighteen files cover the language surface in run-sized doses: algorithms, "
-"types and interfaces, strings and bytes, erasure, patterns, maps, and the "
-"memory shapes."
+"Eighteen files cover the language surface in run-sized doses: algorithms, types and interfaces, strings and bytes, erasure, patterns, maps, and the memory shapes."
 msgstr ""
 
 
@@ -10883,7 +10838,7 @@ msgstr "声明"
 
 #: src/reference/modules-and-visibility.md:11
 #: src/reference/builtin-generic-types.md:54
-#: src/reference/by-reference-and-nullable.md:61
+#: src/reference/by-reference-and-nullable.md:63
 #: src/reference/launched-futures.md:10
 msgid "Spelling"
 msgstr "书写形式"
@@ -11317,7 +11272,7 @@ msgstr "可空"
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:63 src/reference/stdlib.md:329
+#: src/reference/by-reference-and-nullable.md:65 src/reference/stdlib.md:329
 msgid "`?T`"
 msgstr "`?T`"
 
@@ -11630,73 +11585,73 @@ msgstr "其写法**仅为前缀且结合最紧** —— `?` 作用于紧随其�
 
 #: src/reference/builtin-generic-types.md:54
 #: src/reference/literals-and-inference.md:136
-#: src/reference/by-reference-and-nullable.md:61
+#: src/reference/by-reference-and-nullable.md:63
 msgid "Type"
 msgstr "类型"
 
 
 #: src/reference/builtin-generic-types.md:54
-#: src/reference/by-reference-and-nullable.md:61
+#: src/reference/by-reference-and-nullable.md:63
 msgid "Reading"
 msgstr "读法"
 
 
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:63
+#: src/reference/by-reference-and-nullable.md:65
 msgid "`T \\| nil`"
 msgstr "`T \\| nil`"
 
 
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:63
+#: src/reference/by-reference-and-nullable.md:65
 msgid "the nullable"
 msgstr "可空类型"
 
 
 #: src/reference/builtin-generic-types.md:57
-#: src/reference/by-reference-and-nullable.md:64
+#: src/reference/by-reference-and-nullable.md:66
 msgid "`[?T]`"
 msgstr "`[?T]`"
 
 
 #: src/reference/builtin-generic-types.md:57
-#: src/reference/by-reference-and-nullable.md:64
+#: src/reference/by-reference-and-nullable.md:66
 msgid "`[T \\| nil]`"
 msgstr "`[T \\| nil]`"
 
 
 #: src/reference/builtin-generic-types.md:57
-#: src/reference/by-reference-and-nullable.md:64
+#: src/reference/by-reference-and-nullable.md:66
 msgid "array of nullables"
 msgstr "可空类型的数组"
 
 
 #: src/reference/builtin-generic-types.md:58
-#: src/reference/by-reference-and-nullable.md:65
+#: src/reference/by-reference-and-nullable.md:67
 msgid "`?[T]`"
 msgstr "`?[T]`"
 
 
 #: src/reference/builtin-generic-types.md:58
-#: src/reference/by-reference-and-nullable.md:65
+#: src/reference/by-reference-and-nullable.md:67
 msgid "`[T] \\| nil`"
 msgstr "`[T] \\| nil`"
 
 
 #: src/reference/builtin-generic-types.md:58
-#: src/reference/by-reference-and-nullable.md:65
+#: src/reference/by-reference-and-nullable.md:67
 msgid "nullable array"
 msgstr "可为 nil 的数组"
 
 
 #: src/reference/builtin-generic-types.md:59
-#: src/reference/by-reference-and-nullable.md:66
+#: src/reference/by-reference-and-nullable.md:68
 msgid "`??T`"
 msgstr "`??T`"
 
 
 #: src/reference/builtin-generic-types.md:59
-#: src/reference/by-reference-and-nullable.md:66
+#: src/reference/by-reference-and-nullable.md:68
 msgid "chained"
 msgstr "链式"
 
@@ -11714,7 +11669,7 @@ msgstr ""
 
 
 #: src/reference/builtin-generic-types.md:65
-#: src/reference/by-reference-and-nullable.md:78
+#: src/reference/by-reference-and-nullable.md:80
 msgid ""
 "Auto-deref covers every value position: `p.x`, `p.m(..)`, `p[i]`, `for (x of p)`, arithmetic on `p`'s payload."
 msgstr "自动解引用覆盖所有值位置：`p.x`、`p.m(..)`、`p[i]`、`for (x of p)`、对 `p` 载荷的算术运算。"
@@ -12174,7 +12129,7 @@ msgid ""
 "impl Light {\n"
 "    [iterable] fn iterate(self, emit: fn(Light) -> bool) {\n"
 "        let mut cur = self;\n"
-"        for (let i = 0; i < 3; i += 1) {\n"
+"        for (let mut i = 0; i < 3; i += 1) {\n"
 "            if (!emit(cur)) { return; }\n"
 "            cur = when (cur) {\n"
 "                Light::Green  -> Light::Yellow,\n"
@@ -12386,7 +12341,7 @@ msgstr "三种形式 —— 普通的 `\"...\"` 字符串始终是惰性的（�
 
 
 #: src/reference/literals-and-inference.md:111
-#: src/reference/control-flow.md:157
+#: src/reference/control-flow.md:182
 msgid "Example"
 msgstr "示例"
 
@@ -12548,11 +12503,9 @@ msgstr "语句"
 
 #: src/reference/control-flow.md:10
 msgid ""
-"`if (cond) { .. } else if (..) { .. } else { .. }` — braces required; the "
-"same spelling is also an expression (see below)."
+"`if (cond) { .. } else if (..) { .. } else { .. }` — braces required; the same spelling is also an expression (see below)."
 msgstr ""
-"`if (cond) { .. } else if (..) { .. } else { .. }` —— 必须带花括号；同一拼写"
-"也可以作表达式使用（见下文）。"
+"`if (cond) { .. } else if (..) { .. } else { .. }` —— 必须带花括号；同一拼写也可以作表达式使用（见下文）。"
 
 
 #: src/reference/control-flow.md:12
@@ -12562,11 +12515,8 @@ msgstr "`while (cond) { .. }`。"
 
 #: src/reference/control-flow.md:13
 msgid ""
-"`return expr?;` — `expr` is required unless the function returns `nil` (or "
-"the body ends in a tail; see below)."
-msgstr ""
-"`return expr?;` —— 除非函数返回 `nil`（或函数体以尾表达式收尾；见下文），否"
-"则 `expr` 必填。"
+"`return expr?;` — `expr` is required unless the function returns `nil` (or the body ends in a tail; see below)."
+msgstr "`return expr?;` —— 除非函数返回 `nil`（或函数体以尾表达式收尾；见下文），否则 `expr` 必填。"
 
 
 #: src/reference/control-flow.md:15
@@ -12582,14 +12532,9 @@ msgstr "`if`——语句与表达式"
 
 #: src/reference/control-flow.md:20
 msgid ""
-"The statement form runs its effect. The same spelling is also an "
-"**expression**: wherever an expression goes — a `let` initializer, a call "
-"argument, an operand, an f-string hole, a `when` scrutinee — the construct "
-"branches and produces the taken arm's value:"
+"The statement form runs its effect. The same spelling is also an **expression**: wherever an expression goes — a `let` initializer, a call argument, an operand, an f-string hole, a `when` scrutinee — the construct branches and produces the taken arm's value:"
 msgstr ""
-"语句形式运行它的效果。同一个拼写也是**表达式**：在任何表达式位置——`let` 初始"
-"化器、调用实参、运算数、f-string 插值空洞、`when` 的被匹配值——这个构造都会分"
-"支，并产出被选中分支的值："
+"语句形式运行它的效果。同一个拼写也是**表达式**：在任何表达式位置——`let` 初始化器、调用实参、运算数、f-string 插值空洞、`when` 的被匹配值——这个构造都会分支，并产出被选中分支的值："
 
 
 #: src/reference/control-flow.md:25
@@ -12615,56 +12560,35 @@ msgstr "法则："
 
 #: src/reference/control-flow.md:43
 msgid ""
-"**Parens are required** — `if (cond)`, never `if cond`. Braces are required "
-"too, and `else if` chains link arm by arm."
-msgstr ""
-"**括号不可省**——写 `if (cond)`，绝不写 `if cond`。花括号同样不可省，`else "
-"if` 链一环一环地链接。"
+"**Parens are required** — `if (cond)`, never `if cond`. Braces are required too, and `else if` chains link arm by arm."
+msgstr "**括号不可省**——写 `if (cond)`，绝不写 `if cond`。花括号同样不可省，`else if` 链一环一环地链接。"
 
 
 #: src/reference/control-flow.md:45
 msgid ""
-"**Arms are blocks, and a block's tail is the arm's value** — the expression "
-"before the arm's `}`, written without `;`. A block with no tail produces "
-"`nil`."
-msgstr ""
-"**分支是块，块的尾表达式就是分支的值**——分支 `}` 之前的那个表达式，不带 `;`。"
-"没有尾表达式的块产出 `nil`。"
+"**Arms are blocks, and a block's tail is the arm's value** — the expression before the arm's `}`, written without `;`. A block with no tail produces `nil`."
+msgstr "**分支是块，块的尾表达式就是分支的值**——分支 `}` 之前的那个表达式，不带 `;`。没有尾表达式的块产出 `nil`。"
 
 
 #: src/reference/control-flow.md:48
 msgid ""
-"**Producing arms agree on one type** — that shared type is the `if`'s; a "
-"disagreement is a compile error naming both types. An arm that diverges "
-"(`return`, `break`, `continue`) contributes no type: the completing arm's "
-"value is the `if`'s."
+"**Producing arms agree on one type** — that shared type is the `if`'s; a disagreement is a compile error naming both types. An arm that diverges (`return`, `break`, `continue`) contributes no type: the completing arm's value is the `if`'s."
 msgstr ""
-"**产生值的分支必须一致于同一个类型**——那个共享的类型就是 `if` 的类型；不一致"
-"是编译错误，并点名两个类型。发散的分支（`return`、`break`、`continue`）不贡献"
-"类型：收尾分支的值就是 `if` 的值。"
+"**产生值的分支必须一致于同一个类型**——那个共享的类型就是 `if` 的类型；不一致是编译错误，并点名两个类型。发散的分支（`return`、`break`、`continue`）不贡献类型：收尾分支的值就是 `if` 的值。"
 
 
 #: src/reference/control-flow.md:52
 msgid ""
-"**No `else` types the whole `if` `nil`** — the implicit else arm is the "
-"`nil` value, so a value-producing then-arm without an `else` is an agreement "
-"error. The no-`else` form is the statement shape: it runs the arm for effect."
+"**No `else` types the whole `if` `nil`** — the implicit else arm is the `nil` value, so a value-producing then-arm without an `else` is an agreement error. The no-`else` form is the statement shape: it runs the arm for effect."
 msgstr ""
-"**没有 `else`，整个 `if` 的类型就是 `nil`**——隐式的 else 分支就是 `nil` 值，"
-"所以产生值的 then 分支不带 `else` 是一致性错误。无 `else` 形式就是语句形态："
-"只为效果运行它的分支。"
+"**没有 `else`，整个 `if` 的类型就是 `nil`**——隐式的 else 分支就是 `nil` 值，所以产生值的 then 分支不带 `else` 是一致性错误。无 `else` 形式就是语句形态：只为效果运行它的分支。"
 
 
 #: src/reference/control-flow.md:56
 msgid ""
-"**The `;` decides.** A trailing `;` after the statement form is the discard "
-"form — whatever the arms produced is nobody's (the assignments are the "
-"effect). Without the `;`, a trailing `if` statement with an `else` reads as "
-"the enclosing block's tail — the value the block produces."
+"**The `;` decides.** A trailing `;` after the statement form is the discard form — whatever the arms produced is nobody's (the assignments are the effect). Without the `;`, a trailing `if` statement with an `else` reads as the enclosing block's tail — the value the block produces."
 msgstr ""
-"**`;` 说了算。** 语句形式后面的 `;` 是丢弃形式——分支产出了什么都没人接（赋值"
-"才是效果）。不带 `;` 时，末尾带 `else` 的 `if` 语句读作外围块的尾表达式——块产"
-"出的值。"
+"**`;` 说了算。** 语句形式后面的 `;` 是丢弃形式——分支产出了什么都没人接（赋值才是效果）。不带 `;` 时，末尾带 `else` 的 `if` 语句读作外围块的尾表达式——块产出的值。"
 
 
 #: src/reference/control-flow.md:62
@@ -12674,21 +12598,9 @@ msgstr "块尾表达式"
 
 #: src/reference/control-flow.md:64
 msgid ""
-"Every block has a value, and one rule decides it: an expression closed by "
-"`;` is a statement (its value is discarded); an expression followed "
-"immediately by the block's `}` is the block's **tail** — the value the block "
-"produces. (`let` always demands its `;`.) The tail reads the block's own "
-"bindings, and its value moves out before the scope pops. A fn body's tail is "
-"an **implicit return**: the [definite-return law](functions-closures-"
-"generics.md#functions) counts it, so a function with a result arrow can "
-"answer without spelling `return` — the same law covers lambda block bodies:"
+"Every block has a value, and one rule decides it: an expression closed by `;` is a statement (its value is discarded); an expression followed immediately by the block's `}` is the block's **tail** — the value the block produces. (`let` always demands its `;`.) The tail reads the block's own bindings, and its value moves out before the scope pops. A fn body's tail is an **implicit return**: the [definite-return law](functions-closures-generics.md#functions) counts it, so a function with a result arrow can answer without spelling `return` — the same law covers lambda block bodies:"
 msgstr ""
-"每个块都有值，而决定它的是一条规则：以 `;` 收尾的表达式是语句（其值被丢弃）；"
-"紧贴块的 `}` 的表达式是块的**尾表达式**（tail）——块产出的值。（`let` 始终要求"
-"它的 `;`。）尾表达式读取块自己的绑定，其值在作用域弹出之前移出。fn 体的尾表达"
-"式就是**隐式返回**（implicit return）：[必然返回法则](functions-closures-"
-"generics.md#functions)把它算作返回，所以带结果箭头的函数可以不写 `return` 就"
-"给出答案——这条法则同样覆盖 lambda 块体："
+"每个块都有值，而决定它的是一条规则：以 `;` 收尾的表达式是语句（其值被丢弃）；紧贴块的 `}` 的表达式是块的**尾表达式**（tail）——块产出的值。（`let` 始终要求它的 `;`。）尾表达式读取块自己的绑定，其值在作用域弹出之前移出。fn 体的尾表达式就是**隐式返回**（implicit return）：[必然返回法则](functions-closures-generics.md#functions)把它算作返回，所以带结果箭头的函数可以不写 `return` 就给出答案——这条法则同样覆盖 lambda 块体："
 
 
 #: src/reference/control-flow.md:74
@@ -12697,8 +12609,7 @@ msgid ""
 "use ink::{ Logger };\n"
 "\n"
 "fn classify(n: i32) -> str {\n"
-"    let band = if (n > 90) { \"hi\" } else if (n > 50) { \"mid\" } else "
-"{ \"lo\" };\n"
+"    let band = if (n > 90) { \"hi\" } else if (n > 50) { \"mid\" } else { \"lo\" };\n"
 "    band\n"
 "}\n"
 "\n"
@@ -12720,14 +12631,9 @@ msgstr ""
 
 #: src/reference/control-flow.md:100
 msgid ""
-"The trailing `if` in `fact` is the statement form in tail position: its "
-"producing arms agree on `i32` and the merged value is the body's tail. Loop "
-"bodies produce values the same way, discarded; `when` arm blocks are value "
-"blocks too (see [the laws](#the-laws))."
+"The trailing `if` in `fact` is the statement form in tail position: its producing arms agree on `i32` and the merged value is the body's tail. Loop bodies produce values the same way, discarded; `when` arm blocks are value blocks too (see [the laws](#the-laws))."
 msgstr ""
-"`fact` 里末尾的 `if` 是尾位置上的语句形式：产生值的分支一致于 `i32`，合并出的"
-"值就是函数体的尾表达式。循环体以同样的方式产生值，然后被丢弃；`when` 的块分支"
-"也是值块（参见[法则](#the-laws)）。"
+"`fact` 里末尾的 `if` 是尾位置上的语句形式：产生值的分支一致于 `i32`，合并出的值就是函数体的尾表达式。循环体以同样的方式产生值，然后被丢弃；`when` 的块分支也是值块（参见[法则](#the-laws)）。"
 
 
 #: src/reference/control-flow.md:105
@@ -12741,20 +12647,57 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/control-flow.md:120
+#: src/reference/control-flow.md:116
 msgid ""
-"Indexed form — the induction variable is **loop-owned**: the update clause and the body may assign it without `mut`; it is not a normal binding:"
-msgstr "索引形式 —— 归纳变量**为循环所拥有**：更新子句和循环体无需 `mut` 即可给它赋值；它不是普通绑定："
+"```rut\n"
+"for (let x of expr) { .. }         // plain `let`: a read-only view\n"
+"for (let mut x of expr) { .. }     // `mut`: the body may assign x\n"
+"```"
+msgstr ""
 
 
-#: src/reference/control-flow.md:130
+#: src/reference/control-flow.md:121
+msgid "Indexed form — the C shape:"
+msgstr "索引形式 —— C 的形状："
+
+
+#: src/reference/control-flow.md:127
+msgid ""
+"Both headers declare a **normal binding**, and the mut-binding law gates them like any `let`: assigning the loop variable — in the body, or in the indexed form's update clause — requires `mut` in the header:"
+msgstr ""
+"两种形式的循环头都声明一个**普通绑定**，mut 绑定法则像对待任何 `let` 一样把守它们：给循环变量赋值——无论是在循环体里，还是在索引形式的更新子句里——都需要循环头里的 `mut`："
+
+
+#: src/reference/control-flow.md:131
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"for\");\n"
+"    let mut total = 0;\n"
+"    for (let mut i = 0; i < 5; i += 1) {   // the update clause assigns i\n"
+"        total += i;\n"
+"    }\n"
+"    // for (let i = 0; i < 5; i += 1) { }  // ERROR: assignment to `i` requires `mut`\n"
+"    let rows = [[1, 2], [3, 4]];\n"
+"    for (let mut row of rows) {            // the body assigns the element\n"
+"        row[0] = 99;                       // the write reaches the sequence\n"
+"    }\n"
+"    log.info(f\"total={total} rows[1][0]={rows[1][0]}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/control-flow.md:155
 msgid ""
 "`when (x) { pattern -> body, ... }` is an **expression**: the first matching arm's body produces its value. No fallthrough; exactly one arm runs."
 msgstr ""
 "`when (x) { pattern -> body, ... }` 是一个**表达式**：第一个匹配分支的体产出它的值。没有贯穿（fallthrough）；恰好执行一个分支。"
 
 
-#: src/reference/control-flow.md:134
+#: src/reference/control-flow.md:159
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12775,111 +12718,104 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/control-flow.md:157
+#: src/reference/control-flow.md:182
 msgid "Pattern"
 msgstr "模式"
 
 
-#: src/reference/control-flow.md:159
+#: src/reference/control-flow.md:184
 msgid "enum member (path)"
 msgstr "枚举成员（路径）"
 
 
-#: src/reference/control-flow.md:159
+#: src/reference/control-flow.md:184
 msgid "`Light::Green`"
 msgstr "`Light::Green`"
 
 
-#: src/reference/control-flow.md:160
+#: src/reference/control-flow.md:185
 msgid "literal"
 msgstr "字面量"
 
 
-#: src/reference/control-flow.md:160
+#: src/reference/control-flow.md:185
 msgid "`0`, `3.5`, `true`, `\"text\"`"
 msgstr "`0`, `3.5`, `true`, `\"text\"`"
 
 
-#: src/reference/control-flow.md:161
+#: src/reference/control-flow.md:186
 msgid "negative literal"
 msgstr "负字面量"
 
 
-#: src/reference/control-flow.md:161
+#: src/reference/control-flow.md:186
 msgid "`-1`"
 msgstr "`-1`"
 
 
-#: src/reference/control-flow.md:162
+#: src/reference/control-flow.md:187
 msgid "alternatives (comma list)"
 msgstr "多选一（逗号列表）"
 
 
-#: src/reference/control-flow.md:162
+#: src/reference/control-flow.md:187
 msgid "`1, 2, 3`"
 msgstr "`1, 2, 3`"
 
 
-#: src/reference/control-flow.md:163
+#: src/reference/control-flow.md:188
 msgid "wildcard `else` / `_`"
 msgstr "通配 `else` / `_`"
 
 
-#: src/reference/control-flow.md:163
+#: src/reference/control-flow.md:188
 msgid "`else -> ..`"
 msgstr "`else -> ..`"
 
 
-#: src/reference/control-flow.md:165
+#: src/reference/control-flow.md:190
 msgid ""
 "Ranges, destructuring, binding patterns, and guards (`x if cond`) do not exist; patterns are enum members, literals, alternatives, and the wildcards only."
 msgstr "不存在范围、解构、绑定模式和守卫（`x if cond`）；模式只有枚举成员、字面量、多选一和通配符。"
 
 
-#: src/reference/control-flow.md:169 src/reference/opaque.md:45
+#: src/reference/control-flow.md:194 src/reference/opaque.md:45
 msgid "The laws"
 msgstr "法则"
 
 
-#: src/reference/control-flow.md:171
+#: src/reference/control-flow.md:196
 msgid ""
 "**Exhaustiveness is always enforced.** An enum-typed scrutinee must cover every member (then `else` is optional) or add `else` — a partial `when` is a compile error. Any other scrutinee type (integers can't be enumerated): `else` is **mandatory**."
 msgstr ""
 "**始终强制穷尽性。** 枚举类型的被匹配值必须覆盖每个成员（此时 `else` 可省略）或添加 `else` —— 不完整的 `when` 是编译错误。任何其他被匹配值类型（整数无法枚举）：`else` 是**强制的**。"
 
 
-#: src/reference/control-flow.md:175
+#: src/reference/control-flow.md:200
 msgid ""
-"**All arms must agree on one type** — that is the `when`'s type. Block arms "
-"are value blocks: a block arm's tail is the arm's value, and expression and "
-"block arms mix freely under the same law. Used as a statement, the `when`'s "
-"value is discarded — the arms still agree (the check is the same one), and "
-"block arms written for effect stay tail-less."
+"**All arms must agree on one type** — that is the `when`'s type. Block arms are value blocks: a block arm's tail is the arm's value, and expression and block arms mix freely under the same law. Used as a statement, the `when`'s value is discarded — the arms still agree (the check is the same one), and block arms written for effect stay tail-less."
 msgstr ""
-"**所有分支必须一致于同一个类型**——那就是 `when` 的类型。块分支是值块：块分支"
-"的尾表达式就是该分支的值，表达式分支与块分支在同一条法则下自由混用。用作语句"
-"时，`when` 的值会被丢弃——分支仍须一致（检查是同一个），只为效果而写的块分支保"
-"持无尾表达式。"
+"**所有分支必须一致于同一个类型**——那就是 `when` 的类型。块分支是值块：块分支的尾表达式就是该分支的值，表达式分支与块分支在同一条法则下自由混用。用作语句时，`when` 的值会被丢弃——分支仍须一致（检查是同一个），只为效果而写的块分支保持无尾表达式。"
 
 
-#: src/reference/control-flow.md:181
+#: src/reference/control-flow.md:206
 msgid ""
 "Duplicate patterns, and arms made unreachable by earlier ones, are compile errors."
 msgstr "重复的模式，以及被更早分支挡住而不可达的分支，都是编译错误。"
 
 
-#: src/reference/control-flow.md:183
+#: src/reference/control-flow.md:208
 msgid ""
 "Arms use `->`. Expression arms are comma-separated; block arms may omit the trailing comma (the corpus writes it)."
 msgstr "分支使用 `->`。表达式分支以逗号分隔；块分支可以省略尾逗号（语料库中写了它）。"
 
 
-#: src/reference/control-flow.md:185
+#: src/reference/control-flow.md:210
 msgid "`when` literal patterns match compile-time values, never runtime `==`."
 msgstr "`when` 的字面量模式匹配编译期值，绝非运行期的 `==`。"
 
 
-#: src/reference/control-flow.md:187
+#: src/reference/control-flow.md:212
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12902,12 +12838,12 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/control-flow.md:210
+#: src/reference/control-flow.md:235
 msgid "A `when` is also the idiomatic nullable guard, together with `!= nil`:"
 msgstr "`when` 也是惯用的可空守卫，与 `!= nil` 搭配："
 
 
-#: src/reference/control-flow.md:212
+#: src/reference/control-flow.md:237
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13063,7 +12999,7 @@ msgstr ""
 "**字段初始化简写（field-init shorthand）**：裸字段名从作用域中的同名绑定取值——`Name { x, y }` 恰为 `Name { x: x, y: y }`。"
 
 
-#: src/reference/structs.md:109
+#: src/reference/structs.md:112
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13100,30 +13036,30 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:129
+#: src/reference/structs.md:149
 msgid "All fields public, always"
 msgstr "所有字段公开，始终如此"
 
 
-#: src/reference/structs.md:131
+#: src/reference/structs.md:151
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a compile error (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md)). Structs also have no `static` members."
 msgstr ""
 "结构体是开放的数据记录：结构体体内出现成员可见性标注是编译错误（隐私需要控制构造，那是类的职责 —— 参见[类与构造器](classes.md)）。结构体也没有 `static` 成员。"
 
 
-#: src/reference/structs.md:136
+#: src/reference/structs.md:156
 msgid "Methods live in impl blocks"
 msgstr "方法位于 impl 块中"
 
 
-#: src/reference/structs.md:138
+#: src/reference/structs.md:158
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse error. Methods live in the inherent `impl S { .. }`, in the type's module only — the one impl form (see [Interfaces and dispatch](interfaces.md)):"
 msgstr ""
 
 
-#: src/reference/structs.md:143
+#: src/reference/structs.md:163
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -13138,14 +13074,14 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:154
+#: src/reference/structs.md:174
 msgid ""
 "Methods carry real visibility — the class rule: `pub fn` exports cross-module, plain `fn` is module-private. `Self` spells the struct, in signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
 msgstr ""
 "方法带有真实可见性——类的法则：`pub fn` 跨模块导出，不带 `pub` 的 `fn` 只在模块内可见。`Self` 拼写的就是这个结构体，签名（`-> Self`）和字面量（`Self { x: 1, y: 2 }`）里都一样："
 
 
-#: src/reference/structs.md:159
+#: src/reference/structs.md:179
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13167,54 +13103,54 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/structs.md:181
+#: src/reference/structs.md:201
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight helpers, impl blocks for the members other code observes."
 msgstr ""
 
 
-#: src/reference/structs.md:184
+#: src/reference/structs.md:204
 msgid "Limits, exhaustively:"
 msgstr "限制，穷尽列举："
 
 
-#: src/reference/structs.md:186
+#: src/reference/structs.md:206
 msgid ""
 "**fields are always public** — no field-visibility dial (privacy needs construction control, which is the class's job — see [Classes and constructors](classes.md));"
 msgstr "**字段永远公开**——字段可见性没有调节项（私有需要构造控制，那是类的职责——参见[类与构造器](classes.md)）；"
 
 
-#: src/reference/structs.md:189
+#: src/reference/structs.md:209
 msgid ""
 "**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr "**构造就是字面量**——`Point { x: 1, y: 2 }` 到处可用（开放字面量 vs 类方法门禁_正是_结构体/类的分界）。"
 
 
-#: src/reference/structs.md:193
+#: src/reference/structs.md:213
 msgid ""
 "Everything else class-shaped is allowed — `impl` blocks, `Self`, `[disposal]`. And the old \"no destructor\" limit is gone: a shared value dies exactly when its cell's refcount reaches zero, so cleanup is one `impl` away — mark a `[disposal]` member on the type and the engine calls `dispose` at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
 
-#: src/reference/structs.md:200
+#: src/reference/structs.md:220
 msgid "Interfaces and representation"
 msgstr ""
 
 
-#: src/reference/structs.md:202
+#: src/reference/structs.md:222
 msgid ""
 "Widening a struct to an interface `I` **attaches the itable to the same handle** — no allocation, no copy: the interface-typed value aliases the record, and mutations through it are visible to every other handle."
 msgstr ""
 
 
-#: src/reference/structs.md:206
+#: src/reference/structs.md:226
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — primitive fields widened into their slot, composite fields as cell-handle slots (see [Reified types and layout](reified-types.md)). Recursive shapes (`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 "表示：单元内每个字段一个槽，按声明顺序排列 —— 基本类型字段宽化进自己的槽，复合字段作为单元句柄槽（参见[具体化类型与布局](reified-types.md)）。递归形状（`next: ?Node`）是合法的，因为复合字段是指针大小的。"
 
 
-#: src/reference/structs.md:211
+#: src/reference/structs.md:231
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is allowed."
 msgstr "结构体用于小型数据（点、矩形、颜色、配置），但任意大小都允许。"
@@ -13851,25 +13787,25 @@ msgstr "`a == b` 是内置运算符：没有分派，不能选择加入，没有
 
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:97
+#: src/reference/by-reference-and-nullable.md:99
 msgid "Operand type"
 msgstr "操作数类型"
 
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:97
+#: src/reference/by-reference-and-nullable.md:99
 msgid "Lowering"
 msgstr "降格方式"
 
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:99
+#: src/reference/by-reference-and-nullable.md:101
 msgid "numeric / `bool` primitives"
 msgstr "数字 / `bool` 基本类型"
 
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:99
+#: src/reference/by-reference-and-nullable.md:101
 msgid "value"
 msgstr "值"
 
@@ -13880,21 +13816,21 @@ msgstr "数值比较，浮点遵循 IEEE 754（`NaN != NaN`、`-0.0 == 0.0`）"
 
 
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:100
+#: src/reference/by-reference-and-nullable.md:102
 msgid "content (codepoints)"
 msgstr "内容（码点）"
 
 
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:100
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:103
 msgid "content compare"
 msgstr "内容比较"
 
 
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:103
 msgid "content (octets)"
 msgstr "内容（字节）"
 
@@ -13906,13 +13842,13 @@ msgstr ""
 
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:104
 msgid "**cell identity**"
 msgstr "**单元同一性**"
 
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:104
 msgid "the raw slot compare"
 msgstr "原始槽位比较"
 
@@ -14464,7 +14400,7 @@ msgid ""
 "    pub fn new(n: i32) -> Self { return Self { n: n }; }\n"
 "\n"
 "    [iterable] pub fn iterate(self, emit: fn(i32) -> bool) {\n"
-"        for (let i = 1; i <= self.n; i += 1) {\n"
+"        for (let mut i = 1; i <= self.n; i += 1) {\n"
 "            if (!emit(i)) { return; }\n"
 "        }\n"
 "    }\n"
@@ -14620,25 +14556,9 @@ msgstr "没有结果箭头的函数返回 `nil`；`return;`（或执行到末尾
 
 #: src/reference/functions-closures-generics.md:30
 msgid ""
-"A function WITH a result arrow must return on every path: a body that can "
-"fall off the end diagnoses — `missing return: 'f' is '-> str' but a path "
-"reaches the end of the body`, naming the function and its arrow — instead of "
-"handing the caller a never-written value. Ending the body in a **tail** — "
-"the last expression, no `;` (the block value law) — is the implicit return "
-"and counts: the analysis sees `return`, a value-producing body tail, `break`/"
-"`continue`, an `if`/`else` whose arms both return or produce the tail, an "
-"exhaustive `when` whose arms all return, and a `while (true)` with no "
-"`break` bound to it (the scan-loop shape); dead statements after a `return` "
-"are still just dead code. The same law covers the closure block form."
+"A function WITH a result arrow must return on every path: a body that can fall off the end diagnoses — `missing return: 'f' is '-> str' but a path reaches the end of the body`, naming the function and its arrow — instead of handing the caller a never-written value. Ending the body in a **tail** — the last expression, no `;` (the block value law) — is the implicit return and counts: the analysis sees `return`, a value-producing body tail, `break`/`continue`, an `if`/`else` whose arms both return or produce the tail, an exhaustive `when` whose arms all return, and a `while (true)` with no `break` bound to it (the scan-loop shape); dead statements after a `return` are still just dead code. The same law covers the closure block form."
 msgstr ""
-"带结果箭头的函数必须在每条路径上返回：函数体可能执行到末尾自然结束时会诊断——"
-"`missing return: 'f' is '-> str' but a path reaches the end of the body`，点"
-"名函数及其箭头——而不是把一个从未写入的值交给调用方。让函数体以一个**尾表达式"
-"**收尾——最后一个表达式，不带 `;`（块值法则）——就是隐式返回，同样算数：该分析"
-"能看到 `return`、产生值的函数体尾表达式、`break`/`continue`、两个分支都返回或"
-"产出尾表达式的 `if`/`else`、所有分支都返回的穷尽 `when`，以及没有绑定到自身"
-"的 `break` 的 `while (true)`（扫描循环形态）；`return` 之后的死语句仍然只是死"
-"代码。闭包块形式同样适用这条法则。"
+"带结果箭头的函数必须在每条路径上返回：函数体可能执行到末尾自然结束时会诊断——`missing return: 'f' is '-> str' but a path reaches the end of the body`，点名函数及其箭头——而不是把一个从未写入的值交给调用方。让函数体以一个**尾表达式**收尾——最后一个表达式，不带 `;`（块值法则）——就是隐式返回，同样算数：该分析能看到 `return`、产生值的函数体尾表达式、`break`/`continue`、两个分支都返回或产出尾表达式的 `if`/`else`、所有分支都返回的穷尽 `when`，以及没有绑定到自身的 `break` 的 `while (true)`（扫描循环形态）；`return` 之后的死语句仍然只是死代码。闭包块形式同样适用这条法则。"
 
 
 #: src/reference/functions-closures-generics.md:42
@@ -14697,12 +14617,12 @@ msgstr "匿名 fn 直接栖居于 `fn(P..) -> R` —— 它就是函数类型的
 
 #: src/reference/functions-closures-generics.md:76
 msgid ""
-"**The capture law**: primitives, `nil`, and `fn` values copy — a captured scalar is the closure's own slot, and reassigning it inside the closure never moves the original. Ref-headed values (records, `Vec`, arrays, `str`/`bytes`, `?T`, enums) cross as handles: writes through the captured handle reach the shared cell, and so does a whole-value REASSIGNMENT — a captured-and-reassigned binding is promoted to a hidden shared-slot cell, so both frames stay linked for the binding's whole scope (a stash-then-reassign, a reassign inside the closure, and the `for..of` loop variable all follow this one law). Refcounting keeps captures alive; a closure is itself a shared cell value."
+"**The capture law**: primitives, `nil`, and `fn` values copy — a captured scalar is the closure's own slot, and reassigning it inside the closure never moves the original. Ref-headed values (records, `Vec`, arrays, `str`/`bytes`, `?T`, enums) cross as handles: writes through the captured handle reach the shared cell, and so does a whole-value REASSIGNMENT — a captured-and-reassigned binding is promoted to a hidden shared-slot cell, so both frames stay linked for the binding's whole scope (a stash-then-reassign, a reassign inside the closure, and the `for..of` loop variable — one binding reassigned per iteration, its write access gated by the header's `mut` — all follow this one law). Refcounting keeps captures alive; a closure is itself a shared cell value."
 msgstr ""
-"**捕获法则**：标量、`nil` 和 `fn` 值按复制走——被捕获的标量是闭包自己的槽位，在闭包内重新赋值绝不会移动原绑定。以引用为头的值（记录、`Vec`、数组、`str`/`bytes`、`?T`、枚举）以句柄跨越：穿过被捕获句柄的写入抵达共享单元，整体重新赋值也是如此——一个既被捕获又被重新赋值的绑定会晋升为隐藏的共享槽位单元，两个帧在整个绑定作用域内保持联动（先暂存再重赋值、闭包内重赋值、`for..of` 循环变量，都遵循这同一条法则）。引用计数让捕获保持存活；闭包本身就是一个共享单元值。"
+"**捕获法则**：标量、`nil` 和 `fn` 值按复制走——被捕获的标量是闭包自己的槽位，在闭包内重新赋值绝不会移动原绑定。以引用为头的值（记录、`Vec`、数组、`str`/`bytes`、`?T`、枚举）以句柄跨越：穿过被捕获句柄的写入抵达共享单元，整体重新赋值也是如此——一个既被捕获又被重新赋值的绑定会晋升为隐藏的共享槽位单元，两个帧在整个绑定作用域内保持联动（先暂存再重赋值、闭包内重赋值、以及 `for..of` 循环变量——每一轮被重新赋值的同一个绑定，其写访问权由循环头的 `mut` 把守——都遵循这同一条法则）。引用计数让捕获保持存活；闭包本身就是一个共享单元值。"
 
 
-#: src/reference/functions-closures-generics.md:90
+#: src/reference/functions-closures-generics.md:91
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -14722,80 +14642,80 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:110
+#: src/reference/functions-closures-generics.md:111
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own typed code. `T` infers from the arguments; explicit type arguments may be spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 "**泛型在编译期单态化**：每个实例化发出自己的类型化代码。`T` 从实参推断；显式类型实参可以写在调用点，包括方法调用：`self.st.get<T>(self)`。"
 
 
-#: src/reference/functions-closures-generics.md:114
+#: src/reference/functions-closures-generics.md:115
 msgid ""
 "Interface-typed arguments are ordinary arguments: a `T` instantiated at an interface type becomes a handle slot, satisfying no bound."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:116
+#: src/reference/functions-closures-generics.md:117
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call methods on a bare `T`. Pass values in, take an `I`\\-typed parameter, or spell the bound (`T requires I`)."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:119
+#: src/reference/functions-closures-generics.md:120
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their shapes (`[T]` is one type; lengths are runtime values)."
 msgstr "没有常量泛型用户参数。内置接口面固定了它们的形状（`[T]` 是一个类型；长度是运行期值）。"
 
 
-#: src/reference/functions-closures-generics.md:122
+#: src/reference/functions-closures-generics.md:123
 msgid "Inline bounds — `requires`"
 msgstr "内联约束 —— `requires`"
 
 
-#: src/reference/functions-closures-generics.md:129
+#: src/reference/functions-closures-generics.md:130
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, and class generic parameters (struct and interface generic parameters reject `requires`):"
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:133
+#: src/reference/functions-closures-generics.md:134
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every substitution-completing site (free-fn calls, method instantiation, impl-method enqueue). A failing instantiation diagnoses with the bound spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 "约束把关哪些实例化可以编译：在每一个完成替换的位置强制执行（自由函数调用、方法实例化、impl 方法入队）。失败的实例化会带着写明的约束诊断 —— \"`bool` does not satisfy `T` requires `i32 | str`\"。"
 
 
-#: src/reference/functions-closures-generics.md:138
+#: src/reference/functions-closures-generics.md:139
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), aliases (expanded first — see [Type aliases and union bounds](type-aliases.md)), a single interface (satisfied structurally — the member set checks where `T` is chosen), or a **type union** of concrete names/aliases. An interface member inside a union spelling is invalid — an interface bound stands alone."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:145
+#: src/reference/functions-closures-generics.md:146
 msgid ""
 "**Interface-typed values satisfy nothing**: a `T` instantiated at an interface type fails any bound — only a concrete type with the members admits."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:148
+#: src/reference/functions-closures-generics.md:149
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed value into a bound-interface-typed slot (`let w: Labeled = x;`), but gains no method calls on bare `T`."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:151
+#: src/reference/functions-closures-generics.md:152
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a union-bounded value requires **every** member to provide the method — even a member that is never actually instantiated. Dispatch is untouched: each instantiation still binds the concrete member's own method."
 msgstr ""
 
 
-#: src/reference/functions-closures-generics.md:156
+#: src/reference/functions-closures-generics.md:157
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires [T]>(x: U)`."
 msgstr "约束可以引用条目的其他泛型：`fn hold<T, U requires [T]>(x: U)`。"
 
 
-#: src/reference/functions-closures-generics.md:158
+#: src/reference/functions-closures-generics.md:159
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on the class descriptor and admits every instantiation: `pub class HashMap<K requires i8 | .. | bytes, V>` (see [Builtin generic types](builtin-generic-types.md))."
 msgstr ""
@@ -15768,130 +15688,130 @@ msgstr ""
 
 #: src/reference/by-reference-and-nullable.md:45
 msgid ""
-"Primitive elements in a `[T]` stay flat slots; composite elements are handle slots. `for (let x of xs)` yields the **shared** element, not a per-element copy — a cell element writes through to the sequence."
+"Primitive elements in a `[T]` stay flat slots; composite elements are handle slots. `for (let x of xs)` yields the **shared** element, not a per-element copy — a cell element writes through to the sequence, and writes through it are gated by the header's `mut`, like any binding."
 msgstr ""
-"`[T]` 中的基本类型元素保持扁平槽；复合元素是句柄槽。`for (let x of xs)` 产出**共享的**元素，而不是逐元素复制 —— 单元元素的写入直接穿透到序列。"
+"`[T]` 中的基本类型元素保持扁平槽；复合元素是句柄槽。`for (let x of xs)` 产出**共享的**元素，而不是逐元素复制 —— 单元元素的写入直接穿透到序列，而穿过它的写入由循环头的 `mut` 把守，与任何绑定一样。"
 
 
-#: src/reference/by-reference-and-nullable.md:48
+#: src/reference/by-reference-and-nullable.md:50
 msgid ""
 "The repeat `[v; n]` retains the handle `n` times: every slot aliases the one cell. The repeat never copies."
 msgstr "重复形式 `[v; n]` 把句柄保留 `n` 次：每个槽都是同一单元的别名。重复绝不复制。"
 
 
-#: src/reference/by-reference-and-nullable.md:51
+#: src/reference/by-reference-and-nullable.md:53
 msgid ""
 "Copy-by-value is unobservable except through the two legal effects: **aliasing** (writes visible through every binding) and `==` (below)."
 msgstr "按值复制是不可观测的，除非透过两个合法效应：**别名**（写入透过每个绑定可见）与 `==`（见下）。"
 
 
-#: src/reference/by-reference-and-nullable.md:54
+#: src/reference/by-reference-and-nullable.md:56
 msgid "`?T` — the nullable type"
 msgstr "`?T` —— 可空类型"
 
 
-#: src/reference/by-reference-and-nullable.md:56
+#: src/reference/by-reference-and-nullable.md:58
 msgid ""
 "`?T` is a nil-able cell — a one-slot box. `nil` is the null literal; dereferencing it traps `NilDeref` — never a silent read."
 msgstr "`?T` 是可为 nil 的单元 —— 一个单槽盒。`nil` 是空字面量；对它解引用触发 `NilDeref` 陷阱 —— 绝不是无声读取。"
 
 
-#: src/reference/by-reference-and-nullable.md:59
+#: src/reference/by-reference-and-nullable.md:61
 msgid "Grammar — prefix only, binds tightest"
 msgstr "文法 —— 仅为前缀，结合最紧"
 
 
-#: src/reference/by-reference-and-nullable.md:66
+#: src/reference/by-reference-and-nullable.md:68
 msgid "the same runtime box, unwrapped transitively"
 msgstr "同一个运行时盒，传递性地逐层解包"
 
 
-#: src/reference/by-reference-and-nullable.md:68
+#: src/reference/by-reference-and-nullable.md:70
 msgid ""
 "There is no postfix `T?` and no `*T` — each is a diagnosed error naming `?T`. In expression position, `*x`/`&x` diagnose: \"bindings share by reference now — pass `x` directly\" (binary `*`/`&` operators are untouched)."
 msgstr ""
 "没有后缀 `T?`，也没有 `*T` —— 每个都是指名 `?T` 的诊断错误。在表达式位置，`*x`/`&x` 会诊断：\"bindings share by reference now — pass `x` directly\"（二元 `*`/`&` 运算符不受影响）。"
 
 
-#: src/reference/by-reference-and-nullable.md:73
+#: src/reference/by-reference-and-nullable.md:75
 msgid "Coercions and uses"
 msgstr "强制转换与用法"
 
 
-#: src/reference/by-reference-and-nullable.md:75
+#: src/reference/by-reference-and-nullable.md:77
 msgid ""
 "**`T → ?T` boxes; `?T → T` derefs** — both implicit at the expected-type position, transitive through `??T`:"
 msgstr "**`T → ?T` 装盒；`?T → T` 解引用** —— 两者在期望类型位置都是隐式的，经过 `??T` 传递："
 
 
-#: src/reference/by-reference-and-nullable.md:80
+#: src/reference/by-reference-and-nullable.md:82
 msgid ""
 "`p == nil` / `p != nil` compare against the null slot; guard before use. The trap is the bug-catcher, not the semantics."
 msgstr "`p == nil` / `p != nil` 与空槽比较；使用前先守护。陷阱是抓 bug 的工具，不是语义。"
 
 
-#: src/reference/by-reference-and-nullable.md:82
+#: src/reference/by-reference-and-nullable.md:84
 msgid ""
 "A `?T` binding IS the cell reference: writes through it hit the shared cell (a `nudge(mut pt: ?Point)` moves the caller's point)."
 msgstr "`?T` 绑定本身就是单元引用：透过它写入命中共享单元（`nudge(mut pt: ?Point)` 会移动调用方的点）。"
 
 
-#: src/reference/by-reference-and-nullable.md:84
+#: src/reference/by-reference-and-nullable.md:86
 msgid ""
 "`nil` typing: a context-free `nil` has type `nil`; in an expected-`?T` position it types as that `?T` — so `let p: ?Node = nil` and a `left: nil` field in a literal just work. Absence reads plainly: a lookup returns `?V`, and `nil` means \"not found\"."
 msgstr ""
 "`nil` 的类型：无上下文的 `nil` 类型为 `nil`；在期望 `?T` 的位置它被定为该 `?T` —— 因此 `let p: ?Node = nil` 与字面量中的 `left: nil` 字段直接可用。缺失读起来直白：查找返回 `?V`，`nil` 表示“未找到”。"
 
 
-#: src/reference/by-reference-and-nullable.md:89
+#: src/reference/by-reference-and-nullable.md:91
 msgid ""
 "When the cell's refcount reaches zero, the engine runs the type's `[disposal]` member — the cell-death hook (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
 
-#: src/reference/by-reference-and-nullable.md:92
+#: src/reference/by-reference-and-nullable.md:94
 msgid ""
 "Across the host boundary `?T` crosses nil-flattened when its element crosses — an `entry fn -> (?T, err)` is a first-class host answer."
 msgstr ""
 "跨越宿主边界时，`?T` 的跨越方式是 nil 展平：元素跨越的同时它随之展平 —— `entry fn -> (?T, err)` 是一等公民的宿主应答。"
 
 
-#: src/reference/by-reference-and-nullable.md:95
+#: src/reference/by-reference-and-nullable.md:97
 msgid "`==` — identity for cells, content for text"
 msgstr "`==` —— 单元用同一性，文本用内容"
 
 
-#: src/reference/by-reference-and-nullable.md:99
+#: src/reference/by-reference-and-nullable.md:101
 msgid "IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr "浮点遵循 IEEE 754（`NaN != NaN`、`-0.0 == 0.0`）"
 
 
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:104
 msgid ""
 "everything else — records, arrays, enums, closures, interface objects, `opaque`, `?T`"
 msgstr ""
 
 
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:106
 msgid ""
 "`[1, 2] == [1, 2]` is **false** — two cells. Identity is O(1) with no deep walk; compare content where content is the contract (a loop, or a hash/eq interface contract for keys). `?T == ?T` is slot identity: two `nil`s are equal, a null and a box are not. See [Rc, dispose, and identity](rc-dispose-identity.md) for the full law and the lint on obviously-fresh composites."
 msgstr ""
 
 
-#: src/reference/by-reference-and-nullable.md:111
+#: src/reference/by-reference-and-nullable.md:113
 #: src/reference/typed-bytecode.md:121
 msgid "`bytes::clone()` — the one copy escape hatch"
 msgstr "`bytes::clone()` —— 唯一的复制逃生口"
 
 
-#: src/reference/by-reference-and-nullable.md:113
+#: src/reference/by-reference-and-nullable.md:115
 msgid ""
 "`b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot deep copy, the **only copy syntax in the language**. `bytes::from(a)` also deep-copies. Every other type shares on binding, and a divergent value of any other type is unreachable — build a new one instead."
 msgstr ""
 "`b.clone() -> bytes` 铸造一个带 `b` 字节的新缓冲 —— 一次性深复制，是**这门语言唯一的复制语法**。`bytes::from(a)` 同样深复制。其他每个类型在绑定时都共享，任何其他类型的分歧值都不可达 —— 需要不同值就新建一个。"
 
 
-#: src/reference/by-reference-and-nullable.md:118
+#: src/reference/by-reference-and-nullable.md:120
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -15907,45 +15827,45 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/by-reference-and-nullable.md:134
+#: src/reference/by-reference-and-nullable.md:136
 msgid "Containers under sharing"
 msgstr "共享之下的容器"
 
 
-#: src/reference/by-reference-and-nullable.md:136
+#: src/reference/by-reference-and-nullable.md:138
 msgid ""
 "`Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero (`nil` is the slot's zero); `push` takes the `T → ?T`\\-boxed handle; loads yield the `?T` (uses auto-deref). See [Builtin generic types](builtin-generic-types.md)."
 msgstr ""
 "`Vec<T>` 以 `buf: [?T]` 为后备 —— `[nil; cap]` 是泛型零值（`nil` 就是槽的零）；`push` 接受 `T → ?T`\\- 装盒后的句柄；加载产出 `?T`（使用自动解引用）。参见[内置泛型类型](builtin-generic-types.md)。"
 
 
-#: src/reference/by-reference-and-nullable.md:140
+#: src/reference/by-reference-and-nullable.md:142
 msgid ""
 "Keyed collections: `get(k) -> ?V` — `nil` = absent, a hit answers the **stored cell** (the aliasing law: two gets of one key name one cell until a replace re-stores)."
 msgstr ""
 "键控集合：`get(k) -> ?V` —— `nil` = 不存在，命中应答**存储的单元**（别名法则：对同一个键的两次 get 命名同一个单元，直到某次 replace 重新存储）。"
 
 
-#: src/reference/by-reference-and-nullable.md:143
+#: src/reference/by-reference-and-nullable.md:145
 msgid ""
 "Array windows (`v.slice(a, b) -> ?Vec<T>`) are the shared cell: writes through the window hit the parent (see [String slicing and views](string-views.md))."
 msgstr ""
 "数组窗口（`v.slice(a, b) -> ?Vec<T>`）就是共享单元：透过窗口写入命中父序列（参见[字符串切片与视图](string-views.md)）。"
 
 
-#: src/reference/by-reference-and-nullable.md:146
+#: src/reference/by-reference-and-nullable.md:148
 msgid ""
 "Erasure rides the same laws: `opaque(v)` aliases the payload's cell, and `opaque::downcast<T>(o)`'s match is the box's own inner cell (see [opaque — erasure and downcast](opaque.md))."
 msgstr ""
 "擦除遵循同样的法则：`opaque(v)` 别名载荷的单元，`opaque::downcast<T>(o)` 的匹配就是盒自己的内层单元（参见[opaque —— 擦除与向下转型](opaque.md)）。"
 
 
-#: src/reference/by-reference-and-nullable.md:150
+#: src/reference/by-reference-and-nullable.md:152
 msgid "The answer channel"
 msgstr "应答通道"
 
 
-#: src/reference/by-reference-and-nullable.md:152
+#: src/reference/by-reference-and-nullable.md:154
 msgid ""
 "**`(?T, err)` — concretely `(value, ok)` / `(T, str)` — is THE answer channel.** The convention is law: empty err + a value = success; empty err + `nil` = \"not found\"; non-empty err = \"failed\". The err channel disambiguates a legitimately-absent value from a failure. The exactly-one-non-nil invariant is the caller's convention — the engine types the components and decodes them; it does not police the combination. A return-position destructure (`let (v, ok) = f();`) is optimized so the pair mints no cell where it is used as a pair."
 msgstr ""
@@ -23192,10 +23112,8 @@ msgstr "`if` 原子 vs 语句"
 
 #: src/reference/frontend.md:131
 msgid ""
-"peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` "
-"is claimed by the statement grammar first)"
-msgstr ""
-"窥探 2：表达式位置中的 `if (` ⇒ `if` 原子（语句开头的 `if` 先由语句文法领取）"
+"peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` is claimed by the statement grammar first)"
+msgstr "窥探 2：表达式位置中的 `if (` ⇒ `if` 原子（语句开头的 `if` 先由语句文法领取）"
 
 
 #: src/reference/frontend.md:132
@@ -23335,12 +23253,14 @@ msgstr ""
 
 
 #: src/reference/frontend.md:214
-msgid "// the block value; tail: Option\n"
+msgid ""
+"// the block value; tail: Option\n"
 msgstr ""
 
 
 #: src/reference/frontend.md:216
-msgid "// the if ATOM (statement-if above)\n"
+msgid ""
+"// the if ATOM (statement-if above)\n"
 msgstr ""
 
 
@@ -28578,3 +28498,4 @@ msgid ""
 "`run` on a module directory is the deployment path for development; `pack` + `run <bundle>` is the shipping path — both run the identical contract ([loading and the embed loop](loading.md))."
 msgstr ""
 "对模块目录执行 `run` 是开发期的部署路径；`pack` + `run <bundle>` 是发布路径——两者运行完全相同的契约（[加载与嵌入循环](loading.md)）。"
+

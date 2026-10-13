@@ -44,7 +44,9 @@ entry fn main() {
   is no deref-on-load/box-on-store special case anywhere.
 - Primitive elements in a `[T]` stay flat slots; composite elements are
   handle slots. `for (let x of xs)` yields the **shared** element, not
-  a per-element copy — a cell element writes through to the sequence.
+  a per-element copy — a cell element writes through to the sequence,
+  and writes through it are gated by the header's `mut`, like any
+  binding.
 - The repeat `[v; n]` retains the handle `n` times: every slot aliases
   the one cell. The repeat never copies.
 

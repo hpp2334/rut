@@ -59,7 +59,7 @@ entry fn serialize(c: opaque) -> str {
     let b = opaque::downcast<?Bank>(c);
     let xs = b.data;
     let mut out = "[";
-    for (let i = 0; i < xs.len(); i += 1) {
+    for (let mut i = 0; i < xs.len(); i += 1) {
         if (i > 0) {
             out = f"{out}, ";
         }
@@ -131,7 +131,7 @@ entry fn fill(c: opaque, n: u32, seed: u32) {
     let mut b = opaque::downcast<?Bank>(c);
     let fresh: Vec<i32> = Vec::new();
     let mut x = seed | 1;         // the LCG needs an odd state
-    for (let i = 0; i < n as i32; i += 1) {
+    for (let mut i = 0; i < n as i32; i += 1) {
         x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
         fresh.push((x % 1000) as i32);
     }

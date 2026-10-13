@@ -114,15 +114,40 @@ ONE designated member with an `emit` closure that follows the capture
 law exactly like the fused form:
 
 ```rut
-for (let x of expr) { .. }
+for (let x of expr) { .. }         // plain `let`: a read-only view
+for (let mut x of expr) { .. }     // `mut`: the body may assign x
 ```
 
-Indexed form — the induction variable is **loop-owned**: the update
-clause and the body may assign it without `mut`; it is not a normal
-binding:
+Indexed form — the C shape:
 
 ```rut
-for (let i = 0; i < n; i += 1) { .. }
+for (let mut i = 0; i < n; i += 1) { .. }
+```
+
+Both headers declare a **normal binding**, and the mut-binding law
+gates them like any `let`: assigning the loop variable — in the body,
+or in the indexed form's update clause — requires `mut` in the header:
+
+```rut
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("for");
+    let mut total = 0;
+    for (let mut i = 0; i < 5; i += 1) {   // the update clause assigns i
+        total += i;
+    }
+    // for (let i = 0; i < 5; i += 1) { }  // ERROR: assignment to `i` requires `mut`
+    let rows = [[1, 2], [3, 4]];
+    for (let mut row of rows) {            // the body assigns the element
+        row[0] = 99;                       // the write reaches the sequence
+    }
+    log.info(f"total={total} rows[1][0]={rows[1][0]}");
+}
+```
+
+```text
+total=10 rows[1][0]=99
 ```
 
 ## `when`

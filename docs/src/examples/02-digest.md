@@ -65,7 +65,7 @@ entry fn crc32(data: bytes) -> u32 {
     let mut crc: u32 = 0xFFFFFFFFu32;
     for (let b of data) {
         crc = crc ^ b as u32;
-        for (let k = 0; k < 8; k += 1) {
+        for (let mut k = 0; k < 8; k += 1) {
             if ((crc & 1) == 1) {
                 crc = (crc >> 1) ^ 0xEDB88320u32;
             } else {
@@ -139,7 +139,7 @@ impl Json {
             JTag::Str -> { w.write_str(self.str); },
             JTag::Arr -> {
                 w.begin_array();
-                for (let i = 0; i < self.arr.len(); i += 1) {
+                for (let mut i = 0; i < self.arr.len(); i += 1) {
                     let ae: Json = opaque::downcast<Json>(self.arr[i]);
                     let e = ae.encode(w);
                     if (e != nil) { return e; }
@@ -148,7 +148,7 @@ impl Json {
             },
             JTag::Obj -> {
                 w.begin_object();
-                for (let i = 0; i < self.keys.len(); i += 1) {
+                for (let mut i = 0; i < self.keys.len(); i += 1) {
                     w.key(self.keys[i]);
                     let ve: Json = opaque::downcast<Json>(self.vals[i]);
                     let e = ve.encode(w);
