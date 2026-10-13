@@ -930,11 +930,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // regime: every binding shares its cell, so
                     // ANY store through the binding — including through a
                     // `?T` head that derefs first — requires `let mut`
-                    // (the old pointer exception is gone)
-                    if !l.is_mut && !l.loop_var {
-                        self.ctx.err(sp, format!(
-                            "{what} requires a `let mut` binding (the mut-binding law)"
-                        ));
+                    // (the old pointer exception is gone). A loop
+                    // variable's fix is the header's `mut` instead.
+                    if !l.is_mut {
+                        let msg = if l.loop_var {
+                            format!(
+                                "assignment through `{}` requires `mut` in the loop header: {} (the mut-binding law)",
+                                self.ctx.name(l.name),
+                                self.loop_header_fix(l)
+                            )
+                        } else {
+                            format!("{what} requires a `let mut` binding (the mut-binding law)")
+                        };
+                        self.ctx.err(sp, msg);
                         return false;
                     }
                 }

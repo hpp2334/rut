@@ -215,12 +215,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // the mut-binding law is uniform under
                         // the by-reference regime: a `?T` head
                         // derefs, then writes through the shared cell — the
-                        // head binding itself must be `let mut`
-                        if !l.is_mut && !l.loop_var {
-                            self.ctx.err(sp, format!(
-                                "assignment through `{}` requires a `let mut` binding (the mut-binding law)",
-                                self.ctx.name(segs[0].name)
-                            ));
+                        // head binding itself must be `let mut`. Loop
+                        // variables take the header's flag: the fix
+                        // names the loop header, not a `let mut`
+                        if !l.is_mut {
+                            if l.loop_var {
+                                self.ctx.err(sp, format!(
+                                    "assignment through `{}` requires `mut` in the loop header: {} (the mut-binding law)",
+                                    self.ctx.name(segs[0].name),
+                                    self.loop_header_fix(&l)
+                                ));
+                            } else {
+                                self.ctx.err(sp, format!(
+                                    "assignment through `{}` requires a `let mut` binding (the mut-binding law)",
+                                    self.ctx.name(segs[0].name)
+                                ));
+                            }
                             return Err(());
                         }
                         // the chain head: a promoted binding loads its
@@ -305,11 +315,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, format!("unknown name `{}`", self.ctx.name(name)));
                     return Err(());
                 };
-                if !l.is_mut && !l.loop_var {
-                    self.ctx.err(sp, format!(
-                        "assignment to `{}` requires a `let mut` binding (the mut-binding law)",
-                        self.ctx.name(name)
-                    ));
+                if !l.is_mut {
+                    if l.loop_var {
+                        // whole-var reassignment of a plain loop
+                        // variable: the header's `mut` is the fix
+                        self.ctx.err(sp, format!(
+                            "assignment to `{}` requires `mut` in the loop header: {} (the mut-binding law)",
+                            self.ctx.name(name),
+                            self.loop_header_fix(&l)
+                        ));
+                    } else {
+                        self.ctx.err(sp, format!(
+                            "assignment to `{}` requires a `let mut` binding (the mut-binding law)",
+                            self.ctx.name(name)
+                        ));
+                    }
                     return Err(());
                 }
                 match op {

@@ -338,7 +338,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut ai = 0usize;
         for p in &params {
             if let MemberKind::Param(ParamData { name: pname, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: None });
+                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
                 self.note_union_binding(*pname, *ty);
                 ai += 1;
             }

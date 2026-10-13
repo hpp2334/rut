@@ -289,6 +289,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         ty: param_tys[i],
                         is_mut: *is_mut,
                         loop_var: false,
+                        loop_for_c: false,
                         origins: Vec::new(),
                         field: NO_FIELD,
                         cell: None,
@@ -317,6 +318,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         ty: param_tys[i],
                         is_mut: *is_mut,
                         loop_var: false,
+                        loop_for_c: false,
                         origins,
                         field: NO_FIELD,
                         cell: None,
@@ -472,7 +474,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, p) in params.iter().enumerate() {
             if let MemberKind::Param(ParamData { name, is_mut, .. }) = c.ctx.ast.param(*p) {
                 let reg = c.new_reg(param_tys[i]);
-                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, origins: Vec::new(), field: NO_FIELD, cell: None });
+                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
             }
         }
         for (cap) in &caps {
@@ -481,7 +483,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // handle — the local re-binds cell-backed so both frames
             // route through one slot (stay-linked for the binding's scope)
             let reg = c.new_reg(by_cell.unwrap_or(*t));
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, loop_for_c: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
             // captures are part of the fn's parameter list (after declared)
             param_tys.push(by_cell.unwrap_or(*t));
         }
@@ -554,7 +556,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// frame entry — a stashed inner lambda sees the value current at
     /// call time, exactly like the fused `while`-shaped form.
     fn compile_for_of_emit_fn(ctx: &mut Ctx<'a>, fid: u32, body: NodeId, var: IdentId) -> TcResult<()> {
-        let Some((elem_ty, caps, var_cell)) = ctx.for_of_sigs.get(&body.0).cloned() else {
+        let Some((elem_ty, caps, var_cell, is_mut)) = ctx.for_of_sigs.get(&body.0).cloned() else {
             return Ok(()); // creation site already diagnosed
         };
         let mut c = FnCompiler {
@@ -596,21 +598,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let preg = c.new_reg(elem_ty);
         if let Some(cty) = var_cell {
             // the loop var, cell-backed on the SHARED cell (argv[1]);
-            // frame entry stores the element into it
+            // frame entry stores the element into it. The header's
+            // `mut` rides the sig: the body's writes through the
+            // binding obey the same law in this frame as in the outer one
             let crec = c.new_reg(cty);
-            c.locals.push(Local { name: var, reg: crec, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
+            c.locals.push(Local { name: var, reg: crec, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
             let repr = c.ctx.types.repr_of(elem_ty);
             c.emit(Op::SetF { obj: crec, field: 0, val: preg, repr }, 0);
         } else {
             // the loop variable: the closure's parameter — a fresh binding
             // per iteration by construction (each emit call is a fresh frame);
-            // loop-owned, so writes through it (the shared element) are legal
-            c.locals.push(Local { name: var, reg: preg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: None });
+            // loop-owned, so the capture law pools it when captured. The
+            // header's `mut` alone gates the body's writes through it
+            c.locals.push(Local { name: var, reg: preg, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
         }
         for (cap) in &caps {
             let Capture { name: n, ty: t, is_mut: m, cell: by_cell, origins: cap_origins } = cap;
             let reg = c.new_reg(by_cell.unwrap_or(*t));
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
+            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, loop_for_c: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
         }
         let block: NodeHandle<BlockNode> = NodeHandle::new(body);
         if c.compile_block(block).is_err() {

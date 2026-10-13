@@ -462,9 +462,10 @@ pub struct Ctx<'a> {
     /// body node → (element type, captures, the loop var's cell when
     /// the loop var itself is captured — the emit closure binds it
     /// cell-backed and stores the incoming element into the shared
-    /// cell at frame entry, so both loop forms see one variable)
+    /// cell at frame entry, so both loop forms see one variable — and
+    /// the header's `mut` flag, the loop var's write law in the body)
     pub for_of_sigs:
-        std::collections::HashMap<u32, (TypeId, Vec<Capture>, Option<TypeId>)>,
+        std::collections::HashMap<u32, (TypeId, Vec<Capture>, Option<TypeId>, bool)>,
     /// used core compiler-lowered functions (`own`, `downcast`,
     /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
     /// only when bound

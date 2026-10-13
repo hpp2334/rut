@@ -94,6 +94,11 @@ pub(crate) struct Local {
     is_mut: bool,
     /// for-c induction variables are loop-owned
     loop_var: bool,
+    /// the loop var's header form when `loop_var` holds: `true` is a
+    /// for-c induction variable, `false` a for-of element view. Only
+    /// the mut-binding law's dedicated diagnostic reads it (the fix
+    /// names the header form); the capture law never does.
+    loop_for_c: bool,
     /// The capture law's shared-slot storage: `Some(cell record type)`
     /// for a PROMOTED binding (captured ∧ reassigned ∧ ref-headed).
     /// The register then holds the one-field cell's handle — reads go
@@ -353,6 +358,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         ty: TypeId,
         is_mut: bool,
         loop_var: bool,
+        loop_for_c: bool,
         origins: Vec<TypeId>,
         sp_lo: u32,
     ) {
@@ -396,7 +402,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let repr = self.ctx.types.repr_of(cty);
                 self.emit(Op::SetF { obj: frame_reg, field, val: crec2, repr }, sp_lo);
             }
-            self.locals.push(Local { name, reg: crec2, ty, is_mut, loop_var, origins, field, cell });
+            self.locals.push(Local { name, reg: crec2, ty, is_mut, loop_var, loop_for_c, origins, field, cell });
             return;
         }
         if field != NO_FIELD {
@@ -411,7 +417,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let repr = self.ctx.types.repr_of(ty);
             self.emit(Op::SetF { obj: frame_reg, field, val: reg, repr }, sp_lo);
         }
-        self.locals.push(Local { name, reg, ty, is_mut, loop_var, origins, field, cell });
+        self.locals.push(Local { name, reg, ty, is_mut, loop_var, loop_for_c, origins, field, cell });
     }
 
     /// The capture law's promotion for a param local already bound
@@ -447,6 +453,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         { let (argv_off, argc) = self.pool_args(&[old]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp_lo); }
         self.locals[idx].reg = crec;
         self.locals[idx].cell = Some(cty);
+    }
+
+    /// The mut-binding law's loop-header fix clause: the snippet a
+    /// write through a plain (no `mut`) loop variable must adopt —
+    /// `for (let mut x of ...)` for a for-of element view,
+    /// `for (let mut i = ...)` for a for-c induction variable. Reads
+    /// only the header form; the capture law never does.
+    pub(crate) fn loop_header_fix(&self, l: &Local) -> String {
+        let name = self.ctx.name(l.name);
+        if l.loop_for_c {
+            format!("`for (let mut {name} = ...)`")
+        } else {
+            format!("`for (let mut {name} of ...)`")
+        }
     }
 
     /// The capture law's read accessor — EVERY read of a local's value

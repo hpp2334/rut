@@ -521,7 +521,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // the sharing law: the binding takes the
                         // initializer's cell handle — a share, never a copy
                         let reg = self.last_reg;
-                        self.bind_local(name, reg, ty, is_mut, false, origins, sp.lo);
+                        self.bind_local(name, reg, ty, is_mut, false, false, origins, sp.lo);
                         // union provenance (native-fastpath
                         // phase 1): an annotation spelling a union-bounded
                         // generic carries it; a copy takes its
@@ -573,7 +573,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 },
                                 sp.lo,
                             );
-                            self.bind_local(*n, reg, fty, is_mut, false, Vec::new(), sp.lo);
+                            self.bind_local(*n, reg, fty, is_mut, false, false, Vec::new(), sp.lo);
                             // a fresh binding from a tuple field carries no
                             // union provenance
                             self.union_syms.remove(n);
@@ -646,23 +646,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = saved || self.while_never_falls_through(cond, body);
                 Ok(())
             }
-            StmtKind::ForOf { var, is_mut: _, iter, body } => {
+            StmtKind::ForOf { var, is_mut, iter, body } => {
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
-                let r = self.compile_for_of(node.id(), var, iter, body, sp);
+                let r = self.compile_for_of(node.id(), var, is_mut, iter, body, sp);
                 self.terminated = saved;
                 r
             }
-            StmtKind::ForC { var, is_mut: _, init, cond, update, body } => {
+            StmtKind::ForC { var, is_mut, init, cond, update, body } => {
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
                 // induction var is loop-owned; bind directly
-                // to the initializer's register
+                // to the initializer's register. The header's
+                // `mut` IS the binding's write law: without it, an
+                // update/body assignment to the var is an error
                 let t = self.compile_expr(init, None)?;
                 let reg = self.last_reg;
-                self.bind_local(var, reg, t, true, true, Vec::new(), sp.lo);
+                self.bind_local(var, reg, t, is_mut, true, true, Vec::new(), sp.lo);
                 let l_head = self.new_label();
                 let l_body = self.new_label();
                 let l_end = self.new_label();
@@ -950,7 +952,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: rut_lexer::span::Span) -> TcResult<()> {
+    pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, is_mut: bool, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: rut_lexer::span::Span) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
         // `for (v of p)` auto-derefs a pointer
@@ -965,7 +967,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if std::env::var("RUT_PROBE_BT").is_ok() {
                         eprintln!("PROBE for-of marked member found, elem={}", self.ctx.type_name(elem_ty));
                     }
-                    return self.compile_for_of_iterate(var, iter_reg, src, elem_ty, body, sp);
+                    return self.compile_for_of_iterate(var, iter_reg, src, elem_ty, is_mut, body, sp);
                 }
                 if std::env::var("RUT_PROBE_BT").is_ok() {
                     eprintln!("PROBE for-of NO marked member on {}", self.ctx.type_name(it));
@@ -1038,13 +1040,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match var_cell {
             Some(cty) => {
                 // the element store: into the shared cell (the binding's
-                // register holds the cell, stable across iterations)
+                // register holds the cell, stable across iterations).
+                // The header's `mut` is the write law for the body's
+                // stores through the binding (the per-iteration element
+                // store is machinery, never gated)
                 let repr = self.ctx.types.repr_of(elem_ty);
                 self.emit(Op::SetF { obj: cell_reg, field: 0, val: var_reg, repr }, sp.lo);
-                self.locals.push(Local { name: var, reg: cell_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
+                self.locals.push(Local { name: var, reg: cell_reg, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
             }
             None => {
-                self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut: false, loop_var: true, origins: Vec::new(), field: NO_FIELD, cell: None });
+                self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
             }
         }
         self.loops.push((l_cont, l_end));
@@ -1223,6 +1228,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         rreg: u16,
         src: IterSource,
         elem_ty: TypeId,
+        is_mut: bool,
         body: NodeHandle<BlockNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
@@ -1279,7 +1285,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         self.ctx
             .for_of_sigs
-            .insert(body.id().0, (elem_ty, caps.clone(), var_cell));
+            .insert(body.id().0, (elem_ty, caps.clone(), var_cell, is_mut));
         let emit = crate::check::Inst {
             key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
             subst: vec![],
