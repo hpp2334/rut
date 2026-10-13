@@ -54,6 +54,7 @@
 const assert = require('node:assert');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const EXT = path.join(__dirname, '..');
@@ -1148,6 +1149,111 @@ async function main() {
     }
     smokes++;
 
+    // ---- plan2 phase 3 (deps face): EXTRACT-TO-DISK — the extension's
+    // url-dep mount lane: rut_extract_bundle unpacks WITHOUT indexing,
+    // the host writes the files under .rut/deps/<module>-<pin12>/
+    // (content-addressed by the byte pin) and re-indexes them through
+    // rut_add_def_mod with real file:// origins — go-to-definition
+    // lands in REAL files, never bundle: URIs. The BINDING drives the
+    // lane (the exact call src/extension.ts mountUrlDep makes), the
+    // files are read back from disk. ----
+    assert.strictEqual(typeof e.rut_extract_bundle, 'function',
+      'rut_extract_bundle missing from the artifact — rebuild (npm run build:wasm)');
+    {
+      const extracted = rut.extractBundle(bundleBytes);
+      assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
+      assert.strictEqual(extracted.module, 'pouch', `extracted module: ${JSON.stringify(extracted.module)}`);
+      assert.strictEqual(extracted.files.length, 1, `extracted files: ${JSON.stringify(extracted.files.map((f) => f.path))}`);
+      const [ef] = extracted.files;
+      assert.strictEqual(ef.path, 'mod.rut');
+      assert.strictEqual(ef.mode, 'Impl');
+      assert.strictEqual(ef.mod_path, '', `the root rides mod path '': ${JSON.stringify(ef.mod_path)}`);
+      assert.ok(ef.src.includes('pub class Vec'), `the body rides the src: ${ef.src.slice(0, 60)}`);
+      // a corrupt archive is the error envelope — never a partial tree
+      const badExtract = rut.extractBundle(new TextEncoder().encode('definitely not a zip'));
+      assert.ok(badExtract.error && badExtract.error.includes('not a zip'),
+        `extract error envelope: ${JSON.stringify(badExtract)}`);
+
+      // the mount: <tmp>/.rut/deps/pouch-<pin12>/ — the pin prefix IS
+      // the content address (same bytes ⇒ same dir, a bump ⇒ a sibling)
+      const pin12 = crypto.createHash('sha256').update(bundleBytes).digest('hex').slice(0, 12);
+      const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-deps-'));
+      try {
+        const depDir = path.join(wsRoot, '.rut', 'deps', `pouch-${pin12}`);
+        for (const xf of extracted.files) {
+          const fp = path.join(depDir, xf.path);
+          fs.mkdirSync(path.dirname(fp), { recursive: true });
+          fs.writeFileSync(fp, xf.src);
+          const stamped = rut.addDefMod(`file://${fp}`, extracted.module, xf.mod_path, xf.src);
+          assert.ok(!stamped.error, `extracted file indexes: ${JSON.stringify(stamped)}`);
+        }
+        const pdoc = 'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n}\n';
+        const puri = 'file:///ws/e2e-deps.rut';
+        const pa = rut.analyze(puri, pdoc);
+        assert.strictEqual(pa.diags.length, 0, `extracted-deps probe doc: ${JSON.stringify(pa.diags)}`);
+
+        // the LEAF click: exactly one location under the extracted
+        // tree, the declaring `Vec` ident of the body file (read back
+        // from DISK — the target is an openable real file)
+        const depLocs = rut.definition(puri, ...posOf(pdoc, 'Vec'))
+          .filter((l) => l.uri.includes('.rut/deps/pouch-'));
+        assert.strictEqual(depLocs.length, 1,
+          `extracted-dir Vec targets: ${JSON.stringify(rut.definition(puri, ...posOf(pdoc, 'Vec')))}`);
+        const bodySrc = fs.readFileSync(depLocs[0].uri.replace(/^file:\/\//, ''), 'utf8');
+        assert.ok(bodySrc.includes('pub class Vec'), 'the extracted target is the body file');
+        eqRange(depLocs, { uri: depLocs[0].uri, range: identAt(bodySrc, /^pub class Vec/, 'Vec'), len: 3 },
+          'extracted pouch leaf (body preferred)');
+
+        // the PKG-HEAD click: the same extracted root file, top
+        const headLocs = rut.definition(puri, ...posOf(pdoc, 'pouch'));
+        assert.strictEqual(headLocs.length, 1, `pkg head targets: ${JSON.stringify(headLocs)}`);
+        assert.ok(headLocs[0].uri.includes('.rut/deps/pouch-') && headLocs[0].uri.endsWith('/mod.rut'),
+          `pkg head lands in the extracted tree: ${headLocs[0].uri}`);
+        assert.deepStrictEqual(headLocs[0].range,
+          { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          `pkg head opens the file top: ${JSON.stringify(headLocs[0].range)}`);
+        smokes++;
+
+        // ---- the path-dep lane: a mod-tree dep's REAL files — the
+        // middle segment lands on the `pub mod layout;` edge, the leaf
+        // in the child file ----
+        const toolsDir = path.join(wsRoot, 'tools2');
+        const rootSrc = 'pub mod layout;\npub fn tag() -> i32 { return 1; }\n';
+        const childSrc = 'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n';
+        fs.mkdirSync(path.join(toolsDir, 'layout'), { recursive: true });
+        fs.writeFileSync(path.join(toolsDir, 'mod.rut'), rootSrc);
+        fs.writeFileSync(path.join(toolsDir, 'layout', 'mod.rut'), childSrc);
+        let ts = rut.addDefMod(`file://${path.join(toolsDir, 'mod.rut')}`, 'tools2', '', rootSrc);
+        assert.ok(!ts.error, `tools2 root indexes: ${JSON.stringify(ts)}`);
+        ts = rut.addDefMod(`file://${path.join(toolsDir, 'layout', 'mod.rut')}`, 'tools2', 'layout', childSrc);
+        assert.ok(!ts.error, `tools2 child indexes: ${JSON.stringify(ts)}`);
+
+        const mdoc = 'use tools2::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n';
+        const muri = 'file:///ws/e2e-dep-mods.rut';
+        const ma = rut.analyze(muri, mdoc);
+        assert.strictEqual(ma.diags.length, 0, `dep-mods probe doc: ${JSON.stringify(ma.diags)}`);
+        // the MIDDLE segment: the mounting edge in the root file
+        const midLocs = rut.definition(muri, 0, 'use tools2::'.length);
+        assert.strictEqual(midLocs.length, 1, `middle segment targets: ${JSON.stringify(midLocs)}`);
+        assert.ok(midLocs[0].uri.endsWith('/tools2/mod.rut'), `middle segment lands in the root: ${midLocs[0].uri}`);
+        eqRange(midLocs, { uri: midLocs[0].uri, range: identAt(rootSrc, /^pub mod layout;/, 'layout'), len: 6 },
+          'path-dep middle segment');
+        // the LEAF: the decl in the child file
+        const leafLocs = rut.definition(muri, ...posOf(mdoc, 'Column'));
+        assert.strictEqual(leafLocs.length, 1, `leaf targets: ${JSON.stringify(leafLocs)}`);
+        assert.ok(leafLocs[0].uri.endsWith('/tools2/layout/mod.rut'), `leaf lands in the child: ${leafLocs[0].uri}`);
+        eqRange(leafLocs, { uri: leafLocs[0].uri, range: identAt(childSrc, /^pub struct Column/, 'Column'), len: 6 },
+          'path-dep leaf');
+        // and the usage site rides the same edge into the child
+        const usageLocs = rut.definition(muri, ...posOf(mdoc, 'Column { w: 1 }'));
+        assert.ok(usageLocs.some((l) => l.uri.endsWith('/tools2/layout/mod.rut')),
+          `usage into the child: ${JSON.stringify(usageLocs)}`);
+        smokes++;
+      } finally {
+        fs.rmSync(wsRoot, { recursive: true, force: true });
+      }
+    }
+
     // ---- file modules (the mod walk): rut_add_def_mod stamps the
     // tree — the root's `pub mod layout;` rides back as the mount
     // walk's next hop, `use tools::layout::` completes the walked
@@ -1237,6 +1343,7 @@ async function main() {
     `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
     `refs-shadow/refs-cross/sighelp/` +
     `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface/` +
+    `extract-deps-leaf+head/path-dep-segments/` +
     `complete-in-doc-sync) ` +
     `through bin/rut-lsp.wasm`);
 }

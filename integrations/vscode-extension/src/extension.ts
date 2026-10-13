@@ -111,7 +111,7 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
   // workspace index off the hot activation path — hover/completion may
   // briefly resolve against the std surface + open docs only. The dep
   // walk rides after it: the root `rut.jsonc`'s rows mount the deps
-  // (path dirs, pinned url bundles) into the same index.
+  // (path dirs, extracted pinned url bundles) into the same index.
   watchDeps(context, rut);
   void indexWorkspace(rut).then(() => scheduleDepWalk(rut));
 }
@@ -127,9 +127,13 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
 // CLI fills): cache-first, a hit verified against the sha256 pin (a
 // poisoned entry evicts and re-fetches — the CLI's healing law), a
 // miss GETs, pins the bytes BEFORE they land anywhere, and writes the
-// cache atomically (tmp + rename). No pin, no bytes — one error hint.
-// Every failure is ONE hint per dep naming the CLI alternative: never
-// spam, never silent wrong results.
+// cache atomically (tmp + rename). The verified bytes then EXTRACT
+// into real files under `.rut/deps/<module>-<pin12>/` (content-
+// addressed by the byte pin) and re-index through the same lane path
+// deps use — go-to-definition lands in openable `file://` paths, no
+// `bundle:` origins. No pin, no bytes — one error hint. Every failure
+// is ONE hint per dep naming the CLI alternative: never spam, never
+// silent wrong results.
 
 interface WalkCtx {
   rut: RutWasm;
@@ -139,6 +143,12 @@ interface WalkCtx {
   seen: Set<string>;
   /// remaining dep-file budget
   files: number;
+  /// the `.rut/deps/` trees this walk's rows reference (fsPaths) —
+  /// everything else under the root is a stale pin bump, swept
+  depDirs: Set<string>;
+  /// the walk hit a budget (files or depth) — its referenced set is
+  /// incomplete, the stale sweep stays out of the way
+  truncated: boolean;
 }
 
 // hints are once-per-reason per session: a watcher re-walk fires
@@ -230,8 +240,43 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutWasm): void {
 
 async function walkDeps(rut: RutWasm): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
-    const ctx: WalkCtx = { rut, folder: folder.uri, seen: new Set(), files: MAX_DEP_FILES };
+    const ctx: WalkCtx = {
+      rut,
+      folder: folder.uri,
+      seen: new Set(),
+      files: MAX_DEP_FILES,
+      depDirs: new Set(),
+      truncated: false,
+    };
     await walkManifest(ctx, vscode.Uri.joinPath(folder.uri, MANIFEST_NAME), 1);
+    await sweepStaleDepTrees(ctx);
+  }
+}
+
+// pin bumps leave sibling trees behind — the walk deletes the
+// `.rut/deps/<dir>` trees no current manifest row referenced (the dir
+// stays content-addressed, never growing across bumps). A truncated
+// walk skips the sweep: a budget miss is not evidence a tree is stale.
+async function sweepStaleDepTrees(ctx: WalkCtx): Promise<void> {
+  if (ctx.truncated) {
+    return;
+  }
+  const depsRoot = vscode.Uri.joinPath(ctx.folder, '.rut', 'deps');
+  let names: Array<[string, vscode.FileType]>;
+  try {
+    names = await vscode.workspace.fs.readDirectory(depsRoot);
+  } catch {
+    return; // no deps dir (or unreadable) — nothing to sweep
+  }
+  for (const [name, type] of names) {
+    if (type !== vscode.FileType.Directory || ctx.depDirs.has(path.join(depsRoot.fsPath, name))) {
+      continue;
+    }
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.joinPath(depsRoot, name), { recursive: true });
+    } catch {
+      // a concurrent reader wins this race — the next walk retries
+    }
   }
 }
 
@@ -242,10 +287,12 @@ async function walkDeps(rut: RutWasm): Promise<void> {
 // `peer-deps` only when locally resolvable (the consumer supplies
 // them; an unresolvable peer is the normal state, not a failure).
 // Namespaced/const-carrying path deps (calc's `Math`) index their
-// surface only — namespace/consts have no voice in `rut_add_def_named`;
-// a dep needing them mounts through a bundle.
+// surface only — namespace/consts have no voice in
+// `rut_add_def_named`/`rut_add_def_mod`; the extracted-tree lane
+// indexes the surface the same way.
 async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number): Promise<void> {
   if (depth > MAX_DEP_DEPTH || ctx.files <= 0) {
+    ctx.truncated = true; // the referenced set is incomplete — the sweep skips
     return;
   }
   const dir = vscode.Uri.joinPath(manifestUri, '..');
@@ -270,6 +317,7 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
   const module = table.name ?? path.basename(dirKey);
   for (const entry of table.entries) {
     if (ctx.files <= 0) {
+      ctx.truncated = true;
       return;
     }
     const srcUri = vscode.Uri.joinPath(dir, entry.path);
@@ -294,6 +342,7 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
   ];
   for (const { row, peer } of rows) {
     if (ctx.files <= 0) {
+      ctx.truncated = true;
       return;
     }
     if (row.source.kind === 'url') {
@@ -342,6 +391,7 @@ async function mountModTree(
   depth: number
 ): Promise<void> {
   if (depth > MAX_DEP_DEPTH || ctx.files <= 0) {
+    ctx.truncated = true; // the walk is incomplete — the sweep skips
     return;
   }
   let rootUri: vscode.Uri;
@@ -382,6 +432,7 @@ async function mountModTree(
   }
   for (const decl of decls) {
     if (ctx.files <= 0) {
+      ctx.truncated = true;
       return;
     }
     const childDir = vscode.Uri.joinPath(pkgDir, decl.name);
@@ -390,7 +441,13 @@ async function mountModTree(
 }
 
 // one url row — the mount door. `sha256`/`cache_path` are Rust-computed
-// (the row's envelope carries them; JS never hashes URLs).
+// (the row's envelope carries them; JS never hashes URLs). The
+// pin-verified bytes EXTRACT into real files under
+// `.rut/deps/<module>-<pin12>/` — content-addressed by the byte pin
+// (same pin ⇒ same tree, a bump ⇒ a sibling the stale sweep prunes) —
+// and index through the same lane path deps use (`addDefMod` /
+// `addDefNamed` over `file://` uris): go-to-definition lands in
+// openable workspace files, no `bundle:` origins.
 async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
   const source = row.source;
   if (source.kind !== 'url') {
@@ -406,6 +463,11 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
     );
     return;
   }
+  // the tree's name rides the PIN: the row references this dir whether
+  // or not this walk's fetch/extract succeeds — a transient failure
+  // keeps the last good tree instead of sweeping it
+  const depDir = vscode.Uri.joinPath(ctx.folder, '.rut', 'deps', `${row.name}-${sha256.slice(0, 12)}`);
+  ctx.depDirs.add(depDir.fsPath);
   const cacheUri = vscode.Uri.joinPath(ctx.folder, cache_path);
   let bytes = await readFileNullable(cacheUri);
   if (bytes !== null && (await sha256Hex(bytes)) !== sha256) {
@@ -450,13 +512,46 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
       return;
     }
   }
-  const bundle = ctx.rut.addBundle(bytes);
-  if (isEnvelope(bundle)) {
+  const extracted = ctx.rut.extractBundle(bytes);
+  if (isEnvelope(extracted)) {
     hintOnce(
       `bundle:${url}`,
-      `rut: dep '${row.name}' — the bundle did not mount: ${bundle.error}`,
+      `rut: dep '${row.name}' — the bundle did not mount: ${extracted.error}`,
       true
     );
+    return;
+  }
+  for (const f of extracted.files) {
+    if (ctx.files <= 0) {
+      ctx.truncated = true;
+      return;
+    }
+    // the file lands at its archive path (a `.d.rut` stays `.d.rut`,
+    // so the uri convention's mode matches the envelope's) — but only
+    // on real drift: an identical file stays untouched, or the
+    // `**/mod.rut` watcher's re-walk would rewrite it forever
+    const fileUri = vscode.Uri.joinPath(depDir, f.path);
+    if (!(await fileHasContent(fileUri, f.src))) {
+      await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(fileUri, '..'));
+      await vscode.workspace.fs.writeFile(fileUri, new TextEncoder().encode(f.src));
+    }
+    ctx.files--;
+    // the same lane path deps use — mod-path files through
+    // `addDefMod` (the envelope spells the path: `''` the root,
+    // `<path>` a child), flat files under the module NAME
+    if (f.mod_path === null) {
+      ctx.rut.addDefNamed(fileUri.toString(), extracted.module, f.src);
+      continue;
+    }
+    const stamped = ctx.rut.addDefMod(fileUri.toString(), extracted.module, f.mod_path, f.src);
+    if (isEnvelope(stamped)) {
+      hintOnce(
+        `bundle:${url}`,
+        `rut: dep '${row.name}' — ${extracted.module} did not index: ${stamped.error}`,
+        true
+      );
+      return;
+    }
   }
 }
 
@@ -484,6 +579,14 @@ async function readFileNullable(file: vscode.Uri): Promise<Uint8Array | null> {
   } catch {
     return null;
   }
+}
+
+// does the file exist with EXACTLY this text? — the extracted-tree
+// writes ride it: an unchanged tree never rewrites, so the watchers'
+// re-walk settles (the first mount writes, a drifted file heals)
+async function fileHasContent(file: vscode.Uri, src: string): Promise<boolean> {
+  const bytes = await readFileNullable(file);
+  return bytes !== null && new TextDecoder().decode(bytes) === src;
 }
 
 // ---- providers ----

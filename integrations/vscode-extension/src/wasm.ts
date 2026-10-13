@@ -154,6 +154,27 @@ export interface BundleIndexed {
   files: string[];
 }
 
+/// one unpacked bundle file — the archive path as written, its mode,
+/// and the index lane's mod path (`''` the root `mod.rut`, `<path>` a
+/// mounted child, `null` a flat file)
+export interface BundleExtractedFile {
+  path: string;
+  src: string;
+  mode: 'Decl' | 'Impl';
+  mod_path: string | null;
+}
+
+/// `rut_extract_bundle`'s success envelope — the module + its editable
+/// surface, extracted WITHOUT indexing (the host owns the disk: it
+/// writes the files and re-indexes them through `addDefMod` /
+/// `addDefNamed`, real `file://` origins)
+export interface BundleExtracted {
+  module: string;
+  namespace: string | null;
+  consts: Array<[string, number]>;
+  files: BundleExtractedFile[];
+}
+
 interface RutExports {
   memory: WebAssembly.Memory;
   rut_begin(): void;
@@ -199,6 +220,7 @@ interface RutExports {
     srcLen: number
   ): number;
   rut_add_bundle(ptr: number, len: number): number;
+  rut_extract_bundle(ptr: number, len: number): number;
 }
 
 /// everything the module exports (the ABI surface + its linear memory)
@@ -360,6 +382,19 @@ export class RutWasm {
     return this.call(() => {
       const [p, l] = this.putBytes(bytes);
       return this.e.rut_add_bundle(p, l);
+    });
+  }
+
+  /// unpack one `.rutbundle` WITHOUT indexing — the pure-extract twin
+  /// of `addBundle`: bytes in, the editable surface out. The host
+  /// writes the files and re-indexes them through `addDefMod` /
+  /// `addDefNamed` (real `file://` origins — the go-to-definition
+  /// face), so this lane has no index side effect. The error envelope
+  /// on a corrupt/foreign archive.
+  extractBundle(bytes: Uint8Array): BundleExtracted | Envelope {
+    return this.call(() => {
+      const [p, l] = this.putBytes(bytes);
+      return this.e.rut_extract_bundle(p, l);
     });
   }
 
