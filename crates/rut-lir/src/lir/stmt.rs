@@ -46,8 +46,33 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .is_some_and(|s| matches!(self.ctx.ast.stmt(*s), StmtKind::If { els: Some(_), .. }));
         let split = if if_tail { stmts.len() - 1 } else { stmts.len() };
         let base = self.locals.len();
+        // sibling recovery: a failing statement reports its site(s), its
+        // partial scope rolls back, and the walk continues — the NEXT
+        // statement is an independent site and reports too. Each site
+        // prints exactly once and the block still fails (Err below), so
+        // the unit is rejected as before. A failed `let`'s names poison
+        // for the block's remainder: uses of them fail silently — the
+        // real cause is already on the diag list, never a misleading
+        // unknown.
+        let mut stmt_failed = false;
+        let mut poisoned_here: Vec<rut_core::IdentId> = Vec::new();
         for s in &stmts[..split] {
-            self.compile_stmt(*s)?;
+            let mark = self.locals.len();
+            let saved_term = self.terminated;
+            if self.compile_stmt(*s).is_err() {
+                stmt_failed = true;
+                self.locals.truncate(mark);
+                self.terminated = saved_term;
+                self.poison_let_names(*s, &mut poisoned_here);
+            }
+        }
+        if stmt_failed {
+            self.locals.truncate(base);
+            self.unpoison(&poisoned_here);
+            return Err(());
+        }
+        for name in &poisoned_here {
+            self.ctx.poisoned.remove(name);
         }
         let produced = if let Some(e) = tail {
             let t = self.compile_expr(e, expected)?;
@@ -349,14 +374,60 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => return Ok(()),
         };
         let base = self.locals.len();
+        // sibling recovery (see compile_block_value): a failing
+        // statement reports and the walk continues with its siblings;
+        // a failed `let`'s names poison for the block's remainder
+        let mut stmt_failed = false;
+        let mut poisoned_here: Vec<rut_core::IdentId> = Vec::new();
         for s in &stmts {
-            self.compile_stmt(*s)?;
+            let mark = self.locals.len();
+            let saved_term = self.terminated;
+            if self.compile_stmt(*s).is_err() {
+                stmt_failed = true;
+                self.locals.truncate(mark);
+                self.terminated = saved_term;
+                self.poison_let_names(*s, &mut poisoned_here);
+            }
+        }
+        if stmt_failed {
+            self.locals.truncate(base);
+            self.unpoison(&poisoned_here);
+            return Err(());
+        }
+        for name in &poisoned_here {
+            self.ctx.poisoned.remove(name);
         }
         if let Some(e) = tail {
             self.compile_expr(e, None)?;
         }
         self.locals.truncate(base);
         Ok(())
+    }
+
+    /// A failed statement's `let` bindings poison for the block's
+    /// remainder: the binding never happened, so a later use must not
+    /// read as a mysterious unknown — the cause is already on the
+    /// diag list. Records every name the statement would have bound.
+    fn poison_let_names(&mut self, s: NodeHandle<AnyStmt>, out: &mut Vec<rut_core::IdentId>) {
+        let (name, destructure) = match self.ctx.ast.stmt(s) {
+            StmtKind::LetStmt { name, destructure, .. } => (*name, destructure.clone()),
+            _ => return,
+        };
+        if destructure.is_none() && self.ctx.poisoned.insert(name) {
+            out.push(name);
+        }
+        for n in destructure.into_iter().flatten() {
+            if self.ctx.poisoned.insert(n) {
+                out.push(n);
+            }
+        }
+    }
+
+    /// Drop this block's poison additions (block scope exits).
+    fn unpoison(&mut self, names: &[rut_core::IdentId]) {
+        for name in names {
+            self.ctx.poisoned.remove(name);
+        }
     }
 
     /// The fn-body (or lambda-body) tail as the IMPLICIT RETURN: the

@@ -553,6 +553,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some(r) = self.compile_fn_path_value(name, sp) {
                 return r;
             }
+            if self.ctx.poisoned(name) {
+                return Err(()); // the failed `let` is already diagnosed
+            }
             let msg = self
                 .ctx
                 .not_in_core_scope(name)
@@ -655,6 +658,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.used_pkgs.contains(self.ctx.name(segs[0].name)) {
             self.package_head_error(&segs, segs[segs.len() - 1].name, sp);
             return Err(());
+        }
+        if self.ctx.poisoned(segs[0].name) {
+            return Err(()); // the failed `let` is already diagnosed
         }
         self.ctx.err(
             sp,

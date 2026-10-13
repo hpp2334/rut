@@ -154,6 +154,7 @@ impl<'a> Ctx<'a> {
     /// its own).
     pub fn drain_queue(&mut self) -> TcResult<()> {
         let mut guard = 0;
+        let mut failed = false;
         while let Some(inst) = self.queue.pop() {
             guard += 1;
             if guard > 100_000 {
@@ -164,12 +165,17 @@ impl<'a> Ctx<'a> {
                 return Err(());
             }
             let fid = self.inst_map[&inst];
-            let fid = self.inst_map[&inst];
-            
             if FnCompiler::compile(self, &inst, fid).is_err() {
-                
-                return Err(());
+                // a body's diags are already in ctx.diags — keep
+                // draining so a LATER body's sites report too (the
+                // first failure used to starve every body behind it).
+                // Each site prints exactly once and the unit still
+                // fails: the callers refuse on non-empty diags.
+                failed = true;
             }
+        }
+        if failed {
+            return Err(());
         }
         Ok(())
     }

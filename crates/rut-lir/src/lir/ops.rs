@@ -299,6 +299,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Path { segs } if segs.len() == 1 => {
                 let name = segs[0].name;
                 let Some(l) = self.lookup(name).cloned() else {
+                    if self.ctx.poisoned(name) {
+                        return Err(()); // the failed `let` is already diagnosed
+                    }
                     self.ctx.err(sp, format!("unknown name `{}`", self.ctx.name(name)));
                     return Err(());
                 };

@@ -352,6 +352,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // result slot — `return`s wrote it directly during the splice.
         // A nil tail (or a tail-if whose arms all return) answers
         // through the fallback: nothing to move.
+        let diag_mark = self.ctx.diags.len();
         let tail_res = self.compile_block_value(body.id(), Some(ret_ty));
         if let Ok(Some(t)) = &tail_res {
             if *t != TY_NIL {
@@ -371,6 +372,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.union_syms = saved_us;
         let _ = sp;
         if tail_res.is_err() {
+            // the splice is speculative: a failed attempt's diagnostics
+            // come back OUT — the callee's real body compile (its own
+            // queue root) reports each site exactly once. Leaving the
+            // splice's copy in made `rut run` print the same error twice
+            // (once from the splice inside the caller, once from the
+            // body).
+            self.ctx.diags.truncate(diag_mark);
             return false;
         }
         self.last_reg = res;

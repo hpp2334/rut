@@ -336,6 +336,14 @@ pub struct Ctx<'a> {
     /// never ambient)
     pub used: std::collections::HashSet<IdentId>,
     pub diags: Vec<Diag>,
+    /// Names whose binding `let` FAILED (sibling recovery): a later
+    /// statement's use of one fails SILENTLY — the real cause is
+    /// already on the diag list, and a second diagnostic ("unknown
+    /// name") would read as a false error for a name the programmer
+    /// plainly declared. Block-scoped: the block loops insert on a
+    /// failed `let` and remove at exit, so shadowing and lifetimes
+    /// stay exact.
+    pub poisoned: std::collections::HashSet<IdentId>,
     pub types: TypeTable,
     pub ifaces: Vec<IfaceDesc>,
     pub iface_decls: Vec<(IdentId, IfaceDeclInfo)>,
@@ -700,6 +708,7 @@ impl<'a> Ctx<'a> {
             interner,
             used: std::collections::HashSet::new(),
             diags: Vec::new(),
+            poisoned: std::collections::HashSet::new(),
             types: TypeTable::boot_scoped(scope),
             ifaces: Vec::new(),
             iface_decls: Vec::new(),
@@ -1174,6 +1183,15 @@ impl<'a> Ctx<'a> {
 
     pub fn err(&mut self, span: Span, msg: impl Into<String>) {
         self.diags.push(Diag::new(span, msg));
+    }
+
+    /// The poisoned-binding check: `true` when `name` names a binding
+    /// whose `let` statement failed. The use site fails SILENTLY — the
+    /// real cause is already on the diag list, and a second diagnostic
+    /// ("unknown name") would read as a false error for a name the
+    /// programmer plainly declared.
+    pub fn poisoned(&self, name: rut_core::IdentId) -> bool {
+        self.poisoned.contains(&name)
     }
 
     /// The crossing rule: what an `entry fn` signature may
