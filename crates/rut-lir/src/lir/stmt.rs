@@ -646,7 +646,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = saved || self.while_never_falls_through(cond, body);
                 Ok(())
             }
-            StmtKind::ForOf { var, iter, body } => {
+            StmtKind::ForOf { var, is_mut: _, iter, body } => {
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
@@ -654,7 +654,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = saved;
                 r
             }
-            StmtKind::ForC { var, init, cond, update, body } => {
+            StmtKind::ForC { var, is_mut: _, init, cond, update, body } => {
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;

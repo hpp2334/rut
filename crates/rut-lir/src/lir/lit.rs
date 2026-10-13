@@ -1231,7 +1231,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 walk(cond.id(), inside, self, assigned, captured);
                 walk(body.id(), inside, self, assigned, captured);
             }
-            Kind::Stmt(StmtKind::ForOf { var, iter, body }) => {
+            Kind::Stmt(StmtKind::ForOf { var, is_mut: _, iter, body }) => {
                 // the loop var is ONE variable reassigned per iteration
                 // (the sugar law) — the element store counts as an
                 // assignment in BOTH frames

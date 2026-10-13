@@ -293,6 +293,41 @@ fn statement_if_trailing_semicolon_normalizes_away() {
     assert_eq!(fmt(&once), once, "idempotent");
 }
 
+// ---- loop headers: `mut` ----
+
+#[test]
+fn loop_header_mut_survives_parse_fmt_parse() {
+    // the flag prints right after `let`, in both header forms
+    // (the field-write target prints parenthesized — the printer's
+    // standing assignment-target law)
+    let of_once = fmt("fn f(xs: Vec<i32>) -> nil { for (let mut t of xs) { t.x = 1; } }");
+    assert_eq!(
+        of_once,
+        "fn f(xs: Vec<i32>) -> nil {\n    for (let mut t of xs) {\n        (t.x) = 1;\n    }\n}\n"
+    );
+    assert_eq!(fmt(&of_once), of_once, "idempotent");
+
+    let c_once = fmt("fn f(n: i32) -> nil { for (let mut i = 0; i < n; i += 1) { } }");
+    assert_eq!(
+        c_once,
+        "fn f(n: i32) -> nil {\n    for (let mut i = 0; i < n; i += 1) {\n    }\n}\n"
+    );
+    assert_eq!(fmt(&c_once), c_once, "idempotent");
+}
+
+#[test]
+fn loop_header_without_mut_prints_exactly_as_before() {
+    // the mut-less spellings are byte-identical to the pre-`mut` printer
+    assert_eq!(
+        fmt("fn f(xs: Vec<i32>) -> nil { for (let t of xs) { } }"),
+        "fn f(xs: Vec<i32>) -> nil {\n    for (let t of xs) {\n    }\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f(n: i32) -> nil { for (let i = 0; i < n; i += 1) { } }"),
+        "fn f(n: i32) -> nil {\n    for (let i = 0; i < n; i += 1) {\n    }\n}\n"
+    );
+}
+
 // ---- refusal ----
 
 #[test]

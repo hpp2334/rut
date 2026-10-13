@@ -60,6 +60,9 @@ pub struct Binding {
     /// cursor typing at the EOF stays inside its block's scope.
     pub scope_span: Span,
     pub kind: BindKind,
+    /// the header spelled `mut` — the mut-binding law's flag, carried so
+    /// the hover renders the binding as it binds (`let mut x`)
+    pub is_mut: bool,
     /// display text of the declared or inferred type (`Circle`,
     /// `?Circle`, `Vec<i32>`, `f64`); `None` when nothing derives
     pub ty: Option<String>,
@@ -130,12 +133,13 @@ struct Cx<'a> {
 }
 
 impl Cx<'_> {
-    fn push(&mut self, name: &str, decl: Span, scope: Span, kind: BindKind, ty: Option<String>, inferred: bool) {
+    fn push(&mut self, name: &str, decl: Span, scope: Span, kind: BindKind, is_mut: bool, ty: Option<String>, inferred: bool) {
         self.out.push(Binding {
             name: name.to_string(),
             decl_ident_span: decl,
             scope_span: scope,
             kind,
+            is_mut,
             ty,
             inferred,
         });
@@ -191,7 +195,7 @@ impl Cx<'_> {
                     continue;
                 };
                 let ty = d.ty.map(|t| ty_src(self.ast, t));
-                self.push(&name, decl, scope, BindKind::Param, ty, false);
+                self.push(&name, decl, scope, BindKind::Param, d.is_mut, ty, false);
             }
         }
     }
@@ -210,7 +214,7 @@ impl Cx<'_> {
     fn walk_stmt(&mut self, s: NodeHandle<AnyStmt>, block: Span) {
         let sp = self.ast.span(s.id());
         match self.ast.kind(s.id()) {
-            Kind::Stmt(StmtKind::LetStmt { name, destructure, ty, init, .. }) => {
+            Kind::Stmt(StmtKind::LetStmt { name, destructure, ty, init, is_mut, .. }) => {
                 let names: Vec<IdentId> = match destructure {
                     Some(ns) => ns.clone(),
                     None => vec![*name],
@@ -250,22 +254,22 @@ impl Cx<'_> {
                         }
                         raw
                     });
-                    self.push(text, decl, Span::new(decl.lo, block.hi), BindKind::Let, ty_text, inferred);
+                    self.push(text, decl, Span::new(decl.lo, block.hi), BindKind::Let, *is_mut, ty_text, inferred);
                 }
                 self.walk_expr(*init); // lambdas in the initializer
             }
-            Kind::Stmt(StmtKind::ForOf { var, iter, body }) => {
+            Kind::Stmt(StmtKind::ForOf { var, is_mut, iter, body }) => {
                 let body_span = self.scope_of(self.ast.span(body.id()));
                 let text = self.ast.name(*var);
                 if let Some(decl) = ident_span(self.toks, sp, text) {
                     let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *iter).and_then(|t| elem_ty(&t));
                     let inferred = raw.is_some();
-                    self.push(text, decl, Span::new(decl.lo, body_span.hi), BindKind::IterVar, raw, inferred);
+                    self.push(text, decl, Span::new(decl.lo, body_span.hi), BindKind::IterVar, *is_mut, raw, inferred);
                 }
                 self.walk_expr(*iter);
                 self.walk_block(*body);
             }
-            Kind::Stmt(StmtKind::ForC { var, init, cond, update, body }) => {
+            Kind::Stmt(StmtKind::ForC { var, is_mut, init, cond, update, body }) => {
                 let text = self.ast.name(*var);
                 if let Some(decl) = ident_span(self.toks, sp, text) {
                     let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *init);
@@ -274,7 +278,7 @@ impl Cx<'_> {
                     // the scope is the whole loop statement (extended
                     // through an end-of-buffer truncation, `scope_of`)
                     let scope = self.scope_of(sp);
-                    self.push(text, decl, Span::new(decl.lo, scope.hi), BindKind::IterVar, raw, inferred);
+                    self.push(text, decl, Span::new(decl.lo, scope.hi), BindKind::IterVar, *is_mut, raw, inferred);
                 }
                 self.walk_expr(*init);
                 self.walk_expr(*cond);

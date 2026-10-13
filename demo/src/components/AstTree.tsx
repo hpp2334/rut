@@ -184,12 +184,14 @@ function rowsOf(n: AstNode, src: string): Row[] {
       ];
     case "ForOf":
       return [
+        ...(n.mut ? [{ label: "mut", text: "true" }] : []),
         { label: "var", text: n.var },
         { label: "iter", node: n.iter },
         { label: "body", node: n.body },
       ];
     case "ForC":
       return [
+        ...(n.mut ? [{ label: "mut", text: "true" }] : []),
         { label: "var", text: n.var },
         { label: "init", node: n.init },
         { label: "cond", node: n.cond },

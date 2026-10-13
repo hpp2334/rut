@@ -345,13 +345,19 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, body.id())))));
                 "While"
             }
-            StmtKind::ForOf { var, iter, body } => {
+            StmtKind::ForOf { var, is_mut, iter, body } => {
+                if *is_mut {
+                    fields.push(field("mut", DumpVal::Flag(true)));
+                }
                 fields.push(field("var", DumpVal::Str(a.name(*var).to_string())));
                 fields.push(field("iter", DumpVal::Node(Box::new(node_dump(a, iter.id())))));
                 fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, body.id())))));
                 "ForOf"
             }
-            StmtKind::ForC { var, init, cond, update, body } => {
+            StmtKind::ForC { var, is_mut, init, cond, update, body } => {
+                if *is_mut {
+                    fields.push(field("mut", DumpVal::Flag(true)));
+                }
                 fields.push(field("var", DumpVal::Str(a.name(*var).to_string())));
                 fields.push(field("init", DumpVal::Node(Box::new(node_dump(a, init.id())))));
                 fields.push(field("cond", DumpVal::Node(Box::new(node_dump(a, cond.id())))));

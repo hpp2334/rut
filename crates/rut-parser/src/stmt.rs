@@ -99,12 +99,12 @@ enum StmtStage {
     LetInit { is_mut: bool, name: IdentId, destructure: Option<Vec<IdentId>>, ty: Option<NodeHandle<AnyTy>> },
     WhileCond,
     WhileBody,
-    ForIter { var: IdentId },
-    ForInit { var: IdentId },
-    ForCond { var: IdentId, init: NodeHandle<AnyExpr> },
-    ForUpdate { var: IdentId, init: NodeHandle<AnyExpr>, cond: NodeHandle<AnyExpr> },
-    ForBodyOf { var: IdentId, iter: NodeHandle<AnyExpr> },
-    ForBodyC { var: IdentId, init: NodeHandle<AnyExpr>, cond: NodeHandle<AnyExpr>, update: NodeHandle<AnyExpr> },
+    ForIter { var: IdentId, is_mut: bool },
+    ForInit { var: IdentId, is_mut: bool },
+    ForCond { var: IdentId, is_mut: bool, init: NodeHandle<AnyExpr> },
+    ForUpdate { var: IdentId, is_mut: bool, init: NodeHandle<AnyExpr>, cond: NodeHandle<AnyExpr> },
+    ForBodyOf { var: IdentId, is_mut: bool, iter: NodeHandle<AnyExpr> },
+    ForBodyC { var: IdentId, is_mut: bool, init: NodeHandle<AnyExpr>, cond: NodeHandle<AnyExpr>, update: NodeHandle<AnyExpr> },
     /// `return` — waiting for the value
     RetVal,
     /// a bare expression statement
@@ -246,17 +246,23 @@ impl StmtFrame {
             return Step::Pop(Done::Failed);
         }
         p.bump();
+        // `mut` gates writes through the loop variable (the same
+        // mut-binding law as a plain `let`)
+        let is_mut = p.at_kw("mut") && {
+            p.bump();
+            true
+        };
         let Some(var) = p.expect_ident("a loop variable") else {
             return Step::Pop(Done::Failed);
         };
         // for-of vs for-c: peek `of` vs `=` (peek 4)
         if p.at_kw("of") {
             p.bump();
-            self.stage = StmtStage::ForIter { var };
+            self.stage = StmtStage::ForIter { var, is_mut };
             return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
         }
         p.expect(Tok::Eq);
-        self.stage = StmtStage::ForInit { var };
+        self.stage = StmtStage::ForInit { var, is_mut };
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
@@ -281,32 +287,32 @@ impl StmtFrame {
                     self.lo.to(p.span()),
                 )))
             }
-            (StmtStage::ForIter { var }, Done::Expr(iter)) => {
+            (StmtStage::ForIter { var, is_mut }, Done::Expr(iter)) => {
                 p.expect(Tok::RParen);
-                self.stage = StmtStage::ForBodyOf { var, iter };
+                self.stage = StmtStage::ForBodyOf { var, is_mut, iter };
                 Step::Push(Frame::Block(BlockFrame::strict(p)))
             }
-            (StmtStage::ForInit { var }, Done::Expr(init)) => {
+            (StmtStage::ForInit { var, is_mut }, Done::Expr(init)) => {
                 p.expect(Tok::Semi);
-                self.stage = StmtStage::ForCond { var, init };
+                self.stage = StmtStage::ForCond { var, is_mut, init };
                 Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
             }
-            (StmtStage::ForCond { var, init }, Done::Expr(cond)) => {
+            (StmtStage::ForCond { var, is_mut, init }, Done::Expr(cond)) => {
                 p.expect(Tok::Semi);
-                self.stage = StmtStage::ForUpdate { var, init, cond };
+                self.stage = StmtStage::ForUpdate { var, is_mut, init, cond };
                 Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
             }
-            (StmtStage::ForUpdate { var, init, cond }, Done::Expr(update)) => {
+            (StmtStage::ForUpdate { var, is_mut, init, cond }, Done::Expr(update)) => {
                 p.expect(Tok::RParen);
-                self.stage = StmtStage::ForBodyC { var, init, cond, update };
+                self.stage = StmtStage::ForBodyC { var, is_mut, init, cond, update };
                 Step::Push(Frame::Block(BlockFrame::strict(p)))
             }
-            (StmtStage::ForBodyOf { var, iter }, Done::Block(body)) => Step::Pop(Done::Stmt(
-                p.stmt(StmtKind::ForOf { var, iter, body }, self.lo.to(p.span())),
+            (StmtStage::ForBodyOf { var, is_mut, iter }, Done::Block(body)) => Step::Pop(Done::Stmt(
+                p.stmt(StmtKind::ForOf { var, is_mut, iter, body }, self.lo.to(p.span())),
             )),
-            (StmtStage::ForBodyC { var, init, cond, update }, Done::Block(body)) => {
+            (StmtStage::ForBodyC { var, is_mut, init, cond, update }, Done::Block(body)) => {
                 Step::Pop(Done::Stmt(p.stmt(
-                    StmtKind::ForC { var, init, cond, update, body },
+                    StmtKind::ForC { var, is_mut, init, cond, update, body },
                     self.lo.to(p.span()),
                 )))
             }

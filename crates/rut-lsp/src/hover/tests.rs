@@ -522,6 +522,43 @@ return acc;
 }
 
 #[test]
+fn loop_header_mut_renders_in_the_hover() {
+    // the header's `mut` rides the binding record — the hover shows the
+    // binding as it binds; a mut-less loop var stays unadorned
+    let src = "\
+struct Task {
+done: bool;
+}
+fn flip(tasks: [Task]) -> nil {
+for (let mut t of tasks) {
+t.done = true;
+}
+for (let u of tasks) {
+u.done = u.done;
+}
+}
+";
+    let md = hover_nth(src, "t", 1).unwrap();
+    assert!(md.contains("mut t: Task"), "{md}");
+    assert!(md.contains("loop variable"), "{md}");
+    let md = hover_nth(src, "u", 1).unwrap();
+    assert!(md.contains("u: Task"), "{md}");
+    assert!(!md.contains("mut"), "no `mut` without the flag: {md}");
+    // the indexed form too
+    let src = "\
+fn f(n: i32) -> i32 {
+let acc = 0;
+for (let mut i = 0; i < n; i += 1) {
+acc += i;
+}
+return acc;
+}
+";
+    let md = hover_nth(src, "i", 1).unwrap();
+    assert!(md.contains("mut i: i32"), "{md}");
+}
+
+#[test]
 fn shadowing_resolves_to_the_nearest_latest() {
     // the rule infer_local's flat scan lacked: an inner re-binding wins
     // inside its scope; the outer binding resumes after the block ends

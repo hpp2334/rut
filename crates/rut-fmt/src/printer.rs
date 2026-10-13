@@ -1307,8 +1307,11 @@ impl<'a> P<'a> {
                 self.sp();
                 self.block(body);
             }
-            StmtKind::ForOf { var, iter, body } => {
+            StmtKind::ForOf { var, is_mut, iter, body } => {
                 self.text("for (let ");
+                if is_mut {
+                    self.text("mut ");
+                }
                 self.text(self.a.name(var));
                 self.text(" of ");
                 self.expr(iter);
@@ -1316,8 +1319,11 @@ impl<'a> P<'a> {
                 self.sp();
                 self.block(body);
             }
-            StmtKind::ForC { var, init, cond, update, body } => {
+            StmtKind::ForC { var, is_mut, init, cond, update, body } => {
                 self.text("for (let ");
+                if is_mut {
+                    self.text("mut ");
+                }
                 self.text(self.a.name(var));
                 self.text(" = ");
                 self.expr(init);

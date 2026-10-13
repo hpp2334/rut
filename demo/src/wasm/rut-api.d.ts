@@ -59,8 +59,8 @@ export interface AstBlock extends Base { kind: "Block"; stmts: AstNode[] }
 export interface AstLetStmt extends Base { kind: "LetStmt"; mut?: true; name: string; ty?: AstNode; init: AstNode }
 export interface AstIf extends Base { kind: "If"; cond: AstNode; then: AstNode; els?: AstNode }
 export interface AstWhile extends Base { kind: "While"; cond: AstNode; body: AstNode }
-export interface AstForOf extends Base { kind: "ForOf"; var: string; iter: AstNode; body: AstNode }
-export interface AstForC extends Base { kind: "ForC"; var: string; init: AstNode; cond: AstNode; update: AstNode; body: AstNode }
+export interface AstForOf extends Base { kind: "ForOf"; mut?: true; var: string; iter: AstNode; body: AstNode }
+export interface AstForC extends Base { kind: "ForC"; mut?: true; var: string; init: AstNode; cond: AstNode; update: AstNode; body: AstNode }
 export interface AstReturn extends Base { kind: "Return"; value?: AstNode }
 export interface AstBreak extends Base { kind: "Break" }
 export interface AstContinue extends Base { kind: "Continue" }

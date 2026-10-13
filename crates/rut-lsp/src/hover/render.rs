@@ -146,14 +146,17 @@ pub(crate) fn render_candidates(many: &[(&DefIndex, &FnDef)]) -> String {
 /// an inferred type says so (the display-side scoping ruling: declared
 /// annotations render as written, inference is labeled)
 pub(crate) fn binding_markdown(b: &Binding) -> String {
+    // the binding as it binds — `mut` rides along when the header
+    // spelled it (a `let mut`, a `mut` param, a `for (let mut …)` loop var)
+    let mut_ = if b.is_mut { "mut " } else { "" };
     let head = match &b.ty {
         Some(t) => match b.kind {
-            super::bindings::BindKind::Let => format!("let {}: {t}", b.name),
-            _ => format!("{}: {t}", b.name),
+            super::bindings::BindKind::Let => format!("let {mut_}{}: {t}", b.name),
+            _ => format!("{mut_}{}: {t}", b.name),
         },
         None => match b.kind {
-            super::bindings::BindKind::Let => format!("let {}", b.name),
-            _ => b.name.clone(),
+            super::bindings::BindKind::Let => format!("let {mut_}{}", b.name),
+            _ => format!("{mut_}{}", b.name),
         },
     };
     let mut out = code_block(&head);
