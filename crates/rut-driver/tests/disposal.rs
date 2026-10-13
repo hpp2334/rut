@@ -110,7 +110,7 @@ fn the_heap_returns_to_baseline_through_the_disposal_drain() {
         r#"{DISP}
 entry fn main() -> i32 {{
     let mut acc = 0;
-    for (let i = 0; i < 50; i += 1) {{
+    for (let mut i = 0; i < 50; i += 1) {{
         let mut a = A {{ n: i }};
         acc += a.n;
         a = A {{ n: 7 }};   // a mid-frame death: pin, queue, drain at the end

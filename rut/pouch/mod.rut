@@ -42,7 +42,7 @@ impl<T> Vec<T> {
     // generic `T` has no zero value to fill with.
     pub fn filled(v: T, n: i32) -> Self {
         let mut buf: [?T] = [nil; n];
-        for (let i = 0; i < n; i += 1) {
+        for (let mut i = 0; i < n; i += 1) {
             buf[i] = v;
         }
         return Self { buf: buf, len: n, cap: n };
@@ -62,7 +62,7 @@ impl<T> Vec<T> {
                 cap = 4;
             }
             let mut next: [?T] = [nil; cap];
-            for (let i = 0; i < self.len; i += 1) {
+            for (let mut i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }
             self.buf = next;
@@ -84,7 +84,7 @@ impl<T> Vec<T> {
     pub fn from(arr: [T]) -> Self {
         let n = arr.len();
         let mut v = Self { buf: [nil; n], len: n, cap: n };
-        for (let i = 0; i < n; i += 1) {
+        for (let mut i = 0; i < n; i += 1) {
             v.buf[i] = arr[i];
         }
         return v;
@@ -95,7 +95,7 @@ impl<T> Vec<T> {
     pub fn freeze(self) -> bytes {
         let n = self.len;
         let mut a: [u8] = [0u8; n];
-        for (let i = 0; i < n; i += 1) {
+        for (let mut i = 0; i < n; i += 1) {
             a[i] = self.buf[i];
         }
         return bytes::from(a);
@@ -115,7 +115,7 @@ impl<T> Vec<T> {
             return empty;
         }
         let mut a: [T] = [self.buf[0]; n];
-        for (let i = 0; i < n; i += 1) {
+        for (let mut i = 0; i < n; i += 1) {
             a[i] = self.buf[i];
         }
         return a;

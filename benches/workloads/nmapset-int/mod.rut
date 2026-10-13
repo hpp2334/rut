@@ -17,14 +17,14 @@ fn churn(n: i32) -> i32 {
     let mut m: HashMap<i32, i32> = HashMap();
     // build — every key is new
     let mut added = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(i.wrapping_mul(-1640531535), i)) {
             added += 1;
         }
     }
     // replace — every key is present
     let mut replaced = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(i.wrapping_mul(-1640531535), i + 7) == false) {
             replaced += 1;
         }
@@ -32,7 +32,7 @@ fn churn(n: i32) -> i32 {
     // hit lookups — sum the stored values
     let mut sum = 0;
     let mut hits = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let p = m.get(i.wrapping_mul(-1640531535));
         if (p != nil) {
             hits += 1;
@@ -41,28 +41,28 @@ fn churn(n: i32) -> i32 {
     }
     // miss lookups — the second half of the key space is absent
     let mut misses = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.get((i + n).wrapping_mul(-1640531535)) == nil) {
             misses += 1;
         }
     }
     // remove the even keys
     let mut removed = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.remove(i.wrapping_mul(-1640531535))) {
             removed += 1;
         }
     }
     // full re-scan: the odds survive, the evens do not
     let mut present = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.has(i.wrapping_mul(-1640531535))) {
             present += 1;
         }
     }
     // re-add the evens under negated values
     let mut added2 = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.put(i.wrapping_mul(-1640531535), -i)) {
             added2 += 1;
         }

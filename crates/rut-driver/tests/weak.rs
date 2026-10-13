@@ -723,7 +723,7 @@ fn heap_usage_returns_to_baseline_after_a_weak_churn() {
 use core::{{ Weak }};
 entry fn main() -> i32 {{
     let mut live = 0;
-    for (let i = 0; i < 50; i += 1) {{
+    for (let mut i = 0; i < 50; i += 1) {{
         let t = Tile::new(i);
         let w = Weak::new(t);
         let b = w.upgrade();

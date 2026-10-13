@@ -23,7 +23,7 @@ entry fn main() -> nil {
     let b: i64 = 9223372036854774807i64;
     let mut s: i64 = 0;
     let mut bad: i64 = 0;
-    for (let i = 0; i < 10000000; i += 1) {
+    for (let mut i = 0; i < 10000000; i += 1) {
         let a: i64 = ((i % 2048) - 1024) as i64;
         let (v, ok) = pair(a, b);
         s = s.wrapping_add(v);

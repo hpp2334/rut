@@ -5,10 +5,10 @@ use pouch::{ Vec };
 // Scale: n = 128. Checksum is a float sum (compare with tolerance).
 
 fn gemm(n: i32, a: Vec<f64>, b: Vec<f64>, mut out: Vec<f64>) -> nil {
-    for (let i = 0; i < n; i += 1) {
-        for (let k = 0; k < n; k += 1) {
+    for (let mut i = 0; i < n; i += 1) {
+        for (let mut k = 0; k < n; k += 1) {
             let aik = a[i * n + k];
-            for (let j = 0; j < n; j += 1) {
+            for (let mut j = 0; j < n; j += 1) {
                 out[i * n + j] += aik * b[k * n + j];
             }
         }
@@ -20,13 +20,13 @@ entry fn main() -> nil {
     let mut a = Vec<f64>::filled(0.0, n * n);
     let mut b = Vec<f64>::filled(0.0, n * n);
     let mut out = Vec<f64>::filled(0.0, n * n);
-    for (let i = 0; i < n * n; i += 1) {
+    for (let mut i = 0; i < n * n; i += 1) {
         a[i] = i as f64;
         b[i] = (i % 7) as f64;
     }
     gemm(n, a, b, out);
     let mut s: f64 = 0.0;
-    for (let i = 0; i < n * n; i += 1) {
+    for (let mut i = 0; i < n * n; i += 1) {
         s += out[i];
     }
     Logger("app").info(f"CHECKSUM {s}");

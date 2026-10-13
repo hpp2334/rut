@@ -5,7 +5,7 @@ use ink::{ Logger };
 
 entry fn main() -> nil {
     let mut s: f64 = 0.0;
-    for (let i = 0; i < 2000000; i += 1) {
+    for (let mut i = 0; i < 2000000; i += 1) {
         s = s * 1.0000001 + 0.5;
     }
     Logger("app").info(f"CHECKSUM {s}");

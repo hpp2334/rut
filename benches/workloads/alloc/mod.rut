@@ -11,7 +11,7 @@ struct Point {
 
 entry fn main() -> nil {
     let mut s: i32 = 0;
-    for (let i = 0; i < 2000000; i += 1) {
+    for (let mut i = 0; i < 2000000; i += 1) {
         let p = Point { x: i, y: i.wrapping_add(1) };
         s = (s.wrapping_add(p.x)).wrapping_add(p.y);
     }

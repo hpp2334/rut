@@ -171,14 +171,14 @@ entry fn main() -> i32 {
     let mut b: [u8] = [0; n];
     let mut c: [u64] = [0; n];
     let mut f: [bool] = [false; n];
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         a[i] = i * 3 + 1;
         b[i] = (i % 251) as u8;
         c[i] = (i as u64).wrapping_mul(11400714819323198485u64);
         f[i] = i % 2 == 0;
     }
     let mut h: u64 = 14695981039346656037u64;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         h = (h ^ (a[i] as u64)).wrapping_mul(1099511628211u64);
         h = (h ^ (b[i] as u64)).wrapping_mul(1099511628211u64);
         h = (h ^ c[i]).wrapping_mul(1099511628211u64);
@@ -211,17 +211,17 @@ fn pointer_array_get_set_matches_reference() {
 entry fn main() -> i32 {
     let n = 64;
     let mut p: [?i32] = [nil; n];
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         p[i] = i * 10 + 3;
     }
     let mut s = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let q = p[i];
         if (q != nil) { s += q; }
     }
     p[5] = nil;
     let mut t = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let q = p[i];
         if (q == nil) { t += 1; }
     }
@@ -358,7 +358,7 @@ entry fn main() -> i32 {
     let limit: i32 = 10_000;
     let mut marks = Vec<u8>::filled(0, limit + 1);
     let mut count = 0;
-    for (let i = 2; i <= limit; i += 1) {
+    for (let mut i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             count += 1;
             if (i <= limit / i) {
@@ -385,10 +385,10 @@ fn hot_index_loop_threaded_matches_parked() {
 entry fn main() -> i32 {
     let n = 3000;
     let mut a: [i32] = [0; n];
-    for (let i = 0; i < n; i += 1) { a[i] = i; }
+    for (let mut i = 0; i < n; i += 1) { a[i] = i; }
     let mut acc = 0;
-    for (let k = 0; k < 60; k += 1) {
-        for (let i = 0; i < n; i += 1) {
+    for (let mut k = 0; k < 60; k += 1) {
+        for (let mut i = 0; i < n; i += 1) {
             a[i] = a[i] + 1;
             acc += a[i];
         }

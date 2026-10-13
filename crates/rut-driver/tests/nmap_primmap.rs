@@ -137,16 +137,16 @@ fn key(i: i32) -> i32 { return i.wrapping_mul(-1640531535); }
 fn churn_col(n: i32) -> i64 {
     let mut m: HashMap<i32, i64> = HashMap::new();
     let mut added: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64)) { added += 1; }
     }
     let mut replaced: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64 + 7) == false) { replaced += 1; }
     }
     let mut sum: i64 = 0;
     let mut hits: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let p = m.get(key(i));
         if (p != nil) {
             hits += 1;
@@ -154,19 +154,19 @@ fn churn_col(n: i32) -> i64 {
         }
     }
     let mut misses: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.get(key(i + n)) == nil) { misses += 1; }
     }
     let mut removed: i64 = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.remove(key(i))) { removed += 1; }
     }
     let mut present: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.has(key(i))) { present += 1; }
     }
     let mut added2: i64 = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.put(key(i), 0i64 - i as i64)) { added2 += 1; }
     }
     let mut c: i64 = sum;
@@ -184,16 +184,16 @@ fn churn_col(n: i32) -> i64 {
 fn churn_sidecar(n: i32) -> i64 {
     let mut m: HashMap<i32, i64> = HashMap::new();
     let mut added: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64)) { added += 1; }
     }
     let mut replaced: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(key(i), i as i64 + 7) == false) { replaced += 1; }
     }
     let mut sum: i64 = 0;
     let mut hits: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let p = m.get(key(i));
         if (p != nil) {
             hits += 1;
@@ -201,19 +201,19 @@ fn churn_sidecar(n: i32) -> i64 {
         }
     }
     let mut misses: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.get(key(i + n)) == nil) { misses += 1; }
     }
     let mut removed: i64 = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.remove(key(i))) { removed += 1; }
     }
     let mut present: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.has(key(i))) { present += 1; }
     }
     let mut added2: i64 = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.put(key(i), 0i64 - i as i64)) { added2 += 1; }
     }
     let mut c: i64 = sum;
@@ -302,18 +302,18 @@ entry fn main() -> i64 {
     // 500 keys from cap 4: the load law (count + 1)·10 >= cap·7 fires
     // at counts 2/5/11/22/44/89/179/358 — eight sentinel grows — and
     // the wrapper runs NO drain (there is nothing left to drain)
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (!m.put(i * 37, i as i64 * 7 + 1)) { fails += 1; }
     }
     // churn the tombstone / DEAD-slot-reuse paths
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (!m.remove(i * 37)) { fails += 2; }
     }
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (!m.put(i * 37, i as i64 * 7 + 1)) { fails += 4; }
     }
     // every surviving key's val is exact
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let p = m.get(i * 37);
         if (p == nil) { fails += 8; }
         if (p != i as i64 * 7 + 1) { fails += 16; }
@@ -443,7 +443,7 @@ fn primmap_coexists_with_hashmap_and_hashset() {
          entry fn main() -> i64 {\n\
          \x20   let mut pm: HashMap<str, i64> = HashMap::new();\n\
          \x20   let mut acc: i64 = 0;\n\
-         \x20   for (let i = 0; i < 24; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 24; i += 1) {\n\
          \x20       if (pm.put(f\"k{i}\", i as i64 * 3)) { acc += 1; }\n\
          \x20   }\n\
          \x20   acc += pm.get(\"k7\");\n\

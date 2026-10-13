@@ -77,7 +77,7 @@ impl TodoList {
     // ---- UPDATE ----
 
     pub fn set_done(mut self, id: i32, done: bool) -> bool {
-        for (let i = 0; i < self.items.len(); i += 1) {
+        for (let mut i = 0; i < self.items.len(); i += 1) {
             if (self.items[i].id == id) {
                 self.items[i].done = done;
                 return true;

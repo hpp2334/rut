@@ -11,7 +11,7 @@ fn fannkuch(n: i32) -> i32 {
     let mut perm = Vec<i32>::filled(0, n);
     let mut perm1 = Vec<i32>::filled(0, n);
     let mut count = Vec<i32>::filled(0, n);
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         perm1[i] = i;
     }
     let mut max_flips = 0;
@@ -24,7 +24,7 @@ fn fannkuch(n: i32) -> i32 {
             count[r - 1] = r;
             r -= 1;
         }
-        for (let i = 0; i < n; i += 1) {
+        for (let mut i = 0; i < n; i += 1) {
             perm[i] = perm1[i];
         }
         let mut flips = 0;
@@ -51,7 +51,7 @@ fn fannkuch(n: i32) -> i32 {
         }
         while (r != n) {
             let first = perm1[0];
-            for (let i = 0; i < r; i += 1) {
+            for (let mut i = 0; i < r; i += 1) {
                 perm1[i] = perm1[i + 1];
             }
             perm1[r] = first;

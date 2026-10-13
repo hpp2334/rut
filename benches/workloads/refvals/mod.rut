@@ -63,7 +63,7 @@ fn churn(n: i32, gn: i32) -> i64 {
 
     // (1a) build — every key new; one fresh Pt cell per put
     let mut added: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(key(i as i64), Pt { x: i, y: i.wrapping_add(1) })) {
             added += 1;
         }
@@ -72,7 +72,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     // (1b) overwrite churn — every key present, fresh cell per put (the
     // sidecar releases the replaced cell and stores the new one)
     let mut replaced: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(key(i as i64), Pt { x: i.wrapping_add(7), y: i.wrapping_add(8) }) == false) {
             replaced += 1;
         }
@@ -81,7 +81,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     // (2a) hit gets — the sidecar load: arrget + cell deref, both fields
     let mut sum_before: i64 = 0;
     let mut hits: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let p = m.get(key(i as i64));
         if (p != nil) {
             hits += 1;
@@ -92,7 +92,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     // (2b) miss gets — the second half of the key space is absent (5:1
     // hit-heavy overall)
     let mut misses: i64 = 0;
-    for (let i = 0; i < n / 5; i += 1) {
+    for (let mut i = 0; i < n / 5; i += 1) {
         if (m.get(key((2 * n + i) as i64)) == nil) {
             misses += 1;
         }
@@ -102,7 +102,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     // hot loop: `p` IS the stored cell; the field write lands in the
     // map. No put, no set — one get, one field store.
     let mut rmw: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let mut p = m.get(key(i as i64));
         if (p != nil) {
             p.x += 1;
@@ -114,7 +114,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     // sum_after = sum of x + n if (and only if) the alias carried them
     let mut sum_after: i64 = 0;
     let mut hits2: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let p = m.get(key(i as i64));
         if (p != nil) {
             hits2 += 1;
@@ -129,20 +129,20 @@ fn churn(n: i32, gn: i32) -> i64 {
     // above) and a full read-back of y.
     let mut g: HashMap<i64, Pt> = HashMap();
     let mut added_g: i64 = 0;
-    for (let i = 0; i < gn; i += 1) {
+    for (let mut i = 0; i < gn; i += 1) {
         if (g.put(key(i as i64), Pt { x: i.wrapping_add(1), y: i.wrapping_mul(2) })) {
             added_g += 1;
         }
     }
     let mut replaced_g: i64 = 0;
-    for (let i = 0; i < gn; i += 1) {
+    for (let mut i = 0; i < gn; i += 1) {
         if (g.put(key(i as i64), Pt { x: i.wrapping_add(3), y: i.wrapping_mul(2) }) == false) {
             replaced_g += 1;
         }
     }
     let mut hits_g: i64 = 0;
     let mut sum_g: i64 = 0;
-    for (let i = 0; i < gn; i += 1) {
+    for (let mut i = 0; i < gn; i += 1) {
         let p = g.get(key(i as i64));
         if (p != nil) {
             hits_g += 1;
@@ -153,19 +153,19 @@ fn churn(n: i32, gn: i32) -> i64 {
     // (5) removal churn on m — remove the evens, re-scan, re-add under
     // fresh cells (tombstones; no growth — cap already 2^18)
     let mut removed: i64 = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.remove(key(i as i64))) {
             removed += 1;
         }
     }
     let mut present: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.has(key(i as i64))) {
             present += 1;
         }
     }
     let mut added2: i64 = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (m.put(key(i as i64), Pt { x: i.wrapping_mul(3), y: i })) {
             added2 += 1;
         }

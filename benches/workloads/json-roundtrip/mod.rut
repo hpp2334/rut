@@ -76,7 +76,7 @@ fn val_text(sign: u32, mag: u32) -> str {
 fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
     let parts: Vec<str> = Vec::new();
     let mut x: u32 = 42;
-    for (let i = 0; i < rows; i += 1) {
+    for (let mut i = 0; i < rows; i += 1) {
         if (i > 0) { parts.push(","); }
         x = lcg(x);
         let id = (((x >> 5) % 899998) as i32) + 100000;
@@ -356,11 +356,11 @@ fn row_sum(mut h: i64, r: DocRow) -> i64 {
     h = h.wrapping_mul(31 as i64).wrapping_add(b);
     h = fold_f64(h, r.score);
     h = h.wrapping_mul(31 as i64).wrapping_add(r.vals.len() as i64);
-    for (let i = 0; i < r.vals.len(); i += 1) {
+    for (let mut i = 0; i < r.vals.len(); i += 1) {
         h = h.wrapping_mul(31 as i64).wrapping_add(r.vals[i]);
     }
     h = h.wrapping_mul(31 as i64).wrapping_add(r.tags.len() as i64);
-    for (let i = 0; i < r.tags.len(); i += 1) {
+    for (let mut i = 0; i < r.tags.len(); i += 1) {
         h = fold_str(h, r.tags[i]);
     }
     if (r.note == nil) {
@@ -376,7 +376,7 @@ fn row_sum(mut h: i64, r: DocRow) -> i64 {
 
 fn rows_sum(rows: Vec<DocRow>) -> i64 {
     let mut t: i64 = rows.len() as i64;
-    for (let i = 0; i < rows.len(); i += 1) {
+    for (let mut i = 0; i < rows.len(); i += 1) {
         t = row_sum(t, rows[i]);
     }
     return t;
@@ -400,7 +400,7 @@ entry fn main() -> nil {
     let mut total: i64 = 0;
     let mut first: i64 = 0;
     let mut first_len: i32 = 0;
-    for (let r = 0; r < reps; r += 1) {
+    for (let mut r = 0; r < reps; r += 1) {
         let d = decodeJson<JsonVec<DocRow>>(doc);
         if (d.1 != nil) {
             panic("json-roundtrip: decode failed");

@@ -64,7 +64,7 @@ fn val_text(sign: u32, mag: u32) -> str {
 fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {
     let parts: Vec<str> = Vec::new();
     let mut x: u32 = 42;
-    for (let i = 0; i < rows; i += 1) {
+    for (let mut i = 0; i < rows; i += 1) {
         if (i > 0) { parts.push(","); }
         x = lcg(x);
         let id = (((x >> 5) % 899998) as i32) + 100000;
@@ -176,7 +176,7 @@ fn is_digit(c: str) -> bool {
 
 fn join_chars(cs: Vec<str>) -> str {
     let mut out = "";
-    for (let i = 0; i < cs.len(); i += 1) {
+    for (let mut i = 0; i < cs.len(); i += 1) {
         out = f"{out}{cs[i]}";
     }
     return out;
@@ -433,14 +433,14 @@ fn jdoc_sum(o: opaque) -> i64 {
         },
         JTag::Arr -> {
             let mut t: i64 = 5;
-            for (let i = 0; i < j.arr.len(); i += 1) {
+            for (let mut i = 0; i < j.arr.len(); i += 1) {
                 t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.arr[i]));
             }
             s = t;
         },
         JTag::Obj -> {
             let mut t: i64 = 6;
-            for (let i = 0; i < j.keys.len(); i += 1) {
+            for (let mut i = 0; i < j.keys.len(); i += 1) {
                 t = fold_str(t, j.keys[i]);
                 t = t.wrapping_mul(11 as i64).wrapping_add(jdoc_sum(j.vals[i]));
             }
@@ -468,7 +468,7 @@ entry fn main() -> nil {
     let chars = split_chars(doc);
     let mut total: i64 = 0;
     let mut first: i64 = 0;
-    for (let r = 0; r < reps; r += 1) {
+    for (let mut r = 0; r < reps; r += 1) {
         let cur: ?Cur = Cur { cs: chars, pos: 0, depth: 0 };
         let v = jparse_value(cur);
         if (v.1 != "") { panic(v.1); }

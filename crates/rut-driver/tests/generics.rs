@@ -157,7 +157,7 @@ fn vec_over_pointer_array_compiles() {
                      let mut cap = self.buf.len() * 2;\n\
                      if (cap == 0) { cap = 4; }\n\
                      let mut next: [?T] = [nil; cap];\n\
-                     for (let i = 0; i < self.len; i += 1) { next[i] = self.buf[i]; }\n\
+                     for (let mut i = 0; i < self.len; i += 1) { next[i] = self.buf[i]; }\n\
                      self.buf = next;\n\
                  }\n\
                  self.buf[self.len] = v;\n\

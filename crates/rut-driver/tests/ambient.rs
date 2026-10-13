@@ -164,7 +164,7 @@ fn the_gated_names_require_the_import() {
          impl CountUp { fn new(n: i32) -> Self { return Self { n: n }; } }\n\
          impl CountUp {\n\
              [iterable] fn iterate(self, emit: fn(i32) -> bool) {\n\
-                 for (let i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
+                 for (let mut i = 1; i <= self.n; i += 1) { if (!emit(i)) { return; } }\n\
              }\n\
          }\n\
          class Acc { total: i32 = 0; }\n\

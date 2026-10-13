@@ -325,7 +325,7 @@ use pouch::{ Vec };
 fn sieve(limit: i32) -> Vec<i32> {
     let mut marks = Vec<u8>::filled(0, limit + 1);
     let primes: Vec<i32> = Vec::new();
-    for (let i = 2; i <= limit; i += 1) {
+    for (let mut i = 2; i <= limit; i += 1) {
         if (marks[i] == 0) {
             primes.push(i);
             let mut m = i * i;
@@ -747,7 +747,7 @@ entry fn main() -> nil {
     Logger::new("app").info(classify(-3));
     Logger::new("app").info(classify(7));
     let mut late = 0;
-    for (let i = 0; i < 4; i += 1) {
+    for (let mut i = 0; i < 4; i += 1) {
         if (i % 2 == 0) { late += 1; } else { late += 10; }
     }
     Logger::new("app").info(f"late={late}");
@@ -831,7 +831,7 @@ enum Light { Green, Yellow, Red }
 entry fn main() -> nil {
     let mut dropped = 0;
     let mut kept = 0;
-    for (let i = 0; i < 6; i += 1) {
+    for (let mut i = 0; i < 6; i += 1) {
         when (i % 3) {
             0       -> { dropped += 1; },
             1, 2    -> { kept += 1; },
@@ -871,7 +871,7 @@ entry fn main() -> nil {
     Logger::new("app").info(hits[0]);
     Logger::new("app").info(hits[1]);
     Logger::new("app").info(hits[2]);
-    for (let i = 0; i < 50; i += 1) {
+    for (let mut i = 0; i < 50; i += 1) {
         Logger::new("app").info(describe(when (i % 2) { 0 -> Flavor::Sweet, else -> Flavor::Salty }));
     }
 }
@@ -1322,7 +1322,7 @@ impl<T> Vec<T> {
                 cap = 4;
             }
             let mut next: [?T] = [nil; cap];
-            for (let i = 0; i < self.len; i += 1) {
+            for (let mut i = 0; i < self.len; i += 1) {
                 next[i] = self.buf[i];
             }
             self.buf = next;
@@ -1928,7 +1928,7 @@ class CountUp {
 impl CountUp {
     fn new(n: i32) -> Self { return Self { n: n }; }
     [iterable] fn iterate(self, emit: fn(i32) -> bool) {
-        for (let i = 1; i <= self.n; i += 1) {
+        for (let mut i = 1; i <= self.n; i += 1) {
             if (!emit(i)) { return; }
         }
     }
@@ -1981,7 +1981,7 @@ entry fn main() -> nil {
     log.info(f"rowlen={m[0].len()}");
     let rs: Vec<Row> = Vec::new();
     rs.push(Row { v: 5 });
-    for (let r of rs) { r.v = 7; }
+    for (let mut r of rs) { r.v = 7; }
     log.info(f"v={rs[0].v}");
     let mut hits = 0;
     for (let v of xs) { if (v == 2) { hits += 1; } }

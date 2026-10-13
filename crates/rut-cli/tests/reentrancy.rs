@@ -54,7 +54,7 @@ entry fn trigger_boom(i: i64) -> i64 {
 
 entry fn spin(n: i64) -> i64 {
     let mut s = 0i64;
-    for (let i = 0i64; i < n; i += 1) {
+    for (let mut i = 0i64; i < n; i += 1) {
         s += i;
     }
     return s;

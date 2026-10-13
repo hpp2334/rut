@@ -231,7 +231,7 @@ impl Node {
 }
 
 entry fn churn(n: i64) -> nil {
-    for (let i = 0i64; i < n; i += 1) {
+    for (let mut i = 0i64; i < n; i += 1) {
         let node = Node::new(f"n{i}");
         node.tags.push(f"t{i}");
     }

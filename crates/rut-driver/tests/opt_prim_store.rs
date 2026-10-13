@@ -122,7 +122,7 @@ fn opt_prim_element_ops_lower_to_the_prim_store() {
             a[1] = 6;
             let mut s: i64 = 0;
             s = s.wrapping_add(a[0]);
-            for (let i = 0; i < 8; i += 1) {
+            for (let mut i = 0; i < 8; i += 1) {
                 let x = a[i];
                 if (x != nil) {
                     s = s.wrapping_add(x);
@@ -163,7 +163,7 @@ fn reference_elements_keep_the_cell_backing() {
             a[0] = "x";
             let mut n: i64 = 0;
             n = n.wrapping_add(1);
-            for (let i = 0; i < 4; i += 1) {
+            for (let mut i = 0; i < 4; i += 1) {
                 if (a[i] != nil) {
                     n = n.wrapping_add(1);
                 }
@@ -192,7 +192,7 @@ fn i64_nil_round_trip_and_extremes() {
         r#"
         entry fn main() -> i64 {
             let mut a: [?i64] = [nil; 16];
-            for (let i = 0; i < 16; i += 1) {
+            for (let mut i = 0; i < 16; i += 1) {
                 if (i % 2 == 0) {
                     a[i] = (i as i64).wrapping_mul(4294967296i64).wrapping_sub(9223372036854775807i64);
                 }
@@ -201,7 +201,7 @@ fn i64_nil_round_trip_and_extremes() {
             a[8] = -9223372036854775807i64;
             let mut s: i64 = 0;
             let mut live = 0;
-            for (let i = 0; i < 16; i += 1) {
+            for (let mut i = 0; i < 16; i += 1) {
                 let x = a[i];
                 if (x != nil) {
                     live = live + 1;
@@ -243,7 +243,7 @@ fn u64_high_bit_payloads_round_trip() {
             u[1] = 18446744073709551615u64;
             u[2] = 9223372036854775807u64;
             let mut a: u64 = 0;
-            for (let i = 0; i < 4; i += 1) {
+            for (let mut i = 0; i < 4; i += 1) {
                 let x = u[i];
                 if (x != nil) {
                     a = a.wrapping_add(x);
@@ -269,7 +269,7 @@ fn float_and_narrow_int_payloads_round_trip() {
         entry fn main() -> i64 {
             let f: [?f64] = [3.5, -0.25, nil];
             let mut fs: f64 = 0.0;
-            for (let i = 0; i < 3; i += 1) {
+            for (let mut i = 0; i < 3; i += 1) {
                 let x = f[i];
                 if (x != nil) {
                     fs = fs + x;
@@ -279,7 +279,7 @@ fn float_and_narrow_int_payloads_round_trip() {
             n[0] = -2147483647;
             n[1] = 2147483647;
             let mut ns: i64 = 0;
-            for (let i = 0; i < 3; i += 1) {
+            for (let mut i = 0; i < 3; i += 1) {
                 if (n[i] != nil) {
                     ns = ns.wrapping_add(n[i] as i64);
                 }
@@ -288,7 +288,7 @@ fn float_and_narrow_int_payloads_round_trip() {
             b[0] = -32767;
             b[1] = 32767;
             let mut bs: i64 = 0;
-            for (let i = 0; i < 2; i += 1) {
+            for (let mut i = 0; i < 2; i += 1) {
                 if (b[i] != nil) {
                     bs = bs.wrapping_add(b[i] as i64);
                 }
@@ -314,13 +314,13 @@ fn iteration_order_unchanged() {
         r#"
         entry fn main() -> i64 {
             let mut a: [?i32] = [nil; 12];
-            for (let i = 0; i < 12; i += 1) {
+            for (let mut i = 0; i < 12; i += 1) {
                 if (i % 3 != 0) {
                     a[i] = i;
                 }
             }
             let mut acc: i64 = 0;
-            for (let i = 0; i < 12; i += 1) {
+            for (let mut i = 0; i < 12; i += 1) {
                 let x = a[i];
                 if (x == nil) {
                     acc = acc.wrapping_mul(31).wrapping_add(7);
@@ -350,10 +350,10 @@ fn vec_backing_rides_the_prim_store() {
         use pouch::{ Vec };
         entry fn main() -> i64 {
             let mut v: Vec<i64> = Vec::new();
-            for (let i = 0; i < 5000; i += 1) {
+            for (let mut i = 0; i < 5000; i += 1) {
                 v.push((i as i64).wrapping_mul(3));
             }
-            for (let i = 0; i < 5000; i += 10) {
+            for (let mut i = 0; i < 5000; i += 10) {
                 v[i] = -1;
             }
             let mut s: i64 = 0;
@@ -361,7 +361,7 @@ fn vec_backing_rides_the_prim_store() {
                 s = s.wrapping_add(x);
             }
             let mut want: i64 = 0;
-            for (let i = 0; i < 5000; i += 1) {
+            for (let mut i = 0; i < 5000; i += 1) {
                 if (i % 10 == 0) {
                     want = want.wrapping_add(-1);
                 } else {
@@ -399,7 +399,7 @@ fn reads_are_values_not_handles() {
             // and its boxed elements must die with it (release parity)
             let mut lit: [?i64] = [70, nil, 7];
             let mut s: i64 = 0;
-            for (let i = 0; i < 3; i += 1) {
+            for (let mut i = 0; i < 3; i += 1) {
                 let e = lit[i];
                 if (e != nil) {
                     s = s.wrapping_add(e);
@@ -430,20 +430,20 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
         use nmapset::{ HashMap };
         entry fn main() -> i64 {
             let mut m: HashMap<i32, i64> = HashMap::new();
-            for (let i = 0; i < 1000; i += 1) {
+            for (let mut i = 0; i < 1000; i += 1) {
                 if (m.put(i, (i as i64).wrapping_mul(1000003i64))) {
                     let _ = 0;
                 }
             }
-            for (let i = 0; i < 1000; i += 2) {
+            for (let mut i = 0; i < 1000; i += 2) {
                 let _ = m.put(i, -1);
             }
-            for (let i = 0; i < 1000; i += 4) {
+            for (let mut i = 0; i < 1000; i += 4) {
                 let _ = m.remove(i);
             }
             let mut s: i64 = 0;
             let mut live = 0;
-            for (let i = 0; i < 1000; i += 1) {
+            for (let mut i = 0; i < 1000; i += 1) {
                 let p = m.get(i);
                 if (p != nil) {
                     live = live + 1;
@@ -454,7 +454,7 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
             // i ≡ 0 mod 4 removed.
             let mut want: i64 = 0;
             let mut wantlive = 0;
-            for (let i = 0; i < 1000; i += 1) {
+            for (let mut i = 0; i < 1000; i += 1) {
                 if (i % 4 == 2) {
                     want = want.wrapping_add(-1);
                     wantlive = wantlive + 1;
@@ -521,7 +521,7 @@ fn prim_store_release_walk_skips_element_slots() {
         use pouch::{ Vec };
         entry fn main() -> i64 {
             let mut v: Vec<i64> = Vec::new();
-            for (let i = 0; i < 100000; i += 1) {
+            for (let mut i = 0; i < 100000; i += 1) {
                 v.push(i as i64);
             }
             let mut s: i64 = 0;

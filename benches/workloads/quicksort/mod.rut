@@ -14,7 +14,7 @@ fn quicksort(mut xs: Vec<i32>, lo: i32, hi: i32) -> nil {
     }
     let pivot = xs[hi];
     let mut i = lo - 1;
-    for (let j = lo; j < hi; j += 1) {
+    for (let mut j = lo; j < hi; j += 1) {
         if (xs[j] <= pivot) {
             i += 1;
             let t = xs[i];
@@ -34,13 +34,13 @@ entry fn main() -> nil {
     let n = 10000;
     let xs: Vec<i32> = Vec::new();
     let mut x: i32 = 42;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         x = (x.wrapping_mul(1664525)).wrapping_add(1013904223);
         xs.push(x % 1000);
     }
     quicksort(xs, 0, n - 1);
     let mut h: i32 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         h = (h.wrapping_mul(31)).wrapping_add(xs[i]);
     }
     Logger("app").info(f"CHECKSUM {h}");

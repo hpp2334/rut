@@ -9,7 +9,7 @@ use calc::{ Math };
 
 entry fn main() -> nil {
     let mut h: u64 = 14695981039346656037u64;
-    for (let i = 0; i < 1000000; i += 1) {
+    for (let mut i = 0; i < 1000000; i += 1) {
         h = h.wrapping_mul(1099511628211u64);
         h = h.wrapping_add(i as u64);
         h = h ^ (h >> 31);

@@ -120,7 +120,7 @@ use nmapset::{ HashMap };
 // never-inserted miss keys in slots n..2n.
 fn build_parent(n: i32) -> str {
     let mut p = "";
-    for (let i = 0; i < 2 * n; i += 1) {
+    for (let mut i = 0; i < 2 * n; i += 1) {
         let base = 100000 + i;
         p = f"{p}{base}";
     }
@@ -131,16 +131,16 @@ fn build_parent(n: i32) -> str {
 fn churn_range(p: str, n: i32) -> i64 {
     let mut m: HashMap<str, i32> = HashMap::new();
     let mut added: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put_range(p, i * 6, 6, i)) { added += 1; }
     }
     let mut replaced: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put_range(p, i * 6, 6, i + 3) == false) { replaced += 1; }
     }
     let mut sum: i64 = 0;
     let mut hits: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let q = m.get_range(p, i * 6, 6);
         if (q != nil) {
             hits += 1;
@@ -148,19 +148,19 @@ fn churn_range(p: str, n: i32) -> i64 {
         }
     }
     let mut misses: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.get_range(p, (n + i) * 6, 6) == nil) { misses += 1; }
     }
     let mut removed: i64 = 0;
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (m.remove_range(p, i * 6, 6)) { removed += 1; }
     }
     let mut present: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.has_range(p, i * 6, 6)) { present += 1; }
     }
     let mut added2: i64 = 0;
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (m.put_range(p, i * 6, 6, 0 - i)) { added2 += 1; }
     }
     let mut c: i64 = sum;
@@ -179,16 +179,16 @@ fn churn_range(p: str, n: i32) -> i64 {
 fn churn_slice(p: str, n: i32) -> i64 {
     let mut m: HashMap<str, i32> = HashMap::new();
     let mut added: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(p.slice(i * 6, i * 6 + 6), i)) { added += 1; }
     }
     let mut replaced: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(p.slice(i * 6, i * 6 + 6), i + 3) == false) { replaced += 1; }
     }
     let mut sum: i64 = 0;
     let mut hits: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let q = m.get(p.slice(i * 6, i * 6 + 6));
         if (q != nil) {
             hits += 1;
@@ -196,19 +196,19 @@ fn churn_slice(p: str, n: i32) -> i64 {
         }
     }
     let mut misses: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.get(p.slice((n + i) * 6, (n + i) * 6 + 6)) == nil) { misses += 1; }
     }
     let mut removed: i64 = 0;
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (m.remove(p.slice(i * 6, i * 6 + 6))) { removed += 1; }
     }
     let mut present: i64 = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.has(p.slice(i * 6, i * 6 + 6))) { present += 1; }
     }
     let mut added2: i64 = 0;
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (m.put(p.slice(i * 6, i * 6 + 6), 0 - i)) { added2 += 1; }
     }
     let mut c: i64 = sum;
@@ -306,30 +306,30 @@ use nmapset::{ HashMap };
 entry fn main() -> i64 {
     // one parent of 4-char injective decimal slots (1000 + i)
     let mut p = "";
-    for (let i = 0; i < 600; i += 1) {
+    for (let mut i = 0; i < 600; i += 1) {
         let base = 1000 + i;
         p = f"{p}{base}";
     }
     let mut m: HashMap<str, i32> = HashMap::with_capacity(4);
     let mut fails: i64 = 0;
     let n = 500;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (!m.put_range(p, i * 4, 4, i * 7 + 1)) { fails += 1; }
     }
     if (m.len() != n) { fails += 64; }
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (!m.remove_range(p, i * 4, 4)) { fails += 2; }
     }
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (!m.put_range(p, i * 4, 4, i * 7 + 1)) { fails += 4; }
     }
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let q = m.get_range(p, i * 4, 4);
         if (q == nil) { fails += 8; }
         if (q != i * 7 + 1) { fails += 16; }
     }
     // the plain lanes see the same entries
-    for (let i = 0; i < n; i += 97) {
+    for (let mut i = 0; i < n; i += 97) {
         if (m.get(p.slice(i * 4, i * 4 + 4)) != i * 7 + 1) { fails += 32; }
     }
     return fails;

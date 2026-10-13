@@ -175,7 +175,7 @@ use ink_host::{ create_logger, logger_log };
 use futures::{ launch_future, sleep };
 
 async fn tick(log: opaque) -> nil {
-    for (let i = 0; i < 3; i += 1) {
+    for (let mut i = 0; i < 3; i += 1) {
         logger_log(log, 2, f"tick{i}");
         await sleep(10);
     }

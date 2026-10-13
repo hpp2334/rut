@@ -21,7 +21,7 @@ impl Tile {
 // the cache's whole job today: hold entries, evict on demand.
 // The hit returns the STORED cell — it shares the cache's element.
 fn evict(cache: ?Vec<?Tile>, id: i32) -> ?Tile {
-    for (let i = 0; i < cache.len(); i += 1) {
+    for (let mut i = 0; i < cache.len(); i += 1) {
         if (cache[i].id() == id) {
             return cache[i];
         }

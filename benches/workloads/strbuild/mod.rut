@@ -58,7 +58,7 @@ fn frags() -> Vec<str> {
         let mut b = StringBuilder();
         let letter = f"{c}";
         let n = 2 * k + 1;
-        for (let j = 0; j < n; j += 1) {
+        for (let mut j = 0; j < n; j += 1) {
             b.append(letter);
         }
         a.push(b.build());
@@ -81,7 +81,7 @@ fn round(fr: Vec<str>) -> i64 {
     let mut ns: i32 = 0;           // samples taken
     let mut poss = [0; 32];        // sample start offsets (codepoints)
     let mut scls = [0; 32];        // sample length classes
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         x = lcg(x);
         let cls = ((x >> 16) % 5) as i32;
         let frag = fr[cls];
@@ -101,7 +101,7 @@ fn round(fr: Vec<str>) -> i64 {
     let doc = b.build();
     assert(doc.len() == cps, "strbuild: doc len != appended codepoints");
     let mut ha: i64 = 0;           // the sampled-content fold
-    for (let s = 0; s < ns; s += 1) {
+    for (let mut s = 0; s < ns; s += 1) {
         let len = 2 * scls[s] + 1;
         let piece = doc.slice(poss[s], poss[s] + len);
         if (piece != fr[scls[s]]) {
@@ -116,7 +116,7 @@ fn round(fr: Vec<str>) -> i64 {
     // ---- phase B, per-fragment-mint sub-phase (the quote_slow shape) --
     let mut hb: i64 = 0;
     let mut bcps: i64 = 0;
-    for (let j = 0; j < m; j += 1) {
+    for (let mut j = 0; j < m; j += 1) {
         x = lcg(x);
         let hint = ((x >> 8) % 64) as i32;
         x = lcg(x);
@@ -142,7 +142,7 @@ entry fn main() -> nil {
     let reps = rounds_n();
     let mut total: i64 = 0;
     let mut first: i64 = 0;
-    for (let r = 0; r < reps; r += 1) {
+    for (let mut r = 0; r < reps; r += 1) {
         let s = round(fr);
         if (r == 0) {
             first = s;

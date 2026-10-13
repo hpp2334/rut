@@ -15,14 +15,14 @@ fn churn(n: i32) -> i32 {
     let mut m: HashMap<str, i32> = HashMap();
     // build — every key is new
     let mut added = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(f"k{i}", i)) {
             added += 1;
         }
     }
     // replace — every key is present
     let mut replaced = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.put(f"k{i}", i + 3) == false) {
             replaced += 1;
         }
@@ -30,7 +30,7 @@ fn churn(n: i32) -> i32 {
     // hit lookups — sum the stored values
     let mut sum = 0;
     let mut hits = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         let p = m.get(f"k{i}");
         if (p != nil) {
             hits += 1;
@@ -39,28 +39,28 @@ fn churn(n: i32) -> i32 {
     }
     // miss lookups — the "m" prefix is never inserted
     let mut misses = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.get(f"m{i}") == nil) {
             misses += 1;
         }
     }
     // remove every third key
     let mut removed = 0;
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (m.remove(f"k{i}")) {
             removed += 1;
         }
     }
     // full re-scan: two thirds survive
     let mut present = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (m.has(f"k{i}")) {
             present += 1;
         }
     }
     // re-add the removed keys under negated values
     let mut added2 = 0;
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (m.put(f"k{i}", -i)) {
             added2 += 1;
         }

@@ -90,7 +90,7 @@ fn mix64_shaped_free_fn_flattens() {
         "fn mix64(bits: u64) -> u64 { return (14695981039346656037u64 ^ bits).wrapping_mul(1099511628211u64); }\n\
          entry fn main() -> u64 {\n\
          \x20   let mut h = 0u64;\n\
-         \x20   for (let i = 0; i < 4; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 4; i += 1) {\n\
          \x20       h = mix64(h ^ i as u64);\n\
          \x20   }\n\
          \x20   return h;\n\

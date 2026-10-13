@@ -16,35 +16,35 @@ fn churn(n: i32) -> i32 {
     let mut s: HashSet<i32> = HashSet();
     // add — every key is new
     let mut added = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (s.put(i.wrapping_mul(-1640531535))) {
             added += 1;
         }
     }
     // duplicate adds — the lower half again
     let mut dups = 0;
-    for (let i = 0; i < n / 2; i += 1) {
+    for (let mut i = 0; i < n / 2; i += 1) {
         if (s.put(i.wrapping_mul(-1640531535)) == false) {
             dups += 1;
         }
     }
     // membership: the whole key space is present
     let mut present = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (s.has(i.wrapping_mul(-1640531535))) {
             present += 1;
         }
     }
     // membership: the second half of the space is absent
     let mut absent = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (s.has((i + n).wrapping_mul(-1640531535)) == false) {
             absent += 1;
         }
     }
     // remove the even keys
     let mut removed = 0;
-    for (let i = 0; i < n; i += 2) {
+    for (let mut i = 0; i < n; i += 2) {
         if (s.remove(i.wrapping_mul(-1640531535))) {
             removed += 1;
         }
@@ -53,13 +53,13 @@ fn churn(n: i32) -> i32 {
     // survivors (the odd keys) of the first — intersection-style
     let mut s2: HashSet<i32> = HashSet();
     let mut s2added = 0;
-    for (let i = 0; i < n; i += 3) {
+    for (let mut i = 0; i < n; i += 3) {
         if (s2.put(i.wrapping_mul(-1640531535))) {
             s2added += 1;
         }
     }
     let mut inter = 0;
-    for (let i = 0; i < n; i += 1) {
+    for (let mut i = 0; i < n; i += 1) {
         if (s.has(i.wrapping_mul(-1640531535)) && s2.has(i.wrapping_mul(-1640531535))) {
             inter += 1;
         }

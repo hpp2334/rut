@@ -233,7 +233,7 @@ fn create_subtree(mut r: T1Root, w: widget::Widget, path: str, parent: opaque) -
     }
 
     let kids: Vec<widget::Widget> = w.children;
-    for (let j = 0; j < kids.len(); j += 1) {
+    for (let mut j = 0; j < kids.len(); j += 1) {
         create_subtree(r, kids[j], f"{path}/{widget::key_of(kids[j], j)}", el);
     }
 }
@@ -270,7 +270,7 @@ fn patch_tree(mut r: T1Root, old: widget::Widget, new: widget::Widget, path: str
 }
 
 fn key_index_of(v: Vec<str>, k: str) -> i32 {
-    for (let i = 0; i < v.len(); i += 1) {
+    for (let mut i = 0; i < v.len(); i += 1) {
         if (v[i] == k) {
             return i;
         }
@@ -279,7 +279,7 @@ fn key_index_of(v: Vec<str>, k: str) -> i32 {
 }
 
 fn old_index_of(olds: Vec<widget::Widget>, k: str) -> i32 {
-    for (let j = 0; j < olds.len(); j += 1) {
+    for (let mut j = 0; j < olds.len(); j += 1) {
         if (widget::key_of(olds[j], j) == k) {
             return j;
         }
@@ -292,7 +292,7 @@ fn old_index_of(olds: Vec<widget::Widget>, k: str) -> i32 {
 fn key_moved_to_back(v: Vec<str>, p: i32) -> Vec<str> {
     let mut out: Vec<str> = Vec::new();
     let moved = v[p];
-    for (let i = 0; i < v.len(); i += 1) {
+    for (let mut i = 0; i < v.len(); i += 1) {
         if (i != p) {
             out.push(v[i]);
         }
@@ -309,16 +309,16 @@ fn patch_children(mut r: T1Root, old: widget::Widget, new: widget::Widget, path:
     let news: Vec<widget::Widget> = new.children;
 
     let mut new_keys: Vec<str> = Vec::new();
-    for (let i = 0; i < news.len(); i += 1) {
+    for (let mut i = 0; i < news.len(); i += 1) {
         new_keys.push(widget::key_of(news[i], i));
     }
 
     let mut cur: Vec<str> = Vec::new();
-    for (let j = 0; j < olds.len(); j += 1) {
+    for (let mut j = 0; j < olds.len(); j += 1) {
         cur.push(widget::key_of(olds[j], j));
     }
 
-    for (let i = 0; i < news.len(); i += 1) {
+    for (let mut i = 0; i < news.len(); i += 1) {
         let k = new_keys[i];
         let cpath = f"{path}/{k}";
         let at = old_index_of(olds, k);
@@ -354,7 +354,7 @@ fn patch_children(mut r: T1Root, old: widget::Widget, new: widget::Widget, path:
 
     // gone keys: fetch the live handle, retire the subtree's table
     // rows, then detach — the registry tracks live ids only
-    for (let j = 0; j < olds.len(); j += 1) {
+    for (let mut j = 0; j < olds.len(); j += 1) {
         let ok = widget::key_of(olds[j], j);
         if (key_index_of(new_keys, ok) < 0) {
             let cpath = f"{path}/{ok}";
@@ -381,7 +381,7 @@ fn retire_subtree(mut r: T1Root, w: widget::Widget, path: str) -> nil {
         }
     }
     let kids: Vec<widget::Widget> = w.children;
-    for (let j = 0; j < kids.len(); j += 1) {
+    for (let mut j = 0; j < kids.len(); j += 1) {
         retire_subtree(r, kids[j], f"{path}/{widget::key_of(kids[j], j)}");
     }
 }

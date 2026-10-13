@@ -145,11 +145,11 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
          entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
          \x20   let mut m: HashMap<i32, str> = HashMap::new();\n\
-         \x20   for (let i = 0; i < 64; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 64; i += 1) {\n\
          \x20       assert(m.put(i, f\"v{i}\"), \"i32 map: first put must add\");\n\
          \x20   }\n\
          \x20   assert(m.len() == 64, \"i32 map: len after 64 puts\");\n\
-         \x20   for (let i = 0; i < 64; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 64; i += 1) {\n\
          \x20       assert(m.has(i), \"i32 map: has after put\");\n\
          \x20       let p = m.get(i);\n\
          \x20       assert(p != nil, \"i32 map: get after put\");\n\
@@ -188,11 +188,11 @@ fn hashmap_str_keys_and_hashset() {
          entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
          \x20   let mut sm: HashMap<str, i32> = HashMap::new();\n\
-         \x20   for (let i = 0; i < 48; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 48; i += 1) {\n\
          \x20       assert(sm.put(f\"k{i}\", i * 2), \"str map: first put adds\");\n\
          \x20   }\n\
          \x20   assert(sm.len() == 48, \"str map: len\");\n\
-         \x20   for (let i = 0; i < 48; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 48; i += 1) {\n\
          \x20       let p = sm.get(f\"k{i}\");\n\
          \x20       assert(p != nil, \"str map: hit found\");\n\
          \x20       assert(p == i * 2, \"str map: hit round-trips\");\n\
@@ -204,11 +204,11 @@ fn hashmap_str_keys_and_hashset() {
          \x20   assert(sm.has(f\"k3\") == false, \"str map: removed is absent\");\n\
          \x20   acc = acc + sm.len();\n\
          \x20   let mut s: HashSet<i32> = HashSet::new();\n\
-         \x20   for (let i = 0; i < 50; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 50; i += 1) {\n\
          \x20       assert(s.put(i), \"set: first add\");\n\
          \x20   }\n\
          \x20   assert(s.len() == 50, \"set: len\");\n\
-         \x20   for (let i = 0; i < 50; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 50; i += 1) {\n\
          \x20       assert(s.put(i) == false, \"set: dup add answers false\");\n\
          \x20   }\n\
          \x20   assert(s.len() == 50, \"set: dup adds keep len\");\n\
@@ -218,7 +218,7 @@ fn hashmap_str_keys_and_hashset() {
          \x20   assert(s.remove(37) == false, \"set: second remove\");\n\
          \x20   acc = acc + s.len();\n\
          \x20   let mut ss: HashSet<str> = HashSet::new();\n\
-         \x20   for (let i = 0; i < 20; i += 1) {\n\
+         \x20   for (let mut i = 0; i < 20; i += 1) {\n\
          \x20       assert(ss.put(f\"s{i}\"), \"str set: first add\");\n\
          \x20   }\n\
          \x20   assert(ss.has(\"s7\"), \"str set: has\");\n\

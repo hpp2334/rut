@@ -24,13 +24,13 @@ fn fsqrt(x: f64) -> f64 {
 
 fn energy(pos: Vec<f64>, vel: Vec<f64>, mass: Vec<f64>) -> f64 {
     let mut e: f64 = 0.0;
-    for (let i = 0; i < 5; i += 1) {
+    for (let mut i = 0; i < 5; i += 1) {
         e += 0.5
             * mass[i]
             * (vel[i * 3] * vel[i * 3]
                 + vel[i * 3 + 1] * vel[i * 3 + 1]
                 + vel[i * 3 + 2] * vel[i * 3 + 2]);
-        for (let j = i + 1; j < 5; j += 1) {
+        for (let mut j = i + 1; j < 5; j += 1) {
             let dx = pos[i * 3] - pos[j * 3];
             let dy = pos[i * 3 + 1] - pos[j * 3 + 1];
             let dz = pos[i * 3 + 2] - pos[j * 3 + 2];
@@ -41,8 +41,8 @@ fn energy(pos: Vec<f64>, vel: Vec<f64>, mass: Vec<f64>) -> f64 {
 }
 
 fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> nil {
-    for (let i = 0; i < 5; i += 1) {
-        for (let j = i + 1; j < 5; j += 1) {
+    for (let mut i = 0; i < 5; i += 1) {
+        for (let mut j = i + 1; j < 5; j += 1) {
             let dx = pos[i * 3] - pos[j * 3];
             let dy = pos[i * 3 + 1] - pos[j * 3 + 1];
             let dz = pos[i * 3 + 2] - pos[j * 3 + 2];
@@ -56,7 +56,7 @@ fn advance(mut pos: Vec<f64>, mut vel: Vec<f64>, mass: Vec<f64>, dt: f64) -> nil
             vel[j * 3 + 2] += dz * mass[i] * mag;
         }
     }
-    for (let i = 0; i < 5; i += 1) {
+    for (let mut i = 0; i < 5; i += 1) {
         pos[i * 3] += dt * vel[i * 3];
         pos[i * 3 + 1] += dt * vel[i * 3 + 1];
         pos[i * 3 + 2] += dt * vel[i * 3 + 2];
@@ -113,7 +113,7 @@ entry fn main() -> nil {
     let mut mvx: f64 = 0.0;
     let mut mvy: f64 = 0.0;
     let mut mvz: f64 = 0.0;
-    for (let i = 0; i < 5; i += 1) {
+    for (let mut i = 0; i < 5; i += 1) {
         mvx += vel[i * 3] * mass[i];
         mvy += vel[i * 3 + 1] * mass[i];
         mvz += vel[i * 3 + 2] * mass[i];
@@ -122,7 +122,7 @@ entry fn main() -> nil {
     vel[1] = -mvy / mass[0];
     vel[2] = -mvz / mass[0];
 
-    for (let s = 0; s < 1000; s += 1) {
+    for (let mut s = 0; s < 1000; s += 1) {
         advance(pos, vel, mass, 0.01);
     }
     let e = energy(pos, vel, mass);

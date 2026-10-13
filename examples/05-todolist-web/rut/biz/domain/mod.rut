@@ -51,7 +51,7 @@ pub(pkg) fn mk_req(id: i64, tag: str, kind: i64, todo: i64, title: str, latency:
 // ---- the machine's pure scans (no writes — the mutations write) ------
 
 pub(pkg) fn find_todo(items: Vec<Todo>, todo: i64) -> i32 {
-    for (let i = 0; i < items.len(); i += 1) {
+    for (let mut i = 0; i < items.len(); i += 1) {
         if (items[i].id == todo) {
             return i;
         }
@@ -60,7 +60,7 @@ pub(pkg) fn find_todo(items: Vec<Todo>, todo: i64) -> i32 {
 }
 
 pub(pkg) fn find_req(rs: Vec<Req>, tag: str) -> i32 {
-    for (let i = 0; i < rs.len(); i += 1) {
+    for (let mut i = 0; i < rs.len(); i += 1) {
         if (rs[i].tag == tag) {
             return i;
         }
@@ -69,7 +69,7 @@ pub(pkg) fn find_req(rs: Vec<Req>, tag: str) -> i32 {
 }
 
 pub(pkg) fn find_by_title(items: Vec<Todo>, title: str) -> i32 {
-    for (let i = 0; i < items.len(); i += 1) {
+    for (let mut i = 0; i < items.len(); i += 1) {
         if (items[i].title == title) {
             return i;
         }
