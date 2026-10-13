@@ -39,6 +39,43 @@ hits=12 first=false warm=false hot=true
 The condition must be a `bool` — there is no truthiness coercion, and
 no parenthesized-assignment footgun.
 
+### `if` is an expression too
+
+The same spelling produces a value wherever an expression goes: each
+arm is a block, and the arm's **tail** — the expression before the
+arm's `}`, with no `;` — is what the arm yields. The arms must agree on
+one type, and that type is the `if`'s:
+
+```rut
+use ink::{ Logger };
+
+fn grade(n: i32) -> str {
+    let band = if (n > 90) { "hi" } else if (n > 50) { "mid" } else { "lo" };
+    band
+}
+
+entry fn main() {
+    let log = Logger("if-expr");
+    for (let n of [95, 72, 10]) {
+        let verdict = if (n > 50) { "pass" } else { "fail" };
+        log.info(f"{n}: {grade(n)}, {verdict}");
+    }
+}
+```
+
+```text
+95: hi, pass
+72: mid, pass
+10: lo, fail
+```
+
+No `else` and the whole `if` produces `nil` — that is the statement
+form above, running its arm for effect. A trailing `;` after the
+statement form discards quietly; without it, a trailing `if` statement
+with an `else` at the end of a block IS the block's value. That is the
+block tail law — see [`return`](#return) — and `if` in tail position is
+where it shines.
+
 ## Loops
 
 **`while`** repeats until its condition is false:
@@ -120,7 +157,7 @@ and no `do..while`.
 ## `return`
 
 `return expr;` exits the function. If the function returns nothing, the
-arrow is omitted and `return;` (or falling off the end) returns:
+arrow is omitted and `return;` (or simply falling off the end) returns:
 
 ```rut
 use pouch::{ Vec };
@@ -144,6 +181,42 @@ entry fn main() {
 ```text
 first=3 last=1
 ```
+
+A function WITH an arrow must produce its value on every path: spell
+`return`, or end the body with a **tail** — the last expression,
+written without `;`. The tail is the block's value, and a fn body's
+tail is the implicit return; a body that can still fall off the end
+without one diagnoses `missing return`. The two spellings mix freely:
+
+```rut
+use ink::{ Logger };
+
+fn plus_one(n: i32) -> i32 {
+    n + 1
+}
+
+fn fact(n: i32) -> i32 {
+    if (n <= 1) {
+        1
+    } else {
+        n * fact(n - 1)
+    }
+}
+
+entry fn main() {
+    let log = Logger("tail");
+    log.info(f"{plus_one(41)} {fact(5)}");
+}
+```
+
+```text
+42 120
+```
+
+The trailing `if` in `fact` is the statement form in tail position —
+its arms produce the body's answer. Tails are not special to fn bodies:
+any block's last expression without `;` is that block's value, which is
+exactly how the `if`-as-expression arms above yield theirs.
 
 ## `when` — the one match
 
@@ -200,8 +273,19 @@ entry fn main() {
 brake
 ```
 
-Used as a statement, a `when` must produce nothing — the block arms
-above are statement arms.
+Used as a statement, the `when`'s value is discarded — the block arms
+above run for effect. But block arms are value blocks: a block arm's
+tail is the arm's value, and expression and block arms mix freely
+under the same one-type law (see [below](#one-type-across-the-arms)):
+
+```rut
+let w =
+    when (x) {
+        0 -> 10,
+        1 -> { let t = 11; t },
+        else -> 12,
+    };
+```
 
 ### Patterns
 

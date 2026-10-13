@@ -1,0 +1,11 @@
+{
+  // if-expr/ — the if ATOM (expression form) and block tails: the
+  // same `if (cond) { .. } else { .. }` spelling branches and
+  // produces, and every block answers through its tail.
+  "name": "if_expr",
+    "deps": {
+    "ink": {
+      "path": "../../../../rut/ink"
+    }
+  }
+}

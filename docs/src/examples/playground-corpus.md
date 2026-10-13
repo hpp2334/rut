@@ -1,6 +1,6 @@
 # The playground corpus
 
-The classics: seventeen short, self-contained rut programs in
+The classics: eighteen short, self-contained rut programs in
 `demo/src/examples/` that the web playground offers in its picker and
 runs in your browser. They are not copies — the playground imports
 the `.rut` files **raw**, so what you edit there is what this repo
@@ -39,7 +39,7 @@ Both gates drive the same sources through the same engine — native
 and wasm — so a classic that stops running cleanly fails in CI, not
 in front of a reader.
 
-## The seventeen cases
+## The eighteen cases
 
 | Case | Demonstrates | First line it prints |
 |---|---|---|
@@ -55,6 +55,7 @@ in front of a reader.
 | `bytes` | the binary primitive — encode/decode, clone as the ONE copy | `round=true octets=8 chars=8` |
 | `opaque` | `opaque` / `opaque::downcast<T> -> ?T` / `is` — erasure and checked recovery | `point 1 2` |
 | `when` | `when` pattern expressions over enums, exhaustiveness | `small` |
+| `if-expr` | the if ATOM — `if (cond) { x } else { y }` as an expression — and block tails (implicit return) | `95: hi grade=20` |
 | `maps` | the keyed-collection lane — `HashMap`/`HashSet`, keys admitted by the compile-time union bound | `rut=3 runs=1` |
 | `node-cycle` | strong cycles keep cells alive — the program's responsibility | `head.next alive: true` |
 | `tree` | recursive structs (`?Node` nullable fields), composite fields as handle slots | `nodes=15` |
@@ -190,7 +191,7 @@ builds on purpose — run it above and look closely.
   playground edits what the repo ships.
 - Every case is exercised by **two gates** — native and wasm — over
   the same engine.
-- Seventeen files cover the language surface in run-sized doses:
+- Eighteen files cover the language surface in run-sized doses:
   algorithms, types and interfaces, strings and bytes, erasure, patterns,
   maps, and the memory shapes.
 - When you change the language, these files are the first smoke test

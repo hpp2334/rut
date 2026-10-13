@@ -1,0 +1,41 @@
+// `if` is an EXPRESSION: if (cond) { x } else { y } branches and
+// produces the taken arm's value — and every block answers through
+// its TAIL, the last expression written without `;`.
+
+use ink::{ Logger };
+
+fn classify(n: i32) -> str {
+    // the trailing `if` statement IS the body's tail: the arms
+    // produce the value, no `return` spelled
+    if (n > 90) {
+        "hi"
+    } else if (n > 50) {
+        "mid"
+    } else {
+        "lo"
+    }
+}
+
+fn fact(n: i32) -> i32 {
+    // recursion through a tail-if
+    if (n <= 1) {
+        1
+    } else {
+        n * fact(n - 1)
+    }
+}
+
+fn grade(n: i32) -> i32 {
+    // the if ATOM in expression positions: a `let` initializer, then
+    // a binary operand
+    let band = if (n > 50) { 2 } else { 1 };
+    band * 10 + if (n % 2 == 0) { 1 } else { 0 }
+}
+
+entry fn main() {
+    let log = Logger("if-expr");
+    for (let n of [95, 72, 10]) {
+        log.info(f"{n}: {classify(n)} grade={grade(n)}");
+    }
+    log.info(f"fact(5)={fact(5)}");
+}

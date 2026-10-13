@@ -128,6 +128,7 @@ stage — no lookahead).
 | instance vs class method | peek 4: `fn Ident ( <mut? self? …>` |
 | struct literal vs path expression | peek 2: `Ident {` ⇒ literal (classes have no instance literal) |
 | `when`-arm body form | peek 1 after `->` (`{` ⇒ block arm, else expression arm) |
+| `if` atom vs statement | peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` is claimed by the statement grammar first) |
 | postfix loop step | peek 1 (`.` `(` `[` `?`) |
 | assignment target | no lookahead — parse, then validate |
 
@@ -210,7 +211,9 @@ enum NodeKind {
     Method { recv, name, generics, args },
     Field { recv, name }, Index { recv, idx },
     Unary, Binary { op, lhs, rhs }, Assign,
+    Block { stmts, tail },               // the block value; tail: Option
     Lambda { params, ret, body }, When { scrut, arms },
+    If { cond, then, els },              // the if ATOM (statement-if above)
     Try { expr },                 // postfix ?
     FStr { parts },               // holes are NodeIds
     StructLit { ty, fields }, Array { elems }, Conv { ty, expr },

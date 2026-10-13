@@ -31,9 +31,11 @@ entry fn main() {
   that can fall off the end diagnoses — `missing return: 'f' is
   '-> str' but a path reaches the end of the body`, naming the
   function and its arrow — instead of handing the caller a
-  never-written value. The
-  analysis sees `return`, `break`/`continue`, an `if`/`else` whose
-  arms both return, an exhaustive `when` whose arms all return, and a
+  never-written value. Ending the body in a **tail** — the last
+  expression, no `;` (the block value law) — is the implicit return
+  and counts: the analysis sees `return`, a value-producing body
+  tail, `break`/`continue`, an `if`/`else` whose arms both return or
+  produce the tail, an exhaustive `when` whose arms all return, and a
   `while (true)` with no `break` bound to it (the scan-loop shape);
   dead statements after a `return` are still just dead code. The same
   law covers the closure block form.

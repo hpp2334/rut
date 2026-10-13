@@ -22,6 +22,7 @@ import strViewsSrc from "./str-views/mod.rut";
 import bytesSrc from "./bytes/mod.rut";
 import opaqueSrc from "./opaque/mod.rut";
 import whenSrc from "./when/mod.rut";
+import ifExprSrc from "./if-expr/mod.rut";
 import mapsSrc from "./maps/mod.rut";
 import nodeCycleSrc from "./node-cycle/mod.rut";
 import treeSrc from "./tree/mod.rut";
@@ -100,6 +101,12 @@ export const EXAMPLES: RutCase[] = [
     name: "when",
     blurb: "when pattern expressions over enums, exhaustiveness",
     source: whenSrc,
+  },
+  {
+    id: "ex-if-expr",
+    name: "if expressions",
+    blurb: "the if ATOM — if (cond) { x } else { y } as an expression — and block tails (implicit return)",
+    source: ifExprSrc,
   },
   {
     id: "ex-maps",

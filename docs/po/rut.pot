@@ -1622,7 +1622,7 @@ msgid ""
 "constantly."
 msgstr ""
 
-#: src/tutorial/values-and-variables.md:268 src/tutorial/control-flow.md:312
+#: src/tutorial/values-and-variables.md:268 src/tutorial/control-flow.md:396
 #: src/tutorial/functions.md:242 src/tutorial/types.md:283
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:280 src/tutorial/async.md:180
@@ -1756,14 +1756,56 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/control-flow.md:42
-msgid "Loops"
+msgid "`if` is an expression too"
 msgstr ""
 
 #: src/tutorial/control-flow.md:44
+msgid ""
+"The same spelling produces a value wherever an expression goes: each arm is "
+"a block, and the arm's **tail** — the expression before the arm's `}`, with "
+"no `;` — is what the arm yields. The arms must agree on one type, and that "
+"type is the `if`'s:"
+msgstr ""
+
+#: src/tutorial/control-flow.md:49
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn grade(n: i32) -> str {\n"
+"    let band = if (n > 90) { \"hi\" } else if (n > 50) { \"mid\" } else { "
+"\"lo\" };\n"
+"    band\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"if-expr\");\n"
+"    for (let n of [95, 72, 10]) {\n"
+"        let verdict = if (n > 50) { \"pass\" } else { \"fail\" };\n"
+"        log.info(f\"{n}: {grade(n)}, {verdict}\");\n"
+"    }\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/tutorial/control-flow.md:72
+msgid ""
+"No `else` and the whole `if` produces `nil` — that is the statement form "
+"above, running its arm for effect. A trailing `;` after the statement form "
+"discards quietly; without it, a trailing `if` statement with an `else` at "
+"the end of a block IS the block's value. That is the block tail law — see "
+"[`return`](#return) — and `if` in tail position is where it shines."
+msgstr ""
+
+#: src/tutorial/control-flow.md:79
+msgid "Loops"
+msgstr ""
+
+#: src/tutorial/control-flow.md:81
 msgid "**`while`** repeats until its condition is false:"
 msgstr ""
 
-#: src/tutorial/control-flow.md:46
+#: src/tutorial/control-flow.md:83
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1784,7 +1826,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:67
+#: src/tutorial/control-flow.md:104
 msgid ""
 "**`for..of`** iterates anything with elements: fixed arrays, `Vec`s, `str` "
 "(yielding one-codepoint `str`s), `bytes` (yielding `u8`s), and any type that "
@@ -1792,7 +1834,7 @@ msgid ""
 "ONE designated member; see [interfaces](../reference/interfaces.md)):"
 msgstr ""
 
-#: src/tutorial/control-flow.md:73
+#: src/tutorial/control-flow.md:110
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1811,17 +1853,17 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:93
+#: src/tutorial/control-flow.md:130
 msgid "The loop variable is always spelled `let` and is fresh each iteration."
 msgstr ""
 
-#: src/tutorial/control-flow.md:95
+#: src/tutorial/control-flow.md:132
 msgid ""
 "**Indexed `for`** is the C shape. The induction variable is _loop-owned_: "
 "the update clause (and the body) may assign it without `mut`."
 msgstr ""
 
-#: src/tutorial/control-flow.md:98
+#: src/tutorial/control-flow.md:135
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1839,23 +1881,23 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:117
+#: src/tutorial/control-flow.md:154
 msgid ""
 "**`break` and `continue`** work in every loop form; there are no labels and "
 "no `do..while`."
 msgstr ""
 
-#: src/tutorial/control-flow.md:120 src/reference/lexical-structure.md:44
+#: src/tutorial/control-flow.md:157 src/reference/lexical-structure.md:44
 msgid "`return`"
 msgstr ""
 
-#: src/tutorial/control-flow.md:122
+#: src/tutorial/control-flow.md:159
 msgid ""
 "`return expr;` exits the function. If the function returns nothing, the "
-"arrow is omitted and `return;` (or falling off the end) returns:"
+"arrow is omitted and `return;` (or simply falling off the end) returns:"
 msgstr ""
 
-#: src/tutorial/control-flow.md:125
+#: src/tutorial/control-flow.md:162
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -1877,17 +1919,58 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:148
+#: src/tutorial/control-flow.md:185
+msgid ""
+"A function WITH an arrow must produce its value on every path: spell "
+"`return`, or end the body with a **tail** — the last expression, written "
+"without `;`. The tail is the block's value, and a fn body's tail is the "
+"implicit return; a body that can still fall off the end without one "
+"diagnoses `missing return`. The two spellings mix freely:"
+msgstr ""
+
+#: src/tutorial/control-flow.md:191
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn plus_one(n: i32) -> i32 {\n"
+"    n + 1\n"
+"}\n"
+"\n"
+"fn fact(n: i32) -> i32 {\n"
+"    if (n <= 1) {\n"
+"        1\n"
+"    } else {\n"
+"        n * fact(n - 1)\n"
+"    }\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"tail\");\n"
+"    log.info(f\"{plus_one(41)} {fact(5)}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/tutorial/control-flow.md:216
+msgid ""
+"The trailing `if` in `fact` is the statement form in tail position — its "
+"arms produce the body's answer. Tails are not special to fn bodies: any "
+"block's last expression without `;` is that block's value, which is exactly "
+"how the `if`\\-as-expression arms above yield theirs."
+msgstr ""
+
+#: src/tutorial/control-flow.md:221
 msgid "`when` — the one match"
 msgstr ""
 
-#: src/tutorial/control-flow.md:150
+#: src/tutorial/control-flow.md:223
 msgid ""
 "`when (value) { pattern -> body, ... }` is an expression: the first matching "
 "arm produces the value. No fallthrough — exactly one arm runs."
 msgstr ""
 
-#: src/tutorial/control-flow.md:153
+#: src/tutorial/control-flow.md:226
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1909,11 +1992,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:178
+#: src/tutorial/control-flow.md:251
 msgid "The arm body before the `,` is an expression; arms can also be blocks:"
 msgstr ""
 
-#: src/tutorial/control-flow.md:180
+#: src/tutorial/control-flow.md:253
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1935,17 +2018,19 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:203
+#: src/tutorial/control-flow.md:276
 msgid ""
-"Used as a statement, a `when` must produce nothing — the block arms above "
-"are statement arms."
+"Used as a statement, the `when`'s value is discarded — the block arms above "
+"run for effect. But block arms are value blocks: a block arm's tail is the "
+"arm's value, and expression and block arms mix freely under the same "
+"one-type law (see [below](#one-type-across-the-arms)):"
 msgstr ""
 
-#: src/tutorial/control-flow.md:206 src/reference/control-flow.md:67
+#: src/tutorial/control-flow.md:290 src/reference/control-flow.md:155
 msgid "Patterns"
 msgstr ""
 
-#: src/tutorial/control-flow.md:208
+#: src/tutorial/control-flow.md:292
 msgid ""
 "The patterns are: enum members (`Light::Red`), literals (integers, floats, "
 "`bool`, `str`), comma-separated alternatives, and `else`. There are no "
@@ -1953,24 +2038,24 @@ msgid ""
 "that job."
 msgstr ""
 
-#: src/tutorial/control-flow.md:213
+#: src/tutorial/control-flow.md:297
 msgid "Exhaustiveness is enforced"
 msgstr ""
 
-#: src/tutorial/control-flow.md:215
+#: src/tutorial/control-flow.md:299
 msgid ""
 "**Enum scrutinee:** either cover every member or add `else`. A partial "
 "`when` over an enum is a compile error — when you add a member later, the "
 "compiler finds every `when` you must extend."
 msgstr ""
 
-#: src/tutorial/control-flow.md:218
+#: src/tutorial/control-flow.md:302
 msgid ""
 "**Any other scrutinee:** `else` is mandatory (integers and strings cannot be "
 "enumerated)."
 msgstr ""
 
-#: src/tutorial/control-flow.md:221
+#: src/tutorial/control-flow.md:305
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2006,11 +2091,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:259
+#: src/tutorial/control-flow.md:343
 msgid "`when` over a `bool` reads nicely as a two-arm check:"
 msgstr ""
 
-#: src/tutorial/control-flow.md:261
+#: src/tutorial/control-flow.md:345
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2028,24 +2113,24 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:280
+#: src/tutorial/control-flow.md:364
 msgid ""
 "Duplicate patterns — and arms made unreachable by an earlier one — are "
 "compile errors."
 msgstr ""
 
-#: src/tutorial/control-flow.md:283
+#: src/tutorial/control-flow.md:367
 msgid "One type across the arms"
 msgstr ""
 
-#: src/tutorial/control-flow.md:285
+#: src/tutorial/control-flow.md:369
 msgid ""
 "All arm expressions must agree: that shared type is the `when`'s type. A "
 "`when` that builds a value usually reads best wrapped in a function — the "
 "function's return type then pins every arm:"
 msgstr ""
 
-#: src/tutorial/control-flow.md:289
+#: src/tutorial/control-flow.md:373
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2067,7 +2152,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:314
+#: src/tutorial/control-flow.md:398
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -2114,7 +2199,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/control-flow.md:367
+#: src/tutorial/control-flow.md:451
 msgid "Next: [functions, closures, and generics](functions.md)."
 msgstr ""
 
@@ -2264,7 +2349,7 @@ msgid ""
 msgstr ""
 
 #: src/tutorial/functions.md:126
-#: src/reference/functions-closures-generics.md:86
+#: src/reference/functions-closures-generics.md:88
 msgid "Generics"
 msgstr ""
 
@@ -7578,7 +7663,7 @@ msgstr ""
 #: src/examples/00-todolist.md:35 src/examples/01-sort.md:39
 #: src/examples/02-digest.md:51 src/examples/03-plugin.md:42
 #: src/examples/04-custom-async.md:30 src/examples/05-todolist-web.md:49
-#: src/examples/06-github-viewer-cli.md:39 src/examples/playground-corpus.md:68
+#: src/examples/06-github-viewer-cli.md:39 src/examples/playground-corpus.md:69
 msgid "Code tour"
 msgstr ""
 
@@ -7772,7 +7857,7 @@ msgstr ""
 #: src/examples/02-digest.md:199 src/examples/03-plugin.md:213
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:244
 #: src/examples/06-github-viewer-cli.md:212
-#: src/examples/playground-corpus.md:187
+#: src/examples/playground-corpus.md:188
 msgid "Takeaways"
 msgstr ""
 
@@ -9474,7 +9559,7 @@ msgstr ""
 
 #: src/examples/playground-corpus.md:3
 msgid ""
-"The classics: seventeen short, self-contained rut programs in "
+"The classics: eighteen short, self-contained rut programs in "
 "`demo/src/examples/` that the web playground offers in its picker and runs "
 "in your browser. They are not copies — the playground imports the `.rut` "
 "files **raw**, so what you edit there is what this repo ships. The classics "
@@ -9530,7 +9615,7 @@ msgid ""
 msgstr ""
 
 #: src/examples/playground-corpus.md:42
-msgid "The seventeen cases"
+msgid "The eighteen cases"
 msgstr ""
 
 #: src/examples/playground-corpus.md:44
@@ -9675,7 +9760,7 @@ msgid "`point 1 2`"
 msgstr ""
 
 #: src/examples/playground-corpus.md:57 src/reference/lexical-structure.md:44
-#: src/reference/control-flow.md:40
+#: src/reference/control-flow.md:128
 msgid "`when`"
 msgstr ""
 
@@ -9688,81 +9773,95 @@ msgid "`small`"
 msgstr ""
 
 #: src/examples/playground-corpus.md:58
-msgid "`maps`"
+msgid "`if-expr`"
 msgstr ""
 
 #: src/examples/playground-corpus.md:58
+msgid ""
+"the if ATOM — `if (cond) { x } else { y }` as an expression — and block "
+"tails (implicit return)"
+msgstr ""
+
+#: src/examples/playground-corpus.md:58
+msgid "`95: hi grade=20`"
+msgstr ""
+
+#: src/examples/playground-corpus.md:59
+msgid "`maps`"
+msgstr ""
+
+#: src/examples/playground-corpus.md:59
 msgid ""
 "the keyed-collection lane — `HashMap`/`HashSet`, keys admitted by the "
 "compile-time union bound"
 msgstr ""
 
-#: src/examples/playground-corpus.md:58
+#: src/examples/playground-corpus.md:59
 msgid "`rut=3 runs=1`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:59
+#: src/examples/playground-corpus.md:60
 msgid "`node-cycle`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:59
+#: src/examples/playground-corpus.md:60
 msgid "strong cycles keep cells alive — the program's responsibility"
 msgstr ""
 
-#: src/examples/playground-corpus.md:59
+#: src/examples/playground-corpus.md:60
 msgid "`head.next alive: true`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:60
+#: src/examples/playground-corpus.md:61
 msgid "`tree`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:60
+#: src/examples/playground-corpus.md:61
 msgid ""
 "recursive structs (`?Node` nullable fields), composite fields as handle slots"
 msgstr ""
 
-#: src/examples/playground-corpus.md:60
+#: src/examples/playground-corpus.md:61
 msgid "`nodes=15`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:61
+#: src/examples/playground-corpus.md:62
 msgid "`weak-cache`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:61
+#: src/examples/playground-corpus.md:62
 msgid "the cache/observer shape, shown with today's strong refs"
 msgstr ""
 
-#: src/examples/playground-corpus.md:61
+#: src/examples/playground-corpus.md:62
 msgid "`held: true id=1`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:62
+#: src/examples/playground-corpus.md:63
 msgid "`type-aliases`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:62
+#: src/examples/playground-corpus.md:63
 msgid ""
 "transparent aliases, bound-only unions, inline `requires` at the call site"
 msgstr ""
 
-#: src/examples/playground-corpus.md:62
+#: src/examples/playground-corpus.md:63
 msgid "`trip=1500 plain=1500 ridge/trench kind=trench`"
 msgstr ""
 
-#: src/examples/playground-corpus.md:64
+#: src/examples/playground-corpus.md:65
 msgid ""
 "Output goes through `ink`'s `Logger` (the `log.info` lines above) — the same "
 "logging surface the std packages use ([core and the swappable "
 "packages](../reference/stdlib.md))."
 msgstr ""
 
-#: src/examples/playground-corpus.md:70
+#: src/examples/playground-corpus.md:71
 msgid "A classic, whole"
 msgstr ""
 
-#: src/examples/playground-corpus.md:72
+#: src/examples/playground-corpus.md:73
 msgid ""
 "`demo/src/examples/quicksort/mod.rut` is the archetype — imports, one "
 "algorithm, one log line — and the shared-handle mutation law in action (the "
@@ -9770,7 +9869,7 @@ msgid ""
 "exactly what the playground edits:"
 msgstr ""
 
-#: src/examples/playground-corpus.md:77
+#: src/examples/playground-corpus.md:78
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -9821,23 +9920,23 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/playground-corpus.md:127
+#: src/examples/playground-corpus.md:128
 msgid ""
 "(The line above ends with the trailing space the program builds — one after "
 "every element — kept byte-for-byte.)"
 msgstr ""
 
-#: src/examples/playground-corpus.md:130
+#: src/examples/playground-corpus.md:131
 msgid ""
 "Compare with [01 — Sort](01-sort.md): same algorithm, no host — run it here "
 "and compare with the fuel-counted host sweep."
 msgstr ""
 
-#: src/examples/playground-corpus.md:133
+#: src/examples/playground-corpus.md:134
 msgid "Erasure and checked recovery, in one screen"
 msgstr ""
 
-#: src/examples/playground-corpus.md:135
+#: src/examples/playground-corpus.md:136
 msgid ""
 "The `opaque` case is the reference for the erasure primitive — `opaque(v)` "
 "forgets the static type, `opaque::downcast<T>` answers the nullable, and "
@@ -9846,7 +9945,7 @@ msgid ""
 "with its two payload types and a `main` so it runs in place:"
 msgstr ""
 
-#: src/examples/playground-corpus.md:142
+#: src/examples/playground-corpus.md:143
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -9880,11 +9979,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/playground-corpus.md:175
+#: src/examples/playground-corpus.md:176
 msgid "How a case is wired"
 msgstr ""
 
-#: src/examples/playground-corpus.md:177
+#: src/examples/playground-corpus.md:178
 msgid ""
 "Each classic is registered in `demo/src/examples/index.ts` — an id, a blurb, "
 "and the raw source, in the playground's order. The table above quotes each "
@@ -9896,32 +9995,32 @@ msgid ""
 "— run it above and look closely."
 msgstr ""
 
-#: src/examples/playground-corpus.md:189
+#: src/examples/playground-corpus.md:190
 msgid ""
 "The classics are **live sources**, not string copies: the playground edits "
 "what the repo ships."
 msgstr ""
 
-#: src/examples/playground-corpus.md:191
+#: src/examples/playground-corpus.md:192
 msgid ""
 "Every case is exercised by **two gates** — native and wasm — over the same "
 "engine."
 msgstr ""
 
-#: src/examples/playground-corpus.md:193
+#: src/examples/playground-corpus.md:194
 msgid ""
-"Seventeen files cover the language surface in run-sized doses: algorithms, "
+"Eighteen files cover the language surface in run-sized doses: algorithms, "
 "types and interfaces, strings and bytes, erasure, patterns, maps, and the "
 "memory shapes."
 msgstr ""
 
-#: src/examples/playground-corpus.md:196
+#: src/examples/playground-corpus.md:197
 msgid ""
 "When you change the language, these files are the first smoke test — and "
 "often the clearest place to demonstrate the change."
 msgstr ""
 
-#: src/examples/playground-corpus.md:199
+#: src/examples/playground-corpus.md:200
 msgid ""
 "For the bigger, host-driven versions of the same ideas, start at [00 — "
 "Todolist](00-todolist.md) and work up to [06 — GitHub viewer "
@@ -11818,7 +11917,8 @@ msgid ""
 "ever happens implicitly):"
 msgstr ""
 
-#: src/reference/literals-and-inference.md:111 src/reference/control-flow.md:69
+#: src/reference/literals-and-inference.md:111
+#: src/reference/control-flow.md:157
 msgid "Example"
 msgstr ""
 
@@ -11962,27 +12062,149 @@ msgid "Statements"
 msgstr ""
 
 #: src/reference/control-flow.md:10
-msgid "`if (cond) { .. } else if (..) { .. } else { .. }` — braces required."
-msgstr ""
-
-#: src/reference/control-flow.md:11
-msgid "`while (cond) { .. }`."
+msgid ""
+"`if (cond) { .. } else if (..) { .. } else { .. }` — braces required; the "
+"same spelling is also an expression (see below)."
 msgstr ""
 
 #: src/reference/control-flow.md:12
-msgid "`return expr?;` — `expr` is required unless the function returns `nil`."
+msgid "`while (cond) { .. }`."
 msgstr ""
 
-#: src/reference/control-flow.md:14
+#: src/reference/control-flow.md:13
+msgid ""
+"`return expr?;` — `expr` is required unless the function returns `nil` (or "
+"the body ends in a tail; see below)."
+msgstr ""
+
+#: src/reference/control-flow.md:15
 msgid ""
 "`break` / `continue` exist for loops; there are no labels and no `do..while`."
 msgstr ""
 
-#: src/reference/control-flow.md:17
+#: src/reference/control-flow.md:18
+msgid "`if` — statement and expression"
+msgstr ""
+
+#: src/reference/control-flow.md:20
+msgid ""
+"The statement form runs its effect. The same spelling is also an "
+"**expression**: wherever an expression goes — a `let` initializer, a call "
+"argument, an operand, an f-string hole, a `when` scrutinee — the construct "
+"branches and produces the taken arm's value:"
+msgstr ""
+
+#: src/reference/control-flow.md:25
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"if\");\n"
+"    let n = 7;\n"
+"    let label = if (n > 5) { \"big\" } else { \"small\" };\n"
+"    let odd = if (n % 2 == 0) { \"no\" } else { \"yes\" };\n"
+"    log.info(f\"{n}: {label}, odd={odd}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/control-flow.md:41
+msgid "The laws:"
+msgstr ""
+
+#: src/reference/control-flow.md:43
+msgid ""
+"**Parens are required** — `if (cond)`, never `if cond`. Braces are required "
+"too, and `else if` chains link arm by arm."
+msgstr ""
+
+#: src/reference/control-flow.md:45
+msgid ""
+"**Arms are blocks, and a block's tail is the arm's value** — the expression "
+"before the arm's `}`, written without `;`. A block with no tail produces "
+"`nil`."
+msgstr ""
+
+#: src/reference/control-flow.md:48
+msgid ""
+"**Producing arms agree on one type** — that shared type is the `if`'s; a "
+"disagreement is a compile error naming both types. An arm that diverges "
+"(`return`, `break`, `continue`) contributes no type: the completing arm's "
+"value is the `if`'s."
+msgstr ""
+
+#: src/reference/control-flow.md:52
+msgid ""
+"**No `else` types the whole `if` `nil`** — the implicit else arm is the "
+"`nil` value, so a value-producing then-arm without an `else` is an agreement "
+"error. The no-`else` form is the statement shape: it runs the arm for effect."
+msgstr ""
+
+#: src/reference/control-flow.md:56
+msgid ""
+"**The `;` decides.** A trailing `;` after the statement form is the discard "
+"form — whatever the arms produced is nobody's (the assignments are the "
+"effect). Without the `;`, a trailing `if` statement with an `else` reads as "
+"the enclosing block's tail — the value the block produces."
+msgstr ""
+
+#: src/reference/control-flow.md:62
+msgid "Block tails"
+msgstr ""
+
+#: src/reference/control-flow.md:64
+msgid ""
+"Every block has a value, and one rule decides it: an expression closed by "
+"`;` is a statement (its value is discarded); an expression followed "
+"immediately by the block's `}` is the block's **tail** — the value the block "
+"produces. (`let` always demands its `;`.) The tail reads the block's own "
+"bindings, and its value moves out before the scope pops. A fn body's tail is "
+"an **implicit return**: the [definite-return "
+"law](functions-closures-generics.md#functions) counts it, so a function with "
+"a result arrow can answer without spelling `return` — the same law covers "
+"lambda block bodies:"
+msgstr ""
+
+#: src/reference/control-flow.md:74
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"fn classify(n: i32) -> str {\n"
+"    let band = if (n > 90) { \"hi\" } else if (n > 50) { \"mid\" } else { "
+"\"lo\" };\n"
+"    band\n"
+"}\n"
+"\n"
+"fn fact(n: i32) -> i32 {\n"
+"    if (n <= 1) {\n"
+"        1\n"
+"    } else {\n"
+"        n * fact(n - 1)\n"
+"    }\n"
+"}\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"tails\");\n"
+"    log.info(f\"{classify(72)} {fact(5)}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/control-flow.md:100
+msgid ""
+"The trailing `if` in `fact` is the statement form in tail position: its "
+"producing arms agree on `i32` and the merged value is the body's tail. Loop "
+"bodies produce values the same way, discarded; `when` arm blocks are value "
+"blocks too (see [the laws](#the-laws))."
+msgstr ""
+
+#: src/reference/control-flow.md:105
 msgid "`for` — two forms"
 msgstr ""
 
-#: src/reference/control-flow.md:19
+#: src/reference/control-flow.md:107
 msgid ""
 "Iterating form — vecs, fixed arrays, slices, strings (one-codepoint `str`s "
 "per step), `bytes` (`u8` per step), and any type carrying an "
@@ -11994,19 +12216,19 @@ msgid ""
 "form:"
 msgstr ""
 
-#: src/reference/control-flow.md:32
+#: src/reference/control-flow.md:120
 msgid ""
 "Indexed form — the induction variable is **loop-owned**: the update clause "
 "and the body may assign it without `mut`; it is not a normal binding:"
 msgstr ""
 
-#: src/reference/control-flow.md:42
+#: src/reference/control-flow.md:130
 msgid ""
 "`when (x) { pattern -> body, ... }` is an **expression**: the first matching "
 "arm's body produces its value. No fallthrough; exactly one arm runs."
 msgstr ""
 
-#: src/reference/control-flow.md:46
+#: src/reference/control-flow.md:134
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12026,62 +12248,62 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:69
+#: src/reference/control-flow.md:157
 msgid "Pattern"
 msgstr ""
 
-#: src/reference/control-flow.md:71
+#: src/reference/control-flow.md:159
 msgid "enum member (path)"
 msgstr ""
 
-#: src/reference/control-flow.md:71
+#: src/reference/control-flow.md:159
 msgid "`Light::Green`"
 msgstr ""
 
-#: src/reference/control-flow.md:72
+#: src/reference/control-flow.md:160
 msgid "literal"
 msgstr ""
 
-#: src/reference/control-flow.md:72
+#: src/reference/control-flow.md:160
 msgid "`0`, `3.5`, `true`, `\"text\"`"
 msgstr ""
 
-#: src/reference/control-flow.md:73
+#: src/reference/control-flow.md:161
 msgid "negative literal"
 msgstr ""
 
-#: src/reference/control-flow.md:73
+#: src/reference/control-flow.md:161
 msgid "`-1`"
 msgstr ""
 
-#: src/reference/control-flow.md:74
+#: src/reference/control-flow.md:162
 msgid "alternatives (comma list)"
 msgstr ""
 
-#: src/reference/control-flow.md:74
+#: src/reference/control-flow.md:162
 msgid "`1, 2, 3`"
 msgstr ""
 
-#: src/reference/control-flow.md:75
+#: src/reference/control-flow.md:163
 msgid "wildcard `else` / `_`"
 msgstr ""
 
-#: src/reference/control-flow.md:75
+#: src/reference/control-flow.md:163
 msgid "`else -> ..`"
 msgstr ""
 
-#: src/reference/control-flow.md:77
+#: src/reference/control-flow.md:165
 msgid ""
 "Ranges, destructuring, binding patterns, and guards (`x if cond`) do not "
 "exist; patterns are enum members, literals, alternatives, and the wildcards "
 "only."
 msgstr ""
 
-#: src/reference/control-flow.md:81 src/reference/opaque.md:45
+#: src/reference/control-flow.md:169 src/reference/opaque.md:45
 msgid "The laws"
 msgstr ""
 
-#: src/reference/control-flow.md:83
+#: src/reference/control-flow.md:171
 msgid ""
 "**Exhaustiveness is always enforced.** An enum-typed scrutinee must cover "
 "every member (then `else` is optional) or add `else` — a partial `when` is a "
@@ -12089,30 +12311,32 @@ msgid ""
 "`else` is **mandatory**."
 msgstr ""
 
-#: src/reference/control-flow.md:87
+#: src/reference/control-flow.md:175
 msgid ""
-"**All arms must agree on one type** — that is the `when`'s type. Used as a "
-"statement, that type must be `nil` (arm bodies that are evaluated for effect "
-"are written as block arms)."
+"**All arms must agree on one type** — that is the `when`'s type. Block arms "
+"are value blocks: a block arm's tail is the arm's value, and expression and "
+"block arms mix freely under the same law. Used as a statement, the `when`'s "
+"value is discarded — the arms still agree (the check is the same one), and "
+"block arms written for effect stay tail-less."
 msgstr ""
 
-#: src/reference/control-flow.md:90
+#: src/reference/control-flow.md:181
 msgid ""
 "Duplicate patterns, and arms made unreachable by earlier ones, are compile "
 "errors."
 msgstr ""
 
-#: src/reference/control-flow.md:92
+#: src/reference/control-flow.md:183
 msgid ""
 "Arms use `->`. Expression arms are comma-separated; block arms may omit the "
 "trailing comma (the corpus writes it)."
 msgstr ""
 
-#: src/reference/control-flow.md:94
+#: src/reference/control-flow.md:185
 msgid "`when` literal patterns match compile-time values, never runtime `==`."
 msgstr ""
 
-#: src/reference/control-flow.md:96
+#: src/reference/control-flow.md:187
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12134,11 +12358,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:119
+#: src/reference/control-flow.md:210
 msgid "A `when` is also the idiomatic nullable guard, together with `!= nil`:"
 msgstr ""
 
-#: src/reference/control-flow.md:121
+#: src/reference/control-flow.md:212
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13906,42 +14130,45 @@ msgid ""
 "A function WITH a result arrow must return on every path: a body that can "
 "fall off the end diagnoses — `missing return: 'f' is '-> str' but a path "
 "reaches the end of the body`, naming the function and its arrow — instead of "
-"handing the caller a never-written value. The analysis sees `return`, "
-"`break`/`continue`, an `if`/`else` whose arms both return, an exhaustive "
-"`when` whose arms all return, and a `while (true)` with no `break` bound to "
-"it (the scan-loop shape); dead statements after a `return` are still just "
-"dead code. The same law covers the closure block form."
+"handing the caller a never-written value. Ending the body in a **tail** — "
+"the last expression, no `;` (the block value law) — is the implicit return "
+"and counts: the analysis sees `return`, a value-producing body tail, "
+"`break`/`continue`, an `if`/`else` whose arms both return or produce the "
+"tail, an exhaustive `when` whose arms all return, and a `while (true)` with "
+"no `break` bound to it (the scan-loop shape); dead statements after a "
+"`return` are still just dead code. The same law covers the closure block "
+"form."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:40
+#: src/reference/functions-closures-generics.md:42
 msgid ""
 "Methods are functions in impl blocks: the first parameter spelled `self` (or "
 "`mut self`) makes it an instance method; absence of `self` makes it a class "
 "method (see [Classes and constructors](classes.md))."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:44
+#: src/reference/functions-closures-generics.md:46
 msgid ""
 "`entry fn` publishes a function to the embedder (see [Modules and "
 "visibility](modules-and-visibility.md)); `async fn` declares a suspending "
 "function (see [Async and await](async.md))."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:47
+#: src/reference/functions-closures-generics.md:49
 msgid ""
 "Function types are first-class: `fn apply(f: fn(i32) -> i32, v: i32) -> i32`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:49
+#: src/reference/functions-closures-generics.md:51
 msgid "Closures"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:51
+#: src/reference/functions-closures-generics.md:53
 msgid ""
 "The closure spelling is an **anonymous fn** — block bodies, no arrow form:"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:54
+#: src/reference/functions-closures-generics.md:56
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13958,13 +14185,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:72
+#: src/reference/functions-closures-generics.md:74
 msgid ""
 "An anonymous fn inhabits `fn(P..) -> R` directly — it is a value of the "
 "function type, copyable like a primitive."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:74
+#: src/reference/functions-closures-generics.md:76
 msgid ""
 "**The capture law**: primitives, `nil`, and `fn` values copy — a captured "
 "scalar is the closure's own slot, and reassigning it inside the closure "
@@ -13978,7 +14205,7 @@ msgid ""
 "closure is itself a shared cell value."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:88
+#: src/reference/functions-closures-generics.md:90
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -13998,44 +14225,44 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:108
+#: src/reference/functions-closures-generics.md:110
 msgid ""
 "**Generics monomorphize at compile time**: each instantiation emits its own "
 "typed code. `T` infers from the arguments; explicit type arguments may be "
 "spelled at call sites, including method calls: `self.st.get<T>(self)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:112
+#: src/reference/functions-closures-generics.md:114
 msgid ""
 "Interface-typed arguments are ordinary arguments: a `T` instantiated at an "
 "interface type becomes a handle slot, satisfying no bound."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:114
+#: src/reference/functions-closures-generics.md:116
 msgid ""
 "**Generic parameters are unconstrained by default** — you cannot call "
 "methods on a bare `T`. Pass values in, take an `I`\\-typed parameter, or "
 "spell the bound (`T requires I`)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:117
+#: src/reference/functions-closures-generics.md:119
 msgid ""
 "There are no const-generic user parameters. The builtin surfaces fix their "
 "shapes (`[T]` is one type; lengths are runtime values)."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:120
+#: src/reference/functions-closures-generics.md:122
 msgid "Inline bounds — `requires`"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:127
+#: src/reference/functions-closures-generics.md:129
 msgid ""
 "`fn f<T requires A | B>(x: T)` — an **admission-only** bound on fn, method, "
 "and class generic parameters (struct and interface generic parameters reject "
 "`requires`):"
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:131
+#: src/reference/functions-closures-generics.md:133
 msgid ""
 "The bound gates which instantiations compile: enforcement is at every "
 "substitution-completing site (free-fn calls, method instantiation, "
@@ -14043,7 +14270,7 @@ msgid ""
 "spelled out — \"`bool` does not satisfy `T` requires `i32 | str`\"."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:136
+#: src/reference/functions-closures-generics.md:138
 msgid ""
 "Members may be concrete type names (satisfied by exact type identity), "
 "aliases (expanded first — see [Type aliases and union "
@@ -14053,21 +14280,21 @@ msgid ""
 "interface bound stands alone."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:143
+#: src/reference/functions-closures-generics.md:145
 msgid ""
 "**Interface-typed values satisfy nothing**: a `T` instantiated at an "
 "interface type fails any bound — only a concrete type with the members "
 "admits."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:146
+#: src/reference/functions-closures-generics.md:148
 msgid ""
 "A non-union bound **proves the widening**: the body may widen a `T`\\-typed "
 "value into a bound-interface-typed slot (`let w: Labeled = x;`), but gains "
 "no method calls on bare `T`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:149
+#: src/reference/functions-closures-generics.md:151
 msgid ""
 "A **union bound** carries the whole-bound contract: a method call on a "
 "union-bounded value requires **every** member to provide the method — even a "
@@ -14075,13 +14302,13 @@ msgid ""
 "instantiation still binds the concrete member's own method."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:154
+#: src/reference/functions-closures-generics.md:156
 msgid ""
 "Bounds may reference the item's other generics: `fn hold<T, U requires "
 "[T]>(x: U)`."
 msgstr ""
 
-#: src/reference/functions-closures-generics.md:156
+#: src/reference/functions-closures-generics.md:158
 msgid ""
 "Generic **classes** take bounds on their parameters — the bound records on "
 "the class descriptor and admits every instantiation: `pub class HashMap<K "
@@ -19459,7 +19686,7 @@ msgid ""
 "then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:130 src/reference/frontend.md:159
+#: src/reference/host-fns.md:130 src/reference/frontend.md:160
 #: src/reference/cli.md:316
 msgid "Declaration mode"
 msgstr ""
@@ -21845,28 +22072,38 @@ msgid "peek 1 after `->` (`{` ⇒ block arm, else expression arm)"
 msgstr ""
 
 #: src/reference/frontend.md:131
-msgid "postfix loop step"
+msgid "`if` atom vs statement"
 msgstr ""
 
 #: src/reference/frontend.md:131
+msgid ""
+"peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` "
+"is claimed by the statement grammar first)"
+msgstr ""
+
+#: src/reference/frontend.md:132
+msgid "postfix loop step"
+msgstr ""
+
+#: src/reference/frontend.md:132
 msgid "peek 1 (`.` `(` `[` `?`)"
 msgstr ""
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:133
 msgid "assignment target"
 msgstr ""
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:133
 msgid "no lookahead — parse, then validate"
 msgstr ""
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:135
 msgid ""
 "Two decisions need more than 4 tokens and use **scans** — read-only, "
 "commit-once, never a guess:"
 msgstr ""
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:138
 msgid ""
 "**Lambda vs parenthesized expression.** Scan to the matching `)`; it is a "
 "lambda iff the tokens form a valid parameter list and `=>` follows (an "
@@ -21875,7 +22112,7 @@ msgid ""
 "note: _if you meant a lambda, add `=>`_."
 msgstr ""
 
-#: src/reference/frontend.md:142
+#: src/reference/frontend.md:143
 msgid ""
 "**Generic call vs `<` comparison** (`Vec<f32>(n)` vs `a < b > (c)`). Scan "
 "from the `<` tracking angle depth; a `>>`/`<<` consumed where a "
@@ -21885,25 +22122,25 @@ msgid ""
 "write `(a < b) > (c)`."
 msgstr ""
 
-#: src/reference/frontend.md:149
+#: src/reference/frontend.md:150
 msgid ""
 "Scans never mutate parser state. Peeking at arbitrary distance is allowed; "
 "checkpoint/rollback is not — the API does not exist, so the monotone-cursor "
 "invariant (debug-asserted) cannot be violated, even during error recovery."
 msgstr ""
 
-#: src/reference/frontend.md:153
+#: src/reference/frontend.md:154
 msgid "Recovery"
 msgstr ""
 
-#: src/reference/frontend.md:155
+#: src/reference/frontend.md:156
 msgid ""
 "Within a file the parser resynchronizes at `;`, `}`, or the token after a "
 "balanced block and keeps parsing — a file yields many diagnostics, not one. "
 "Resync only ever skips forward."
 msgstr ""
 
-#: src/reference/frontend.md:161
+#: src/reference/frontend.md:162
 msgid ""
 "The mode is chosen by file extension: `Mode::Impl` for `.rut`, `Mode::Decl` "
 "for `.d.rut`. Both share one grammar; declaration mode adds the surface "
@@ -21915,7 +22152,7 @@ msgid ""
 "bind at load time live in [Host fns and declaration files](host-fns.md)."
 msgstr ""
 
-#: src/reference/frontend.md:172
+#: src/reference/frontend.md:173
 msgid ""
 "Declarations-only module scope is enforced by the parser itself: a statement "
 "at module top level is a syntax error, not a semantic one. The grammar "
@@ -21923,11 +22160,11 @@ msgid ""
 "[Modules and visibility](modules-and-visibility.md)."
 msgstr ""
 
-#: src/reference/frontend.md:177
+#: src/reference/frontend.md:178
 msgid "The AST"
 msgstr ""
 
-#: src/reference/frontend.md:179
+#: src/reference/frontend.md:180
 msgid ""
 "Nodes are plain records in one arena; children are `NodeId`s into it. Spans "
 "sit on every node; there are no `String` keys — names are `IdentId`s into an "
@@ -21939,68 +22176,76 @@ msgid ""
 "equality, never by text."
 msgstr ""
 
-#: src/reference/frontend.md:193
+#: src/reference/frontend.md:194
 msgid "// items\n"
 msgstr ""
 
-#: src/reference/frontend.md:197
+#: src/reference/frontend.md:198
 msgid "// fields only\n"
 msgstr ""
 
-#: src/reference/frontend.md:198
+#: src/reference/frontend.md:199
 msgid ""
 "// fields only —\n"
 "                                                           // methods live "
 "in impls\n"
 msgstr ""
 
-#: src/reference/frontend.md:200
+#: src/reference/frontend.md:201
 msgid "// signatures only\n"
 msgstr ""
 
-#: src/reference/frontend.md:201
+#: src/reference/frontend.md:202
 msgid ""
 "// inherent only —\n"
 "              // no trait_ref: `impl I for T` does not parse\n"
 msgstr ""
 
-#: src/reference/frontend.md:204
+#: src/reference/frontend.md:205
 msgid ""
 "// .d.rut only\n"
 "    // statements\n"
 msgstr ""
 
-#: src/reference/frontend.md:207
+#: src/reference/frontend.md:208
 msgid "// expressions\n"
 msgstr ""
 
 #: src/reference/frontend.md:214
+msgid "// the block value; tail: Option\n"
+msgstr ""
+
+#: src/reference/frontend.md:216
+msgid "// the if ATOM (statement-if above)\n"
+msgstr ""
+
+#: src/reference/frontend.md:217
 msgid "// postfix ?\n"
 msgstr ""
 
-#: src/reference/frontend.md:215
+#: src/reference/frontend.md:218
 msgid "// holes are NodeIds\n"
 msgstr ""
 
-#: src/reference/frontend.md:220
+#: src/reference/frontend.md:223
 msgid ""
 "Stable `NodeId`s are the rest of the pipeline's currency: the checker keys "
 "side tables by node id, diagnostics reach spans through them, and the LSP, "
 "formatter, and dumper hold copyable references with no reparenting."
 msgstr ""
 
-#: src/reference/frontend.md:224
+#: src/reference/frontend.md:227
 msgid ""
 "What the AST does **not** contain: no `new`, no `switch`/`case`, no `?.` or "
 "`??` — the lexer rejects those words before parsing. There are no paren "
 "nodes either: the parse's grouping _is_ the tree."
 msgstr ""
 
-#: src/reference/frontend.md:228
+#: src/reference/frontend.md:231
 msgid "Diagnostics"
 msgstr ""
 
-#: src/reference/frontend.md:235
+#: src/reference/frontend.md:238
 msgid ""
 "One renderer serves every frontend stage: a primary `error:` line, the "
 "rustc-style `--> file:line:col` arrow (1-based line and char column; the "
@@ -22015,24 +22260,24 @@ msgid ""
 "for `Circle { .. }` on a class."
 msgstr ""
 
-#: src/reference/frontend.md:247
+#: src/reference/frontend.md:250
 msgid ""
 "The compile stops before IR if any diagnostic exists — a module with "
 "diagnostics never produces bytecode. See [Diagnostics, traces, and "
 "symbolication](diagnostics.md) for the runtime half of the story."
 msgstr ""
 
-#: src/reference/frontend.md:252
+#: src/reference/frontend.md:255
 msgid "The formatter"
 msgstr ""
 
-#: src/reference/frontend.md:254
+#: src/reference/frontend.md:257
 msgid ""
 "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module "
 "from the AST:"
 msgstr ""
 
-#: src/reference/frontend.md:257
+#: src/reference/frontend.md:260
 msgid ""
 "**Comment gap-scan** — comments live in the byte gaps between token spans, "
 "so the formatter recovers every `//` and block comment with zero "
@@ -22040,7 +22285,7 @@ msgid ""
 "runs at the enclosing indent."
 msgstr ""
 
-#: src/reference/frontend.md:261
+#: src/reference/frontend.md:264
 msgid ""
 "**Parens and literals re-derived** — the printer re-parens only where flat "
 "precedence would invert the tree, re-spells floats shortest round-trip from "
@@ -22048,20 +22293,20 @@ msgid ""
 "set (`0xff` legitimately becomes `255`)."
 msgstr ""
 
-#: src/reference/frontend.md:265
+#: src/reference/frontend.md:268
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is "
 "idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full "
 "pipeline before and after formatting and log identical output."
 msgstr ""
 
-#: src/reference/frontend.md:268
+#: src/reference/frontend.md:271
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered "
 "diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr ""
 
-#: src/reference/frontend.md:270
+#: src/reference/frontend.md:273
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` "
 "block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default "
@@ -22069,11 +22314,11 @@ msgid ""
 "rut.jsonc](project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:275
+#: src/reference/frontend.md:278
 msgid "Testing"
 msgstr ""
 
-#: src/reference/frontend.md:277
+#: src/reference/frontend.md:280
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, "
 "`examples/**/*.d.rut`, and playground classic must parse with zero "
