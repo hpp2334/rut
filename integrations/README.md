@@ -28,8 +28,14 @@ What it provides (the LSP slice landed early; the
 - **completions** — member items through receiver inference; bare
   context = keywords + the std surface
 - **go-to-definition / go-to-type-definition** — locals, params, fields,
-  fns, types, and use-imported std names; across files through the use
-  graph (ambiguity = a candidate list, never a wrong silent jump)
+  fns, types, and use-imported names through the use graph, into dep
+  sources included: every segment of a use path is clickable — the pkg
+  segment opens the dep's root module, a middle segment its `pub mod`
+  edge, the leaf its declaration (a dep with both a `.d.rut` surface
+  and a `mod.rut` body answers from the body; cached url deps answer
+  into their `bundle:` origin — the VS Code extension is the face that
+  extracts them to real files). Ambiguity = a candidate list, never a
+  wrong silent jump
 - **references** — a declaration's uses, shadow-aware within the file,
   cross-file through the use graph; member and local targets stay
   in-file (locals can't escape, imports carry type/fn names)

@@ -8,8 +8,8 @@ signature help — powered by the language core running **as an
 in-process wasm module**. No server process, no per-platform binaries:
 one `rut-lsp.wasm` serves every platform. The extension also reads your
 project's `rut.jsonc`: path deps mount from anywhere on disk, pinned
-url deps fetch with their `sha256` verified, and the manifest gets
-schema-validated hovers.
+url deps fetch with their `sha256` verified and extract to editable
+files, and the manifest gets schema-validated hovers.
 
 ## Try it
 
@@ -83,8 +83,8 @@ manifests, JS only moves bytes) and walks its dependency rows:
   the CLI fills — the cache filename is the Rust-computed
   `sha256` of the url) is read before any network, and a hit is
   verified against the pin. On a miss the extension fetches
-  in-extension, hashes the bytes (`crypto.webcrypto`), and mounts them
-  only when the hash matches; the entry then lands in the cache
+  in-extension, hashes the bytes (`crypto.webcrypto`), and extracts
+  them only when the hash matches; the entry then lands in the cache
   atomically (tmp + rename). A poisoned entry evicts and re-fetches,
   like the CLI's healing loop.
 - **The pin is law at the mount door**: fetched or cached, bytes mount
@@ -101,6 +101,24 @@ manifests, JS only moves bytes) and walks its dependency rows:
   the module's members complete by visibility tier. The wasm parses
   every file (`rut_add_def_mod` answers the declared children) — JS
   only moves bytes. `**/mod.rut` watchers re-mount a moved tree.
+- **Ctrl+click walks the whole use path into the dep** — every
+  segment of `use A::B::…::Z` lands in real files: path deps in their
+  on-disk sources, pinned url deps in the tree their verified bytes
+  extract to, `<folder>/.rut/deps/<module>-<pin12>/`
+  (content-addressed — the same pin reuses its tree untouched, a
+  bumped pin writes a sibling the stale sweep prunes), indexed
+  through the same lane path deps use, over `file://` uris — no
+  virtual `bundle:` documents. The pkg segment opens the dep's root
+  module at the top (the extracted root `mod.rut`, or the `.d.rut`
+  surface when that is all there is), a middle segment lands on its
+  `pub mod` edge, the leaf on its declaration (the body file, when a
+  package ships both a `.d.rut` surface and a `mod.rut` body) —
+  `pouch` → the extracted root, `Vec` → the `pub class Vec` line;
+  `layout` → `pub mod layout;`, `Column` → the child file's struct.
+- **`.rut/` is scratch, not source**: the CLI's cache (`.rut/cache/`)
+  and the extension's extracted dep trees (`.rut/deps/`) both live
+  there — keep `.rut/` in your project's `.gitignore`; everything
+  under it is re-fetchable and re-extractable.
 - **Offline / failure** shows one info hint per dep naming the CLI
   alternative (`rut fetch` warms the cache) — never spam, never silent
   wrong results.
@@ -158,7 +176,10 @@ npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
                        # param hints, references (shadow-aware + the
                        # cross-file reverse edge), signature help
                        # (verbatim signature, active slot, mismatch -> no
-                       # help). Needs bin/rut-lsp.wasm (npm run
+                       # help), and the dep clicks — a url dep's
+                       # extracted-tree leaf + pkg head, a path dep's
+                       # `pub mod` middle segment + child-file leaf.
+                       # Needs bin/rut-lsp.wasm (npm run
                        # build:wasm); runs headless in plain node
 npm run test:host      # the Extension Host run (needs `code` on PATH and
                        # bin/rut-lsp.wasm built); SKIPS LOUDLY (exit 0) on
