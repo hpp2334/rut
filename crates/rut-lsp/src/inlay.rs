@@ -166,8 +166,12 @@ struct CallCx<'a> {
 
 impl CallCx<'_> {
     fn walk_block(&mut self, block: NodeHandle<BlockNode>) {
-        for s in self.ctx.ast.block(block) {
-            self.walk_stmt(*s);
+        for s in self.ctx.ast.block(block).to_vec() {
+            self.walk_stmt(s);
+        }
+        // the block's tail value is in the same scope
+        if let Some(t) = self.ctx.ast.block_tail(block) {
+            self.walk_expr(t);
         }
     }
 
@@ -231,9 +235,13 @@ impl CallCx<'_> {
                     self.walk_expr(a);
                 }
             }
-            ExprKind::Block { stmts } => {
-                for s in stmts.clone() {
+            ExprKind::Block { .. } => {
+                let b = NodeHandle::<BlockNode>::new(e.id());
+                for s in self.ctx.ast.block(b).to_vec() {
                     self.walk_stmt(s);
+                }
+                if let Some(t) = self.ctx.ast.block_tail(b) {
+                    self.walk_expr(t);
                 }
             }
             ExprKind::Lambda { body, .. } => self.walk_expr(*body),

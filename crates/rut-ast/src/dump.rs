@@ -433,8 +433,11 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
             }
         },
         Kind::Expr(k) => match k {
-            ExprKind::Block { stmts } => {
+            ExprKind::Block { stmts, tail } => {
                 fields.push(field("stmts", DumpVal::Nodes(stmts.iter().map(|&s| node_dump(a, s.id())).collect())));
+                if let Some(t) = tail {
+                    fields.push(field("tail", DumpVal::Node(Box::new(node_dump(a, t.id())))));
+                }
                 "Block"
             }
             ExprKind::AsyncBlock { body } => {

@@ -153,6 +153,10 @@ impl Cx<'_> {
         for s in self.ast.block(block).to_vec() {
             self.walk_stmt(s, span);
         }
+        // the block's tail value is in the same scope
+        if let Some(t) = self.ast.block_tail(block) {
+            self.walk_expr(t);
+        }
     }
 
     fn walk_stmt(&mut self, s: NodeHandle<AnyStmt>, block: Span) {
@@ -260,10 +264,14 @@ impl Cx<'_> {
 
     fn walk_expr(&mut self, e: NodeHandle<AnyExpr>) {
         match self.ast.expr(e) {
-            ExprKind::Block { stmts } => {
+            ExprKind::Block { .. } => {
                 let span = self.ast.span(e.id());
-                for s in stmts {
-                    self.walk_stmt(*s, span);
+                let b = NodeHandle::<BlockNode>::new(e.id());
+                for s in self.ast.block(b).to_vec() {
+                    self.walk_stmt(s, span);
+                }
+                if let Some(t) = self.ast.block_tail(b) {
+                    self.walk_expr(t);
                 }
             }
             ExprKind::Lambda { params, body, ret: _ } => {

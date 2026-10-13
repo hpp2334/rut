@@ -200,7 +200,15 @@ impl Ast {
     }
     pub fn block(&self, h: NodeHandle<BlockNode>) -> &[NodeHandle<AnyStmt>] {
         match self.expr(h.into()) {
-            ExprKind::Block { stmts } => stmts,
+            ExprKind::Block { stmts, .. } => stmts,
+            _ => unreachable!("block handle into a non-block node"),
+        }
+    }
+    /// the block's tail expression (the `}`-closed last statement) —
+    /// the implicit value Rust-style; `None` when the block ends nil
+    pub fn block_tail(&self, h: NodeHandle<BlockNode>) -> Option<NodeHandle<AnyExpr>> {
+        match self.expr(h.into()) {
+            ExprKind::Block { tail, .. } => *tail,
             _ => unreachable!("block handle into a non-block node"),
         }
     }
@@ -587,9 +595,13 @@ pub enum TypeKind {
 
 #[derive(Clone, Debug)]
 pub enum ExprKind {
-    /// block expression — fn bodies, loop bodies, block arms/lambda bodies;
-    /// its value is the last statement's (nil if none)
-    Block { stmts: Vec<NodeHandle<AnyStmt>> },
+    /// block expression — fn bodies, loop bodies, block arms/lambda bodies.
+    /// Rust-style tail value: the last statement WITHOUT `;` (an
+    /// expression statement closed by the block's `}`) is the block's
+    /// value; a trailing `if` statement with an `else` reads as the tail
+    /// too (statement-if in tail position). `None` ⇒ the block's value
+    /// is `nil`.
+    Block { stmts: Vec<NodeHandle<AnyStmt>>, tail: Option<NodeHandle<AnyExpr>> },
     Lit(Lit),
     /// dotted path, possibly with generic args on any segment:
     /// `primes`, `Color.Red`, `Vec.from`, `MyMap<K, V>.new`, `Self`

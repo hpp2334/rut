@@ -24,18 +24,247 @@ pub(crate) enum IterSource {
 impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- statements ----
 
+    /// The block's VALUE (Rust-style tail law): statements compile in
+    /// scope, then the tail — the explicit tail expression, else a
+    /// tail-position `if` statement — with the caller's `expected`
+    /// hint. The value lands in a fresh register (`last_reg`); the move
+    /// happens after the block's locals pop, so a tail that read a
+    /// binding of this block leaves with its own storage. `None`: the
+    /// block produces no value (no tail, or a tail-position `if` whose
+    /// arms all terminate — their `return`s ARE the answers).
+    pub(crate) fn compile_block_value(&mut self, h: impl Into<NodeId>, expected: Option<TypeId>) -> TcResult<Option<TypeId>> {
+        let id = h.into();
+        self.span = self.ctx.ast.span(id).lo;
+        let (stmts, tail) = match self.ctx.ast.kind(id) {
+            Kind::Expr(ExprKind::Block { stmts, tail }) => (stmts.clone(), *tail),
+            _ => return Ok(None),
+        };
+        // a trailing `if` STATEMENT with an else is tail position too
+        let if_tail = tail.is_none()
+            && stmts
+                .last()
+                .is_some_and(|s| matches!(self.ctx.ast.stmt(*s), StmtKind::If { els: Some(_), .. }));
+        let split = if if_tail { stmts.len() - 1 } else { stmts.len() };
+        let base = self.locals.len();
+        for s in &stmts[..split] {
+            self.compile_stmt(*s)?;
+        }
+        let produced = if let Some(e) = tail {
+            let t = self.compile_expr(e, expected)?;
+            Some((Some(t), self.last_reg))
+        } else if if_tail {
+            let last = stmts[stmts.len() - 1];
+            match self.ctx.ast.stmt(last) {
+                StmtKind::If { cond, then, els } => {
+                    let t = self.compile_if_value(last, *cond, *then, *els, expected)?;
+                    Some((t, self.last_reg))
+                }
+                _ => unreachable!("the tail-if shape was checked"),
+            }
+        } else {
+            None
+        };
+        self.locals.truncate(base);
+        match produced {
+            None | Some((None, _)) => Ok(None),
+            Some((Some(TY_NIL), _)) => Ok(Some(TY_NIL)),
+            Some((Some(t), src)) => {
+                // the value moves to a fresh register so the "value in
+                // last_reg" convention survives the scope pop (the tail
+                // may have read a binding whose slot this block owns)
+                let out = self.new_reg(t);
+                self.mov_slot(out, src, t, self.span);
+                Ok(Some(t))
+            }
+        }
+    }
+
+    /// The tail-position `if` STATEMENT as the block's value — the
+    /// statement-if with block tails reads as a value when its arms
+    /// produce one (the `fact` shape; the if ATOM in expression
+    /// position is phase 2). compile_when's arm shape: producing arms
+    /// agree on the type and spill into the shared out-register before
+    /// their jump; a TERMINATING arm contributes no type (its `return`
+    /// is the answer — the `!` coercion), so `if (c) { return a; }
+    /// else { return b; }` produces nothing and terminates the body.
+    /// Without `else` the plain statement form answers and the block
+    /// stays valueless.
+    fn compile_if_value(
+        &mut self,
+        node: NodeHandle<AnyStmt>,
+        cond: NodeHandle<AnyExpr>,
+        then: NodeHandle<BlockNode>,
+        els: Option<ElseBranch>,
+        expected: Option<TypeId>,
+    ) -> TcResult<Option<TypeId>> {
+        let Some(els) = els else {
+            // a value needs both arms: the plain statement form answers
+            self.compile_stmt(node)?;
+            return Ok(None);
+        };
+        let sp = self.ctx.ast.span(node.id());
+        // definite-return: the if terminates iff BOTH arms do (the
+        // statement form's law, per-arm snapshot/clear)
+        let saved = self.terminated;
+        self.terminated = false;
+        self.compile_expr(cond, Some(TY_BOOL))?;
+        let cond_reg = self.last_reg;
+        let l_then = self.new_label();
+        let l_else = self.new_label();
+        let l_end = self.new_label();
+        self.br(cond_reg, l_then, l_else);
+        self.bind(l_then);
+        self.terminated = false;
+        let t1 = self.compile_block_value(then, expected)?;
+        let r1 = self.last_reg;
+        let then_term = self.terminated;
+        self.terminated = false;
+        // spill the then-value into the shared out slot before the
+        // jump (only a COMPLETING arm leaves a value to merge)
+        let out = match t1 {
+            Some(t) if t != TY_NIL => {
+                let o = self.new_reg(t);
+                self.mov_slot(o, r1, t, sp.lo);
+                Some(o)
+            }
+            _ => None,
+        };
+        self.jmp(l_end);
+        self.bind(l_else);
+        let (t2, r2) = match els {
+            ElseBranch::Block(b) => (self.compile_block_value(b, expected)?, self.last_reg),
+            // an else-if chain: the nested if STATEMENT is the value
+            ElseBranch::If(h) => match self.ctx.ast.stmt(h.into()).clone() {
+                StmtKind::If { cond, then, els } => {
+                    let t = self.compile_if_value(h.into(), cond, then, els, expected)?;
+                    (t, self.last_reg)
+                }
+                _ => unreachable!("ElseBranch::If is an if statement"),
+            },
+        };
+        let else_term = self.terminated;
+        self.terminated = saved || (then_term && else_term);
+        // the merged value: producing arms agree on the type (nil arms
+        // produce the nil value); a terminating arm contributes nothing
+        let mut value: Option<TypeId> = None;
+        match (t1, t2) {
+            (Some(a), Some(b)) => {
+                if a != b {
+                    let sp = match els {
+                        ElseBranch::Block(b) => self.ctx.ast.span(b.id()),
+                        ElseBranch::If(h) => self.ctx.ast.span(h.id()),
+                    };
+                    self.ctx.err(sp, format!(
+                        "`if` arms must agree: `{}` vs `{}`",
+                        self.ctx.type_name(a),
+                        self.ctx.type_name(b)
+                    ));
+                }
+                if a != TY_NIL {
+                    if let Some(o) = out {
+                        if a == b {
+                            self.mov_slot(o, r2, b, sp.lo);
+                        }
+                        // the if's value is the shared out slot
+                        // (compile_when's "value in last_reg" convention)
+                        self.last_reg = o;
+                    }
+                }
+                value = Some(a);
+            }
+            (Some(a), None) => {
+                // the else arm diverges — the then-value is the merge's
+                // value (its spill already happened before the jump)
+                if a != TY_NIL {
+                    if let Some(o) = out {
+                        self.last_reg = o;
+                    }
+                }
+                value = Some(a);
+            }
+            (None, Some(b)) => {
+                // the then arm diverges — the else-value is the merge's
+                if b != TY_NIL {
+                    let o = self.new_reg(b);
+                    self.mov_slot(o, r2, b, sp.lo);
+                    self.last_reg = o;
+                }
+                value = Some(b);
+            }
+            (None, None) => {}
+        }
+        self.bind(l_end);
+        Ok(value)
+    }
+
+    /// The nil-context wrapper: statements in scope, an explicit tail
+    /// computes and DISCARDS (statement position — the tail's own
+    /// errors still diagnose). A tail-position `if` statement compiles
+    /// as the plain statement form here (its value, if any, is nobody's).
     pub(crate) fn compile_block(&mut self, h: impl Into<NodeId>) -> TcResult<()> {
-        let stmts = match self.ctx.ast.kind(h.into()) {
-            Kind::Expr(ExprKind::Block { stmts }) => stmts,
+        let (stmts, tail) = match self.ctx.ast.kind(h.into()) {
+            Kind::Expr(ExprKind::Block { stmts, tail }) => (stmts.clone(), *tail),
             _ => return Ok(()),
         };
-        let stmts = stmts.clone();
         let base = self.locals.len();
-        for s in stmts {
-            self.compile_stmt(s)?;
+        for s in &stmts {
+            self.compile_stmt(*s)?;
+        }
+        if let Some(e) = tail {
+            self.compile_expr(e, None)?;
         }
         self.locals.truncate(base);
         Ok(())
+    }
+
+    /// The fn-body (or lambda-body) tail as the IMPLICIT RETURN: the
+    /// body's tail value (`compile_block_value`'s `Some(t)`, sitting in
+    /// `last_reg`) is checked against the frame's return type with the
+    /// return statement's own widening law, then emitted as the frame's
+    /// Ret. A `nil` tail needs no op — the frame's fallback
+    /// `Ret { val: None }` IS the implicit nil return. Sets
+    /// `terminated`: the tail counts as the return for the
+    /// definite-return law. (`None` tails — no tail, or a tail-position
+    /// `if` whose arms all `return` — never reach here; their
+    /// `terminated` verdict rides the compile itself.)
+    pub(crate) fn emit_body_tail(&mut self, body: NodeId, tail_ty: TypeId, ret_ty: TypeId) {
+        // the tail's spelling (the widening law's origin probe and the
+        // diagnostic anchor): the explicit tail expr, else the
+        // tail-position `if` statement
+        let (value, sp_lo) = match self.ctx.ast.kind(body) {
+            Kind::Expr(ExprKind::Block { tail, stmts, .. }) => match tail {
+                Some(e) => (Some(*e), self.ctx.ast.span(e.id()).lo),
+                None => match stmts.last() {
+                    Some(s) => (None, self.ctx.ast.span(s.id()).lo),
+                    None => (None, self.ctx.ast.span(body).lo),
+                },
+            },
+            _ => return,
+        };
+        if tail_ty == TY_NIL {
+            if ret_ty != TY_NIL {
+                self.ctx.err(rut_lexer::span::Span::new(sp_lo, sp_lo), format!(
+                    "tail type mismatch: `{}` expected, `nil` is the body's tail",
+                    self.ctx.type_name(ret_ty)
+                ));
+            }
+            self.terminated = true;
+            return;
+        }
+        let ok = match value {
+            Some(v) => self.widens_val(v, tail_ty, ret_ty),
+            None => self.widens(tail_ty, ret_ty),
+        };
+        if !ok {
+            self.ctx.err(rut_lexer::span::Span::new(sp_lo, sp_lo), format!(
+                "tail type mismatch: `{}` expected, `{}` is the body's tail",
+                self.ctx.type_name(ret_ty),
+                self.ctx.type_name(tail_ty)
+            ));
+        }
+        self.widen_to_slot(tail_ty, ret_ty, sp_lo);
+        self.emit(Op::Ret { val: Some(self.last_reg) }, sp_lo);
+        self.terminated = true;
     }
 
     pub(crate) fn compile_stmt(&mut self, node: NodeHandle<AnyStmt>) -> TcResult<()> {
@@ -442,9 +671,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match self.ctx.ast.kind(node) {
             Kind::Stmt(StmtKind::Break) => depth == 0,
             // a block IS an expression kind here: fn/loop/if bodies are
-            // blocks, so the statement walk resumes through them
-            Kind::Expr(ExprKind::Block { stmts }) => {
+            // blocks, so the statement walk resumes through them (the
+            // tail rides — a `break` under it binds the same way)
+            Kind::Expr(ExprKind::Block { stmts, tail }) => {
                 stmts.iter().any(|s| self.binds_break(s.id(), depth))
+                    || tail.is_some_and(|t| self.binds_break_in_expr(t.id(), depth))
             }
             // loops deepen: their breaks bind to them
             Kind::Stmt(StmtKind::While { body, .. })
@@ -475,8 +706,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// own fn frame and stops the walk.
     fn binds_break_in_expr(&self, node: NodeId, depth: u32) -> bool {
         match self.ctx.ast.kind(node) {
-            Kind::Expr(ExprKind::Block { stmts }) => {
+            Kind::Expr(ExprKind::Block { stmts, tail }) => {
                 stmts.iter().any(|s| self.binds_break(s.id(), depth))
+                    || tail.is_some_and(|t| self.binds_break_in_expr(t.id(), depth))
             }
             Kind::Expr(ExprKind::WhenExpr { arms, .. }) => arms
                 .iter()
@@ -890,15 +1122,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let st = self.compile_expr(scrut, None)?;
         let scrut_reg = self.last_reg;
-        // arm type unification (statement-when: nil)
+        // arm type unification (statement-when: nil). The hint scans
+        // for the first arm that SPELLS a value (a literal, a block
+        // tail): an unhintable first arm (a call, a path) no longer
+        // demotes the whole when to nil.
         let result_ty = if let Some(e) = expected {
             e
         } else {
-            // first expression-arm's type
             let mut t = TY_NIL;
             for a in arms {
-                if let ArmKind::WhenArm { body, .. } = self.ctx.ast.arm(*a) {
-                    t = self.expr_type_hint(*body);
+                t = match self.ctx.ast.arm(*a) {
+                    ArmKind::WhenArm { body, .. } => self.expr_type_hint(*body),
+                };
+                if t != TY_NIL {
                     break;
                 }
             }
@@ -937,16 +1173,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // per-arm snapshot/clear: the body's verdict is its own
             let arm_saved = self.terminated;
             self.terminated = false;
-            // nil arms may be statement blocks (`-> { a(); b(); }`)
-            // — blocks aren't value expressions in this
-            // build, so compile them as scoped statement blocks
-            let body_is_block = matches!(self.ctx.ast.expr(*body), ExprKind::Block { .. });
-            let bt = if body_is_block && result_ty == TY_NIL {
-                self.compile_block(*body)?;
-                TY_NIL
-            } else {
-                self.compile_expr(*body, if result_ty != TY_NIL { Some(result_ty) } else { None })?
-            };
+            // arms compile uniformly through the expression funnel —
+            // block arms are value blocks now (compile_expr's Block arm
+            // → compile_block_value); a nil-context block still compiles
+            // as statements
+            let bt = self.compile_expr(*body, if result_ty != TY_NIL { Some(result_ty) } else { None })?;
             all_terminate &= self.terminated;
             self.terminated = arm_saved;
             if result_ty != TY_NIL {
@@ -995,7 +1226,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F32),
             ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => TY_STR,
             ExprKind::Lit(Lit::Bool(_)) => TY_BOOL,
-            ExprKind::Block { .. } => TY_NIL,
+            // a block hints at its tail (the block value law)
+            ExprKind::Block { tail, .. } => tail.map_or(TY_NIL, |t| self.expr_type_hint(t)),
             ExprKind::Struct { ty, .. } => self.resolve_type_now(*ty),
             _ => TY_NIL,
         }

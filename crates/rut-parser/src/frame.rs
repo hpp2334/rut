@@ -29,6 +29,10 @@ pub(crate) enum Done {
     Stmt(NodeHandle<AnyStmt>),
     If(NodeHandle<IfNode>),
     Expr(NodeHandle<AnyExpr>),
+    /// a block's tail expression — the `}`-closed last statement
+    /// (no `;`): handed to the enclosing `BlockFrame`, which records it
+    /// as the block's implicit value
+    TailExpr(NodeHandle<AnyExpr>),
     Block(NodeHandle<BlockNode>),
     Ty(NodeHandle<AnyTy>),
     Pat(NodeHandle<AnyPat>),

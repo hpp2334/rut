@@ -313,7 +313,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let body = fd.body;
         let stmts = match self.ctx.ast.kind(body.id()) {
-            Kind::Expr(ExprKind::Block { stmts }) => stmts.clone(),
+            Kind::Expr(ExprKind::Block { stmts, .. }) => stmts.clone(),
             _ => return false,
         };
         if stmts.len() > MAX_STMTS {
@@ -347,7 +347,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let l_end = self.new_label();
         self.inline_ret = Some((res, l_end));
         self.inline_stack.push((name, name));
-        let ok = self.compile_block(body.id()).is_ok();
+        // the spliced body's TAIL answers too (the implicit-return law
+        // the full compile applies): its value moves into the inline
+        // result slot — `return`s wrote it directly during the splice.
+        // A nil tail (or a tail-if whose arms all return) answers
+        // through the fallback: nothing to move.
+        let tail_res = self.compile_block_value(body.id(), Some(ret_ty));
+        if let Ok(Some(t)) = &tail_res {
+            if *t != TY_NIL {
+                self.mov_slot(res, self.last_reg, *t, sp.lo);
+            }
+        }
         self.inline_stack.pop();
         self.bind(l_end);
         self.locals.truncate(base);
@@ -360,7 +370,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.union_bounds = saved_ub;
         self.union_syms = saved_us;
         let _ = sp;
-        if !ok {
+        if tail_res.is_err() {
             return false;
         }
         self.last_reg = res;

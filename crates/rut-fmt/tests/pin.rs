@@ -205,6 +205,52 @@ fn decl_mode_formats_bodiless_methods() {
     );
 }
 
+// ---- block tails (the `}`-closed last statement: no `;`) ----
+
+#[test]
+fn fn_body_tail_prints_without_semicolon() {
+    assert_eq!(fmt("fn f() -> i32 { 5 }"), "fn f() -> i32 {\n    5\n}\n");
+}
+
+#[test]
+fn tail_after_statements_round_trips() {
+    let src = "fn f() -> i32 {\n    let a = 1;\n    a + a\n}\n";
+    assert_eq!(fmt(src), src);
+}
+
+#[test]
+fn tail_comments_ride_the_tail_element() {
+    // a leading run drains own-line before the tail; a trailing run
+    // rides its line — the tail has the statement hooks, minus the `;`
+    let src = "fn f() -> i32 {\n    // leading\n    5 // trail\n}\n";
+    assert_eq!(fmt(src), src);
+}
+
+#[test]
+fn lambda_block_tail_prints_inline() {
+    assert_eq!(
+        fmt("fn f() -> i32 { let g: fn() -> i32 = fn () -> i32 { 4 }; g }"),
+        "fn f() -> i32 {\n    let g: fn() -> i32 = fn () -> i32 { 4 };\n    g\n}\n"
+    );
+}
+
+#[test]
+fn when_arm_block_tails_print_inline() {
+    // the arm blocks' tails stay flat (no `;` inside the arm braces)
+    assert_eq!(
+        fmt("fn f(x: i32) -> i32 { let w = when (x) { 0 -> { 1 }, else -> { 2 } }; w }"),
+        "fn f(x: i32) -> i32 {\n    let w =\n        when (x) {\n            0 -> { 1 },\n            else -> { 2 },\n        };\n    w\n}\n"
+    );
+}
+
+#[test]
+fn statement_if_with_tail_arms_prints_multiline() {
+    assert_eq!(
+        fmt("fn fact(n: i32) -> i32 { if (n <= 1) { 1 } else { n * fact(n - 1) } }"),
+        "fn fact(n: i32) -> i32 {\n    if (n <= 1) {\n        1\n    } else {\n        n * fact(n - 1)\n    }\n}\n"
+    );
+}
+
 // ---- refusal ----
 
 #[test]

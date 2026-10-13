@@ -331,9 +331,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::Conv { dst, src, from: from_prim, to }, sp.lo);
                 Ok(want)
             }
-            _ => {
-                self.ctx.err(sp, "unsupported expression in this build");
-                Err(())
+            ExprKind::Block { .. } => {
+                // the block as a VALUE expression (when arm blocks today;
+                // any value-position block): the tail — or the
+                // tail-position `if` statement — is the block's value,
+                // under the caller's expected hint
+                let t = self.compile_block_value(node.id(), expected)?;
+                Ok(t.unwrap_or(TY_NIL))
             }
         }
     }

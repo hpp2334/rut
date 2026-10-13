@@ -1071,9 +1071,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 kids(body.id(), out, self);
             }
-            Kind::Expr(ExprKind::Block { stmts }) => {
+            Kind::Expr(ExprKind::Block { stmts, tail }) => {
                 for s in stmts {
                     kids(s.id(), out, self);
+                }
+                // the tail is in scope at its site — a closure inside it
+                // captures like any statement's
+                if let Some(t) = tail {
+                    kids(t.id(), out, self);
                 }
             }
             // the async block's body IS in scope at its site: the mint
@@ -1247,9 +1252,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 walk(body.id(), inside, self, assigned, captured);
             }
-            Kind::Expr(ExprKind::Block { stmts }) => {
+            Kind::Expr(ExprKind::Block { stmts, tail }) => {
                 for s in stmts {
                     walk(s.id(), inside, self, assigned, captured);
+                }
+                // the tail is walked with the SAME `inside` law: a
+                // closure site there captures exactly like a statement's
+                if let Some(t) = tail {
+                    walk(t.id(), inside, self, assigned, captured);
                 }
             }
             // the async block descends with the SAME `inside` law: its

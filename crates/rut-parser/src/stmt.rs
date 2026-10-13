@@ -21,18 +21,21 @@ pub(crate) struct BlockFrame {
     /// already expected the brace themselves)
     lax: bool,
     stmts: Vec<NodeHandle<AnyStmt>>,
+    /// the tail expression: the last statement closed by the block's
+    /// `}` (no `;`) — the block's implicit value, Rust-style
+    tail: Option<NodeHandle<AnyExpr>>,
     before: usize,
 }
 
 impl BlockFrame {
     pub(crate) fn strict(p: &Parser) -> Self {
-        BlockFrame { lo: p.span().lo, lax: false, stmts: Vec::new(), before: p.pos }
+        BlockFrame { lo: p.span().lo, lax: false, stmts: Vec::new(), tail: None, before: p.pos }
     }
     /// a lax block expects its own `{` but keeps the caller's `lo` for
     /// the span — v1's fn/method bodies were `parse_block_body(lo)` with
     /// the `fn` token's lo and the brace pre-expected by the caller
     pub(crate) fn lax(p: &Parser, lo: u32) -> Self {
-        BlockFrame { lo, lax: true, stmts: Vec::new(), before: p.pos }
+        BlockFrame { lo, lax: true, stmts: Vec::new(), tail: None, before: p.pos }
     }
     /// the degraded block of the NEST_MAX budget (C3): empty, so the
     /// enclosing item can still complete
@@ -54,7 +57,8 @@ impl BlockFrame {
     fn next_stmt(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::RBrace) || p.at_eof() {
             let stmts = std::mem::take(&mut self.stmts);
-            return Step::Pop(Done::Block(p.block(stmts, Span::new(self.lo, p.span().hi))));
+            let tail = self.tail.take();
+            return Step::Pop(Done::Block(p.block_with_tail(stmts, tail, Span::new(self.lo, p.span().hi))));
         }
         self.before = p.pos;
         Step::Push(Frame::Stmt(StmtFrame::new()))
@@ -64,6 +68,7 @@ impl BlockFrame {
         match d {
             Done::Stmt(s) => self.stmts.push(s),
             Done::If(h) => self.stmts.push(h.into()),
+            Done::TailExpr(e) => self.tail = Some(e),
             Done::Failed => {
                 // v1: no progress guarantees a bump, then resync
                 if p.pos == self.before {
@@ -313,6 +318,13 @@ impl StmtFrame {
                 )))
             }
             (StmtStage::Expr, Done::Expr(e)) => {
+                // the tail law: the `;` decides. A `}` IMMEDIATELY after
+                // the expression makes it the block's tail (no `;` — the
+                // implicit value, Rust-style); anything else still
+                // demands the `;` (the diagnostic is preserved).
+                if matches!(p.tok(), Tok::RBrace) {
+                    return Step::Pop(Done::TailExpr(e));
+                }
                 p.expect(Tok::Semi);
                 Step::Pop(Done::Stmt(p.stmt(StmtKind::ExprStmt(e), self.lo.to(p.span()))))
             }

@@ -1383,16 +1383,23 @@ impl<'a> P<'a> {
         }
     }
 
-    /// the multiline block: ` {` statements ` }` — the drains ride the
-    /// per-statement begin/end hooks; the close drains the runs pending
-    /// between the last statement and the bracket.
+    /// the multiline block: ` {` statements [` ` tail] ` }` — the
+    /// drains ride the per-statement begin/end hooks (the tail gets the
+    /// same element hooks, minus the `;`); the close drains the runs
+    /// pending between the last element and the bracket.
     fn block(&mut self, h: NodeHandle<BlockNode>) {
+        let stmts = self.a.block(h).to_vec();
+        let tail = self.a.block_tail(h);
         if self.in_flat > 0 {
             // the inline-flat shape (arm/lambda bodies inside flat contexts)
             self.text("{");
-            for s in self.a.block(h) {
+            for s in &stmts {
                 self.sp();
                 self.stmt_tokens(*s);
+            }
+            if let Some(t) = tail {
+                self.sp();
+                self.expr_tokens(t);
             }
             self.text(" }");
             return;
@@ -1401,9 +1408,16 @@ impl<'a> P<'a> {
         self.passed = self.passed.max(self.a.span(h.id()).lo);
         self.level += 1;
         self.nl();
-        let stmts = self.a.block(h).to_vec();
         for s in &stmts {
             self.stmt(*s);
+        }
+        if let Some(t) = tail {
+            // the block's value: printed like a statement (the comment
+            // drains ride it) but without the `;`
+            let span = self.a.span(t.id());
+            self.begin_el(span, Begin::Stmt);
+            self.expr_tokens(t);
+            self.end_el(span);
         }
         self.drain_close(self.content_end(self.a.span(h.id())));
         self.level -= 1;
@@ -1455,20 +1469,27 @@ impl<'a> P<'a> {
 
     /// the arm body: a Block tries inline-flat (`{ x(); }`, the corpus's
     /// short-arm shape) and falls back to the multiline block; anything
-    /// else prints as an expression.
+    /// else prints as an expression. A tail rides the flat attempt (no
+    /// `;`) — a block-holding tail forces the broken shape.
     fn arm_body(&mut self, body: NodeHandle<AnyExpr>, _arm_span: Span) {
         let Some(b) = self.a.narrow_block(body) else {
             self.expr(body);
             return;
         };
         let stmts = self.a.block(b).to_vec();
-        if self.flat_safe(&stmts) {
+        let tail = self.a.block_tail(b);
+        let flat_ok = self.flat_safe(&stmts) && tail.map_or(true, |t| self.expr_flat(t));
+        if flat_ok {
             let m = self.stamp();
             self.in_flat += 1;
             self.text("{");
             for s in &stmts {
                 self.sp();
                 self.stmt_tokens(*s);
+            }
+            if let Some(t) = tail {
+                self.sp();
+                self.expr_tokens(t);
             }
             self.text(" }");
             self.in_flat -= 1;
@@ -1603,14 +1624,22 @@ impl<'a> P<'a> {
 
     fn expr_tokens(&mut self, h: NodeHandle<AnyExpr>) {
         match self.a.expr(h).clone() {
-            ExprKind::Block { stmts } => {
+            ExprKind::Block { .. } => {
                 // expression-position block — a lambda/anon body or a
-                // grouped block; multiline always at statement level
+                // grouped block; multiline always at statement level.
+                // The tail prints without the `;` (the block's value).
+                let b = NodeHandle::<BlockNode>::new(h.id());
+                let stmts = self.a.block(b).to_vec();
+                let tail = self.a.block_tail(b);
                 if self.in_flat > 0 {
                     self.text("{");
                     for s in &stmts {
                         self.sp();
                         self.stmt_tokens(*s);
+                    }
+                    if let Some(t) = tail {
+                        self.sp();
+                        self.expr_tokens(t);
                     }
                     self.text(" }");
                     return;
@@ -1621,6 +1650,12 @@ impl<'a> P<'a> {
                 self.nl();
                 for s in &stmts {
                     self.stmt(*s);
+                }
+                if let Some(t) = tail {
+                    let span = self.a.span(t.id());
+                    self.begin_el(span, Begin::Stmt);
+                    self.expr_tokens(t);
+                    self.end_el(span);
                 }
                 self.drain_close(self.content_end(self.a.span(h.id())));
                 self.level -= 1;
@@ -1886,20 +1921,27 @@ impl<'a> P<'a> {
     }
 
     /// the lambda's block body: inline-flat attempt (the corpus's
-    /// `fn (x: i32) -> i32 { return x + 1; }` shape), broken fallback
+    /// `fn (x: i32) -> i32 { return x + 1; }` shape), broken fallback.
+    /// The tail rides the flat attempt without the `;`.
     fn lambda_block(&mut self, body: NodeHandle<AnyExpr>) {
         let Some(b) = self.a.narrow_block(body) else {
             self.expr(body);
             return;
         };
         let stmts = self.a.block(b).to_vec();
-        if self.flat_safe(&stmts) {
+        let tail = self.a.block_tail(b);
+        let flat_ok = self.flat_safe(&stmts) && tail.map_or(true, |t| self.expr_flat(t));
+        if flat_ok {
             let m = self.stamp();
             self.in_flat += 1;
             self.text("{");
             for s in &stmts {
                 self.sp();
                 self.stmt_tokens(*s);
+            }
+            if let Some(t) = tail {
+                self.sp();
+                self.expr_tokens(t);
             }
             self.text(" }");
             self.in_flat -= 1;

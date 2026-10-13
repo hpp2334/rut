@@ -269,7 +269,16 @@ impl Parser {
         NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Module { items }), span))
     }
     pub(crate) fn block(&mut self, stmts: Vec<NodeHandle<AnyStmt>>, span: Span) -> NodeHandle<BlockNode> {
-        NodeHandle::new(self.push_raw(Kind::Expr(ExprKind::Block { stmts }), span))
+        self.block_with_tail(stmts, None, span)
+    }
+    /// a block with its tail expression (the `}`-closed last statement)
+    pub(crate) fn block_with_tail(
+        &mut self,
+        stmts: Vec<NodeHandle<AnyStmt>>,
+        tail: Option<NodeHandle<AnyExpr>>,
+        span: Span,
+    ) -> NodeHandle<BlockNode> {
+        NodeHandle::new(self.push_raw(Kind::Expr(ExprKind::Block { stmts, tail }), span))
     }
     pub(crate) fn if_stmt(&mut self, cond: NodeHandle<AnyExpr>, then: NodeHandle<BlockNode>, els: Option<ElseBranch>, span: Span) -> NodeHandle<IfNode> {
         NodeHandle::new(self.push_raw(Kind::Stmt(StmtKind::If { cond, then, els }), span))

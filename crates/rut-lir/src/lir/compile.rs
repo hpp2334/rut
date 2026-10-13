@@ -331,9 +331,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             c.promote_param(li, 0);
         }
         let _ = generics; // user generic methods unsupported (diag at call)
-        // body
-        if c.compile_block(body).is_err() {
-            return Err(());
+        // body: the block's TAIL (an explicit tail expression, or a
+        // tail-position `if` statement with an else) is the implicit
+        // return — Rust-style. The tail value is checked against the
+        // fn's return type and counted as the return for the
+        // definite-return law below.
+        let tail_ty = c.compile_block_value(body, Some(ret_ty))?;
+        if let Some(t) = tail_ty {
+            c.emit_body_tail(body, t, ret_ty);
         }
         // Definite-return analysis (the "checked loosely" comment, now
         // real): a non-nil fn must return on every path — the silent
@@ -483,13 +488,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let n_caps = caps.len() as u32;
         // body: block or single expression (arrows)
         if let Some(block) = c.ctx.ast.narrow_block(body) {
-            if c.compile_block(block).is_err() {
-                return Err(());
+            // the block's TAIL is the lambda's answer (Rust-style
+            // implicit return — the same law as a fn body)
+            let tail_ty = c.compile_block_value(block, Some(ret_ty))?;
+            if let Some(t) = tail_ty {
+                c.emit_body_tail(block.id(), t, ret_ty);
             }
             // the same definite-return law as compile_fn: the lambda's
-            // BLOCK form falls through exactly like a fn body (the
-            // arrow-expression form returns its expression — checked
-            // below); the fallback Ret still emits for IR well-formedness
+            // BLOCK form falls through exactly like a fn body when no
+            // tail answers (the arrow-expression form returns its
+            // expression — checked below); the fallback Ret still emits
+            // for IR well-formedness
             if !c.terminated && ret_ty != TY_NIL {
                 c.ctx.err(c.ctx.ast.span(block.id()), format!(
                     "missing return: `lambda` is `-> {}` but a path reaches the end of the body",
