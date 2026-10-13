@@ -285,3 +285,39 @@ entry fn main() {
 "#,
     );
 }
+
+#[test]
+fn loop_header_mut_survives_formatting() {
+    // the loop-header `mut` (BOTH for forms) rides fmt without changing
+    // behavior — the mut-binding law makes the flag semantic, so a lost
+    // or misprinted `mut` would turn the formatted text's writes into
+    // compile errors, which the VM run below would catch. The byte-level
+    // round-trip + idempotence pins live in pin.rs
+    // (`loop_header_mut_survives_parse_fmt_parse`); the field-write
+    // target reprints parenthesized (`(t.done) = ..`), the printer's
+    // standing assignment-target law, and must re-parse to the same
+    // program.
+    probe(
+        "loop-mut",
+        r#"
+use ink::{ Logger };
+class Task {
+    done: bool;
+}
+entry fn main() {
+    let log = Logger::new("lm");
+    let tasks = [Task { done: false }, Task { done: true }];
+    for (let mut t of tasks) {
+        t.done = !t.done;
+    }
+    let mut total = 0;
+    for (let mut i = 0; i < 4; i += 1) {
+        total += i;
+    }
+    let first = tasks[0].done;
+    let second = tasks[1].done;
+    log.info(f"{first} {second} {total}");
+}
+"#,
+    );
+}

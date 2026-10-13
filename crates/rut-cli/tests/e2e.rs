@@ -3042,3 +3042,246 @@ entry fn main() -> nil {
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["42 Eat an apple false"]);
 }
+
+// ---- `mut` in loop headers — the CLI e2e lane's pins (phase 5) ----
+//
+// The mut-binding law now covers BOTH for forms: the header's `mut` is
+// the write law for the loop variable. The plan's 9 shapes map here as:
+//
+//   1. for-of `let mut` element write — the user's todo snippet
+//      verbatim (`toggle_task` + `format_list`), the canonical happy
+//      path, run end to end below.
+//   2. for-of plain `let` field write → the header-naming error (also
+//      pinned at the driver level:
+//      rut-driver/tests/loop_mut_law.rs::for_of_plain_let_field_write_diagnoses).
+//   3. for-of plain `let` whole-var reassign → error (driver twin:
+//      for_of_plain_let_whole_var_reassign_diagnoses).
+//   4. for-c body assigns the induction var without `mut` → error
+//      (driver twin: for_c_body_assignment_without_mut_diagnoses).
+//   5. for-c update clause `i += 1` without `mut` → error, the
+//      uniform-law case (driver twin:
+//      for_c_update_clause_without_mut_diagnoses).
+//   6. `for (let mut i = 0; ..)` works end to end — already pinned in
+//      this lane by case4_sieve (its `for (let mut i = 2; i <= limit;
+//      i += 1)` runs the full pipeline) and case8_fuel_traps_and_parks;
+//      cross-referenced, not duplicated.
+//   7. the capture law × mut: a closure writes through a captured
+//      `let mut` for-of var into the shared cell; the non-mut capture
+//      write is refused (driver twins:
+//      closure_capture_of_mut_for_of_var_writes_through_the_shared_cell /
+//      closure_capture_of_plain_let_for_of_var_write_diagnoses).
+//   8. async for-of with a `let mut` var — pinned at the driver level
+//      (loop_mut_law.rs::async_for_of_mut_var_runs /
+//      async_for_of_plain_let_write_diagnoses, compile → link → verify
+//      → VM → async drive through the futures pair); this lane mounts
+//      no async host world, so duplicating that harness 1:1 would buy
+//      nothing — cross-referenced, not duplicated.
+//   9. fmt: `mut` survives parse→fmt→parse — pinned in
+//      rut-fmt/tests/pin.rs::loop_header_mut_survives_parse_fmt_parse
+//      (byte-level round-trip + idempotence) and VM-verified in
+//      rut-fmt/tests/semantic_equiv.rs::loop_header_mut_survives_formatting.
+
+/// The canonical happy path: the user's todo snippet verbatim. The
+/// header's `mut` is what makes `task.completed = !task.completed`
+/// legal — and the write must land on the STORED elements, so the
+/// format after the toggle sees the flipped flags.
+#[test]
+fn mut_loop_todo_toggle_and_format_list_end_to_end() {
+    let src = r#"
+use pouch::{ Vec };
+use ink::{ Logger };
+
+class Task {
+    title: str;
+    completed: bool;
+}
+
+class TodoList {
+    tasks: Vec<Task>;
+}
+impl TodoList {
+    fn new() -> Self { return Self { tasks: Vec::new() }; }
+    fn add(mut self, title: str) -> nil { self.tasks.push(Task { title: title, completed: false }); }
+    fn toggle_task(self) -> nil {
+        for (let mut task of self.tasks) { task.completed = !task.completed; }
+    }
+    fn format_list(self) -> str {
+        let mut out = "";
+        for (let mut task of self.tasks) {
+            let mark = if (task.completed) { "[x] " } else { "[ ] " };
+            out = f"{out}{mark}{task.title}";
+        }
+        return out;
+    }
+}
+
+entry fn main() -> nil {
+    let log = Logger::new("todo");
+    let mut list = TodoList::new();
+    list.add("buy milk");
+    list.add("walk dog");
+    list.add("write rut");
+    log.info(list.format_list());
+    list.toggle_task();
+    log.info(list.format_list());
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(
+        lines,
+        vec![
+            "[ ] buy milk[ ] walk dog[ ] write rut",
+            "[x] buy milk[x] walk dog[x] write rut",
+        ]
+    );
+}
+
+#[test]
+fn for_of_plain_let_field_write_names_the_loop_header() {
+    // the header-naming fix, spelled through the CLI lane's compile
+    let src = r#"
+struct Task { completed: bool }
+entry fn main() -> nil {
+    let tasks = [Task { completed: false }];
+    for (let t of tasks) {
+        t.completed = true;
+    }
+}
+"#;
+    let out = compile(src, "main");
+    assert!(
+        out.graph.diags.iter().any(|d| d.msg.contains(
+            "assignment through `t` requires `mut` in the loop header: `for (let mut t of ...)` (the mut-binding law)"
+        )),
+        "want the loop-header law diag: {:?}",
+        out.graph.diags
+    );
+    assert!(out.graph.program.is_none());
+}
+
+#[test]
+fn for_of_plain_let_whole_var_reassign_names_the_loop_header() {
+    let src = r#"
+struct Task { completed: bool }
+entry fn main() -> nil {
+    let tasks = [Task { completed: false }];
+    for (let t of tasks) {
+        t = Task { completed: true };
+    }
+}
+"#;
+    let out = compile(src, "main");
+    assert!(
+        out.graph.diags.iter().any(|d| d.msg.contains(
+            "assignment to `t` requires `mut` in the loop header: `for (let mut t of ...)` (the mut-binding law)"
+        )),
+        "want the loop-header law diag: {:?}",
+        out.graph.diags
+    );
+    assert!(out.graph.program.is_none());
+}
+
+#[test]
+fn for_c_body_assignment_names_the_loop_header() {
+    // the update slot stays read-only (`i` as a no-op update expr); the
+    // BODY assigns the induction var — same law, same fix
+    let src = r#"
+entry fn main() -> nil {
+    let mut n = 3;
+    for (let i = 0; n > 0; i) {
+        i = i + 1;
+        n -= 1;
+    }
+}
+"#;
+    let out = compile(src, "main");
+    assert!(
+        out.graph.diags.iter().any(|d| d.msg.contains(
+            "assignment to `i` requires `mut` in the loop header: `for (let mut i = ...)` (the mut-binding law)"
+        )),
+        "want the loop-header law diag: {:?}",
+        out.graph.diags
+    );
+    assert!(out.graph.program.is_none());
+}
+
+#[test]
+fn for_c_update_clause_names_the_loop_header() {
+    // `i += 1` in the update clause is author code: the uniform-law case
+    let src = r#"
+entry fn main() -> nil {
+    for (let i = 0; i < 3; i += 1) {
+        Logger::new("law").info(f"{i}");
+    }
+}
+"#;
+    let out = compile(src, "main");
+    assert!(
+        out.graph.diags.iter().any(|d| d.msg.contains(
+            "assignment to `i` requires `mut` in the loop header: `for (let mut i = ...)` (the mut-binding law)"
+        )),
+        "want the loop-header law diag: {:?}",
+        out.graph.diags
+    );
+    assert!(out.graph.program.is_none());
+}
+
+#[test]
+fn closure_capture_of_mut_loop_var_writes_through_the_shared_cell() {
+    // the lambda's write through the captured `f` must land on the
+    // stored element: the capture pools the loop var's shared cell (the
+    // promotion machinery is unchanged; the capture inherits the
+    // header's mut)
+    let src = r#"
+use ink::{ Logger };
+struct Flag { on: bool }
+entry fn main() -> nil {
+    let log = Logger::new("cap");
+    let flags = [Flag { on: false }];
+    for (let mut f of flags) {
+        let set = fn () -> bool { f.on = true; return f.on; };
+        set();
+    }
+    log.info(f"on={flags[0].on}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["on=true"]);
+}
+
+#[test]
+fn closure_capture_of_plain_loop_var_write_is_refused() {
+    // the capture inherits the binding's (absent) mut: the write is
+    // refused inside the closure frame too. Note the refusal diag is the
+    // GENERIC mut-binding message here ("field assignment requires a
+    // `let mut` binding"), not the loop-header-naming variant: the
+    // closure frame's copy of the captured var is a fresh local without
+    // the loop_var flag, so the fix clause names a `let mut` the author
+    // cannot spell for a loop var. The refusal itself is the law — this
+    // is the behavior phase 2 landed and the driver twin
+    // (loop_mut_law.rs::closure_capture_of_plain_let_for_of_var_write_diagnoses)
+    // pins with containment asserts; flagged to the plan as a diagnostic
+    // quality note, not changed (no compiler edits in this phase).
+    let src = r#"
+struct Flag { on: bool }
+entry fn main() -> nil {
+    let flags = [Flag { on: false }];
+    for (let f of flags) {
+        let set = fn () -> bool { f.on = true; return f.on; };
+        set();
+    }
+}
+"#;
+    let out = compile(src, "main");
+    assert!(
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("mut") && d.msg.contains("binding") && d.msg.contains("the mut-binding law")),
+        "want a mut-binding law refusal for the captured plain loop var: {:?}",
+        out.graph.diags
+    );
+    assert!(out.graph.program.is_none());
+}
