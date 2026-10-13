@@ -26,6 +26,10 @@
 //! `signature_help` (the phase-3 callee machinery at a call's argument
 //! position — verbatim signature, depth-computed active parameter,
 //! ambiguity/mismatch → no help),
+//! `check` (the semantic diagnostics lane — "check package → per-file
+//! diagnostics" over the driver's graph walk, the checker's type errors
+//! mapped back through the chain's file stamps and merged with the
+//! parse set; parse-only when no package graph assembles),
 //! `server` (the
 //! tower-lsp service — open doc + the embedded std surface + a
 //! workspace scan; feature `server`, native only). The wasm shim
@@ -33,6 +37,7 @@
 //! process.
 
 pub mod analysis;
+pub mod check;
 pub mod completion;
 pub mod definition;
 pub mod deps;

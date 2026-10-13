@@ -53,6 +53,7 @@ use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::{Client, LanguageServer};
 
 use crate::analysis::{self, Analysis};
+use crate::check;
 use crate::deps::{self, DepSource};
 use crate::hover::DefIndex;
 use crate::mods::DocMods;
@@ -564,9 +565,16 @@ fn hex_sha256(bytes: &[u8]) -> String {
 /// a `NAME/mod.rut` below it the `NAME` module (any other file shape
 /// is not a module file — the default). Bounded like every walk here.
 fn resolve_doc_mods(file: &Path) -> DocMods {
+    resolve_doc_mods_at(file).1
+}
+
+/// [`resolve_doc_mods`] with the nearest manifest dir attached — the
+/// check lane's B1 assembly reads the package's files off it (`None`
+/// = no manifest above the file: not a package file at all).
+fn resolve_doc_mods_at(file: &Path) -> (Option<PathBuf>, DocMods) {
     let file_dir = match file.parent() {
         Some(d) => d.to_path_buf(),
-        None => return DocMods::default(),
+        None => return (None, DocMods::default()),
     };
     let is_mod_rut = file.file_name().map(|n| n == "mod.rut").unwrap_or(false);
     let mut dir: &Path = &file_dir;
@@ -576,7 +584,7 @@ fn resolve_doc_mods(file: &Path) -> DocMods {
                 if let Ok(t) = deps::dep_table(&text) {
                     if let Some(name) = t.name {
                         if !is_mod_rut && file_dir != dir {
-                            return DocMods::default(); // a stray file in a child dir
+                            return (None, DocMods::default()); // a stray file in a child dir
                         }
                         let rel = file_dir.strip_prefix(dir).unwrap_or(&file_dir);
                         let mod_path = rel
@@ -584,7 +592,10 @@ fn resolve_doc_mods(file: &Path) -> DocMods {
                             .map(|c| c.as_os_str().to_string_lossy().into_owned())
                             .collect::<Vec<_>>()
                             .join("/");
-                        return DocMods { mod_path: Some(mod_path), pkg: Some(name) };
+                        return (
+                            Some(dir.to_path_buf()),
+                            DocMods { mod_path: Some(mod_path), pkg: Some(name) },
+                        );
                     }
                 }
             }
@@ -594,7 +605,7 @@ fn resolve_doc_mods(file: &Path) -> DocMods {
             None => break,
         }
     }
-    DocMods::default()
+    (None, DocMods::default())
 }
 
 /// the fs lane's child lookup — the loader's three-case law over the
@@ -669,12 +680,131 @@ impl Backend {
     async fn publish(&self, uri: Uri, version: Option<i32>) {
         // empty list on failure/fix — diagnostics must always publish, or
         // stale squiggles never clear
-        let diags = self
+        let parse = self
             .analyze_uri(&uri)
             .map(|a| a.diags)
             .unwrap_or_default();
+        let diags = self.check_lane(&uri, parse);
         self.client.publish_diagnostics(uri, diags, version).await;
     }
+
+    /// B1: the semantic lane over the workspace/manifest context — the
+    /// doc's own package assembles from the fs (its manifest dir's
+    /// module tree, the live buffer riding the doc's mod path) and the
+    /// dep world is the defs store's stamped groups (the dep walk's
+    /// mounts, their namespaces re-read off the manifests). The
+    /// checker's per-file diags merge into the parse set; no package
+    /// graph → parse-only (today's behavior, never worse).
+    fn check_lane(&self, uri: &Uri, parse: Vec<Diagnostic>) -> Vec<Diagnostic> {
+        let Some(text) = self.get(uri) else { return parse };
+        // one directory is one module — only a module file carries a
+        // package's voice; every other shape stays parse-only
+        let is_module_file = uri.as_str().rsplit('/').next().is_some_and(|n| n == "mod.rut");
+        if !is_module_file {
+            return parse;
+        }
+        let path = match uri.to_file_path() {
+            Some(cow) => cow.into_owned(),
+            None => return parse,
+        };
+        let (dir, dm) = resolve_doc_mods_at(&path);
+        let (Some(dir), Some(pkg)) = (dir, dm.pkg) else { return parse };
+        let Some(doc_group) =
+            fs_pkg_group(&dir, &pkg, dm.mod_path.as_deref().unwrap_or(""), &text, uri.as_str())
+        else {
+            return parse; // the package cannot assemble — never worse
+        };
+        let mut groups = {
+            let defs = self.defs.read().unwrap();
+            check::groups_from_defs(&defs)
+        };
+        // the dep groups' namespaces: the manifest beside each group's
+        // root file (the walk parsed it, the index keeps only the stamps)
+        for g in &mut groups {
+            if g.namespace.is_none() {
+                g.namespace = manifest_namespace(g);
+            }
+        }
+        // replace-by-module: the fs truth (live buffer included)
+        // outranks any stale stamp for the doc's own package
+        match groups.iter().position(|g| g.module == doc_group.module) {
+            Some(i) => groups[i] = doc_group,
+            None => groups.push(doc_group),
+        }
+        check::merged_doc_diags(uri.as_str(), &text, Some(pkg), dm.mod_path, groups, parse)
+    }
+}
+
+/// The doc's own package, assembled over the fs (the B1 "workspace /
+/// manifest context"): the manifest dir's `mod.rut` is the root module,
+/// the root's `mod` tree mounts through the same walk the dep lane
+/// rides, and the LIVE buffer rides the doc's own mod path. `None` = the
+/// package cannot assemble (a host manifest's tree is Decl-flavored, no
+/// readable root) — the caller falls back to parse-only.
+fn fs_pkg_group(
+    dir: &Path,
+    pkg: &str,
+    doc_path: &str,
+    doc_text: &str,
+    doc_uri: &str,
+) -> Option<check::PkgFiles> {
+    let manifest = std::fs::read_to_string(dir.join(MANIFEST_NAME)).ok()?;
+    let table = deps::dep_table(&manifest).ok()?;
+    if table.host {
+        return None; // a host surface's tree is Decl-flavored — not a source world
+    }
+    let file_uri = |p: &Path| format!("file://{}", p.to_string_lossy());
+    let root_path = dir.join("mod.rut");
+    let (root_text, root_uri) = if doc_path.is_empty() {
+        (doc_text.to_string(), doc_uri.to_string())
+    } else {
+        (std::fs::read_to_string(&root_path).ok()?, file_uri(&root_path))
+    };
+    let mut files = std::collections::BTreeMap::new();
+    files.insert(
+        String::new(),
+        check::FileSrc {
+            uri: root_uri,
+            text: rut_lexer::lexer::normalize(&root_text),
+            mode: Mode::Impl,
+            vis: rut_ast::ast::Vis::Pub,
+        },
+    );
+    let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
+        Ok(fs_child_lookup(dir, parent, name, "mod.rut"))
+    };
+    let canon = root_path.to_string_lossy().into_owned();
+    if let Ok(mods) = rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read) {
+        for (path, m) in mods {
+            let (text, uri) = if path == doc_path {
+                (doc_text.to_string(), doc_uri.to_string())
+            } else {
+                (m.text.clone(), file_uri(&dir.join(format!("{path}/mod.rut"))))
+            };
+            files.insert(
+                path,
+                check::FileSrc {
+                    uri,
+                    text: rut_lexer::lexer::normalize(&text),
+                    mode: Mode::Impl,
+                    vis: m.vis,
+                },
+            );
+        }
+    }
+    Some(check::PkgFiles { module: pkg.to_string(), namespace: table.namespace, files })
+}
+
+/// the namespace head a dep group's manifest spells, read off the
+/// manifest beside its root file (bundle origins — `bundle:pouch/…` —
+/// name no directory: `None`, the embedded `std_surface::NAMESPACES`
+/// mirror covers the std heads).
+fn manifest_namespace(group: &check::PkgFiles) -> Option<String> {
+    let root = group.files.get("")?;
+    let path = root.uri.strip_prefix("file://")?;
+    let dir = Path::new(path).parent()?;
+    let text = std::fs::read_to_string(dir.join(MANIFEST_NAME)).ok()?;
+    deps::dep_table(&text).ok()?.namespace
 }
 
 impl LanguageServer for Backend {

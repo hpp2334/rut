@@ -66,6 +66,29 @@ extension rides the same model:
 - **Hover** renders `pub? mod NAME;` decls (kind, mounted file, child
   count) and resolves use-path segments to their mounted modules.
 
+## Semantic diagnostics — the check lane
+
+Diagnostics are two lanes merged (both faces, one engine —
+`crates/rut-lsp/src/check.rs`):
+
+- **Parse lane** (always): the lexer + parser diags for the open
+  document — a syntax error squiggles the moment it is written.
+- **Check lane** (when a package graph assembles): the compiler's own
+  checker runs over the document's package and its dep closure, so
+  type errors surface in the editor — `checked = true;` (bool into a
+  `str` binding), a record literal missing a field, an arity mistake —
+  at the same site `rut run` reports them. The document's package is
+  known from its stamps: a `mod.rut` under a folder-level package (the
+  workspace scan) or a dep file opened for editing (the dep walk).
+  Diags map back through the graph's file stamps — each squiggle
+  lands in the file that owns it, and a span that names no open
+  document never lights up anywhere. The merge with the parse set
+  dedupes true duplicates only; a distinct site is never collapsed.
+
+No package context — a stray file under no manifest, a non-`mod.rut`
+file — keeps today's parse-only diagnostics. The check lane never
+makes an editor worse than the compiler-less lane it extends.
+
 ## Deps — the extension reads rut.jsonc
 
 After the workspace scan the extension hands each workspace folder's
@@ -188,9 +211,14 @@ npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
                        # param hints, references (shadow-aware + the
                        # cross-file reverse edge), signature help
                        # (verbatim signature, active slot, mismatch -> no
-                       # help), and the dep clicks — a url dep's
+                       # help), the dep clicks — a url dep's
                        # extracted-tree leaf + pkg head, a path dep's
-                       # `pub mod` middle segment + child-file leaf.
+                       # `pub mod` middle segment + child-file leaf — and
+                       # the check lane: a stamped doc's package compiles
+                       # with its dep closure and the checker's type
+                       # errors publish (assignment mismatch + missing
+                       # field, each on its own line), while an unstamped
+                       # doc stays parse-only clean.
                        # Needs bin/rut-lsp.wasm (npm run
                        # build:wasm); runs headless in plain node
 npm run test:host      # the Extension Host run (needs `code` on PATH and

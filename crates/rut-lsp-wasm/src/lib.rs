@@ -193,7 +193,11 @@ pub extern "C" fn rut_legend() -> *mut u8 {
 
 /// open / FULL-sync change: store the document, return one analysis —
 /// `{diags, tokens, symbols}` (the values the LSP face would push over
-/// the wire)
+/// the wire). The diags are the MERGED set (B1+B2): the parse lane's
+/// diags plus the check lane's — the doc's package (its stamped twin
+/// names it) compiles with its dep closure and the checker's per-file
+/// diags map back through the file stamps. No package context →
+/// parse-only, exactly the pre-B1 answer.
 #[no_mangle]
 pub extern "C" fn rut_analyze(uri_ptr: *const u8, uri_len: usize, src_ptr: *const u8, src_len: usize) -> *mut u8 {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
@@ -209,8 +213,18 @@ pub extern "C" fn rut_analyze(uri_ptr: *const u8, uri_len: usize, src_ptr: *cons
             a
         }
     };
+    let diags = {
+        let defs = &state().defs;
+        let dm = doc_mods_of(uri, defs);
+        let groups = if dm.pkg.is_some() {
+            rut_lsp::check::groups_from_defs(defs)
+        } else {
+            Vec::new()
+        };
+        rut_lsp::check::merged_doc_diags(uri, src, dm.pkg, dm.mod_path, groups, a.diags)
+    };
     let value = serde_json::json!({
-        "diags": a.diags,
+        "diags": diags,
         // SemanticTokens serializes `data` to the flat u32 wire format
         // (the same bytes the stdio server puts on the wire)
         "tokens": ls_types::SemanticTokens { result_id: None, data: a.tokens },
@@ -1114,6 +1128,78 @@ mod tests {
         rut_begin();
         let h = take(rut_hover(uri.as_ptr(), uri.len(), 3, push_ch));
         assert!(h["contents"]["value"].as_str().unwrap().contains("push"), "{h}");
+    }
+
+    /// plan3 phase 4 (B1+B2): the CHECK LANE through the raw ABI — a
+    /// doc whose package is STAMPED (`rut_add_def_mod` named it)
+    /// compiles with its dep closure, and the checker's type errors
+    /// surface with the right file and range: the bool→str assignment
+    /// mismatch AND the missing record field, the diagnosis pair. An
+    /// UNSTAMPED doc with the same text answers parse-only clean —
+    /// today's behavior, the corpus lock's foundation.
+    #[test]
+    fn analyze_runs_the_checker_over_a_stamped_chain() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        // the dep: one mod-tree file mounted under its module NAME
+        let dep_src = &b"pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n"[..];
+        let dep_uri = b"file:///ws/chk/dep/mod.rut";
+        rut_begin();
+        let stamped = take(rut_add_def_mod(
+            dep_uri.as_ptr(),
+            dep_uri.len(),
+            b"chkdep".as_ptr(),
+            6,
+            b"".as_ptr(),
+            0,
+            dep_src.as_ptr(),
+            dep_src.len(),
+        ));
+        assert!(stamped["decls"].as_array().unwrap().is_empty(), "{}", stamped);
+        // the doc's own pkg root, stamped the same way the extension's
+        // workspace indexer stamps it
+        let doc = "use chkdep::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n    let t = Task { title: \"x\", completed: false };\n}\n";
+        let app_uri = b"file:///ws/chk/app/mod.rut";
+        rut_begin();
+        let stamped = take(rut_add_def_mod(
+            app_uri.as_ptr(),
+            app_uri.len(),
+            b"chkapp".as_ptr(),
+            6,
+            b"".as_ptr(),
+            0,
+            doc.as_ptr(),
+            doc.len(),
+        ));
+        assert!(stamped["decls"].as_array().unwrap().is_empty(), "{}", stamped);
+
+        // the analyze lane returns the MERGED diags: both checker sites,
+        // `source: "rut"`, each on its own line
+        rut_begin();
+        let a = take(rut_analyze(app_uri.as_ptr(), app_uri.len(), doc.as_ptr(), doc.len()));
+        let diags = a["diags"].as_array().unwrap();
+        let mismatch = diags
+            .iter()
+            .find(|d| d["message"].as_str().unwrap_or("").contains("assignment type mismatch"))
+            .unwrap_or_else(|| panic!("no assignment-mismatch diag: {a}"));
+        let missing = diags
+            .iter()
+            .find(|d| d["message"].as_str().unwrap_or("").contains("`id` is missing"))
+            .unwrap_or_else(|| panic!("no missing-field diag: {a}"));
+        for d in [mismatch, missing] {
+            assert_eq!(d["source"], "rut", "{d}");
+        }
+        assert_eq!(mismatch["range"]["start"]["line"], 3, "{mismatch}");
+        assert_eq!(missing["range"]["start"]["line"], 4, "{missing}");
+
+        // the parse-only fallback: the SAME text at an UNSTAMPED uri is
+        // clean (no package graph assembles for it)
+        let plain_uri = b"file:///ws/chk/plain.rut";
+        rut_begin();
+        let plain = take(rut_analyze(plain_uri.as_ptr(), plain_uri.len(), doc.as_ptr(), doc.len()));
+        assert!(
+            plain["diags"].as_array().unwrap().is_empty(),
+            "an unstamped doc must stay parse-only: {plain}"
+        );
     }
 
     #[test]

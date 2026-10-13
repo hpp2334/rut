@@ -20,7 +20,12 @@ What it provides (the LSP slice landed early; the
   primitives, and identifier classes (functions, methods, types, params,
   fields, enum members), including inside `f"…"` holes
 - **diagnostics** — lexer + parser errors as you type (`.d.rut` files
-  parse in declaration mode)
+  parse in declaration mode); when the document's package graph
+  assembles (a `mod.rut` under a folder-level package, or an opened
+  dep file), the compiler's checker joins the lane and type errors —
+  assignment mismatches, missing record fields — publish at their
+  sites, mapped per file through the graph's stamps (parse-only for
+  stray files: never worse)
 - **document symbols** — the outline: fns, enums, structs, classes,
   traits, impl blocks
 - **hover** — types on identifiers (written annotation or inferred),
@@ -151,6 +156,7 @@ settings until one ships.
 - `rut-highlightjs/register.js` is generated from the package's
   `src/grammar.js` (`node scripts/build.mjs`) and committed dist-style;
   the book consumes a byte-copy shim at `docs/theme/rut-highlight.js`.
-- Checker-level diagnostics (M5) and formatting are the remaining
-  tooling-milestone items; navigation and inference are parse-level by
-  design.
+- Checker-level diagnostics now ride the editor's check lane for
+  packaged documents (the compiler's checker behind
+  `crates/rut-lsp/src/check.rs`); hover/completion stay index-level by
+  design. Formatting is the remaining tooling-milestone item.

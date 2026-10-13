@@ -40,6 +40,15 @@ pub const MYHOST: &str = include_str!("../../../rut/myhost/myhost.d.rut");
 pub const MYHOST_NET: &str = include_str!("../../../rut/myhost/net/mod.d.rut");
 pub const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/net/tls/mod.d.rut");
 
+/// The embedded std pkgs' manifest namespaces — the qualified-access
+/// heads the surface grammar cannot say (`"namespace": "Math"` lives in
+/// `rut/calc/rut.jsonc`, not in `calc.d.rut`). The embedded surface
+/// mirrors the manifest truth so a stamped document's
+/// `use calc::{ Math }` + `Math.sqrt(x)` binds and type-checks in the
+/// check lane's world assembly (`check::groups_from_defs` reads the
+/// head off here) instead of false-flagging the use line.
+pub const NAMESPACES: &[(&str, &str)] = &[("calc", "Math")];
+
 const CORE_LABEL: &str = "core";
 
 /// One embedded file of a std pkg: the mod path it indexes at (`""` =

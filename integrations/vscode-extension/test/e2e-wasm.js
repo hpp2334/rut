@@ -1424,6 +1424,64 @@ async function main() {
     const guarded = take(e.rut_complete_in(...put(syncUri), ...put(guardDoc), 1, 20));
     assert.deepStrictEqual(guarded, [], `dot guard through the raw entry: ${JSON.stringify(guarded)}`);
     smokes++;
+
+    // ---- plan3 phase 4 (B1+B2): SEMANTIC DIAGNOSTICS — the check lane.
+    // A doc whose package is STAMPED (rut_add_def_mod named it) compiles
+    // with its dep closure: the checker's type errors surface with the
+    // right file and range — the bool→str assignment mismatch AND the
+    // missing record field (the diagnosis pair). The dep rides the chain
+    // (mounted via rut_add_def_mod); an UNSTAMPED doc with the same text
+    // stays parse-only clean — today's behavior, the corpus lock above
+    // depends on it. ----
+    {
+      const chkDepSrc =
+        'pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n';
+      e.rut_begin();
+      const chkDep = take(
+        e.rut_add_def_mod(...put('file:///ws/chk/dep/mod.rut'), ...put('chkdep'), ...put(''), ...put(chkDepSrc))
+      );
+      assert.ok(Array.isArray(chkDep.decls), `chkdep stamps: ${JSON.stringify(chkDep)}`);
+      const chkAppSrc = [
+        'use chkdep::{ Task };',
+        'fn main() -> nil {',
+        '    let mut checked: str = " ";',
+        '    checked = true;',
+        '    let t = Task { title: "x", completed: false };',
+        '}',
+        '',
+      ].join('\n');
+      const chkAppUri = 'file:///ws/chk/app/mod.rut';
+      e.rut_begin();
+      const chkApp = take(
+        e.rut_add_def_mod(...put(chkAppUri), ...put('chkapp'), ...put(''), ...put(chkAppSrc))
+      );
+      assert.ok(Array.isArray(chkApp.decls), `chkapp stamps: ${JSON.stringify(chkApp)}`);
+      e.rut_begin();
+      const chkMerged = take(e.rut_analyze(...put(chkAppUri), ...put(chkAppSrc)));
+      const chkDiags = chkMerged.diags || [];
+      const mismatch = chkDiags.find((d) => (d.message || '').includes('assignment type mismatch'));
+      const missingField = chkDiags.find((d) => (d.message || '').includes('id` is missing'));
+      if (!mismatch) {
+        bad.push(`check lane: no assignment-mismatch diag (got ${JSON.stringify(chkDiags.map((d) => d.message))})`);
+      } else {
+        if (mismatch.source !== 'rut') bad.push(`check lane: mismatch source ${mismatch.source} != rut`);
+        if (mismatch.range.start.line !== 3) {
+          bad.push(`check lane: mismatch diag on line ${mismatch.range.start.line} != 3 (${JSON.stringify(mismatch.range)})`);
+        }
+      }
+      if (!missingField) {
+        bad.push(`check lane: no missing-field diag (got ${JSON.stringify(chkDiags.map((d) => d.message))})`);
+      } else if (missingField.range.start.line !== 4) {
+        bad.push(`check lane: missing-field diag on line ${missingField.range.start.line} != 4`);
+      }
+      // the parse-only fallback: the SAME text at an unstamped uri
+      e.rut_begin();
+      const chkPlain = take(e.rut_analyze(...put('file:///ws/chk/plain.rut'), ...put(chkAppSrc)));
+      if ((chkPlain.diags || []).length !== 0) {
+        bad.push(`unstamped doc must stay parse-only clean: ${JSON.stringify(chkPlain.diags)}`);
+      }
+      smokes++;
+    }
   }
 
   if (bad.length) {
@@ -1439,7 +1497,7 @@ async function main() {
     `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface/` +
     `extract-deps-leaf+head/path-dep-segments/` +
     `eof-member+locals/` +
-    `complete-in-doc-sync) ` +
+    `complete-in-doc-sync/check-lane-mismatch+missing-field) ` +
     `through bin/rut-lsp.wasm`);
 }
 
