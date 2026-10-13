@@ -12513,7 +12513,14 @@ msgid ""
 "fields is legal."
 msgstr ""
 
-#: src/reference/structs.md:109
+#: src/reference/structs.md:108
+msgid ""
+"**Field-init shorthand**: a bare field name takes its value from the "
+"like-named binding in scope — `Name { x, y }` is exactly `Name { x: x, y: y "
+"}`."
+msgstr ""
+
+#: src/reference/structs.md:112
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12534,11 +12541,28 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:129
+#: src/reference/structs.md:132
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Task { id: i32; title: str; done: bool }\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"sh\");\n"
+"    let id = 7;\n"
+"    let t = Task { id, title: \"Eat an apple\", done: false };  // `id` is "
+"`id: id`\n"
+"    log.info(f\"{t.id} {t.title} {t.done}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/structs.md:149
 msgid "All fields public, always"
 msgstr ""
 
-#: src/reference/structs.md:131
+#: src/reference/structs.md:151
 msgid ""
 "A struct is an open data record: member visibility in a struct body is a "
 "compile error (privacy needs construction control, which is the class's job "
@@ -12546,18 +12570,18 @@ msgid ""
 "members."
 msgstr ""
 
-#: src/reference/structs.md:136
+#: src/reference/structs.md:156
 msgid "Methods live in impl blocks"
 msgstr ""
 
-#: src/reference/structs.md:138
+#: src/reference/structs.md:158
 msgid ""
 "A struct body is **fields only** — a `fn` member in the body is a hard parse "
 "error. Methods live in the inherent `impl S { .. }`, in the type's module "
 "only — the one impl form (see [Interfaces and dispatch](interfaces.md)):"
 msgstr ""
 
-#: src/reference/structs.md:143
+#: src/reference/structs.md:163
 msgid ""
 "```rut\n"
 "impl Point {\n"
@@ -12573,14 +12597,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:154
+#: src/reference/structs.md:174
 msgid ""
 "Methods carry real visibility — the class rule: `pub fn` exports "
 "cross-module, plain `fn` is module-private. `Self` spells the struct, in "
 "signatures (`-> Self`) and the literal (`Self { x: 1, y: 2 }`) alike:"
 msgstr ""
 
-#: src/reference/structs.md:159
+#: src/reference/structs.md:179
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12601,30 +12625,30 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/structs.md:181
+#: src/reference/structs.md:201
 msgid ""
 "Free functions over data remain the default idiom; methods are for tight "
 "helpers, impl blocks for the members other code observes."
 msgstr ""
 
-#: src/reference/structs.md:184
+#: src/reference/structs.md:204
 msgid "Limits, exhaustively:"
 msgstr ""
 
-#: src/reference/structs.md:186
+#: src/reference/structs.md:206
 msgid ""
 "**fields are always public** — no field-visibility dial (privacy needs "
 "construction control, which is the class's job — see [Classes and "
 "constructors](classes.md));"
 msgstr ""
 
-#: src/reference/structs.md:189
+#: src/reference/structs.md:209
 msgid ""
 "**construction is the literal** — `Point { x: 1, y: 2 }` everywhere (open "
 "literal vs class-method-gated _is_ the struct/class distinction)."
 msgstr ""
 
-#: src/reference/structs.md:193
+#: src/reference/structs.md:213
 msgid ""
 "Everything else class-shaped is allowed — `impl` blocks, `Self`, "
 "`[disposal]`. And the old \"no destructor\" limit is gone: a shared value "
@@ -12633,18 +12657,18 @@ msgid ""
 "at that moment (see [Rc, dispose, and identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/structs.md:200
+#: src/reference/structs.md:220
 msgid "Interfaces and representation"
 msgstr ""
 
-#: src/reference/structs.md:202
+#: src/reference/structs.md:222
 msgid ""
 "Widening a struct to an interface `I` **attaches the itable to the same "
 "handle** — no allocation, no copy: the interface-typed value aliases the "
 "record, and mutations through it are visible to every other handle."
 msgstr ""
 
-#: src/reference/structs.md:206
+#: src/reference/structs.md:226
 msgid ""
 "Representation: one slot per field inside the cell, in declaration order — "
 "primitive fields widened into their slot, composite fields as cell-handle "
@@ -12652,7 +12676,7 @@ msgid ""
 "(`next: ?Node`) are legal because composite fields are pointer-sized."
 msgstr ""
 
-#: src/reference/structs.md:211
+#: src/reference/structs.md:231
 msgid ""
 "Structs are for small data (points, rects, colors, configs), but any size is "
 "allowed."

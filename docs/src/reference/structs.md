@@ -105,6 +105,9 @@ everywhere — function bodies and module-level `let` initializers alike
   the `P` literal`` — there is no last-wins.
 - An omitted field with an initializer takes it; `{}` with
   all-initialized fields is legal.
+- **Field-init shorthand**: a bare field name takes its value from the
+  like-named binding in scope — `Name { x, y }` is exactly
+  `Name { x: x, y: y }`.
 
 ```rut
 use ink::{ Logger };
@@ -124,6 +127,23 @@ entry fn main() {
 
 ```text
 16711935 9
+```
+
+```rut
+use ink::{ Logger };
+
+struct Task { id: i32; title: str; done: bool }
+
+entry fn main() {
+    let log = Logger("sh");
+    let id = 7;
+    let t = Task { id, title: "Eat an apple", done: false };  // `id` is `id: id`
+    log.info(f"{t.id} {t.title} {t.done}");
+}
+```
+
+```text
+7 Eat an apple false
 ```
 
 ## All fields public, always

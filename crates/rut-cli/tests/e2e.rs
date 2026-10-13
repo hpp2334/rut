@@ -3020,3 +3020,25 @@ entry fn main() -> (i32, i32) {
     let prog = out.graph.program.as_ref().expect("program").clone();
     assert!(prog.export("main").is_some(), "`entry fn main` is the export");
 }
+
+#[test]
+fn struct_field_init_shorthand_compiles_and_runs() {
+    // `Task { id, .. }` means `Task { id: id, .. }` — the parser
+    // desugars the field-init shorthand to a like-named value read, so
+    // the COMPILED values (not just the parse) must come out identical
+    let src = r#"
+class Task {
+    id: i32;
+    title: str;
+    completed: bool;
+}
+entry fn main() -> nil {
+    let id = 41 + 1;
+    let t = Task { id, title: "Eat an apple", completed: false };
+    Logger::new("app").info(f"{t.id} {t.title} {t.completed}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["42 Eat an apple false"]);
+}

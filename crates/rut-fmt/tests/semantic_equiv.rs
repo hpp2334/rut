@@ -202,6 +202,41 @@ entry fn main() {
 }
 
 #[test]
+fn struct_field_init_shorthand_survives_formatting() {
+    // `Task { id, .. }` — the field-init shorthand. The parser desugars
+    // it to `id: id` (a single-segment path over the name token), so
+    // fmt reprints it EXPANDED (the normalize-on-reprint contract, like
+    // `0xff` → `255`): round-trip, idempotence, and identical VM output.
+    let src = r#"
+use ink::{ Logger };
+class Task {
+    id: i32;
+    title: str;
+    completed: bool;
+}
+entry fn main() {
+    let log = Logger::new("sh");
+    let id = 7;
+    let t = Task { id, title: "Eat an apple", completed: false };
+    log.info(f"{t.id} {t.title} {t.completed}");
+}
+"#;
+    let want = run(src).unwrap_or_else(|e| panic!("shorthand: original does not run: {e}"));
+    assert_eq!(want, vec!["7 Eat an apple false"]);
+    let fmted = rut_fmt::format(src, rut_parser::Mode::Impl, &rut_fmt::Style::default())
+        .unwrap_or_else(|ds| panic!("shorthand: fmt refused: {}", ds[0].msg));
+    assert!(
+        fmted.contains("id: id"),
+        "shorthand must reprint expanded to `id: id`: {fmted}"
+    );
+    let got = run(&fmted).unwrap_or_else(|e| panic!("shorthand: FORMATTED text does not run: {e}"));
+    assert_eq!(want, got, "shorthand: the VM output changed under formatting");
+    let again = rut_fmt::format(&fmted, rut_parser::Mode::Impl, &rut_fmt::Style::default())
+        .unwrap_or_else(|ds| panic!("shorthand: fmt(fmt) refused: {}", ds[0].msg));
+    assert_eq!(fmted, again, "shorthand: fmt(fmt(x)) != fmt(x)");
+}
+
+#[test]
 fn comments_around_everything_survive_formatting() {
     probe(
         "comments",

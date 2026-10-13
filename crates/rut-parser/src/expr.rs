@@ -676,13 +676,43 @@ impl AtomFrame {
         if p.eat_punct(Tok::RBrace) {
             return self.struct_pop(p);
         }
+        // the field-name token's span — a field-init shorthand's value
+        // span (the desugared path must spell exactly the name token)
+        let id_sp = p.span();
         let Some(f) = p.expect_ident("a field name") else {
             p.sync_stmt();
             return self.struct_pop(p);
         };
+        // `Name { x, .. }` / `Name { x }` — the field-init shorthand:
+        // the bare name reads the like-named binding, desugared to a
+        // single-segment path spanned over the name token. Anything
+        // else keeps the `field: expr` grammar (so `Name { x.y }` and
+        // `Name { x<EOF>` stay on the clear "expected `:`" error).
+        if matches!(p.tok(), Tok::Comma | Tok::RBrace) {
+            let e = p.expr(
+                ExprKind::Path { segs: vec![PathSeg { name: f, generics: Vec::new() }] },
+                id_sp,
+            );
+            return self.struct_field_done(p, f, e);
+        }
         p.expect(Tok::Colon);
         self.cur_field = Some(f);
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
+    }
+
+    /// one field absorbed — fold `(name, value)` into the literal, then
+    /// a `,` loops to the next field, anything else must close it
+    fn struct_field_done(&mut self, p: &mut Parser, f: IdentId, e: NodeHandle<AnyExpr>) -> Step {
+        match &mut self.stage {
+            AtomStage::Struct { fields, .. } => fields.push((f, e)),
+            _ => unreachable!("struct field at the wrong stage"),
+        }
+        if p.eat_punct(Tok::Comma) {
+            self.struct_top(p)
+        } else {
+            p.expect(Tok::RBrace);
+            self.struct_pop(p)
+        }
     }
 
     fn struct_pop(&mut self, p: &mut Parser) -> Step {
@@ -886,15 +916,9 @@ impl AtomFrame {
                         self.lo.to(p.span()),
                     )))
                 }
-                AtomStage::Struct { fields, .. } => {
+                AtomStage::Struct { .. } => {
                     let f = self.cur_field.take().expect("struct field without a name");
-                    fields.push((f, e));
-                    if p.eat_punct(Tok::Comma) {
-                        self.struct_top(p)
-                    } else {
-                        p.expect(Tok::RBrace);
-                        self.struct_pop(p)
-                    }
+                    self.struct_field_done(p, f, e)
                 }
             AtomStage::PathGen { args, .. }
                 | AtomStage::PathSegGen { args, .. }

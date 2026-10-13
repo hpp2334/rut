@@ -13056,6 +13056,13 @@ msgid ""
 msgstr "带初始化器的字段被省略时取其初始化器；当所有字段都有初始化器时，`{}` 是合法的。"
 
 
+#: src/reference/structs.md:108
+msgid ""
+"**Field-init shorthand**: a bare field name takes its value from the like-named binding in scope — `Name { x, y }` is exactly `Name { x: x, y: y }`."
+msgstr ""
+"**字段初始化简写（field-init shorthand）**：裸字段名从作用域中的同名绑定取值——`Name { x, y }` 恰为 `Name { x: x, y: y }`。"
+
+
 #: src/reference/structs.md:109
 msgid ""
 "```rut\n"
@@ -13071,6 +13078,23 @@ msgid ""
 "    let s = Style {};                     // the declared initializers fill the fields\n"
 "    let r = Rect { min: Point { x: 0, y: 0 }, max: q };  // max shares q's cell\n"
 "    log.info(f\"{s.color} {r.max.x}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/structs.md:132
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Task { id: i32; title: str; done: bool }\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"sh\");\n"
+"    let id = 7;\n"
+"    let t = Task { id, title: \"Eat an apple\", done: false };  // `id` is `id: id`\n"
+"    log.info(f\"{t.id} {t.title} {t.done}\");\n"
 "}\n"
 "```"
 msgstr ""
