@@ -4,6 +4,6 @@
   "format": "rutlock",
   "format_version": 1,
   "deps": [
-    { "pkg": "http", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle", "sha256": "c165618cb6b1cd44efe00dacfeea3e53d9420f7037936c7018d66cb777f9dc5a" }
+    { "pkg": "http", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/http.rutbundle", "sha256": "c165618cb6b1cd44efe00dacfeea3e53d9420f7037936c7018d66cb777f9dc5a" }
   ]
 }

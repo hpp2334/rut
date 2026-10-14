@@ -11,7 +11,7 @@
     // pinned jsDelivr rows the app's own manifests spell (the tests prime
     // an offline remote from the committed dist/std artifacts, so the
     // gate never networks)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/nmapset.rutbundle" }
   }
 }

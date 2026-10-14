@@ -16,8 +16,8 @@
 //!   dev state stands when no `mod.rut` exists, and the ambiguity
 //!   (`entry.type`, no kind, no body) names both fixes;
 //! - bundles: a mod package packs its tree as the `rut.mods` rows
-//!   section and loads mounting the same tree; the PUBLISHED std-v9
-//!   artifacts (the OLD flat envelope, committed at `dist/std-v9/`)
+//!   section and loads mounting the same tree; the PUBLISHED std-v8
+//!   artifacts (the OLD flat envelope, committed at `dist/std-v8/`)
 //!   still load through the reader-compat lane, and a flat package
 //!   repacks byte-identically (the freshness gate over all 16);
 //! - a mod file's `use` statements join the run chain's closure check.
@@ -403,7 +403,7 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
     // legacy names) keeps loading through the reader's compat lane.
     // The published bytes are committed at `dist/std-v8/` so the gate
     // never networks; `dist/std` (the working envelope) is the
-    // freshness gate's business and `dist/std-v9/` the pin envelope.
+    // freshness gate's business and `dist/std-v10/` the pin envelope.
     let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std-v8"));
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).expect("dist/std") {
@@ -420,7 +420,7 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
     assert_eq!(
         stems,
         vec!["http", "json", "nmapset", "pouch"],
-        "the pinned artifacts ride in dist/std-v9: {names:?}"
+        "the pinned artifacts ride in dist/std-v10: {names:?}"
     );
     for path in &names {
         let bytes = std::fs::read(path).expect("read the bundle");

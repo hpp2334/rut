@@ -5,10 +5,10 @@
 /// every `.compile()`), never the `*_host` surfaces (they ride
 /// transitively), never `bench_cross` (dev tooling, not app std).
 ///
-/// LOCKSTEP: the shas are the sha256 of the frozen `dist/std-v9/`
-/// artifacts (phase 3, tag live); keep in step with the stdlib book
-/// pages and the tag lane — when the tag moves, these rows move with
-/// it. The manifest rows are UNPINNED (the `sha256` key is retired
+/// LOCKSTEP: the shas are the sha256 of the frozen `dist/std-v10/`
+/// artifacts (the v10 freeze, tag live); keep in step with the
+/// stdlib book pages and the tag lane — when the tag moves, these
+/// rows move with it. The manifest rows are UNPINNED (the `sha256` key is retired
 /// from the url descriptor grammar — pins live in rut.lock): the
 /// scaffold renders this table into `rut.lock` via
 /// `rut_driver::render_lock`, and `tests/new_lane.rs` holds the law by
@@ -16,39 +16,39 @@
 /// (the lock is the carrier — no duplicate table here).
 const STD: &[(&str, &str)] = &[
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/ink.rutbundle",
         "4197b149b08f1963aa42374aa988be162411dd244f07193d885f337c8a761ac6",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle",
-        "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle",
+        "1bbd861905b6cc09435833d18122f0740be14b7b4bc306821634fb88d38e6f83",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/flow.rutbundle",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/flow.rutbundle",
         "2a45f7279797446bc7bb8e1ed31f9ac0de275e1d615f50f5439ab87a5e1c4f8a",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/nmapset.rutbundle",
         "62b92c34beeda942ffb5cbf8ca84146c56bb33131ac3c0c0a0f8f9ebd643aa02",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/json.rutbundle",
-        "a39d4bfbd89b1046e3505147811badc07fb4c7abcbde4d4f946419d163245983",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/json.rutbundle",
+        "3617601203bdd8d71eb34663ee7cc9790065b2ad49ff2e7ef5a77369b44ed039",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/strbuild.rutbundle",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/strbuild.rutbundle",
         "c27400b68f9bb6ce4634f3b59fdcbdb76b974c0d86abfe57cf1aadc8b6c9bb6e",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/calc.rutbundle",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/calc.rutbundle",
         "61974c5c60e8c85fe9a155b46cf965dfe2ba0dfcd0451d0d46d55145cabd5407",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/futures.rutbundle",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/futures.rutbundle",
         "b22614a88d62f711ec061cebd573b452f93c6ef85b96fbed8531cf012aae8353",
     ),
     (
-        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/http.rutbundle",
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/http.rutbundle",
         "c165618cb6b1cd44efe00dacfeea3e53d9420f7037936c7018d66cb777f9dc5a",
     ),
 ];
@@ -141,7 +141,7 @@ fn manifest_text(name: &str) -> String {
   // module the loader mounts.
   //
   // THE STD SET: all nine swappable std libs, each a COMMITTED
-  // compiled bundle (dist/std, jsDelivr-served at the std-v9 tag).
+  // compiled bundle (dist/std, jsDelivr-served at the std-v10 tag).
   // The pins live in `rut.lock` beside this file (machine-generated:
   // the scaffold wrote them; `rut install` re-pins after a dep edit —
   // the sha256 key is retired from manifest rows). Unused deps are

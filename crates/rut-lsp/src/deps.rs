@@ -581,12 +581,12 @@ mod tests {
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle" }
   }
 }"#;
 
-    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle";
-    const POUCH_PIN: &str = "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466";
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle";
+    const POUCH_PIN: &str = "1bbd861905b6cc09435833d18122f0740be14b7b4bc306821634fb88d38e6f83";
 
     #[test]
     fn plugin_manifest_rows_path_and_url() {

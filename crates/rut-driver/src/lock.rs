@@ -241,7 +241,7 @@ mod tests {
     fn ink_row() -> LockRow {
         LockRow {
             pkg: "ink".into(),
-            url: "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle".into(),
+            url: "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/ink.rutbundle".into(),
             sha256: INK_SHA.into(),
         }
     }
@@ -249,7 +249,7 @@ mod tests {
     fn pouch_row() -> LockRow {
         LockRow {
             pkg: "pouch".into(),
-            url: "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle".into(),
+            url: "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle".into(),
             sha256: POUCH_SHA.into(),
         }
     }
@@ -263,8 +263,8 @@ mod tests {
   \"format\": \"rutlock\",
   \"format_version\": 1,
   \"deps\": [
-    { \"pkg\": \"ink\",   \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/ink.rutbundle\",   \"sha256\": \"4197b14904bd9a5d8b0995d86b7d1b1e50d80e9cb1a1c1e6e2a5e8e9c0d1b2a3\" },
-    { \"pkg\": \"pouch\", \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle\", \"sha256\": \"2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e\" }
+    { \"pkg\": \"ink\",   \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/ink.rutbundle\",   \"sha256\": \"4197b14904bd9a5d8b0995d86b7d1b1e50d80e9cb1a1c1e6e2a5e8e9c0d1b2a3\" },
+    { \"pkg\": \"pouch\", \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle\", \"sha256\": \"2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e\" }
   ]
 }
 ";

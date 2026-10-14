@@ -106,6 +106,13 @@ MECH = [
     (re.compile(r'\bIterator\b'), 'Iterable'),
     # the std-v5 publish: the book's pin rows ride the new tag spelling
     (re.compile(r'\bstd-v3\b'), 'std-v5'),
+    # the std-v10 publish (the mut-law repack): the pin rows ride the
+    # new tag, and the pouch/json rows' shas move with the new bytes
+    (re.compile(r'\bstd-v9\b'), 'std-v10'),
+    (re.compile(r'\b2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466\b'),
+     '1bbd861905b6cc09435833d18122f0740be14b7b4bc306821634fb88d38e6f83'),
+    (re.compile(r'\ba39d4bfbd89b1046e3505147811badc07fb4c7abcbde4d4f946419d163245983\b'),
+     '3617601203bdd8d71eb34663ee7cc9790065b2ad49ff2e7ef5a77369b44ed039'),
     # the main convention retires: `entry fn main` is the same decl's
     # spelling now (drop `pub`, add `entry`)
     (re.compile(r'\bpub fn main\b'), 'entry fn main'),

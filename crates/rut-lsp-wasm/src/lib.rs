@@ -766,7 +766,7 @@ mod tests {
     /// the CDN url's own sha256 — the cache filename rut-lsp computes
     /// (the URL STRING is hashed, never the bytes)
     const POUCH_CACHE: &str =
-        ".rut/cache/b8f8818a7044ac0c3b657cb2419659392ff314fe7c39efd33988396d95dc717d.rutbundle";
+        ".rut/cache/fdcaf5d4f3d713bfe8975ed9f49708850af77baa76dd27ef5b31cd376640b683.rutbundle";
 
     /// read an export's result envelope — `[u32 le length][json]`. The
     /// heap is a byte array (align 1), so the length reads byte-wise —
@@ -792,12 +792,12 @@ mod tests {
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle" }
   }
 }"#;
 
-    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle";
-    const POUCH_PIN: &str = "2f6e6a201083c012edb5362d1ed79bce409747d68c48ff48f23383be4cc54466";
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle";
+    const POUCH_PIN: &str = "1bbd861905b6cc09435833d18122f0740be14b7b4bc306821634fb88d38e6f83";
 
     /// hand a lock spelling `rows` to `rut_set_lock`, byte-typed
     fn set_lock(rows: Vec<rut_driver::LockRow>) -> serde_json::Value {

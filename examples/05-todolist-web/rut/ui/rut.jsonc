@@ -19,7 +19,7 @@
     // THE STD CLOSURE, from the CDN — the same rut.lock-pinned jsDelivr
     // rows biz spells (first-mount-wins: whichever package mounts first
     // serves both, one archive per name)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/pouch.rutbundle" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v9/dist/std/nmapset.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/nmapset.rutbundle" }
   }
 }

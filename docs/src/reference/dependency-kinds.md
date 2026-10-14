@@ -131,7 +131,7 @@ project's `rut.lock`** from this CDN — that is the recommended import
 for everything the toolchain ships. A `path` row is for **your own
 local packages**: a sibling directory in the same project (the modules
 tutorial's `greet` app mounting `../pkg` is the shape). The tag
-advances with format changes (`std-v9` today) and is never re-pointed,
+advances with format changes (`std-v10` today) and is never re-pointed,
 so a lock pin at a tag stays honest forever.
 
 The std tree ships as committed per-package bundles —
