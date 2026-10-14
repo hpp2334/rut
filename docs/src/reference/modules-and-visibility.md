@@ -63,9 +63,11 @@ entry fn main() {
 ```
 
 The use path is **`pkg::` followed by module segments**: the head is
-the mounted package's bare `[a-zA-Z0-9_]+` name, then zero or more
-**module segments** walking the package's file modules, then the
-leaf — a brace list of one or more names, or a single name:
+the mounted package's bare `[a-zA-Z0-9_]+` name — or the consumer's
+own package (its name, or one of its `mod` edges; see the
+intra-package import below) — then zero or more **module segments**
+walking the package's file modules, then the leaf — a brace list of
+one or more names, or a single name:
 
 ```text
 use tur_kit::layout::grid::Cell;       // one name from a nested module
@@ -84,6 +86,28 @@ declare is rejected at the use line itself —
 `` `ink` has no `Nope` — unknown import `` — not later, at a call site
 that might never be written. An unreferenced use name is a lint, not
 an error.
+
+The head may also name the **consumer's own package** — the
+intra-package import. The package's own name resolves to its root
+module, and a `mod` edge of its own tree resolves by walking from the
+file the `use` is written in (the current module first, then the
+ancestors — the same walk qualified positions take):
+
+```rut
+use imp::{ TodoList, Task };   // beside `mod imp;` — imp's pub names
+
+mod imp;
+```
+
+The leaves obey the same laws every crossing does. Each must be a
+declaration of the walked module, **visible from the importing file**:
+a bare, private member of `imp` is not importable — `pub` or `pub(pkg)`
+is (import is no visibility bypass). A module itself is not an import —
+walk it (`use imp::grid::{ Cell }`, not `use imp::{ grid }`). And the
+binding is per file, exactly like a dep use: a module needs its own
+`use` line. One head must never answer as two things: a name that is
+both a declared dep and an own module edge is a loud ambiguity —
+rename one of the two.
 
 The head itself is **declaration-scoped**: a package may `use` exactly
 the heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps`
@@ -114,16 +138,21 @@ a path is legal — a type annotation, a call, a field read — by
 **qualified position**: `layout::Column`, `store::Source<str>`,
 `widget::mk(3)`. The head resolves against the current module's scope,
 then the module's ancestors up to the package root; positions never
-take a package head — `use` statements are the only cross-package
-door. `::` is THE path separator — every name-resolution path (use
-paths, qualified positions, enum members, statics/associated fns,
-extern namespaces) spells its segments with it; `.` is value access
-only (fields, instance methods, tuple indices — see
-[Lexical structure](lexical-structure.md)). One separator, two doors:
+take a *dep* package head — `use` statements are the only cross-package
+door. `use` is also the intra-package import — a use head may be this
+package's own name, or one of its `mod` edges (see
+[Uses](#uses)) — so a cross-file name binds bare once imported;
+positions stay spelling-free: `imp::grid::Cell` never needed an
+import, and still spells. `::` is THE path separator — every
+name-resolution path (use paths, qualified positions, enum members,
+statics/associated fns, extern namespaces) spells its segments with
+it; `.` is value access only (fields, instance methods, tuple indices
+— see [Lexical structure](lexical-structure.md)). One separator, two
+doors:
 
 | form | spelling | door |
 |---|---|---|
-| use path | `use pkg::a::b::{ C }` | `::` — cross-package, the import |
+| use path | `use pkg::a::b::{ C }` | `::` — cross-package **and own-package module**, the import |
 | qualified position | `a::b::C` / `a::b::f(..)` | `::` — intra-package, at the use site |
 
 ### Module-level `let`

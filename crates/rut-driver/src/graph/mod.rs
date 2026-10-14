@@ -21,7 +21,7 @@
 mod compiler;
 mod seeds;
 
-pub(crate) use compiler::uses_of;
+pub(crate) use compiler::{dep_use_heads, mod_inputs_of};
 
 use compiler::{GraphCompiler};
 use seeds::build_seed_groups;

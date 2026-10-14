@@ -154,6 +154,7 @@ context; after that, use the zh-CN rendering alone.
 | module tree | 模块树 | the mounted file-module set of a package |
 | qualified position | 限定位置 | the `::`-spelled intra-package reference（`layout::Column` stays code）；dot → 点号（`.` 只拼值访问） |
 | use path | use 路径 | the `::`-spelled import path（`use` 为代码） |
+| intra-package import | 包内导入 | the own-package use lane — a use head naming the consumer's own package（its name → the root module，a `mod` edge → the walked child）；own package → 本包；own module edge → 本包模块边 |
 | path separator | 路径分隔符 | `::` — THE path separator: every name-resolution path spells its segments with it（每条名称解析路径的段都由它拼写）；`.` is value access only |
 | value access | 值访问 | fields, instance methods, tuple indices → 字段、实例方法、元组索引（`.` 的唯一职责） |
 | mount | 挂载 | mounting is declared, not discovered → 挂载由声明决定，而非目录发现 |

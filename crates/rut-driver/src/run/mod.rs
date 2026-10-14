@@ -362,6 +362,11 @@ impl RutRun {
         let mounted: Vec<(String, Pkg)> =
             session.modules().map(|(s, m)| (s.clone(), m.clone())).collect();
         for (spec, pkg) in &mounted {
+            // a per-file layout for the use split: files = [(0, this
+            // file's mod path)], the scopes tree the pkg mounted — the
+            // own-package lane's walk starts at the file the use is
+            // written in
+            let layout_for = |from: &str| crate::graph::mod_inputs_of(pkg, vec![(0, from.to_string())]);
             // the root's own uses — a source body's parse (compiled
             // bodies carry no source; the flat shape is exactly
             // today's check)
@@ -369,7 +374,8 @@ impl RutRun {
                 let mode = if *is_decl { Mode::Decl } else { Mode::Impl };
                 let (ast, diags) = rut_parser::parse(text, mode);
                 if diags.is_empty() {
-                    for name in crate::graph::uses_of(&ast) {
+                    let layout = layout_for("");
+                    for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &ast) {
                         if let Err(e) = session.resolve_use(spec, &name, &root) {
                             return Err(RunError::law(e.to_string()));
                         }
@@ -384,7 +390,8 @@ impl RutRun {
                 if !diags.is_empty() {
                     continue; // the compile reports the syntax
                 }
-                for name in crate::graph::uses_of(&ast) {
+                let layout = layout_for(&m.path);
+                for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &ast) {
                     if let Err(e) = session.resolve_use(spec, &name, &root) {
                         return Err(RunError::law(format!(
                             "`{}` ({}): {e}",

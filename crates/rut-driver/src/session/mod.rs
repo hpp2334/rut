@@ -24,7 +24,11 @@
 //! adds the nameability law on top: a mounted head passes only when
 //! the consumer DECLARES it (its manifest's `deps` ∪ `peer-deps` ∪ the
 //! program root's `dev-deps`; `core` rides unconditionally). The
-//! mounted-but-undeclared miss is D5, the dedicated diagnostic.
+//! mounted-but-undeclared miss is D5, the dedicated diagnostic. The
+//! sibling [`Session::own_use_head`] answers the own-package lane: a
+//! use head that is no declared dep may name the consumer's OWN
+//! package — its spec (the root module) or a `mod` edge visible-walked
+//! from the importing file.
 //!
 //! The dep kinds: `[deps]` is today's transitively-mounted
 //! table; `[peer-deps]` is REQUIRED by default (the consumer supplies
@@ -159,6 +163,43 @@ impl Session {
         } else {
             Err(ResolveError::not_declared(head, consumer, pkg.mounted_by.as_deref()))
         }
+    }
+
+    /// The own-package answer for a use head — the sibling the use
+    /// validation consults beside [`Session::resolve_use`]. `Some` when
+    /// the CONSUMER's own package claims the head: a `mod` edge
+    /// visible-walked from `from` (the importing file's mod path; the
+    /// current module first, then the ancestors, nearest wins — the
+    /// qualified positions' walk exactly), or the consumer's OWN spec
+    /// naming the root module. The walk ignores edge visibility: mod
+    /// edges are intra-package namespaces, the LEAF gate decides what
+    /// crosses. A flat package (no mod children) claims nothing — its
+    /// own name was never a legal use head there.
+    pub(crate) fn own_use_head(&self, consumer: &str, head: &str, from: &str) -> Option<String> {
+        let pkg = self.resolve(consumer).ok()?;
+        let mut cur = from.to_string();
+        loop {
+            let child = if cur.is_empty() {
+                head.to_string()
+            } else {
+                format!("{cur}/{head}")
+            };
+            if pkg.mods.contains_key(&child) {
+                return Some(child);
+            }
+            let parent = match cur.rsplit_once('/') {
+                Some((p, _)) => p.to_string(),
+                None => String::new(),
+            };
+            if parent == cur {
+                break;
+            }
+            cur = parent;
+        }
+        if !pkg.mods.is_empty() && head == pkg.spec {
+            return Some(String::new());
+        }
+        None
     }
 
     /// The nameability allowlist: the heads `consumer` may `use` — its

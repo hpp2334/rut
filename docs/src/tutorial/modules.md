@@ -222,11 +222,25 @@ app/
 └── app/mod.rut      # the shell
 ```
 
-Each file is its own module: cross-file references are qualified
-(`domain::Todo`, `world::boot(..)`), and visibility is per module —
-private to the declaring module, `pub(pkg)` to share inside the
-package, `pub` to cross packages. Cross-package references still go
-through `use` paths (`use app::world::{ World }`).
+Each file is its own module. Cross-file references are **qualified**
+(`domain::Todo`, `world::boot(..)`) — or imported: `use` is also the
+intra-package import, so a file may bind another module's `pub` names
+as bare names, per file:
+
+```rut
+// app/mod.rut — beside `mod domain;` and `mod world;`
+use domain::{ Todo };
+use world::{ World };
+```
+
+The leaves gate exactly as every crossing does: a name the target
+doesn't declare is refused at the use line, and a private one stays
+private — `pub` or `pub(pkg)` to widen (import is no visibility
+bypass). A module needs its own `use` line: bindings are per file.
+Visibility is per module — private to the declaring module, `pub(pkg)`
+to share inside the package, `pub` to cross packages.
+Cross-package references still go through `use` paths
+(`use greet::{ Greeting };`).
 
 ## Dependency kinds
 

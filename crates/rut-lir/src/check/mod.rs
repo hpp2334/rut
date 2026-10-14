@@ -316,6 +316,22 @@ pub(crate) fn under(from: &str, anc: &str) -> bool {
     from == anc || from.starts_with(&format!("{anc}/"))
 }
 
+/// The visibility predicate, free-standing (the driver's own-package
+/// use validation rides the same law the checker enforces at use
+/// sites): may `from` see a decl declared in `def_mod` with
+/// visibility `vis`? Paths are pkg-relative, `""` is the root. `Pub`
+/// and `Pkg` pass within the package by construction (`pub` alone
+/// crosses packages — the use-binding gate checks that separately);
+/// `Super` reaches the parent module's subtree; `Self_` reaches the
+/// declaring module and its descendants.
+pub fn vis_crosses(from: &str, def_mod: &str, vis: Vis) -> bool {
+    match vis {
+        Vis::Pub | Vis::Pkg => true,
+        Vis::Super => under(from, parent_of(def_mod)),
+        Vis::Self_ => under(from, def_mod),
+    }
+}
+
 /// A mod path's parent (`"a/b"` → `"a"`, `""`/`"a"` → `""`).
 pub(crate) fn parent_of(path: &str) -> &str {
     match path.rsplit_once('/') {
@@ -547,6 +563,13 @@ pub struct Ctx<'a> {
     /// head that names one of these is the cross-package spelling the
     /// position grammar refuses, and the diagnostic names the use fix.
     pub used_pkgs: std::collections::HashSet<String>,
+    /// The own-package `use` bindings (the intra-package import):
+    /// `(binding mod path, name)` → the target module, recorded by the
+    /// graph compiler's validated own lane. A bare name bound by
+    /// `use imp::{ X }` resolves through the TARGET module's decls in
+    /// the file whose `use` wrote it — the dep surfaces' per-file law,
+    /// pointed inside the package.
+    pub own_uses: std::collections::HashMap<(String, IdentId), String>,
     /// the origin pkg of every bound (used) name: a used
     /// type's or trait's DECLARING pkg, recorded beside the binding —
     /// the origin map covers only spliced text, a linked dep contributes
@@ -768,6 +791,7 @@ impl<'a> Ctx<'a> {
             cur_mod: String::new(),
             use_sites: std::collections::HashMap::new(),
             used_pkgs: std::collections::HashSet::new(),
+            own_uses: std::collections::HashMap::new(),
             extern_origins: std::collections::HashMap::new(),
             pub_core,
             inst_map: std::collections::HashMap::new(),
@@ -813,17 +837,10 @@ impl<'a> Ctx<'a> {
 
     /// The visibility predicate (the flat `is_pub = vis == Vis::Pub`
     /// grown up): may `from` see a decl declared in `def_mod` with
-    /// visibility `vis`? Paths are pkg-relative, `""` is the root.
-    /// `Pub` and `Pkg` pass within the package by construction (`pub`
-    /// alone crosses packages — the use-binding gate checks that
-    /// separately); `Super` reaches the parent module's subtree;
-    /// `Self_` reaches the declaring module and its descendants.
+    /// visibility `vis`? Paths are pkg-relative, `""` is the root —
+    /// the free-standing [`vis_crosses`] is the one law.
     pub(crate) fn vis_crosses(&self, from: &str, def_mod: &str, vis: Vis) -> bool {
-        match vis {
-            Vis::Pub | Vis::Pkg => true,
-            Vis::Super => under(from, parent_of(def_mod)),
-            Vis::Self_ => under(from, def_mod),
-        }
+        vis_crosses(from, def_mod, vis)
     }
 
     /// The qualified-head walk: `name` must be a `mod` child of the
@@ -877,12 +894,24 @@ impl<'a> Ctx<'a> {
 
     /// Is the name use-bound by the CURRENT module's file? Uses bind
     /// per file; a flat package (no per-file records) gates exactly as
-    /// before — every binding counts.
+    /// before — every binding counts. An own-package binding claims
+    /// the name for its file: the dep lanes must not bind it there.
     pub(crate) fn use_bound_here(&self, name: IdentId) -> bool {
+        if self.own_uses.contains_key(&(self.cur_mod.clone(), name)) {
+            return false;
+        }
         match self.use_sites.get(&name) {
             None => true,
             Some(sites) => sites.iter().any(|m| *m == self.cur_mod),
         }
+    }
+
+    /// The module an own-package `use` binding in the CURRENT file
+    /// targets — `use imp::{ X }` in the root targets `imp`. Owned:
+    /// the ladder arms hold it across mutations. `None` = the name is
+    /// not own-bound here (the dep lanes carry on).
+    pub(crate) fn own_use_target(&self, name: IdentId) -> Option<String> {
+        self.own_uses.get(&(self.cur_mod.clone(), name)).cloned()
     }
 
     /// A free fn declared in the CURRENT module (single-seg call /
@@ -946,7 +975,8 @@ impl<'a> Ctx<'a> {
     }
 
     /// The "bound elsewhere" hint: the name rides another file's
-    /// `use` — this module needs its own.
+    /// `use` — this module needs its own. An own-package binding says
+    /// where the name comes from (imported there from module X).
     pub(crate) fn use_elsewhere_hint(&self, name: IdentId) -> Option<String> {
         let sites = self.use_sites.get(&name)?;
         let other = sites.iter().find(|m| **m != self.cur_mod)?;
@@ -955,10 +985,15 @@ impl<'a> Ctx<'a> {
         } else {
             format!("module `{other}`")
         };
+        let note = match self.own_uses.get(&(other.clone(), name)) {
+            Some(target) => format!(" (imported there from module `{target}`)"),
+            None => String::new(),
+        };
         Some(format!(
-            "`{}` is use-bound in {} — this module needs its own `use` to bind it",
+            "`{}` is use-bound in {}{} — this module needs its own `use` to bind it",
             self.name(name),
-            where_
+            where_,
+            note
         ))
     }
 

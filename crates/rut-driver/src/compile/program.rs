@@ -93,6 +93,7 @@ pub fn compile_program(
         !uses.is_empty(),
         &Seeds::none(),
         &rut_lir::check::ModInputs::flat(),
+        &[],
     )
 }
 
@@ -103,7 +104,11 @@ pub fn compile_program(
 /// and the instantiations to materialize before the compile roots.
 /// `mods` carries the file-module inputs (phase 3): the concatenated
 /// text's file layout and the scope tree — flat for single-file
-/// packages.
+/// packages. `own_uses` carries the own-package use bindings the
+/// graph validation recorded: `(importing file mod path, bound name,
+/// target module)` — the bare-name ladder resolves these through the
+/// target module's decls, per file.
+#[allow(clippy::too_many_arguments)]
 pub fn compile_program_resolved(
     src: &str,
     mode: Mode,
@@ -113,6 +118,7 @@ pub fn compile_program_resolved(
     allow_uses: bool,
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
+    own_uses: &[(String, String, String)],
 ) -> ProgramOutput {
     let fail = |diags: Vec<Diag>, ast_dump: String, ast_json: String| ProgramOutput {
         diags,
@@ -150,6 +156,15 @@ pub fn compile_program_resolved(
     // the file-module inputs (phase 3): the file layout + scope tree
     // this unit resolves against (flat for single-file packages)
     ctx.mods = mods.clone();
+    // the own-package use bindings (the intra-package import): the
+    // graph validation's rows — a bare name bound by `use imp::{ X }`
+    // resolves through the TARGET module's decls, in the file whose
+    // `use` wrote it
+    for (site, name, target) in own_uses {
+        if let Some(id) = ast.interner.lookup(name) {
+            ctx.own_uses.insert((site.clone(), id), target.clone());
+        }
+    }
     // the pkg names this unit's use statements name — a qualified head
     // spelling one of these is the cross-package door the position
     // grammar refuses; the diagnostic names the use fix

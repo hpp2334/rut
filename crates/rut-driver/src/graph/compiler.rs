@@ -78,6 +78,9 @@ pub(super) struct UnitSrc {
     /// the file-module layout the unit compiled with (phase 3) — the
     /// replay must reassemble the same module tree
     layout: rut_lir::check::ModInputs,
+    /// the own-package use bindings the unit validated with — the
+    /// replay re-binds the same bare names to their target modules
+    own_uses: Vec<(String, String, String)>,
 }
 
 impl<'a> GraphCompiler<'a> {
@@ -460,15 +463,17 @@ impl<'a> GraphCompiler<'a> {
                 self.diags.push(Diag::new(Span::new(0, 0), p));
             }
         }
-        // phase 3: the use statements' mod paths validate against the
-        // DEPS' mounted trees (uses are the cross-package door — each
-        // segment must be a `pub mod` of the dep, the leaf names a
-        // `pub` decl of the walked module). Flat uses validate their
-        // leaf list against the dep's root module at the same door.
-        if !self.validate_qualified_uses(spec, &ast, &layout) {
-            return None;
-        }
-        let uses = uses_of(&ast);
+        // phase 3: the use statements validate against the DEPS' mounted
+        // trees, plus the own-package lane (the intra-package import).
+        // Uses are the cross-package door — each dep segment must be a
+        // `pub mod` of the dep, the leaf a `pub` decl of the walked
+        // module; the own lane walks the consumer's own mod tree and
+        // gates its leaves under the crossing predicate. The validated
+        // dep heads ensure; the own bindings ride the compile.
+        let (uses, own_uses) = match self.validate_qualified_uses(spec, &ast, &layout) {
+            Some(uses) => uses,
+            None => return None,
+        };
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays
         // legal but redundant for them), while the `pub builtin`
@@ -501,6 +506,7 @@ impl<'a> GraphCompiler<'a> {
             true,
             &Seeds::none(),
             &layout,
+            &own_uses,
         );
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
@@ -526,7 +532,7 @@ impl<'a> GraphCompiler<'a> {
         // — same surface bindings, same text, same module layout)
         self.unit_src.insert(
             spec.to_string(),
-            UnitSrc { text: combined, is_decl, bound, layout },
+            UnitSrc { text: combined, is_decl, bound, layout, own_uses },
         );
         let idx = self.programs.len();
         self.programs.push(program);
@@ -718,6 +724,7 @@ impl<'a> GraphCompiler<'a> {
         };
         let (text, is_decl, bound) = (src.text.clone(), src.is_decl, src.bound.clone());
         let layout = src.layout.clone();
+        let own_uses = src.own_uses.clone();
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
         let out = compile_program_resolved(
             &text,
@@ -728,6 +735,7 @@ impl<'a> GraphCompiler<'a> {
             true,
             &Seeds { groups: &groups },
             &layout,
+            &own_uses,
         );
         for r in &out.requests {
             self.requests.push((owner.to_string(), r.clone()));
@@ -804,11 +812,17 @@ impl<'a> GraphCompiler<'a> {
             self.diags.extend(attribute_diags(d, owner, &layout));
             return;
         }
-        let mut uses = uses_of(&ast);
+        // the dep heads only: a head the owner's own package claims is
+        // the intra-package lane — the compile binds it through the
+        // layout (the walk validated at the pack-time compile)
+        let mut uses = dep_use_heads(self.session, owner, &self.root, &layout, &ast);
         // the prelude ride, exactly as the source walk spells it
         if owner != "core" && self.session.resolve("core").is_ok() && !uses.iter().any(|u| u == "core") {
             uses.push("core".to_string());
         }
+        // the own-package bindings re-derive silently: the text is
+        // byte-identical, the layout the same tree
+        let own_uses = own_use_bindings(self.session, owner, &self.root, &layout, &ast);
         let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)> = Vec::new();
         let mut bound_scopes = HashSet::new();
         for dep in &uses {
@@ -829,6 +843,7 @@ impl<'a> GraphCompiler<'a> {
             true,
             &Seeds { groups: &groups },
             &layout,
+            &own_uses,
         );
         for r in &out.requests {
             self.requests.push((owner.to_string(), r.clone()));
@@ -888,19 +903,106 @@ impl<'a> GraphCompiler<'a> {
 }
 
 
-/// The exact package names a module uses, in source order, deduped.
-/// `path[0]` is the package — the dep the graph ensures and binds;
-/// the mod-path segments behind it are the qualified-use lanes'
-/// (validation walks the dep's tree, the binding composes them onto
-/// the host mod rows).
-pub(crate) fn uses_of(ast: &Ast) -> Vec<String> {
+/// The dep heads one parsed unit's `use` statements name, in source
+/// order, deduped. `path[0]` is the package — the dep the graph
+/// ensures and binds; the mod-path segments behind it are the
+/// qualified-use lanes' (validation walks the dep's tree, the binding
+/// composes them onto the host mod rows). The OWN-PACKAGE lane is
+/// excluded: a head the consumer's own package claims (its spec, or a
+/// `mod` edge visible-walked from the use's file) is the
+/// intra-package import — no package to ensure or declare; the
+/// compile binds it through the layout. Silent: the compile's
+/// validation owns the diagnostics, this is the ensure-list /
+/// closure-check split. `layout` maps each use statement's span to
+/// its file (the own walk's start).
+pub(crate) fn dep_use_heads(
+    session: &Session,
+    spec: &str,
+    root: &str,
+    layout: &rut_lir::check::ModInputs,
+    ast: &Ast,
+) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
-        if let ItemKind::Use { path, .. } = ast.item(it) {
-            let name = ast.name(path[0]).to_string();
-            if !out.contains(&name) {
-                out.push(name);
+        let ItemKind::Use { path, .. } = ast.item(it) else {
+            continue;
+        };
+        let head = ast.name(path[0]).to_string();
+        let from = layout.file_of(ast.span(it.id()).lo).to_string();
+        if session.resolve_use(spec, &head, root).is_err()
+            && session.own_use_head(spec, &head, &from).is_some()
+        {
+            continue; // the intra-package lane — no package behind it
+        }
+        if !out.contains(&head) {
+            out.push(head);
+        }
+    }
+    out
+}
+
+/// The visibility-fix hint for an own-lane leaf the crossing predicate
+/// refuses (the checker's `vis_hint`, spelled driver-side — there is
+/// no Ctx here): each tier names what would widen it.
+fn own_leaf_vis_hint(name: &str, from: &str, def_mod: &str, vis: Vis) -> String {
+    match vis {
+        Vis::Super => format!(
+            "`{name}` is `pub(super)` — visible only in `{}`'s subtree, and `{from}` is outside it",
+            def_mod.rsplit_once('/').map(|(p, _)| p).unwrap_or(""),
+        ),
+        _ => format!(
+            "`{name}` is private to module `{def_mod}` — visible only inside it and its submodules; \
+             declare it `pub` (or `pub(pkg)`) to widen"
+        ),
+    }
+}
+
+/// The own-package use bindings one parsed unit's statements carry,
+/// derived silently — the reseed replay's twin of the validation's
+/// own lane (the text is byte-identical, the validation already ran).
+/// Each statement's head resolves through the session's own-package
+/// answer (a dep-lane head joins nothing); the interior segments walk
+/// the layout's mod tree; every leaf binds `(importing file, name)` →
+/// target module.
+pub(crate) fn own_use_bindings(
+    session: &Session,
+    spec: &str,
+    root: &str,
+    layout: &rut_lir::check::ModInputs,
+    ast: &Ast,
+) -> Vec<(String, String, String)> {
+    let mut out: Vec<(String, String, String)> = Vec::new();
+    for it in ast.module_items(ast.root).to_vec() {
+        let ItemKind::Use { path, names } = ast.item(it) else {
+            continue;
+        };
+        let head = ast.name(path[0]).to_string();
+        let from = layout.file_of(ast.span(it.id()).lo).to_string();
+        if session.resolve_use(spec, &head, root).is_ok() {
+            continue; // the dep lane — not ours
+        }
+        let Some(mut at) = session.own_use_head(spec, &head, &from) else {
+            continue;
+        };
+        let mut walked = true;
+        for &seg in &path[1..] {
+            match layout
+                .scopes
+                .get(&at)
+                .and_then(|s| s.children.get(ast.name(seg)))
+            {
+                Some((child, _vis)) => at = child.clone(),
+                None => {
+                    walked = false;
+                    break;
+                }
             }
+        }
+        if !walked {
+            continue;
+        }
+        for &n in names {
+            out.push((from.clone(), ast.name(n).to_string(), at.clone()));
         }
     }
     out
@@ -982,19 +1084,180 @@ impl GraphCompiler<'_> {
     /// validate each leaf against the dep's ROOT module — the surface
     /// the flat binding walks — at the use line: a typo'd import is
     /// rejected where it is written, not at a call site that may never
-    /// be written. `false` = diagnosed, the unit fails.
+    /// be written. The OWN-PACKAGE lane rides beside them: a head that
+    /// is no declared dep may name the consumer's own package — its
+    /// spec naming the root module, or a `mod` edge walked from the
+    /// importing file's mod path (`use imp::{TodoList}` beside
+    /// `mod imp;`); each leaf must be a decl of the walked module,
+    /// visible from the importing file under the crossing predicate
+    /// (import is no visibility bypass), and a module name is not an
+    /// import — walk it. A head that names BOTH a declared dep and an
+    /// own mod edge is the loud ambiguity (mounts and mod edges are
+    /// different namespaces; silence here would be a trap). Answers the
+    /// dep heads to ensure plus the validated own bindings
+    /// (`(importing file, name)` → target module) — `None` = diagnosed,
+    /// the unit fails.
     fn validate_qualified_uses(
         &mut self,
         spec: &str,
         ast: &Ast,
         layout: &rut_lir::check::ModInputs,
-    ) -> bool {
+    ) -> Option<(Vec<String>, Vec<(String, String, String)>)> {
+        let dep_heads = dep_use_heads(self.session, spec, &self.root, layout, ast);
         let mut ok = true;
+        let mut own_uses: Vec<(String, String, String)> = Vec::new();
         let session = self.session;
         for it in ast.module_items(ast.root).to_vec() {
             let ItemKind::Use { path, names } = ast.item(it) else {
                 continue;
             };
+            let head_text = ast.name(path[0]).to_string();
+            let span = ast.span(it.id());
+            // the importing file's mod path — the own walk starts here
+            let from = layout.file_of(span.lo).to_string();
+            // the head's two namespaces: the mounted+declared dep
+            // (today's law) and the own package. Neither answers →
+            // today's resolve shapes; both → the loud ambiguity.
+            let dep = session.resolve_use(spec, &head_text, &self.root).ok();
+            let own_head = session.own_use_head(spec, &head_text, &from);
+            if dep.is_none() && own_head.is_none() {
+                let e = session
+                    .resolve_use(spec, &head_text, &self.root)
+                    .unwrap_err();
+                self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
+                ok = false;
+                continue;
+            }
+            if let (Some(_), Some(target)) = (&dep, &own_head) {
+                let what = if target.is_empty() {
+                    "this package's own name (the root module)".to_string()
+                } else {
+                    format!(
+                        "this package's own module `{head_text}` ({})",
+                        rut_lir::check::ModInputs::display(target),
+                    )
+                };
+                // the use statement's span indexes the combined text —
+                // attribute it like every compile diag
+                self.diags.extend(attribute_diags(
+                    vec![Diag::new(
+                        span,
+                        format!(
+                            "`{head_text}` names both the declared dependency `{head_text}` and {what} — \
+                             the use path is ambiguous; rename one of the two",
+                        ),
+                    )],
+                    spec,
+                    layout,
+                ));
+                ok = false;
+                continue;
+            }
+            let Some(pkg) = dep else {
+                // ---- the own-package lane ----
+                let mut at = own_head.expect("own lane checked above");
+                // the interior segments walk child mods (`walk_mod_path`
+                // semantics — edges are intra-package namespaces; the
+                // LEAF visibility-gates)
+                let mut walked = true;
+                for &seg in &path[1..] {
+                    let seg_text = ast.name(seg);
+                    match layout
+                        .scopes
+                        .get(&at)
+                        .and_then(|s| s.children.get(seg_text))
+                    {
+                        Some((child, _vis)) => at = child.clone(),
+                        None => {
+                            // attributed like every compile diag: the
+                            // arrow names the use line
+                            self.diags.extend(attribute_diags(
+                                vec![Diag::new(
+                                    span,
+                                    format!(
+                                        "`{seg_text}` is not a module under `{}` — only `mod` children \
+                                         extend a qualified path",
+                                        if at.is_empty() { head_text.as_str() } else { at.as_str() },
+                                    ),
+                                )],
+                                spec,
+                                layout,
+                            ));
+                            walked = false;
+                            break;
+                        }
+                    }
+                }
+                if !walked {
+                    ok = false;
+                    continue;
+                }
+                // the leaves: decls of the walked module, visible from
+                // the importing file under the crossing predicate
+                let at_file = |at: &str| -> String {
+                    if at.is_empty() {
+                        "mod.rut".to_string()
+                    } else {
+                        format!("{at}/mod.rut")
+                    }
+                };
+                let mut bad: Vec<Diag> = Vec::new();
+                {
+                    let Some(table) = self.dep_mod_table(spec) else { continue };
+                    let Some(rows) = table.get(&at) else { continue };
+                    for &n in names {
+                        let text = ast.name(n);
+                        match rows.iter().find(|d| d.name == text) {
+                            None => bad.push(Diag::new(
+                                span,
+                                format!(
+                                    "`{text}` is not declared in `{spec}`'s module `{at}` ({})",
+                                    at_file(&at),
+                                ),
+                            )),
+                            Some(d) if d.kind == crate::mods::DeclKind::Mod => {
+                                let mut fix = String::new();
+                                for &seg in path {
+                                    fix.push_str(ast.name(seg));
+                                    fix.push_str("::");
+                                }
+                                bad.push(Diag::new(
+                                    span,
+                                    format!(
+                                        "`{text}` is a module of this package — a module is not \
+                                         imported; walk it: `use {fix}{text}::{{ .. }}`"
+                                    ),
+                                ));
+                            }
+                            Some(d) if !rut_lir::check::vis_crosses(&from, &at, d.vis) => {
+                                bad.push(Diag::new(
+                                    span,
+                                    format!(
+                                        "`{}::{}` — {}",
+                                        at,
+                                        text,
+                                        own_leaf_vis_hint(text, &from, &at, d.vis),
+                                    ),
+                                ));
+                            }
+                            Some(_) => {
+                                own_uses.push((from.clone(), text.to_string(), at.clone()));
+                            }
+                        }
+                    }
+                }
+                if !bad.is_empty() {
+                    // the use statement's span indexes the combined text
+                    // — attribute it like every compile diag (the
+                    // renderer spells `--> file:line:col` off it)
+                    self.diags.extend(attribute_diags(bad, spec, layout));
+                    ok = false;
+                }
+                continue;
+            };
+            // the dep lane: the head is a mounted, declared dep — the
+            // nameability gate already answered above
+            let dep_name = head_text;
             if path.len() < 2 {
                 // the flat spelling — each leaf must be a decl of the
                 // dep's root module (or the dep's namespace head). The
@@ -1005,12 +1268,6 @@ impl GraphCompiler<'_> {
                 // keeps failing at its use site. A compiled dep's decls
                 // ride its binary (the binding gate answers), and an
                 // undeclared head keeps its D5 shape at the binding.
-                if let Err(e) = session.resolve_use(spec, ast.name(path[0]), &self.root) {
-                    self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
-                    ok = false;
-                    continue;
-                }
-                let dep_name = ast.name(path[0]).to_string();
                 if !self.dep_rows_readable(&dep_name) {
                     continue;
                 }
@@ -1020,7 +1277,6 @@ impl GraphCompiler<'_> {
                     .resolve(&dep_name)
                     .ok()
                     .and_then(|m| m.namespace.clone());
-                let span = ast.span(it.id());
                 let bad: Vec<Diag> = {
                     let Some(table) = self.dep_mod_table(&dep_name) else { continue };
                     // no root rows to read (a hand-built host surface
@@ -1060,19 +1316,9 @@ impl GraphCompiler<'_> {
                 }
                 continue;
             }
-            let dep_name = ast.name(path[0]).to_string();
-            // the nameability gate first: the head must be DECLARED,
-            // not merely mounted (D5's mounted-but-undeclared fire;
-            // an unmounted head keeps its D2/NoModule shape). Mod-path
-            // validation walks only declared heads.
-            let pkg = match session.resolve_use(spec, &dep_name, &self.root) {
-                Ok(p) => p,
-                Err(e) => {
-                    self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
-                    ok = false;
-                    continue;
-                }
-            };
+            // the nameability gate already answered: `pkg` is the
+            // declared dep the head resolved to. Mod-path validation
+            // walks only declared heads.
             // the dep's tree flavor names the declaring files: a host
             // surface's children are `.d.rut` files (`mod.d.rut`), a
             // lib body's are `mod.rut` — the diagnostics spell the one
@@ -1173,7 +1419,10 @@ impl GraphCompiler<'_> {
                 ok = false;
             }
         }
-        ok
+        if !ok {
+            return None;
+        }
+        Some((dep_heads, own_uses))
     }
 
     /// The dep's per-module decl rows (parsed once per spec — the

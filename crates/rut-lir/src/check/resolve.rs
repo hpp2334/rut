@@ -439,6 +439,15 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             return self.mk_data_inst(name, args, sp);
                         }
+                // an own-package use binding (the intra-package import):
+                // the name resolves through the TARGET module's decls —
+                // the same rungs the qualified leaf rides (generics and
+                // the crossing predicate included)
+                if let Some(target) = self.own_use_target(name) {
+                    let leaf = PathSeg { name, generics: seg.generics.clone() };
+                    let from = self.cur_mod.clone();
+                    return self.resolve_qualified_leaf_ty(&from, &target, &leaf, sp, env);
+                }
                 // the removed engine-contract names (v20): a spelled
                 // `Iterable`/`Disposal` in type position names its
                 // marker. (`Future`/`RunContext` resolve through the

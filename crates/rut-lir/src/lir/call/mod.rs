@@ -380,6 +380,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.fn_is_here(name) {
             return self.compile_free_fn_call(name, generics, args, expected, sp);
         }
+        // an own-package use binding (the intra-package import): the
+        // name resolves through the TARGET module's fn — names are
+        // package-unique, so the ordinary free-fn call lowers it, the
+        // crossing predicate gating at the use site
+        if let Some(target) = self.ctx.own_use_target(name) {
+            if let Some(fnode) = self.ctx.fn_in(&target, name) {
+                let from = self.ctx.cur_mod.clone();
+                let vis = self.ctx.ast.fn_decl(fnode).vis;
+                if !self.ctx.vis_crosses(&from, &target, vis) {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}::{}` — {}",
+                            target,
+                            self.ctx.name(name),
+                            self.ctx.vis_hint(name, &from, &target, vis)
+                        ),
+                    );
+                    return Err(());
+                }
+                return self.compile_free_fn_call(name, generics, args, expected, sp);
+            }
+        }
         // used function: signature from the surface, a direct call to the
         // exporter's scope-qualified id. The binding gate is per file
         // (phase 3): the name binds in the module whose file used it.

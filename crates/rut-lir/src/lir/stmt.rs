@@ -1575,7 +1575,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let mname = segs[1].name;
                     // a LOCAL enum's decl or a USED enum's binding — the
                     // same members the member-path expression reads; the
-                    // local half resolves in the CURRENT module (phase 3)
+                    // local half resolves in the CURRENT module (phase 3),
+                    // the own-package import lane between (the target
+                    // module's enum, the crossing predicate gating)
                     let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> =
                         if let Some(e) = self.ctx.enum_here(ename) {
                             let members: Vec<(IdentId, i64)> = match self.ctx.types.kind(e.ty) {
@@ -1583,6 +1585,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 _ => vec![],
                             };
                             Some((e.ty, members))
+                        } else if let Some(target) = self.ctx.own_use_target(ename) {
+                            match self.ctx.enum_in(&target, ename) {
+                                Some(e) => {
+                                    let from = self.ctx.cur_mod.clone();
+                                    if !self.ctx.vis_crosses(&from, &target, e.vis) {
+                                        self.ctx.err(sp, format!(
+                                            "`{}::{}` — {}",
+                                            target,
+                                            self.ctx.name(ename),
+                                            self.ctx.vis_hint(ename, &from, &target, e.vis)
+                                        ));
+                                        return Err(());
+                                    }
+                                    let members: Vec<(IdentId, i64)> =
+                                        match self.ctx.types.kind(e.ty) {
+                                            TyKind::Enum { members } => members.clone(),
+                                            _ => vec![],
+                                        };
+                                    Some((e.ty, members))
+                                }
+                                None => None,
+                            }
                         } else if self.ctx.use_bound_here(ename) {
                             self.ctx.extern_enum(ename)
                         } else {

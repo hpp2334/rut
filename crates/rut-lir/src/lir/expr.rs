@@ -522,6 +522,30 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, format!("`{}` is a function —call it: `{}(..)`", self.ctx.name(name), self.ctx.name(name)));
                 return Err(());
             }
+            // an own-package use binding: the TARGET module's let — the
+            // crossing predicate gates, the load-time lane loads (this
+            // rung rides ABOVE the module-let arm: `find_let` reads the
+            // whole unit and would refuse with the qualify error first)
+            if let Some(target) = self.ctx.own_use_target(name) {
+                if let Some((_, ty_node, init, lvis)) = self.ctx.let_in(&target, name) {
+                    let from = self.ctx.cur_mod.clone();
+                    if !self.ctx.vis_crosses(&from, &target, lvis) {
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "`{}::{}` — {}",
+                                target,
+                                self.ctx.name(name),
+                                self.ctx.vis_hint(name, &from, &target, lvis)
+                            ),
+                        );
+                        return Err(());
+                    }
+                    let ty = ty_node.map(|t| self.resolve_type_now(t)).unwrap_or(TY_I32);
+                    let _reg = self.load_const_let(init, ty, expected, sp)?;
+                    return Ok(ty);
+                }
+            }
             // module let (load-time, M1: literals only)
             if let Some((_, ty_node, init, lvis)) = self.ctx.find_let(name).cloned() {
                 // a module let of ANOTHER module is not in scope bare
@@ -629,10 +653,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
             // a LOCAL enum (the decl's member list) or a USED enum (the
-            // carried descriptor row — the member values ride it)
+            // carried descriptor row — the member values ride it), with
+            // the own-package import lane between: the name binds
+            // through its target module, the crossing predicate gating
             let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> =
                 if let Some(e) = self.ctx.enum_here(base) {
                     Some((e.ty, e.members.iter().map(|m| (*m, 0)).collect()))
+                } else if let Some(target) = self.ctx.own_use_target(base) {
+                    match self.ctx.enum_in(&target, base) {
+                        Some(e) => {
+                            let from = self.ctx.cur_mod.clone();
+                            if !self.ctx.vis_crosses(&from, &target, e.vis) {
+                                self.ctx.err(sp, format!(
+                                    "`{}::{}` — {}",
+                                    target,
+                                    self.ctx.name(base),
+                                    self.ctx.vis_hint(base, &from, &target, e.vis)
+                                ));
+                                return Err(());
+                            }
+                            Some((e.ty, e.members.iter().map(|m| (*m, 0)).collect()))
+                        }
+                        None => None,
+                    }
                 } else if self.ctx.use_bound_here(base) {
                     self.ctx.extern_enum(base)
                 } else {
@@ -849,41 +892,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // packages gate identically: every fn is the root's)
         if self.ctx.fn_is_here(name) {
             let fnode = self.ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n).unwrap();
-            let fd = self.ctx.ast.fn_decl(fnode).clone();
-            if fd.is_async {
-                self.ctx.err(sp, format!(
-                    "`{}` is async —call it; async fns have no value in this build",
-                    self.ctx.name(name)
-                ));
-                return Some(Err(()));
+            return Some(self.fn_value_of_node(name, fnode, sp));
+        }
+        // an own-package use binding: the TARGET module's fn — the
+        // crossing predicate gates, the same value mints (names are
+        // package-unique, so the instantiation key is the name either way)
+        if let Some(target) = self.ctx.own_use_target(name) {
+            if let Some(fnode) = self.ctx.fn_in(&target, name) {
+                let from = self.ctx.cur_mod.clone();
+                let vis = self.ctx.ast.fn_decl(fnode).vis;
+                if !self.ctx.vis_crosses(&from, &target, vis) {
+                    self.ctx.err(sp, format!(
+                        "`{}::{}` — {}",
+                        target,
+                        self.ctx.name(name),
+                        self.ctx.vis_hint(name, &from, &target, vis)
+                    ));
+                    return Some(Err(()));
+                }
+                return Some(self.fn_value_of_node(name, fnode, sp));
             }
-            if !fd.generics.is_empty() {
-                self.ctx.err(sp, format!(
-                    "`{}` is generic —call it (spelling the type arguments there); a bare fn path has none to give",
-                    self.ctx.name(name)
-                ));
-                return Some(Err(()));
-            }
-            // the fn's own signature — a non-generic fn spells no free
-            // generics, so this env resolves it exactly
-            let ptys: Vec<TypeId> = fd
-                .params
-                .iter()
-                .map(|p| match self.ctx.ast.param(*p) {
-                    MemberKind::Param(ParamData { ty: Some(t), .. }) => self.resolve_type_now(*t),
-                    _ => TY_I32,
-                })
-                .collect();
-            let ret_ty = fd.ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
-            // the SAME instantiation key the direct-call lane mints —
-            // the value and every direct call share one compiled body
-            let inst = crate::check::Inst {
-                key: crate::check::FnKey::Free(name),
-                subst: vec![],
-                iface_origins: vec![],
-            };
-            let fid = self.ctx.ensure_inst(inst);
-            return Some(self.make_fn_value(fid, ptys, ret_ty, sp));
         }
         // an imported fn (`use pkg::name`): the value binds the
         // exporter's scope-qualified fn — the same id the direct-call
@@ -908,6 +936,52 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Some(Err(()));
         }
         None
+    }
+
+    /// The fn value of a resolved free-fn node (the local lane's body,
+    /// shared with the own-package import lane): the async/generic
+    /// refusals, the fn's own signature, the SAME instantiation key the
+    /// direct-call lane mints — the value and every direct call share
+    /// one compiled body.
+    fn fn_value_of_node(
+        &mut self,
+        name: IdentId,
+        fnode: NodeHandle<FnNode>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
+        let fd = self.ctx.ast.fn_decl(fnode).clone();
+        if fd.is_async {
+            self.ctx.err(sp, format!(
+                "`{}` is async —call it; async fns have no value in this build",
+                self.ctx.name(name)
+            ));
+            return Err(());
+        }
+        if !fd.generics.is_empty() {
+            self.ctx.err(sp, format!(
+                "`{}` is generic —call it (spelling the type arguments there); a bare fn path has none to give",
+                self.ctx.name(name)
+            ));
+            return Err(());
+        }
+        // the fn's own signature — a non-generic fn spells no free
+        // generics, so this env resolves it exactly
+        let ptys: Vec<TypeId> = fd
+            .params
+            .iter()
+            .map(|p| match self.ctx.ast.param(*p) {
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => self.resolve_type_now(*t),
+                _ => TY_I32,
+            })
+            .collect();
+        let ret_ty = fd.ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
+        let inst = crate::check::Inst {
+            key: crate::check::FnKey::Free(name),
+            subst: vec![],
+            iface_origins: vec![],
+        };
+        let fid = self.ctx.ensure_inst(inst);
+        self.make_fn_value(fid, ptys, ret_ty, sp)
     }
 
     /// The fn value itself: an empty-capture closure over `fid`, typed

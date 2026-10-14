@@ -4333,9 +4333,31 @@ msgstr ""
 
 #: src/tutorial/modules.md:225
 msgid ""
-"Each file is its own module: cross-file references are qualified (`domain::Todo`, `world::boot(..)`), and visibility is per module — private to the declaring module, `pub(pkg)` to share inside the package, `pub` to cross packages. Cross-package references still go through `use` paths (`use app::world::{ World }`)."
+"Each file is its own module. Cross-file references are **qualified** (`domain::Todo`, `world::boot(..)`) — or imported: `use` is also the intra-package import, so a file may bind another module's `pub` names as bare names, per file:"
 msgstr ""
-"每个文件都是独立的模块：跨文件引用使用限定位置（`domain::Todo`、`world::boot(..)`），可见性按模块划分 —— 对声明模块私有，`pub(pkg)` 在包内共享，`pub` 跨包可见。跨包引用仍然走 `use` 路径（`use app::world::{ World }`）。"
+"每个文件都是独立的模块。跨文件引用是**限定位置**（`domain::Todo`、`world::boot(..)`）—— 或者导入：`use` 也是包内导入，一个文件可以把另一个模块的 `pub` 名字绑定为裸名字，按文件生效："
+
+
+#: src/tutorial/modules.md:230
+msgid ""
+"```rut\n"
+"// app/mod.rut — beside `mod domain;` and `mod world;`\n"
+"use domain::{ Todo };\n"
+"use world::{ World };\n"
+"```"
+msgstr ""
+"```rut\n"
+"// app/mod.rut —— 与 `mod domain;`、`mod world;` 并排\n"
+"use domain::{ Todo };\n"
+"use world::{ World };\n"
+"```"
+
+
+#: src/tutorial/modules.md:236
+msgid ""
+"The leaves gate exactly as every crossing does: a name the target doesn't declare is refused at the use line, and a private one stays private — `pub` or `pub(pkg)` to widen (import is no visibility bypass). A module needs its own `use` line: bindings are per file. Visibility is per module — private to the declaring module, `pub(pkg)` to share inside the package, `pub` to cross packages. Cross-package references still go through `use` paths (`use greet::{ Greeting };`)."
+msgstr ""
+"叶子的把关与每一次穿越完全一致：目标没有声明的名字会在 use 行被拒绝，私有的保持私有 —— 用 `pub` 或 `pub(pkg)` 放宽（导入不是可见性旁路）。一个模块需要自己的 `use` 行：绑定按文件生效。可见性按模块划分 —— 对声明模块私有，`pub(pkg)` 在包内共享，`pub` 跨包可见。跨包引用仍然走 `use` 路径（`use greet::{ Greeting };`）。"
 
 
 #: src/tutorial/modules.md:233
@@ -10970,9 +10992,9 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:65
 msgid ""
-"The use path is **`pkg::` followed by module segments**: the head is the mounted package's bare `[a-zA-Z0-9_]+` name, then zero or more **module segments** walking the package's file modules, then the leaf — a brace list of one or more names, or a single name:"
+"The use path is **`pkg::` followed by module segments**: the head is the mounted package's bare `[a-zA-Z0-9_]+` name — or the consumer's own package (its name, or one of its `mod` edges; see the intra-package import below) — then zero or more **module segments** walking the package's file modules, then the leaf — a brace list of one or more names, or a single name:"
 msgstr ""
-"use 路径是 **`pkg::` 后跟模块段**：开头是已挂载包的裸 `[a-zA-Z0-9_]+` 名，随后是零个或多个走在包内文件模块之间的**模块段**，最后是叶子 —— 一个含一个或多个名字的花括号列表，或者单个名字："
+"use 路径是 **`pkg::` 后跟模块段**：开头是已挂载包的裸 `[a-zA-Z0-9_]+` 名 —— 或者消费方自己的包（它的名字，或它的某条 `mod` 边；见下文的包内导入）—— 随后是零个或多个走在包内文件模块之间的**模块段**，最后是叶子 —— 一个含一个或多个名字的花括号列表，或者单个名字："
 
 
 #: src/reference/modules-and-visibility.md:70
@@ -10992,7 +11014,36 @@ msgstr ""
 "导入_模块本身_（`use tur_kit::layout;`）是一个错误 —— 模块是命名空间，不是值；诊断会给出修复方法（在叶子处写出一个名字）。rut 是完全静态类型的：编译器解析每一个用到的名字，并根据用法判断它落在类型位置（注解中的 `Column`）还是值位置（`Logger(..)`），因此用户无需任何标注。use 行只能写出目标所导出的名字：目标没有声明的名字会在 use 行本身被拒绝——`` `ink` has no `Nope` — unknown import ``——而不是稍后在一个可能永远写不出来的调用点。未被引用的 use 名是一个 lint，不是错误。"
 
 
-#: src/reference/modules-and-visibility.md:88
+#: src/reference/modules-and-visibility.md:90
+msgid ""
+"The head may also name the **consumer's own package** — the intra-package import. The package's own name resolves to its root module, and a `mod` edge of its own tree resolves by walking from the file the `use` is written in (the current module first, then the ancestors — the same walk qualified positions take):"
+msgstr ""
+"开头也可以命名**消费方自己的包** —— 这就是包内导入。包自己的名字解析到它的根模块，自己树里的一条 `mod` 边则从写下 `use` 的那个文件出发解析（先当前模块，再各级祖先 —— 与限定位置走的是同一条路）："
+
+
+#: src/reference/modules-and-visibility.md:96
+msgid ""
+"```rut\n"
+"use imp::{ TodoList, Task };   // beside `mod imp;` — imp's pub names\n"
+"\n"
+"mod imp;\n"
+"```"
+msgstr ""
+"```rut\n"
+"use imp::{ TodoList, Task };   // 与 `mod imp;` 并排 —— imp 的 pub 名字\n"
+"\n"
+"mod imp;\n"
+"```"
+
+
+#: src/reference/modules-and-visibility.md:102
+msgid ""
+"The leaves obey the same laws every crossing does. Each must be a declaration of the walked module, **visible from the importing file**: a bare, private member of `imp` is not importable — `pub` or `pub(pkg)` is (import is no visibility bypass). A module itself is not an import — walk it (`use imp::grid::{ Cell }`, not `use imp::{ grid }`). And the binding is per file, exactly like a dep use: a module needs its own `use` line. One head must never answer as two things: a name that is both a declared dep and an own module edge is a loud ambiguity — rename one of the two."
+msgstr ""
+"叶子遵守每一次穿越都遵守的法则。每个叶子都必须是走到的模块里的一条声明，且**从导入文件可见**：`imp` 的裸私有成员不可导入 —— `pub` 或 `pub(pkg)` 才可以（导入不是可见性旁路）。模块本身不可导入 —— 走进它（`use imp::grid::{ Cell }`，而非 `use imp::{ grid }`）。绑定与依赖 use 完全一样按文件生效：一个模块需要自己的 `use` 行。一个开头绝不能同时是两个东西：一个名字既是已声明的依赖、又是本包自己的模块边，就是响亮的歧义 —— 给其中之一改名。"
+
+
+#: src/reference/modules-and-visibility.md:112
 msgid ""
 "The head itself is **declaration-scoped**: a package may `use` exactly the heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps` when the package is the program root) ∪ `core`. Mounting stays transitive (a dep's own `deps` still join the program's closure), but a head that is mounted without being declared by _this_ package is the resolver's dedicated diagnostic, naming who pulled it in and the row to add ([dependency kinds](dependency-kinds.md))."
 msgstr ""
@@ -11013,9 +11064,9 @@ msgstr "限定位置"
 
 #: src/reference/modules-and-visibility.md:112
 msgid ""
-"Inside one package, a declaration of another module is nameable where a path is legal — a type annotation, a call, a field read — by **qualified position**: `layout::Column`, `store::Source<str>`, `widget::mk(3)`. The head resolves against the current module's scope, then the module's ancestors up to the package root; positions never take a package head — `use` statements are the only cross-package door. `::` is THE path separator — every name-resolution path (use paths, qualified positions, enum members, statics/associated fns, extern namespaces) spells its segments with it; `.` is value access only (fields, instance methods, tuple indices — see [Lexical structure](lexical-structure.md)). One separator, two doors:"
+"Inside one package, a declaration of another module is nameable where a path is legal — a type annotation, a call, a field read — by **qualified position**: `layout::Column`, `store::Source<str>`, `widget::mk(3)`. The head resolves against the current module's scope, then the module's ancestors up to the package root; positions never take a _dep_ package head — `use` statements are the only cross-package door. `use` is also the intra-package import — a use head may be this package's own name, or one of its `mod` edges (see [Uses](#uses)) — so a cross-file name binds bare once imported; positions stay spelling-free: `imp::grid::Cell` never needed an import, and still spells. `::` is THE path separator — every name-resolution path (use paths, qualified positions, enum members, statics/associated fns, extern namespaces) spells its segments with it; `.` is value access only (fields, instance methods, tuple indices — see [Lexical structure](lexical-structure.md)). One separator, two doors:"
 msgstr ""
-"在同一个包内，另一个模块的声明在路径合法之处 —— 类型注解、调用、字段读取 —— 都可以通过**限定位置**命名：`layout::Column`、`store::Source<str>`、`widget::mk(3)`。路径头先在当前模块作用域中解析，再沿模块祖先上溯到包根；位置永远不带包头 —— `use` 语句是唯一的跨包之门。`::` 是唯一的路径分隔符 —— 每一条名称解析路径（use 路径、限定位置、枚举成员、静态项/关联函数、extern 命名空间）的段都由它拼写；`.` 只做值访问（字段、实例方法、元组索引 —— 见[词法结构](lexical-structure.md)）。一个分隔符，两扇门："
+"在同一个包内，另一个模块的声明在路径合法之处 —— 类型注解、调用、字段读取 —— 都可以通过**限定位置**命名：`layout::Column`、`store::Source<str>`、`widget::mk(3)`。路径头先在当前模块作用域中解析，再沿模块祖先上溯到包根；位置永远不带_依赖_包头 —— `use` 语句是唯一的跨包之门。`use` 也是包内导入 —— use 的开头可以是本包自己的名字，或它的某条 `mod` 边（见 [Uses](#uses)）—— 跨文件的名字一旦导入即可裸拼；位置保持拼写自由：`imp::grid::Cell` 从来不需要导入，如今照样拼写。`::` 是唯一的路径分隔符 —— 每一条名称解析路径（use 路径、限定位置、枚举成员、静态项/关联函数、extern 命名空间）的段都由它拼写；`.` 只做值访问（字段、实例方法、元组索引 —— 见[词法结构](lexical-structure.md)）。一个分隔符，两扇门："
 
 
 #: src/reference/modules-and-visibility.md:124
@@ -11045,8 +11096,8 @@ msgstr ""
 
 
 #: src/reference/modules-and-visibility.md:126
-msgid "`::` — cross-package, the import"
-msgstr "`::` —— 跨包，导入语句"
+msgid "`::` — cross-package **and own-package module**, the import"
+msgstr "`::` —— 跨包与本包模块，导入语句"
 
 
 #: src/reference/modules-and-visibility.md:127
