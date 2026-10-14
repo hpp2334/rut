@@ -1,6 +1,6 @@
 ---
 name: Batch Plan Implementation
-description: EXPLICIT USER REQUEST ONLY — run this skill solely when the user asks for it BY NAME (e.g. "use batch-plan-impl"); a bare "go"/"execute the plan", or the existence of an approved batch-format plan, does NOT authorize it (implement directly in the current session instead). Once explicitly invoked: execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the active complex model from models.jsonc (main.complex, or peak.complex during the workday 14:00–18:00 UTC+8 peak window), then creates one headless OpenCode session per task, each pinned to the active balance model from models.jsonc (a phase has one task, or several PARALLEL tasks when the plan splits it so), and dispatches their prompts, while a small watch-only subagent polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; continue phase by phase until the plan is done. No user interaction once legitimately invoked: decide autonomously, retry once, never delete sessions.
+description: EXPLICIT USER REQUEST ONLY — run this skill solely when the user asks for it BY NAME (e.g. "use batch-plan-impl"); a bare "go"/"execute the plan", or the existence of an approved batch-format plan, does NOT authorize it (implement directly in the current session instead). Once explicitly invoked: execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to the active complex model from models.jsonc (main.complex, or peak.complex during the workday 14:00–18:00 UTC+8 peak window), then creates one headless OpenCode session per task, each pinned to the active balance model from models.jsonc (a phase has one task, or several PARALLEL tasks when the plan splits it so), and dispatches their prompts, while a small watch-only subagent polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; after each phase a plan-alignment review subagent — pinned to the SAME model the orchestrator itself runs on (the active complex model, not balance) — reviews the landed diff against the plan, and any misalignment or high-priority issue is dispatched back to the phase session as a fix round, the review→fix loop repeating until the review reports ALIGNED with no high-priority issues; continue phase by phase until the plan is done. No user interaction once legitimately invoked: decide autonomously, retry once, never delete sessions.
 ---
 
 # Batch Plan Implementation
@@ -39,15 +39,21 @@ ONE task by default, or SEVERAL tasks run in PARALLEL when the plan
 splits it that way (encouraged — see "Writing parallel-friendly plans"
 below). A **watch-only subagent** monitors every session of the phase
 (60s polling each), relays context between tasks when triggered (4p),
-and verifies the results. Phases run strictly sequentially —
-parallelism lives INSIDE a phase, never across phases.
+and verifies the results. When a phase's sessions are done and pushed, a
+**plan-alignment review subagent** — pinned to the SAME model this session
+runs on (the active complex model) — reviews the landed code against the
+plan; misalignment or high-priority issues go back to the working session
+as a fix round, and the review→fix loop repeats until the review reports
+aligned with no high-priority issues (4d). Phases run strictly sequentially
+— parallelism lives INSIDE a phase, never across phases.
 
 ## Division of labor
 
 | Actor | Does | Never does |
 | --- | --- | --- |
-| You (orchestrator) | plan parsing, session create, prompt dispatch, subagent spawn, batch control, authoring relay notes (4p) | implement a phase itself, delete a session |
+| You (orchestrator) | plan parsing, session create, prompt dispatch (phase + fix-round), subagent spawn, batch control, authoring relay notes (4p) | implement a phase itself, delete a session |
 | Subagent (one per phase, small prompt) | poll 60s across ALL the phase's sessions, detect stall/timeout, relay orchestrator-authored context notes between task sessions when their trigger fires, verify commits + push + clean tree, extract summaries, report | create sessions, author task instructions or relay notes, edit files, commit, delete sessions |
+| Review subagent (one per review round, `general` agent) | read-only plan-alignment review (4d): diff vs the phase's plan text, verdict + prioritized issue list; may read files and run builds/tests | edit files, commit, push, create sessions, message phase sessions |
 
 ## Rules
 
@@ -78,7 +84,15 @@ parallelism lives INSIDE a phase, never across phases.
   `main.balance`. Re-resolve before EVERY session create or dispatch — a
   boundary can pass mid-batch (see step 0 / step 3).
 - Pin the **active balance model** on every dispatch — phase sessions and the
-  watch subagent all use it (see step 3).
+  watch subagent all use it (see step 3). The EXCEPTION is the plan-alignment
+  review subagent (4d): it is pinned to the **active complex model** — the
+  SAME model this session runs on — so the review reasons at orchestration
+  strength.
+- **Every phase is gated by the plan-alignment review loop (4d)**: after the
+  phase's sessions land and push, the review subagent compares the diff to
+  the phase's plan text. Misalignment or ANY high-priority issue loops back
+  to the working session as a fix round; the loop exits only on
+  `VERDICT: ALIGNED` + `HIGH: none`.
 - **Switch your session's MODEL to the active complex model first**
   (`main.complex`, or `peak.complex` inside the peak window), **keeping the
   `build` agent/mode**, so all orchestration reasoning runs on it (see
@@ -98,6 +112,9 @@ parallelism lives INSIDE a phase, never across phases.
 | PARALLEL: a task's scope collides with a sibling's landed files | The orchestrator dispatches a reconcile prompt to the affected task (rebase onto sibling, adapt); if that fails once too, stop the batch. |
 | PARALLEL: a task needs a sibling's landed facts mid-flight | The watcher fires the pre-arranged relay (4p); if none was arranged, the watcher reports and the orchestrator authors one. |
 | Phase STALLED/TIMEOUT | Interrupt the session (`POST /api/session/$SID/interrupt`), then retry ONCE. |
+| Review finds NOT_ALIGNED or high-priority issues | Dispatch a fix-round prompt (reviewer's findings VERBATIM) to the SAME phase session, re-watch with the new $SINCE, re-review; loop until `VERDICT: ALIGNED` + `HIGH: none` (4d). |
+| Review loop makes no progress (fix round lands an empty diff / no new commit, or two consecutive rounds return an identical HIGH set) | Anti-deadlock guard — the loop's only forced exit besides success: treat as STALLED, retry the round ONCE; still stuck → stop the batch, record it. |
+| Review subagent itself fails (no verdict / crashes / times out) | Retry the review ONCE with a fresh subagent; if it still fails, record the skipped gate and continue to the next phase, flagging the phase in the final report. |
 | Phase fails after retry | **Stop the batch** — later phases likely depend on it. Leave everything for review. |
 | Anything else unexpected | Choose the least destructive option, record it, keep going if safe. |
 
@@ -282,11 +299,84 @@ DIRTY: <yes/no>
 SUMMARY: <final assistant text, max ~30 lines>
 ```
 
-#### d. Review and continue (you)
+#### d. Plan-alignment review loop (review subagent — YOUR model)
+
+Once the watcher reports DONE and the mechanical gates hold (commit, pushed,
+clean tree), dispatch a **review subagent** (subagent tool, `general` agent,
+foreground) pinned to `$COMPLEX_REF` — the **SAME model this session runs
+on**, NOT the balance model. The reviewer is read-only over git state and
+the sessions: it may read files, run `git diff/log/show`, and run
+builds/tests, but never edits, commits, pushes, or messages any session.
+
+Build the payload with `jq -n --rawfile` into `review<n>-r<k>.txt` (`k` =
+review round, starting at 1). Fill: `$PROJECT_DIR`, `$BASE`, `<n>`,
+`<title>`, the phase's FULL `detail` from the plan (verbatim), and for
+rounds k>1 the prior findings. Send exactly this:
+
+```text
+You are a plan-alignment reviewer for phase <n> of an approved plan. Observe
+and report ONLY — never edit files, commit, push, or message any session.
+
+Context:
+- Project dir: $PROJECT_DIR
+- Phase diff to review: git -C $PROJECT_DIR diff $BASE..HEAD
+  (commit list: git -C $PROJECT_DIR log --oneline $BASE..HEAD)
+- Task scope (parallel phases only): <declared file scope, or "whole phase">
+- Phase <n> — "<title>" — FULL plan text (the contract):
+  <detail>
+- Prior review rounds (rounds 2+): <prior HIGH findings, or "none — first round">
+
+REVIEW (read-only):
+1. Read the diff and every file it touches; check the implementation against
+   the plan text ABOVE — every acceptance criterion, path, name, and spec
+   point must be honored or consciously superseded by the plan's own text.
+2. Run the project's build/tests if the diff can affect them.
+3. Classify every problem:
+   - HIGH: plan misalignment (missing, contradicted, or silently reinterpreted
+     phase text) or any correctness, data-loss, security, or
+     breaking-regression issue.
+   - MINOR: style, naming, nice-to-haves — record but do NOT gate on these.
+
+RESPOND with exactly this and nothing else:
+VERDICT: ALIGNED | NOT_ALIGNED
+HIGH: <numbered list, each with file:line and a one-line fix hint, or "none">
+MINOR: <short list or "none">
+SUMMARY: <max ~15 lines>
+```
+
+**Loop** — the phase passes review ONLY on `VERDICT: ALIGNED` **and**
+`HIGH: none`. Otherwise (round k did not pass):
+
+1. Write `fix<n>-r<k>.txt` — a fix-round prompt for the SAME working session
+   `$SID`: state that the phase is implemented but the plan-alignment review
+   found gaps, embed the reviewer's `VERDICT` + `HIGH` list **verbatim**
+   (MINOR items may be attached as optional), and instruct: resolve every
+   HIGH item, stay within the phase's scope, commit as
+   `phase(<n>): review fixes (round <k>)` (same body/push rules as the
+   original phase prompt).
+2. Dispatch it via `POST /api/session/$SID/prompt`, record the new `$SINCE`,
+   spawn a fresh watcher (step 4c — same expected prefix `phase(<n):`), and
+   when it reports DONE re-run this review step as round k+1 with the
+   updated prior-findings history.
+3. Repeat — the loop has no iteration cap and exits ONLY on
+   `VERDICT: ALIGNED` + `HIGH: none`. One anti-deadlock guard: if a fix
+   round produces an empty diff / no new commit, or two consecutive rounds
+   return an identical `HIGH` set, treat the phase as STALLED (policy
+   table) — retry the round once, else stop the batch and record.
+
+In a PARALLEL phase (4p): run ONE review subagent for the whole phase once
+ALL tasks are green (`$BASE..HEAD` covers every task), listing each task's
+declared scope in the prompt; group the `HIGH` findings by scope and run a
+fix round on EACH affected task's session (new `$SINCE` + fresh watcher per
+session), then re-review. The phase's review closes when NO scope has open
+HIGH items.
+
+#### e. Review and continue (you)
 
 Phase succeeded only when ALL hold: `STATUS: DONE`, `OUTCOME: succeeded`,
-at least one commit, `PUSHED: yes`, clean tree. Then leave the session as-is
-and start the next phase (back to 4a).
+at least one commit, `PUSHED: yes`, clean tree, **and the review loop of 4d
+has closed** (`VERDICT: ALIGNED`, `HIGH: none`). Then leave the sessions
+as-is and start the next phase (back to 4a).
 
 Otherwise (FAILED / STALLED / TIMEOUT): retry ONCE per policy (fresh session,
 same prompt; interrupt first if stalled). Retry succeeds → continue. Retry
@@ -315,8 +405,10 @@ When the plan splits a phase into tasks T1..Tn:
    it is a courier, not an instructor. If no note was armed and Y needs
    X's facts, the watcher says so in its report and the orchestrator
    authors the follow-up.
-4. **Completion**: all tasks green → next phase. A failed task retries
-   alone (policy table). Sibling pushes may land mid-flight — expected.
+4. **Completion**: all tasks green → the whole-phase review loop of 4d (one
+   reviewer on `$COMPLEX_REF`, fix rounds routed per scope) → next phase. A
+   failed task retries alone (policy table). Sibling pushes may land
+   mid-flight — expected.
 
 ### Writing parallel-friendly plans
 
@@ -341,10 +433,10 @@ After the last phase (or on abort), summarize from the run log:
 
 ```
 Batch plan complete: <k>/<N> phases done (base <BASE> -> HEAD <short hash>)
-  1. <title>  ✓ <commit> pushed   ses_xxx
-  2. <title>  ✗ STALLED (retried once, failed)   ses_yyy — left untouched
+  1. <title>  ✓ <commit> pushed, review passed (r<N> rounds)   ses_xxx
+  2. <title>  ✗ STALLED in review round 2 (retried once, failed)   ses_yyy — left untouched
 Overall: git diff --stat <BASE>..HEAD
-Autonomous decisions: <auto-stash hash, retry counts, assumptions made>
+Autonomous decisions: <auto-stash hash, retry counts, review-round counts, skipped gates, assumptions made>
 All sessions were kept (never deleted) — resume any of them from the session list.
 ```
 
@@ -355,7 +447,8 @@ All sessions were kept (never deleted) — resume any of them from the session l
 | Switch own model to plan model | you | `opencode api post /api/session/$SELF/model --data '{"model":{"providerID":"<p>","id":"<m>"}}'` (agent stays `build`) |
 | Resolve active model pair (step 0/3) | you | `DOW=$((10#$(TZ=Asia/Shanghai date +%u))); HM=$((10#$(TZ=Asia/Shanghai date +%H%M))); if [ "$DOW" -le 5 ] && [ "$HM" -ge 1400 ] && [ "$HM" -lt 1800 ]; then W=peak; else W=main; fi; sed 's://.*$::' models.jsonc \| jq -r --arg w "$W" '.[$w].complex, .[$w].balance'` |
 | Create session (pinned model) | you | `opencode api post /api/session --data "$(jq -n --arg t "..." --arg d "$PROJECT_DIR" --arg m "$MODEL_JSON" '{title:$t,location:{directory:$d},model:($m\|fromjson)}')"` |
-| Dispatch prompt | you | `opencode api post /api/session/$SID/prompt --data "$(cat payload.json)"` |
+| Dispatch prompt (phase OR fix round) | you | `opencode api post /api/session/$SID/prompt --data "$(cat payload.json)"` |
+| Review subagent model | you | pin `model: "$COMPLEX_REF"` in the subagent tool call — the SAME model as this session, NOT balance |
 | Poll newest message | subagent | `opencode api session.message.list --param sessionID=$SID --param order=desc --param limit=1` |
 | Done when | subagent | newest msg `type=="idle"` and `time.created > $SINCE` |
 | Verify | subagent | `git log --oneline $BASE..HEAD` + `status -sb` (no `[ahead`) + `status --porcelain` + idle `outcome` |
@@ -369,7 +462,9 @@ All sessions were kept (never deleted) — resume any of them from the session l
   permission asks — no permission handling is needed anywhere in the batch.
 - Models come from `models.jsonc` at the repo root — the active pair follows
   the peak window (workdays 14:00–18:00 UTC+8): you run on `<window>.complex`,
-  and every phase session AND watch subagent is pinned to `<window>.balance`.
+  and every phase session AND watch subagent is pinned to `<window>.balance`,
+  while the plan-alignment review subagent (4d) is pinned to
+  `<window>.complex` — the SAME model the orchestrator itself runs on.
   Re-resolve before every dispatch; a monitor session may also nudge you at
   13:50/18:10 (UTC+8) to re-apply the switch.
 - Payload JSON must be built with `jq -n --rawfile` / `jq -n --arg` — never
