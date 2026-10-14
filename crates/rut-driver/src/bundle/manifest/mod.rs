@@ -1,6 +1,6 @@
 //! The manifest grammar — a module manifest (`name`, `type`, +
-//! `entry`) or a consumer manifest (`deps`, `peer-deps`,
-//! `dev-deps`), or both, parsed into [`Manifest`].
+//! `entry`) or a consumer manifest (`deps`, `dev-deps`), or both,
+//! parsed into [`Manifest`].
 //!
 //! **One directory is one module.** Its manifest names the exact
 //! package it answers to and how to reach its surface:
@@ -54,11 +54,16 @@
 //! consumer manifest (the `deps` object).
 //!
 //! The dep kinds: `deps` is today's transitively-mounted table;
-//! `peer-deps` is REQUIRED by default (the consumer supplies the peer)
-//! with `"optional": true` marking the presence-mounted kind whose
-//! integration group is the descriptor's `lib` file; `dev-deps` mount
-//! only while building the pkg itself (the loader's law — the Session
-//! never sees a dev table).
+//! `dev-deps` mounts only while building the pkg itself (the loader's
+//! law — the Session never sees a dev table). The grammar carries only
+//! these two dep tables: `peer-deps` (the presence-mounted peer kind)
+//! and `inline` are RETIRED — a manifest carrying either refuses as
+//! the unknown key it now is (the strict-keys law).
+//!
+//! The strict-keys law: the manifest grammar carries NO unknown keys.
+//! Every top-level key beyond the known set refuses loudly naming the
+//! key (`manifest: unknown key 'whatever'`) — no forward-compat lane,
+//! never a silent ignore.
 //!
 //! The manifest text is **JSONC** — `//` line comments, `/* */` block
 //! comments, and trailing commas are all legal — parsed by
@@ -155,15 +160,10 @@ pub struct Manifest {
     /// compat lane parses it as inert metadata. Kept for the host to
     /// resolve; the Session does not read the filesystem or the network.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
-    /// `peer-deps` — REQUIRED by default; the CONSUMER
-    /// supplies the peer, it is never pulled transitively. `optional =
-    /// true` marks the presence-mounted kind whose integration group is
-    /// the descriptor's `lib` file. Descriptors: `path` (string),
-    /// `optional` (bool), `lib` (string) — nothing else.
-    pub peer_deps: BTreeMap<String, BTreeMap<String, String>>,
     /// `dev-deps` — mounted ONLY when building/testing
     /// the pkg itself (the program root), never in a consumer's world.
-    /// Same descriptor shape as `deps`.
+    /// Descriptors: `path` (string) — nothing else (dev presence is
+    /// name-based at the root).
     pub dev_deps: BTreeMap<String, BTreeMap<String, String>>,
     /// `style` — the pkg's formatter knobs (the rut-fmt batch): flat
     /// `"key": "value"` rows read by the fmt crate's consumer, which
@@ -226,10 +226,10 @@ fn underscore_refused_top(key: &str) -> ManifestError {
 /// stripped by [`jsonc::strip`] before the parser sees them — the
 /// positions never move), then standard JSON (`serde_json`), then this
 /// format's value laws — top-level `name`, `type` (the declared kind),
-/// the `entry` object, and the dep objects `deps` / `peer-deps` /
-/// `dev-deps` whose values are descriptor objects. Syntax errors keep
-/// the `line N:` prefix (the ORIGINAL file's line); value laws are
-/// path-targeted.
+/// the `entry` object, and the dep objects `deps` / `dev-deps` whose
+/// values are descriptor objects. Unknown top-level keys refuse loudly
+/// naming the key. Syntax errors keep the `line N:` prefix (the
+/// ORIGINAL file's line); value laws are path-targeted.
 ///
 /// This is the STRICT lane — the directory grammar: `entry.lib` /
 /// `entry.libs` refuse loudly. The bundle reader parses old published
@@ -266,17 +266,10 @@ fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestErr
         walk_top_lane(key, value, &mut declared_type, &mut m, compat)?;
     }
     m.type_declared = declared_type;
-    // D4: `peer-deps` + `dev-deps` is the sanctioned
-    // both-kinds pairing (the ruling); anything riding `deps` beside
-    // either is a manifest error naming both rows — a pkg is either
-    // pulled transitively or required of the consumer / held for
-    // development, never both.
+    // D4: `deps` beside `dev-deps` under the same name is the
+    // collision — a manifest error naming both rows — a pkg is either
+    // pulled transitively or held for development, never both.
     for name in m.deps.keys() {
-        if m.peer_deps.contains_key(name) {
-            return Err(ManifestError(format!(
-                "`{name}` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both"
-            )));
-        }
         if m.dev_deps.contains_key(name) {
             return Err(ManifestError(format!(
                 "`{name}` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both"
@@ -296,11 +289,7 @@ fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestErr
             // deps of any kind — name the table AND the row (D4 style):
             // a host pkg is pure surface; the wrapper lib declares the
             // dep, never the host pkg
-            for (table, rows) in [
-                ("deps", &m.deps),
-                ("peer-deps", &m.peer_deps),
-                ("dev-deps", &m.dev_deps),
-            ] {
+            for (table, rows) in [("deps", &m.deps), ("dev-deps", &m.dev_deps)] {
                 if let Some(spec) = rows.keys().next() {
                     return Err(ManifestError(format!(
                         "`{spec}` appears in `[{table}]` of a `type = \"host\"` pkg — \
@@ -350,9 +339,9 @@ fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestErr
     }
     // The old multi-lib array law, compat only: `libs` is an ordered
     // tail on the base `lib`, so the base must exist; every element is
-    // a `.rut` source (a `.d.rut` is a decl surface, not a body — the
-    // same refusal `peer-deps` `lib` gets); and no file rides twice —
-    // the splice would duplicate every name in it.
+    // a `.rut` source (a `.d.rut` is a decl surface, not a body); and
+    // no file rides twice — the splice would duplicate every name in
+    // it.
     if compat && !m.legacy_entry.libs.is_empty() {
         if m.legacy_entry.lib.is_none() {
             return Err(ManifestError(format!(
@@ -459,7 +448,7 @@ mod tests {
 
     #[test]
     fn host_pkg_refuses_every_deps_table() {
-        for table in ["deps", "peer-deps", "dev-deps"] {
+        for table in ["deps", "dev-deps"] {
             let err = parse_manifest(&format!(
                 r#"{{"name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
@@ -532,7 +521,7 @@ mod tests {
         // body refusal still hold WITH the keys present (`entry.type`
         // stays optional — the default-root discovery is the mount
         // doors' law, never the manifest's)
-        for table in ["deps", "peer-deps", "dev-deps"] {
+        for table in ["deps", "dev-deps"] {
             let err = parse_manifest(&format!(
                 r#"{{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
@@ -664,16 +653,26 @@ mod tests {
     }
 
     #[test]
-    fn unknown_top_level_keys_and_objects_ride() {
-        // forward compatibility, any shape: an unknown scalar, object,
-        // or array at the top level is ignored (JSON has no section
-        // headers to refuse — the five known objects walk, the rest
-        // rides)
-        let m = parse_manifest(
-            r#"{"name": "x", "whatever": {"a": [1, 2]}, "future": true}"#,
+    fn unknown_top_level_keys_refuse_loudly_naming_the_key() {
+        // the strict-keys law: the grammar carries NO unknown keys —
+        // an unknown scalar, object, or array at the top level refuses
+        // naming the key (no forward-compat lane, never a silent
+        // ignore)
+        let err = parse_manifest(
+            r#"{"name": "x", "whatever": {"a": [1, 2]}}"#,
         )
-        .unwrap();
-        assert_eq!(m.name.as_deref(), Some("x"));
+        .unwrap_err();
+        assert_eq!(err.to_string(), "manifest: unknown key 'whatever'");
+        // the retired `peer-deps` table refuses the same way — no
+        // retired-key lane, the grammar simply no longer knows it
+        let err = parse_manifest(
+            r#"{"name": "x", "peer-deps": {"pouch": {"path": "../pouch"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "manifest: unknown key 'peer-deps'");
+        // and the retired `inline` flag too
+        let err = parse_manifest(r#"{"name": "ink", "inline": true}"#).unwrap_err();
+        assert_eq!(err.to_string(), "manifest: unknown key 'inline'");
     }
 
     #[test]
@@ -832,10 +831,10 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().starts_with("deps.core: `_hint`"), "{err}");
         let err = parse_manifest(
-            r#"{"peer-deps": {"p": {"_hint": "why", "path": "..", "optional": true}}}"#,
+            r#"{"dev-deps": {"p": {"_hint": "why", "path": ".."}}}"#,
         )
         .unwrap_err();
-        assert!(err.to_string().starts_with("peer-deps.p: `_hint`"), "{err}");
+        assert!(err.to_string().starts_with("dev-deps.p: `_hint`"), "{err}");
         let err = parse_manifest(r#"{"style": {"_why": "2"}}"#).unwrap_err();
         assert!(err.to_string().starts_with("style: `_why`"), "{err}");
         // the JSONC spelling of the same prose parses — the fix works
@@ -844,34 +843,29 @@ mod tests {
     }
 
     #[test]
-    fn host_scope_retires_loudly_and_inline_rides() {
+    fn host_scope_retires_loudly_and_inline_refuses() {
         // `host_scope` (the retired registration-prefix override)
         // refuses at parse, naming the fix — the registration scope is
-        // the package name. `inline` (the retired source-inlining flag)
-        // still parses as an unknown key: old manifests keep loading,
-        // the flag does nothing.
+        // the package name. `inline` (the retired source-inlining
+        // flag) lost its forward-compat ride with the strict-keys law:
+        // it refuses as the unknown key it now is.
         let err = parse_manifest(
             r#"{"name": "ink_host", "entry": {"type": "./ink_host.d.rut"}, "host_scope": "ink_host"}"#,
         )
         .unwrap_err();
         assert!(err.to_string().starts_with("host_scope: retired"), "{err}");
         assert!(err.to_string().contains("the registration scope is the package name"), "{err}");
-        let m = parse_manifest(r#"{"name": "ink", "inline": true}"#).unwrap();
-        assert_eq!(m.name.as_deref(), Some("ink"));
+        let err = parse_manifest(r#"{"name": "ink", "inline": true}"#).unwrap_err();
+        assert_eq!(err.to_string(), "manifest: unknown key 'inline'");
     }
 
-    // ---- the dep kinds: the three tables, `optional`, the
-    // `lib` group key, D4 — the T11 manifest-error shapes ----
+    // ---- the dep kinds: the two tables, D4 — the T11
+    // manifest-error shapes ----
 
-    /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
+    /// The pinned grammar: `deps` + `dev-deps`, the only dep tables.
     const JSON: &str = r#"
 {
   "name": "json",
-
-  "peer-deps": {
-    "pouch":   { "path": "../pouch",   "optional": true, "lib": "./serde_pouch.rut" },
-    "nmapset": { "path": "../nmapset", "optional": true, "lib": "./serde_nmapset.rut" }
-  },
 
   "dev-deps": {
     "pouch":   { "path": "../pouch" },
@@ -881,21 +875,13 @@ mod tests {
 "#;
 
     #[test]
-    fn peer_and_dev_tables_parse() {
+    fn dev_tables_parse() {
         let m = parse_manifest(JSON).unwrap();
-        let pouch = m.peer_deps.get("pouch").unwrap();
-        assert_eq!(pouch.get("path").unwrap(), "../pouch");
-        assert_eq!(pouch.get("optional").unwrap(), "true");
-        assert_eq!(pouch.get("lib").unwrap(), "./serde_pouch.rut");
-        // `optional` defaults to false — REQUIRED by default
-        let req = parse_manifest(
-            r#"{"name": "j", "peer-deps": {"nmapset": {"path": "../nmapset"}}}"#,
-        )
-        .unwrap();
-        assert_eq!(req.peer_deps.get("nmapset").unwrap().get("optional"), None);
-        // the sanctioned both-kinds pairing parses (pouch in peer + dev)
         assert!(m.dev_deps.contains_key("pouch"));
         assert_eq!(m.dev_deps.get("pouch").unwrap().get("path").unwrap(), "../pouch");
+        // the dev descriptor is `path`-only: no `optional` bool, no
+        // `lib` group key — dev presence is name-based at the root
+        assert_eq!(m.dev_deps.get("pouch").unwrap().len(), 1);
     }
 
     #[test]
@@ -925,34 +911,34 @@ mod tests {
                 .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "deps.pouch: 'optional' is a peer-deps attribute — deps has no options"
-        );
-    }
-
-    #[test]
-    fn t11_optional_must_be_a_bool() {
-        let err = parse_manifest(
-            r#"{"peer-deps": {"pouch": {"path": "..", "optional": "yes"}}}"#,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "peer-deps.pouch: 'optional' expects true or false"
+            "deps.pouch: 'optional' is not a deps-descriptor key"
         );
     }
 
     #[test]
     fn t11_unknown_descriptor_key_is_path_targeted() {
         let err = parse_manifest(
-            r#"{"peer-deps": {"pouch": {"path": "..", "feats": "x"}}}"#,
+            r#"{"deps": {"pouch": {"path": "..", "feats": "x"}}}"#,
         )
         .unwrap_err();
-        assert_eq!(err.to_string(), "peer-deps.pouch: unknown key 'feats'");
+        assert_eq!(err.to_string(), "deps.pouch: unknown key 'feats'");
         let err = parse_manifest(
             r#"{"dev-deps": {"pouch": {"path": "..", "git": "x"}}}"#,
         )
         .unwrap_err();
         assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'git'");
+        // the dev descriptor keeps NO flags: the peer machinery's
+        // `optional`/`lib` bits refuse as the unknown keys they now are
+        let err = parse_manifest(
+            r#"{"dev-deps": {"pouch": {"path": "..", "optional": true}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'optional'");
+        let err = parse_manifest(
+            r#"{"dev-deps": {"pouch": {"path": "..", "lib": "./serde_pouch.rut"}}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'lib'");
     }
 
     #[test]
@@ -962,28 +948,7 @@ mod tests {
     }
 
     #[test]
-    fn t11_lib_must_be_a_rut_source() {
-        // a `.d.rut` lib key is a load error: decl surfaces don't gate
-        let err = parse_manifest(
-            r#"{"peer-deps": {"pouch": {"path": "..", "optional": true, "lib": "./pouch.d.rut"}}}"#,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "peer-deps.pouch: 'lib' must be a .rut source — a .d.rut decl surface does not gate"
-        );
-    }
-
-    #[test]
-    fn t11_d4_deps_beside_peer_or_dev_is_the_collision() {
-        let err = parse_manifest(
-            r#"{"name": "j", "deps": {"pouch": {"path": "../pouch"}}, "peer-deps": {"pouch": {"path": "../pouch", "optional": true}}}"#,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "`pouch` appears in both `[deps]` and `[peer-deps]` — a package is either pulled transitively or required of the consumer, never both"
-        );
+    fn t11_d4_deps_beside_dev_is_the_collision() {
         let err = parse_manifest(
             r#"{"name": "j", "deps": {"pouch": {"path": "../pouch"}}, "dev-deps": {"pouch": {"path": "../pouch"}}}"#,
         )
@@ -992,17 +957,8 @@ mod tests {
             err.to_string(),
             "`pouch` appears in both `[deps]` and `[dev-deps]` — a package is either pulled transitively or held for development, never both"
         );
-        // peer + dev together stays legal — the sanctioned pairing
+        // the fixture's dev-only pairing parses
         assert!(parse_manifest(JSON).is_ok());
-    }
-
-    #[test]
-    fn t11_peer_dep_keys_are_bare_names() {
-        let err = parse_manifest(r#"{"peer-deps": {"std:pouch": {"path": ".."}}}"#).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "peer-deps: 'std:pouch' is not a bare package name — expected [a-zA-Z0-9_]+"
-        );
     }
 
     // ---- the url source kind: one descriptor, one source; the
@@ -1115,13 +1071,9 @@ mod tests {
     }
 
     #[test]
-    fn peer_tables_refuse_the_url_kind() {
-        // `peer-deps` stays path-only — its path is directory-time
-        // metadata for the declarer's own build, nothing to fetch
-        let err =
-            parse_manifest(r#"{"peer-deps": {"pouch": {"url": "https://x/p.rutbundle"}}}"#)
-                .unwrap_err();
-        assert_eq!(err.to_string(), "peer-deps.pouch: unknown key 'url'");
+    fn dev_tables_refuse_the_url_kind() {
+        // `dev-deps` stays path-only — its rows mount only for the
+        // pkg's own self-build walk (directories, never fetches)
         let err =
             parse_manifest(r#"{"dev-deps": {"pouch": {"url": "https://x/p.rutbundle"}}}"#)
                 .unwrap_err();

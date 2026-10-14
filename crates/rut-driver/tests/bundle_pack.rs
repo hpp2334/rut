@@ -30,16 +30,13 @@ fn map_read(files: &BTreeMap<String, Vec<u8>>) -> PackRead {
 #[test]
 fn bundles_the_source_file_set_in_manifest_order() {
     // a FLAT package's file set: its `rut.jsonc` byte-for-byte and the
-    // root module (`mod.rut`) — the post-repeal group shape — plus each
-    // `[peer-deps]` `lib` group file
+    // root module (`mod.rut`) — the post-repeal group shape
     let mut files = BTreeMap::new();
     files.insert(
         "json/rut.jsonc".to_string(),
-        br#"{"name": "json", "peer-deps": {"pouch": {"path": "../pouch", "optional": true, "lib": "./serde_pouch.rut"}}}"#
-            .to_vec(),
+        br#"{"name": "json"}"#.to_vec(),
     );
     files.insert("json/mod.rut".to_string(), b"pub fn f() -> str { return \"j\"; }\n".to_vec());
-    files.insert("json/serde_pouch.rut".to_string(), b"impl<T> J for Vec<T>".to_vec());
 
     let manifest = parse_manifest(
         &String::from_utf8(files["json/rut.jsonc"].clone()).unwrap(),
@@ -50,8 +47,8 @@ fn bundles_the_source_file_set_in_manifest_order() {
     let names: Vec<&str> = out.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names,
-        vec!["json/rut.jsonc", "json/mod.rut", "json/serde_pouch.rut"],
-        "the manifest rides first, then the root module, then the peer groups"
+        vec!["json/rut.jsonc", "json/mod.rut"],
+        "the manifest rides first, then the root module"
     );
     // the manifest rides byte-for-byte
     assert_eq!(
@@ -67,12 +64,11 @@ fn bundles_the_source_file_set_in_manifest_order() {
     let mut old = BTreeMap::new();
     old.insert(
         "json/rut.jsonc".to_string(),
-        br#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}, "peer-deps": {"pouch": {"path": "../pouch", "optional": true, "lib": "./serde_pouch.rut"}}}"#
+        br#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}}"#
             .to_vec(),
     );
     old.insert("json/json.rut".to_string(), b"pub fn f() -> str { return \"j\"; }\n".to_vec());
     old.insert("json/store.rut".to_string(), b"// the store half\n".to_vec());
-    old.insert("json/serde_pouch.rut".to_string(), b"impl<T> J for Vec<T>".to_vec());
     let legacy = parse_manifest_compat(
         &String::from_utf8(old["json/rut.jsonc"].clone()).unwrap(),
     )
@@ -82,7 +78,7 @@ fn bundles_the_source_file_set_in_manifest_order() {
     let names2: Vec<&str> = out2.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names2,
-        vec!["json/rut.jsonc", "json/json.rut", "json/store.rut", "json/serde_pouch.rut"],
+        vec!["json/rut.jsonc", "json/json.rut", "json/store.rut"],
         "manifest order IS the archive order"
     );
 }

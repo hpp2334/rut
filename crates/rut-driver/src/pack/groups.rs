@@ -13,9 +13,7 @@ use std::collections::BTreeMap;
 
 /// Emit a generic-owning compiled pkg's riding source under `prefix`
 /// (empty for the root, `<pkg>/` for a group): the root module's
-/// source (`mod.rut` — the post-repeal envelope), then each
-/// `[peer-deps]` descriptor's `lib` group file in peer-name order (the
-/// manifest's BTreeMap order — deterministic). Verbatim bytes, one
+/// source (`mod.rut` — the post-repeal envelope). Verbatim bytes, one
 /// entry per path. An OLD published archive being re-packed (its
 /// manifest rides the compat lane) rides at the legacy `entry.lib` +
 /// `libs` spelling instead — the reader-compat law's writer twin.
@@ -25,7 +23,7 @@ pub(super) fn ride_generic_source(
     entries: &mut Vec<(String, Vec<u8>)>,
     read: &impl Fn(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(), String> {
-    let mut push = |rel: &str, entries: &mut Vec<(String, Vec<u8>)>| -> Result<bool, String> {
+    let push = |rel: &str, entries: &mut Vec<(String, Vec<u8>)>| -> Result<bool, String> {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         if entries.iter().any(|(n, _)| *n == key) {
@@ -45,11 +43,6 @@ pub(super) fn ride_generic_source(
         }
     } else {
         push("mod.rut", entries)?;
-    }
-    for desc in manifest.peer_deps.values() {
-        if let Some(lib) = desc.get("lib") {
-            push(lib, entries)?;
-        }
     }
     Ok(())
 }
@@ -107,14 +100,13 @@ pub(super) fn group_file(
 
 /// Collect a package's SOURCE file set — the group shape — under
 /// `prefix` (empty for a root, `<pkg>/` for a dep group): its `rut.jsonc`
-/// byte-for-byte, its root module (`mod.rut`) when the pkg is flat, and
-/// each `[peer-deps]` descriptor's `lib` group file. A pkg with mounted
+/// byte-for-byte and its root module (`mod.rut`) when the pkg is flat.
+/// A pkg with mounted
 /// mod children rides its module rows too (`rut.mods` — the additive
 /// envelope section; its root source is the `""` row, so the tree needs
 /// no standalone file). An OLD published archive being re-packed rides
 /// at the legacy `entry.lib` + `libs` spelling instead (the
-/// reader-compat law's writer twin). Descriptor order is the
-/// manifest's (BTreeMap), so the archive stays deterministic. A
+/// reader-compat law's writer twin). A
 /// compiled group does not take this shape (its `.rutc` is the linking
 /// truth); host pkgs and declared-but-unused pkgs ride the bundle
 /// exactly like this. Dir reads go through the world's reader; same
@@ -169,15 +161,6 @@ pub fn collect_source_group(
                 "module at {dir_key} has no entry — the root module is `mod.rut` beside the manifest"
             ));
         }
-    }
-    for desc in manifest.peer_deps.values() {
-        let Some(lib) = desc.get("lib") else {
-            continue; // presence declared, no integration file to pack
-        };
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let body = read(dir_key, rel)?;
-        out.push((key, body));
     }
     Ok(())
 }

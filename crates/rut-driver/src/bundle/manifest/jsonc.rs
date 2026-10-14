@@ -227,13 +227,13 @@ mod tests {
   "name": "x",
   "entry": {"lib": "./x.rut", "libs": ["./a.rut", "./b.rut",]},
   "deps": {"core": {"path": "rut/core",},},
-  "peer-deps": {"p": {"path": "..", "optional": true,}},
+  "dev-deps": {"p": {"path": "..",}},
   "style": {"indent": "2",},
 }"#;
         let v: serde_json::Value = serde_json::from_str(&strip(text)).unwrap();
         assert_eq!(v["entry"]["libs"].as_array().unwrap().len(), 2);
         assert_eq!(v["deps"]["core"]["path"], "rut/core");
-        assert_eq!(v["peer-deps"]["p"]["optional"], true);
+        assert_eq!(v["dev-deps"]["p"]["path"], "..");
         assert_eq!(v["style"]["indent"], "2");
     }
 

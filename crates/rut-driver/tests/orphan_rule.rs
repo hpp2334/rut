@@ -299,8 +299,7 @@ fn consumer_proves_jsonserialize_on_its_own_type() {
                 rut_driver::Pkg::source(
                     "main",
                     "\
-use json::{ encodeJson, JsonSerialize, JsonWriter, EncodeJsonError, JsonVec };
-use pouch::{ Vec };
+use json::{ encodeJson, JsonSerialize, JsonWriter, EncodeJsonError };
 
 class Todo { name: str; n: i64; }
 
@@ -317,9 +316,7 @@ impl Todo {
 }
 
 entry fn main() -> ?str {
-    let mut v = Vec<Todo>::new();
-    v.push(Todo { name: \"a\", n: 1 });
-    let (doc, e) = encodeJson(JsonVec(v));
+    let (doc, e) = encodeJson(Todo { name: \"a\", n: 1 });
     if (e != nil) { return nil; }
     return doc;
 }
@@ -327,7 +324,7 @@ entry fn main() -> ?str {
                 )
                 // the root declares the tree pkgs it names (the
                 // nameability law — mounted-but-undeclared is D5)
-                .manifest(rut_driver::Manifest::lib("main", &["json", "pouch", "calc"])),
+                .manifest(rut_driver::Manifest::lib("main", &["json", "calc"])),
             )
             .entrypoint("main")
             .compile(),

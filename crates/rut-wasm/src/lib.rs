@@ -157,13 +157,9 @@ fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) 
 /// One std pkg mounted from the repo tree's OWN files — the source AND
 /// the manifest ride `include_str!`, so `rut/<name>/rut.jsonc` stays
 /// the single source of truth (no hand-maintained dep table here; the
-/// parsed structural form carries the `deps`/`peer-deps` rows). The
-/// `[peer-deps]` group TEXTS ride too (the wasm host has no
-/// filesystem — the manifest's `lib` path resolves through
-/// [`group_text`]), but stay UNMOUNTED: the run chain's peer gate
-/// performs the presence law itself, so a group mounts exactly when
-/// its peer is in the program's closure (this also closes the old gap
-/// where `json`'s wrapper groups never mounted while `flow`'s did).
+/// parsed structural form carries the `deps` rows). The walk's peer
+/// fold ([`peers_of`]) runs over the parsed manifest; it is inert
+/// since `[peer-deps]` left the grammar (phase-2 deletes the lane).
 macro_rules! std_pkg {
     ($name:literal) => {
         peers_of(
@@ -190,36 +186,19 @@ macro_rules! std_pkg {
 /// the peer gate's presence pass does the mounting. A manifest `lib`
 /// path this host cannot embed is a build-time bug: loud, never a
 /// silent missing group.
-fn peers_of(mut pkg: rut_driver::Pkg) -> rut_driver::Pkg {
-    let descs: Vec<(String, BTreeMap<String, String>)> =
-        pkg.manifest.peer_deps.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-    for (peer, desc) in descs {
-        let text = desc.get("lib").map(|lib| {
-            group_text(&pkg.spec, lib)
-                .unwrap_or_else(|| panic!("pkg `{}`: cannot embed the group `{lib}` — add it to `group_text`", pkg.spec))
-                .to_string()
-        });
-        pkg.peer_libs.insert(peer.clone(), text);
-        pkg.peers.insert(peer, rut_driver::PeerDecl::of(&desc));
-    }
+fn peers_of(pkg: rut_driver::Pkg) -> rut_driver::Pkg {
+    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
+    // the fold's table is always empty — nothing to embed
     pkg
 }
 
 /// The embedded peer-group texts, keyed (pkg spec, manifest `lib`
 /// path). The surrogate for the directory walk's file read: the same
-/// files the gate pass would read from disk.
-fn group_text(pkg: &str, lib: &str) -> Option<&'static str> {
-    match (pkg, lib) {
-        ("flow", "./group-pouch.rut") => Some(include_str!("../../../rut/flow/group-pouch.rut")),
-        ("flow", "./group-nmapset.rut") => {
-            Some(include_str!("../../../rut/flow/group-nmapset.rut"))
-        }
-        ("json", "./group-pouch.rut") => Some(include_str!("../../../rut/json/group-pouch.rut")),
-        ("json", "./group-nmapset.rut") => {
-            Some(include_str!("../../../rut/json/group-nmapset.rut"))
-        }
-        _ => None,
-    }
+/// files the gate pass would read from disk. Inert — the grammar no
+/// longer declares peer groups, so nothing calls it.
+#[allow(dead_code)] // phase-2 deletes this with the peers lane
+fn group_text(_pkg: &str, _lib: &str) -> Option<&'static str> {
+    None
 }
 
 /// The playground's library offers (§0.9 of the host-pkgs plan): wasm
@@ -1039,69 +1018,6 @@ entry fn main() {
             "[\"t-3\",\"t-2\",\"t-1\",\"lift-off\"]",
             "{j}"
         );
-    }
-
-    // ---- the json peer-group GAP fix: json's wrapper families mount
-    // through the peer gate's presence pass exactly like flow's always
-    // did — `JsonVec` exists on this page because `pouch` rides the
-    // world (before this phase only flow's groups were force-appended;
-    // json's were never mounted). ----
-
-    const BOOK_JSON_VEC: &str = r#"
-use json::{ encodeJson, decodeJson, JsonVec, JsonWriter, JsonReader,
-            EncodeJsonError, DecodeJsonError };
-use pouch::{ Vec };
-use ink::{ Logger };
-
-class Note { n: i64; }
-
-impl Note {
-    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        w.begin_object();
-        w.key("n");
-        w.write_i64(self.n);
-        w.end_object();
-        return nil;
-    }
-}
-
-impl Note {
-    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        r.begin_object();
-        let mut n: ?i64 = nil;
-        while (r.more()) {
-            let k = r.next_key();
-            if (k == "n") { n = r.read_i64(); } else { r.skip_value(); }
-        }
-        r.end_object();
-        if (r.failed()) { return (nil, r.error()); }
-        let nv: i64 = n;
-        return (Note { n: nv }, nil);
-    }
-}
-
-entry fn main() {
-    let log = Logger::new("json");
-    let mut v: Vec<Note> = Vec::new();
-    v.push(Note { n: 7 });
-    let (text, e) = encodeJson(JsonVec(v));
-    if (e != nil) { panic("encode failed"); }
-    let doc: str = text;
-    let (back, e2) = decodeJson<JsonVec<Note>>(doc);
-    if (e2 != nil) { panic("decode failed"); }
-    let w: JsonVec<Note> = back;
-    let rows: Vec<Note> = w.to_vec();
-    log.info(f"count={rows.len()}");
-}
-"#;
-
-    #[test]
-    fn the_json_wrapper_groups_mount_by_presence_on_the_page() {
-        let _g = lock();
-        unsafe { PARKED = None };
-        let j = run_json(&compile_case(BOOK_JSON_VEC), 10_000_000, 4 * 1024 * 1024);
-        assert_eq!(field(&j, "trap"), "null", "{j}");
-        assert_eq!(field(&j, "output"), "[\"count=1\"]", "{j}");
     }
 
     // ---- the manifest lane (`rut_compile_manifest`): the page's own

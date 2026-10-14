@@ -5,7 +5,7 @@
 
 use serde_json::{Map, Value};
 
-use super::descriptor::{check_dep_key, parse_deps_descriptor, parse_peer_descriptor};
+use super::descriptor::{check_dep_key, parse_deps_descriptor, parse_dev_descriptor};
 use super::expect::{expect_field_string, expect_field_string_array, expect_string, expect_u64};
 use super::{valid_spec, Manifest, ManifestError, PkgType};
 
@@ -66,8 +66,10 @@ pub(crate) fn underscore_refused(path: &str, key: &str) -> ManifestError {
 
 // ---- the sections ----
 
-/// Top-level keys. Unknown keys ride (forward compatibility, any
-/// shape), `host_scope` refuses loudly (the retirement law).
+/// Top-level keys. The grammar carries NO unknown keys — anything
+/// unnamed refuses loudly, naming the key (the no-forward-compat law:
+/// a typo or a retired key is a manifest error, never a silent
+/// ignore); `host_scope` keeps its dedicated retirement refusal.
 pub(super) fn walk_top_lane(
     key: &str,
     value: &Value,
@@ -125,10 +127,15 @@ pub(super) fn walk_top_lane(
         "consts" => walk_consts(value, m)?,
         "entry" => walk_entry(value, m, compat)?,
         "deps" => walk_deps(value, m, compat)?,
-        "peer-deps" => walk_peers(value, "peer-deps", m)?,
-        "dev-deps" => walk_peers(value, "dev-deps", m)?,
+        "dev-deps" => walk_dev_table(value, m)?,
         "style" => walk_style(value, m)?,
-        _ => {} // forward-compatible: ignore unknown top-level keys
+        other => {
+            // the strict-keys law: the manifest grammar carries no
+            // unknown keys — an old or mistyped key refuses LOUDLY,
+            // naming the key (a silent ignore would strand retired
+            // manifests' meaning)
+            return Err(ManifestError(format!("manifest: unknown key '{other}'")));
+        }
     }
     Ok(())
 }
@@ -200,28 +207,19 @@ pub(super) fn walk_deps(
     Ok(())
 }
 
-/// The `peer-deps` / `dev-deps` objects: same descriptor walk with the
-/// `optional` flag and the `lib` group key.
-pub(super) fn walk_peers(
-    value: &Value,
-    kind: &str,
-    m: &mut Manifest,
-) -> Result<(), ManifestError> {
-    let table = expect_object(kind, value)?;
+/// The `dev-deps` object: exact specifier → descriptor; the descriptor
+/// laws are [`parse_dev_descriptor`]'s (`path` only — dev presence is
+/// name-based at the root, and the peer machinery's `lib`/`optional`
+/// keys died with `peer-deps`).
+pub(super) fn walk_dev_table(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
+    let table = expect_object("dev-deps", value)?;
     for (spec, v) in table {
         if spec.starts_with('_') {
-            return Err(underscore_refused(kind, spec));
+            return Err(underscore_refused("dev-deps", spec));
         }
-        check_dep_key(kind, spec)?;
-        let desc = parse_peer_descriptor(kind, spec, v)?;
-        match kind {
-            "peer-deps" => {
-                m.peer_deps.insert(spec.clone(), desc);
-            }
-            _ => {
-                m.dev_deps.insert(spec.clone(), desc);
-            }
-        }
+        check_dep_key("dev-deps", spec)?;
+        let desc = parse_dev_descriptor("dev-deps", spec, v)?;
+        m.dev_deps.insert(spec.clone(), desc);
     }
     Ok(())
 }

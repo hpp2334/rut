@@ -3,10 +3,9 @@
 //! test drives the pkg through its entry surface on a plain VM and
 //! asserts canonical strings, no DOM, no clock, no host surface.
 //!
-//! The fixtures: `tests/data/jsonpkg` (json + pouch + nmapset — every
-//! group wrapper dispatches) and `tests/data/jsonlight` (json alone —
-//! the base mounts light, the peer-gated container wrappers never
-//! exist).
+//! The fixtures: `tests/data/jsonpkg` (json — the base surface end to
+//! end) and `tests/data/jsonlight` (json alone — the same base, a
+//! minimal entry set).
 //!
 //! Entry answer shape:
 //!   successes  ->  `OK:<payload>`
@@ -65,9 +64,6 @@ fn vm_at(dir: &str) -> Vm {
     let compiled = rut_driver::RutRun::new()
         .pkgs(&loaded)
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        // the nmapset group drags nmap_host's declared surface — the
-        // bodies install against the rows snapshot (declared host fns
-        // run only through the registry)
         // json's writer rides the strbuild pkg — its `strbuild_host` rows
         // are in this closure's declared set, so the bodies install
         // through the same chain
@@ -382,76 +378,6 @@ fn opt_mapping() {
     assert_eq!(val_doc, "55");
 }
 
-// ---- Vec<T>: the peer-gated pouch group dispatches ----
-
-#[test]
-fn vec_group() {
-    let cases = [
-        ("[]", "OK:len=0"),
-        ("[1,2,3,4]", "OK:len=4:1:2:3:4"),
-    ];
-    for (doc, want) in cases {
-        dec_expect("dec_vec", doc, want);
-    }
-    let mut vm = vm_at(PKG);
-    let out: String = vm.call("enc_vec", ()).unwrap();
-    assert_eq!(out, "[\"a\",\"b\"]");
-}
-
-#[test]
-fn vec_group_nested() {
-    // the survey §1.4 item 3's fixture: the unbounded element T
-    // instantiates recursively — the group impl dispatches inside itself
-    let cases = [
-        ("[[1,2],[3]]", "OK:outer=2:inner=2:head=1"),
-        ("[[7]]", "OK:outer=1:inner=1:head=7"),
-    ];
-    for (doc, want) in cases {
-        dec_expect("dec_vec_vec", doc, want);
-    }
-    let mut vm = vm_at(PKG);
-    let out: String = vm.call("enc_vec_vec", ()).unwrap();
-    assert_eq!(out, "[[1,2]]");
-}
-
-// ---- the nmapset group ----
-
-#[test]
-fn map_group() {
-    let cases = [
-        ("dec_hm_ss", "{\"a\": \"x\", \"b\": \"y\"}", "OK:len=2:a=x"),
-        // i64 keys parse from the doc's key text (§2.6); "01" normalizes
-        // to 1 so the duplicate is LAST WINS
-        ("dec_hm_ii", "{\"01\": 1, \"1\": 2}", "OK:len=1:k1=2"),
-        (
-            "dec_hm_key_err",
-            "{\"x\": 1, \"y\": 2}",
-            "ERR:WrongType@6:x:a key this map's key type can parse",
-        ),
-        ("dec_hs", "[7, 8]", "OK:len=2:has7=true"),
-        ("dec_hs", "[7, 7]", "OK:len=1:has7=true"),
-        ("dec_pm_i64", "{\"n\": 5}", "OK:len=1:n=5"),
-        // a u64 beyond i64's reach rides the folded u64 lane (`HashMap<K, u64>` — the generic class)
-        ("dec_pm_u64", "{\"n\": 18446744073709551615}", "OK:len=1:n=18446744073709551615"),
-        ("dec_pm_f64", "{\"x\": 1.5}", "OK:len=1:x=1.5"),
-        // the f64 key spelling normalizes: `1` back as 1.0 — the §2.6
-        // disclosure
-        ("dec_pm_f64", "{\"x\": 1}", "OK:len=1:x=1"),
-    ];
-    for (entry, doc, want) in cases {
-        dec_expect(entry, doc, want);
-    }
-    // bytes KEYS: no JSON spelling — WrongType naming the key text and
-    // the spelling disclosure (KeyUnsupported is the encode-side kind;
-    // it lands with the map encode half)
-    let mut vm = vm_at(PKG);
-    let key: String = vm.call("dec_hm_bytes_key", ()).unwrap();
-    assert!(
-        key.contains("bytes keys have no JSON spelling"),
-        "dec_hm_bytes_key: {key}"
-    );
-}
-
 // ---- the depth limit: 128, both directions, recoverable ----
 
 #[test]
@@ -617,12 +543,9 @@ fn every_decode_kind_reachable() {
 fn every_encode_kind_reachable() {
     // Depth: the cyclic writer (the expected failure — data,
     // never a trap); NotFinite: inf. KeyUnsupported is DECLARED in the
-    // finalized error set (survey §2.3) but DORMANT this phase, on
-    // record: its only sanctioned fire site is inside the map ENCODE
-    // rows, and those land with nmapset's iteration surface (the
-    // recorded menu item — group-nmapset.rut's header discloses the
-    // deferral). The decode-side bytes-key law it mirrors is pinned in
-    // map_group below.
+    // finalized error set (survey §2.3) but DORMANT, on record: its
+    // only sanctioned fire site would be the map ENCODE rows (the
+    // map wrappers rode the retired `[peer-deps]` groups).
     let mut vm = vm_at(PKG);
     let deep: String = vm.call("enc_deep", (200i32,)).unwrap();
     assert!(deep.starts_with("ERR:Depth"), "{deep}");
@@ -631,47 +554,7 @@ fn every_encode_kind_reachable() {
     assert_eq!(inf, "ERR:NotFinite@7:$.bad");
 }
 
-// ---- the group gate, end to end (survey §3 matrix 6) ----
-
-#[test]
-fn peer_gate_light_diagnoses_full_dispatches() {
-    // the same Vec-consuming source, both worlds. WITHOUT the peers the
-    // container rows never exist and the reference diagnoses at the
-    // reference site (D2 — the optional peer's miss names the pkg, the
-    // peer, and the fix); WITH them it compiles clean —
-    // the rows' runtime dispatch is vec_group's proof above.
-    let src = "use json::decodeJson;\nuse pouch::Vec;\nentry fn main() -> nil {\n    let mut v = Vec<i64>::new();\n    v.push(1);\n}\n";
-    // the probe DECLARES its uses structurally (the audit's d2probe
-    // row): json + pouch, exactly what the source spells
-    let probe = |p: rut_driver::Pkg| {
-        p.manifest(rut_driver::Manifest::lib("d2probe", &["json", "pouch"]))
-    };
-    let light = rut_native::load_dir(Path::new(LIGHT)).expect("mount light");
-    let err = rut_driver::RutRun::new()
-        .pkgs(&light)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .pkg(probe(rut_driver::Pkg::source("d2probe", src)))
-        .entrypoint("d2probe")
-        .compile()
-        .unwrap_err();
-    assert!(err.to_string().contains("pouch"), "the D2 miss names the peer: {err}");
-
-    let full = rut_native::load_dir(Path::new(PKG)).expect("mount full");
-    let out = rut_driver::RutRun::new()
-        .pkgs(&full)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .pkg(probe(rut_driver::Pkg::source("d2probe", src)))
-        .entrypoint("d2probe")
-        .compile()
-        .unwrap();
-    assert!(
-        out.graph.diags.is_empty(),
-        "the same source compiles clean with the peers: {:?}",
-        out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>()
-    );
-}
-
-// ---- the LIGHT consumer: json mounts base-only without peers ----
+// ---- the LIGHT consumer: json mounts base-only ----
 
 #[test]
 fn light_consumer_base_rows() {
@@ -705,21 +588,13 @@ fn light_consumer_base_rows() {
 
 // ---- the user-type lane: the fixture's DocRow satisfies both
 // interfaces on its own inherent impl (the structural fork's whole
-// point), and the group wrapper dispatches it per instantiation ----
+// point); the boundary check admits it at the entries ----
 
 #[test]
 fn user_type_satisfies_structurally() {
     let mut vm = vm_at(PKG);
-    let enc: String = vm.call("enc_rows", ()).unwrap();
-    assert_eq!(enc, r#"[{"id":1,"name":"one"},{"id":2,"name":"two"}]"#);
-    let mut vm = vm_at(PKG);
     let dec: String = vm.call("dec_row", (r#"{"id":7,"name":"seven"}"#.to_string(),)).unwrap();
     assert_eq!(dec, "OK:7:seven");
-    let mut vm = vm_at(PKG);
-    let rows: String = vm
-        .call("dec_rows", (r#"[{"id":1,"name":"a"},{"id":2,"name":"b"}]"#.to_string(),))
-        .unwrap();
-    assert_eq!(rows, "OK:len=2:first=a");
 }
 
 // ---- the json-perf batch phase 1: the reader's per-byte classification

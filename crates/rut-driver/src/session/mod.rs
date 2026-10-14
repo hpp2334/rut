@@ -22,7 +22,7 @@
 //! Two doors share that resolution: [`Session::resolve`] (the raw
 //! mount lookup) and [`Session::resolve_use`] — the USE door, which
 //! adds the nameability law on top: a mounted head passes only when
-//! the consumer DECLARES it (its manifest's `deps` ∪ `peer-deps` ∪ the
+//! the consumer DECLARES it (its manifest's `deps`, plus the
 //! program root's `dev-deps`; `core` rides unconditionally). The
 //! mounted-but-undeclared miss is D5, the dedicated diagnostic. The
 //! sibling [`Session::own_use_head`] answers the own-package lane: a
@@ -31,11 +31,11 @@
 //! from the importing file.
 //!
 //! The dep kinds: `[deps]` is today's transitively-mounted
-//! table; `[peer-deps]` is REQUIRED by default (the consumer supplies
-//! the peer) with `optional = true` marking the presence-mounted kind
-//! whose integration group is the descriptor's `lib` file; `[dev-deps]`
-//! mount only while building the pkg itself (the loader's law — the
-//! Session never sees a dev table).
+//! table; `[dev-deps]`
+//! mounts only while building the pkg itself (the loader's law — the
+//! Session never sees a dev table). The retired `[peer-deps]` table
+//! left the grammar (strict keys); its mount machinery rides inert
+//! until phase 2 deletes it.
 //!
 //! The `Session` itself does no I/O (wasm hosts mount in memory); the
 //! native file readers are the counterparts that read files (the
@@ -203,7 +203,7 @@ impl Session {
     }
 
     /// The nameability allowlist: the heads `consumer` may `use` — its
-    /// own manifest's `deps` ∪ `peer-deps` tables, plus `dev-deps` when
+    /// own manifest's `deps` table, plus `dev-deps` when
     /// the consumer IS the program root. Read off `pkg.manifest` (the
     /// STRUCTURAL form every producer stamps — the walk's jsonc read, a
     /// bundle's in-archive manifest, a host's `Pkg::manifest(..)` /
@@ -214,7 +214,6 @@ impl Session {
             return false;
         };
         c.manifest.deps.contains_key(head)
-            || c.manifest.peer_deps.contains_key(head)
             || (c.spec == root && c.manifest.dev_deps.contains_key(head))
     }
 
@@ -318,11 +317,8 @@ impl Session {
             self.mount(Pkg {
                 spec: name.clone(),
                 entry: manifest.entry.clone(),
-                peers: manifest
-                    .peer_deps
-                    .iter()
-                    .map(|(peer, desc)| (peer.clone(), PeerDecl::of(desc)))
-                    .collect(),
+                // phase-2 deletes the peers lane: `[peer-deps]` left the
+                // grammar, so no parse ever fills `Pkg::peers` now
                 manifest: manifest.clone(),
                 ..Default::default()
             })?;
@@ -359,51 +355,6 @@ mod tests {
         assert!(err.to_string().contains("`rut.jsonc` `deps`"), "{}", err);
     }
 
-    /// The pinned grammar (survey §0), plus the §2.3 `lib` keys.
-    const JSON: &str = r#"
-{
-  "name": "json",
-  
-
-  "peer-deps": {
-    "pouch":   { "path": "../pouch",   "optional": true, "lib": "./serde_pouch.rut" },
-    "nmapset": { "path": "../nmapset", "optional": true, "lib": "./serde_nmapset.rut" }
-  },
-
-  "dev-deps": {
-    "pouch":   { "path": "../pouch" },
-    "nmapset": { "path": "../nmapset" }
-  }
-}
-"#;
-
-    #[test]
-    fn d2_optional_peer_miss_names_pkg_peer_and_fix() {
-        // (D2): with json's registry entry recorded, a miss
-        // on the peer's name is the DEDICATED diagnostic — pkg + peer +
-        // the integration it unlocks + the fix — never the bare
-        // NoModule text. The pinned survey text, verbatim.
-        let mut s = Session::new();
-        s.load_manifest(JSON).unwrap();
-        let err = s.resolve("pouch").unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `\"pouch\": { \"path\": \"..\" }` to your `rut.jsonc` `deps`"
-        );
-        // a name NO pkg declares as a peer stays the bare miss
-        let err = s.resolve("stranger").unwrap_err();
-        assert_eq!(err, ResolveError::NoModule { spec: "stranger".into() });
-        // a REQUIRED peer's absence is D1's business (loud at mount);
-        // reached gate-less it stays the bare miss, not a false D2
-        let mut s = Session::new();
-        s.load_manifest(
-            r#"{"name": "j", "peer-deps": {"nmapset": {"path": "../nmapset"}}}"#,
-        )
-        .unwrap();
-        let err = s.resolve("nmapset").unwrap_err();
-        assert_eq!(err, ResolveError::NoModule { spec: "nmapset".into() });
-    }
-
     #[test]
     fn malformed_specifier() {
         let s = Session::new();
@@ -420,19 +371,11 @@ mod tests {
     }
 
     #[test]
-    fn session_records_peer_declarations() {
-        let mut s = Session::new();
-        s.load_manifest(JSON).unwrap();
-        let decl = s.resolve("json").unwrap().peers.get("pouch").unwrap();
-        assert_eq!(
-            *decl,
-            PeerDecl {
-                optional: true,
-                lib: Some("./serde_pouch.rut".into()),
-                path: "../pouch".into()
-            }
-        );
-        // a recorded peer group rides the pkg, never the body
+    fn peer_groups_ride_the_pkg_never_the_body() {
+        // a recorded peer group rides the pkg, never the body (the
+        // mount lane that used to feed it — the manifest's
+        // `[peer-deps]` — left the grammar; the mechanism itself is
+        // phase-2's deletion)
         let mut s = Session::new();
         s.register_module("m", Pkg::source("m", "fn a() {}")).unwrap();
         s.resolve_mut("m").unwrap().peer_groups.push("fn b() {}".to_string());

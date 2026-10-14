@@ -479,6 +479,13 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
     // The published bytes are committed at `dist/std-v8/` so the gate
     // never networks; `dist/std` (the working envelope) is the
     // freshness gate's business and `dist/std-v10/` the pin envelope.
+    //
+    // ONE carve-out, the strict-keys law: the compat lane relaxes the
+    // repealed ENTRY keys only. `json`'s manifest carries `[peer-deps]`
+    // — the key left the grammar with no retired lane (D3) — so that
+    // one artifact refuses loudly naming the key, at parse and at
+    // [`Pkg::from_bundle`] (pinned in
+    // `the_peer_deps_bundle_refuses_at_the_manifest_door` below).
     let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std-v8"));
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).expect("dist/std") {
@@ -497,7 +504,9 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
         vec!["http", "json", "nmapset", "pouch"],
         "the pinned artifacts ride in dist/std-v10: {names:?}"
     );
-    for path in &names {
+    for path in names.iter().filter(|p| {
+        p.file_stem().unwrap().to_string_lossy() != "json"
+    }) {
         let bytes = std::fs::read(path).expect("read the bundle");
         let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
         let entry_names: Vec<&str> = entries.iter().map(|(n, _)| n.as_str()).collect();
@@ -540,6 +549,29 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
             );
         }
     }
+}
+
+#[test]
+fn the_peer_deps_bundle_refuses_at_the_manifest_door() {
+    // the strict-keys law against a PUBLISHED artifact: the compat lane
+    // relaxes the repealed entry keys (a loading law), but it grants NO
+    // retired lane to `[peer-deps]` — json's std-v8 manifest carries
+    // the key, and the grammar refuses it exactly like any unknown
+    // key, at parse and at the bundle door. Old artifacts riding the
+    // key must be re-packed.
+    let bytes = std::fs::read(PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../dist/std-v8/json.rutbundle"
+    )))
+    .expect("the pinned artifact");
+    let manifest_text = rut_driver::bundle::Bundle::parse(&bytes)
+        .unwrap()
+        .read("rut.jsonc")
+        .unwrap();
+    let err = rut_driver::bundle::parse_manifest_compat(&manifest_text).unwrap_err();
+    assert_eq!(err.to_string(), "manifest: unknown key 'peer-deps'", "{err}");
+    let err = Pkg::from_bundle(&bytes).unwrap_err().to_string();
+    assert!(err.contains("manifest: unknown key 'peer-deps'"), "{err}");
 }
 
 #[test]

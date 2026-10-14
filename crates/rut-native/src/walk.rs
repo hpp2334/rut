@@ -407,12 +407,10 @@ struct Fetched<'a> {
 /// walk reads every mounted pkg's manifest anyway, so folding the
 /// table into the pkg costs no extra I/O. The peer gate reads it
 /// post-closure; the reference-site D2 diagnostic resolves against it.
-fn manifest_peers(manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
-    manifest
-        .peer_deps
-        .iter()
-        .map(|(peer, desc)| (peer.clone(), PeerDecl::of(desc)))
-    .collect()
+fn manifest_peers(_manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
+    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
+    // the table it folded is always empty now
+    BTreeMap::new()
 }
 
 /// The manifest + [`manifest_peers`] folded into a walked pkg, plus
@@ -434,41 +432,23 @@ fn fold_peers(mut pkg: Pkg, manifest: &Manifest, libs: BTreeMap<String, Option<S
 
 /// The declared `lib` texts for a DIR pkg — best-effort reads (a
 /// missing file is the gate's D3 error when the peer shows up).
-fn dir_peer_libs(dir: &Path, manifest: &Manifest) -> BTreeMap<String, Option<String>> {
-    let mut out = BTreeMap::new();
-    for (peer, desc) in &manifest.peer_deps {
-        let Some(lib) = desc.get("lib") else {
-            continue; // presence declared, no integration file to mount
-        };
-        let text = std::fs::read_to_string(dir.join(lib)).ok();
-        out.insert(peer.clone(), text);
-    }
-    out
+fn dir_peer_libs(_dir: &Path, _manifest: &Manifest) -> BTreeMap<String, Option<String>> {
+    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
+    // there is no `lib` file left to read
+    BTreeMap::new()
 }
 
 /// The declared `lib` texts for an ARCHIVE pkg — read from the
 /// archive's entries at the pkg's prefix.
 fn archive_peer_libs(
-    entries: &[(String, Vec<u8>)],
-    prefix: &str,
-    origin: &str,
-    manifest: &Manifest,
+    _entries: &[(String, Vec<u8>)],
+    _prefix: &str,
+    _origin: &str,
+    _manifest: &Manifest,
 ) -> Result<BTreeMap<String, Option<String>>, LoadError> {
-    let mut out = BTreeMap::new();
-    for (peer, desc) in &manifest.peer_deps {
-        let Some(lib) = desc.get("lib") else {
-            continue;
-        };
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))
-            .map_err(|e| LoadError::law(format!("{origin}: {e}")))?;
-        let text = match read_entry(entries, &key) {
-            Ok(t) => Some(t),
-            Err(_) => None,
-        };
-        out.insert(peer.clone(), text);
-    }
-    Ok(out)
+    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
+    // there is no `lib` file left to read
+    Ok(BTreeMap::new())
 }
 
 /// The `mod.rut` probe: `mod.rut` beside the manifest —

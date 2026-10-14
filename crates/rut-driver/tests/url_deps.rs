@@ -138,28 +138,6 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) ->
     vm.call::<_, R>(entry, ()).expect("run")
 }
 
-/// Does a probe module naming the group's wrapper compile over this
-/// session? The wrapper name is the compiled-world observable for "the
-/// group mounted" — the impl-registration rows are gone (satisfaction
-/// is structural), so the group's exported wrapper is what resolves.
-/// The hand probe declares the heads it names (the nameability law —
-/// a mounted-but-undeclared use is D5): codec + pouch, the world's
-/// dir-declared heads.
-fn probe_compiles(session: &rut_driver::Loaded, probe: &str) -> bool {
-    let g = rut_driver::RutRun::new()
-        .pkgs(session)
-        .pkg(
-            rut_driver::Pkg::source("probe", probe)
-                .manifest(rut_driver::Manifest::lib("probe", &["codec", "pouch"])),
-        )
-        .entrypoint("probe")
-        .compile()
-        .expect("compile the probe");
-    g.graph.diags.is_empty()
-}
-
-const CODEC_POUCH_PROBE: &str = "use codec::{ CodedVec };\nclass P(CodedVec);\nentry fn main() -> i32 { return 0; }\n";
-
 // ------------------------------------------------------------------
 // the tests
 
@@ -361,19 +339,16 @@ fn embedder_mount_outranks_the_url_dep() {
     assert!(g.graph.program.is_some(), "{:?}", g.graph.diags);
 }
 
-/// The peer world: `codec` (inline, interface + wrapper-only pouch
-/// group, dev-deps for its own build) packed INSIDE `zeta` as a
-/// declared-but-
-/// unused dep, so it rides the archive as a SOURCE group (the group
-/// files ride with it) — the consumer sees codec as an ARCHIVE SOURCE
-/// GROUP, and the one unified peer gate must read the group file from
-/// the archive.
-fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
+/// The archive source-group world: `codec` (interface + entries,
+/// dev-deps for its own build) packed INSIDE `zeta` as a declared-but-
+/// unused dep, so it rides the archive as a SOURCE group — the consumer
+/// sees codec as an ARCHIVE SOURCE GROUP.
+fn codec_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     let root = scratch(tag);
     write(
         &root.join("pouch"),
         "rut.jsonc",
-        &manifest("pouch", "mod.rut", r#", "inline": true"#),
+        &manifest("pouch", "mod.rut", ""),
     );
     write(
         &root.join("pouch"),
@@ -381,25 +356,20 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
         "pub class Vec<T> {\n    items: [T];\n}\n\nimpl<T> Vec<T> {\n    pub fn filled(v: T, n: i32) -> Self {\n        let mut items: [T] = [v; n];\n        return Self { items: items };\n    }\n\n    pub fn first(self) -> T {\n        return self.items[0];\n    }\n}\n",
     );
     // codec — the json shape: the interface and public names in the
-    // base, the wrapper-only group beside it, dev-deps for its own build
+    // base, dev-deps for its own build
     write(
         &root.join("codec"),
         "rut.jsonc",
         &manifest(
             "codec",
             "mod.rut",
-            r#", "inline": true, "peer-deps": {"pouch": {"path": "../pouch", "optional": true, "lib": "./codec_pouch.rut"}}, "dev-deps": {"pouch": {"path": "../pouch"}}"#,
+            r#", "dev-deps": {"pouch": {"path": "../pouch"}}"#,
         ),
     );
     write(
         &root.join("codec"),
         "mod.rut",
         "pub interface Coded {\n    fn coded(self) -> str;\n}\n\npub class CodedStr(str);\n\nimpl CodedStr {\n    pub fn coded(self) -> str {\n        return self.inner;\n    }\n}\n\npub fn encode(s: str) -> str {\n    return CodedStr(s).coded();\n}\n",
-    );
-    write(
-        &root.join("codec"),
-        "codec_pouch.rut",
-        "use pouch::{Vec};\n\npub class CodedVec(Vec<i32>);\n\nimpl CodedVec {\n    pub fn coded(self) -> str {\n        return \"[vec]\";\n    }\n}\n",
     );
     // zeta — packs codec as a declared-but-unused (source) group
     write(
@@ -411,82 +381,6 @@ fn peer_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     let bytes = pack_dir(&root.join("zeta")).expect("pack zeta");
     let url = "https://fixtures.test/zeta.rutbundle";
     (root, bytes, url.to_string())
-}
-
-#[test]
-fn mixed_dir_and_archive_peer_gate() {
-    let (root, bytes, url) = peer_world("peer");
-    // the consumer declares every head it uses (the walked law): codec
-    // and pouch by PATH, zeta by url. Name order mounts codec from the
-    // DIR first, so the archive's ridden codec source group loses
-    // first-mount-wins; codec's optional peer pouch is present through
-    // the dir lane, and the one gate mounts the integration text.
-    let app = root.join("app");
-    write(
-        &app,
-        "rut.jsonc",
-        &manifest(
-            "app",
-            "mod.rut",
-            &format!(r#", "deps": {{"codec": {{"path": "../codec"}}, "pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
-        ),
-    );
-    write(
-        &app,
-        "mod.rut",
-        "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n",
-    );
-
-    let mut table = BTreeMap::new();
-    table.insert(url.clone(), bytes);
-    write_lock(&app, &table);
-    let session =
-        block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
-            .expect("url load");
-    // zeta: compiled (the archive root); codec + pouch: the DIR mounts
-    // (the declared rows won first-mount-wins over the archive's ridden
-    // codec group)
-    assert!(matches!(
-        session.pkg("zeta").unwrap().body,
-        rut_driver::PkgBody::Compiled(_)
-    ));
-    assert!(matches!(
-        session.pkg("codec").unwrap().body,
-        rut_driver::PkgBody::Source { .. }
-    ));
-    assert!(matches!(
-        session.pkg("pouch").unwrap().body,
-        rut_driver::PkgBody::Source { .. }
-    ));
-    // the peer gate over the mixed world: codec's optional peer pouch
-    // is present (the dir lane), so the integration group text mounts
-    // and the wrapper resolves for the consumer probe
-    assert!(
-        probe_compiles(&session, CODEC_POUCH_PROBE),
-        "the present peer's integration group must mount"
-    );
-
-    // the absence twin: codec declared (the use is legal), pouch still
-    // absent — the same gate, the optional peer inert, the integration
-    // group never mounts
-    let app2 = root.join("app2");
-    write(
-        &app2,
-        "rut.jsonc",
-        &manifest(
-            "app2",
-            "mod.rut",
-            &format!(r#", "deps": {{"codec": {{"path": "../codec"}}, "zeta": {{"url": "{url}"}}}}"#),
-        ),
-    );
-    write(&app2, "mod.rut", "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n");
-    write_lock(&app2, &table);
-    let session2 = block_on(rut_native::load_dir_with(&app2, &Table::from(table)))
-        .expect("light load");
-    assert!(
-        !probe_compiles(&session2, CODEC_POUCH_PROBE),
-        "absent peer stays inert: the integration group never mounted"
-    );
 }
 
 #[test]
@@ -620,7 +514,7 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
     // subject is the PACK-side dev-deps refusal — if the use-law
     // precedes it, give `app` the `codec` path row (../codec, the
     // fixture's own layout) and keep this test's subject intact.
-    let (root, bytes, url) = peer_world("devrefuse");
+    let (root, bytes, url) = codec_world("devrefuse");
     let app = root.join("app");
     write(
         &app,

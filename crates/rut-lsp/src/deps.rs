@@ -238,7 +238,9 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
         host: m.pkg_type == rut_driver::bundle::PkgType::Host,
         deps: rows(&m.deps),
         dev_deps: rows(&m.dev_deps),
-        peer_deps: rows(&m.peer_deps),
+        // phase-2 deletes the peers lane: `[peer-deps]` left the
+        // grammar, so no parse ever fills this row set
+        peer_deps: Vec::new(),
     })
 }
 
@@ -688,24 +690,21 @@ mod tests {
         assert!(inf.1.is_infinite() && inf.1.is_sign_positive());    }
 
     #[test]
-    fn peer_descriptor_bits_ride() {
+    fn dev_descriptor_rows_ride() {
         let t = dep_table(
             r#"{
   "name": "json",
-  "peer-deps": {
-    "pouch": { "path": "../pouch", "optional": true, "lib": "./serde_pouch.rut" }
-  },
   "dev-deps": { "nmapset": { "path": "../nmapset" } }
 }"#,
         )
-        .expect("peer/dev tables parse");
-        let pouch = t.peer_deps.iter().find(|r| r.name == "pouch").expect("pouch peer");
-        assert!(pouch.optional);
-        assert_eq!(pouch.lib.as_deref(), Some("./serde_pouch.rut"));
-        assert_eq!(pouch.source, DepSource::Path { dir: "../pouch".into() });
+        .expect("dev tables parse");
+        // `[peer-deps]` left the grammar — the row set is structurally
+        // empty now (the field rides until phase 2 deletes it)
+        assert!(t.peer_deps.is_empty());
         let nmapset = t.dev_deps.iter().find(|r| r.name == "nmapset").expect("dev row");
         assert!(!nmapset.optional);
         assert!(nmapset.lib.is_none());
+        assert_eq!(nmapset.source, DepSource::Path { dir: "../nmapset".into() });
     }
 
     #[test]

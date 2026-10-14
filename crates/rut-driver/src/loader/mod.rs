@@ -249,12 +249,10 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
 /// walk reads every mounted pkg's manifest anyway, so folding the
 /// table into the pkg costs no extra I/O. The peer gate reads it
 /// post-closure; the reference-site D2 diagnostic resolves against it.
-pub(crate) fn manifest_peers(manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
-    manifest
-        .peer_deps
-        .iter()
-        .map(|(peer, desc)| (peer.clone(), PeerDecl::of(desc)))
-        .collect()
+pub(crate) fn manifest_peers(_manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
+    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
+    // the table it folded is always empty now
+    BTreeMap::new()
 }
 
 /// A manifest's declared peer-INTEGRATION texts, read from archive
@@ -263,24 +261,13 @@ pub(crate) fn manifest_peers(manifest: &Manifest) -> BTreeMap<String, PeerDecl> 
 /// errors only when the peer is present (an absent optional peer stays
 /// inert, read or not).
 fn archive_peer_libs(
-    entries: &[(String, Vec<u8>)],
-    prefix: &str,
-    manifest: &Manifest,
+    _entries: &[(String, Vec<u8>)],
+    _prefix: &str,
+    _manifest: &Manifest,
 ) -> Result<BTreeMap<String, Option<String>>, String> {
-    let mut out = BTreeMap::new();
-    for (peer, desc) in &manifest.peer_deps {
-        let Some(lib) = desc.get("lib") else {
-            continue; // presence declared, no integration file to mount
-        };
-        let rel = lib.strip_prefix("./").unwrap_or(lib);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let text = match read_entry(entries, &key) {
-            Ok(t) => Some(t),
-            Err(_) => None,
-        };
-        out.insert(peer.clone(), text);
-    }
-    Ok(out)
+    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
+    // there is no `lib` file left to read
+    Ok(BTreeMap::new())
 }
 
 /// The manifest + [`manifest_peers`] + the integration texts folded
@@ -618,13 +605,9 @@ pub fn riding_gen_source(
     // children ride beside it and mount by declaration at the pkg's
     // own mount). The rows' presence is that pkg's dispatch marker.
     if let Some((root, _)) = rows_body(entries, prefix)? {
-        let mut peers = Vec::new();
-        for (peer, desc) in &manifest.peer_deps {
-            if let Some(lib) = desc.get("lib") {
-                peers.push((peer.clone(), read(lib)?));
-            }
-        }
-        return Ok(Some(crate::session::GenSource { text: root, peers }));
+        // phase-2 deletes the peers lane: `[peer-deps]` left the
+        // grammar, so a compiled unit rides no group files
+        return Ok(Some(crate::session::GenSource { text: root, peers: Vec::new() }));
     }
     let text = match read("mod.rut") {
         Ok(t) => t,
@@ -647,13 +630,9 @@ pub fn riding_gen_source(
             }
         }
     };
-    let mut peers = Vec::new();
-    for (peer, desc) in &manifest.peer_deps {
-        if let Some(lib) = desc.get("lib") {
-            peers.push((peer.clone(), read(lib)?));
-        }
-    }
-    Ok(Some(crate::session::GenSource { text, peers }))
+    // phase-2 deletes the peers lane: `[peer-deps]` left the grammar,
+    // so a compiled unit rides no group files
+    Ok(Some(crate::session::GenSource { text, peers: Vec::new() }))
 }
 
 /// The mount seam's riding law, ONE helper: read the generic-bearing

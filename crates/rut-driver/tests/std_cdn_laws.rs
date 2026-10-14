@@ -13,10 +13,9 @@
 //!    instantiation law over the CDN: a compiled std bundle whose pkg
 //!    RIDES its generic source serves consumer-spelled shapes at the
 //!    consumer's link (`Vec<i64>` from a bundle-mounted pouch
-//!    compiles and runs; json's peer groups instantiate the consumer's
-//!    `T`). A bundle stripped of its riding source refuses loudly at
-//!    mount (re-pack it). Determinism: same bundle + same consumer ⇒
-//!    byte-identical output.
+//!    compiles and runs). A bundle stripped of its riding source
+//!    refuses loudly at mount (re-pack it). Determinism: same bundle +
+//!    same consumer ⇒ byte-identical output.
 //! 5. **The concrete-lib law** — a compiled concrete-class lib (the
 //!    string builder) serves its consumers from the bundle: the
 //!    classes' methods cross on the surface's inherent rows, no
@@ -309,108 +308,6 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
     .expect("vm");
     let out: i32 = vm.call("main", ()).expect("run");
     assert_eq!(out, 2, "the load-time-compiled body runs");
-    let _ = std::fs::remove_dir_all(&base);
-}
-
-#[test]
-fn a_json_peer_shape_compiles_with_the_consumer_type() {
-    // json's peer groups inherit the riding law: the group files cross
-    // wrapper families (`JsonVec<T>` is itself generic over the bound),
-    // the group source rides, and the consumer's `T` instantiates at
-    // the link. The consumer type satisfies BOTH json interfaces on its
-    // own inherent impls (the structural law), and the round trip runs
-    // through json's own generic entries — whose bodies are `f`-kind
-    // requests the recompiled owner also serves.
-    let mut table = BTreeMap::new();
-    let mut rows = String::new();
-    for key in ["json", "pouch", "nmapset"] {
-        let (url, bytes) = artifact(key);
-        rows.push_str(&format!("\"{key}\": {{\"url\": \"{url}\"}},\n"));
-        table.insert(url, bytes);
-    }
-    let base = std::env::temp_dir().join(format!("rut-std-cdn-json-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    let src = r#"use json::{ JsonSerialize, JsonDeserialize, JsonWriter, JsonReader,
-             EncodeJsonError, DecodeJsonError, encodeJson, decodeJson, JsonVec };
-use pouch::{ Vec };
-
-class Todo { name: str; n: i64; }
-
-impl Todo {
-    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
-        w.begin_object();
-        w.key("name");
-        w.write_str(self.name);
-        w.key("n");
-        w.write_i64(self.n);
-        w.end_object();
-        return nil;
-    }
-}
-
-impl Todo {
-    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
-        r.begin_object();
-        let mut name: ?str = nil;
-        let mut n: ?i64 = nil;
-        while (r.more()) {
-            let k = r.next_key();
-            when (k) {
-                "name" -> { name = r.read_str(); },
-                "n" -> { n = r.read_i64(); },
-                else -> { r.skip_value(); },
-            }
-            if (r.failed()) { return (nil, r.error()); }
-        }
-        r.end_object();
-        if (r.failed()) { return (nil, r.error()); }
-        if (name == nil || n == nil) { return (nil, r.error()); }
-        let nm: str = name;
-        let nv: i64 = n;
-        return (Todo { name: nm, n: nv }, nil);
-    }
-}
-
-entry fn main() -> i32 {
-    let mut v: Vec<Todo> = Vec<Todo>::new();
-    v.push(Todo { name: "write the book", n: 1 });
-    v.push(Todo { name: "ship the CDN", n: 2 });
-    let (text, e) = encodeJson(JsonVec(v));
-    if (e != nil) { return -1; }
-    let doc: str = text;
-    let (back, e2) = decodeJson<JsonVec<Todo>>(doc);
-    if (e2 != nil) { return -2; }
-    let w: JsonVec<Todo> = back;
-    let rows: Vec<Todo> = w.to_vec();
-    return rows.len() as i32;
-}
-"#;
-    let (diags, program, session) = load_compile_run(&base, &rows, table, src)
-        .expect("the json peer world loads");
-    assert!(diags.is_empty(), "{}", diags.join("; "));
-    let prog = rut_core::link::flatten(program.expect("linked"));
-    rut_vm::verify::verify(&prog).expect("verify");
-    let limits = rut_vm::interp::Limits {
-        fuel: Some(10_000_000),
-        heap_limit_bytes: Some(16 * 1024 * 1024),
-        interrupt_every: 1024,
-    };
-    // the writer's accumulator rides strbuild_host (json's closure
-    // carries it) — the embedder half binds its bodies against the
-    // offered pkgs' rows snapshot (calc offered beside: the math bodies'
-    // scope is declared like any pkg's)
-    let mut world = session.pkgs.clone();
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    let ctx = rut_driver::host_pkg_ctx(&world);
-    let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-    hosts.verify_against(&ctx.flatten());
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-    .expect("vm");
-    let out: i32 = vm.call("main", ()).expect("run");
-    assert_eq!(out, 2, "the consumer type round-trips through json's container rows");
     let _ = std::fs::remove_dir_all(&base);
 }
 

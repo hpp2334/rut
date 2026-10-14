@@ -1,10 +1,9 @@
 {
   // sib_a — T10's first sibling: a concrete class over
-  // pouch's generic Vec. `inline = true` makes it an inline unit (the
-  // splice path), so a consumer importing it splices pouch transitively —
-  // the shape that, undeduped, collides with any OTHER pouch-riding use.
+  // pouch's generic Vec. A consumer importing it splices pouch
+  // transitively — the shape that, undeduped, collides with any OTHER
+  // pouch-riding use.
   "name": "sib_a",
-    "inline": true,
   "deps": {
     "pouch": {
       "path": "../pouch"

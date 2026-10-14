@@ -2,18 +2,16 @@
 //! A's deps still pull B into the closure and A still compiles against
 //! B's mounted rows. What is declaration-scoped is NAMEABILITY: a pkg
 //! may `use` exactly the heads it declares itself — `deps` ∪
-//! `peer-deps` ∪ (`dev-deps` only when it is the program root) ∪
+//! (`dev-deps` only when it is the program root) ∪
 //! `core`. A head that is MOUNTED but UNDECLARED by the consumer is
 //! D5, naming the mount edge and the fix; unmounted heads keep their
-//! shapes (D2/NoModule — pinned unchanged here).
+//! shapes (NoModule — pinned unchanged here).
 //!
 //! The law's doors, each pinned end to end:
 //! - the walked world (the run chain's closure check + the graph's
 //!   `ensure_use`/`validate_qualified_uses` — one door,
 //!   `Session::resolve_use`, feeds both);
 //! - the dev arm (the root's dev-deps nameable at the root only);
-//! - the peer-group arm (json's integration groups still compile —
-//!   peers are allowlisted);
 //! - the bundle lane (a source group's in-archive dep: declared → ok,
 //!   stripped → D5; the pack lane refuses through the same resolver);
 //! - the hand-mounted world (the structural manifest is the one
@@ -21,8 +19,6 @@
 //!   row renders D5's host clause).
 
 use std::path::{Path, PathBuf};
-
-const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-dep-hygiene-{tag}-{}", std::process::id()));
@@ -190,24 +186,6 @@ fn unmounted_head_stays_the_bare_nomodule() {
     );
 }
 
-#[test]
-fn optional_peer_miss_stays_d2() {
-    // the cons_ref fixture: the consumer references json's optional
-    // peer `pouch` while it is absent — the dedicated D2 answers, the
-    // nameability law never touches the unmounted half
-    let s = rut_native::load_dir(Path::new(&format!("{PEERS}/cons_ref"))).expect("mount");
-    let err = rut_driver::RutRun::new()
-        .pkgs(&s)
-        .entrypoint(&s.root)
-        .compile()
-        .unwrap_err()
-        .to_string();
-    assert_eq!(
-        err,
-        "cannot resolve `pouch` — `json`'s pouch integration is not mounted because the optional peer `pouch` is absent from this program's closure; add `\"pouch\": { \"path\": \"..\" }` to your `rut.jsonc` `deps`",
-    );
-}
-
 // ---------------------------------------------------------------------
 // the dev arm — dev-deps are nameable at the root only
 // ---------------------------------------------------------------------
@@ -242,33 +220,6 @@ fn the_same_dev_name_used_by_a_non_root_is_d5() {
         err,
         "cannot resolve `b` — `b` is mounted in this program (pulled by `app`) but `a` does not declare it; add \"b\": { \"path\": \"..\" } to `a`'s `rut.jsonc` `deps`",
     );
-}
-
-// ---------------------------------------------------------------------
-// the peer-group arm — peers are allowlisted
-// ---------------------------------------------------------------------
-
-#[test]
-fn json_pouch_group_still_compiles() {
-    // cons_pouch: the consumer declares json + pouch; json's pouch
-    // integration group mounts (presence) and its group source names
-    // `pouch` — LEGAL: json's own [peer-deps] allowlists it. The
-    // wrapper dispatches; green is the pin.
-    let s = rut_native::load_dir(Path::new(&format!("{PEERS}/cons_pouch"))).expect("mount");
-    let c = rut_driver::RutRun::new()
-        .pkgs(&s)
-        .entrypoint(&s.root)
-        .compile()
-        .expect("the peer-group world compiles");
-    assert!(
-        c.graph.diags.is_empty(),
-        "{}",
-        c.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
-    );
-    // and the group's own use rode the allowlist, not luck: json's
-    // manifest names pouch under [peer-deps]
-    let json = s.pkg("json").expect("json mounted");
-    assert!(json.manifest.peer_deps.contains_key("pouch"), "the peer row rides");
 }
 
 // ---------------------------------------------------------------------

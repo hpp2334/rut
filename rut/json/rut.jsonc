@@ -1,43 +1,25 @@
 {
   // json — the 9th std pkg (the rut-json batch, phase 1). The base owns
   // every public name (interfaces, reader/writer classes, entries,
-  // errors, the scalar/optional/array wrapper families); the optional
-  // peers carry the wrapper groups — the container shapes of the
-  // survey's §2.6 matrix. Presence-based mounting: a consumer whose
-  // closure holds `pouch` gets the JsonVec wrapper, one that holds
-  // `nmapset` the map/set wrapper families; the dev-deps guarantee both
-  // while json builds itself (the peer gate's D3 path checks run on
-  // this very manifest), so every wrapper compiles in json's own test
-  // runs.
-  // Landed as the mechanism's first real consumer.
+  // errors, the scalar/optional/array wrapper families).
   //
   // Publishes COMPILED (the linkable-classes phase): the entries are
   // GENERIC FUNCTIONS, and instantiation is owner-anchored — a consumer
   // requests `decodeJson<i64>` from this pkg, whose unit compiles the
   // monomorphized body (the surface exports names + signatures; the
-  // ledger carries the instantiations). The peer groups compile INTO
-  // json's unit wherever json is packed (the dev-deps supply presence at
-  // pack time — compile once per owner), so the container rows travel
-  // inside json's binary and the `lib` keys stay the presence/D2
-  // contract.
+  // ledger carries the instantiations), so the container rows travel
+  // inside json's binary.
+  //
+  // The old `[peer-deps]` wrapper groups (JsonVec, JMap*, JSet) retired
+  // with the key: the grammar carries `deps` + `dev-deps` only now, and
+  // presence-gated group mounting is gone. The dev-deps keep json's own
+  // build closure intact.
   "format": "rutbundle",
   "format_version": 10,
   "name": "json",
     "deps": {
     "strbuild": {
       "path": "../strbuild"
-    }
-  },
-  "peer-deps": {
-    "pouch": {
-      "path": "../pouch",
-      "optional": true,
-      "lib": "./group-pouch.rut"
-    },
-    "nmapset": {
-      "path": "../nmapset",
-      "optional": true,
-      "lib": "./group-nmapset.rut"
     }
   },
   "dev-deps": {
