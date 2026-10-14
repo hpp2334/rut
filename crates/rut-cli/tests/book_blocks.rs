@@ -1,7 +1,7 @@
 //! Book code-block gate — every ```rut fenced block under docs/src whose
 //! content contains `entry fn main` compiles AND runs to completion, driven
 //! the way the playground's wasm host drives them (mount_std plus the
-//! tree packages the block's `use` lines name, peers assembled,
+//! tree packages the block's `use` lines name,
 //! math/logger/nmap/async host fns bound — the same set the wasm host
 //! mounts, which is what the book's ▶ Run buttons ride).
 //!

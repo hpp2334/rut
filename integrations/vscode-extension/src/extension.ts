@@ -659,7 +659,7 @@ async function atomicCacheWrite(target: vscode.Uri, bytes: Uint8Array): Promise<
 }
 
 // a missing or unreadable file is a null, not a failure — callers
-// decide whether that's a miss (cache), a skip (peer), or a hint (dep)
+// decide whether that's a miss (cache) or a hint (dep)
 async function readFileNullable(file: vscode.Uri): Promise<Uint8Array | null> {
   try {
     return await vscode.workspace.fs.readFile(file);

@@ -43,13 +43,9 @@
         "description": "A bare package name — the specifier a `use` path spells."
       }
     },
-    "peer-deps": {
-      "$ref": "#/definitions/peerTable",
-      "description": "Dependencies required of the consumer — never pulled transitively. Required by default; `optional: true` marks the presence-mounted kind whose integration group is the descriptor's `lib` file."
-    },
     "dev-deps": {
-      "$ref": "#/definitions/peerTable",
-      "description": "Dependencies mounted only while building/testing this package itself — never in a consumer's world. Same descriptor shape as peer-deps."
+      "$ref": "#/definitions/devTable",
+      "description": "Dependencies mounted only while building/testing this package itself — never in a consumer's world. The root manifest's table only (a dep's own dev table is never walked). Each descriptor is `{ \"path\": ... }` — a directory relative to this manifest's directory; no flags, no url."
     },
     "style": {
       "type": "object",
@@ -91,10 +87,10 @@
         "$ref": "#/definitions/depDescriptor"
       }
     },
-    "peerTable": {
+    "devTable": {
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/peerDescriptor"
+        "$ref": "#/definitions/devDescriptor"
       }
     },
     "depDescriptor": {
@@ -128,23 +124,18 @@
         }
       ]
     },
-    "peerDescriptor": {
+    "devDescriptor": {
       "type": "object",
-      "description": "A peer descriptor: `path` and `lib` are strings, `optional` is the one bool.",
+      "description": "A dev descriptor: `path` is the one key — dev presence is name-based at the root, so the descriptor carries no flags and no url (a url there is refused at parse).",
       "properties": {
         "path": {
           "type": "string",
-          "description": "The peer's module directory, relative to this manifest's directory. The consumer supplies the peer — the editor indexes it only when it resolves locally."
-        },
-        "lib": {
-          "type": "string",
-          "description": "The integration group — an impl-only `.rut` source in THIS package's directory wrapping the optional peer's types. Mounted under this package's name when the peer is present. A `.d.rut` decl surface does not gate."
-        },
-        "optional": {
-          "type": "boolean",
-          "description": "`true` marks the presence-mounted kind: the peer mounts only when the consumer's closure supplies it. Peers are required by default."
+          "description": "The dependency's module directory, relative to this manifest's directory."
         }
       },
+      "required": [
+        "path"
+      ],
       "additionalProperties": false
     }
   }

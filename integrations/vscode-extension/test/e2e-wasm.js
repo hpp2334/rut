@@ -1171,7 +1171,11 @@ async function main() {
     assert.strictEqual(pouchRow.source.cache_path,
       `.rut/cache/${crypto.createHash('sha256').update(pouchUrl).digest('hex')}.rutbundle`);
     assert.deepStrictEqual(table.dev_deps, []);
-    assert.deepStrictEqual(table.peer_deps, []);
+    // the peer row set is gone from the wire (the retired `[peer-deps]`
+    // table's client-visible removal) — the envelope spells no
+    // `peer_deps` row at all
+    assert.strictEqual('peer_deps' in table, false,
+      'the envelope carries no peer_deps row');
     smokes++;
 
     // entry.type indexes in Decl mode (the envelope spells the variant)

@@ -49,8 +49,8 @@ pub(crate) struct Progress {
 /// (the existing law) so the line-per-dep output stays sane.
 ///
 /// Note on the rows: in practice they carry only `[deps]` url rows —
-/// `[dev-deps]` routes through the peer descriptor grammar, which has
-/// no url flavor today (the design text mentioning dev-deps url rows
+/// `[dev-deps]` descriptors are path-only by grammar (a url there is
+/// refused at parse; the design text mentioning dev-deps url rows
 /// is aspirational; do not fight it).
 pub(crate) fn progress_loop(
     cmd: &str,

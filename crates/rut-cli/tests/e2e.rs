@@ -2427,7 +2427,7 @@ fn dbg_digest() {
     let src = std::fs::read_to_string("../../examples/02-digest/mod.rut").expect("digest.rut");
     let mut world = Vec::new();
     // json mounted light (the base only — the encode half's traits and
-    // writer; no peer group needed)
+    // writer)
     for d in ["rut/pouch", "rut/json"] {
         world.extend(
             rut_native::dir_pkgs(
