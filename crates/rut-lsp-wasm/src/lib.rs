@@ -104,8 +104,8 @@ struct State {
     /// onto its url deps.
     lock_pins: std::collections::BTreeMap<String, String>,
     /// the direct-dep module names — the open document's own package
-    /// name plus every dep row its ROOT manifest declares (`deps` ∪
-    /// `peer-deps`, `dev-deps` at the walk root). The host hands the
+    /// name plus every dep row its ROOT manifest declares (`deps`,
+    /// `dev-deps` at the walk root). The host hands the
     /// set to `rut_set_direct_deps` when it parses a root manifest;
     /// every dep index named here stamps `direct_dep`, the
     /// auto-import tier's gate (a transitive-only dep's `use` is the
@@ -493,7 +493,6 @@ fn dep_table_json(t: &rut_lsp::deps::DepTable) -> serde_json::Value {
         "consts": t.consts,
         "deps": t.deps.iter().map(dep_row_json).collect::<Vec<_>>(),
         "dev_deps": t.dev_deps.iter().map(dep_row_json).collect::<Vec<_>>(),
-        "peer_deps": t.peer_deps.iter().map(dep_row_json).collect::<Vec<_>>(),
     })
 }
 

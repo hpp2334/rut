@@ -20,15 +20,13 @@
 //! 1. auto-offer the core prelude UNLESS a pkg named `core` was offered
 //!    (first-pkg-wins override; the §0.14 law made literal);
 //! 2. close the world, mount rows — the offered pkgs mount into the
-//!    crate-internal table, and the mount-by-mount world runs its ONE
-//!    peer-gate append pass (a walk collector already ran it over its
-//!    own yield; the gate is idempotent per pkg);
+//!    crate-internal table;
 //! 3. the host registry: every `.host_pkg(..)` installs against the
 //!    rows snapshot (the context is internal now — a wiring drift is
 //!    the loud panic, exactly as before);
 //! 4. the closure check — every `use` name in every offered source
 //!    resolves AND is declared by its consumer (the D5 nameability
-//!    law: mounted-but-undeclared refuses, unmounted keeps D2/NoModule);
+//!    law: mounted-but-undeclared refuses, unmounted keeps NoModule);
 //!    a miss is [`RunError`], carrying the resolver's own diagnostic;
 //! 5. parse → check → LIR → link. Shape/closure failures are
 //!    `Err(RunError)`; compile diagnostics ride INSIDE
@@ -41,7 +39,7 @@ use rut_parser::Mode;
 use crate::graph::{compile_graph, GraphOutput};
 pub use crate::session::{Pkg, PkgBody};
 
-pub use crate::session::{GenSource, HostRow, PeerDecl};
+pub use crate::session::{GenSource, HostRow};
 
 /// A walk's yield: the pkgs in the closure (root included) and the
 /// root's name — offer them to a run with
@@ -257,9 +255,7 @@ impl RutRun {
         if !pkgs.contains_key("core") {
             pkgs.insert("core".to_string(), core_pkg());
         }
-        // 2. close the world, mount rows — plus the mount-by-mount
-        //    world's ONE peer-gate append pass (idempotent per pkg: a
-        //    walk collector's yield already carries its groups)
+        // 2. close the world, mount rows
         let mut session = crate::session::Session::new();
         // the compiled walks' ledgers, namespaced PER ARCHIVE: an
         // archive's rows shift above everything recorded so far (boot
@@ -336,7 +332,6 @@ impl RutRun {
                 .register_module(&name, pkg)
                 .map_err(|e| RunError::law(e.to_string()))?;
         }
-        crate::loader::peer_gate(session.table_mut())?;
         // 3. HostRegistry + install every .host_pkg against the rows
         //    snapshot (a wiring drift panics — the contract, unchanged)
         let ctx = session.host_pkg_context();

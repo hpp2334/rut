@@ -1,13 +1,11 @@
-//! The package value: its body kinds, the generic-source rider, and
-//! the peer declarations a manifest recorded.
+//! The package value: its body kinds and the generic-source rider.
 //!
 //! A `Pkg` is pure data — a named package. The walk (rut-native)
 //! yields them; [`crate::run::RutRun`] offers them; the compile-time
 //! mount table (the crate-internal `Session`) holds them. Walker-found
-//! metadata (the pkg's own manifest — dep tables included, the peer
-//! declarations and their integration texts) is pub data on it; the
-//! walk's own bookkeeping (where the pkg's files live) never rides —
-//! it died with the walk's move to rut-native.
+//! metadata (the pkg's own manifest — dep tables included) is pub data
+//! on it; the walk's own bookkeeping (where the pkg's files live) never
+//! rides — it died with the walk's move to rut-native.
 
 use std::collections::BTreeMap;
 
@@ -142,8 +140,7 @@ impl Default for PkgBody {
 /// binary (generic-source riding): the pkg's own source text (the root
 /// module's source — the exact text a directory mount
 /// compiles; an OLD published bundle's spliced legacy keys ride the
-/// reader-compat shape) and the `[peer-deps]` group files keyed by peer spec, in
-/// manifest (peer-name) order. A compiled pkg whose surface exports
+/// reader-compat shape). A compiled pkg whose surface exports
 /// generics rides this so consumer-spelled shapes stay servable; the
 /// graph lowers it in the CONSUMER's session only when a request misses
 /// the pack-time ledger — nothing persists, `.rutc` caches stay
@@ -156,10 +153,6 @@ pub struct GenSource {
     /// legacy-lib splice is the compat shape) — what a source mount
     /// recompiles from
     pub text: String,
-    /// `(peer spec, group file text)` — the `[peer-deps]` `lib` files;
-    /// the recompile splices exactly the rows whose peer is in the
-    /// program's closure (the presence law, peer-name order)
-    pub peers: Vec<(String, String)>,
 }
 
 /// One package: the bare name it answers to, its entry files, its body
@@ -197,9 +190,9 @@ pub struct Pkg {
     /// producer stamps: the walk's `rut.jsonc` read, a bundle group's
     /// in-archive manifest, a host's in-memory build
     /// ([`Pkg::manifest`]). Json text is only a loader input; this is
-    /// the one mechanism — the dep tables (`deps`, `peer-deps`,
-    /// `dev-deps`) are read off it, never off pkg fields (the old flat
-    /// `deps` field folded in here). For a walked pkg the WHOLE
+    /// the one mechanism — the dep tables (`deps`, `dev-deps`) are read
+    /// off it, never off pkg fields (the old flat `deps` field folded
+    /// in here). For a walked pkg the WHOLE
     /// manifest rides, dev rows included, so a program root's
     /// self-build allowlist reads its own `dev-deps` back later.
     pub manifest: Manifest,
@@ -209,31 +202,6 @@ pub struct Pkg {
     /// or the walk's own root). Pure diagnostic data: the uses
     /// diagnostic's later "pulled by `a`" clause reads it.
     pub mounted_by: Option<String>,
-    /// The pkg's own `[peer-deps]` declarations — declaring name →
-    /// declaration. Pub data: the peer gate reads it post-closure; the
-    /// reference-site missing-peer diagnostic resolves against it.
-    pub peers: BTreeMap<String, PeerDecl>,
-    /// The pkg's declared peer-INTEGRATION texts, read by the walk at
-    /// mount: peer name → the descriptor's `lib` file. `Some` when the
-    /// read succeeded, `None` when the file could not be read (the
-    /// gate's loud D3 packaging-bug error — but ONLY when the peer is
-    /// present; an absent optional peer stays inert). A name absent
-    /// from the map altogether is a hand-offered pkg whose world
-    /// carries no files — the gate's "not mounted" error. Pure data:
-    /// the gate moves a text onto [`Pkg::peer_groups`] on presence.
-    pub peer_libs: BTreeMap<String, Option<String>>,
-    /// Presence-gated peer-integration groups recorded for this pkg: the
-    /// gate moved the descriptor's `lib` text here because the peer is
-    /// in the program's closure. The graph compiles them INTO this
-    /// pkg's unit (after its own source) — a mounted pkg's body is
-    /// never mutated. A host whose world has no filesystem (wasm)
-    /// appends the same texts by hand — the pkg is pure data, the
-    /// graph only reads.
-    pub peer_groups: Vec<String>,
-    /// Have this pkg's peer groups already been appended by an earlier
-    /// gate pass (or by the offering host)? A second pass never
-    /// double-appends.
-    pub groups_mounted: bool,
 }
 
 impl Pkg {
@@ -304,38 +272,10 @@ impl Pkg {
     }
 
     /// The pure container parse: a packed `.rutbundle`'s bytes → the
-    /// walked yield ([`crate::run::Loaded`]) — gates, groups, the scope
-    /// ledger, and the ONE peer gate over the archive's own pkgs. No
-    /// filesystem, no network: the same contract a url dep rides.
-    /// Pure data: the gate moves a text onto [`Pkg::peer_groups`] on presence.
+    /// walked yield ([`crate::run::Loaded`]) — gates, groups, and the
+    /// scope ledger. No filesystem, no network: the same contract a
+    /// url dep rides.
     pub fn from_bundle(bytes: &[u8]) -> Result<crate::run::Loaded, crate::run::RunError> {
         crate::loader::bundle_walk_bytes(bytes)
-    }
-}
-
-/// One recorded `[peer-deps]` declaration: the declaring
-/// pkg's claim about a peer. Peers are REQUIRED by default; `optional`
-/// marks the presence-mounted kind. `lib` names the peer-gated
-/// integration file — an impl-only `.rut` source, relative to the
-/// declaring pkg's manifest. `path` is directory-time metadata: never
-/// read for a dep's peer (presence is by NAME), read only at the
-/// declaring pkg's own build, where a broken path is the loud D3
-/// packaging-bug error.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PeerDecl {
-    pub optional: bool,
-    pub lib: Option<String>,
-    pub path: String,
-}
-
-impl PeerDecl {
-    /// The declaration a descriptor table describes — the walk and
-    /// the manifest lanes share the reading.
-    pub fn of(desc: &BTreeMap<String, String>) -> PeerDecl {
-        PeerDecl {
-            optional: desc.get("optional").map(|v| v == "true").unwrap_or(false),
-            lib: desc.get("lib").cloned(),
-            path: desc.get("path").cloned().unwrap_or_default(),
-        }
     }
 }

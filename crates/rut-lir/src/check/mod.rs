@@ -285,8 +285,8 @@ impl ModInputs {
     }
 
     /// The file module a byte offset belongs to: the last file whose
-    /// range contains it (peer-group splices past the last mod row
-    /// attribute to the root — the driver lays a `""` sentinel row
+    /// range contains it (an offset past the last mod row
+    /// attributes to the root — the driver lays a `""` sentinel row
     /// there). No layout = the flat root.
     pub fn file_of(&self, offset: u32) -> &str {
         match self.files.binary_search_by_key(&offset, |(s, _)| *s) {

@@ -34,8 +34,8 @@
 //! table; `[dev-deps]`
 //! mounts only while building the pkg itself (the loader's law — the
 //! Session never sees a dev table). The retired `[peer-deps]` table
-//! left the grammar (strict keys); its mount machinery rides inert
-//! until phase 2 deletes it.
+//! left the grammar (strict keys) and its mount machinery is gone —
+//! two dep tables remain.
 //!
 //! The `Session` itself does no I/O (wasm hosts mount in memory); the
 //! native file readers are the counterparts that read files (the
@@ -46,7 +46,7 @@ mod error;
 mod module;
 
 pub(crate) use error::ResolveError;
-pub use module::{GenSource, HostRow, Pkg, PkgBody, PeerDecl};
+pub use module::{GenSource, HostRow, Pkg, PkgBody};
 
 use std::collections::BTreeMap;
 
@@ -93,19 +93,16 @@ impl Session {
         self.mount(pkg)
     }
 
-    /// Exact resolution: the package name must be mounted as-is. A miss
-    /// that is a declared optional peer of some mounted pkg answers D2
-    /// instead of the bare text — `resolve` is the ONE
-    /// path every reference-site miss flows through, so the dedicated
-    /// diagnostic holds by construction (item-level misses can never be
-    /// peer-gated: groups are impl-only).
+    /// Exact resolution: the package name must be mounted as-is — a
+    /// miss is the bare [`ResolveError::NoModule`] text (`resolve` is
+    /// the ONE path every reference-site miss flows through).
     pub(crate) fn resolve(&self, spec: &str) -> Result<&Pkg, ResolveError> {
         if !valid_spec(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
         match self.modules.get(spec) {
             Some(m) => Ok(m),
-            None => Err(self.peer_miss(spec)),
+            None => Err(ResolveError::NoModule { spec: spec.to_string() }),
         }
     }
 
@@ -120,31 +117,13 @@ impl Session {
         if self.modules.contains_key(spec) {
             return Ok(self.modules.get_mut(spec).unwrap());
         }
-        Err(self.peer_miss(spec))
-    }
-
-    /// The miss diagnostic for `spec`: when the name is a declared
-    /// OPTIONAL peer of some mounted pkg, D2 — pkg + peer + the
-    /// integration it unlocks + the fix; otherwise the bare NoModule
-    /// text. Declaring pkgs scan in mount (BTreeMap) order, so the
-    /// diagnostic is deterministic when several pkgs declare the same
-    /// peer. A REQUIRED peer's absence never reaches here through the
-    /// loader (the peer gate's D1 fires at mount); without the gate it
-    /// stays the bare miss — D1's business, not D2's.
-    fn peer_miss(&self, spec: &str) -> ResolveError {
-        for (_, m) in &self.modules {
-            if m.peers.get(spec).is_some_and(|d| d.optional) {
-                return ResolveError::PeerMissing { spec: spec.to_string(), pkg: m.spec.clone() };
-            }
-        }
-        ResolveError::NoModule { spec: spec.to_string() }
+        Err(ResolveError::NoModule { spec: spec.to_string() })
     }
 
     /// The single use-door: resolve `head` FOR `consumer` under the
     /// nameability law. The order: a malformed name is
-    /// [`ResolveError::BadSpec`]; an UNMOUNTED head keeps the existing
-    /// shapes (D2 when the miss is a declared optional peer of a
-    /// mounted pkg, else NoModule — unchanged); a MOUNTED head passes
+    /// [`ResolveError::BadSpec`]; an UNMOUNTED head keeps the
+    /// [`ResolveError::NoModule`] shape; a MOUNTED head passes
     /// only when `consumer` DECLARES it — [`Session::declares`]'s
     /// allowlist — otherwise D5, the dedicated
     /// mounted-but-undeclared diagnostic. `core` passes
@@ -294,12 +273,6 @@ impl Session {
         self.modules.iter()
     }
 
-    /// The whole table — the pure peer gate's pass runs over it at the
-    /// close of the world.
-    pub(crate) fn table_mut(&mut self) -> &mut BTreeMap<String, Pkg> {
-        &mut self.modules
-    }
-
     /// Take every mounted pkg out — the walk collectors' yield
     /// (`Loaded`): the session dies, the pkgs travel.
     pub(crate) fn drain_pkgs(&mut self) -> Vec<Pkg> {
@@ -317,8 +290,6 @@ impl Session {
             self.mount(Pkg {
                 spec: name.clone(),
                 entry: manifest.entry.clone(),
-                // phase-2 deletes the peers lane: `[peer-deps]` left the
-                // grammar, so no parse ever fills `Pkg::peers` now
                 manifest: manifest.clone(),
                 ..Default::default()
             })?;
@@ -368,27 +339,5 @@ mod tests {
         s.register_module("my_map", Pkg::source("my_map", "...")).unwrap();
         let m = s.resolve("my_map").unwrap();
         assert!(matches!(&m.body, PkgBody::Source { text, .. } if text == "..."));
-    }
-
-    #[test]
-    fn peer_groups_ride_the_pkg_never_the_body() {
-        // a recorded peer group rides the pkg, never the body (the
-        // mount lane that used to feed it — the manifest's
-        // `[peer-deps]` — left the grammar; the mechanism itself is
-        // phase-2's deletion)
-        let mut s = Session::new();
-        s.register_module("m", Pkg::source("m", "fn a() {}")).unwrap();
-        s.resolve_mut("m").unwrap().peer_groups.push("fn b() {}".to_string());
-        let m = s.resolve("m").unwrap();
-        assert!(
-            matches!(&m.body, PkgBody::Source { text, .. } if text == "fn a() {}"),
-            "{:?}",
-            m.body
-        );
-        assert_eq!(m.peer_groups, vec!["fn b() {}".to_string()]);
-        // a host body (no rut source) carries no group text either —
-        // groups compile into SOURCE units only
-        s.register_module("d", Pkg::host("d", vec![])).unwrap();
-        assert!(s.resolve("d").unwrap().peer_groups.is_empty());
     }
 }

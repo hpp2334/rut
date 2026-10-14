@@ -157,48 +157,22 @@ fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) 
 /// One std pkg mounted from the repo tree's OWN files — the source AND
 /// the manifest ride `include_str!`, so `rut/<name>/rut.jsonc` stays
 /// the single source of truth (no hand-maintained dep table here; the
-/// parsed structural form carries the `deps` rows). The walk's peer
-/// fold ([`peers_of`]) runs over the parsed manifest; it is inert
-/// since `[peer-deps]` left the grammar (phase-2 deletes the lane).
+/// parsed structural form carries the `deps` rows).
 macro_rules! std_pkg {
     ($name:literal) => {
-        peers_of(
-            rut_driver::Pkg::source(
+        rut_driver::Pkg::source(
+            $name,
+            include_str!(concat!("../../../rut/", $name, "/mod.rut")),
+        )
+        .manifest(
+            rut_driver::parse_manifest(include_str!(concat!(
+                "../../../rut/",
                 $name,
-                include_str!(concat!("../../../rut/", $name, "/mod.rut")),
-            )
-            .manifest(
-                rut_driver::parse_manifest(include_str!(concat!(
-                    "../../../rut/",
-                    $name,
-                    "/rut.jsonc"
-                )))
-                .expect(concat!("the std `", $name, "` manifest is valid")),
-            ),
+                "/rut.jsonc"
+            )))
+            .expect(concat!("the std `", $name, "` manifest is valid")),
         )
     };
-}
-
-/// Fold a hand-offered pkg's parsed manifest `[peer-deps]` onto the
-/// pkg the way the walk's fold does — the declarations onto
-/// [`rut_driver::Pkg::peers`], the embedded group texts onto
-/// [`rut_driver::Pkg::peer_libs`] — leaving `groups_mounted` false so
-/// the peer gate's presence pass does the mounting. A manifest `lib`
-/// path this host cannot embed is a build-time bug: loud, never a
-/// silent missing group.
-fn peers_of(pkg: rut_driver::Pkg) -> rut_driver::Pkg {
-    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
-    // the fold's table is always empty — nothing to embed
-    pkg
-}
-
-/// The embedded peer-group texts, keyed (pkg spec, manifest `lib`
-/// path). The surrogate for the directory walk's file read: the same
-/// files the gate pass would read from disk. Inert — the grammar no
-/// longer declares peer groups, so nothing calls it.
-#[allow(dead_code)] // phase-2 deletes this with the peers lane
-fn group_text(_pkg: &str, _lib: &str) -> Option<&'static str> {
-    None
 }
 
 /// The playground's library offers (§0.9 of the host-pkgs plan): wasm
@@ -299,9 +273,7 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     // the library world (everything but the program's own source): the
     // run-side install snapshot reads its declared rows. Every source
     // pkg mounts through `std_pkg!` — the tree's own rut.jsonc is the
-    // dep law; `flow`/`json` groups mount through the peer gate's
-    // presence pass (both peers ride this world, so all four wrapper
-    // families exist on the page).
+    // dep law.
     let lib_pkgs = vec![
         ink_host,
         nmap_host,

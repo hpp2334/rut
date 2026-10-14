@@ -6,7 +6,7 @@
 //! and the refusal matrix.
 //!
 //! The v2/v3 load scenarios this file succeeds (the dep-bundle
-//! round trips, the peer groups through an archive, D1) re-launch here
+//! round trips) re-launch here
 //! on v5: `rut pack` emits v5 only, and the loader reads v5 only —
 //! older layouts are refused with the one-line version error.
 

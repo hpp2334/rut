@@ -393,7 +393,7 @@ fn parse_manifest_stamps_the_same_law() {
 fn over_declaration_stays_legal() {
     // the law bounds uses by declarations, never declarations by
     // uses: a row naming a head the source never spells is inert —
-    // declared-unused is legal (D4 guards the bad shape, dep ∩ peer)
+    // declared-unused is legal (D4 guards the bad shape, deps ∩ dev-deps)
     let compiled = rut_driver::RutRun::new()
         .pkg(rut_driver::Pkg::source("b", B_SRC))
         .pkg(

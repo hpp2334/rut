@@ -8,7 +8,7 @@
 //! - [`dep_table`] parses one manifest into a [`DepTable`]: the
 //!   module's own identity (`name`, entry sources with the mode each
 //!   indexes in, `namespace`, `consts`) plus its dep rows (`deps`,
-//!   `dev-deps`, `peer-deps`), each a `path` directory or a `url`
+//!   `dev-deps`), each a `path` directory or a `url`
 //!   bundle with the `.rut/cache/` cache path computed here. The pin
 //!   is NOT the manifest's business — [`lock_pins`] reads `rut.lock`
 //!   (the walk root's ledger) and [`dep_table_pinned`] stamps its rows
@@ -56,9 +56,7 @@ pub enum DepSource {
     Url { url: String, sha256: Option<String>, cache_path: String },
 }
 
-/// One dep row (`deps` / `dev-deps` / `peer-deps`). `optional` and
-/// `lib` are the peer descriptor's bits (`optional = true` marks the
-/// presence-mounted kind whose integration group is `lib`).
+/// One dep row (`deps` / `dev-deps`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepRow {
     pub name: String,
@@ -93,8 +91,6 @@ pub struct DepTable {
     pub deps: Vec<DepRow>,
     /// `dev-deps` — mounted only for the pkg's own build/tests
     pub dev_deps: Vec<DepRow>,
-    /// `peer-deps` — required by default, `optional` marks otherwise
-    pub peer_deps: Vec<DepRow>,
 }
 
 /// The cache path for a url dep — `.rut/cache/<sha256(url)>.rutbundle`,
@@ -105,7 +101,7 @@ pub fn cache_path(url: &str) -> String {
 }
 
 /// One dep row from a parsed descriptor map. `deps` rows may be path-
-/// or url-sourced; `peer-deps`/`dev-deps` descriptors are path-only by
+/// or url-sourced; `dev-deps` descriptors are path-only by
 /// grammar (a url there refused at parse) — the url arm simply never
 /// fires for them. Url rows parse UNPINNED: the manifest grammar
 /// retired `sha256` (an old bundle manifest's pin rides as inert
@@ -172,7 +168,6 @@ pub fn dep_table_pinned(
         .deps
         .iter_mut()
         .chain(t.dev_deps.iter_mut())
-        .chain(t.peer_deps.iter_mut())
     {
         if let DepSource::Url { url, sha256, .. } = &mut row.source {
             *sha256 = pins.get(url).cloned();
@@ -238,9 +233,6 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
         host: m.pkg_type == rut_driver::bundle::PkgType::Host,
         deps: rows(&m.deps),
         dev_deps: rows(&m.dev_deps),
-        // phase-2 deletes the peers lane: `[peer-deps]` left the
-        // grammar, so no parse ever fills this row set
-        peer_deps: Vec::new(),
     })
 }
 
@@ -636,7 +628,7 @@ mod tests {
             }
             other => panic!("pouch must be a url row: {other:?}"),
         }
-        assert!(t.dev_deps.is_empty() && t.peer_deps.is_empty());
+        assert!(t.dev_deps.is_empty());
     }
 
     #[test]
@@ -698,9 +690,6 @@ mod tests {
 }"#,
         )
         .expect("dev tables parse");
-        // `[peer-deps]` left the grammar — the row set is structurally
-        // empty now (the field rides until phase 2 deletes it)
-        assert!(t.peer_deps.is_empty());
         let nmapset = t.dev_deps.iter().find(|r| r.name == "nmapset").expect("dev row");
         assert!(!nmapset.optional);
         assert!(nmapset.lib.is_none());

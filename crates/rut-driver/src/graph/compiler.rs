@@ -162,12 +162,12 @@ impl<'a> GraphCompiler<'a> {
     }
 
     /// The declaration-gated ensure — the use law at the graph (D5's
-    /// compile-side half). Consumer `spec` may ensure and bind only the
-    /// heads its manifest declares (`deps` ∪ `peer-deps` ∪ the
+    /// compile-side half). Consumer `spec` may ensure and bind only
+    /// the heads its manifest declares (`deps` plus the
     /// program root's `dev-deps`; `core` rides unconditionally): a
     /// mounted-but-undeclared head is D5, diagnosed in place, the unit
     /// fails; an unmounted one is `ensure`'s own resolve error
-    /// (D2/NoModule — the same resolver text either way, so the miss
+    /// (NoModule — the same resolver text either way, so the miss
     /// diagnoses exactly once).
     fn ensure_use(&mut self, spec: &str, dep: &str) -> Option<Unit> {
         if let Err(e) = self.session.resolve_use(spec, dep, &self.root) {
@@ -390,11 +390,9 @@ impl<'a> GraphCompiler<'a> {
     }
 
     /// The compile path: parse the module's source, resolve its uses,
-    /// compile the unit, link it. The unit's text is its own source
-    /// plus its peer-integration groups (presence-gated:
-    /// the session recorded the group texts whose optional peers are
-    /// in this closure) — every decl's origin IS this module, so no
-    /// origin map exists. `scope` was assigned by the dispatcher
+    /// compile the unit, link it. The unit's text is its own source —
+    /// every decl's origin IS this module, so no origin map exists.
+    /// `scope` was assigned by the dispatcher
     /// before the deps ensured (the forward mapping a mounted owner
     /// binary needs).
     fn ensure_source(
@@ -408,24 +406,13 @@ impl<'a> GraphCompiler<'a> {
         // the unit's text: this module's source, then the mounted mod
         // files (phase 3 — each file keeps its own module scope; the
         // concatenation is the compilation's byte layout, the file
-        // ranges attribute every decl to its module), then the
-        // presence-gated peer groups (the "\n" seams are the old append
-        // shape; peers splice into the ROOT module — integration text).
+        // ranges attribute every decl to its module).
         let mut combined = src.to_string();
         let mut files: Vec<(u32, String)> = vec![(0, String::new())];
         for (path, m) in &module.mods {
             combined.push('\n');
             files.push((combined.len() as u32, path.clone()));
             combined.push_str(&m.text);
-        }
-        if !is_decl {
-            for group in self.session.resolve(spec).map(|m| m.peer_groups.as_slice()).unwrap_or_default() {
-                combined.push('\n');
-                // the peer splices attribute to the root module: a
-                // `""` sentinel row past the last child
-                files.push((combined.len() as u32, String::new()));
-                combined.push_str(&group);
-            }
         }
         // a declaration-mode pkg (a `.d.rut` surface) is body-free — a
         // mod tree under it is incoherent (the children are bodies);
@@ -778,10 +765,7 @@ impl<'a> GraphCompiler<'a> {
         // the unit's text: the ridden source, then the mounted mod
         // files (phase 3 — a mod-rooted pkg's children ride the rows and
         // mount beside it; the recompile must reassemble the SAME tree
-        // the pack-time unit compiled), then the peers' group files
-        // whose peers are in this program's closure (the presence law,
-        // peer-name order — the exact splice a directory owner's gate
-        // performs)
+        // the pack-time unit compiled)
         let mut text = gen.text.clone();
         let mut files: Vec<(u32, String)> = vec![(0, String::new())];
         let module = self.session.resolve(owner).ok();
@@ -789,13 +773,6 @@ impl<'a> GraphCompiler<'a> {
             text.push('\n');
             files.push((text.len() as u32, path.clone()));
             text.push_str(&m.text);
-        }
-        for (peer, group) in &gen.peers {
-            if self.session.resolve(peer).is_ok() {
-                text.push('\n');
-                files.push((text.len() as u32, String::new()));
-                text.push_str(group);
-            }
         }
         // parse + bind: the ridden source's uses resolve at their
         // load-time scopes — every foreign scope the mounted binary
@@ -1031,8 +1008,8 @@ pub(crate) fn mod_inputs_of(
 }
 
 /// Tag + rebase a compile's diags at the unit-append boundary: the
-/// spans index the COMBINED text — the pkg's root file, its mod
-/// children, the peer groups concatenated — so each diag reads its
+/// spans index the COMBINED text — the pkg's root file and its mod
+/// children concatenated — so each diag reads its
 /// file module off the layout (`ModInputs::file_of`: root file → the
 /// spec, a child → `spec/path`) and rebases its span and label spans
 /// to file-local bytes. A span-0 diag has no position to show and
@@ -1449,11 +1426,7 @@ impl GraphCompiler<'_> {
     /// consumers share it). A `PkgBody::Host` dep collects from its
     /// root surface + mounted tree (the body carries `root_surface`,
     /// the pkg carries `mods`), so a qualified-use leaf naming a host
-    /// row validates against the path-carrying rows. The PEER GROUPS'
-    /// decls join the root module's rows: a group splices into the
-    /// root at compile time (the `""` sentinel file), so its `pub`
-    /// decls are the unit's exports too — the leaf gates read the
-    /// surface the unit actually compiles, group text included.
+    /// row validates against the path-carrying rows.
     fn dep_mod_table(
         &mut self,
         spec: &str,
@@ -1461,17 +1434,8 @@ impl GraphCompiler<'_> {
         if !self.dep_decls.contains_key(spec) {
             let pkg = self.session.resolve(spec).ok()?;
             let (set, _) = crate::mods::collect_module_set(spec, pkg);
-            let mut table: std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>> =
+            let table: std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>> =
                 set.units.into_iter().map(|u| (u.path, u.decls)).collect();
-            if !pkg.peer_groups.is_empty() {
-                let root = table.entry(String::new()).or_default();
-                for group in &pkg.peer_groups {
-                    let (ast, d) = rut_parser::parse(group, Mode::Impl);
-                    if d.is_empty() {
-                        root.extend(crate::mods::decl_rows(&ast));
-                    }
-                }
-            }
             self.dep_decls.insert(spec.to_string(), table);
         }
         self.dep_decls.get(spec)

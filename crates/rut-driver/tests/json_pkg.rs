@@ -543,9 +543,7 @@ fn every_decode_kind_reachable() {
 fn every_encode_kind_reachable() {
     // Depth: the cyclic writer (the expected failure — data,
     // never a trap); NotFinite: inf. KeyUnsupported is DECLARED in the
-    // finalized error set (survey §2.3) but DORMANT, on record: its
-    // only sanctioned fire site would be the map ENCODE rows (the
-    // map wrappers rode the retired `[peer-deps]` groups).
+    // finalized error set (survey §2.3) but DORMANT, on record.
     let mut vm = vm_at(PKG);
     let deep: String = vm.call("enc_deep", (200i32,)).unwrap();
     assert!(deep.starts_with("ERR:Depth"), "{deep}");

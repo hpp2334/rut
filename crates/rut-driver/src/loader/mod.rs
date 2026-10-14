@@ -2,10 +2,9 @@
 //! ([`sha256_hex`]), the packed-container walk ([`bundle_walk_bytes`],
 //! the engine of [`Pkg::from_bundle`] and rut-native's
 //! `load_bundle_session`), the in-archive entry builder
-//! ([`bundle_entry_pkg`]), the generic-source reader
-//! ([`riding_gen_source`]), and the PURE peer gate ([`peer_gate`]).
-//! Everything with a file, a path, or a wire lives in `rut-native`;
-//! every read here is an in-memory entry.
+//! ([`bundle_entry_pkg`]), and the generic-source reader
+//! ([`riding_gen_source`]). Everything with a file, a path, or a wire
+//! lives in `rut-native`; every read here is an in-memory entry.
 
 use std::collections::BTreeMap;
 
@@ -20,7 +19,7 @@ use crate::mods::{
     mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME,
 };
 use crate::run::{Loaded, RunError};
-use crate::session::{Pkg, PkgBody, PeerDecl};
+use crate::session::{Pkg, PkgBody};
 use crate::Mode;
 
 /// The hex sha256 of `bytes` — the pin law's arithmetic. Public so a
@@ -70,11 +69,10 @@ fn namescope_ledger(
 }
 
 /// The pure container walk: a packed `.rutbundle`'s bytes → the walked
-/// yield ([`Loaded`]) — gates, groups, the scope ledger, and the ONE
-/// peer gate over the archive's own pkgs. No filesystem, no network:
-/// the same contract a url dep rides. [`Pkg::from_bundle`] is its
-/// public face; rut-native's `load_bundle_session` adds only the file
-/// read.
+/// yield ([`Loaded`]) — gates, groups, and the scope ledger. No
+/// filesystem, no network: the same contract a url dep rides.
+/// [`Pkg::from_bundle`] is its public face; rut-native's
+/// `load_bundle_session` adds only the file read.
 pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     let origin = "bundle";
     let err = |msg: String| RunError::law(format!("{origin}: {msg}"));
@@ -99,13 +97,8 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                 .name
                 .clone()
                 .ok_or_else(|| err("rut.jsonc has no `name`".into()))?;
-            let pkg = fold_peers(
-                bundle_entry_pkg(entries, "", &manifest)
-                    .map_err(|e| RunError::law(format!("{origin}: {e}")))?,
-                &manifest,
-                archive_peer_libs(entries, "", &manifest).map_err(err)?,
-            );
-            let mut pkg = pkg;
+            let mut pkg = bundle_entry_pkg(entries, "", &manifest)
+                .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
             pkg.spec = root_spec.clone();
             pkgs.insert(root_spec.clone(), pkg);
             return Ok(Loaded { pkgs: pkgs.into_values().collect(), root: root_spec });
@@ -132,7 +125,6 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     // law refuses a generic-owning unit that carries none
     let gen_source = riding_source(&root_spec, &root, entries, "", &manifest).map_err(err)?;
     let mods = rows_mods(entries, "").map_err(err)?;
-    let libs = archive_peer_libs(entries, "", &manifest).map_err(err)?;
     pkgs.insert(
         root_spec.clone(),
         Pkg {
@@ -141,8 +133,6 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             entry: manifest.entry.clone(),
             gen_source,
             mods,
-            peers: manifest_peers(&manifest),
-            peer_libs: libs,
             bundle_scopes: scopes.clone(),
             manifest: manifest.clone(),
             ..Default::default()
@@ -198,15 +188,12 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                 }
                 let gen_source = riding_source(&name, &program, entries, &format!("{prefix}/"), &dm)
                     .map_err(err)?;
-                let libs = archive_peer_libs(entries, &format!("{prefix}/"), &dm).map_err(err)?;
                 Pkg {
                     spec: name.clone(),
                     body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
                     gen_source,
                     mods: rows_mods(entries, &format!("{prefix}/")).map_err(err)?,
-                    peers: manifest_peers(&dm),
-                    peer_libs: libs,
                     manifest: dm.clone(),
                     // the first-mount edge: the archive root pulled its groups
                     mounted_by: Some(root_spec.clone()),
@@ -214,12 +201,8 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                 }
             }
             GroupKind::Source => {
-                let mut pkg = fold_peers(
-                    bundle_entry_pkg(entries, &format!("{prefix}/"), &dm)
-                        .map_err(|e| RunError::law(format!("{origin}: {e}")))?,
-                    &dm,
-                    archive_peer_libs(entries, &format!("{prefix}/"), &dm).map_err(err)?,
-                );
+                let mut pkg = bundle_entry_pkg(entries, &format!("{prefix}/"), &dm)
+                    .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
                 pkg.spec = name.clone();
                 // the first-mount edge: the archive root pulled its groups
                 pkg.mounted_by = Some(root_spec.clone());
@@ -237,52 +220,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             )));
         }
     }
-    // the archive's rows ride ITS ROOT — the run chain's close-of-world
-    // replays the archive from them (grouping the members, shifting the
-    // numbering); group members stay row-free, so the graph's
-    // compiled-mount arm sees exactly the pack-time shape
-    peer_gate(&mut pkgs)?;
     Ok(Loaded { pkgs: pkgs.into_values().collect(), root: root_spec })
-}
-
-/// A manifest's `[peer-deps]` as the pkg's own declaration map — the
-/// walk reads every mounted pkg's manifest anyway, so folding the
-/// table into the pkg costs no extra I/O. The peer gate reads it
-/// post-closure; the reference-site D2 diagnostic resolves against it.
-pub(crate) fn manifest_peers(_manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
-    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
-    // the table it folded is always empty now
-    BTreeMap::new()
-}
-
-/// A manifest's declared peer-INTEGRATION texts, read from archive
-/// entries at `prefix` — the mount's half of the peer gate's input
-/// (see [`Pkg::peer_libs`]). A missing entry records `None`: the gate
-/// errors only when the peer is present (an absent optional peer stays
-/// inert, read or not).
-fn archive_peer_libs(
-    _entries: &[(String, Vec<u8>)],
-    _prefix: &str,
-    _manifest: &Manifest,
-) -> Result<BTreeMap<String, Option<String>>, String> {
-    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
-    // there is no `lib` file left to read
-    Ok(BTreeMap::new())
-}
-
-/// The manifest + [`manifest_peers`] + the integration texts folded
-/// into a walked pkg — the constructor + fold pair the entry lanes
-/// share. The WHOLE structural manifest rides (dev rows included —
-/// data only; a dep's dev table is still never walked).
-pub(crate) fn fold_peers(
-    mut pkg: Pkg,
-    manifest: &Manifest,
-    libs: BTreeMap<String, Option<String>>,
-) -> Pkg {
-    pkg.manifest = manifest.clone();
-    pkg.peers.extend(manifest_peers(manifest));
-    pkg.peer_libs.extend(libs);
-    pkg
 }
 
 /// The rows lane: the archive's `rut.mods` entry at `prefix` — the
@@ -580,16 +518,16 @@ fn plain_source_pkg(
 
 /// The generic-bearing source a compiled unit rides, read from the
 /// archive under `prefix` (empty for the root, `<pkg>/` for a group):
-/// the root module's source, plus the `[peer-deps]` group files keyed
-/// by peer. The root source's PRESENCE is the dispatch marker the
-/// packer laid down — the packer rides source iff the pkg owns an open
-/// generic surface, so absence means a non-generic pkg (source-free by
-/// law); a generic-owning unit without the marker refuses at the mount
-/// seam ([`riding_source`]). Once the marker answers, every other
-/// riding file must be there (refuse, never guess — a corrupt archive
-/// is a load error). An OLD published bundle (the flat envelope) rides
-/// its source at the legacy `entry.lib` spelling instead — the
-/// reader-compat law keeps those loading.
+/// the root module's source. The root source's PRESENCE is the
+/// dispatch marker the packer laid down — the packer rides source iff
+/// the pkg owns an open generic surface, so absence means a
+/// non-generic pkg (source-free by law); a generic-owning unit without
+/// the marker refuses at the mount seam ([`riding_source`]). Once the
+/// marker answers, every other riding file must be there (refuse,
+/// never guess — a corrupt archive is a load error). An OLD published
+/// bundle (the flat envelope) rides its source at the legacy
+/// `entry.lib` spelling instead — the reader-compat law keeps those
+/// loading.
 pub fn riding_gen_source(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -605,9 +543,7 @@ pub fn riding_gen_source(
     // children ride beside it and mount by declaration at the pkg's
     // own mount). The rows' presence is that pkg's dispatch marker.
     if let Some((root, _)) = rows_body(entries, prefix)? {
-        // phase-2 deletes the peers lane: `[peer-deps]` left the
-        // grammar, so a compiled unit rides no group files
-        return Ok(Some(crate::session::GenSource { text: root, peers: Vec::new() }));
+        return Ok(Some(crate::session::GenSource { text: root }));
     }
     let text = match read("mod.rut") {
         Ok(t) => t,
@@ -630,9 +566,7 @@ pub fn riding_gen_source(
             }
         }
     };
-    // phase-2 deletes the peers lane: `[peer-deps]` left the grammar,
-    // so a compiled unit rides no group files
-    Ok(Some(crate::session::GenSource { text, peers: Vec::new() }))
+    Ok(Some(crate::session::GenSource { text }))
 }
 
 /// The mount seam's riding law, ONE helper: read the generic-bearing
@@ -657,80 +591,4 @@ pub fn riding_source(
         ));
     }
     Ok(gen)
-}
-
-/// Pass 3 — the peer gate, the PURE presence law (the walk's
-/// directory-time D3 checks live in rut-native; this half reads
-/// nothing):
-///
-/// - required peer absent → the loud D1 mount error: names the pkg, the
-///   peer, and the fix. Never auto-pulled.
-/// - peer present (any reason) → the pkg's recorded integration text
-///   (its `[peer-deps]` `lib`, read at mount) moves onto
-///   [`Pkg::peer_groups`] — presence-based mounting; the mounted body
-///   stays pristine.
-/// - optional peer absent → inert; the group simply never mounts.
-/// - a COMPILED declarer's rows are already in its `.rutc` (the
-///   pack-time closure's dev-deps supplied the peers — compile once
-///   per owner), so only the presence law runs.
-///
-/// Pkgs whose groups an earlier pass (or the offering host) already
-/// appended are skipped — never double-appended.
-pub fn peer_gate(pkgs: &mut BTreeMap<String, Pkg>) -> Result<(), RunError> {
-    // collected first, applied after — the map borrows nothing
-    let mut appends: Vec<(String, String)> = Vec::new();
-    let mut pre_compiled: Vec<String> = Vec::new();
-    let declared: Vec<(String, BTreeMap<String, PeerDecl>)> = pkgs
-        .iter()
-        .filter(|(_, m)| !m.peers.is_empty() && !m.groups_mounted)
-        .map(|(s, m)| (s.clone(), m.peers.clone()))
-        .collect();
-    for (pkg, peers) in declared {
-        // a compiled declarer's rows ride its binary — the presence law
-        // still runs below (D1), but there is nothing to move, and the
-        // declarer is done after this pass
-        let compiled = matches!(&pkgs[&pkg].body, PkgBody::Compiled(_));
-        for (peer, decl) in peers {
-            if !pkgs.contains_key(&peer) {
-                if decl.optional {
-                    continue; // inert — the group simply never mounts
-                }
-                // D1: loud at mount, naming pkg + peer + fix
-                return Err(RunError::law(format!(
-                    "pkg `{pkg}` requires the peer `{peer}`, and `{peer}` is not in this program's closure — peers are not pulled transitively: add `\"{peer}\": {{ \"path\": \"..\" }}` to your `rut.jsonc` `deps`"
-                )));
-            }
-            if compiled {
-                continue; // rows ride the binary — nothing to move
-            }
-            let Some(lib) = &decl.lib else {
-                continue; // presence declared, no integration file to mount
-            };
-            match pkgs[&pkg].peer_libs.get(&peer) {
-                Some(Some(text)) => appends.push((pkg.clone(), text.clone())),
-                Some(None) => {
-                    return Err(RunError::law(format!(
-                        "pkg `{pkg}`'s [peer-deps] entry `{peer}` names the group `{lib}` — cannot read it (a packaging bug in {pkg})"
-                    )));
-                }
-                None => {
-                    return Err(RunError::law(format!(
-                        "pkg `{pkg}` declares `[peer-deps]` but is not mounted"
-                    )));
-                }
-            }
-        }
-        if compiled {
-            pre_compiled.push(pkg);
-        }
-    }
-    for (pkg, text) in appends {
-        let m = pkgs.get_mut(&pkg).unwrap();
-        m.peer_groups.push(text);
-        m.groups_mounted = true;
-    }
-    for pkg in pre_compiled {
-        pkgs.get_mut(&pkg).unwrap().groups_mounted = true;
-    }
-    Ok(())
 }

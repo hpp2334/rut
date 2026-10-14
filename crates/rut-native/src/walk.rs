@@ -15,9 +15,7 @@
 //! 2. the dev pass — the ROOT's `[dev-deps]` mount exactly like
 //!    `[deps]` (a dep's dev table is never walked, so a consumer's
 //!    world never contains it);
-//! 3. the peer gate — ONE post-closure pass (a peer may mount after
-//!    its declarer alphabetically, so it cannot run during the walk);
-//! 4. compile — the run chain's `.compile()`; the graph sees ordinary
+//! 3. compile — the run chain's `.compile()`; the graph sees ordinary
 //!    sources.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,12 +24,11 @@ use std::path::{Path, PathBuf};
 use rut_core::id::ScopeId;
 
 use rut_driver::bundle::{
-    bundle_key, parse_manifest, parse_manifest_compat, read_entry, Manifest, PkgType,
+    parse_manifest, parse_manifest_compat, read_entry, Manifest, PkgType,
     MANIFEST_NAME,
 };
-use rut_driver::loader::peer_gate;
 use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
-use rut_driver::{Loaded, Mode, Pkg, PkgBody, PeerDecl, RunError};
+use rut_driver::{Loaded, Mode, Pkg, PkgBody, RunError};
 
 use crate::error::LoadError;
 use crate::remote::DepRemote;
@@ -400,56 +397,8 @@ struct Fetched<'a> {
 }
 
 // ---------------------------------------------------------------------
-// entry modules (dir flavor) + peer folding
+// entry modules (dir flavor)
 // ---------------------------------------------------------------------
-
-/// A manifest's `[peer-deps]` as the pkg's own declaration map — the
-/// walk reads every mounted pkg's manifest anyway, so folding the
-/// table into the pkg costs no extra I/O. The peer gate reads it
-/// post-closure; the reference-site D2 diagnostic resolves against it.
-fn manifest_peers(_manifest: &Manifest) -> BTreeMap<String, PeerDecl> {
-    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
-    // the table it folded is always empty now
-    BTreeMap::new()
-}
-
-/// The manifest + [`manifest_peers`] folded into a walked pkg, plus
-/// the peer-gated integration texts read from the pkg's OWN source
-/// (dir or archive) — the walk reads each declared `lib` file once, at
-/// mount; the gate later moves a text onto the pkg only when the peer
-/// is present in the program's closure (presence law). A text that
-/// cannot be read is recorded as `None` — the gate turns it into the
-/// loud D3 packaging-bug error, but ONLY when the peer is present (an
-/// absent optional peer stays inert, read or not). The WHOLE
-/// structural manifest rides too (dev rows included — data only; a
-/// dep's dev table is still never walked).
-fn fold_peers(mut pkg: Pkg, manifest: &Manifest, libs: BTreeMap<String, Option<String>>) -> Pkg {
-    pkg.manifest = manifest.clone();
-    pkg.peers.extend(manifest_peers(manifest));
-    pkg.peer_libs.extend(libs);
-    pkg
-}
-
-/// The declared `lib` texts for a DIR pkg — best-effort reads (a
-/// missing file is the gate's D3 error when the peer shows up).
-fn dir_peer_libs(_dir: &Path, _manifest: &Manifest) -> BTreeMap<String, Option<String>> {
-    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
-    // there is no `lib` file left to read
-    BTreeMap::new()
-}
-
-/// The declared `lib` texts for an ARCHIVE pkg — read from the
-/// archive's entries at the pkg's prefix.
-fn archive_peer_libs(
-    _entries: &[(String, Vec<u8>)],
-    _prefix: &str,
-    _origin: &str,
-    _manifest: &Manifest,
-) -> Result<BTreeMap<String, Option<String>>, LoadError> {
-    // phase-2 deletes this lane: `[peer-deps]` left the grammar, so
-    // there is no `lib` file left to read
-    Ok(BTreeMap::new())
-}
 
 /// The `mod.rut` probe: `mod.rut` beside the manifest —
 /// `Ok(Some(text))` when the directory carries one (it is the root
@@ -575,16 +524,13 @@ fn lib_pkg(
     let mods: BTreeMap<String, ModSource> =
         mount_mod_children(&root_text, &root_canon, Mode::Impl, "mod.rut", &mut lookup)
             .map_err(|e| LoadError::law(format!("{dir}: {e}")))?;
-    Ok(fold_peers(
-        Pkg {
-            body: PkgBody::Source { text: root_text, is_decl: false },
-            entry: manifest.entry.clone(),
-            mods,
-            ..Default::default()
-        },
-        manifest,
-        dir_peer_libs(&PathBuf::from(dir), manifest),
-    ))
+    Ok(Pkg {
+        body: PkgBody::Source { text: root_text, is_decl: false },
+        entry: manifest.entry.clone(),
+        mods,
+        manifest: manifest.clone(),
+        ..Default::default()
+    })
 }
 
 /// Build a directory's entry [`Pkg`] from its manifest:
@@ -676,7 +622,8 @@ fn load_entry_module(
             if let PkgBody::Host { consts: rows, .. } = &mut m.body {
                 *rows = consts;
             }
-            return Ok(fold_peers(m, manifest, dir_peer_libs(&PathBuf::from(dir), manifest)));
+            m.manifest = manifest.clone();
+            Ok(m)
         }
         PkgType::Lib => {
             // the surface read + the lib-surface law (kept from today)
@@ -698,15 +645,12 @@ fn load_entry_module(
                     lib_pkg(dir, root, &root_file.to_string_lossy(), manifest)
                 }
                 None => match surface_only {
-                    Some(surface) if manifest.type_declared => Ok(fold_peers(
-                        Pkg {
-                            body: PkgBody::Source { text: surface, is_decl: true },
-                            entry: manifest.entry.clone(),
-                            ..Default::default()
-                        },
-                        manifest,
-                        dir_peer_libs(&PathBuf::from(dir), manifest),
-                    )),
+                    Some(surface) if manifest.type_declared => Ok(Pkg {
+                        body: PkgBody::Source { text: surface, is_decl: true },
+                        entry: manifest.entry.clone(),
+                        manifest: manifest.clone(),
+                        ..Default::default()
+                    }),
                     Some(_) => Err(LoadError::law(format!(
                         "module in {dir} spells `entry.type` but no kind — `\"type\": \"host\"` \
                          for a host pkg, or `\"type\": \"lib\"` for the surface-only dev state"
@@ -811,7 +755,6 @@ pub fn load_dir_resolved(
     let src = FsSource::at(dir);
     let mut world = World::new();
     let root = walk_dir(&mut world, &src, dir.to_string_lossy().as_ref(), map, pins)?;
-    run_gate(&mut world, &root)?;
     Ok(world.into_loaded(root))
 }
 
@@ -848,8 +791,8 @@ pub(crate) fn walk_dir(
         )))?;
     let root_module = load_entry_module(src, dir, &manifest)?;
     world.register(&root, root_module)?;
-    // the root's dir rides the world, so the gate pass and the pack
-    // lanes can answer for the root's own files
+    // the root's dir rides the world, so the pack lanes can answer for
+    // the root's own files
     world.locs.insert(root.clone(), Loc::Dir(PathBuf::from(dir)));
     let mut visiting = vec![canonical(dir)?];
     let mut fetched = Fetched {
@@ -893,8 +836,8 @@ fn resolve_deps(
 
 /// The dev-table mount — the pack lane's compile-once-per-owner pass:
 /// a DIR dep group's own `[dev-deps]` mount into the pack's world, so
-/// its unit compiles over the same closure wherever it is packed (the
-/// presence its peer groups ride). NEVER part of a consumer's world.
+/// its unit compiles over the same closure wherever it is packed.
+/// NEVER part of a consumer's world.
 /// `parent` is the group's own spec (the first-mount edge).
 pub(crate) fn mount_dev_table(
     world: &mut World,
@@ -925,9 +868,9 @@ pub(crate) fn mount_dev_table(
 /// `name` disagrees with its key is an error naming both. `visiting`
 /// guards cycles; `parent` is the spec of the pkg whose table this is
 /// — the first-mount edge every pkg mounted here records
-/// ([`Pkg::mounted_by`]). Every mounted pkg's manifest, directory (or
-/// archive location) and `[peer-deps]` declarations are recorded for
-/// pass 3.
+/// ([`Pkg::mounted_by`]). Every mounted pkg's manifest and directory
+/// (or archive location) are recorded — the pack lanes' group reads
+/// dispatch on them.
 fn resolve_table(
     world: &mut World,
     src: &dyn Source,
@@ -988,55 +931,6 @@ fn resolve_table(
     Ok(())
 }
 
-/// Pass 3 — the peer gate, the walk-side wrapper: the D3 checks (the
-/// program root's own peer paths read and name-checked — directory-time
-/// law, this lane owns the directories) plus the driver's pure
-/// presence law ([`peer_gate`]): required peer absent → the loud D1
-/// mount error; peer present → the integration text recorded at mount
-/// moves onto the pkg (presence-based mounting; the mounted body stays
-/// pristine); optional peer absent → inert. Groups already mounted by
-/// an earlier pass are skipped — never double-appended.
-pub(crate) fn run_gate(world: &mut World, root: &str) -> Result<(), LoadError> {
-    // D3 — the root's own peer paths, dir-only law: an archive root
-    // has no directories, its `path` keys never crossed the pack
-    // boundary, and presence is by name. The check runs even when
-    // dev-deps already supplied presence — a broken path is the loud
-    // D3 packaging-bug error at the pkg's own build.
-    let root_dir = match world.locs.get(root) {
-        Some(Loc::Dir(d)) => Some(d.clone()),
-        _ => None,
-    };
-    if let Some(dir) = root_dir {
-        let peers = world
-            .pkgs
-            .get(root)
-            .map(|p| p.peers.clone())
-            .unwrap_or_default();
-        for (peer, decl) in peers {
-            // self-build: the path must resolve and name the peer —
-            // even when dev-deps already supplied presence
-            let peer_dir = dir.join(&decl.path);
-            match read_manifest(&FsSource::default(), peer_dir.to_string_lossy().as_ref()) {
-                Ok(dm) if dm.name.as_deref() == Some(peer.as_str()) => {}
-                Ok(dm) => {
-                    return Err(LoadError::law(format!(
-                        "pkg `{root}`'s [peer-deps] entry `{peer}` points at `{path}` — the manifest there names it `{actual}` (a packaging bug in {root})",
-                        path = decl.path,
-                        actual = dm.name.as_deref().unwrap_or("<unnamed>"),
-                    )));
-                }
-                Err(_) => {
-                    return Err(LoadError::law(format!(
-                        "pkg `{root}`'s [peer-deps] entry `{peer}` points at `{path}` — cannot read a manifest there (a packaging bug in {root})",
-                        path = decl.path,
-                    )));
-                }
-            }
-        }
-    }
-    peer_gate(&mut world.pkgs).map_err(|e| LoadError::law(e.msg))
-}
-
 /// Mount a url dep's fetched bytes — the mount door where the pin is
 /// LAW. The fetcher saw only a url; the LOCK's pin for that url and
 /// the bytes meet HERE, on EVERY load (fresh fetch, cache hit,
@@ -1059,11 +953,9 @@ pub(crate) fn run_gate(world: &mut World, root: &str) -> Result<(), LoadError> {
 ///    two independently packed bundles never argue about a number
 ///    (each binary's ids resolve through its own archive's rows);
 /// 5. the root mounts (first-mount-wins) — compiled for a lib root,
-///    the decl-surface host rows for a `type = "host"` root; the
-///    manifest's peers fold in;
+///    the decl-surface host rows for a `type = "host"` root;
 /// 6. the group loop = the driver's bundle walk's (first-mount-wins,
-///    own-scope vs ledger consistency for compiled groups) — the gate
-///    runs once, post-closure;
+///    own-scope vs ledger consistency for compiled groups);
 /// 7. the closure check against the COMBINED world — bundles are
 ///    closed: every declared dep rides in-archive (or mounted
 ///    earlier). No fetching at bundle load, ever.
@@ -1123,12 +1015,7 @@ fn mount_url_dep(
                     "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
                 )));
             }
-            let libs = archive_peer_libs(&entries, "", url, &manifest)?;
-            let mut pkg = fold_peers(
-                bundle_entry_pkg(&entries, "", &manifest, url)?,
-                &manifest,
-                libs,
-            );
+            let mut pkg = bundle_entry_pkg(&entries, "", &manifest, url)?;
             // the first-mount edge: the declaring pkg's spec pulled this archive
             pkg.mounted_by = Some(parent.to_string());
             world.register(&root_spec, pkg)?;
@@ -1172,7 +1059,6 @@ fn mount_url_dep(
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
     let mods = rut_driver::loader::rows_mods(&entries, "")
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
-    let libs = archive_peer_libs(&entries, "", url, &manifest)?;
     world.register(
         &root_spec,
         Pkg {
@@ -1180,8 +1066,6 @@ fn mount_url_dep(
             entry: manifest.entry.clone(),
             gen_source,
             mods,
-            peers: manifest_peers(&manifest),
-            peer_libs: libs,
             // the archive's rows ride ITS ROOT — the run chain's
             // close-of-world replays the archive from them (grouping
             // the members, shifting the numbering); group members stay
@@ -1244,15 +1128,12 @@ fn mount_url_dep(
                 }
                 let gen_source = rut_driver::loader::riding_source(&name, &program, &entries, &format!("{prefix}/"), &dm)
                     .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
-                let libs = archive_peer_libs(&entries, &format!("{prefix}/"), url, &dm)?;
                 Pkg {
                     body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
                     gen_source,
                     mods: rut_driver::loader::rows_mods(&entries, &format!("{prefix}/"))
                         .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
-                    peers: manifest_peers(&dm),
-                    peer_libs: libs,
                     manifest: dm.clone(),
                     // the first-mount edge: the archive root pulled its groups
                     mounted_by: Some(root_spec.clone()),
@@ -1260,12 +1141,7 @@ fn mount_url_dep(
                 }
             }
             rut_driver::bundle::GroupKind::Source => {
-                let libs = archive_peer_libs(&entries, &format!("{prefix}/"), url, &dm)?;
-                let mut pkg = fold_peers(
-                    bundle_entry_pkg(&entries, &format!("{prefix}/"), &dm, url)?,
-                    &dm,
-                    libs,
-                );
+                let mut pkg = bundle_entry_pkg(&entries, &format!("{prefix}/"), &dm, url)?;
                 // the first-mount edge: the archive root pulled its groups
                 pkg.mounted_by = Some(root_spec.clone());
                 pkg
@@ -1274,8 +1150,8 @@ fn mount_url_dep(
         world.register(&name, pkg)?;
         prefixes.insert(name.clone(), format!("{prefix}/"));
     }
-    // where this archive's mounted pkgs' files live (pass 3's reads,
-    // the packer's rode-along copies — the world holds the location)
+    // where this archive's mounted pkgs' files live (the packer's
+    // rode-along copies — the world holds the location)
     for (spec, prefix) in &prefixes {
         world
             .locs
@@ -1317,7 +1193,7 @@ fn bundle_entry_pkg(
 }
 
 // ---------------------------------------------------------------------
-// the offer lane (no dev pass, no gate)
+// the offer lane (no dev pass)
 // ---------------------------------------------------------------------
 
 /// Offer one package directory — and, recursively, its `[deps]` — as
@@ -1326,22 +1202,17 @@ fn bundle_entry_pkg(
 /// [`Loaded::root`]; offer every pkg to a run with `RutRun::new().pkg(..)`.
 ///
 /// This is an OFFER to someone else's program, not "building the pkg
-/// itself": no dev-deps are mounted (pass 2 is root-only) and the peer
-/// gate does not run here — the embedder's world grows incrementally,
-/// so presence is a program-closure property the run's own
-/// `.compile()` owns (it runs the ONE append pass at close). The pkgs'
-/// peer declarations and integration texts ride along.
+/// itself": no dev-deps are mounted (pass 2 is root-only).
 pub fn dir_pkgs(dir: &Path) -> Result<Loaded, RunError> {
     dir_pkgs_fetched(dir, &BTreeMap::new())
 }
 
 /// [`dir_pkgs`] over pre-fetched url bytes — the `dir_pkgs_with`
 /// lane's sync core. The root's `rut.lock` is read from disk (the
-/// same law the load lanes keep). The gate does not run here (the
-/// offer law); archive locations ride the world, so a later gate pass
-/// sees them — note it moves group texts recorded at mount (an
+/// same law the load lanes keep); archive locations ride the world —
+/// the pack lanes' rode-along copies read through them (an
 /// embedder that mounts url deps offer-by-offer owns its archive
-/// list; the load/pack lanes run the gate themselves).
+/// list; the load/pack lanes keep theirs).
 pub(crate) fn dir_pkgs_fetched(
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
@@ -1366,7 +1237,7 @@ fn dir_pkgs_resolved(
 
 /// [`dir_pkgs`] with a url-dep remote — reads the root's lock (it
 /// gates the prefetch), collects the url rows, fetches, mounts over
-/// the bytes map. The gate still does not run here (the offer law).
+/// the bytes map.
 pub async fn dir_pkgs_with(dir: &Path, remote: &dyn DepRemote) -> Result<Loaded, RunError> {
     let src = FsSource::at(dir);
     let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;

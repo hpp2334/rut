@@ -2,7 +2,7 @@
 //! emit one deterministic `.rutbundle`. The FS half lives in
 //! rut-native (`pack_dir*`): the root manifest bytes, the `[deps]`
 //! walk, the dev-table mounts (compile once per owner — a dep's unit
-//! is the same bytes wherever it is packed), the peer gate, and the
+//! is the same bytes wherever it is packed), and the
 //! file reader. They meet here: the [`PackWorld`] the walk assembles
 //! compiles over the crate-internal table (auto core — the §0.14 law;
 //! every OTHER package is the program's own closure, `calc` included,
@@ -249,8 +249,8 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     }
     // the generic-source riding law (v7, additive): a compiled pkg whose
     // surface exports generics ALSO rides the source that serves
-    // consumer-spelled shapes — the root module + the
-    // `[peer-deps]` group files, verbatim, beside the binary. The
+    // consumer-spelled shapes — the root module, verbatim, beside the
+    // binary. The
     // riding source's presence is the loader's dispatch marker; non-generic pkgs
     // stay source-free. (`--strip` refuses the combination above.)
     if has_open_generic_surface(&units.programs[root_idx]) {
@@ -278,7 +278,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         if rides_compiled(&session, spec, &units) {
             let &(idx, _) = units.linked.get(spec).unwrap();
             // the group's manifest rides byte-for-byte: the loader reads
-            // its name, mount flags, and peer declarations from it
+            // its name and mount flags from it
             let toml =
                 group_file(source, MANIFEST_NAME, &w.archives, &w.read).map_err(PackError::law)?;
             entries.push((
@@ -331,7 +331,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 PkgSource::Archive { slot, prefix: old } => {
                     // copy the archive group's file set under the new
                     // prefix — the archive already decided the set
-                    // (manifest, entry, libs, peer-group files), in
+                    // (manifest, entry, libs), in
                     // archive order (deterministic)
                     let archive = &w.archives[*slot];
                     for (key, bytes) in &archive.entries {

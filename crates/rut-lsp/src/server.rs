@@ -17,7 +17,7 @@
 //! rules can't drift: path deps resolve against the manifest dir
 //! (outside-workspace dirs included — the server has fs) and recurse
 //! cycle-safe under the depth/file caps, `deps` at any depth, the root's
-//! `dev-deps` too, `peer-deps` only when locally resolvable. Every dep
+//! `dev-deps` too. Every dep
 //! source indexes through `rut_lsp::deps::index_dep` into the same defs
 //! store the scan fills.
 //!
@@ -204,9 +204,7 @@ impl<'a> Walk<'a> {
     /// mod tree mounts (see [`Walk::mount_mod_tree`]), then its dep
     /// rows walk — `deps` at any depth, `dev-deps` only at the root
     /// (the loader's law: a dep's dev table never enters a consumer's
-    /// world), `peer-deps` only when locally resolvable (the consumer
-    /// supplies them; an unresolvable peer is the normal state, not a
-    /// failure). Every index this call mounts stamps `direct_dep`:
+    /// world). Every index this call mounts stamps `direct_dep`:
     /// `true` at depth 1 (the workspace root — the open document's own
     /// package) and 2 (the root manifest's own dep rows — the deps a
     /// `use` in the doc may legally spell, the closure check's
@@ -273,10 +271,8 @@ impl<'a> Walk<'a> {
         let rows = table
             .deps
             .iter()
-            .map(|r| (r, false))
-            .chain(table.dev_deps.iter().filter(|_| at_root).map(|r| (r, false)))
-            .chain(table.peer_deps.iter().map(|r| (r, true)));
-        for (row, peer) in rows {
+            .chain(table.dev_deps.iter().filter(|_| at_root));
+        for row in rows {
             if self.files == 0 {
                 return;
             }
@@ -290,43 +286,16 @@ impl<'a> Walk<'a> {
                     let dep_dir = normalize_path(&dir.join(rel));
                     let dep_manifest = dep_dir.join(MANIFEST_NAME);
                     if !dep_manifest.is_file() {
-                        if !peer {
-                            self.hint_once(
-                                format!("path:{}:{}", dir.display(), row.name),
-                                MessageType::ERROR,
-                                format!(
-                                    "rut: dep '{}' — {rel} has no {MANIFEST_NAME}; \
-                                     a path dep is a module directory (one manifest per module)",
-                                    row.name
-                                ),
-                            );
-                        }
+                        self.hint_once(
+                            format!("path:{}:{}", dir.display(), row.name),
+                            MessageType::ERROR,
+                            format!(
+                                "rut: dep '{}' — {rel} has no {MANIFEST_NAME}; \
+                                 a path dep is a module directory (one manifest per module)",
+                                row.name
+                            ),
+                        );
                         continue;
-                    }
-                    // the optional peer's integration group (`lib` — an
-                    // impl-only source in the OWNER's directory) is the
-                    // owner's surface gated on the peer's presence: index
-                    // it under the owner's module name, only when the
-                    // peer resolved
-                    if peer && row.optional {
-                        if let Some(lib) = &row.lib {
-                            let lib_path = dir.join(lib);
-                            if let Ok(src) = std::fs::read_to_string(&lib_path) {
-                                if self.files > 0 {
-                                    self.files -= 1;
-                                    let uri = lib_path.to_string_lossy().into_owned();
-                                    let idx = deps::index_dep(
-                                        &module,
-                                        &uri,
-                                        &src,
-                                        analysis::mode_of(&uri),
-                                        None,
-                                        &[],
-                                    );
-                                    self.insert(Self::mark(idx, direct));
-                                }
-                            }
-                        }
                     }
                     self.manifest(&dep_dir, depth + 1);
                 }

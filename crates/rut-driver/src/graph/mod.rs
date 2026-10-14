@@ -9,8 +9,7 @@
 //! no splice, no second compilation model.
 //!
 //! The dispatch is on the mounted [`PkgBody`]: a source body takes
-//! the compile path (its peer-integration groups, presence-gated, ride
-//! the same unit), a host body synthesizes its placeholder program,
+//! the compile path, a host body synthesizes its placeholder program,
 //! and a compiled body (a v5 bundle's decoded `.rutc`) is pushed after
 //! a fresh-scope rebase of its packed ids.
 //!

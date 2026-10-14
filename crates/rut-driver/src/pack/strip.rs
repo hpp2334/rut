@@ -87,8 +87,8 @@ pub(super) fn strip_arm(
                     return Err(PackError::law(format!(
                         "--strip needs a fully-compiled closure: the source group \
                          `{spec}` binds compiled `{dep}`'s surface at load, whose \
-                         names would be mangled — drop the `inline` flag / \
-                         restructure the closure, or pack without `--strip`"
+                         names would be mangled — restructure the closure, or \
+                         pack without `--strip`"
                     )));
                 }
             }

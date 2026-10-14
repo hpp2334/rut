@@ -309,9 +309,7 @@ async function sweepStaleDepTrees(ctx: WalkCtx): Promise<void> {
 // one manifest: its own entry sources index under the module name (the
 // uri is the file's real on-disk URI so F12 jumps land), then its dep
 // rows walk — `deps` at any depth, `dev-deps` only at the root (the
-// loader's law: a dep's dev table never enters a consumer's world),
-// `peer-deps` only when locally resolvable (the consumer supplies
-// them; an unresolvable peer is the normal state, not a failure).
+// loader's law: a dep's dev table never enters a consumer's world).
 // Namespaced/const-carrying path deps (calc's `Math`) index their
 // surface only — namespace/consts have no voice in
 // `rut_add_def_named`/`rut_add_def_mod`; the extracted-tree lane
@@ -352,7 +350,6 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
     const stamped = ctx.rut.setDirectDeps([
       ...(table.name ? [table.name] : []),
       ...table.deps.map((r) => r.name),
-      ...table.peer_deps.map((r) => r.name),
       ...table.dev_deps.map((r) => r.name),
     ]);
     if (isEnvelope(stamped)) {
@@ -379,12 +376,11 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
   // it as the Impl entry, indexed by the entries loop at mod path '')
   const entryPaths = table.entries.filter((e) => e.mode === 'Impl').map((e) => e.path);
   await mountModTree(ctx, dir, module, entryPaths, depth);
-  const rows: Array<{ row: DepRow; peer: boolean }> = [
-    ...table.deps.map((row) => ({ row, peer: false })),
-    ...(depth === 1 ? table.dev_deps : []).map((row) => ({ row, peer: false })),
-    ...table.peer_deps.map((row) => ({ row, peer: true })),
+  const rows: DepRow[] = [
+    ...table.deps,
+    ...(depth === 1 ? table.dev_deps : []),
   ];
-  for (const { row, peer } of rows) {
+  for (const row of rows) {
     if (ctx.files <= 0) {
       ctx.truncated = true;
       return;
@@ -396,27 +392,13 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
     const depDir = path.resolve(dirKey, row.source.dir);
     const depManifestUri = vscode.Uri.file(path.join(depDir, MANIFEST_NAME));
     if (!fs.existsSync(depManifestUri.fsPath)) {
-      if (!peer) {
-        hintOnce(
-          `path:${dirKey}:${row.name}`,
-          `rut: dep '${row.name}' — ${row.source.dir} has no ${MANIFEST_NAME}; ` +
-            `a path dep is a module directory (one manifest per module)`,
-          true
-        );
-      }
+      hintOnce(
+        `path:${dirKey}:${row.name}`,
+        `rut: dep '${row.name}' — ${row.source.dir} has no ${MANIFEST_NAME}; ` +
+          `a path dep is a module directory (one manifest per module)`,
+        true
+      );
       continue;
-    }
-    // the optional peer's integration group (`lib` — an impl-only
-    // source in the OWNER's directory) is the owner's surface gated on
-    // the peer's presence: index it under the owner's module name,
-    // only when the peer resolved
-    if (peer && row.optional && row.lib !== null) {
-      const libUri = vscode.Uri.file(path.resolve(dirKey, row.lib));
-      const libSrc = await readFileNullable(libUri);
-      if (libSrc !== null && ctx.files > 0) {
-        ctx.files--;
-        ctx.rut.addDefNamed(libUri.toString(), module, new TextDecoder().decode(libSrc));
-      }
     }
     await walkManifest(ctx, depManifestUri, depth + 1);
   }

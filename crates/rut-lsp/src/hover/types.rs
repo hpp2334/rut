@@ -247,7 +247,7 @@ pub struct DefIndex {
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
     /// the dep is a DIRECT dep of the open document's package —
-    /// declared in its own manifest (`deps` ∪ `peer-deps`, `dev-deps`
+    /// declared in its own manifest (`deps`, `dev-deps`
     /// at the walk root). The compiler's closure check
     /// (`Session::resolve_use` → `declares`) refuses `use` of a
     /// mounted-but-undeclared package (the D5 diagnostic), so the

@@ -110,8 +110,8 @@ export type DepSource =
   | { kind: 'path'; dir: string }
   | { kind: 'url'; url: string; sha256: string | null; cache_path: string };
 
-/// one dep row (`deps` / `dev-deps` / `peer-deps`); `optional`/`lib`
-/// are the peer descriptor's bits
+/// one dep row (`deps` / `dev-deps`); `optional`/`lib`
+/// are inert descriptor bits the wire carries
 export interface DepRow {
   name: string;
   source: DepSource;
@@ -129,7 +129,6 @@ export interface DepTable {
   consts: Array<[string, number]>;
   deps: DepRow[];
   dev_deps: DepRow[];
-  peer_deps: DepRow[];
 }
 
 /// `rut_parse_manifest` / `rut_add_bundle` answer the error envelope on

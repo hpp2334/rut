@@ -14,7 +14,7 @@ use rut_driver::bundle::{parse_manifest, write_bundle, Manifest, PkgType};
 use rut_driver::pack::{PackError, PackOpts, PackWorld, PkgSource};
 
 use crate::source::{FsSource, Source};
-use crate::walk::{mount_dev_table, read_manifest, run_gate, walk_dir, Archive, World, MANIFEST_RETIRED};
+use crate::walk::{mount_dev_table, read_manifest, walk_dir, Archive, World, MANIFEST_RETIRED};
 
 /// The conventional pack output: `<dirname>.rutbundle`, a sibling of
 /// the directory (`demo/mod` → `demo/mod.rutbundle`).
@@ -79,8 +79,8 @@ use crate::remote::DepRemote;
 
 /// The pack lane's fetched core: read the root's `rut.lock` from disk
 /// (the realistic lane — the walk's mount door verifies against it),
-/// then the manifest's gates, the walk, the dev tables, the one peer
-/// gate — then the driver's pure pack over the assembled world.
+/// then the manifest's gates, the walk, the dev tables — then the
+/// driver's pure pack over the assembled world.
 pub fn pack_dir_opts_fetched(
     dir: &Path,
     opts: &PackOpts,
@@ -95,8 +95,7 @@ pub fn pack_dir_opts_fetched(
 /// [`pack_dir_opts_fetched`] with the lock read — the pack lanes'
 /// resolved core (no separate pub resolved name: the pack has no
 /// install-side caller yet). The root manifest's gates, the walk, the
-/// dev tables, the one peer gate — then the driver's pure pack over
-/// the assembled world.
+/// dev tables — then the driver's pure pack over the assembled world.
 fn pack_dir_opts_locked(
     dir: &Path,
     opts: &PackOpts,
@@ -166,11 +165,11 @@ fn pack_dir_opts_locked(
     let sources = collect_group_sources(&src, &dir_key, &manifest, &world)?;
     // compile once per owner: every DIR dep group's unit is the same
     // bytes wherever it is packed, so each one's own `[dev-deps]` mount
-    // too — the presence a declarer's peer groups ride (json's rows
-    // ship with json, wherever json travels). Archive-backed groups'
-    // dev tables are IGNORED, not walked (their paths never crossed the
-    // pack boundary); one that still declares dirs it needs is the v1
-    // refusal.
+    // too — its unit compiles over the same closure wherever it packs
+    // (json's rows ship with json, wherever json travels).
+    // Archive-backed groups' dev tables are IGNORED, not walked (their
+    // paths never crossed the pack boundary); one that still declares
+    // dirs it needs is the v1 refusal.
     for (spec, source) in &sources {
         match source {
             PkgSource::Dir(gdir) => {
@@ -192,10 +191,6 @@ fn pack_dir_opts_locked(
             }
         }
     }
-    // re-run the ONE peer gate over the grown closure (the dev mounts
-    // may have supplied peers) — the D3 checks plus the pure presence
-    // law, exactly the walk's own pass
-    run_gate(&mut world, &root).map_err(rut_driver::pack::PackError::from)?;
     // the file reader the emission reads through — (dir key, rel) →
     // bytes; the KEY MATH stays this side, the driver never sees a
     // `Path`

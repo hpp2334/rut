@@ -13,20 +13,19 @@
 //!   flavor included.
 //! - [`load_dir`] / [`load_dir_with`] — the directory walk with all
 //!   its laws: `[deps]` recursion, the rut.lock pin verified at the
-//!   mount door, the root-only `[dev-deps]` pass, the peer gate, url
+//!   mount door, the root-only `[dev-deps]` pass, url
 //!   prefetch. The yield is [`rut_driver::Loaded`] — offer its pkgs to
 //!   a run with [`rut_driver::RutRun::pkg`]. [`load_dir_resolved`] is
 //!   the pins-injected flavor (install's validation lane).
 //! - [`url_dep_rows`] — the closure's url dep rows (spec, url): what
 //!   `rut install` walks before it can pin anything.
 //! - [`dir_pkgs`] / [`dir_pkgs_with`] — the OFFER lane: a package
-//!   directory walked for someone else's program (no dev pass, no
-//!   gate — presence is the run's own `.compile()` law).
+//!   directory walked for someone else's program (no dev pass).
 //! - [`tree_pkg`] — one toolchain-tree package (`rut/<name>`) as
 //!   walked pkgs; the hosts' offer for the engine-adjacent surfaces
 //!   (`calc`, `futures`, …).
-//! - [`pack_dir`] and family — the pack lanes: walk + dev tables +
-//!   the one peer gate, then the driver's pure emit.
+//! - [`pack_dir`] and family — the pack lanes: walk + dev tables,
+//!   then the driver's pure emit.
 //! - [`default_out_path`] — the conventional pack output path.
 //!
 //! The wasm hosts (`rut-wasm`, the demo page) mount in memory and
