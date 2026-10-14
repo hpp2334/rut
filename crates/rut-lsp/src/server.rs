@@ -990,9 +990,10 @@ impl LanguageServer for Backend {
         let uri = params.text_document_position_params.text_document.uri;
         let Some(text) = self.get(&uri) else { return Ok(None) };
         let p = params.text_document_position_params.position;
+        let doc = self.doc_mods(&uri);
         let out = {
             let defs = self.defs.read().unwrap();
-            analysis::hover_at(uri.as_str(), &text, &defs, p.line, p.character)
+            analysis::hover_at(uri.as_str(), &text, &defs, &doc, p.line, p.character)
         };
         Ok(out)
     }
@@ -1016,9 +1017,10 @@ impl LanguageServer for Backend {
         let uri = params.text_document_position_params.text_document.uri;
         let Some(text) = self.get(&uri) else { return Ok(None) };
         let p = params.text_document_position_params.position;
+        let doc = self.doc_mods(&uri);
         let locs = {
             let defs = self.defs.read().unwrap();
-            analysis::definition_at(uri.as_str(), &text, &defs, p.line, p.character)
+            analysis::definition_at(uri.as_str(), &text, &defs, &doc, p.line, p.character)
         };
         Ok(self.locations(locs))
     }
@@ -1030,9 +1032,10 @@ impl LanguageServer for Backend {
         let uri = params.text_document_position_params.text_document.uri;
         let Some(text) = self.get(&uri) else { return Ok(None) };
         let p = params.text_document_position_params.position;
+        let doc = self.doc_mods(&uri);
         let locs = {
             let defs = self.defs.read().unwrap();
-            analysis::type_definition_at(uri.as_str(), &text, &defs, p.line, p.character)
+            analysis::type_definition_at(uri.as_str(), &text, &defs, &doc, p.line, p.character)
         };
         // locations() only ever builds the Array response
         Ok(self.locations(locs).map(|r| match r {
@@ -1056,12 +1059,14 @@ impl LanguageServer for Backend {
         let uri = params.text_document_position.text_document.uri;
         let Some(text) = self.get(&uri) else { return Ok(None) };
         let p = params.text_document_position.position;
+        let doc = self.doc_mods(&uri);
         let locs = {
             let defs = self.defs.read().unwrap();
             analysis::references_at(
                 uri.as_str(),
                 &text,
                 &defs,
+                &doc,
                 p.line,
                 p.character,
                 params.context.include_declaration,

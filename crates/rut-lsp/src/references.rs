@@ -313,11 +313,17 @@ fn scan_files(
             None if is_doc => (ctx.toks, ctx.ast),
             None => unreachable!("every non-doc candidate was parsed above"),
         };
+        // the asking doc's own-package context rides only for its own
+        // tokens (the two queries cannot disagree about the doc's
+        // idents); another file's context is unknown — the default
+        // keeps the own lanes off in its scan
+        let orphan = crate::mods::DocMods::default();
         let f_ctx = definition::Ctx {
             doc_uri: f.origin.as_str(),
             toks,
             ast,
             idxs: &chain,
+            doc_mods: if is_doc { ctx.doc_mods } else { &orphan },
         };
         let decls = decl_ident_spans(f, toks, ast, &chain);
 
@@ -402,7 +408,8 @@ mod tests {
 
     fn refs(d: &Doc, pos: u32, extra: &[DefIndex], include_decl: bool) -> Vec<DefLocation> {
         let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
-        let ctx = definition::Ctx { doc_uri: DOC, toks: &d.toks, ast: &d.ast, idxs: &idxs };
+        let dm = crate::mods::DocMods::default();
+        let ctx = definition::Ctx { doc_uri: DOC, toks: &d.toks, ast: &d.ast, idxs: &idxs, doc_mods: &dm };
         references(&ctx, pos, include_decl)
     }
 
@@ -686,11 +693,13 @@ mod tests {
         // references on the LIB's type — queried from the importing doc:
         // the use-statement name + the usage site, nothing else
         let idxs: Vec<&DefIndex> = std::iter::once(&main.index).chain(extra.iter().copied()).collect();
+        let dm = crate::mods::DocMods::default();
         let ctx = definition::Ctx {
             doc_uri: DOC,
             toks: &main.toks,
             ast: &main.ast,
             idxs: &idxs,
+            doc_mods: &dm,
         };
         let hits = references(&ctx, at(&norm, "Widget::new", 1), false);
         let mut offs = ref_offsets(&norm, DOC, &hits);
@@ -711,11 +720,13 @@ mod tests {
         // reverse edge finds the importing doc's two sites — the only
         // two entries, both carrying the DOC's uri
         let idxs: Vec<&DefIndex> = std::iter::once(&lib.index).chain(extra.iter().copied()).collect();
+        let dm = crate::mods::DocMods::default();
         let ctx = definition::Ctx {
             doc_uri: WIDGET_URI,
             toks: &lib.toks,
             ast: &lib.ast,
             idxs: &idxs,
+            doc_mods: &dm,
         };
         let hits = references(&ctx, at(&lib.src, "class Widget", 1) + 6, false);
         assert_eq!(hits.len(), 2, "{hits:?}");
@@ -734,11 +745,13 @@ mod tests {
         // references on the gadgets Widget (via the importing doc's use
         // site): the other pkg's same-named type must contribute nothing
         let idxs: Vec<&DefIndex> = std::iter::once(&main.index).chain(extra.iter().copied()).collect();
+        let dm = crate::mods::DocMods::default();
         let ctx = definition::Ctx {
             doc_uri: DOC,
             toks: &main.toks,
             ast: &main.ast,
             idxs: &idxs,
+            doc_mods: &dm,
         };
         let hits = references(&ctx, at(&norm, "Widget::new", 1), false);
         assert_eq!(hits.len(), 2, "use name + usage only: {hits:?}");

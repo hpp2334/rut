@@ -98,6 +98,15 @@ pub fn complete(
     // it and the bare position's locals tier enumerates it
     let binds = crate::hover::bindings::collect(ast, toks, idxs);
     if let Some((segs, prefix)) = use_path_before(toks, pos) {
+        // the OWN lane first — a head that speaks for the doc's own
+        // package (its own name, or an own mod edge) rides the
+        // position-path machinery: the intra-package walk and the
+        // visible-members gate, exactly what the compiler's own-use
+        // check accepts (`use imp::⏐` offers the module's visible
+        // members). A foreign head keeps the cross-package tier.
+        if let Some(out) = position_path_completions(idxs, doc, &segs, &prefix) {
+            return out;
+        }
         return use_path_completions(idxs, &segs, &prefix);
     }
     // a lone `:` (or the `->` arrow) under the cursor is the
@@ -1675,6 +1684,42 @@ return c.;
         let items = complete_over_gadgets(flat_src, "let c: layout.", DocMods::default());
         let ls = labels(&items);
         assert!(!ls.contains(&"Column"), "no doc mods, no mod tier: {ls:?}");
+    }
+
+    #[test]
+    fn the_use_path_tier_answers_an_own_package_head() {
+        // the open document IS the gadgets root: `use gadgets::layout::⏐`
+        // rides the own lane — the position machinery's visible-members
+        // gate, so `pub(super)` reaches the root where the cross-package
+        // tier's pub-only crossing law stays shut
+        let doc = DocMods { mod_path: Some(String::new()), pkg: Some("gadgets".to_string()) };
+        let items = complete_over_gadgets("use gadgets::layout::", "use gadgets::layout::", doc.clone());
+        let ls = labels(&items);
+        assert!(ls.contains(&"Column"), "{ls:?}");
+        assert!(
+            ls.contains(&"for_parent"),
+            "the own lane gates by visibility, not the pub-crossing law: {ls:?}"
+        );
+        assert!(!ls.contains(&"internal"), "a private fn stays hidden: {ls:?}");
+
+        // the bare own-pkg head: the doc's own rows are the scope (the
+        // freshness law) — the declared children offer
+        let doc_src = "mod layout;\nuse gadgets::";
+        let items = complete_over_gadgets(doc_src, "use gadgets::", doc);
+        let ls = labels(&items);
+        assert!(ls.contains(&"layout"), "the own root's edges offer: {ls:?}");
+
+        // an own mod edge head — `use layout::⏐` from the root walks
+        // the ancestor spelling to the same tier
+        let doc_src = "mod layout;\nuse layout::";
+        let items = complete_over_gadgets(
+            doc_src,
+            "use layout::",
+            DocMods { mod_path: Some(String::new()), pkg: Some("gadgets".to_string()) },
+        );
+        let ls = labels(&items);
+        assert!(ls.contains(&"Column"), "the own mod edge head rides the same tier: {ls:?}");
+        assert!(ls.contains(&"grid"), "{ls:?}");
     }
 
     // ---- the type-head tier (after `Type::`) ----

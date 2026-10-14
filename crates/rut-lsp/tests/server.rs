@@ -755,6 +755,7 @@ fn write_dep_fixture(name: &str) -> DepFixture {
 use gadgets::{ Widget };
 use gadgets::layout::{ Column };
 use pouch::{ Vec };
+use helpers::{ Slot };
 mod helpers;
 fn main() -> nil {
     let w = Widget::new();
@@ -928,8 +929,23 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
     assert!(md.contains("file module"), "{md}");
     assert!(md.contains("layout/mod.rut"), "{md}");
 
-    // the `mod helpers;` decl hover: kind + mounted file (no children)
+    // the OWN-lane segment hover: `helpers` in `use helpers::{ Slot };`
+    // resolves through the doc's own package and renders the mounted
+    // module (same shape as the foreign lane)
     let (l, c) = pos_of(&fx.main_src, "helpers", 0);
+    let h = editor
+        .request(
+            "textDocument/hover",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let md = h["result"]["contents"]["value"].as_str().expect("own segment hover markdown");
+    assert!(md.contains("file module"), "{md}");
+    assert!(md.contains("helpers/mod.rut"), "{md}");
+
+    // the `mod helpers;` decl hover: kind + mounted file (no children)
+    let (l, c) = pos_of(&fx.main_src, "helpers", 1);
     let h = editor
         .request(
             "textDocument/hover",
@@ -942,9 +958,67 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
     assert!(md.contains("file module — `helpers/mod.rut`"), "{md}");
     assert!(md.contains("no child modules"), "{md}");
 
+    // the mod-edge CLICK: `helpers` in `mod helpers;` opens the
+    // mounted child at its file top (0:0)
+    let resp = editor
+        .request(
+            "textDocument/definition",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("edge click locations");
+    assert_eq!(locs.len(), 1, "exactly one target: {resp}");
+    assert!(
+        locs[0]["uri"].as_str().unwrap().ends_with("/helpers/mod.rut"),
+        "the child file: {resp}"
+    );
+    assert_eq!(
+        locs[0]["range"],
+        json!({"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}}),
+        "the child file top: {resp}"
+    );
+
+    // the own-package USE lanes: the head opens the child module at its
+    // file top (the mod-edge target law — the pkg head opens the root
+    // the same way), the leaf lands on the child's declaring ident
+    let (l, c) = pos_of(&fx.main_src, "helpers", 0);
+    let resp = editor
+        .request(
+            "textDocument/definition",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("use head locations");
+    assert_eq!(locs.len(), 1, "exactly one target: {resp}");
+    assert!(
+        locs[0]["uri"].as_str().unwrap().ends_with("/helpers/mod.rut"),
+        "the head opens the module: {resp}"
+    );
+    assert_eq!(
+        locs[0]["range"],
+        json!({"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}}),
+        "the file top: {resp}"
+    );
+    let (l, c) = pos_of(&fx.main_src, "Slot", 0);
+    let resp = editor
+        .request(
+            "textDocument/definition",
+            json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+            &mut notes,
+        )
+        .await;
+    let locs = resp["result"].as_array().expect("use leaf locations");
+    assert_eq!(locs.len(), 1, "exactly one target: {resp}");
+    assert!(
+        locs[0]["uri"].as_str().unwrap().ends_with("/helpers/mod.rut"),
+        "the leaf lands in the child: {resp}"
+    );
+
     // position-path completion: after `helpers::` in the package's own
     // file, the module's members visible to the root
-    let (l, c) = pos_of(&fx.main_src, "Slot", 0);
+    let (l, c) = pos_of(&fx.main_src, "Slot", 1);
     let comp = editor
         .request(
             "textDocument/completion",

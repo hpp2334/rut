@@ -16,6 +16,7 @@ use super::render::{
     render_module_target, render_primitive, render_ty, render_let,
 };
 use super::types::{DefIndex, FnDef, LetDef, MemberSrc, TyDef, TyForm};
+use crate::mods::DocMods;
 use crate::semantic::is_keyword;
 
 pub(crate) fn contains(sp: Span, pos: u32) -> bool {
@@ -29,8 +30,11 @@ pub struct HoverOut {
 }
 
 /// `idxs` in priority order — the open document first, then the std
-/// surface, then the rest of the workspace.
-pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Option<HoverOut> {
+/// surface, then the rest of the workspace. `doc` is the open
+/// document's file-module context (the face's knowledge): an
+/// own-package use-path segment hover resolves through it, the default
+/// keeps the cross-package lanes only.
+pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, doc: &DocMods, pos: u32) -> Option<HoverOut> {
     let t = tok_at(toks, pos)?;
     let Tok::Ident(name) = &t.tok else { return None };
     if is_keyword(name) {
@@ -52,7 +56,7 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, pos: u32) -> Option<
     // use-path segments — the hovered ident is a path segment of one
     // of the document's `use pkg::a::b::{ .. }` edges: hover the
     // resolved module through the dep tree (a miss is no hover)
-    if let Some(md) = use_segment_hover(idxs, t.span) {
+    if let Some(md) = use_segment_hover(idxs, doc, t.span) {
         return Some(HoverOut { markdown: md, span: t.span });
     }
 
@@ -194,15 +198,35 @@ fn mounted_child<'a>(idxs: &[&'a DefIndex], owner: &DefIndex, child: &str) -> Op
 /// a use-path SEGMENT hover: the span matches one of the document's
 /// path segments — the resolved module (walked through the pub edges;
 /// the pkg head answers the root module) renders kind + mounted file
-/// + child count. A non-walking path is no hover, never wrong text.
-fn use_segment_hover(idxs: &[&DefIndex], span: Span) -> Option<String> {
-    let doc = idxs[0];
-    for u in &doc.uses {
+/// + child count. An OWN package head — the doc's own pkg name, or
+/// one of its own mod edges (the ancestor-walk spelling, keyed on the
+/// doc context) — commits to the intra-package walk (any declared
+/// edge; the doc's own rows read for its own scope). A non-walking
+/// path is no hover, never wrong text.
+fn use_segment_hover(idxs: &[&DefIndex], doc: &DocMods, span: Span) -> Option<String> {
+    let di = idxs[0];
+    for u in &di.uses {
         for (k, sp) in u.path_spans.iter().enumerate() {
             if *sp != Some(span) {
                 continue;
             }
             let pkg = &u.path[0];
+            // the OWN lane — committed once the head speaks for the
+            // doc's own package: `k == 0` answers the resolved start
+            // module, deeper segments walk intra-package
+            if let Some(start) = crate::mods::resolve_position_head(doc, di, idxs, pkg) {
+                let path = if k == 0 {
+                    start
+                } else {
+                    crate::mods::walk_position_mods(idxs, doc.pkg.as_deref(), &start, &u.path[1..=k])?
+                };
+                let target = if doc.mod_path.as_deref() == Some(path.as_str()) {
+                    di
+                } else {
+                    crate::mods::find_mod(idxs, doc.pkg.as_deref(), &path)?
+                };
+                return Some(render_module_target(target, &path));
+            }
             let walked = if k == 0 {
                 Some(String::new())
             } else {

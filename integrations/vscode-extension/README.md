@@ -143,6 +143,14 @@ manifests, JS only moves bytes) and walks its dependency rows:
   package ships both a `.d.rut` surface and a `mod.rut` body) —
   `pouch` → the extracted root, `Vec` → the `pub class Vec` line;
   `layout` → `pub mod layout;`, `Column` → the child file's struct.
+  Own-package paths ride the same lanes keyed on the doc's place in
+  its package: `use app::…` (the package's own name) opens the root
+  module, `use helpers::…` (an own `mod` edge) opens the module's
+  file, interior segments land on their mounting edges, and the leaf
+  jumps through the intra-package walk — with `use imp::⏐` offering
+  the module's members by visibility tier. A `pub? mod NAME;` decl is
+  clickable too: ctrl+click opens the mounted child (`NAME/mod.rut`,
+  or the file-form `NAME.rut`) at its top.
 - **`.rut/` is scratch, not source**: the CLI's cache (`.rut/cache/`)
   and the extension's extracted dep trees (`.rut/deps/`) both live
   there — keep `.rut/` in your project's `.gitignore`; everything

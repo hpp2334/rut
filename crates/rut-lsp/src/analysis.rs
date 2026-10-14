@@ -206,10 +206,13 @@ fn byte_at(normalized: &str, line: u32, ch: u32) -> u32 {
 
 /// hover at an LSP position: the document's index first, then `extra`.
 /// Returns the full LSP value — both faces hand it to their client as-is.
-pub fn hover_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Option<Hover> {
+/// `doc` is the open document's file-module context (the face's
+/// knowledge) — an own-package use-path segment hover resolves through
+/// it; the default keeps the cross-package lanes only.
+pub fn hover_at(uri: &str, src: &str, extra: &[hover::DefIndex], dm: &crate::mods::DocMods, line: u32, ch: u32) -> Option<Hover> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
-    let h = hover::hover(&idxs, &toks, &ast, byte_at(&normalized, line, ch))?;
+    let h = hover::hover(&idxs, &toks, &ast, dm, byte_at(&normalized, line, ch))?;
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
@@ -246,8 +249,10 @@ pub fn complete_at(
 /// multiple entries = the candidate list. Targets carry the doc URI, a
 /// workspace origin, or the std surface's true `rut/...` source path —
 /// the face resolves them (server: against the workspace root; wasm
-/// shim: the extension does).
-pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Vec<definition::DefLocation> {
+/// shim: the extension does). `doc` is the open document's file-module
+/// context — the mod-edge clicks and the own-package use lanes key on
+/// it; the default keeps them off.
+pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], dm: &crate::mods::DocMods, line: u32, ch: u32) -> Vec<definition::DefLocation> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
@@ -255,13 +260,14 @@ pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32,
         toks: &toks,
         ast: &ast,
         idxs: &idxs,
+        doc_mods: dm,
     };
     definition::definition(&ctx, byte_at(&normalized, line, ch))
 }
 
 /// type definitions at an LSP position: the expression's type head →
 /// that type's declaration (the cheap shape the survey priced)
-pub fn type_definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Vec<definition::DefLocation> {
+pub fn type_definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], dm: &crate::mods::DocMods, line: u32, ch: u32) -> Vec<definition::DefLocation> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
@@ -269,6 +275,7 @@ pub fn type_definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], line:
         toks: &toks,
         ast: &ast,
         idxs: &idxs,
+        doc_mods: dm,
     };
     definition::type_definition(&ctx, byte_at(&normalized, line, ch))
 }
@@ -314,6 +321,7 @@ pub fn references_at(
     uri: &str,
     src: &str,
     extra: &[hover::DefIndex],
+    dm: &crate::mods::DocMods,
     line: u32,
     ch: u32,
     include_declaration: bool,
@@ -325,6 +333,7 @@ pub fn references_at(
         toks: &toks,
         ast: &ast,
         idxs: &idxs,
+        doc_mods: dm,
     };
     references::references(&ctx, byte_at(&normalized, line, ch), include_declaration)
 }

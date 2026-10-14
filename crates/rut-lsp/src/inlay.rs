@@ -506,7 +506,7 @@ mod tests {
         let idxs: Vec<&DefIndex> = vec![&d.index];
         let (hl, hc) = at(&src, "let c", 1);
         let byte = d.lines.byte(&d.src, hl, hc) + 4; // the `c` ident
-        let hov = crate::hover::hover(&idxs, &d.toks, &d.ast, byte);
+        let hov = crate::hover::hover(&idxs, &d.toks, &d.ast, &crate::mods::DocMods::default(), byte);
         let md = hov.expect("hover at the binding").markdown;
         assert!(md.contains("let c: Circle"), "{md}");
         let hover_ty = md.split("let c: ").nth(1).unwrap().split('\n').next().unwrap();
@@ -566,7 +566,7 @@ mod tests {
         let idxs: Vec<&DefIndex> = vec![&d.index];
         let (hl, hc) = at(&src, "let v", 1);
         let byte = d.lines.byte(&d.src, hl, hc) + 4; // the `v` ident
-        let md = crate::hover::hover(&idxs, &d.toks, &d.ast, byte)
+        let md = crate::hover::hover(&idxs, &d.toks, &d.ast, &crate::mods::DocMods::default(), byte)
             .expect("hover at the binding")
             .markdown;
         assert!(md.contains("let v: (opaque, str)"), "{md}");

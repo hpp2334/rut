@@ -1314,7 +1314,7 @@ async function main() {
         // in the child file ----
         const toolsDir = path.join(wsRoot, 'tools2');
         const rootSrc = 'pub mod layout;\npub fn tag() -> i32 { return 1; }\n';
-        const childSrc = 'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n';
+        const childSrc = 'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\nmod grid;\n';
         fs.mkdirSync(path.join(toolsDir, 'layout'), { recursive: true });
         fs.writeFileSync(path.join(toolsDir, 'mod.rut'), rootSrc);
         fs.writeFileSync(path.join(toolsDir, 'layout', 'mod.rut'), childSrc);
@@ -1343,6 +1343,35 @@ async function main() {
         const usageLocs = rut.definition(muri, ...posOf(mdoc, 'Column { w: 1 }'));
         assert.ok(usageLocs.some((l) => l.uri.endsWith('/tools2/layout/mod.rut')),
           `usage into the child: ${JSON.stringify(usageLocs)}`);
+
+        // ---- the editor-agreement lane: the doc IS a package file —
+        // the mod-edge click opens the mounted child at its file top,
+        // and a file-form child clicks to its REAL file (never a
+        // re-derived grid/mod.rut) ----
+        const gridSrc = 'pub fn dig() -> i32 { return 1; }\n';
+        fs.writeFileSync(path.join(toolsDir, 'layout', 'grid.rut'), gridSrc);
+        ts = rut.addDefMod(`file://${path.join(toolsDir, 'layout', 'grid.rut')}`, 'tools2', 'layout/grid', gridSrc);
+        assert.ok(!ts.error, `tools2 grid.rut indexes: ${JSON.stringify(ts)}`);
+
+        const rootUri = `file://${path.join(toolsDir, 'mod.rut')}`;
+        rut.analyze(rootUri, rootSrc); // the doc's stamp rides its indexed twin
+        const edgeLocs = rut.definition(rootUri, 0, 'pub mod '.length);
+        assert.strictEqual(edgeLocs.length, 1, `edge click targets: ${JSON.stringify(edgeLocs)}`);
+        assert.ok(edgeLocs[0].uri.endsWith('/tools2/layout/mod.rut'),
+          `edge click lands in the child: ${edgeLocs[0].uri}`);
+        assert.deepStrictEqual(edgeLocs[0].range,
+          { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          `edge click opens the file top: ${JSON.stringify(edgeLocs[0].range)}`);
+
+        const layoutUri = `file://${path.join(toolsDir, 'layout', 'mod.rut')}`;
+        rut.analyze(layoutUri, childSrc);
+        const gridLocs = rut.definition(layoutUri, ...posOf(childSrc, 'grid'));
+        assert.strictEqual(gridLocs.length, 1, `file-form child targets: ${JSON.stringify(gridLocs)}`);
+        assert.ok(gridLocs[0].uri.endsWith('/tools2/layout/grid.rut'),
+          `file-form child lands in grid.rut: ${gridLocs[0].uri}`);
+        assert.deepStrictEqual(gridLocs[0].range,
+          { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          `file-form child opens the file top: ${JSON.stringify(gridLocs[0].range)}`);
         smokes++;
       } finally {
         fs.rmSync(wsRoot, { recursive: true, force: true });

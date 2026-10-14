@@ -210,11 +210,13 @@ mod tests {
         doc_idx.origin = doc_uri.to_string();
         let idxs = indexes();
         let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
+        let dm = crate::mods::DocMods::default();
         let ctx = crate::definition::Ctx {
             doc_uri,
             toks: &toks,
             ast: &ast,
             idxs: &chain,
+            doc_mods: &dm,
         };
         // the leaf: the `connect` inside the braces
         let leaf = normalized.find("connect").expect("the leaf") as u32;
@@ -242,7 +244,8 @@ mod tests {
         let idxs = indexes();
         let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
         let leaf = normalized.find("connect").expect("the leaf") as u32;
-        let h = crate::hover::hover(&chain, &toks, &ast, leaf).expect("the leaf hovers");
+        let h = crate::hover::hover(&chain, &toks, &ast, &crate::mods::DocMods::default(), leaf)
+            .expect("the leaf hovers");
         assert!(h.markdown.contains("connect"), "{}", h.markdown);
         assert!(h.markdown.contains("myhost"), "the hover names the exporting pkg: {}", h.markdown);
     }

@@ -250,7 +250,8 @@ pub extern "C" fn rut_hover(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u
     };
     let out = {
         let defs = &state().defs;
-        rut_lsp::analysis::hover_at(uri, &src, defs, line, ch)
+        let doc = doc_mods_of(uri, defs);
+        rut_lsp::analysis::hover_at(uri, &src, defs, &doc, line, ch)
     };
     json_envelope(serde_json::json!(out))
 }
@@ -304,7 +305,9 @@ fn complete_stored(uri: &str, line: u32, ch: u32) -> *mut u8 {
 /// workspace; `null` when the doc is unknown, `[]` when nothing
 /// resolves. Targets carry the doc URI, a workspace origin, or the std
 /// surface's true `rut/...` source path (relative — the extension
-/// resolves it against the workspace).
+/// resolves it against the workspace). The doc's file-module context
+/// rides from its stamped twin (see `doc_mods_of`) — the mod-edge
+/// clicks and the own-package use lanes key on it.
 #[no_mangle]
 pub extern "C" fn rut_definition(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
@@ -313,7 +316,8 @@ pub extern "C" fn rut_definition(uri_ptr: *const u8, uri_len: usize, line: u32, 
     };
     let locs = {
         let defs = &state().defs;
-        rut_lsp::analysis::definition_at(uri, &src, defs, line, ch)
+        let doc = doc_mods_of(uri, defs);
+        rut_lsp::analysis::definition_at(uri, &src, defs, &doc, line, ch)
     };
     locations_envelope(&locs)
 }
@@ -328,7 +332,8 @@ pub extern "C" fn rut_type_definition(uri_ptr: *const u8, uri_len: usize, line: 
     };
     let locs = {
         let defs = &state().defs;
-        rut_lsp::analysis::type_definition_at(uri, &src, defs, line, ch)
+        let doc = doc_mods_of(uri, defs);
+        rut_lsp::analysis::type_definition_at(uri, &src, defs, &doc, line, ch)
     };
     locations_envelope(&locs)
 }
@@ -398,7 +403,8 @@ pub extern "C" fn rut_references(
     };
     let locs = {
         let defs = &state().defs;
-        rut_lsp::analysis::references_at(uri, &src, defs, line, ch, include_decl != 0)
+        let doc = doc_mods_of(uri, defs);
+        rut_lsp::analysis::references_at(uri, &src, defs, &doc, line, ch, include_decl != 0)
     };
     locations_envelope(&locs)
 }
@@ -1020,6 +1026,50 @@ mod tests {
             "the imported fn completes plain: {}",
             hits[0]
         );
+    }
+
+    #[test]
+    fn definition_on_the_mod_edge_names_the_child_file_top() {
+        let _lock = TEST_SERIAL.lock().unwrap();
+        // the plan-C lane through the raw ABI: the root file is BOTH a
+        // stamped index (its uri carries the (module, mod_path) pair
+        // `doc_mods_of` reads) and the analyzed doc; the `helpers` ident
+        // in `pub mod helpers;` jumps to the mounted child at 0:0
+        rut_begin();
+        let root = "pub mod helpers;\nentry fn main() -> nil {\n}\n";
+        let child = "pub struct Slot {\n    n: i32;\n}\n";
+        let (ru, cu) = (
+            b"file:///ws/edgemod/mod.rut".as_slice(),
+            b"file:///ws/edgemod/helpers/mod.rut".as_slice(),
+        );
+        let (n, mp) = (b"edgemod".as_slice(), b"".as_slice());
+        rut_add_def_mod(ru.as_ptr(), ru.len(), n.as_ptr(), n.len(), mp.as_ptr(), mp.len(), root.as_ptr(), root.len());
+        rut_add_def_mod(cu.as_ptr(), cu.len(), n.as_ptr(), n.len(), b"helpers".as_ptr(), 7, child.as_ptr(), child.len());
+        rut_begin();
+        take(rut_analyze(ru.as_ptr(), ru.len(), root.as_ptr(), root.len()));
+        // the edge ident starts at char 8 (`pub mod `)
+        rut_begin();
+        let locs = take(rut_definition(ru.as_ptr(), ru.len(), 0, 8));
+        let arr = locs.as_array().unwrap();
+        assert_eq!(arr.len(), 1, "exactly one target: {locs}");
+        assert!(
+            arr[0]["uri"].as_str().unwrap().ends_with("/edgemod/helpers/mod.rut"),
+            "the child uri: {locs}"
+        );
+        assert_eq!(
+            arr[0]["range"],
+            serde_json::json!({"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 0}}),
+            "the child file top: {locs}"
+        );
+
+        // an UNSTAMPED doc with the same text misses (the doc context
+        // keys the lane — the scratch uri carries no stamp)
+        let scratch = b"file:///ws/edgemod-scratch.rut".as_slice();
+        rut_begin();
+        take(rut_analyze(scratch.as_ptr(), scratch.len(), root.as_ptr(), root.len()));
+        rut_begin();
+        let none = take(rut_definition(scratch.as_ptr(), scratch.len(), 0, 8));
+        assert!(none.as_array().unwrap().is_empty(), "unstamped miss: {none}");
     }
 
     #[test]

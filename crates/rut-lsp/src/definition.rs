@@ -13,7 +13,12 @@
 //!    (workspace) indexes — whose origin does (path segment or file
 //!    stem — how `rut.jsonc` `name` works, without re-implementing the
 //!    manifest loader);
-//!    un-imported names keep hover's flat-chain semantics;
+//!    un-imported names keep hover's flat-chain semantics. An OWN
+//!    package head — the doc's own pkg name, or one of its own mod
+//!    edges (the ancestor-walk spelling, the doc context keyed) — rides
+//!    the intra-package lanes instead: the head opens the resolved
+//!    module's file top, a middle segment lands on its mounting edge,
+//!    the leaf on the walked mod path's decl;
 //! 4. **stdlib** through the embedded surface — the `include_str!`
 //!    origins carry the true `rut/...` path (`DefIndex::src_path`), so a
 //!    jump lands in the real source file.
@@ -39,6 +44,7 @@ use crate::hover::lookup::{self, MemberHit, MemberTarget};
 use crate::hover::types::head_of_ty;
 use crate::hover::{bindings, DefIndex, FnDef, MemberSrc, TyDef};
 use crate::line_index::LineIndex;
+use crate::mods::DocMods;
 
 /// one resolved jump target — the uri is the doc itself, a workspace
 /// path/URI, or (for the embedded std surface) the true repo-relative
@@ -59,6 +65,11 @@ pub struct Ctx<'a> {
     pub ast: &'a Ast,
     /// the lookup chain: the open document first, then std + workspace
     pub idxs: &'a [&'a DefIndex],
+    /// the face's knowledge of the open document's place in its
+    /// package's mod tree — keys the OWN-package lanes (the
+    /// `mod NAME;` edge click, an own-pkg/own-mod use head); the
+    /// default (unknown) keeps them off
+    pub doc_mods: &'a DocMods,
 }
 
 impl Ctx<'_> {
@@ -215,6 +226,14 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
             uri: ctx.doc_uri.to_string(),
             range: range_of(&ctx.doc().lines, &ctx.doc().src, t.span),
         }];
+    }
+
+    // 1b. the mod-edge click — the hovered ident IS a `mod NAME;`
+    //     edge's declaring ident: the mounted child's file top (the
+    //     own-package lanes; an unstamped doc or an unmounted child is
+    //     a miss, never a wrong jump)
+    if let Some(loc) = mod_edge_target(ctx, t.span, name) {
+        return vec![loc];
     }
 
     // 2. use-statement names and path segments — the survey's
@@ -462,13 +481,32 @@ fn pkg_root_index<'a>(idxs: &[&'a DefIndex], pkg: &str) -> Option<&'a DefIndex> 
 /// the use-statement layer: the hovered ident is a leaf name (jump to
 /// the exporting decl through the walked mod path), the pkg head
 /// (jump to the pkg's root index at the file top), or a middle path
-/// segment (jump to the `mod NAME;` edge that mounts it)
+/// segment (jump to the `mod NAME;` edge that mounts it). An OWN
+/// package head — the doc's own pkg name, or one of its own mod edges
+/// (the ancestor-walk spelling) — commits to the intra-package lanes:
+/// the head opens the resolved module's file top, a middle segment
+/// lands on its mounting edge, and a dead end is an honest empty,
+/// never a foreign fallback.
 fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation>> {
     let doc = ctx.doc();
     for u in &doc.uses {
         // the leaf name
         if u.name == name && u.name_span == Some(span) {
             let pkg = &u.path[0];
+            // the OWN lane — the walk is the intra-package one (any
+            // declared edge; the doc's own rows read for its own scope)
+            if let Some(start) = own_lane_start(ctx, pkg) {
+                let walked = crate::mods::walk_position_mods(
+                    ctx.idxs,
+                    ctx.doc_mods.pkg.as_deref(),
+                    &start,
+                    &u.path[1..],
+                );
+                return Some(match walked {
+                    Some(p) => own_leaf_targets(ctx, &p, name),
+                    None => Vec::new(),
+                });
+            }
             let walked = if u.path.len() == 1 {
                 Some(String::new())
             } else {
@@ -489,6 +527,27 @@ fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation
                 continue;
             }
             let pkg = &u.path[0];
+            // the OWN lane — `k == 0` opens the resolved module's file
+            // top (the root for the pkg name, the child file for an own
+            // mod edge), deeper segments the mounting edge
+            if let Some(start) = own_lane_start(ctx, pkg) {
+                return Some(if k == 0 {
+                    match own_scope(ctx, &start) {
+                        Some(i) => vec![loc_at(ctx.doc_uri, i, Span::new(0, 0))],
+                        None => Vec::new(),
+                    }
+                } else {
+                    match crate::mods::walk_position_mods(
+                        ctx.idxs,
+                        ctx.doc_mods.pkg.as_deref(),
+                        &start,
+                        &u.path[1..=k],
+                    ) {
+                        Some(p) => own_edge_target(ctx, &p).map(|l| vec![l]).unwrap_or_default(),
+                        None => Vec::new(),
+                    }
+                });
+            }
             if k == 0 {
                 return Some(
                     pkg_root_index(ctx.idxs, pkg)
@@ -503,6 +562,75 @@ fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation
         }
     }
     None
+}
+
+/// the OWN-package lanes' start path for a use head, when the head
+/// speaks for the doc's own package at all: the package's own name
+/// starts at the root module, any other spelling resolves through the
+/// position head walk (the doc's own rows first, then its ancestors —
+/// the compiler's bare-head law). `None` = a foreign head; the caller
+/// rides the cross-package lanes.
+fn own_lane_start(ctx: &Ctx, head: &str) -> Option<String> {
+    crate::mods::resolve_position_head(ctx.doc_mods, ctx.doc(), ctx.idxs, head)
+}
+
+/// the scope index for a resolved own mod path — the open document's
+/// own rows when the path IS its own module (the freshest rows — the
+/// chain's stamped twin may lag an open edit), else the chain index
+/// stamped for the `(pkg, path)` pair. `None` = nothing speaks for the
+/// path (an unmounted module — the callers answer empty).
+fn own_scope<'a>(ctx: &'a Ctx<'a>, walked: &str) -> Option<&'a DefIndex> {
+    if ctx.doc_mods.mod_path.as_deref() == Some(walked) {
+        return Some(ctx.doc());
+    }
+    crate::mods::find_mod(ctx.idxs, ctx.doc_mods.pkg.as_deref(), walked)
+}
+
+/// the own-lane leaf: the walked mod path's scope answers the
+/// declaring type / module-let / free-fn spans (the use-graph's
+/// collector, scoped to the one module)
+fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
+    let Some(i) = own_scope(ctx, walked) else { return Vec::new() };
+    let mut hits: Vec<(&DefIndex, Span)> = Vec::new();
+    if let Some(t) = i.ty(name) {
+        hits.push((i, ty_span(t)));
+    }
+    if let Some(l) = i.lets.iter().find(|l| l.name == name) {
+        hits.push((i, l.name_span.unwrap_or(l.span)));
+    }
+    for f in i.fns.iter().filter(|f| f.name == name && f.owner.is_none()) {
+        hits.push((i, fn_span(f)));
+    }
+    hits.into_iter().map(|(i, sp)| loc_at(ctx.doc_uri, i, sp)).collect()
+}
+
+/// the own-lane interior segment: the walked path's mounting `mod
+/// NAME;` edge in the parent module's index — the foreign lane's
+/// target law, keyed on the own package
+fn own_edge_target(ctx: &Ctx, walked: &str) -> Option<DefLocation> {
+    let parent_path = crate::mods::parent_of(walked);
+    let name = walked.rsplit('/').next()?;
+    let parent = own_scope(ctx, parent_path)?;
+    let edge = parent.mods.iter().find(|m| m.name == name)?;
+    Some(loc_at(ctx.doc_uri, parent, edge.name_span.unwrap_or(edge.span)))
+}
+
+/// the `mod NAME;` edge click — the hovered ident IS one of the doc's
+/// own edges (the exact recorded name span): the child's mod path is
+/// `child_path(doc's mod path, NAME)` and the jump opens the mounted
+/// child at its file top (`Span::new(0, 0)`, the pkg-head convention).
+/// Honest misses: an unstamped doc answers nothing; a child the chain
+/// does not carry an empty jump; the `(pkg, mod_path)` pair keys the
+/// match — another package's same-path child never leaks in.
+fn mod_edge_target(ctx: &Ctx, span: Span, name: &str) -> Option<DefLocation> {
+    ctx.doc()
+        .mods
+        .iter()
+        .find(|m| m.name == name && m.name_span == Some(span))?;
+    let from = ctx.doc_mods.mod_path.as_deref()?;
+    let child = crate::mods::child_path(from, name);
+    let mounted = crate::mods::find_mod(ctx.idxs, ctx.doc_mods.pkg.as_deref(), &child)?;
+    Some(loc_at(ctx.doc_uri, mounted, Span::new(0, 0)))
 }
 
 fn decl_site(doc: &DefIndex, span: Span, name: &str) -> bool {
@@ -559,14 +687,16 @@ mod tests {
     }
 
     /// run `query` against the ctx built from `d` + `extra` (the chain
-    /// lives here, so the Ctx's borrow of it is valid for the call)
+    /// lives here, so the Ctx's borrow of it is valid for the call);
+    /// the doc context rides as the face's knowledge (`dm`)
     fn run(
         d: &Doc,
         extra: &[DefIndex],
+        dm: &DocMods,
         query: impl Fn(&Ctx) -> Vec<DefLocation>,
     ) -> Vec<DefLocation> {
         let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
-        let ctx = Ctx { doc_uri: DOC, toks: &d.toks, ast: &d.ast, idxs: &idxs };
+        let ctx = Ctx { doc_uri: &d.index.origin, toks: &d.toks, ast: &d.ast, idxs: &idxs, doc_mods: dm };
         query(&ctx)
     }
 
@@ -591,11 +721,16 @@ mod tests {
     }
 
     fn def(d: &Doc, pos: u32, extra: &[DefIndex]) -> Vec<DefLocation> {
-        run(d, extra, |c| definition(c, pos))
+        def_as(d, pos, extra, &DocMods::default())
+    }
+
+    /// the doc-context lane — the own-package queries ride a `DocMods`
+    fn def_as(d: &Doc, pos: u32, extra: &[DefIndex], dm: &DocMods) -> Vec<DefLocation> {
+        run(d, extra, dm, |c| definition(c, pos))
     }
 
     fn typedef(d: &Doc, pos: u32, extra: &[DefIndex]) -> Vec<DefLocation> {
-        run(d, extra, |c| type_definition(c, pos))
+        run(d, extra, &DocMods::default(), |c| type_definition(c, pos))
     }
 
     const WIDGET_DOC: &str = "class Widget {\n    id: i32;\n}\n";
@@ -945,6 +1080,206 @@ mod tests {
         let src = "use ghost::{ Thing };\nentry fn main() -> nil {\n}\n";
         let d = doc(src);
         assert!(def(&d, at(&d.src, "use ghost::", 1) + 4, &[]).is_empty());
+    }
+
+    // ---- the own-package lanes (the doc context keys them) ----
+
+    /// `app`'s root module: the doc IS `mod.rut` (origin stamped like
+    /// the faces do), declaring the `mod helpers;` edge
+    fn app_root() -> Doc {
+        doc_at(
+            "file:///ws/app/mod.rut",
+            "mod helpers;\nentry fn main() -> nil {\n}\n",
+        )
+    }
+
+    /// the mounted `helpers` child, stamped the way the faces' mount
+    /// lays it into the chain
+    fn app_helpers() -> DefIndex {
+        crate::deps::index_dep_mod(
+            "app",
+            "file:///ws/app/helpers/mod.rut",
+            "helpers",
+            "pub struct Slot {\n    n: i32;\n}\n",
+            Mode::Impl,
+            None,
+            &[],
+        )
+    }
+
+    /// the doc context for the app root
+    fn root_dm() -> DocMods {
+        DocMods { mod_path: Some(String::new()), pkg: Some("app".to_string()) }
+    }
+
+    #[test]
+    fn an_edge_click_opens_the_child_file_top() {
+        let d = app_root();
+        let extra = [app_helpers()];
+        let hits = def_as(&d, at(&d.src, "mod helpers;", 1) + 4, &extra, &root_dm());
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
+        assert_eq!(hits[0].range.start.line, 0, "the file top");
+        assert_eq!(hits[0].range.start.character, 0);
+    }
+
+    #[test]
+    fn an_edge_click_on_an_unstamped_doc_is_a_miss() {
+        // no doc context — the own lanes stay off (today's answer)
+        let d = app_root();
+        let extra = [app_helpers()];
+        assert!(def(&d, at(&d.src, "mod helpers;", 1) + 4, &extra).is_empty());
+    }
+
+    #[test]
+    fn an_edge_click_on_an_unmounted_child_is_a_miss() {
+        // the doc is stamped but the chain carries no index at the
+        // child's mod path — an empty jump, never a wrong one
+        let d = app_root();
+        assert!(def_as(&d, at(&d.src, "mod helpers;", 1) + 4, &[], &root_dm()).is_empty());
+    }
+
+    #[test]
+    fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
+        // the doc IS `helpers` (mounted file-form): its `mod deep;`
+        // edge resolves `helpers/deep`, mounted as `deep.rut`
+        let d = doc_at(
+            "file:///ws/app/helpers.rut",
+            "mod deep;\npub struct Slot {\n    n: i32;\n}\n",
+        );
+        let deep = crate::deps::index_dep_mod(
+            "app",
+            "file:///ws/app/helpers/deep.rut",
+            "helpers/deep",
+            "pub fn dig() -> i32 { return 1; }\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let dm = DocMods { mod_path: Some("helpers".into()), pkg: Some("app".into()) };
+        let extra = [deep];
+        let hits = def_as(&d, at(&d.src, "mod deep;", 1) + 4, &extra, &dm);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/helpers/deep.rut");
+        assert_eq!(hits[0].range.start.line, 0);
+        assert_eq!(hits[0].range.start.character, 0);
+    }
+
+    #[test]
+    fn an_edge_click_never_leaks_across_packages() {
+        // another pkg's index stamped at the SAME mod path must not
+        // answer the app root's edge click (the (pkg, path) pair keys)
+        let d = app_root();
+        let other = crate::deps::index_dep_mod(
+            "other",
+            "file:///ws/other/helpers/mod.rut",
+            "helpers",
+            "pub struct Slot {\n    n: i32;\n}\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let extra = [other];
+        assert!(def_as(&d, at(&d.src, "mod helpers;", 1) + 4, &extra, &root_dm()).is_empty());
+    }
+
+    #[test]
+    fn an_own_pkg_use_path_resolves_intra_package() {
+        // `use app::helpers::{ Slot };` in the app root — the pkg-name
+        // head opens the root module (the doc itself) at its top, the
+        // segment rides the mounting edge, the leaf lands in the child
+        let d = doc_at(
+            "file:///ws/app/mod.rut",
+            "mod helpers;\nuse app::helpers::{ Slot };\nentry fn main() -> nil {\n}\n",
+        );
+        let root_twin = crate::deps::index_dep_mod(
+            "app",
+            "file:///ws/app/on-disk/mod.rut",
+            "",
+            "mod helpers;\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let extra = [root_twin, app_helpers()];
+        let dm = root_dm();
+        // the pkg-name head: the doc's own rows ARE the root — its own
+        // file top (never the lagging on-disk twin)
+        let hits = def_as(&d, at(&d.src, "use app::", 1) + 4, &extra, &dm);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/mod.rut");
+        assert_eq!(hits[0].range.start.line, 0);
+        assert_eq!(hits[0].range.start.character, 0);
+        // the `helpers` segment: the mounting edge in the root (the
+        // doc's own rows carry it)
+        let hits = def_as(&d, at(&d.src, "app::helpers", 1) + 6, &extra, &dm);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/mod.rut");
+        let ix = LineIndex::new(&d.src);
+        let want = at(&d.src, "mod helpers;", 1) + 4;
+        assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 7));
+        // the leaf: the child's declaring ident
+        let hits = def_as(&d, at(&d.src, "{ Slot }", 1) + 2, &extra, &dm);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
+        let child = normalize("pub struct Slot {\n    n: i32;\n}\n");
+        let cix = LineIndex::new(&child);
+        let want = at(&child, "struct Slot", 1) + 7;
+        assert_eq!(span_of(&child, &cix, &hits[0]), (want, want + 4));
+    }
+
+    #[test]
+    fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
+        // `use helpers::deep::{ Gem };` from the app root — the bare
+        // head is the root's own mod edge: the head opens the child
+        // file at its top, the `deep` segment its mounting edge, the
+        // leaf the walked path's decl
+        let d = doc_at(
+            "file:///ws/app/mod.rut",
+            "use helpers::deep::{ Gem };\nmod helpers;\nentry fn main() -> nil {\n}\n",
+        );
+        let helpers = crate::deps::index_dep_mod(
+            "app",
+            "file:///ws/app/helpers/mod.rut",
+            "helpers",
+            "mod deep;\npub struct Slot {\n    n: i32;\n}\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let deep = crate::deps::index_dep_mod(
+            "app",
+            "file:///ws/app/helpers/deep.rut",
+            "helpers/deep",
+            "pub struct Gem {\n    g: i32;\n}\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let extra = [helpers, deep];
+        let dm = root_dm();
+        // the head: the child file's top (the mod-edge target law)
+        let hits = def_as(&d, at(&d.src, "use helpers::", 1) + 4, &extra, &dm);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
+        assert_eq!(hits[0].range.start.line, 0);
+        assert_eq!(hits[0].range.start.character, 0);
+        // the `deep` segment: the `mod deep;` edge in the helpers module
+        let hits = def_as(&d, at(&d.src, "helpers::deep", 1) + 10, &extra, &dm);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
+        let helpers_src = normalize("mod deep;\npub struct Slot {\n    n: i32;\n}\n");
+        let hix = LineIndex::new(&helpers_src);
+        let want = at(&helpers_src, "mod deep;", 1) + 4;
+        assert_eq!(span_of(&helpers_src, &hix, &hits[0]), (want, want + 4));
+        // the leaf: the walked path's decl
+        let hits = def_as(&d, at(&d.src, "{ Gem }", 1) + 2, &extra, &dm);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, "file:///ws/app/helpers/deep.rut");
+        let deep_src = normalize("pub struct Gem {\n    g: i32;\n}\n");
+        let dix = LineIndex::new(&deep_src);
+        let want = at(&deep_src, "struct Gem", 1) + 7;
+        assert_eq!(span_of(&deep_src, &dix, &hits[0]), (want, want + 3));
     }
 
     // ---- the module matcher (the explicit name, then the fallback) ----
