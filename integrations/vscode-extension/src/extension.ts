@@ -108,6 +108,15 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
     registerSignatureHelp(rut)
   );
 
+  // the palette's manual re-index — the same lane activation and the
+  // folder-change hook ride, on demand: covers watcher misses (a mount
+  // a glob never saw, a walk that raced an edit)
+  subscriptions.push(
+    vscode.commands.registerCommand('rut.reindexDeps', () => {
+      void indexWorkspace(rut).then(() => scheduleDepWalk(rut));
+    })
+  );
+
   // workspace index off the hot activation path — hover/completion may
   // briefly resolve against the std surface + open docs only. The dep
   // walk rides after it: the root `rut.jsonc`'s rows mount the deps
@@ -706,7 +715,8 @@ function registerDefinition(rut: RutWasm): vscode.Disposable {
       position: vscode.Position
     ): vscode.Location[] {
       return resolveLocations(
-        rut.definition(doc.uri.toString(), position.line, position.character)
+        rut.definition(doc.uri.toString(), position.line, position.character),
+        doc.uri.toString()
       );
     },
   });
@@ -719,7 +729,8 @@ function registerTypeDefinition(rut: RutWasm): vscode.Disposable {
       position: vscode.Position
     ): vscode.Location[] {
       return resolveLocations(
-        rut.typeDefinition(doc.uri.toString(), position.line, position.character)
+        rut.typeDefinition(doc.uri.toString(), position.line, position.character),
+        doc.uri.toString()
       );
     },
   });
@@ -750,7 +761,8 @@ function registerReferences(rut: RutWasm): vscode.Disposable {
       context: vscode.ReferenceContext
     ): vscode.Location[] {
       return resolveLocations(
-        rut.references(doc.uri.toString(), position.line, position.character, context.includeDeclaration)
+        rut.references(doc.uri.toString(), position.line, position.character, context.includeDeclaration),
+        doc.uri.toString()
       );
     },
   });
@@ -857,14 +869,26 @@ function analyzeDoc(rut: RutWasm, doc: vscode.TextDocument): Analysis {
 // parses as-is; a repo-relative path (the embedded std surface's true
 // source, e.g. `rut/pouch/mod.rut`) resolves against the workspace
 // folders — a workspace that is the rut repo gets a real jump into the
-// stdlib. Nowhere to resolve: dropped (a clean miss, never a wrong jump).
-function resolveLocations(locs: LspLocation[]): vscode.Location[] {
+// stdlib. Nowhere to resolve: dropped (never a wrong jump). A FULLY
+// dropped answer — the wasm resolved the symbol but every target is
+// unopenable (a url dep not extracted yet, mostly) — hints once per
+// document instead of a silent dead ctrl+click; an empty input stays
+// silent (an honest miss — nothing resolved at all).
+function resolveLocations(locs: LspLocation[], srcUri: string): vscode.Location[] {
   const out: vscode.Location[] = [];
   for (const l of locs) {
     const uri = toTargetUri(l.uri);
     if (uri) {
       out.push(new vscode.Location(uri, toRange(l.range)));
     }
+  }
+  if (locs.length > 0 && out.length === 0) {
+    hintOnce(
+      `def-dropped:${srcUri}`,
+      'rut: definition target not openable — a dep may not be extracted yet; ' +
+        'run `rut install`, then reload the window',
+      false
+    );
   }
   return out;
 }

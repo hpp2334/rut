@@ -21,6 +21,13 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "rut.reindexDeps",
+        "category": "rut",
+        "title": "Re-index dependencies"
+      }
+    ],
     "languages": [
       {
         "id": "rut",
