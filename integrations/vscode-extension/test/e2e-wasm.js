@@ -1485,6 +1485,98 @@ async function main() {
     }
   }
 
+  // ---- plan6 phase 1 (the lock feed): rut_set_lock — the pin ledger
+  // the dep walk feeds from the workspace root's rut.lock BEFORE its
+  // manifest parses. Drives the REAL pair (examples/03-plugin's
+  // committed rut.jsonc + rut.lock) through the BINDING (the exact
+  // calls src/extension.ts's walkDeps/mountUrlDep make) on a fresh
+  // instance: the unlocked parse answers sha256 null (the honest
+  // unpinned refusal), the fed parse stamps the pin, and the whole
+  // url-dep chain lands go-to-definition in the extracted .rut/deps
+  // tree — the chain the editor lane was missing. ----
+  {
+    const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
+    const manifest = fs.readFileSync(manifestPath, 'utf8');
+    const lock = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
+    const pouchUrl = manifest.match(/"pouch"\s*:\s*\{\s*"url"\s*:\s*"([^"]+)"/)[1];
+    assert.ok(pouchUrl, 'the fixture manifest carries a pouch url dep');
+    const inst = await RutWasm.load(WASM_PATH);
+    // BEFORE any setLock: the url row answers sha256 null — without a
+    // lock the unpinned refusal stays honest, never a guessed pin
+    const bare = inst.parseManifest(manifest);
+    assert.ok(!bare.error, `unlocked manifest parse: ${JSON.stringify(bare)}`);
+    assert.strictEqual(bare.deps.find((r) => r.name === 'pouch').source.sha256, null,
+      'the unlocked parse must leave the url row unpinned');
+    // setLock(<real rut.lock bytes>) answers the ledger size (derived
+    // from the fixture's rows, never a constant); the re-parse stamps
+    // the pin onto the url row — and the pin IS the committed bundle
+    // bytes' sha256 (the mount door's law, from fixture bytes alone)
+    const fed = inst.setLock(lock);
+    const wantPins = (lock.match(/"pkg"\s*:/g) || []).length;
+    assert.deepStrictEqual(fed, { pins: wantPins }, `setLock envelope: ${JSON.stringify(fed)}`);
+    const pinned = inst.parseManifest(manifest);
+    assert.ok(!pinned.error, `pinned manifest parse: ${JSON.stringify(pinned)}`);
+    const pouchRow = pinned.deps.find((r) => r.name === 'pouch');
+    assert.strictEqual(pouchRow.source.url, pouchUrl);
+    const lockPouch = lock.match(/\{[^{}]*"pkg"\s*:\s*"pouch"[^{}]*\}/)[0];
+    const pin = lockPouch.match(/"sha256"\s*:\s*"([0-9a-f]{64})"/)[1];
+    assert.strictEqual(pouchRow.source.sha256, pin, 'the lock-sourced pin rides the url row');
+    const bundleBytes = fs.readFileSync(
+      path.join(REPO, 'dist', pouchUrl.match(/rut@([^/]+)\//)[1], 'pouch.rutbundle'));
+    assert.strictEqual(crypto.createHash('sha256').update(bundleBytes).digest('hex'), pin,
+      'the lock pin matches the committed bundle bytes');
+    // a malformed lock is the error envelope — and the ledger stands
+    // EMPTY after it (the re-parse answers unpinned, never guessed
+    // pins); the same holds for the miss lane's empty bytes (a folder
+    // with no lock — walkDeps hands over '' to clear the ledger)
+    const badLock = inst.setLock(
+      '{"format": "rutlock", "format_version": 1, "deps": [{"pkg": "p", "url": "https://x/p.rutbundle", "sha256": "nothex"}]}');
+    assert.ok(badLock.error && badLock.error.includes('64 hex digits'),
+      `malformed lock envelope: ${JSON.stringify(badLock)}`);
+    assert.strictEqual(inst.parseManifest(manifest).deps.find((r) => r.name === 'pouch').source.sha256, null,
+      'a malformed lock must clear the ledger, not keep it');
+    assert.ok(inst.setLock('').error, 'the empty-bytes miss lane answers the error envelope');
+    assert.strictEqual(inst.parseManifest(manifest).deps.find((r) => r.name === 'pouch').source.sha256, null,
+      'the miss lane must leave the ledger empty');
+    // the whole chain: extract the PINNED bundle under
+    // .rut/deps/<module>-<pin12>/ — pin12 from the LOCK-SOURCED row —
+    // index through addDefMod/addDefNamed (the exact mountUrlDep
+    // moves), and the `use` leaf answers the file:// location whose
+    // content holds the decl
+    const extracted = inst.extractBundle(bundleBytes);
+    assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
+    const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-lock-'));
+    try {
+      const depDir = path.join(wsRoot, '.rut', 'deps', `pouch-${pin.slice(0, 12)}`);
+      for (const xf of extracted.files) {
+        const fp = path.join(depDir, xf.path);
+        fs.mkdirSync(path.dirname(fp), { recursive: true });
+        fs.writeFileSync(fp, xf.src);
+        if (xf.mod_path === null) {
+          inst.addDefNamed(`file://${fp}`, extracted.module, xf.src);
+          continue;
+        }
+        const stamped = inst.addDefMod(`file://${fp}`, extracted.module, xf.mod_path, xf.src);
+        assert.ok(!stamped.error, `extracted file indexes: ${JSON.stringify(stamped)}`);
+      }
+      const pdoc = 'use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec.new();\n}\n';
+      const puri = 'file:///ws/e2e-lock-feed.rut';
+      const pa = inst.analyze(puri, pdoc);
+      assert.strictEqual(pa.diags.length, 0, `lock-feed probe doc: ${JSON.stringify(pa.diags)}`);
+      const leaf = inst.definition(puri, ...posOf(pdoc, 'Vec'))
+        .filter((l) => l.uri.includes(`.rut/deps/pouch-${pin.slice(0, 12)}`));
+      assert.strictEqual(leaf.length, 1,
+        `lock-fed leaf targets: ${JSON.stringify(inst.definition(puri, ...posOf(pdoc, 'Vec')))}`);
+      const body = fs.readFileSync(leaf[0].uri.replace(/^file:\/\//, ''), 'utf8');
+      assert.ok(body.includes('pub class Vec'), 'the lock-fed target holds the decl');
+      eqRange(leaf, { uri: leaf[0].uri, range: identAt(body, /^pub class Vec/, 'Vec'), len: 3 },
+        'lock-fed extracted leaf');
+    } finally {
+      fs.rmSync(wsRoot, { recursive: true, force: true });
+    }
+    smokes++;
+  }
+
   if (bad.length) {
     console.error(`e2e-wasm: ${bad.length} violation(s):\n  ${bad.slice(0, 40).join('\n  ')}${bad.length > 40 ? `\n  … (+${bad.length - 40} more)` : ''}`);
     process.exit(1);
@@ -1498,7 +1590,8 @@ async function main() {
     `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface/` +
     `extract-deps-leaf+head/path-dep-segments/` +
     `eof-member+locals/` +
-    `complete-in-doc-sync/check-lane-mismatch+missing-field) ` +
+    `complete-in-doc-sync/check-lane-mismatch+missing-field/` +
+    `lock-feed-unpinned+pinned+extract-leaf) ` +
     `through bin/rut-lsp.wasm`);
 }
 

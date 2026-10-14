@@ -201,6 +201,9 @@ interface RutExports {
   rut_signature_help(uriPtr: number, uriLen: number, line: number, ch: number): number;
   rut_add_def(uriPtr: number, uriLen: number, srcPtr: number, srcLen: number): void;
   rut_parse_manifest(ptr: number, len: number): number;
+  /// the url→pin ledger the NEXT `rut_parse_manifest` stamps onto its
+  /// url rows — the workspace root's `rut.lock` bytes
+  rut_set_lock(ptr: number, len: number): number;
   /// the direct-dep names (JSON array) — the stamp the dep indexes
   /// carry for the auto-import tier's gate
   rut_set_direct_deps(ptr: number, len: number): number;
@@ -346,6 +349,19 @@ export class RutWasm {
     return this.call(() => {
       const [p, l] = this.put(text);
       return this.e.rut_parse_manifest(p, l);
+    });
+  }
+
+  /// hand the wasm the workspace root's `rut.lock` bytes — the url→pin
+  /// ledger the NEXT `parseManifest` stamps onto its url rows (the lock
+  /// is the pin's only source; the manifest grammar retired `sha256`).
+  /// `{"pins": N}`, or the error envelope for a malformed lock (the
+  /// empty ledger stands — url rows answer `sha256: null`, the honest
+  /// unpinned refusal, never guessed pins).
+  setLock(text: string): { pins: number } | Envelope {
+    return this.call(() => {
+      const [p, l] = this.put(text);
+      return this.e.rut_set_lock(p, l);
     });
   }
 

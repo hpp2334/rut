@@ -120,20 +120,22 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
 //
 // After the workspace scan each workspace folder's root `rut.jsonc` is
 // handed to the wasm (`rut_parse_manifest` — JS moves bytes, the wasm
-// parses; law: no JS-side rut parsing). Path deps resolve against the
-// manifest dir — OUTSIDE the workspace folder is the point — and
-// recurse cycle-safe under a depth/file budget. Url deps ride the
-// shared `.rut/cache/` (the Rust-computed cache_path, the same dir the
-// CLI fills): cache-first, a hit verified against the sha256 pin (a
-// poisoned entry evicts and re-fetches — the CLI's healing law), a
-// miss GETs, pins the bytes BEFORE they land anywhere, and writes the
-// cache atomically (tmp + rename). The verified bytes then EXTRACT
-// into real files under `.rut/deps/<module>-<pin12>/` (content-
-// addressed by the byte pin) and re-index through the same lane path
-// deps use — go-to-definition lands in openable `file://` paths, no
-// `bundle:` origins. No pin, no bytes — one error hint. Every failure
-// is ONE hint per dep naming the CLI alternative: never spam, never
-// silent wrong results.
+// parses; law: no JS-side rut parsing). The folder's `rut.lock` rides
+// in first (`rut_set_lock`): its url→pin ledger is what the parse
+// stamps onto the url rows — the pin's only source. Path deps
+// resolve against the manifest dir — OUTSIDE the workspace folder is
+// the point — and recurse cycle-safe under a depth/file budget. Url
+// deps ride the shared `.rut/cache/` (the Rust-computed cache_path,
+// the same dir the CLI fills): cache-first, a hit verified against the
+// sha256 pin (a poisoned entry evicts and re-fetches — the CLI's
+// healing law), a miss GETs, pins the bytes BEFORE they land anywhere,
+// and writes the cache atomically (tmp + rename). The verified bytes
+// then EXTRACT into real files under `.rut/deps/<module>-<pin12>/`
+// (content-addressed by the byte pin) and re-index through the same
+// lane path deps use — go-to-definition lands in openable `file://`
+// paths, no `bundle:` origins. No pin, no bytes — one error hint.
+// Every failure is ONE hint per dep naming the CLI alternative: never
+// spam, never silent wrong results.
 
 interface WalkCtx {
   rut: RutWasm;
@@ -240,6 +242,21 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutWasm): void {
 
 async function walkDeps(rut: RutWasm): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    // the pin ledger rides the walk root: `rut.lock` beside the root
+    // manifest feeds `rut.setLock` BEFORE the manifest parses, so its
+    // url rows carry the lock's pins. A miss hands over empty bytes —
+    // clearing a previous folder's ledger (multi-root precedence:
+    // folder order decides; url rows the lock pins live in ROOT
+    // manifests — accepted), and the error envelope that comes back is
+    // expected, not a hint. A PRESENT-but-malformed lock is the one
+    // error hint; the empty ledger stands (the honest unpinned
+    // refusal, never stale or guessed pins).
+    const lockUri = vscode.Uri.joinPath(folder.uri, 'rut.lock');
+    const lockBytes = await readFileNullable(lockUri);
+    const fed = rut.setLock(lockBytes === null ? '' : new TextDecoder().decode(lockBytes));
+    if (lockBytes !== null && isEnvelope(fed)) {
+      hintOnce(`lock:${lockUri.fsPath}:${fed.error}`, `rut: ${lockUri.fsPath} — ${fed.error}`, true);
+    }
     const ctx: WalkCtx = {
       rut,
       folder: folder.uri,
@@ -475,8 +492,8 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
   if (sha256 === null) {
     hintOnce(
       `unpinned:${url}`,
-      `rut: dep '${row.name}' has no sha256 pin — the editor never mounts unpinned url ` +
-        `bytes; pin the bundle's hash beside its url in ${MANIFEST_NAME}`,
+      `rut: dep '${row.name}' has no sha256 pin in rut.lock — the editor never mounts unpinned ` +
+        `url bytes; run \`rut install\` in the project to (re)pin, then reload the window`,
       true
     );
     return;
