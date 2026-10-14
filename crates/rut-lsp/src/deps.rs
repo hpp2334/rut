@@ -812,6 +812,7 @@ pub host fn sqrt(x: f64) -> f64;
                     path: "layout".into(),
                     vis: rut_ast::ast::Vis::Pub,
                     text: "pub mod grid;\npub struct Column {\n    w: i32;\n}\n".into(),
+                    file: "mod.rut".into(),
                 },
             ),
             (
@@ -820,6 +821,7 @@ pub host fn sqrt(x: f64) -> f64;
                     path: "layout/grid".into(),
                     vis: rut_ast::ast::Vis::Pub,
                     text: "pub struct Cell {\n    x: i32;\n}\n".into(),
+                    file: "mod.rut".into(),
                 },
             ),
         ]);
@@ -911,6 +913,7 @@ pub host fn sqrt(x: f64) -> f64;
                     path: "net".into(),
                     vis: rut_ast::ast::Vis::Pub,
                     text: "pub mod tls;\npub host fn connect(url: str) -> opaque;\n".into(),
+                    file: "mod.d.rut".into(),
                 },
             ),
             (
@@ -919,6 +922,7 @@ pub host fn sqrt(x: f64) -> f64;
                     path: "net/tls".into(),
                     vis: rut_ast::ast::Vis::Pub,
                     text: "pub host fn handshake(c: opaque) -> opaque;\n".into(),
+                    file: "mod.d.rut".into(),
                 },
             ),
         ]);

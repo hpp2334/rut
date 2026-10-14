@@ -10,15 +10,27 @@
 //! naming BOTH a declared dep and an own mod edge is the loud
 //! ambiguity; a true miss keeps today's resolver texts.
 //!
-//! Directory-form modules only (`NAME/mod.rut`) — the single-file
-//! `NAME.rut` form is a later phase.
+//! Both child spellings ride: the directory form (`imp/mod.rut`) and
+//! the single-file form (`imp.rut`) — the diagnostics spell the
+//! physical name the loader mounted.
 
 use std::collections::BTreeMap;
 
 use rut_ast::ast::Vis;
 
 fn mod_source(path: &str, vis: Vis, text: &str) -> rut_driver::ModSource {
-    rut_driver::ModSource { path: path.to_string(), vis, text: text.to_string() }
+    mod_file_source(path, vis, text, "mod.rut")
+}
+
+/// The single-file flavor: the loader mounted `NAME.rut`, and the
+/// diagnostics spell that physical name.
+fn mod_file_source(path: &str, vis: Vis, text: &str, file: &str) -> rut_driver::ModSource {
+    rut_driver::ModSource {
+        path: path.to_string(),
+        vis,
+        text: text.to_string(),
+        file: file.to_string(),
+    }
 }
 
 /// The todolist shape: `use imp::{ TodoList, Task };` + `mod imp;` in
@@ -212,7 +224,8 @@ entry fn main() -> i64 { return go(); }
 #[test]
 fn a_private_leaf_is_not_importable() {
     // import is no visibility bypass: a bare (private) member of imp
-    // is refused at the use line — `pub` or `pub(pkg)` is
+    // is refused at the use line — the text names the importing file
+    // and the declaring file (the physical name the loader recorded)
     let mut app = rut_driver::Pkg::source(
         "app",
         "use imp::{ Task };\n\
@@ -233,11 +246,9 @@ fn a_private_leaf_is_not_importable() {
     let g = graph_of(vec![app], "app");
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
     let d = &g.diags[0];
-    assert!(
-        d.msg.contains("`imp::Task` — `Task` is private to module `imp`")
-            && d.msg.contains("declare it `pub` (or `pub(pkg)`) to widen"),
-        "got: {}",
-        d.msg
+    assert_eq!(
+        d.msg,
+        "`Task` is not visible from `mod.rut` — mark it `pub` (or `pub(pkg)`) in `imp/mod.rut`"
     );
     assert_eq!(d.file.as_deref(), Some("app"));
     assert!(
@@ -245,6 +256,101 @@ fn a_private_leaf_is_not_importable() {
         "the arrow names the use line:\n{}",
         rendered(src, &g)
     );
+}
+
+#[test]
+fn a_private_leaf_spells_the_single_file_mount() {
+    // the physical-name law: `imp` mounted as `imp.rut` (not the
+    // directory-form guess) — the declaring file is spelled `imp.rut`
+    let mut app = rut_driver::Pkg::source(
+        "app",
+        "use imp::{ Task };\n\
+         mod imp;\n\
+         entry fn main() -> i32 { return 0; }\n",
+    );
+    app.mods.insert(
+        "imp".to_string(),
+        mod_file_source(
+            "imp",
+            Vis::Self_,
+            "struct Task { id: i64; }\npub fn ignored() -> i64 { return 0; }\n",
+            "imp.rut",
+        ),
+    );
+    let g = graph_of(vec![app], "app");
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert_eq!(
+        g.diags[0].msg,
+        "`Task` is not visible from `mod.rut` — mark it `pub` (or `pub(pkg)`) in `imp.rut`"
+    );
+}
+
+#[test]
+fn a_missing_leaf_is_the_unknown_import() {
+    // a name the walked module never declared reads the walked module
+    // the way the use spelled it
+    let mut app = rut_driver::Pkg::source(
+        "app",
+        "use imp::{ Ghost };\n\
+         mod imp;\n\
+         entry fn main() -> i32 { return 0; }\n",
+    );
+    app.mods.insert(
+        "imp".to_string(),
+        mod_source("imp", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"),
+    );
+    let g = graph_of(vec![app], "app");
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert_eq!(g.diags[0].msg, "`imp` has no `Ghost` — unknown import");
+}
+
+#[test]
+fn a_missing_leaf_hint_names_the_module_it_lives_in() {
+    // the name exists in the package but in a DIFFERENT module — the
+    // hint names it (`TodoList` lives in `imp::grid`, the use spelled
+    // `imp::{TodoList}`)
+    let mut app = rut_driver::Pkg::source(
+        "app",
+        "use imp::{ TodoList };\n\
+         mod imp;\n\
+         entry fn main() -> i32 { return 0; }\n",
+    );
+    app.mods.insert(
+        "imp".to_string(),
+        mod_source("imp", Vis::Self_, "mod grid;\npub fn ignored() -> i64 { return 0; }\n"),
+    );
+    app.mods.insert(
+        "imp/grid".to_string(),
+        mod_source("imp/grid", Vis::Self_, "pub class TodoList { n: i64; }\n"),
+    );
+    let g = graph_of(vec![app], "app");
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert_eq!(
+        g.diags[0].msg,
+        "`imp` has no `TodoList` — unknown import (declared in module `imp::grid`)"
+    );
+}
+
+#[test]
+fn a_deep_walk_miss_reads_the_walked_module() {
+    // `use imp::grid::{ Tool };` — the walked module spells `::`-joined
+    let mut app = rut_driver::Pkg::source(
+        "app",
+        "use imp::grid::{ Tool };\n\
+         mod imp;\n\
+         entry fn main() -> i32 { return 0; }\n",
+    );
+    app.mods.insert(
+        "imp".to_string(),
+        mod_source("imp", Vis::Self_, "mod grid;\npub fn ignored() -> i64 { return 0; }\n"),
+    );
+    app.mods.insert(
+        "imp/grid".to_string(),
+        mod_source("imp/grid", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"),
+    );
+    let g = graph_of(vec![app], "app");
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert_eq!(g.diags[0].msg, "`imp::grid` has no `Tool` — unknown import");
 }
 
 #[test]
@@ -411,12 +517,9 @@ fn a_module_name_is_not_an_import() {
     );
     let g = graph_of(vec![app], "app");
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
-    assert!(
-        g.diags[0]
-            .msg
-            .contains("`grid` is a module of this package — a module is not imported; walk it: `use imp::grid::{ .. }`"),
-        "got: {}",
-        g.diags[0].msg
+    assert_eq!(
+        g.diags[0].msg,
+        "`grid` is a module of this package — a module is not imported; walk it: `use imp::grid::{ .. }`"
     );
 }
 

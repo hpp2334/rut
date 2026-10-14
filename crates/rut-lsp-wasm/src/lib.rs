@@ -1324,6 +1324,7 @@ mod tests {
                     path: "layout".into(),
                     vis: rut_ast::ast::Vis::Pub,
                     text: "pub struct Column {\n    w: i32;\n}\n".into(),
+                    file: "mod.rut".into(),
                 },
             ),
         ]);

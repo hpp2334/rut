@@ -305,6 +305,7 @@ fn a_mounted_module_nothing_declares_is_named_at_compile() {
             path: "ghost".to_string(),
             vis: Vis::Self_,
             text: "pub fn boo() -> i32 { return 0; }\n".to_string(),
+            file: "mod.rut".to_string(),
         },
     );
     let c = rut_driver::RutRun::new()
@@ -644,7 +645,7 @@ fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::P
             .map(|(p, v, t)| {
                 (
                     p.to_string(),
-                    ModSource { path: p.to_string(), vis: v, text: t.to_string() },
+                    ModSource { path: p.to_string(), vis: v, text: t.to_string(), file: "mod.rut".to_string() },
                 )
             })
             .collect(),

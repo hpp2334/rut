@@ -31,6 +31,7 @@ fn dep_pkg() -> rut_driver::Pkg {
             path: "sub".to_string(),
             vis: Vis::Pub,
             text: "pub fn one() -> i32 { return 1; }\n".to_string(),
+            file: "mod.rut".to_string(),
         },
     );
     p

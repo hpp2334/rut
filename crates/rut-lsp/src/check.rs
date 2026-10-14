@@ -269,7 +269,12 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Pkg> {
                 }
                 p.mods.insert(
                     path.clone(),
-                    ModSource { path: path.clone(), vis: f.vis, text: f.text.clone() },
+                    ModSource {
+                        path: path.clone(),
+                        vis: f.vis,
+                        text: f.text.clone(),
+                        file: "mod.rut".to_string(),
+                    },
                 );
             }
             p
@@ -284,7 +289,12 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Pkg> {
                 }
                 children.insert(
                     path.clone(),
-                    ModSource { path: path.clone(), vis: f.vis, text: f.text.clone() },
+                    ModSource {
+                        path: path.clone(),
+                        vis: f.vis,
+                        text: f.text.clone(),
+                        file: "mod.rut".to_string(),
+                    },
                 );
             }
             match lower_decl_module(&root.text, &children, &g.module) {

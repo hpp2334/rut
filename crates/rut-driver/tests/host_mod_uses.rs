@@ -17,7 +17,12 @@ use rut_vm::HostPkg;
 use rut_vm::interp::Vm;
 
 fn mod_source(path: &str, vis: rut_ast::ast::Vis, text: &str) -> rut_driver::ModSource {
-    rut_driver::ModSource { path: path.to_string(), vis, text: text.to_string() }
+    rut_driver::ModSource {
+        path: path.to_string(),
+        vis,
+        text: text.to_string(),
+        file: "mod.rut".to_string(),
+    }
 }
 
 /// The plan's target shape, hand-lowered: root + net + net/tls.

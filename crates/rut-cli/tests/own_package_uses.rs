@@ -146,8 +146,48 @@ fn a_private_own_member_refuses_at_the_use_line() {
         .expect("run rut run <dir>");
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("private to module `imp`"), "{stderr}");
+    assert!(
+        stderr.contains(
+            "`Task` is not visible from `mod.rut` — mark it `pub` (or `pub(pkg)`) in `imp/mod.rut`"
+        ),
+        "{stderr}"
+    );
     assert!(stderr.contains("--> todolist:1:1"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The same refusal, single-file flavor: the declaring file is spelled
+/// `imp.rut` — the physical name the loader mounted, never the
+/// directory-form guess.
+#[test]
+fn the_single_file_private_refusal_spells_the_file() {
+    let root = scratch("file-form-private");
+    let dir = root.join("todolist");
+    write(
+        &dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "todolist"}"#,
+    );
+    write(
+        &dir,
+        "mod.rut",
+        "use imp::{ Task };\n\
+         mod imp;\n\
+         entry fn main() {}\n",
+    );
+    write(&dir, "imp.rut", "struct Task { id: i64; }\n");
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <dir>");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains(
+            "`Task` is not visible from `mod.rut` — mark it `pub` (or `pub(pkg)`) in `imp.rut`"
+        ),
+        "{stderr}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 

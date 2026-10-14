@@ -56,6 +56,27 @@ pub struct ModSource {
     pub vis: Vis,
     /// the file's text
     pub text: String,
+    /// the file's PHYSICAL name the loader mounted: `mod.rut`/
+    /// `mod.d.rut` (directory-form) or `NAME.rut` (single-file) — the
+    /// exact spelling the diagnostics name ([`ModSource::display`];
+    /// the rows/bundle lanes are directory-form by law, so they record
+    /// the flavor's spelling)
+    pub file: String,
+}
+
+impl ModSource {
+    /// The file's display path: a directory-form child spells
+    /// `<path>/mod.rut` (the root its bare file name), a single-file
+    /// child spells its own name (`imp.rut`, never the directory-form
+    /// guess) — the lsp's `display_of` law, the exact spelling the
+    /// diagnostics name.
+    pub fn display(&self) -> String {
+        if self.file == "mod.rut" || self.file == crate::decl::DECL_CHILD_FILE {
+            file_display(&self.path, &self.file)
+        } else {
+            self.file.clone()
+        }
+    }
 }
 
 /// What the FS/archive lane answers for one `mod` declaration's child
@@ -171,7 +192,7 @@ fn mount_rec(
                 visiting.pop();
                 out.insert(
                     child_path.clone(),
-                    ModSource { path: child_path, vis: *vis, text },
+                    ModSource { path: child_path, vis: *vis, text, file: file.clone() },
                 );
             }
             ChildLookup::Ambiguous => {
@@ -794,7 +815,7 @@ mod tests {
         let mut mods = BTreeMap::new();
         mods.insert(
             "layout".to_string(),
-            ModSource { path: String::new(), vis: Vis::Self_, text: "pub fn span() -> i32 { return 1; }\n".into() },
+            ModSource { path: String::new(), vis: Vis::Self_, text: "pub fn span() -> i32 { return 1; }\n".into(), file: "mod.rut".into() },
         );
         let json = rows_json("mod layout;\n", &mods);
         let (root, rows) = parse_rows(&json).unwrap();
@@ -833,7 +854,7 @@ mod tests {
         for (path, vis, text) in children {
             mods.insert(
                 path.to_string(),
-                ModSource { path: path.to_string(), vis: *vis, text: text.to_string() },
+                ModSource { path: path.to_string(), vis: *vis, text: text.to_string(), file: "mod.d.rut".to_string() },
             );
         }
         Pkg {
@@ -935,6 +956,7 @@ mod tests {
                 path: "layout".into(),
                 vis: Vis::Pub,
                 text: "pub fn span() -> i32 { return 1; }\n".into(),
+                file: "mod.rut".into(),
             },
         );
         let (set, problems) = collect_module_set("app", &pkg);

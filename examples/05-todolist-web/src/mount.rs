@@ -89,7 +89,12 @@ const BIZ_APP: &str = include_str!("../rut/biz/app/mod.rut");
 fn child_mod(path: &str, vis: rut_ast::ast::Vis, text: &str) -> (String, rut_driver::ModSource) {
     (
         path.to_string(),
-        rut_driver::ModSource { path: path.to_string(), vis, text: text.to_string() },
+        rut_driver::ModSource {
+            path: path.to_string(),
+            vis,
+            text: text.to_string(),
+            file: "mod.rut".to_string(),
+        },
     )
 }
 

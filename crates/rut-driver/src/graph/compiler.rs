@@ -470,7 +470,7 @@ impl<'a> GraphCompiler<'a> {
         // module; the own lane walks the consumer's own mod tree and
         // gates its leaves under the crossing predicate. The validated
         // dep heads ensure; the own bindings ride the compile.
-        let (uses, own_uses) = match self.validate_qualified_uses(spec, &ast, &layout) {
+        let (uses, own_uses) = match self.validate_qualified_uses(spec, module, &ast, &layout) {
             Some(uses) => uses,
             None => return None,
         };
@@ -941,19 +941,15 @@ pub(crate) fn dep_use_heads(
     out
 }
 
-/// The visibility-fix hint for an own-lane leaf the crossing predicate
-/// refuses (the checker's `vis_hint`, spelled driver-side — there is
-/// no Ctx here): each tier names what would widen it.
-fn own_leaf_vis_hint(name: &str, from: &str, def_mod: &str, vis: Vis) -> String {
-    match vis {
-        Vis::Super => format!(
-            "`{name}` is `pub(super)` — visible only in `{}`'s subtree, and `{from}` is outside it",
-            def_mod.rsplit_once('/').map(|(p, _)| p).unwrap_or(""),
-        ),
-        _ => format!(
-            "`{name}` is private to module `{def_mod}` — visible only inside it and its submodules; \
-             declare it `pub` (or `pub(pkg)`) to widen"
-        ),
+/// The file a mod path lives in, spelled for the own-lane texts: the
+/// loader's physical record (`imp.rut` single-file, `imp/mod.rut`
+/// directory-form), the root's body `mod.rut` — the exact file the
+/// user sees, never the directory-form guess.
+fn file_display(module: &crate::session::Pkg, path: &str) -> String {
+    match module.mods.get(path) {
+        Some(m) => m.display(),
+        None if path.is_empty() => "mod.rut".to_string(),
+        None => format!("{path}/mod.rut"),
     }
 }
 
@@ -1091,15 +1087,20 @@ impl GraphCompiler<'_> {
     /// `mod imp;`); each leaf must be a decl of the walked module,
     /// visible from the importing file under the crossing predicate
     /// (import is no visibility bypass), and a module name is not an
-    /// import — walk it. A head that names BOTH a declared dep and an
-    /// own mod edge is the loud ambiguity (mounts and mod edges are
-    /// different namespaces; silence here would be a trap). Answers the
-    /// dep heads to ensure plus the validated own bindings
-    /// (`(importing file, name)` → target module) — `None` = diagnosed,
-    /// the unit fails.
+    /// import — walk it. The leaf texts spell the fix at the walked
+    /// module: a miss is the dep lanes' unknown-import shape (plus the
+    /// module the name does live in, when it lives in the package), a
+    /// visibility refusal names the importing file and the declaring
+    /// file's PHYSICAL name, a module name names the walk. A head that
+    /// names BOTH a declared dep and an own mod edge is the loud
+    /// ambiguity (mounts and mod edges are different namespaces; silence
+    /// here would be a trap). Answers the dep heads to ensure plus the
+    /// validated own bindings (`(importing file, name)` → target
+    /// module) — `None` = diagnosed, the unit fails.
     fn validate_qualified_uses(
         &mut self,
         spec: &str,
+        module: &crate::session::Pkg,
         ast: &Ast,
         layout: &rut_lir::check::ModInputs,
     ) -> Option<(Vec<String>, Vec<(String, String, String)>)> {
@@ -1193,12 +1194,17 @@ impl GraphCompiler<'_> {
                     continue;
                 }
                 // the leaves: decls of the walked module, visible from
-                // the importing file under the crossing predicate
-                let at_file = |at: &str| -> String {
+                // the importing file under the crossing predicate. The
+                // texts spell the fix: a miss reads the walked module
+                // the way the use spelled it (plus where the name does
+                // live, when it lives in this package); a visibility
+                // refusal names the importing file and the declaring
+                // file's physical name; a module name names the walk.
+                let walked_name = |at: &str| -> String {
                     if at.is_empty() {
-                        "mod.rut".to_string()
+                        spec.to_string()
                     } else {
-                        format!("{at}/mod.rut")
+                        at.replace('/', "::")
                     }
                 };
                 let mut bad: Vec<Diag> = Vec::new();
@@ -1208,13 +1214,27 @@ impl GraphCompiler<'_> {
                     for &n in names {
                         let text = ast.name(n);
                         match rows.iter().find(|d| d.name == text) {
-                            None => bad.push(Diag::new(
-                                span,
-                                format!(
-                                    "`{text}` is not declared in `{spec}`'s module `{at}` ({})",
-                                    at_file(&at),
-                                ),
-                            )),
+                            None => {
+                                // the name may still live in a sibling
+                                // module of this package — the hint
+                                // names it (first hit, mod-path order)
+                                let home = table
+                                    .iter()
+                                    .filter(|(m, _)| m.as_str() != at.as_str())
+                                    .find(|(_, rows)| rows.iter().any(|d| d.name == text))
+                                    .map(|(m, _)| walked_name(m));
+                                let hint = match home {
+                                    Some(h) => format!(" (declared in module `{h}`)"),
+                                    None => String::new(),
+                                };
+                                bad.push(Diag::new(
+                                    span,
+                                    format!(
+                                        "`{}` has no `{text}` — unknown import{hint}",
+                                        walked_name(&at),
+                                    ),
+                                ));
+                            }
                             Some(d) if d.kind == crate::mods::DeclKind::Mod => {
                                 let mut fix = String::new();
                                 for &seg in path {
@@ -1233,10 +1253,10 @@ impl GraphCompiler<'_> {
                                 bad.push(Diag::new(
                                     span,
                                     format!(
-                                        "`{}::{}` — {}",
-                                        at,
-                                        text,
-                                        own_leaf_vis_hint(text, &from, &at, d.vis),
+                                        "`{text}` is not visible from `{}` — mark it `pub` \
+                                         (or `pub(pkg)`) in `{}`",
+                                        file_display(module, &from),
+                                        file_display(module, &at),
                                     ),
                                 ));
                             }
