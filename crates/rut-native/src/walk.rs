@@ -508,54 +508,77 @@ fn read_decl_root_module(dir: &str) -> Result<Option<String>, LoadError> {
     }
 }
 
-/// The dir lane's child lookup for the mod mount — the same three-case
-/// law the archive rows lane answers: `NAME/<child file>` reads (with
-/// its canonical identity — the cycle guard's key, so a symlinked
-/// alias repeats it), a same-named FILE sibling (`NAME.rut`), a
-/// `NAME/` directory without its module file, or nothing there at
-/// all. The child file's spelling is the caller's flavor: `mod.rut`
-/// for a lib body tree, `mod.d.rut` for a host surface tree.
+/// The dir lane's child lookup for the mod mount — the same case law
+/// the archive rows lane answers, over TWO spellings: the directory
+/// form `NAME/<child file>` first, else the single-file form
+/// `NAME.rut` beside the declaring file; BOTH present is the loud
+/// ambiguity (which mounts is undecidable). A `NAME/` directory
+/// without its module file, or nothing there at all, are the loud
+/// misses. The found answer carries the file's canonical identity
+/// (the cycle guard's key, so a symlinked alias repeats it) and its
+/// physical name (the diagnostics spell the real shape). The child
+/// file's spelling is the caller's flavor: `mod.rut` for a lib body
+/// tree, `mod.d.rut` for a host surface tree.
+///
+/// `dirs` remembers the PHYSICAL directory of every found file: a
+/// file-form parent (`a.rut`) lives in its own directory — its
+/// children mount beside it, never under a dir named after the mod
+/// path. Seeded empty; the root's dir is `dir` itself.
 pub(crate) fn dir_child_lookup(
     dir: &Path,
+    dirs: &mut BTreeMap<String, PathBuf>,
     parent: &str,
     name: &str,
     child_file: &str,
 ) -> Result<ChildLookup, String> {
-    let base = if parent.is_empty() {
-        dir.to_path_buf()
-    } else {
-        dir.join(parent)
+    let base = match dirs.get(parent) {
+        Some(d) => d.clone(),
+        None if parent.is_empty() => dir.to_path_buf(),
+        None => dir.join(parent),
     };
     let mod_rs = base.join(name).join(child_file);
-    match std::fs::read_to_string(&mod_rs) {
+    let file_form = base.join(format!("{name}.rut"));
+    let has_dir = mod_rs.is_file();
+    let has_file = file_form.is_file();
+    if has_dir && has_file {
+        return Ok(ChildLookup::Ambiguous);
+    }
+    let probe = if has_dir {
+        (mod_rs, child_file.to_string())
+    } else if has_file {
+        (file_form, format!("{name}.rut"))
+    } else if base.join(name).is_dir() {
+        return Ok(ChildLookup::NoModRut);
+    } else {
+        return Ok(ChildLookup::Missing);
+    };
+    match std::fs::read_to_string(&probe.0) {
         Ok(text) => {
-            let canon = std::fs::canonicalize(&mod_rs)
-                .unwrap_or_else(|_| mod_rs.clone())
+            let canon = std::fs::canonicalize(&probe.0)
+                .unwrap_or_else(|_| probe.0.clone())
                 .to_string_lossy()
                 .into_owned();
-            Ok(ChildLookup::Found { text, canon })
-        }
-        Err(e) if mod_rs.is_file() => {
-            Err(format!("cannot read {}: {e}", mod_rs.display()))
-        }
-        Err(_) => {
-            let file = base.join(format!("{name}.rut"));
-            if file.is_file() {
-                Ok(ChildLookup::NotADir)
-            } else if base.join(name).is_dir() {
-                Ok(ChildLookup::NoModRut)
-            } else {
-                Ok(ChildLookup::Missing)
+            if let Some(found_dir) = probe.0.parent() {
+                let child_path = if parent.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{parent}/{name}")
+                };
+                dirs.insert(child_path, found_dir.to_path_buf());
             }
+            Ok(ChildLookup::Found { text, canon, file: probe.1 })
         }
+        // a file that exists but cannot be read is the loud read
+        // error, never a silent fallback
+        Err(e) => Err(format!("cannot read {}: {e}", probe.0.display())),
     }
 }
 
 /// Assemble a lib pkg from its assembled root text: the root's `mod`
 /// declarations mount the child tree from the directory —
-/// `NAME/mod.rut` beside the declaring file, recursively,
-/// cycle-guarded by canonical file identity. The root's own file
-/// identity (`root_file`) opens the guard's chain.
+/// `NAME/mod.rut` beside the declaring file, else the single-file
+/// `NAME.rut`, recursively, cycle-guarded by canonical file identity.
+/// The root's own file identity (`root_file`) opens the guard's chain.
 fn lib_pkg(
     dir: &str,
     root_text: String,
@@ -566,8 +589,9 @@ fn lib_pkg(
         .unwrap_or_else(|_| PathBuf::from(root_file))
         .to_string_lossy()
         .into_owned();
+    let mut dirs = BTreeMap::new();
     let mut lookup = |parent: &str, name: &str| {
-        dir_child_lookup(Path::new(dir), parent, name, "mod.rut")
+        dir_child_lookup(Path::new(dir), &mut dirs, parent, name, "mod.rut")
     };
     let mods: BTreeMap<String, ModSource> =
         mount_mod_children(&root_text, &root_canon, Mode::Impl, "mod.rut", &mut lookup)
@@ -605,10 +629,11 @@ fn lib_pkg(
 ///   is refused in either file — the lib-surface law.
 ///
 /// The root's `mod` declarations mount the child tree —
-/// `NAME/mod.rut` beside the declaring file, recursively,
-/// cycle-guarded. The repealed `entry.lib`/`entry.libs` keys refused
-/// at parse (the manifest walk); a published BUNDLE's old manifest
-/// rides the reader's compat lane instead (a loading law).
+/// `NAME/mod.rut` beside the declaring file (else the single-file
+/// `NAME.rut`), recursively, cycle-guarded. The repealed
+/// `entry.lib`/`entry.libs` keys refused at parse (the manifest walk);
+/// a published BUNDLE's old manifest rides the reader's compat lane
+/// instead (a loading law).
 ///
 /// The manifest's `namespace` row (when present) rides the pkg as the
 /// qualified-access head (`calc`'s `Math`), and its `consts` rows ride
@@ -655,8 +680,9 @@ fn load_entry_module(
                 .unwrap_or_else(|_| PathBuf::from(&key))
                 .to_string_lossy()
                 .into_owned();
+            let mut dirs = BTreeMap::new();
             let mut lookup = |parent: &str, name: &str| {
-                dir_child_lookup(Path::new(dir), parent, name, "mod.d.rut")
+                dir_child_lookup(Path::new(dir), &mut dirs, parent, name, "mod.d.rut")
             };
             let mods: BTreeMap<String, ModSource> =
                 mount_mod_children(&src_text, &root_canon, Mode::Decl, "mod.d.rut", &mut lookup)

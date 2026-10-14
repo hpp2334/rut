@@ -4,10 +4,13 @@
 //! - the mount: `mod layout;` → `layout/mod.rut` → `mod grid;` →
 //!   `layout/grid/mod.rut`, two levels, each file its own module root,
 //!   `pub mod` vs `mod` carried on the edge;
-//! - the loud mounting laws: a missing child names both spellings, a
-//!   same-named FILE is not a module directory, a directory without
-//!   its `mod.rut` says so, and a symlinked cycle is the loud
-//!   `cyclic mod` error (the dep walk's law mirrored);
+//! - the single-file spelling: `mod imp;` mounts `imp.rut` beside the
+//!   declaring file (mixed trees mount both forms), both spellings
+//!   present is the loud ambiguity naming both, and a cycle through a
+//!   file child is still the loud `cyclic mod` error;
+//! - the loud mounting laws: a missing child names both spellings and
+//!   a directory without its `mod.rut` says so (the symlinked cycle
+//!   alias included);
 //! - the collection: every mounted file's declarations gathered with
 //!   the mod path attached (the plumbing phase 3 gates on) — and a
 //!   mounted module nothing declares is named at compile;
@@ -129,6 +132,90 @@ fn mod_tree_mounts_two_levels_and_runs() {
 }
 
 #[test]
+fn a_file_module_mounts_and_runs() {
+    // the single-file spelling: `mod imp;` mounts `imp.rut` beside the
+    // declaring file — the logical mod path is unchanged (`imp`), so
+    // the qualified walk and the own-package use lanes ride it as-is
+    let root = scratch("file-form");
+    let pkg = root.join("pkg");
+    write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
+    write(
+        &pkg,
+        "mod.rut",
+        "use imp::{ span };\nmod imp;\nentry fn main() -> i32 { return span() + imp::plus(2); }\n",
+    );
+    write(
+        &pkg,
+        "imp.rut",
+        "pub fn span() -> i32 { return 5; }\npub fn plus(v: i32) -> i32 { return v + 40; }\n",
+    );
+    let loaded = load(&pkg);
+    let pkg = loaded.pkg("pkg").expect("pkg mounted");
+    let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
+    assert_eq!(keys, vec!["imp"], "the file child mounts at its logical mod path");
+    assert!(pkg.mods["imp"].text.contains("pub fn span"));
+    assert_eq!(run_main(loaded), 47);
+}
+
+#[test]
+fn a_mixed_tree_mounts_both_forms_at_every_level() {
+    // dir form and file form interleave: `layout/` is a directory
+    // child, `helper.rut` a file child beside it, and the directory
+    // child declares a file child of its own
+    let root = scratch("mixed-tree");
+    let pkg = root.join("pkg");
+    write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
+    write(
+        &pkg,
+        "mod.rut",
+        "mod layout;\nmod helper;\nentry fn main() -> i32 { return layout::span() + helper::two() + layout::grid::cell(); }\n",
+    );
+    write(
+        &pkg,
+        "layout/mod.rut",
+        "mod grid;\npub fn span() -> i32 { return 1; }\n",
+    );
+    write(&pkg, "layout/grid.rut", "pub fn cell() -> i32 { return 2; }\n");
+    write(&pkg, "helper.rut", "pub fn two() -> i32 { return 20; }\n");
+    let loaded = load(&pkg);
+    let pkg = loaded.pkg("pkg").expect("pkg mounted");
+    let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
+    assert_eq!(keys, vec!["helper", "layout", "layout/grid"]);
+    assert_eq!(run_main(loaded), 23);
+}
+
+#[test]
+fn both_forms_are_the_loud_ambiguity() {
+    // `layout/grid/mod.rut` AND `layout/grid.rut` — which mounts is
+    // undecidable; the error names both spellings
+    let root = world("ambiguous", false);
+    let pkg = root.join("pkg");
+    write(&pkg, "layout/grid.rut", "pub fn cell() -> i32 { return 2; }\n");
+    let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
+    assert!(
+        err.contains("`mod grid;` in layout/mod.rut — both `grid/mod.rut` and `grid.rut` exist"),
+        "{err}"
+    );
+    assert!(err.contains("keep one"), "{err}");
+}
+
+#[test]
+fn a_cycle_through_a_file_child_is_the_loud_cyclic_mod_error() {
+    // a.rut declares `mod b;`; `b.rut` aliases `a.rut` itself — the
+    // canonical identity repeats inside the mount chain (the file
+    // child's real name rides the message)
+    let root = scratch("file-cycle");
+    let pkg = root.join("pkg");
+    write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
+    write(&pkg, "mod.rut", "mod a;\nentry fn main() -> i32 { return 7; }\n");
+    write(&pkg, "a.rut", "mod b;\npub fn one() -> i32 { return 1; }\n");
+    std::os::unix::fs::symlink(pkg.join("a.rut").canonicalize().unwrap(), pkg.join("b.rut")).unwrap();
+    let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
+    assert!(err.contains("cyclic mod:"), "{err}");
+    assert!(err.contains("`b` (a/b/b.rut)"), "{err}");
+}
+
+#[test]
 fn missing_child_names_both_spellings() {
     let root = world("missing", false);
     let pkg = root.join("pkg");
@@ -136,19 +223,6 @@ fn missing_child_names_both_spellings() {
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(
         err.contains("`mod grid;` in layout/mod.rut — no `grid/mod.rut` beside it"),
-        "{err}"
-    );
-}
-
-#[test]
-fn a_same_named_file_is_not_a_module_directory() {
-    let root = world("notadir", false);
-    let pkg = root.join("pkg");
-    std::fs::remove_dir_all(pkg.join("layout/grid")).unwrap();
-    write(&pkg, "layout/grid.rut", "pub fn cell() -> i32 { return 2; }\n");
-    let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
-    assert!(
-        err.contains("`mod grid;` in layout/mod.rut — `grid.rut` is a file, not a module directory"),
         "{err}"
     );
 }

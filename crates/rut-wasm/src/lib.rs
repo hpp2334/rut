@@ -133,6 +133,9 @@ fn mount_memory(
             Some(text) => Ok(rut_driver::ChildLookup::Found {
                 text: text.clone(),
                 canon: path,
+                // the map is keyed by LOGICAL mod path — the physical
+                // name is the flavor's directory-form spelling
+                file: "mod.d.rut".to_string(),
             }),
             None => Ok(rut_driver::ChildLookup::Missing),
         }

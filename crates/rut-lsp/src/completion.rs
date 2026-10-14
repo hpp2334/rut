@@ -527,7 +527,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
                 &mut out,
                 CompletionOut::plain(
                     m.name.clone(),
-                    format!("file module — {}", mods::display(&child)),
+                    format!("file module — {}", mods::display_of(idxs, Some(pkg.as_str()), &child)),
                     m.doc.clone(),
                     CompletionKind::Module,
                 ),
@@ -860,7 +860,7 @@ fn position_path_completions(
             &mut out,
             CompletionOut::plain(
                 m.name.clone(),
-                format!("file module — {}", mods::display(&child)),
+                format!("file module — {}", mods::display_of(idxs, pkg, &child)),
                 m.doc.clone(),
                 CompletionKind::Module,
             ),

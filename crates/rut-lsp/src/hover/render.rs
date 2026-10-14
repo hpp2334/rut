@@ -226,10 +226,12 @@ pub(crate) fn render_let(i: &DefIndex, l: &LetDef) -> String {
 }
 
 /// the resolved file-module render — a use-path segment's target (or
-/// any resolved module): the mounted file as the subject, the child
+/// any resolved module): the mounted file as the subject (the REAL
+/// name for a single-file module — the origin's basename), the child
 /// count, provenance
 pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
-    let mut out = code_block(&crate::mods::display(path));
+    let file = crate::mods::display_of(&[i], i.module.as_deref(), path);
+    let mut out = code_block(&file);
     out.push_str("\nfile module");
     match i.mods.len() {
         0 => out.push_str("\nno child modules"),

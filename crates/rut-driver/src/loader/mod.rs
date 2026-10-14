@@ -348,11 +348,14 @@ pub fn rows_mods(
     Ok(rows_body(entries, prefix)?.map(|(_, mods)| mods).unwrap_or_default())
 }
 
-/// The archive-entries child lookup for the mod mount — the same
-/// three-case law the FS lane answers, over entry keys: `NAME/mod.rut`
-/// present, a same-named FILE entry (`NAME.rut`), a `NAME/` prefix
-/// without its `mod.rut`, or nothing. Entries are archive-relative and
-/// canonical — the cycle guard keys on the key itself.
+/// The archive-entries child lookup for the mod mount — the same case
+/// law the FS lane answers, over entry keys: the directory form
+/// `NAME/mod.rut` first, else the single-file `NAME.rut`, both present
+/// the loud ambiguity. A bundle is DIRECTORY-FORM only (the packer
+/// mounts rows; loose file entries never mount as modules), so the
+/// single-file spelling falling alone is the loud missing error — the
+/// dir-form fix named. Entries are archive-relative and canonical —
+/// the cycle guard keys on the key itself.
 fn entry_child_lookup<'a>(
     entries: &'a [(String, Vec<u8>)],
     prefix: &'a str,
@@ -364,13 +367,17 @@ fn entry_child_lookup<'a>(
             format!("{prefix}{parent}/")
         };
         let key = bundle_key(&format!("{base}{name}/mod.rut"))?;
-        if let Ok(text) = read_entry(entries, &key) {
-            return Ok(ChildLookup::Found { text, canon: key });
-        }
         let file = bundle_key(&format!("{base}{name}.rut"))?;
-        if entries.iter().any(|(n, _)| *n == file) {
-            return Ok(ChildLookup::NotADir);
+        let has_dir = read_entry(entries, &key).is_ok();
+        let has_file = entries.iter().any(|(n, _)| *n == file);
+        if has_dir && has_file {
+            return Ok(ChildLookup::Ambiguous);
         }
+        if has_dir {
+            return Ok(ChildLookup::Found { text: read_entry(entries, &key)?, canon: key, file: "mod.rut".to_string() });
+        }
+        // the single-file entry alone: not a module here — bundles are
+        // directory-form (the loud misses name the dir-form fix)
         let dir = bundle_key(&format!("{base}{name}/"))?;
         if entries.iter().any(|(n, _)| n.starts_with(&dir)) {
             return Ok(ChildLookup::NoModRut);

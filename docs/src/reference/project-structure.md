@@ -4,11 +4,11 @@ One directory is one module; its `rut.jsonc` names the exact package it
 answers to and how to reach its surface. The body is a **file module
 tree**: the root module is `mod.rut` beside the manifest, and `mod
 NAME;` declarations in it mount child modules (`NAME/mod.rut` beside
-the declaring file). The manifest is what makes the directory **the
-runnable unit**: `rut run <dir>` (or its packed `.rutbundle`) is the
-only run lane — a loose `.rut` file is not a program ([the rut
-CLI](cli.md)). This page is the manifest grammar, the resolution laws,
-and where everything lives in the toolchain tree.
+the declaring file, or the single-file `NAME.rut`). The manifest is
+what makes the directory **the runnable unit**: `rut run <dir>` (or its
+packed `.rutbundle`) is the only run lane — a loose `.rut` file is not
+a program ([the rut CLI](cli.md)). This page is the manifest grammar,
+the resolution laws, and where everything lives in the toolchain tree.
 
 ## The manifest
 
@@ -126,12 +126,15 @@ pub mod widget;
 
 Mounting is **declared, not discovered**: `mod NAME;` (or `pub mod
 NAME;`) in a file resolves against the sibling `NAME/mod.rut`
-directory. The loader never reads a directory listing — an undeclared
-directory is invisible, a declared child that is missing (or whose
-directory carries no `mod.rut`) is a loud error naming both spellings,
-and a `NAME.rut` file where a module directory is expected says so.
-Mounting is recursive and cycle-guarded by file identity; a repeated
-declaration mounts once.
+directory — or, when there is no such directory, the single-file
+spelling `NAME.rut` in the same directory (both present is a loud
+ambiguity naming both spellings; a single-file child mounts at the
+logical mod path `NAME` exactly as the directory would). The loader
+never reads a directory listing — an undeclared directory is
+invisible, a declared child that is missing under both spellings (or
+whose directory carries no `mod.rut`) is a loud error naming the
+spellings. Mounting is recursive and cycle-guarded by file identity; a
+repeated declaration mounts once.
 
 Visibility is per module file ([Modules and
 visibility](modules-and-visibility.md)): plain declarations are visible
@@ -150,9 +153,10 @@ manifest is the default root (lib parity), and a spelled `entry.type`
 still wins — `calc.d.rut`, `engine.d.rut` and every other flat host
 pkg keep their custom root names. Neither present is the loud no-entry
 error naming both spellings. `mod NAME;` in the surface file mounts
-`NAME/mod.d.rut` **beside the declaring file**, recursively and
+`NAME/mod.d.rut` **beside the declaring file** — or the single-file
+`NAME.rut` when there is no such directory — recursively and
 cycle-guarded, exactly like a body tree with `mod.d.rut` as the module
-file:
+file (both spellings present is the loud ambiguity):
 
 ```
 http_host/

@@ -291,10 +291,13 @@ fn bundle_rows(
 }
 
 /// The archive-entries child lookup for the source lane's mod mount —
-/// the loader's `entry_child_lookup` three-case law mirrored over the
-/// editor's decoded entries: `NAME/mod.rut` present, a same-named
-/// FILE entry (`NAME.rut`), a `NAME/` prefix without its `mod.rut`,
-/// or nothing. Keys are bundle-normalized exactly like the loader's.
+/// the loader's `entry_child_lookup` case law mirrored over the
+/// editor's decoded entries: the directory form `NAME/mod.rut` first,
+/// else the single-file `NAME.rut`, both present the loud ambiguity.
+/// A bundle is DIRECTORY-FORM only (loose file entries never mount as
+/// modules), so the single-file spelling falling alone is the loud
+/// missing error. Keys are bundle-normalized exactly like the
+/// loader's.
 fn entry_child_lookup(
     entries: &[(String, Vec<u8>)],
 ) -> impl FnMut(&str, &str) -> Result<rut_driver::ChildLookup, String> + '_ {
@@ -305,12 +308,21 @@ fn entry_child_lookup(
             format!("{parent}/")
         };
         let mod_key = bundle_key(&format!("{base}{name}/mod.rut"))?;
-        if let Ok(text) = read_entry(entries, &mod_key) {
-            return Ok(rut_driver::ChildLookup::Found { text, canon: mod_key });
+        let file_key = bundle_key(&format!("{base}{name}.rut"))?;
+        let dir_text = read_entry(entries, &mod_key).ok();
+        let has_file = read_entry(entries, &file_key).is_ok();
+        if dir_text.is_some() && has_file {
+            return Ok(rut_driver::ChildLookup::Ambiguous);
         }
-        if read_entry(entries, &bundle_key(&format!("{base}{name}.rut"))?).is_ok() {
-            return Ok(rut_driver::ChildLookup::NotADir);
+        if let Some(text) = dir_text {
+            return Ok(rut_driver::ChildLookup::Found {
+                text,
+                canon: mod_key,
+                file: "mod.rut".to_string(),
+            });
         }
+        // the single-file entry alone: not a module here — bundles are
+        // directory-form (the loud misses name the dir-form fix)
         if entries.iter().any(|(k, _)| k.starts_with(&format!("{base}{name}/"))) {
             return Ok(rut_driver::ChildLookup::NoModRut);
         }

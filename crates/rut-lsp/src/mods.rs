@@ -206,6 +206,29 @@ pub fn display(path: &str) -> String {
     }
 }
 
+/// [`display`] with the REAL file name when the child is mounted as a
+/// single-file module: its index's origin basename (`imp.rut`), never
+/// the directory-form guess. The loader's dir-form spelling stays the
+/// fallback — the child not indexed, or mounted directory-form (whose
+/// origin basename is the flavor's `mod.rut`/`mod.d.rut`).
+pub(crate) fn display_of(idxs: &[&DefIndex], pkg: Option<&str>, child: &str) -> String {
+    let mounted = idxs.iter().copied().find(|i| {
+        mod_path_of(i) == child && pkg.map_or(true, |p| crate::definition::matches_pkg(i, p))
+    });
+    match mounted.and_then(|i| origin_file_name(&i.origin)) {
+        Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
+        _ => display(child),
+    }
+}
+
+/// the origin's `.rut` file name (its last path segment when it spells
+/// one) — `file:///…/imp.rut`, `rut/pouch/mod.rut`, a bundle key;
+/// `core` (and any non-file origin) answers `None`.
+fn origin_file_name(origin: &str) -> Option<String> {
+    let name = origin.rsplit('/').next()?;
+    (name.ends_with(".rut")).then(|| name.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,6 +373,27 @@ mod tests {
     fn display_spells_the_mounted_file() {
         assert_eq!(display(""), "mod.rut");
         assert_eq!(display("layout/grid"), "layout/grid/mod.rut");
+    }
+
+    #[test]
+    fn display_of_spells_a_single_file_child() {
+        // a single-file module's REAL name rides its index's origin
+        // basename; the dir-form guess stays the fallback
+        let mut file_child = mod_index("gadgets", "imp", &[]);
+        file_child.origin = "file:///ws/imp.rut".to_string();
+        let mut dir_child = mod_index("gadgets", "layout", &[]);
+        dir_child.origin = "file:///ws/layout/mod.rut".to_string();
+        let idxs = [&file_child, &dir_child];
+        assert_eq!(display_of(&idxs, Some("gadgets"), "imp"), "imp.rut");
+        // the dir-form child keeps the loader's spelling (its origin
+        // basename is the flavor's `mod.rut`)
+        assert_eq!(display_of(&idxs, Some("gadgets"), "layout"), "layout/mod.rut");
+        // an unindexed child (or a non-file origin — `core`) falls back
+        assert_eq!(display_of(&idxs, Some("gadgets"), "ghost"), "ghost/mod.rut");
+        let mut core = mod_index("core", "prim", &[]);
+        core.origin = "core".to_string();
+        let single = [&core];
+        assert_eq!(display_of(&single, None, "prim"), "prim/mod.rut");
     }
 
     // keep the unused-import lint honest — pub_ty shapes a row the

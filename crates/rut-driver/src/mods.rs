@@ -13,8 +13,11 @@
 //!   The flavor rides the caller: a lib body tree speaks Impl and
 //!   mounts `NAME/mod.rut`; a Decl surface tree (a `type = "host"`
 //!   pkg's `.d.rut` set) speaks Decl and mounts `NAME/mod.d.rut`.
-//!   Missing file / a same-named FILE sibling / a dir without its
-//!   module file are each loud errors naming both spellings.
+//!   Each child has TWO spellings: the directory form
+//!   (`NAME/<child file>`) first, else the single-file form
+//!   (`NAME.rut` beside the declaring file); both present is the loud
+//!   ambiguity. Missing under both, or a directory without its module
+//!   file, is a loud error naming the spellings.
 //! - [`collect_module_set`] — the driver-side collection: every
 //!   mounted file parses to its own `ItemKind::Module` root (children
 //!   are NEVER spliced into the parent's AST) and its declarations are
@@ -57,18 +60,23 @@ pub struct ModSource {
 
 /// What the FS/archive lane answers for one `mod` declaration's child
 /// lookup. The four cases ARE the diagnostics: found (with the file's
-/// canonical identity for the cycle guard), a same-named FILE sibling
-/// (not a module directory), a directory without its module file, and
-/// nothing there at all. The module file's spelling is the caller's
-/// (`mod.rut` for a lib body tree, `mod.d.rut` for a host surface
-/// tree) — the lookup probes that one name.
+/// canonical identity for the cycle guard and its PHYSICAL name for
+/// the diagnostics — `mod.rut`/`mod.d.rut` for a directory-form
+/// child, `NAME.rut` for a single-file one), both spellings present
+/// (the loud ambiguity), a directory without its module file, and
+/// nothing there at all. The directory form's spelling is the
+/// caller's flavor (`mod.rut` for a lib body tree, `mod.d.rut` for a
+/// host surface tree); the single-file form is always `NAME.rut`.
 pub enum ChildLookup {
-    /// `NAME/<child file>` read; `canon` is the file's canonical
-    /// identity (the cycle guard's key — a symlinked alias repeats it)
-    Found { text: String, canon: String },
-    /// a same-named FILE sibling exists — `NAME.rut`, not a module dir
-    NotADir,
-    /// the directory exists but carries no module file
+    /// a child file read; `canon` is its canonical identity (the
+    /// cycle guard's key — a symlinked alias repeats it) and `file`
+    /// the physical name the diagnostics spell
+    Found { text: String, canon: String, file: String },
+    /// both spellings exist — `NAME/<child file>` AND `NAME.rut`;
+    /// which mounts is ambiguous, named loudly
+    Ambiguous,
+    /// the directory exists but carries no module file (and no
+    /// `NAME.rut` beside it)
     NoModRut,
     /// nothing there under either spelling
     Missing,
@@ -84,13 +92,15 @@ pub enum ChildLookup {
 ///
 /// The flavor is explicit: `mode` is the parse mode the tree speaks
 /// ([`Mode::Impl`] for a lib body tree, [`Mode::Decl`] for a host
-/// surface tree) and `child_file` the module file's name the lookup
-/// resolved against (`"mod.rut"` / `"mod.d.rut"`) — the diagnostics
-/// name that spelling.
+/// surface tree) and `child_file` the directory form's module file
+/// name the lookup resolves against (`"mod.rut"` / `"mod.d.rut"`) —
+/// the diagnostics name that spelling (the single-file form spells
+/// itself). The ROOT is always the directory form (`mod.rut`/`mod.d.rut`
+/// beside the manifest) — only child edges carry two spellings.
 ///
 /// A file that fails to PARSE mounts with no children: the syntax
 /// error is the compile's loud half, and decl-walking a broken file
-/// would guess. Every lookup failure is the loud error naming both
+/// would guess. Every lookup failure is the loud error naming the
 /// spellings (the declaration and the file it expected).
 pub fn mount_mod_children(
     root_text: &str,
@@ -105,23 +115,25 @@ pub fn mount_mod_children(
     }
     let mut out = BTreeMap::new();
     let mut visiting = vec![root_canon.to_string()];
-    mount_rec("", &ast, mode, child_file, read, &mut out, &mut visiting)?;
+    mount_rec("", child_file, &ast, mode, child_file, read, &mut out, &mut visiting)?;
     Ok(out)
 }
 
 /// The declaring file's display path, mod-path relative: the root is
-/// the module file, a child `<parent>/<child file>` — the exact
-/// spelling the diagnostics name.
-fn file_display(parent: &str, child_file: &str) -> String {
+/// its own file name, a child `<parent>/<file name>` — the exact
+/// spelling the diagnostics name (a single-file child displays as
+/// `layout/imp.rut`, not the directory-form guess).
+fn file_display(parent: &str, file: &str) -> String {
     if parent.is_empty() {
-        child_file.to_string()
+        file.to_string()
     } else {
-        format!("{parent}/{child_file}")
+        format!("{parent}/{file}")
     }
 }
 
 fn mount_rec(
     parent: &str,
+    parent_file: &str,
     ast: &Ast,
     mode: Mode,
     child_file: &str,
@@ -143,10 +155,10 @@ fn mount_rec(
             continue; // first mount wins (a repeated declaration)
         }
         match read(parent, &name)? {
-            ChildLookup::Found { text, canon } => {
+            ChildLookup::Found { text, canon, file } => {
                 if visiting.contains(&canon) {
                     return Err(format!(
-                        "cyclic mod: `{name}` ({child_path}/{child_file}) is already being mounted"
+                        "cyclic mod: `{name}` ({child_path}/{file}) is already being mounted"
                     ));
                 }
                 visiting.push(canon);
@@ -154,7 +166,7 @@ fn mount_rec(
                 // into its declarations, never splice it here
                 let (child_ast, diags) = parse(&text, mode);
                 if diags.is_empty() {
-                    mount_rec(&child_path, &child_ast, mode, child_file, read, out, visiting)?;
+                    mount_rec(&child_path, &file, &child_ast, mode, child_file, read, out, visiting)?;
                 }
                 visiting.pop();
                 out.insert(
@@ -162,23 +174,23 @@ fn mount_rec(
                     ModSource { path: child_path, vis: *vis, text },
                 );
             }
-            ChildLookup::NotADir => {
+            ChildLookup::Ambiguous => {
                 return Err(format!(
-                    "`mod {name};` in {} — `{name}.rut` is a file, not a module directory \
-                     (expected `{name}/{child_file}`)",
-                    file_display(parent, child_file),
+                    "`mod {name};` in {} — both `{name}/{child_file}` and `{name}.rut` exist; \
+                     the mount is ambiguous — keep one",
+                    file_display(parent, parent_file),
                 ));
             }
             ChildLookup::NoModRut => {
                 return Err(format!(
                     "`mod {name};` in {} — `{name}/` has no `{child_file}`",
-                    file_display(parent, child_file),
+                    file_display(parent, parent_file),
                 ));
             }
             ChildLookup::Missing => {
                 return Err(format!(
                     "`mod {name};` in {} — no `{name}/{child_file}` beside it",
-                    file_display(parent, child_file),
+                    file_display(parent, parent_file),
                 ));
             }
         }
@@ -480,7 +492,14 @@ pub fn mount_rows(
             format!("{parent}/{name}")
         };
         match rows.get(&child) {
-            Some(text) => Ok(ChildLookup::Found { text: text.clone(), canon: child }),
+            // rows are keyed by LOGICAL mod path — the physical name is
+            // unknowable here, so the directory form's spelling stands
+            // in (bundles are directory-form)
+            Some(text) => Ok(ChildLookup::Found {
+                text: text.clone(),
+                canon: child,
+                file: child_file.to_string(),
+            }),
             None => Ok(ChildLookup::Missing),
         }
     };
@@ -517,6 +536,12 @@ mod tests {
 
     impl FakeFs {
         fn lookup(&mut self, parent: &str, name: &str) -> Result<ChildLookup, String> {
+            self.lookup_as(parent, name, "mod.rut")
+        }
+
+        /// the flavor-aware twin: `file` is the physical name a found
+        /// file reports (the Decl test's `mod.d.rut`)
+        fn lookup_as(&mut self, parent: &str, name: &str, file: &str) -> Result<ChildLookup, String> {
             let child = if parent.is_empty() {
                 name.to_string()
             } else {
@@ -525,8 +550,30 @@ mod tests {
             match self.files.get(&child) {
                 Some(text) => {
                     let canon = self.aliases.get(&child).cloned().unwrap_or_else(|| child.clone());
-                    Ok(ChildLookup::Found { text: text.clone(), canon })
+                    Ok(ChildLookup::Found {
+                        text: text.clone(),
+                        canon,
+                        file: file.to_string(),
+                    })
                 }
+                None => Ok(ChildLookup::Missing),
+            }
+        }
+
+        /// the single-file spelling: the file lives at `NAME.rut` (the
+        /// map keyed by that physical shape)
+        fn lookup_file_form(&mut self, parent: &str, name: &str) -> Result<ChildLookup, String> {
+            let dir = if parent.is_empty() {
+                format!("{name}")
+            } else {
+                format!("{parent}/{name}")
+            };
+            match self.files.get(&dir) {
+                Some(text) => Ok(ChildLookup::Found {
+                    text: text.clone(),
+                    canon: dir.clone(),
+                    file: format!("{name}.rut"),
+                }),
                 None => Ok(ChildLookup::Missing),
             }
         }
@@ -570,6 +617,78 @@ mod tests {
         assert_eq!(
             err,
             "`mod grid;` in layout/mod.rut — no `grid/mod.rut` beside it"
+        );
+    }
+
+    #[test]
+    fn a_file_child_mounts_and_the_diagnostics_spell_its_name() {
+        // the single-file spelling: `mod imp;` mounts `imp.rut` — and
+        // a declaration INSIDE it names `imp.rut` as the declaring
+        // file, never the directory-form guess
+        let mut fs = FakeFs {
+            files: BTreeMap::from([
+                ("imp".into(), "pub fn one() -> i32 { return 1; }\nmod deep;\n".into()),
+                ("imp/deep".into(), "pub fn two() -> i32 { return 2; }\n".into()),
+            ]),
+            aliases: BTreeMap::new(),
+        };
+        let mods = mount_mod_children("mod imp;\nentry fn main() {}\n", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            fs.lookup_file_form(p, n)
+        })
+        .unwrap();
+        assert_eq!(mods.keys().collect::<Vec<_>>(), vec!["imp", "imp/deep"]);
+        // the missing-child error inside the file child names ITS file
+        // (mod-path relative: the module's path plus the real name)
+        let mut fs = FakeFs {
+            files: BTreeMap::from([("imp".into(), "mod gone;\n".into())]),
+            aliases: BTreeMap::new(),
+        };
+        let err = mount_mod_children("mod imp;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            fs.lookup_file_form(p, n)
+        })
+        .unwrap_err();
+        assert_eq!(
+            err,
+            "`mod gone;` in imp/imp.rut — no `gone/mod.rut` beside it"
+        );
+    }
+
+    #[test]
+    fn both_spellings_are_the_loud_ambiguity() {
+        let mut fs = FakeFs { files: BTreeMap::new(), aliases: BTreeMap::new() };
+        let err = mount_mod_children("mod imp;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            if p.is_empty() {
+                Ok(ChildLookup::Ambiguous)
+            } else {
+                fs.lookup(p, n)
+            }
+        })
+        .unwrap_err();
+        assert_eq!(
+            err,
+            "`mod imp;` in mod.rut — both `imp/mod.rut` and `imp.rut` exist; \
+             the mount is ambiguous — keep one"
+        );
+        // a nested declaration names the declaring file (here the
+        // single-file child's own spelling)
+        let err = mount_mod_children("mod layout;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            if p == "layout" {
+                Ok(ChildLookup::Ambiguous)
+            } else if p.is_empty() {
+                Ok(ChildLookup::Found {
+                    text: "mod grid;\n".into(),
+                    canon: "layout".into(),
+                    file: "layout.rut".to_string(),
+                })
+            } else {
+                fs.lookup(p, n)
+            }
+        })
+        .unwrap_err();
+        assert_eq!(
+            err,
+            "`mod grid;` in layout/layout.rut — both `grid/mod.rut` and `grid.rut` exist; \
+             the mount is ambiguous — keep one"
         );
     }
 
@@ -631,7 +750,7 @@ mod tests {
             "root",
             Mode::Decl,
             "mod.d.rut",
-            &mut |p, n| fs.lookup(p, n),
+            &mut |p, n| fs.lookup_as(p, n, "mod.d.rut"),
         )
         .unwrap();
         assert_eq!(mods.keys().collect::<Vec<_>>(), vec!["net", "net/tls"]);
@@ -644,7 +763,7 @@ mod tests {
             "root",
             Mode::Decl,
             "mod.d.rut",
-            &mut |p, n| fs.lookup(p, n),
+            &mut |p, n| fs.lookup_as(p, n, "mod.d.rut"),
         )
         .unwrap_err();
         assert_eq!(
@@ -661,7 +780,7 @@ mod tests {
             "root",
             Mode::Decl,
             "mod.d.rut",
-            &mut |p, n| fs.lookup(p, n),
+            &mut |p, n| fs.lookup_as(p, n, "mod.d.rut"),
         )
         .unwrap_err();
         assert_eq!(

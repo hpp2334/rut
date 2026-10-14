@@ -1,7 +1,8 @@
 //! The todolist shape through the binary: `use imp::{ .. };` beside
 //! `mod imp;` in the root — the own-package import lane — runs end to
-//! end and packs (the build lane). Directory-form modules only
-//! (`imp/mod.rut`); `pub` members (import is no visibility bypass).
+//! end and packs (the build lane). Both child spellings ride: the
+//! directory form (`imp/mod.rut`) and the single-file form (`imp.rut`);
+//! `pub` members only (import is no visibility bypass).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -147,5 +148,74 @@ fn a_private_own_member_refuses_at_the_use_line() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("private to module `imp`"), "{stderr}");
     assert!(stderr.contains("--> todolist:1:1"), "{stderr}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The same shape, single-file flavor: `imp.rut` beside the declaring
+/// file mounts at the logical mod path `imp` — the loader's mounting
+/// law's second spelling, end to end through the binary.
+#[test]
+fn the_single_file_module_shape_runs() {
+    let root = scratch("file-form");
+    let dir = root.join("todolist");
+    write(
+        &dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 10, "name": "todolist"}"#,
+    );
+    write(
+        &dir,
+        "mod.rut",
+        r#"use imp::{ Task };
+
+mod imp;
+
+entry fn main() {
+    let t = Task { id: 1, title: "first", done: false };
+    let _ = t.id;
+}
+"#,
+    );
+    write(
+        &dir,
+        "imp.rut",
+        r#"pub struct Task {
+    id: i64;
+    title: str;
+    done: bool;
+}
+"#,
+    );
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <dir>");
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn both_child_spellings_are_the_loud_ambiguity() {
+    // `imp/mod.rut` AND `imp.rut` — the loader refuses, naming both
+    let root = scratch("ambiguous");
+    let dir = root.join("todolist");
+    write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
+    write(&dir, "mod.rut", "mod imp;\nentry fn main() {}\n");
+    write(&dir, "imp/mod.rut", "pub fn one() -> i64 { return 1; }\n");
+    write(&dir, "imp.rut", "pub fn two() -> i64 { return 2; }\n");
+    let out = Command::new(rut())
+        .args(["run", dir.to_str().unwrap()])
+        .output()
+        .expect("run rut run <dir>");
+    assert!(!out.status.success(), "the ambiguous mount refuses");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("both `imp/mod.rut` and `imp.rut` exist"),
+        "{stderr}"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }

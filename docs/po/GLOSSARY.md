@@ -149,7 +149,10 @@ context; after that, use the zh-CN rendering alone.
 | walk | 遍历 | rut-native 的目录遍历（the walk）；the deps walk → deps 遍历；动词 walk → 遍历；对照 offer |
 | offer | offer | 保留不译（`.pkg(..)` 的提供法则，名词）；动词 offer(s) → 提供；first-pkg-wins → 先提供者优先；the offer lane → offer 车道 |
 | first-pkg-wins | 先提供者优先 | 链上的 first-mount-wins（先挂载者胜） |
-| file module | 文件模块 | a `mod NAME;`-declared child: `NAME/mod.rut` beside the declaring file（`mod` 为代码） |
+| file module | 文件模块 | a `mod NAME;`-declared child: `NAME/mod.rut` beside the declaring file, or the single-file `NAME.rut`（`mod` 为代码） |
+| directory form | 目录形式 | the `NAME/mod.rut` child spelling — probed first |
+| single-file form | 单文件形式 | the `NAME.rut` child spelling beside the declaring file; mounts at the logical mod path `NAME` exactly as the directory would |
+| both spellings | 两种拼法 | both forms present is the loud ambiguity — keep one |
 | root module | 根模块 | the package's `mod.rut` beside its manifest |
 | module tree | 模块树 | the mounted file-module set of a package |
 | qualified position | 限定位置 | the `::`-spelled intra-package reference（`layout::Column` stays code）；dot → 点号（`.` 只拼值访问） |

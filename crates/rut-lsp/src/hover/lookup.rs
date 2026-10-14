@@ -170,7 +170,7 @@ fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String>
                 return Some(render_mod(
                     i,
                     m,
-                    &crate::mods::display(&child),
+                    &crate::mods::display_of(idxs, i.module.as_deref(), &child),
                     mounted.map(|c| c.mods.len()),
                 ));
             }

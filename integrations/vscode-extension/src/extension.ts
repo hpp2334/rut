@@ -424,7 +424,8 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
 
 // one package's mod tree: `mod NAME;` declarations are the graph, so
 // the walk follows the wasm-parsed decls (`addDefMod` returns them) —
-// `NAME/mod.rut` beside the declaring file, recursively, depth- and
+// the child edge mounts `NAME/mod.rut` beside the declaring file, then
+// the single-file spelling `NAME.rut`, recursively, depth- and
 // file-budget-capped. A read miss names the dep once (the loader's
 // loud diagnostics, mirrored — never silent missing modules).
 async function mountModTree(
@@ -460,6 +461,8 @@ async function mountModTree(
   } else {
     // a host pkg (or surface-only dev state): no body row — `mod.rut`
     // beside the manifest is probed anyway; a read miss mounts nothing
+    // (the ROOT is always the directory form — only child edges carry
+    // the `NAME.rut` spelling)
     rootUri = vscode.Uri.joinPath(pkgDir, 'mod.rut');
     const bytes = await readFileNullable(rootUri);
     if (bytes === null) {
@@ -479,8 +482,66 @@ async function mountModTree(
       ctx.truncated = true;
       return;
     }
-    const childDir = vscode.Uri.joinPath(pkgDir, decl.name);
-    await mountModTree(ctx, childDir, module, [], depth + 1);
+    await mountChildMod(ctx, pkgDir, module, decl.name, depth);
+  }
+}
+
+// one `mod NAME;` edge: `NAME/mod.rut` beside the declaring file
+// first, then the single-file spelling `NAME.rut`; BOTH is the loader's
+// loud ambiguity (hinted once, mirrored). The found child stamps under
+// the module and its own decls recurse from its physical directory
+// (a file-form child's children mount beside it, not under `NAME/`).
+async function mountChildMod(
+  ctx: WalkCtx,
+  declaringDir: vscode.Uri,
+  module: string,
+  name: string,
+  depth: number
+): Promise<void> {
+  const dirUri = vscode.Uri.joinPath(declaringDir, name, 'mod.rut');
+  const fileUri = vscode.Uri.joinPath(declaringDir, `${name}.rut`);
+  const [dirBytes, fileBytes] = await Promise.all([
+    readFileNullable(dirUri),
+    readFileNullable(fileUri)
+  ]);
+  let childUri: vscode.Uri;
+  let bytes: Uint8Array;
+  if (dirBytes !== null && fileBytes !== null) {
+    hintOnce(
+      `mods:${fileUri.fsPath}`,
+      `rut: ${module} — both ${name}/mod.rut and ${name}.rut exist; keep one`,
+      true
+    );
+    return;
+  } else if (dirBytes !== null) {
+    childUri = dirUri;
+    bytes = dirBytes;
+  } else if (fileBytes !== null) {
+    childUri = fileUri;
+    bytes = fileBytes;
+  } else {
+    return; // nothing under either spelling — the edge mounts nothing
+  }
+  if (depth + 1 > MAX_DEP_DEPTH || ctx.files <= 0) {
+    ctx.truncated = true;
+    return;
+  }
+  ctx.files--;
+  const text = new TextDecoder().decode(bytes);
+  const stamped = ctx.rut.addDefMod(childUri.toString(), module, '', text);
+  if (isEnvelope(stamped)) {
+    hintOnce(`mods:${declaringDir.fsPath}`, `rut: ${module} — ${stamped.error}`, true);
+    return;
+  }
+  const childDir = childUri.fsPath === dirUri.fsPath
+    ? vscode.Uri.joinPath(declaringDir, name)
+    : declaringDir;
+  for (const decl of stamped.decls) {
+    if (ctx.files <= 0) {
+      ctx.truncated = true;
+      return;
+    }
+    await mountChildMod(ctx, childDir, module, decl.name, depth + 1);
   }
 }
 
@@ -830,6 +891,15 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     pkgs.set(folder.uri.fsPath, await folderPkgName(rut, folder.uri));
   }
+  // the BFS frontier: stamped files whose `mod NAME;` edges may carry
+  // single-file children (`NAME.rut` beside the declaring file)
+  const frontier: Array<{
+    folder: vscode.Uri;
+    dir: vscode.Uri;
+    pkg: string;
+    modPath: string;
+    decls: Array<{ name: string; vis: 'pub' | 'mod' }>;
+  }> = [];
   for (const file of files) {
     const bytes = await vscode.workspace.fs.readFile(file);
     const folder = vscode.workspace.getWorkspaceFolder(file)?.uri;
@@ -846,10 +916,57 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
     ) {
       const rel = path.relative(folder.fsPath, path.dirname(file.fsPath));
       const modPath = rel === '' ? '' : rel.split(path.sep).join('/');
-      rut.addDefMod(file.toString(), pkg, modPath, dec.decode(bytes));
+      const stamped = rut.addDefMod(file.toString(), pkg, modPath, dec.decode(bytes));
+      if (!isEnvelope(stamped) && stamped.decls.length > 0) {
+        frontier.push({
+          folder,
+          dir: vscode.Uri.file(path.dirname(file.fsPath)),
+          pkg,
+          modPath,
+          decls: stamped.decls
+        });
+      }
       continue;
     }
     rut.addDef(file.toString(), dec.decode(bytes));
+  }
+  // the single-file children, breadth-first: each stamped edge probes
+  // `NAME.rut` beside the declaring file (the directory-form child is
+  // the path-shape stamp above, so BOTH spellings is the loader's loud
+  // ambiguity — hinted once). A child stamps at (pkg, child path) and
+  // its own decls enqueue — declarations are the graph, bounded by the
+  // dep walk's file budget.
+  let budget = MAX_DEP_FILES;
+  while (frontier.length > 0 && budget > 0) {
+    const { folder, dir, pkg, modPath, decls } = frontier.shift()!;
+    for (const decl of decls) {
+      if (budget <= 0) {
+        break;
+      }
+      const dirChild = vscode.Uri.joinPath(dir, decl.name, 'mod.rut');
+      const fileChild = vscode.Uri.joinPath(dir, `${decl.name}.rut`);
+      if (!fs.existsSync(fileChild.fsPath)) {
+        continue; // no single-file spelling — nothing to stamp here
+      }
+      if (fs.existsSync(dirChild.fsPath)) {
+        hintOnce(
+          `mods:${fileChild.fsPath}`,
+          `rut: ${pkg} — both ${decl.name}/mod.rut and ${decl.name}.rut exist; keep one`,
+          true
+        );
+        continue;
+      }
+      if (nestedManifest(folder.fsPath, fileChild.fsPath)) {
+        continue; // a nested package's own walk owns it
+      }
+      const childPath = modPath === '' ? decl.name : `${modPath}/${decl.name}`;
+      const bytes = await vscode.workspace.fs.readFile(fileChild);
+      const stamped = rut.addDefMod(fileChild.toString(), pkg, childPath, dec.decode(bytes));
+      budget--;
+      if (!isEnvelope(stamped) && stamped.decls.length > 0) {
+        frontier.push({ folder, dir, pkg, modPath: childPath, decls: stamped.decls });
+      }
+    }
   }
 }
 
