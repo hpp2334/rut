@@ -783,7 +783,8 @@ async function main() {
       /^fn hex_val\(c: str\) -> i32 \{/m, 'digest call ret let');
     // for-c counter → i32 — GT: RFC 0007 §1 (the suffixless literal
     // default; the same law the file's `let mut i = 0;` hints ride)
-    hintAt(digestSrc, /for \(let i = 0; i < n; i \+= 3\) \{/, 'i', ': i32', 1,
+    // (std-v10 era: the mut-law sweep spells the header `let mut i`)
+    hintAt(digestSrc, /for \(let mut i = 0; i < n; i \+= 3\) \{/, 'i', ': i32', 1,
       /^    let mut i = 0;/m, 'digest for-c counter');
     // PARAMETER hint at the free call: `hex_val(f"{c}")` → `c:` —
     // GT: the callee's own param name in its decl line
