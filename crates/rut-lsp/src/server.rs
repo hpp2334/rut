@@ -446,9 +446,9 @@ impl<'a> Walk<'a> {
             let idx = deps::index_dep_mod(module, &uri, "", &root_text, Mode::Impl, None, &[]);
             self.insert(Self::mark(idx, direct));
         }
-        let mut dirs = std::collections::BTreeMap::new();
+        let mut files = std::collections::BTreeMap::new();
         let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
-            Ok(fs_child_lookup(dir, &mut dirs, parent, name, "mod.rut"))
+            Ok(fs_child_lookup(dir, &mut files, parent, name, "mod.rut"))
         };
         let canon = p.to_string_lossy().into_owned();
         match rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read) {
@@ -458,8 +458,12 @@ impl<'a> Walk<'a> {
                         break;
                     }
                     self.files -= 1;
-                    let child_file = child_file_path(dir, &path, "mod.rut");
-                    let uri = child_file.to_string_lossy().into_owned();
+                    // the physical file the lookup found — a file-form
+                    // child's real path never re-derives from the mod
+                    // path (`layout/grid` may mount from `grid.rut`)
+                    let child = files.get(&path).cloned()
+                        .unwrap_or_else(|| dir.join(&path).join("mod.rut"));
+                    let uri = child.to_string_lossy().into_owned();
                     let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Impl, None, &[]);
                     self.insert(Self::mark(idx, direct));
                 }
@@ -492,9 +496,9 @@ impl<'a> Walk<'a> {
             return;
         };
         let child_file = rut_driver::decl::DECL_CHILD_FILE;
-        let mut dirs = std::collections::BTreeMap::new();
+        let mut files = std::collections::BTreeMap::new();
         let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
-            Ok(fs_child_lookup(dir, &mut dirs, parent, name, child_file))
+            Ok(fs_child_lookup(dir, &mut files, parent, name, child_file))
         };
         let canon = root_path.to_string_lossy().into_owned();
         match rut_driver::mount_mod_children(&root_text, &canon, Mode::Decl, child_file, &mut read) {
@@ -504,7 +508,11 @@ impl<'a> Walk<'a> {
                         break;
                     }
                     self.files -= 1;
-                    let child = child_file_path(dir, &path, child_file);
+                    // the physical file the lookup found — the mod path
+                    // alone never re-derives it (a file-form child of a
+                    // file-form parent mounts beside it)
+                    let child = files.get(&path).cloned()
+                        .unwrap_or_else(|| dir.join(&path).join(child_file));
                     let uri = child.to_string_lossy().into_owned();
                     let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Decl, None, &[]);
                     self.insert(Self::mark(idx, direct));
@@ -617,19 +625,20 @@ fn resolve_doc_mods_at(file: &Path) -> (Option<PathBuf>, DocMods) {
 /// are the misses. The canonical identity (the cycle guard's key) is
 /// the resolved path; `file` is the physical name the diagnostics
 /// spell. `child_file` is the flavor's spelling (`mod.rut` /
-/// `mod.d.rut`). `dirs` remembers the PHYSICAL directory of every
-/// found file — a file-form parent (`a.rut`) has its children mount
-/// beside it, never under a dir named after the mod path (seeded
-/// empty; the root's dir is `dir` itself).
+/// `mod.d.rut`). `files` remembers the PHYSICAL file of every found
+/// child, keyed by mod path — the index stamps read their URIs from it
+/// (a definition target points at the file that IS), and a file-form
+/// parent's children probe beside it, never under a dir named after
+/// the mod path. Seeded empty; the root's dir is `dir` itself.
 fn fs_child_lookup(
     dir: &Path,
-    dirs: &mut std::collections::BTreeMap<String, PathBuf>,
+    files: &mut std::collections::BTreeMap<String, PathBuf>,
     parent: &str,
     name: &str,
     child_file: &str,
 ) -> rut_driver::ChildLookup {
-    let base = match dirs.get(parent) {
-        Some(d) => d.clone(),
+    let base = match files.get(parent) {
+        Some(f) => f.parent().map(Path::to_path_buf).unwrap_or_else(|| dir.to_path_buf()),
         None if parent.is_empty() => dir.to_path_buf(),
         None => dir.join(parent),
     };
@@ -655,28 +664,13 @@ fn fs_child_lookup(
         .canonicalize()
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|_| probe.0.to_string_lossy().into_owned());
-    if let Some(found_dir) = probe.0.parent() {
-        let child_path = if parent.is_empty() {
-            name.to_string()
-        } else {
-            format!("{parent}/{name}")
-        };
-        dirs.insert(child_path, found_dir.to_path_buf());
-    }
-    rut_driver::ChildLookup::Found { text, canon, file: probe.1 }
-}
-
-/// the mounted child's physical file: the directory form when it
-/// exists (`<path>/<child file>`), else the single-file spelling
-/// (`<path>.rut`) — the URIs definition targets ride point at the
-/// file that IS.
-fn child_file_path(dir: &Path, path: &str, child_file: &str) -> PathBuf {
-    let dir_form = dir.join(path).join(child_file);
-    if dir_form.is_file() {
-        dir_form
+    let child_path = if parent.is_empty() {
+        name.to_string()
     } else {
-        dir.join(format!("{path}.rut"))
-    }
+        format!("{parent}/{name}")
+    };
+    files.insert(child_path, probe.0.clone());
+    rut_driver::ChildLookup::Found { text, canon, file: probe.1 }
 }
 
 impl Backend {
@@ -816,9 +810,9 @@ fn fs_pkg_group(
             vis: rut_ast::ast::Vis::Pub,
         },
     );
-    let mut dirs = std::collections::BTreeMap::new();
+    let mut found = std::collections::BTreeMap::new();
     let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
-        Ok(fs_child_lookup(dir, &mut dirs, parent, name, "mod.rut"))
+        Ok(fs_child_lookup(dir, &mut found, parent, name, "mod.rut"))
     };
     let canon = root_path.to_string_lossy().into_owned();
     if let Ok(mods) = rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read) {
@@ -826,7 +820,11 @@ fn fs_pkg_group(
             let (text, uri) = if path == doc_path {
                 (doc_text.to_string(), doc_uri.to_string())
             } else {
-                (m.text.clone(), file_uri(&child_file_path(dir, &path, "mod.rut")))
+                // the physical file the lookup found — the mod path
+                // alone never re-derives it
+                let child = found.get(&path).cloned()
+                    .unwrap_or_else(|| dir.join(&path).join("mod.rut"));
+                (m.text.clone(), file_uri(&child))
             };
             files.insert(
                 path,

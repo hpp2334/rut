@@ -266,9 +266,9 @@ fn pack_host_root(
         .unwrap_or_else(|_| src_path.clone())
         .to_string_lossy()
         .into_owned();
-    let mut dirs = BTreeMap::new();
+    let mut files = BTreeMap::new();
     let mut lookup = |parent: &str, name: &str| {
-        crate::walk::dir_child_lookup(dir, &mut dirs, parent, name, "mod.d.rut")
+        crate::walk::dir_child_lookup(dir, &mut files, parent, name, "mod.d.rut")
     };
     let mods: BTreeMap<String, rut_driver::ModSource> =
         rut_driver::mount_mod_children(&src, &root_canon, rut_driver::Mode::Decl, "mod.d.rut", &mut lookup)

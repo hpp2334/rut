@@ -27050,13 +27050,6 @@ msgid "Host surface trees"
 msgstr "宿主表面树"
 
 
-#: src/reference/project-structure.md:146
-msgid ""
-"A `type = \"host\"` package has no body — but its `.d.rut` surface organizes as the same kind of tree. The **root surface** follows the same discovery law a body's `mod.rut` does: `mod.d.rut` beside the manifest is the default root (lib parity), and a spelled `entry.type` still wins — `calc.d.rut`, `engine.d.rut` and every other flat host pkg keep their custom root names. Neither present is the loud no-entry error naming both spellings. `mod NAME;` in the surface file mounts `NAME/mod.d.rut` **beside the declaring file**, recursively and cycle-guarded, exactly like a body tree with `mod.d.rut` as the module file:"
-msgstr ""
-"`type = \"host\"` 包没有正文 —— 但它的 `.d.rut` 表面组织成同一类树。**根表面**遵循与正文的 `mod.rut` 相同的发现法则：清单旁的 `mod.d.rut` 是默认根（与 lib 对等），写明的 `entry.type` 仍然优先 —— `calc.d.rut`、`engine.d.rut` 和其他所有扁平宿主包都保留各自的自定义根名。两者都缺则是响亮的“无入口”错误，同时指出两种拼写。表面文件中的 `mod NAME;` **在声明文件旁**挂载 `NAME/mod.d.rut`，递归且防环，与以 `mod.d.rut` 为模块文件的正文树一模一样："
-
-
 #: src/reference/project-structure.md:161
 msgid ""
 "```\n"

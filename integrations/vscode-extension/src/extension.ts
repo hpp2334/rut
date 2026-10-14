@@ -930,12 +930,11 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
     }
     rut.addDef(file.toString(), dec.decode(bytes));
   }
-  // the single-file children, breadth-first: each stamped edge probes
-  // `NAME.rut` beside the declaring file (the directory-form child is
-  // the path-shape stamp above, so BOTH spellings is the loader's loud
-  // ambiguity — hinted once). A child stamps at (pkg, child path) and
-  // its own decls enqueue — declarations are the graph, bounded by the
-  // dep walk's file budget.
+  // the declared children, breadth-first: each stamped edge probes
+  // `NAME.rut` beside the declaring file (BOTH spellings is the
+  // loader's loud ambiguity — hinted once). A child stamps at (pkg,
+  // child path) and its own decls enqueue — declarations are the
+  // graph, bounded by the dep walk's file budget.
   let budget = MAX_DEP_FILES;
   while (frontier.length > 0 && budget > 0) {
     const { folder, dir, pkg, modPath, decls } = frontier.shift()!;
@@ -945,10 +944,9 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
       }
       const dirChild = vscode.Uri.joinPath(dir, decl.name, 'mod.rut');
       const fileChild = vscode.Uri.joinPath(dir, `${decl.name}.rut`);
-      if (!fs.existsSync(fileChild.fsPath)) {
-        continue; // no single-file spelling — nothing to stamp here
-      }
-      if (fs.existsSync(dirChild.fsPath)) {
+      const hasFile = fs.existsSync(fileChild.fsPath);
+      const hasDir = fs.existsSync(dirChild.fsPath);
+      if (hasFile && hasDir) {
         hintOnce(
           `mods:${fileChild.fsPath}`,
           `rut: ${pkg} — both ${decl.name}/mod.rut and ${decl.name}.rut exist; keep one`,
@@ -956,15 +954,38 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
         );
         continue;
       }
-      if (nestedManifest(folder.fsPath, fileChild.fsPath)) {
+      if (!hasFile && !hasDir) {
+        continue; // nothing under either spelling — nothing to stamp here
+      }
+      const childUri = hasFile ? fileChild : dirChild;
+      if (nestedManifest(folder.fsPath, childUri.fsPath)) {
         continue; // a nested package's own walk owns it
       }
       const childPath = modPath === '' ? decl.name : `${modPath}/${decl.name}`;
-      const bytes = await vscode.workspace.fs.readFile(fileChild);
-      const stamped = rut.addDefMod(fileChild.toString(), pkg, childPath, dec.decode(bytes));
+      if (!hasFile) {
+        // the directory form is the path-shape stamp's business —
+        // EXCEPT under a file-form parent, whose child's bare
+        // relative dir is not its mod path; only that correction
+        // spends the budget here
+        const bareRel = path.relative(folder.fsPath, path.dirname(childUri.fsPath));
+        const bare = bareRel === '' ? '' : bareRel.split(path.sep).join('/');
+        if (bare === childPath) {
+          continue;
+        }
+      }
+      const bytes = await vscode.workspace.fs.readFile(childUri);
+      // addDefMod replaces per origin — a dir-form correction overrides
+      // the path-shape stamp's bare-relative answer
+      const stamped = rut.addDefMod(childUri.toString(), pkg, childPath, dec.decode(bytes));
       budget--;
       if (!isEnvelope(stamped) && stamped.decls.length > 0) {
-        frontier.push({ folder, dir, pkg, modPath: childPath, decls: stamped.decls });
+        frontier.push({
+          folder,
+          dir: hasFile ? dir : vscode.Uri.joinPath(dir, decl.name),
+          pkg,
+          modPath: childPath,
+          decls: stamped.decls
+        });
       }
     }
   }

@@ -1039,3 +1039,100 @@ async fn completion_parity_sort_text_and_additional_edits_on_the_wire() {
     assert_eq!(edits[0]["range"]["start"]["character"], 0);
     let _ = remove_ws(fx.base);
 }
+
+// ---- the file-modules lane: a single-file module's children mount
+// beside it, and every stamped URI must spell the REAL file ----
+
+struct FileModFixture {
+    base: std::path::PathBuf,
+    ws: std::path::PathBuf,
+    main_src: String,
+    main_uri: String,
+}
+
+/// the single-file-module dep tree: the dep's `pub mod layout;` mounts
+/// the FILE `layout.rut` (no `layout/` directory), and layout's own
+/// `pub mod grid;` mounts `grid.rut` BESIDE it — mod path
+/// `layout/grid`, physical file `grid.rut`, never `layout/grid.rut`.
+fn write_file_module_fixture(name: &str) -> FileModFixture {
+    let base = std::env::temp_dir().join(format!("rut-lsp-filemod-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let ws = base.join("ws");
+    let dep = base.join("outside"); // a SIBLING of ws — outside the scan root
+    std::fs::create_dir_all(&ws).unwrap();
+    std::fs::create_dir_all(&dep).unwrap();
+    std::fs::write(dep.join("rut.jsonc"), r#"{ "name": "gadgets" }"#).unwrap();
+    std::fs::write(dep.join("mod.rut"), "pub mod layout;\npub fn tag() -> i32 { return 1; }\n").unwrap();
+    std::fs::write(dep.join("layout.rut"), "pub mod grid;\npub fn one() -> i32 { return 1; }\n").unwrap();
+    std::fs::write(
+        dep.join("grid.rut"),
+        "pub struct Cell {\n    w: i32;\n}\npub fn mk() -> Cell { return Cell { w: 1 }; }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        ws.join("rut.jsonc"),
+        r#"{ "name": "wsapp", "deps": { "gadgets": { "path": "../outside" } } }"#,
+    )
+    .unwrap();
+    let main_src = "\
+use gadgets::layout::{ one };
+use gadgets::layout::grid::{ Cell, mk };
+fn main() -> nil {
+    let c: Cell = mk();
+    let _ = c.w + one();
+}
+";
+    std::fs::write(ws.join("mod.rut"), main_src).unwrap();
+    let main_uri = format!("file://{}/mod.rut", ws.display());
+    FileModFixture { base, ws, main_src: main_src.to_string(), main_uri }
+}
+
+/// THE file-modules regression: mod path `layout/grid` rides
+/// `grid.rut` (beside its single-file parent), so the dep walk's index
+/// stamps must carry that real path — a definition there dead-linked
+/// when the URI was re-derived from the mod path (`layout/grid.rut`,
+/// a file that does not exist).
+#[tokio::test]
+async fn file_module_children_define_to_their_real_files() {
+    let fx = write_file_module_fixture("define");
+    let ws_uri = format!("file://{}", fx.ws.display());
+    let mut editor = spawn_at(&ws_uri).await;
+    // the scan + dep walk run off the hot initialize path
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let mut notes = Vec::new();
+    editor
+        .notify(
+            "textDocument/didOpen",
+            json!({"textDocument": {
+                "uri": fx.main_uri, "languageId": "rut", "version": 1, "text": fx.main_src
+            }}),
+        )
+        .await;
+
+    // `Cell` (the annotation) and `mk()` live in `outside/grid.rut`;
+    // `one()` lives in `outside/layout.rut` — each F12 lands in the
+    // file that IS
+    for (needle, occurrence, file) in [("Cell", 1, "grid.rut"), ("mk", 1, "grid.rut"), ("one", 1, "layout.rut")] {
+        let (l, c) = pos_of(&fx.main_src, needle, occurrence);
+        let resp = editor
+            .request(
+                "textDocument/definition",
+                json!({"textDocument": {"uri": fx.main_uri}, "position": {"line": l, "character": c}}),
+                &mut notes,
+            )
+            .await;
+        let locs = resp["result"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{needle}: no definition locations: {resp}"));
+        let uris: Vec<&str> = locs.iter().map(|l| l["uri"].as_str().unwrap()).collect();
+        assert!(
+            uris.iter().any(|u| u.ends_with(&format!("/outside/{file}"))),
+            "{needle} must define into outside/{file}: {uris:?}"
+        );
+        assert!(
+            !uris.iter().any(|u| u.ends_with("layout/grid.rut")),
+            "the mod-path-derived dead link must not appear: {uris:?}"
+        );
+    }
+    let _ = remove_ws(fx.base);
+}

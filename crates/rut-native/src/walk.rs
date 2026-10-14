@@ -520,19 +520,20 @@ fn read_decl_root_module(dir: &str) -> Result<Option<String>, LoadError> {
 /// file's spelling is the caller's flavor: `mod.rut` for a lib body
 /// tree, `mod.d.rut` for a host surface tree.
 ///
-/// `dirs` remembers the PHYSICAL directory of every found file: a
-/// file-form parent (`a.rut`) lives in its own directory — its
-/// children mount beside it, never under a dir named after the mod
-/// path. Seeded empty; the root's dir is `dir` itself.
+/// `files` remembers the PHYSICAL file of every found child, keyed by
+/// mod path: a file-form parent (`a.rut`) lives in its own directory —
+/// its children mount beside it, never under a dir named after the mod
+/// path (the parent's file dir IS the probe base, both forms). Seeded
+/// empty; the root's dir is `dir` itself.
 pub(crate) fn dir_child_lookup(
     dir: &Path,
-    dirs: &mut BTreeMap<String, PathBuf>,
+    files: &mut BTreeMap<String, PathBuf>,
     parent: &str,
     name: &str,
     child_file: &str,
 ) -> Result<ChildLookup, String> {
-    let base = match dirs.get(parent) {
-        Some(d) => d.clone(),
+    let base = match files.get(parent) {
+        Some(f) => f.parent().map(Path::to_path_buf).unwrap_or_else(|| dir.to_path_buf()),
         None if parent.is_empty() => dir.to_path_buf(),
         None => dir.join(parent),
     };
@@ -558,14 +559,12 @@ pub(crate) fn dir_child_lookup(
                 .unwrap_or_else(|_| probe.0.clone())
                 .to_string_lossy()
                 .into_owned();
-            if let Some(found_dir) = probe.0.parent() {
-                let child_path = if parent.is_empty() {
-                    name.to_string()
-                } else {
-                    format!("{parent}/{name}")
-                };
-                dirs.insert(child_path, found_dir.to_path_buf());
-            }
+            let child_path = if parent.is_empty() {
+                name.to_string()
+            } else {
+                format!("{parent}/{name}")
+            };
+            files.insert(child_path, probe.0.clone());
             Ok(ChildLookup::Found { text, canon, file: probe.1 })
         }
         // a file that exists but cannot be read is the loud read
@@ -589,9 +588,9 @@ fn lib_pkg(
         .unwrap_or_else(|_| PathBuf::from(root_file))
         .to_string_lossy()
         .into_owned();
-    let mut dirs = BTreeMap::new();
+    let mut files = BTreeMap::new();
     let mut lookup = |parent: &str, name: &str| {
-        dir_child_lookup(Path::new(dir), &mut dirs, parent, name, "mod.rut")
+        dir_child_lookup(Path::new(dir), &mut files, parent, name, "mod.rut")
     };
     let mods: BTreeMap<String, ModSource> =
         mount_mod_children(&root_text, &root_canon, Mode::Impl, "mod.rut", &mut lookup)
@@ -680,9 +679,9 @@ fn load_entry_module(
                 .unwrap_or_else(|_| PathBuf::from(&key))
                 .to_string_lossy()
                 .into_owned();
-            let mut dirs = BTreeMap::new();
+            let mut files = BTreeMap::new();
             let mut lookup = |parent: &str, name: &str| {
-                dir_child_lookup(Path::new(dir), &mut dirs, parent, name, "mod.d.rut")
+                dir_child_lookup(Path::new(dir), &mut files, parent, name, "mod.d.rut")
             };
             let mods: BTreeMap<String, ModSource> =
                 mount_mod_children(&src_text, &root_canon, Mode::Decl, "mod.d.rut", &mut lookup)
