@@ -69,13 +69,10 @@ source text by design; a partially translated book is a valid book.
 | symbolication | 符号化 | |
 | embed loop | 嵌入循环 | |
 | compiled group | 编译组 | a bundle dep whose `.rutc` rides（对照 source group） |
-| source group | 源码组 | a splice-needed dep / host pkg riding its source file set |
+| source group | 源码组 | a host pkg (or a declared dep whose unit did not link) riding its declaration file set |
 | riding (generic-source) | 承载（泛型源码承载） | the riding law → 承载法则；rides beside the binary → 在二进制旁承载；generic-source riding → 泛型源码承载；a generic-owning pkg → 拥有泛型的 pkg；distinction from rode-along（随行）: riding = a pkg's OWN source beside its compiled binary |
-| six-pin law | 六钉法则 | a bundle-mounted pkg's ledger names its pack-time dev closure — the consumer's closure must contain those names |
 | scope ledger | 作用域台账 | `rut.scopes` stays code；打包期作用域 → 打包期作用域 |
-| splice | 拼接 | splice-needed → 需要拼接；the splice law → 拼接法则 |
 | rebase | 重定基 | packed ids rebase onto the loader's numbering |
-| linkable | 可链接 | the splice law's verdict — Linkable |
 | symbol stripping | 符号剥离 | the `--strip` lane — compile-time name/position stripping |
 | sidecar | 旁车 | the `.rutsym` private symbol table rides beside the bundle；`.rutsym` stays code（与 compiler.md 的"旁车 map 文件"同一词） |
 | symbol table | 符号表 | the private restore half; not a secret |
@@ -101,7 +98,9 @@ source text by design; a partially translated book is a valid book.
 | poisoned entry | 被污染的缓存条目 | the eviction law → 驱逐法则 |
 | mount door | 挂载门 | the loader's mount point where the pin is law — 每次加载都校验 |
 | rode-along group | 随行组 | a url dep's groups riding a consumer's pack |
-| nameability | 可命名性 | the declaration-scoped use law → 可命名性按声明划定（nameability is declaration-scoped）：一个包只能 `use` 自己清单点名的头（`deps` ∪ `peer-deps` ∪ 根上的 `dev-deps` ∪ `core`）；transitive mount ≠ nameable → 传递挂载不等于可命名；D5 stays code |
+| nameability | 可命名性 | the declaration-scoped use law → 可命名性按声明划定（nameability is declaration-scoped）：一个包只能 `use` 自己清单点名的头（`deps` ∪ 根上的 `dev-deps` ∪ `core`）；transitive mount ≠ nameable → 传递挂载不等于可命名；D5 stays code |
+| content identity | 内容标识 | a bundle group's dirname: `name@<16 hex>` — sha256 over the group's own rode source set (`rut.jsonc` + `mod.rut` + `mod.d.rut` + `rut.mods`, fixed order, absent skipped)，`name@<fp16>` stays code；同一源码 ⇒ 同一标识，同一标识只挂载一次（精确去重） |
+| coexistence | 共存 | 同名两个内容标识并肩挂载；多标识之下裸 `use` 头是响亮的歧义——用自己的 `deps` 行固定其一，或经作用域台账绑定 |
 
 First mention of a glossary term in a chapter may carry the English in
 parentheses — 中文（English） — when the mapping is not obvious from

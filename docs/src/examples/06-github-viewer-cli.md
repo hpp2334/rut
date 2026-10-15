@@ -196,9 +196,10 @@ chain = chain
 let compiled = chain.entrypoint(&root).compile()?;
 ```
 
-The walk runs the peer gate over its closure, so json's impl-only
-integration groups mount because the collections are in the closure
-([Dependency kinds](../reference/dependency-kinds.md)). The HTTP
+The walk pulls json's own `deps` along — `strbuild`, `pouch`,
+`nmapset` — so the whole serde surface, wrapper families included, is
+in the closure ([Dependency
+kinds](../reference/dependency-kinds.md)). The HTTP
 bodies install through `http::pkg()` (the reqwest lane);
 the example's own rows are CLI I/O only — `out` (stdout), `eprint`,
 the file pair, and `exit` — declared in
@@ -222,8 +223,9 @@ presence.
 - **The fixture lane is the test gate**: recorded replies keyed on
   method + URL, deterministic chunks on a virtual clock, zero
   network.
-- The peer gate is load-bearing here: mounting the collections is
-  what makes json's `Vec<T>` serde impls compile into this unit.
+- The closure is load-bearing here: json's `Vec<T>` serde wrappers are
+  json's own source, compiled where json compiles — the container
+  packages ride along as json's plain deps.
 
 The lane's declarations live in the std tree; for the runner behind
 `rut run`, see [the rut CLI](../reference/cli.md).

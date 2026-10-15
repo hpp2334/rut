@@ -322,25 +322,25 @@ examples/05-todolist-web/
 
 * **the manifest route.** The native lane mounts the DIRECTORY:
   the Loader over `rut/biz` reads `rut/biz/rut.jsonc` and runs the
-  [dependency-kinds](../../docs/src/reference/dependency-kinds.md) four
+  [dependency-kinds](../../docs/src/reference/dependency-kinds.md) three
   passes (the deps walk — `ui` by its local path row, and through it
-  pouch/nmapset/nmap_host from the pinned jsDelivr bundles — the root's dev-deps, the peer gate,
+  pouch/nmapset/nmap_host from the pinned jsDelivr bundles — then
   compile) FOR REAL — the manifest, not a Rust fn, is the module list.
   The tests prime an offline remote from the committed dist/std
   artifacts (dist/std plays the wire), so the gates never network.
 * **both lanes, one closure.** The wasm lane keeps the `Session`
   I/O-free (wasm hosts mount in memory), so `src/mount.rs` registers
-  the same packages BY HAND — one `register_module` per package, the
-  same `inline` values the manifests state (the registration scope is
-  the pkg name), everything `include_str!`. The mirror is `rut/biz/rut.json`'s mirror and
+  the same packages BY HAND — one `register_module` per package, keyed
+  by the pkg's bare name (the registration scope IS the pkg name),
+  everything `include_str!`. The mirror is `rut/biz/rut.json`'s mirror and
   nothing more; `tests/mount_lane.rs` (the P3 proof) pins both lanes
   to the same mounted-name set, host surface, and compiled binary.
   `web/` rides NO manifest path — both lanes register it by hand
   (the embedder mounts what the closure uses; the `mount_std_core`
-  precedent). INLINE (spliced, deduped by origin — a first-class
-  manifest key with a stated shape reason): `ui` (its generic exports
-  splice by law; the framework's private tables are probed same-unit
-  by the twins).
+  precedent). `ui` is an ordinary linked package — every module
+  links, and its generic exports instantiate owner-anchored (a
+  consumer's `ctx.get<..>` request compiles into ui's unit, one row
+  program-wide; the framework's private tables never leave it).
 * **the import discipline** (acyclic, minimal, law-enforced —
   `tests/app_law.rs`): **biz imports `ui` and nothing else of the
   framework's guts** — exactly the store + the handle types + the

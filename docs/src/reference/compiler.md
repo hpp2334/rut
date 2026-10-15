@@ -108,10 +108,13 @@ the declaring package's compile, so a linked library's
 `make() -> Vec<i64>` and the consumer's own `Vec<i64>` are one row, and
 the binary ships one copy of each instantiation's code.
 
-That leaves `inline = true` for packages whose methods live on class
-bodies (inherent impls cross no surface yet): the graph compiler splices
-their source into every consumer instead of linking them (`ink`, `json`,
-`nmapset`, `strbuild`, `futures`, `http`, `pouch`). See
+There is no splice lane and no `inline` flag left: **every module
+links**. A class's methods cross on the surface's inherent rows (the
+ordinary call boundary — the `ink`-pattern packages over host rows
+compile like any other), and a generic export links owner-anchored,
+the way the section above describes. The swappable std packages
+(`ink`, `pouch`, `flow`, `nmapset`, `json`, `strbuild`, `futures`,
+`http`) are ordinary linked packages. See
 [Project structure and rut.jsonc](project-structure.md).
 
 ## The type lattice

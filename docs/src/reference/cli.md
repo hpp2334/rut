@@ -116,8 +116,8 @@ The three created files, for `rut new hello` — all verbatim:
   // the scaffold wrote them; `rut install` re-pins after a dep edit —
   // the sha256 key is retired from manifest rows). Unused deps are
   // legal: host pkgs merge inert unless the program mounts their pkg,
-  // inline pkgs inline per-using-consumer — this hello (ink only)
-  // runs clean with the full set declared.
+  // and every source pkg compiles only as part of the closure — this
+  // hello (ink only) runs clean with the full set declared.
   "name": "hello",
   "deps": {
     "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/ink.rutbundle" },
@@ -255,13 +255,15 @@ rut pack plugins/server --strip
 Packs a module directory into a **deterministic** `.rutbundle` — same
 input, same bytes. Without `-o`, the output is written beside the input
 as `<dir-name>.rutbundle`. A **lib** pkg packs **compiled**
-(format_version 10): the root and every linkable package ride as
-`.rutc` binaries (bodies + surface — the linking truth), splice-needed
-packages (generic exports, interface-typed parameters, `inline`) and host
-pkgs ride as source groups, and a scope ledger lets any loader rebase
-the binaries onto its own numbering. A root that cannot link is
-refused — share the directory instead. A **`type = "host"` pkg packs
-as a decl root** (its `.d.rut` surface riding as source,
+(format_version 11): the root and every source dep ride as `mod.rutc`
+binaries (bodies + surface — the linking truth) under
+`deps/<name>@<fp16>/` identity directories, host pkgs (and declared
+deps whose unit did not link) ride as declaration file sets, and the
+scope ledger's rows spell the identities so any loader can rebase the
+binaries onto its own numbering. A root that produces no compiled
+program — a `type = "host"` pkg — is refused: pack a source pkg
+instead. A **`type = "host"` pkg packs as a decl root** (its `.d.rut`
+surface riding as source at the canonical `mod.d.rut` name,
 single-package), `--strip` refuses there (`no symbols to strip`), and
 `run` accepts either bundle directly — though running a host bundle
 refuses with intent: bind its rows from the embedder

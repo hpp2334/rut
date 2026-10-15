@@ -3,8 +3,8 @@
 `rut pack mod/` reads a module directory and emits **one file** —
 `mod.rutbundle` — a zip archive carrying the module in one of two root
 kinds, routed by the manifest's `type` key: a **lib** pkg packs
-**compiled** (the root's `.rutc` binary, its scope ledger, and each
-dependency as a compiled `.rutc` group or a source file set), and a
+**compiled** (the root's `mod.rutc` binary, its scope ledger, and each
+dependency as a group under `deps/<name>@<fp16>/`), and a
 `type = "host"` pkg packs as a **decl** root (its `.d.rut` surface
 rides as source; single-package). A bundle is the same contract as the
 directory it was packed from, in one file: the loader mounts it
@@ -12,38 +12,60 @@ exactly like the directory, and the two compile to identical programs.
 
 ## Layout rules
 
-- **Entry names are paths relative to the module root** — `rut.jsonc`,
-  `<pkg>.rutc`, `<pkg>.d.rut`, `<dep>/…` group entries for deps. No
-  directories otherwise, no metadata entries. Unknown extra entries are
-  ignored by loaders (forward compatibility) — except in a decl
-  bundle, where a group entry, a root `.rutc`, or a ledger is a
-  contradiction and refuses (see [the decl root](#the-decl-root-host)).
+- **The archive root carries only the root's own files** — `rut.jsonc`,
+  `rut.scopes`, `mod.rutc`, the root's surface/source/rows. Every dep
+  group rides one level down, at `deps/<name>@<fp16>/…` keyed by the
+  group's **content identity**. No metadata entries; nothing else at
+  the root. Unknown extra entries are ignored by loaders (forward
+  compatibility) — except in a decl bundle, where a group entry, a
+  root `.rutc`, or a ledger is a contradiction and refuses (see [the
+  decl root](#the-decl-root-host)).
+- **Entry names are canonical** — `mod.rutc`, `mod.d.rut`, `mod.rut`,
+  `rut.mods` at both levels. The archive is name-free: whatever a
+  directory grammar spelled (`<pkg>.rutc`, a custom `entry.type`
+  surface), the wire spelling is the canonical one.
 - The manifest's `name` is the package name the bundle answers to — a
-  bare `[a-zA-Z0-9_]+` name, the same law as directory manifests.
-- Includes and splices never escape the archive: there is no outside.
+  bare `[a-zA-Z0-9_]+` name, the same law as directory manifests. A
+  group's manifest `name` must equal its dirname's name half (the
+  identity's `name@`).
+- No entry reaches outside the archive: there is no outside — a
+  bundle's sources compile from the archive's own bytes alone.
 
 ## The compiled root (lib)
 
 ```text
-rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 10
-rut.scopes               the pack-time scope ledger (scope = "spec" rows)
-<pkg>.rutc               the root's compiled binary — bodies + surface
+rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 11
+rut.scopes               the pack-time scope ledger — one `<scope> = "<identity>"`
+                           row per linked module, ascending by scope; every row
+                           spells name@<16 hex> (the group identities; the loader
+                           maps the self-row and engine rows to their bare mounts)
+mod.rutc                 the root's compiled binary — bodies + surface
+mod.d.rut                the root's surface text (humans, LSP), when it declares
+                           one — the canonical name, whatever the directory
+                           grammar spelled
 mod.rut                  the root's generic-bearing source, when its surface
                            exports generics (the riding law, below)
 rut.mods                 the root's module rows, when it has mod children
-<pkg>.d.rut              the root's surface text (humans, LSP), when it declares one
-<dep>/rut.jsonc          per dep group, mixed kinds:
-<dep>/<dep>.rutc           linkable dep → a compiled group (its rut.jsonc rides too);
-                           generic exports ride compiled — the binary carries
-                           the closure's instantiations in its ledger
-<dep>/mod.rut              the group's generic-bearing source, when its surface
-<dep>/group-*.rut …        exports generics (the root module + the peer-deps
-                           group files, verbatim — the riding law, below)
-<dep>/rut.mods             its module rows, when it has mod children
-<dep>/<dep>.d.rut          its surface text, when it declares one
-<leaf>/rut.jsonc           splice-needed dep (the `inline` flag) or a host
-<leaf>/mod.rut             pkg → a source group: the source file set
-<leaf>/group-*.rut …       (the root module + peer groups)
+deps/<name>@<fp16>/      one directory per dep group, keyed by the group's
+                           CONTENT IDENTITY — fp16 is the first 16 hex chars of
+                           the sha256 over the group's own rode source set
+                           (rut.jsonc + mod.rut + mod.d.rut + rut.mods, fixed
+                           order, absent files skipped); same source ⇒ same
+                           dirname, two identities of one name coexist side by
+                           side
+deps/<name>@<fp16>/rut.jsonc   the group's manifest, byte-for-byte
+deps/<name>@<fp16>/mod.rutc    a compiled group (the ordinary case: a source
+                           body the graph linked) — bodies + surface, the
+                           linking truth; generic exports ride compiled — the
+                           binary carries the closure's instantiations in its
+                           ledger
+deps/<name>@<fp16>/mod.d.rut   the group's surface text, when it declares one
+deps/<name>@<fp16>/mod.rut     the group's generic-bearing source, when its
+                           surface exports generics (the riding law, below)
+deps/<name>@<fp16>/rut.mods    its module rows, when it has mod children
+deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
+                           not link) → a declaration file set: no binary, the
+                           source is the interface
 ```
 
 - The **`.rutc` binaries are the linking truth**: bodies plus the
@@ -53,37 +75,36 @@ rut.mods                 the root's module rows, when it has mod children
   text. The `.d.rut` files ride for humans and tooling; the loader
   never reads them.
 - The **scope ledger** names the pack-time scope of every linked module
-  in the closure (engine mounts included). A decoded program's ids
-  spell its pack-time scopes; the loader resolves each through the
-  ledger to the module to ensure and rebases the ids onto its own
-  numbering — pack-time and load-time numbering never have to agree. A
-  reference with no ledger row is refused.
+  in the closure (engine mounts included), and every row spells the
+  owner's content identity. A decoded program's ids spell its pack-time
+  scopes; the loader resolves each through the ledger to the module to
+  ensure and rebases the ids onto its own numbering — pack-time and
+  load-time numbering never have to agree. A reference with no ledger
+  row is refused.
 - **The module rows are the tree's wire form** (`rut.mods` —
-  `<dep>/rut.mods` for a group): one JSON object, mod path → source
-  text, `""` = the root module, one row per mounted child. A package
-  with no mod children writes no rows entry — a flat package packs
-  exactly as before, byte-stable. The section is **additive**: the
-  reader accepts both envelopes, so a bundle packed before file
-  modules (the published std tags among them) keeps loading — that is
-  a loading law, not a transition; a NEW directory whose manifest
-  spells the repealed `entry.lib`/`entry.libs` keys refuses loudly at
-  the manifest walk.
-- **Mixed groups, one classifier**: the same splice law that rules the
-  graph (the `inline` flag — [modules and
-  visibility](modules-and-visibility.md)) decides each package's kind.
-  Refuse, never guess: the packer calls the graph's own classifier,
-  there is no second implementation.
+  `deps/<ident>/rut.mods` for a group): one JSON object, mod path →
+  source text, `""` = the root module, one row per mounted child. A
+  package with no mod children writes no rows entry — a flat package
+  packs exactly as before, byte-stable. The section is **additive**:
+  the reader accepts both envelopes, so a bundle packed before file
+  modules keeps loading — that is a loading law, not a transition; a
+  NEW directory whose manifest spells the repealed
+  `entry.lib`/`entry.libs` keys refuses loudly at the manifest walk.
+- **Group kinds are the packer's one decision**: a source body rides
+  compiled iff the graph linked it; a host body (or a declared dep
+  whose unit did not link) rides its declaration file set. Refuse,
+  never guess: the packer calls the graph's own classifier, there is
+  no second implementation.
 - **Generics ride compiled — and their source rides beside them** (the
   generic-source riding law): instantiation is owned by the declaring
   package, and the pack walk seeds each generic dep with the
   instantiations its consumers spell — the binary's instantiation
   ledger names every `(owner, decl, arguments)` row. A compiled pkg
   whose surface exports an OPEN generic surface (generic fns, generic
-  type exports, generic methods, generic-target impls) ALSO rides the
-  source that serves consumer-spelled shapes: the root module
-  (`mod.rut`) and each `peer-deps` group file, verbatim, beside the
-  binary. The riding source's presence is the loader's dispatch
-  marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay
+  type exports, generic methods) ALSO rides the source that serves
+  consumer-spelled shapes: the root module (`mod.rut`), verbatim,
+  beside the binary. The riding source's presence is the loader's
+  dispatch marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay
   source-free by law. At the consumer's link, a request the ledger
   lacks lowers the ridden text in the consumer's session and compiles
   the monomorphized body with owner = the pkg's spec — one row
@@ -94,10 +115,10 @@ rut.mods                 the root's module rows, when it has mod children
   carries no riding source — re-pack the directory), never mislinks.
   `--strip` refuses the combination: the ridden text would recompile
   clean-named beside mangled binaries.
-- **The root must be linkable** — else `pack: <pkg> is inline — its
-  source is its interface and it cannot be published compiled; share
-  the directory instead`. A root that has nothing to compile is not
-  this refusal: a `type = "host"` pkg packs as the decl root, below.
+- **The root must compile** — a root that produces no compiled program
+  is refused: `pack: <pkg> produced no compiled program — a host pkg
+  (a `.d.rut` surface with no body) cannot be a bundle root; pack a
+  source pkg instead`.
 
 ## The decl root (host)
 
@@ -106,17 +127,16 @@ bundle is the manifest plus that surface, riding as source —
 single-package, no ledger, no groups, nothing to decode:
 
 ```text
-rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 10
-<pkg>.d.rut              the declaration surface — the root itself (the spelled
-                         entry.type), or mod.d.rut when it spells none
+rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 11
+mod.d.rut                the declaration surface — the ONE canonical name,
+                           whatever the directory grammar spelled
 rut.mods                 the surface's mod tree, when it has mod children
 ```
 
-The root file is the spelled `entry.type` when the manifest carries
-one, else `mod.d.rut` beside the manifest — the default root, lib
-parity with a body's `mod.rut`. Old bundles whose manifest spells a
-custom surface name (`http_host.d.rut` and friends) load unchanged
-through that override lane — no re-pack, no version bump.
+The root file rides at the canonical `mod.d.rut` name — the directory
+keeps its own spelling (`entry.type` or the `mod.d.rut` default root),
+and the archive is name-free. There is no override lane at the reader:
+the surface entry is `mod.d.rut`, full stop.
 
 The mod tree rides the same additive rows envelope a lib body tree
 uses (see [layout rules](#layout-rules)): the tree mounts at pack
@@ -144,16 +164,15 @@ what makes a bundle-shaped directory pack unchanged:
 
 ```jsonc
 {
-  // the bundle wire — 10, always; the manifest's `type` routes the
+  // the bundle wire — 11, always; the manifest's `type` routes the
   // root kind (the module-binary version is a different constant)
   "format": "rutbundle",
-  "format_version": 10,
+  "format_version": 11,
   // the package this bundle answers to
   "name": "plugin",
-  // directory-time; the compiled form rides plugin.rutc instead
-  "entry": { "lib": "./plugin.rut" },
 
-  // the whole dep closure rides the archive
+  // the whole dep closure rides the archive, as groups under
+  // deps/<name>@<fp16>/ — this manifest is the closure's map
   "deps": {
     "server": { "path": "../server" }
   }
@@ -165,9 +184,9 @@ not a bundle — which is why the keys are safe to write into every module
 manifest today: `examples/03-plugin/plugin` is a working directory that
 also packs unchanged.
 
-The rest of the manifest grammar — deps tables, `inline`,
-`style` — is defined in [Project structure and
-rut.jsonc](project-structure.md); the dependency semantics are
+The rest of the manifest grammar — the dep tables, `dev-deps`,
+`style`, and the strict-keys law — is defined in [Project structure
+and rut.jsonc](project-structure.md); the dependency semantics are
 [Dependency kinds](dependency-kinds.md).
 
 ## Url deps — bundles by reference
@@ -201,7 +220,7 @@ never fetches).
 Because the manifest rides byte-for-byte, url rows carry into a
 consumer's own `rut pack` output, satisfied by the rode-along groups:
 the archive's groups re-encode from the consumer session's units (one
-`.rutc` path), source groups copy their file set under the new prefix,
+`.rutc` path) or copy their file sets under the new identity prefixes,
 and the same manifest + lock still pack byte-identically. The pack
 refuses, loudly and named, the cases that would emit a bundle the
 loader must reject: an archive source group still declaring `dev-deps`
@@ -211,31 +230,30 @@ not ride.
 
 ## The wire version
 
-`format_version` is 10 — the one bundle wire, both root kinds; the
+`format_version` is 11 — the one bundle wire, both root kinds; the
 manifest's `type` routes lib-compiled vs host-decl. A loader refuses
 any other value **before reading anything else** — refuse, never
-guess: `this toolchain reads bundle format_version 10 only (found {v})
+guess: `this toolchain reads bundle format_version 11 only (found {v})
 — re-pack the directory`.
 
 Every file in the two layouts is part of the package: a bundle that
-dropped peer groups or a declared child module would load partial —
-semantically wrong, so the closure law is checked at the mount.
-Compilation is the delivery contract — one exception, the riding law
-above: a pkg with an open generic surface rides its source beside the
-binary so consumer-spelled shapes stay servable. Source sharing as the
-general contract stays a directory (`rut run <dir>`), as it always was
-outside bundles.
+dropped a declared child module would load partial — semantically
+wrong, so the closure law is checked at the mount. Compilation is the
+delivery contract — one exception, the riding law above: a pkg with an
+open generic surface rides its source beside the binary so
+consumer-spelled shapes stay servable. Source sharing as the general
+contract stays a directory (`rut run <dir>`), as it always was outside
+bundles.
 
-Peer-gated packages publish inside a compiled bundle two ways, per
-their group-kind law: a NON-generic compiled declarer's peer groups
-compile into its binary at pack time (the rows ride the binary; the
-group files do not travel), and a splice-needed declarer publishes as
-a source group, its group files riding beside the entry — the loader's
-peer gate appends by presence exactly as in a directory world
-([Dependency kinds](dependency-kinds.md)). A generic-owning compiled
-declarer rides its group files too (the riding law), and the
-on-demand recompile splices exactly the rows whose peers are in the
-consumer's closure.
+**The groups mirror the manifest.** The archive root is the root's own
+files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the
+content identity, fingerprinted over the group's own rode source set,
+and the reader recomputes the fingerprint and refuses a mismatch (a
+doctored or stale dirname). Same source ⇒ same dirname, so a repack of
+an unchanged group lands at the same directory and the two identities
+of one name coexist side by side (the packer exact-dedups one
+identity's file set — two groups stage to one identity only when their
+bytes are equal).
 
 **The ledger namespaces per archive.** Each archive's scope rows shift
 into a fresh numeric range of the consuming run's world (boot passes
@@ -271,8 +289,8 @@ surface.
 Same directory + same toolchain ⇒ byte-identical `.rutbundle`:
 
 - fixed entry order — `rut.jsonc` first, then the scope ledger, the
-  root's binary, then dep groups in name order (deduplicated,
-  recursive);
+  root's binary, then the root's surface/source/rows, then dep groups
+  in identity order (one group per distinct identity);
 - fixed (zeroed) timestamps;
 - STORE (no compression) — determinism over size.
 
@@ -305,11 +323,15 @@ and version, then every group's decode, then the mount.
 |---|---|
 | zip entry CRC-32 | refuse — corrupt bundle (names the entry) |
 | `rut.jsonc` present, `"format": "rutbundle"` | refuse — not a rut bundle |
-| `format_version` exactly 10 | refuse — `this toolchain reads bundle format_version 10 only (found {v}) — re-pack the directory` |
-| a host root carrying a root `.rutc` | refuse — a host bundle's root is its surface, not a compiled unit |
-| a host root carrying a `rut.scopes` ledger or a group entry | refuse — a host bundle is its surface, single-package |
-| a compiled root without its `rut.scopes` ledger, or a ledger row that is not a bare package name | refuse — a corrupt compiled bundle |
-| `<pkg>.rutc` decode: version, tables, surface ids | refuse — names the entry and the cause |
+| `format_version` exactly 11 | refuse — `this toolchain reads bundle format_version 11 only (found {v}) — re-pack the directory` |
+| a host root carrying a root `mod.rutc` | refuse — a host bundle's root is its surface, not a compiled unit |
+| a host root carrying a `rut.scopes` ledger or any group entry | refuse — a host bundle is its surface, single-package |
+| a compiled root without its `rut.scopes` ledger, or a ledger row that is not a content identity (`name@<16 hex>`) | refuse — a corrupt compiled bundle |
+| an entry under a top-level prefix other than `deps/` | refuse — the archive root carries only the root's own files; dep groups ride at `deps/<name>@<fp16>/` |
+| a `deps/` group directory whose name is not a content identity | refuse — expected `<name>@<16 hex>` |
+| a group's manifest `name` disagreeing with its dirname's name half | refuse — names both |
+| a group dirname's fingerprint disagreeing with the hash of its rode source set | refuse — the dirname and the content disagree |
+| `mod.rutc` decode (root and groups): version, tables, surface ids | refuse — names the entry and the cause |
 | a compiled group's ledger row agrees with its binary's own scope | refuse — corrupt or doctored |
 | a riding source entry that fails to read or decode (UTF-8) | refuse — names the entry; a bad archive never reaches the session |
 | every declared dep satisfied by a group (compiled roots) | refuse — names the missing group |
@@ -318,7 +340,7 @@ and version, then every group's decode, then the mount.
 
 The std tree (`rut/`) ships as **committed** per-package bundles at
 `dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can
-spell (15 today). jsDelivr's gh lane serves repo files at a ref, so the
+spell (16 today). jsDelivr's gh lane serves repo files at a ref, so the
 artifacts ARE the delivery and the publish act is a git tag:
 
 ```jsonc
@@ -337,7 +359,7 @@ in-repo examples' locks are the reference; anti-rot: docs never rot
 pins). The laws:
 
 - **Committed artifacts, immutable tags.** `scripts/pack-std::cjs`
-  packs all 15 (deterministic — same input ⇒ byte-identical, so
+  packs all 16 (deterministic — same input ⇒ byte-identical, so
   freshness is a pure equality gate: `--check` repacks and
   byte-compiles, no network; the retired `--pins` flag is gone — the
   pins live in `rut.lock` now, written by `rut install`, and no
@@ -353,26 +375,29 @@ pins). The laws:
   pkg's spec (one row program-wide, nothing persisted). So the CDN
   lane delivers **host surfaces** (decl bundles), **concrete-class
   libs** (`http`, `ink`, `strbuild` — methods cross on the surface's
-  inherent rows), **and the generic owners** (`pouch`, `nmapset`,
-  `json`, `futures` — `Vec<Todo>`, `Map<K,V>`, `decodeJson<T>`
-  compile at the link from the ridden source). The riding law binds
-  this lane too: a pkg that owns an open generic surface but carries
-  no riding source refuses at the mount (`pouch` owns an open generic
-  surface but its bundle carries no riding source — re-pack the
-  directory), and a bundle-mounted json names its pack-time dev
-  closure in its ledger, so the consumer's closure must contain those
-  names (`pouch`, `nmapset` beside `json` — the six-pin law).
+  inherent rows), **and the generic owners** (`pouch`, `flow`,
+  `nmapset`, `json`, `futures` — `Vec<Todo>`, `Flow<i32>`,
+  `decodeJson<T>` compile at the link from the ridden source). The
+  riding law binds this lane too: a pkg that owns an open generic
+  surface but carries no riding source refuses at the mount (`pouch`
+  owns an open generic surface but its bundle carries no riding
+  source — re-pack the directory). And every bundle is **closed** —
+  a bundle-mounted json carries its `strbuild` + `pouch` + `nmapset`
+  groups inside, so its wrappers' `use` heads resolve wherever it
+  travels (the ordinary closure law).
 - **Duplicate mounts are safe.** Two archives may carry the same group
-  (`json`'s and `http`'s closures both carry `strbuild`):
-  first-mount-wins mounts one body, and the per-archive ledger
-  namespacing keeps every binary's ids resolving through its own
-  archive's rows. Pin sets stay minimal-top anyway — a closed bundle
-  carries the rest.
+  (`json`'s and `http`'s closures both carry `strbuild`): the same
+  identity mounts once (exact dedup), two identities of one name
+  coexist side by side, and the per-archive ledger namespacing keeps
+  every binary's ids resolving through its own archive's rows. A bare
+  `use` head under several identities of one name is the loud
+  ambiguity ([Dependency kinds](dependency-kinds.md)) — pin one of
+  them with your own `deps` row.
 
 ## Loading
 
 A bundle is one more resolution source alongside the directory form —
-same name resolution, same compile, same splice rules:
+same name resolution, same compile, same identity-keyed groups:
 
 ```rust
 // from a file
@@ -385,7 +410,7 @@ After the offer, the package name resolves exactly as the directory form
 does — with one difference: a compiled group's body is the decoded
 program itself. The run assigns it a fresh scope, rebases its packed
 ids through the ledger, and pushes it; source groups offer as sources
-and compile (or splice) exactly as a directory world. Then the normal
+and compile exactly as a directory world. Then the normal
 pipeline takes over ([Loading and the embed loop](loading.md)). Loose
 directories and loose `.rut` files stay valid share layouts; the bundle
 packages them, nothing requires it.

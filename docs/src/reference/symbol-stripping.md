@@ -83,15 +83,14 @@ diagnostics lose fidelity ([Diagnostics](diagnostics.md)).
 ## The mixed-closure refusal
 
 `--strip` needs a **fully-compiled** closure. A package riding as a
-source group (the `inline` flag, or a host declaration) would bind its
-compiled dependencies' surfaces at load — and those names are mangled.
-The packer refuses rather than guesses:
+declaration file set (a host pkg, or a source dep whose unit did not
+link) would bind its compiled dependencies' surfaces at load — and
+those names are mangled. The packer refuses rather than guesses:
 
 ```text
 pack: --strip needs a fully-compiled closure: the source group `boxy`
 binds compiled `util`'s surface at load, whose names would be mangled —
-drop the `inline` flag / restructure the closure, or pack without
-`--strip`
+restructure the closure, or pack without `--strip`
 ```
 
 Host and declaration leaf groups have no compiled dependencies and pass

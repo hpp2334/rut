@@ -114,17 +114,22 @@ constants are `calc`'s.
 
 ## The swappable set
 
+A **rut pkg** below is an ordinary source package — every module
+links, and the published bundle form is compiled (there is no inline
+lane; see [the compiler pipeline](compiler.md)). A **host pkg** is the
+declaration surface whose bodies the embedder binds.
+
 | package | kind | surface |
 |---|---|---|
 | `ink_host` | host pkg | `create_logger(name: str) -> opaque`, `logger_log(log: opaque, level: i32, msg: str)` |
-| `ink` | inline rut pkg | the `Logger` class over `ink_host` |
-| `pouch` | inline rut pkg | the growable sequence `Vec<T>` |
-| `flow` | inline rut pkg | the push pipeline (`Flow<E>`, the wrappers) |
-| `nmap_host` / `nmapset` | host pkg + inline rut pkg | the native key table; `HashMap`/`HashSet` |
-| `json` | inline rut pkg (pulls `strbuild_host`) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and their wrapper families |
-| `strbuild_host` / `strbuild` | host pkg + inline rut pkg | the builder rows; the `StringBuilder` class |
+| `ink` | rut pkg (over `ink_host`) | the `Logger` class |
+| `pouch` | rut pkg | the growable sequence `Vec<T>` |
+| `flow` | rut pkg (`pouch` + `nmapset` as deps) | the push pipeline (`Flow<E>`, the wrappers) |
+| `nmap_host` / `nmapset` | host pkg + rut pkg | the native key table; `HashMap`/`HashSet` |
+| `json` | rut pkg (`strbuild` + `pouch` + `nmapset` as deps) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and the wrapper families |
+| `strbuild_host` / `strbuild` | host pkg + rut pkg | the builder rows; the `StringBuilder` class |
 | `calc` | host pkg | the `Math` namespace |
-| `async_host` / `futures` | host pkg + inline rut pkg | the launcher rows; `launch_future` / `sleep` |
+| `async_host` / `futures` | host pkg + rut pkg | the launcher rows; `launch_future` / `sleep` |
 | `http_host` / `http` | host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg | the std HTTP lanes |
 | `bench-cross` | host pkg | the crossing-tax benchmark rows |
 
@@ -294,8 +299,10 @@ Constants: `Math::PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`,
 
 ### `json` — the serde package
 
-Pure rut, `inline = true`, zero host fns — offering json adds no host
-bindings.
+Pure rut, zero host fns — offering json adds no host bindings. Its
+container wrapper families are json's OWN source, and `strbuild`,
+`pouch`, and `nmapset` are plain `deps` that ride along transitively
+([dependency kinds](dependency-kinds.md)).
 
 ```rut
 fn encodeJson<T requires JsonSerialize>(v: T) -> (?str, ?EncodeJsonError);
@@ -328,9 +335,9 @@ pub interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJ
   | `JsonU64` | `u64` | decode-only — satisfaction is per-interface, so it satisfies `JsonDeserialize` alone (an out-of-`i64`-range producer has no encode row); `get()` unwraps |
   | `SOpt<T requires JsonSerialize>` | `?T` | both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction bound means a decode-only `T` cannot ride it) |
   | `JsonArr<T requires JsonSerialize>` | `[T]` | both; `to_arr()` unwraps |
-  | `JsonVec<T requires JsonSerialize>` | `Vec<T>` | both (the pouch peer group); `to_vec()` unwraps |
-  | `JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>` | `HashMap<K, V>` per key shape | decode-only (the nmapset peer group); `to_map()` unwraps — `JMapBytes` answers the bytes-keys disclosure |
-  | `JSet<T requires JsonDeserialize>` | `HashSet<T>` | decode-only (the nmapset peer group); `to_set()` unwraps |
+  | `JsonVec<T requires JsonSerialize>` | `Vec<T>` | both (over pouch's `Vec<T>`); `to_vec()` unwraps |
+  | `JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>` | `HashMap<K, V>` per key shape | decode-only (over nmapset's `HashMap`); `to_map()` unwraps — `JMapBytes` answers the bytes-keys disclosure |
+  | `JSet<T requires JsonDeserialize>` | `HashSet<T>` | decode-only (over nmapset's `HashSet`); `to_set()` unwraps |
 
 - **Numbers**: `i64` accepts integer lexemes only (overflow/decimal
   lexeme = `WrongType`, never a silent wrap); `f64` parses IEEE-exact in
@@ -344,11 +351,11 @@ pub interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJ
   KeyUnsupported }`; decode details carry `at`/`got`/`expected`, encode
   details carry `at` and the lazily built `$.rows[3].name` path.
 - `decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy.
-- **Ownership**: json owns the interfaces; all container wrappers live
-  in json, gated by peer groups — `JsonVec` activates when `pouch` is
-  anywhere in the consumer's closure, the `JMap*`/`JSet` rows when
-  `nmapset` is ([dependency kinds](dependency-kinds.md)). A consumer
-  without the peers mounts json light.
+- **Ownership**: json owns everything — the interfaces AND the
+  container wrapper families (json's own source); `pouch` and
+  `nmapset` are plain `deps`, so the wrappers' `use` heads resolve in
+  every consumer's closure ([dependency
+  kinds](dependency-kinds.md)).
 - The writer accumulates through `strbuild`'s `StringBuilder`; the reader
   rides the core `str::scan`/`starts_with` primitives and O(1) string
   views.
@@ -449,10 +456,12 @@ For the common accumulator shape no builder is needed at all:
   `rut_std::async_host::pkg()`) on the chain ([embedding](embedding.md)).
   The `rut` CLI offers the tree packages a loose file names by `use`
   ([the rut CLI](cli.md)).
-- `inline = true` packages (ink, pouch, nmapset, json, strbuild,
-  futures) are source-inlined into each consumer — required for
-  class-method surfaces, whose inherent impls cross no module link
-  boundary yet ([the frontend](frontend.md)).
+- The rut packages over host rows (`ink`, `strbuild`, `nmapset`,
+  `futures`, `http`) pull their decl pkg along (`deps`) — the embedder
+  pairs the mount with the bodies (`rut_std::logger::pkg()` et al),
+  exactly ink + `logger::pkg`. `json` and `flow` pull their own
+  wrapper-deps the same way; there is no special compilation lane —
+  every module links ([the compiler pipeline](compiler.md)).
 - Generic exports link on their own: instantiation happens where the
   body lives, consumers request it, and `Vec<i64>` is one type
   program-wide ([the compiler pipeline](compiler.md)).

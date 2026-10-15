@@ -201,7 +201,7 @@ dear rut, hello from a package
 Resolution walks `deps` recursively (a dep's own `deps` mount with
 it), with a cycle guard and first-mount-wins. The walk decides what is
 **mounted**; what a source may **name** is its own manifest's
-business: `deps` ∪ `peer-deps` ∪ `core` (plus `dev-deps` at the
+business: `deps` ∪ `core` (plus `dev-deps` at the
 program root). A head that is mounted but undeclared — riding along on
 someone else's row — refuses with a dedicated diagnostic naming the
 mount edge and the row to add
@@ -242,27 +242,28 @@ to share inside the package, `pub` to cross packages.
 Cross-package references still go through `use` paths
 (`use greet::{ Greeting };`).
 
-## Dependency kinds
+## Dependency tables
 
-Beyond `deps`, a manifest can declare two other relations:
+`deps` is one of two dep tables a manifest carries:
 
-- **`peer-deps`** — a package this one *integrates with* but never
-  pulls: the consumer supplies it, or (with `optional = true`) the
-  integration mounts only if the peer is already in the program's
-  closure. The standard library's `json` package uses this to attach
-  its `Vec`/map serialization impls only for programs that carry the
-  container packages.
+- **`deps`** — the transitively mounted dependencies, and the
+  declaration table (the nameability law above).
 - **`dev-deps`** — mounted only when building/testing the package
-  itself, never for a consumer.
+  itself, never for a consumer; the rows are `path`-only.
+
+There is no third table: the grammar is strict at the top level, so a
+retired key (`peer-deps`) or flag (`inline`) refuses as the unknown
+key it now is, naming the key. The standard library's `json` package
+shows the modern shape — its `Vec`/map serialization wrappers are
+json's OWN source, and the container packages are plain `deps` riding
+along transitively:
 
 ```jsonc
 {
-  "peer-deps": {
-    "pouch": { "path": "../pouch", "optional": true, "lib": "./group-pouch.rut" }
-  },
-
-  "dev-deps": {
-    "pouch": { "path": "../pouch" }
+  "deps": {
+    "strbuild": { "path": "../strbuild" },
+    "pouch":    { "path": "../pouch" },
+    "nmapset":  { "path": "../nmapset" }
   }
 }
 ```

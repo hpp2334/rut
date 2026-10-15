@@ -53,12 +53,18 @@ The keys, all of them:
 | `name` | the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error. |
 | `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. OPTIONAL on a host pkg: when absent, `mod.d.rut` beside the manifest is the root surface (lib parity with a body's `mod.rut`), and when spelled it wins. Neither present is the loud no-entry error naming both spellings. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
 | `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `mod.rut` is an error naming both fixes |
-| `deps` | the transitively mounted dependencies — and the declaration table: a pkg may `use` exactly the heads its manifest names (`deps` ∪ `peer-deps` ∪ `core`, plus `dev-deps` at the program root), so a head riding someone else's `deps` is mounted but not nameable ([Nameability](dependency-kinds.md#nameability)). One source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote `.rutbundle`). Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
-| `peer-deps` | presence-gated peers — descriptors accept `path`, `optional`, `lib` ([Dependency kinds](dependency-kinds.md)) |
-| `dev-deps` | mounted only while building/testing this pkg itself |
-| `inline` | `true` forces source-inlining into every consumer instead of linking (packages whose class methods must resolve at the call site — inherent impls cross no surface yet; generic exports link on their own, their instantiations owned by the declaring package) |
+| `deps` | the transitively mounted dependencies — and the declaration table: a pkg may `use` exactly the heads its manifest names (`deps` ∪ `core`, plus `dev-deps` at the program root), so a head riding someone else's `deps` is mounted but not nameable ([Nameability](dependency-kinds.md#nameability)). One source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote `.rutbundle`) — never both, never neither. Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
+| `dev-deps` | mounted only while building/testing this pkg itself — never in a consumer's world. Descriptors are **`path`-only**: a dev row is directory-time metadata for the declarer's own build, nothing to fetch ([Dependency kinds](dependency-kinds.md)) |
 | `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
 | `style` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
+
+The **grammar is strict at the top level**: the keys above are all of
+them, and any other top-level key refuses naming the key — `manifest:
+unknown key 'whatever'`. There is no forward-compat lane: a typo is a
+manifest error, never a silent ignore, and the retired keys refuse the
+same way (`peer-deps` and `inline` are unknown keys now); `host_scope`
+keeps its dedicated retirement refusal — the registration scope is
+the package name.
 
 The **body keys are repealed**: `entry.lib` and `entry.libs` refuse
 loudly, each error naming the fix — the root module is `mod.rut` beside
@@ -87,15 +93,14 @@ the fix — comments are the prose now.
   directories or file layouts beyond the `mod` declarations the source
   itself spells.
 - **The walk is recursive, with a cycle guard; first mount wins.** An
-  already-mounted name (the embedder's, the root's, or an earlier dep's)
-  is never overwritten — which is what makes peer presence-by-name sound:
-  the consumer's own path for a package always beats the declarer's
-  `path`.
-- **Name mismatch is an error.** A dep whose manifest `name` disagrees
-  with its key fails, naming both.
-- **The cross-table law.** A name in `deps` beside `peer-deps` or
-  `dev-deps` is an error naming both rows; peer + dev together is the
-  sanctioned pairing.
+  already-mounted name (the embedder's, the root's, or an earlier
+  dep's) is never overwritten — the consumer's own path for a package
+  always beats a dep's transitive row.
+- **Name mismatch is an error.** A dep whose manifest `name`
+  disagrees with its key fails, naming both.
+- **The cross-table law.** A name in `deps` beside `dev-deps` is an
+  error naming both rows — a package is either pulled transitively or
+  held for development, never both.
 - **`core` needs no `deps`** — `.compile()` auto-offers it
   unconditionally ([core and the swappable packages](stdlib.md));
   every name still requires `use core::{ .. };` per
@@ -242,14 +247,15 @@ demand:
 | `calc` | host pkg: the math surface — offer `rut_native::tree_pkg("calc")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
 | `ink_host`, `nmap_host`, `async_host`, `bench_cross` | host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std` |
 | `http_host` | host pkg, the surface-tree pilot — the default `mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std` |
-| `ink`, `http`, `strbuild`, `futures` | inline rut wrappers over host rows (`inline = true`) |
-| `pouch` | the sequence library (plain linked package) |
-| `json` | the base pkg with `peer-deps`/`dev-deps` — the reference consumer of [Dependency kinds](dependency-kinds.md) |
+| `ink`, `http`, `strbuild`, `futures` | rut classes over host rows (published compiled — methods cross on the surface's inherent rows) |
+| `pouch` | the growable sequence `Vec<T>` (plain linked package) |
+| `flow` | the push pipeline (`Flow<E>`; its `VecFlow`/`SetFlow` wrappers over `pouch`/`nmapset`) |
+| `json` | the serde pkg — owns the wrapper families over `pouch`/`nmapset`, plain `deps` ([Dependency kinds](dependency-kinds.md)) |
 | `nmapset` | native-key maps/sets over `nmap_host` |
 
-Nothing in the engine knows the swappable packages' names — peers and
-deps are resolved by name from manifests; a host may replace the
-non-`core` set wholesale ([Embedding and native modules](embedding.md)).
+Nothing in the engine knows the swappable packages' names — deps are
+resolved by name from manifests; a host may replace the non-`core`
+set wholesale ([Embedding and native modules](embedding.md)).
 
 ## The playground
 

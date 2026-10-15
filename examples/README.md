@@ -57,57 +57,54 @@ generics rides the source that serves consumer-spelled shapes — so the
 CDN delivers **host surfaces** (the v6 decl bundles), **concrete-class
 libs** (`http` — 06 rides it), **and the generic owners** (`pouch`,
 `nmapset`, `json`, `futures` — the examples' `Vec<Todo>` and
-`Vec<str>` shapes compile from the bundles at the link; a consumer's
-closure must also contain the names a bundle-mounted json's ledger
-spells — `pouch`, `nmapset` beside it
-([dependency kinds](../docs/src/reference/dependency-kinds.md),
+`Vec<str>` shapes compile from the bundles at the link). And every
+bundle is CLOSED: a bundle-mounted json carries its `strbuild` +
+`pouch` + `nmapset` groups inside, so its wrappers resolve wherever it
+travels ([dependency kinds](../docs/src/reference/dependency-kinds.md),
 [module bundles](../docs/src/reference/bundles.md)).
 
-## Packages and manifests — the three dep kinds
+## Packages and manifests — the two dep tables
 
 Every package carries a `rut.jsonc` (the
 [project structure reference](../docs/src/reference/project-structure.md)
-— `03-plugin`'s `plugin/` and `server/` are the in-tree examples). Since
-the dep-kinds batch, a manifest relates to other packages through three
-tables: **`[deps]`** — transitively mounted, unchanged; **`[peer-deps]`**
-— **required by default** (the *consumer* supplies the peer; never
-pulled transitively) with `optional = true` marking the presence-mounted
-kind whose integration file — the descriptor's `lib`, a
-wrapper-family-only
-`.rut` — mounts only when the peer is anywhere in the program's
-closure; **`[dev-deps]`** — mounted only while building the pkg itself,
-never in a consumer's world.
+— `03-plugin`'s `plugin/` and `server/` are the in-tree examples). The
+grammar is strict at the top level — two dep tables and nothing else:
+**`[deps]`** — transitively mounted, and the declaration table (a pkg
+may `use` exactly the heads it names); **`[dev-deps]`** — mounted only
+while building the pkg itself, never in a consumer's world, `path`
+rows only. Any other top-level key refuses naming the key — a retired
+table (`peer-deps`) or flag (`inline`) is an unknown key now.
 
-The motivating case is json's wrapper families over another pkg's
-containers: json cannot grow members on pouch's `Vec` (satisfaction is
-having the members on the type's OWN inherent impl — a container class
-is not json's to extend), so the `Vec<T>`/map/set shapes ride the
-WRAPPER families in json's optional groups (`JsonVec<T>`,
-`JMapStr<V>`, …), and those groups must not force every json consumer
-to mount pouch/nmapset. The pinned grammar:
+The motivating case is still json's wrapper families over another
+pkg's containers: json cannot grow members on pouch's `Vec`
+(satisfaction is having the members on the type's OWN inherent impl —
+a container class is not json's to extend), so the `Vec<T>`/map/set
+shapes ride the WRAPPER families in json's own source (`JsonVec<T>`,
+`JMapStr<V>`, …), and `pouch`/`nmapset` are plain deps riding along
+transitively — the pinned grammar:
 
-```toml
-# rut/json/rut.jsonc
-name = "json"
+```jsonc
+// rut/json/rut.jsonc
+{
+  "name": "json",
 
-[peer-deps]
-pouch    = { path = "../pouch",    optional = true }
-nmapset  = { path = "../nmapset",  optional = true }
-
-[dev-deps]
-pouch    = { path = "../pouch" }
-nmapset  = { path = "../nmapset" }
+  "deps": {
+    "strbuild": { "path": "../strbuild" },
+    "pouch":    { "path": "../pouch" },
+    "nmapset":  { "path": "../nmapset" }
+  }
+}
 ```
 
-(json develops against real pouch/nmapset via the both-kinds pairing;
-its consumers mount json light — absent optional peers are silent,
-and referencing the integration names the fix instead of a bare
-unresolved-name.)
+(every json consumer gets the whole surface; a packed json bundle is
+CLOSED — its `deps/` carries the strbuild + pouch + nmapset groups, so
+the wrappers' `use` heads resolve wherever json travels.)
 
 Decisions this batch landed, visible in the examples:
 
-- **Dedup-by-origin at the splice** — two packages both riding a
-  shared transitive inline pkg now compose instead of colliding, so
+- **Shared transitive deps compose** — two packages both riding a
+  shared transitive pkg mount one body (first-mount-wins) instead of
+  colliding, so
   [`05-todolist-web`](05-todolist-web/)'s `appkit` single-splice
   wrapper retires as a NECESSITY: it was the workaround for the
   duplicate-definition trap; it stays legal (one use, one leaf) and
@@ -115,18 +112,14 @@ Decisions this batch landed, visible in the examples:
   the todolist-restructure batch — the example's packages mount
   separately under the manifest route, appkit proven dead by
   P1/P2/P3.)
-- **Required-by-default peers** — a missing required peer is a loud
-  mount error naming pkg + peer + the fix; silence is reserved for
-  absent *optional* peers, which is the feature.
 - **Bundles pack the manifest as-is** — [`03-plugin`](03-plugin/)'s
-  `plugin/rut.jsonc` rides `format_version = 9`
+  `plugin/rut.jsonc` rides `format_version = 11`
   ([bundles](../docs/src/reference/bundles.md)):
-  peer groups ride
-  the archive; an older loader refuses rather than guess.
+  dep groups ride the archive under their identity dirs; an older
+  loader refuses rather than guess.
 
 Not here, on purpose: registry/index deps and version-range selection
-— `[peer-deps]` is a presence relation over mounted packages, not a
-package manager.
+— `[deps]` resolves by exact name, not a package manager.
 
 ## Capability is structural — the interface law
 
@@ -178,7 +171,7 @@ interface JsonDeserialize { fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonE
 A type satisfies them STRUCTURALLY — `pub fn encode` / `pub fn decode`
 on the type's own inherent impl; the scalar shapes ride the wrapper
 families (`JsonI64(i64)` with encode + decode + `get()`, decode-only
-`JsonU64`, optional `SOpt<T>`, array `JsonArr<T>`, and the pouch peer's
+`JsonU64`, optional `SOpt<T>`, array `JsonArr<T>`, and json's own
 `JsonVec<T>` with `to_vec()`).
 
 The locked rulings, user-visible as spells:
@@ -221,12 +214,10 @@ full entry).
 
 The run recipe:
 
-- **A module dir** (the full world): `[deps]` json by path — add
-  `pouch`/`nmapset` to the same table when you want the `Vec<T>` /
-  map-set wrapper families; they are peer groups, mounted only when
-  the peer is
-  in your closure anyway. `rut run <dir>` runs it, and the peer gate
-  (`assemble_peers`) applies the same gating rules.
+- **A module dir** (the full world): `[deps]` json by path — json's
+  own `deps` pull `strbuild`, `pouch` and `nmapset` along, so the
+  `Vec<T>` / map-set wrapper families are always in the closure.
+  `rut run <dir>` runs it.
 - **The worked example**: `cargo run -p digests`
   ([`02-digest/`](02-digest/)) — its encode half is `Json` satisfying
   json's `JsonSerialize` interface structurally (the member on the
@@ -286,8 +277,8 @@ for zero need). The rulings, user-visible as spells:
   governs builder growth exactly as it governs engine allocations.
 
 json is the reference consumer: its writer's accumulator IS a
-`StringBuilder` field (`[deps] strbuild` — the peer groups are
-untouched, they never touch the builder).
+`StringBuilder` field (`[deps] strbuild` — the wrapper families never
+touch the builder).
 
 The scoreboard is the suite's surprise: on the pkg's own row,
 **rut is AHEAD of QuickJS** — 0.42× net (352.6 vs 842.5 ms; node's
@@ -439,8 +430,8 @@ as a PAIR:
   answers nil, `body` the short drain, `http_read_err` goes non-nil
   and stays (sticky) — never a trap; a failed completer is NOT the
   mid-read path.
-- **`http`** — the rut face over the handles (the ink pattern,
-  `inline = true` — the class-method law), ASYNC-ONLY and
+- **`http`** — the rut face over the handles (the ink pattern — a
+  rut class over host rows, published compiled), ASYNC-ONLY and
   unsuffixed: only the operations that really wait are async points;
   everything else is sync construction sugar. `HttpClient()`
   with the five verbs as BUILD sugars (`get`/`post`/`put`/`patch`/

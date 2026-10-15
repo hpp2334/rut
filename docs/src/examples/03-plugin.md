@@ -171,7 +171,7 @@ plus its deps, loadable as-is and packable unchanged
 // plugin/rut.jsonc
 {
   "format": "rutbundle",
-  "format_version": 10,
+  "format_version": 11,
   "name": "plugin",
 
   "deps": {

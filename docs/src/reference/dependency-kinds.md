@@ -2,20 +2,20 @@
 
 Every package's `rut.jsonc` names the packages it relates to, and the
 *kind* of each relation decides how — and whether — it mounts, and
-whether the declarer may name it. Three tables, one grammar:
+whether the declarer may name it. Two tables, one grammar, strict
+keys:
 
-- **`deps`** — the transitively mounted dependencies.
-- **`peer-deps`** — **required by default**: not transitively pulled;
-  the *consumer* must supply the peer. With `optional = true`, presence
-  in the consumer's closure mounts the integration; absence is inert.
+- **`deps`** — the transitively mounted dependencies — and the
+  declaration table: a pkg may `use` exactly the heads its manifest
+  names.
 - **`dev-deps`** — mounted only when building/testing the package
   itself (the program root), never in a consumer's world.
 
-Peers are a *presence* relation, not a *pull* relation: the gate looks at
-what the program's closure already contains and never adds a package. A
-package is either pulled transitively (`deps`) or required of the
-consumer / held for development (`peer-deps`/`dev-deps`) — never
-both.
+A package is either pulled transitively (`deps`) or held for
+development (`dev-deps`) — never both. There is no third relation:
+the strict-keys law refuses any other top-level key naming the key,
+so a retired table (`peer-deps`) or flag (`inline`) refuses as the
+unknown key it now is — `manifest: unknown key 'peer-deps'`.
 
 ## The grammar
 
@@ -23,43 +23,30 @@ both.
 // rut/json/rut.jsonc — the reference shape
 {
   "name": "json",
-  "entry": { "lib": "./json.rut" },
-  "inline": true,
 
   "deps": {
-    "strbuild": { "path": "../strbuild" }
-  },
-
-  "peer-deps": {
-    "pouch":   { "path": "../pouch",   "optional": true, "lib": "./group-pouch.rut" },
-    "nmapset": { "path": "../nmapset", "optional": true, "lib": "./group-nmapset.rut" }
-  },
-
-  "dev-deps": {
-    "pouch":   { "path": "../pouch" },
-    "nmapset": { "path": "../nmapset" }
+    "strbuild": { "path": "../strbuild" },
+    "pouch":    { "path": "../pouch" },
+    "nmapset":  { "path": "../nmapset" }
   }
 }
 ```
 
 - Keys are bare package names — the same `[a-zA-Z0-9_]+` law as `name`;
   a dep-table key outside it is a path-targeted manifest error.
-- `peer-deps`/`dev-deps` descriptors accept exactly three keys:
-  `path` (string, directory-time), `optional` (the one bool the inline
-  grammar learns), and `lib` (string; the peer-gated integration file).
-  Anything else is the strict-manifest error. `deps` keeps
-  string-valued descriptors and **rejects** `optional` — it has no
-  options.
-- `optional` defaults to `false` — required by default. The zero-dep
-  spelling `{ path = ".." }` is valid in all three tables.
-- A `lib` ending in `.d.rut` is a load error: the integration must be a
-  `.rut` source — a declaration surface does not gate.
-- **The cross-table law**: a name riding `deps` beside `peer-deps`
-  or `dev-deps` is a manifest error naming both rows — *`pouch`
-  appears in both `deps` and `peer-deps` — a package is either
-  pulled transitively or required of the consumer, never both*. Peer +
-  dev together is the sanctioned pairing: integration-if-present for
-  consumers, always-present while developing the package itself.
+- A `deps` descriptor accepts exactly one source: `path` (a directory,
+  relative to this manifest) or `url` (a remote `.rutbundle`,
+  http(s)) — both set, or neither, is the one-descriptor-one-source
+  manifest error. Any other key is the strict-manifest error naming
+  the path (`deps.pouch: unknown key 'feats'`).
+- A `dev-deps` descriptor is **`path`-only** — dev rows mount only for
+  the declarer's own build walk (directories, never fetches); `url`,
+  `optional`, and `lib` refuse as the unknown keys they are.
+- The zero-dep spelling `{ path = ".." }` is valid in both tables.
+- **The cross-table law**: a name riding `deps` beside `dev-deps` is
+  a manifest error naming both rows — *`pouch` appears in both `deps`
+  and `dev-deps` — a package is either pulled transitively or held
+  for development, never both*.
 
 ## Url dependencies — the second source kind
 
@@ -76,9 +63,9 @@ directory:
 
 - **One descriptor, one source**: `path` or `url`, never both, never
   neither — a path-targeted manifest error either way. The url itself
-  must be http(s). `peer-deps`/`dev-deps` stay `path`-only — a peer's
-  path is directory-time metadata for the declarer's own build,
-  nothing to fetch.
+  must be http(s). `dev-deps` stays `path`-only — a dev row is
+  directory-time metadata for the declarer's own build, nothing to
+  fetch.
 - **The manifest row carries no pin.** The old optional `sha256` key
   is **retired** from the descriptor grammar — the strict (directory)
   lane refuses it, naming the fix: `deps.pouch: 'sha256' retired —
@@ -154,72 +141,52 @@ generics **also rides the source that serves consumer-spelled shapes**:
   bundle is a declaration surface (no generics), and a lib of concrete
   classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent
   rows with its whole closure riding inside;
-- **generic owners deliver too** — `pouch`, `nmapset`, `json`,
-  `futures` ride their entry + group source beside the binaries, so
-  a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at the
-  consumer's link**: the ridden text lowers in the consumer's session,
-  the monomorphized bodies register under the declaring pkg's spec (one
-  row program-wide, identity by owner), and nothing persists (`.rutc`
-  caches stay pack-time). The riding law binds both sides: a pkg that
-  owns an open generic surface but carries no riding source refuses at
-  the mount (`pouch` owns an open generic surface but its bundle
-  carries no riding source — re-pack the directory). A bundle-mounted
-  json also names its pack-time dev
-  closure in its ledger, so the consumer's closure must contain those
-  names (`pouch`, `nmapset` beside `json` — the six-pin law).
+- **generic owners deliver too** — `pouch`, `flow`, `nmapset`, `json`,
+  `futures` ride their entry source (the root module) beside the
+  binaries, so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>`
+  compiles **at the consumer's link**: the ridden text lowers in the
+  consumer's session, the monomorphized bodies register under the
+  declaring pkg's spec (one row program-wide, identity by owner), and
+  nothing persists (`.rutc` caches stay pack-time). The riding law
+  binds both sides: a pkg that owns an open generic surface but
+  carries no riding source refuses at the mount (`pouch` owns an open
+  generic surface but its bundle carries no riding source — re-pack
+  the directory). And a bundle is **closed**: every dep its manifest
+  declares rides as an in-archive group, so a bundle-mounted json
+  carries `strbuild`, `pouch`, and `nmapset` inside — the ordinary
+  closure law, nothing to supply at the consumer's side.
 
 ## Semantics
 
 | table | who supplies it | transitive? | missing behavior |
 |---|---|---|---|
 | `deps` | the declarer's own graph | yes — walked recursively | mount error |
-| `peer-deps` (required, the default) | the **consumer's** closure | never pulled | loud resolution error at mount |
-| `peer-deps` with `optional = true` | the consumer's closure, if anywhere | never pulled | inert; referencing the integration is the dedicated missing-peer diagnostic |
 | `dev-deps` | the pkg's own self-build | root only — never walked for a dep | n/a (they exist to be there) |
 
 The tables decide mounting; what a mounted head lets its consumer
 *name* is the declaration-scoped law of
 [Nameability](#nameability) below.
 
-## The mount law — four passes, one gate
+## The mount law — three passes
 
-All loader-owned; the session stays I/O-free and the compile graph never
-learns what a peer is.
+All loader-owned; the session stays I/O-free.
 
-1. **The `deps` walk — unchanged.** Recursive, name order,
-   first-mount-wins, cycle guard, name-mismatch error. While walking,
-   the loader records each mounted package's `peer-deps` into the
-   session's peer registry (it reads every dep's manifest anyway).
+1. **The `deps` walk.** Recursive, name order, first-mount-wins,
+   cycle guard, name-mismatch error. A dep mounted from a url bundle
+   brings its whole closure with it: the archive's groups mount under
+   their content identities (`name@<16 hex>`) — first-mount-wins
+   becomes per-identity exact dedup ([Module
+   bundles](bundles.md), [Coexistence](#coexistence)).
 2. **The dev pass — root only.** The program root's `dev-deps` mount
    exactly like `deps`. A dep's dev table is **never** walked — a
    consumer's world never contains another package's dev table.
    Offering a package to someone else's program
    (`rut_native::dir_pkgs`, or `.pkg(..)` by hand) is the same law:
-   it walks no dev-deps and runs no gate (its peer declarations are
-   still recorded).
-3. **The peer gate — one post-closure pass.** After the full closure
-   exists, for every mounted package and every `peer-deps` entry:
-   - **required**: the peer must resolve in the session, else the D1
-     error. Never auto-pulled.
-   - **optional, present** (any reason): the declarer's group file (the
-     descriptor's `lib`, an impl-only `.rut`) is appended to its
-     `Module.source` — groups in peer-name order after the base. The
-     combined text stays one source string, so every consumer of module
-     sources (the splice, bundles, wasm mounts) is untouched.
-   - **optional, absent**: inert — the group simply never mounts.
-   - **paths**: the program root's own peer paths are read and
-     name-checked even when dev-deps already supplied presence — a
-     broken path is the loud D3 packaging-bug error at the package's own
-     build. A dep's peer paths are never read: presence is by name, so a
-     broken peer path is inert for an optional peer and unreachable for
-     a required one.
-   The gate is post-closure because a peer may mount after its declarer
-   alphabetically; groups add no package names, so one pass is a
-   fixpoint.
-4. **Compile — unchanged.** The graph splices each compilation unit from
-   its origin-deduplicated leaf list (first position wins, topological
-   order preserved); in the no-collision case the composed text is
-   byte-identical to the pre-peer law.
+   it walks no dev-deps.
+3. **Compile.** Every mounted module links — sources compile in
+   dependency post-order, and the walk's yield is the whole program.
+   There is no presence-gated append and no splice lane: nothing
+   changes shape after the walk.
 
 ## Nameability
 
@@ -230,7 +197,7 @@ B's mounted rows — but nameability belongs to the consumer's own
 manifest: a package may `use` exactly the heads it declares itself,
 
 ```text
-deps ∪ peer-deps ∪ (dev-deps, only when the package is the program root) ∪ core
+deps ∪ (dev-deps, only when the package is the program root) ∪ core
 ```
 
 — and there is no ambient tier. `core` rides unconditionally (the
@@ -238,14 +205,12 @@ graph threads the prelude into every unit, and the resolver passes the
 `core` head without a row); every other head must be the consumer's
 own declaration. Over-declaring stays legal — the law bounds uses by
 declarations, never declarations by uses — so a row naming a head the
-source never spells is inert (D4 guards the bad *shape*, a name in two
-tables).
+source never spells is inert.
 
 The dedicated diagnostic is **D5**, and it fires only when a head is
 MOUNTED but UNDECLARED by the consumer — an unmounted head keeps its
-existing shape (`NoModule` for a name nothing offers, D2 for a missing
-optional peer). D5 names the mount edge — who pulled the head in — and
-the fix, in two renderings:
+existing shape (`NoModule` for a name nothing offers). D5 names the
+mount edge — who pulled the head in — and the fix, in two renderings:
 
 - **The walked edge** (the consumer mounts through the dep walk, an
   archive group, or a dev row — there is a first-mount `mounted_by`
@@ -282,97 +247,57 @@ embedded jsonc, `Manifest::lib(name, &[heads])` for an ad-hoc surface
 shape, defaulting the program's declaration host-side to the offered
 lib names.
 
-**Groups are satisfaction-only.** A group file contains the peer
-integration's wrapper families — newtype class decls and their
-inherent impls (and private helpers); it declares no host fns and no
-manifest rows — the base owns the interfaces and every other public
-name, and the wrappers are the group's whole addition. This is what
-keeps the diagnostic matrix total: the only ways to reach the
-integration are through the wrapper names (which `use` paths route
-into the declaring package) or the base package's interfaces, and both
-have dedicated peer-aware diagnostics. A group appended to a module
-with no rut body (a `.d.rut` surface) is a load error — declaration
-surfaces do not gate.
+## Coexistence
 
-## The missing-peer matrix
+A dep group mounted from a bundle carries its **content identity** —
+`name@<16 hex>`, the first 16 hex chars of the sha256 over the group's
+own rode source set (`rut.jsonc`, `mod.rut`, `mod.d.rut`, `rut.mods`;
+fixed order, absent files skipped). Same source ⇒ same identity, and
+the same identity mounts once (exact dedup); two identities of one
+name mount side by side — two builds of `util` in one program without
+colliding. `@` sits outside the `[a-zA-Z0-9_]+` name alphabet, so an
+identity can never collide with a bare package name.
 
-| case | behavior |
-|---|---|
-| required peer absent from the consumer's closure | **D1** — loud at mount: names the package, the peer, and the fix. Not silent, not auto-pulled. |
-| optional peer absent, integration never touched | nothing — silent success; that *is* the feature |
-| optional peer absent, integration referenced | **D2** — the dedicated missing-peer diagnostic; never a bare unresolved name |
-| peer present (any reason) | the integration mounts automatically — presence-based resolution |
-| self-build / dev mode | dev-deps guarantee presence; no missing case exists |
-| a `peer-deps` path that does not resolve | **D3** — loud manifest error at the pkg's own build; for consumers, required ⇒ D1, optional ⇒ inert |
+A bare `use` head stays exact while one identity spells the name;
+under several, it refuses naming them all:
 
-The four diagnostics, verbatim shapes (all load/resolution-time errors,
-never runtime traps):
+```text
+cannot resolve `util` — 2 identities of that name are mounted (`util@0123…`, `util@4567…`); a bare use head is ambiguous under coexistence — mount one of them under its bare name or bind through the bundle's scope ledger
+```
 
-- **D1** — `pkg \`json\` requires the peer \`nmapset\`, and \`nmapset\`
-  is not in this program's closure — peers are not pulled transitively:
-  add "nmapset": { "path": ".." } to your \`rut.jsonc\` \`deps\``
-- **D2** — `cannot resolve \`pouch\` — \`json\`'s pouch integration is
-  not mounted because the optional peer \`pouch\` is absent from this
-  program's closure; add "pouch": { "path": ".." } to your
-  \`rut.jsonc\` \`deps\``. Declaring packages scan in mount order, so
-  the diagnostic is deterministic when several packages declare the same
-  peer. Required peers never reach this path — D1 fires at mount.
-- **D3** — three shapes, all *a packaging bug in json*: cannot read a
-  manifest at the peer path; the manifest there names it `other`; cannot
-  read the group file.
-- **D4** — the cross-table collision (both texts quoted above).
-
-The matrix's four are missing-*peer* shapes. The fifth diagnostic lives
-outside it: **D5** — a head mounted but undeclared by its consumer,
-both renderings quoted verbatim in [Nameability](#nameability).
+— mount one of them under its bare name (your own `deps` row) or bind
+through the bundle's scope ledger ([Module bundles](bundles.md)).
 
 ## Interplay
 
-- **Placement and the gate — the gate precedes the compile.** The peer
-  gate runs at load; the group compiles inside the declaring package's
-  unit. Peer absent ⇒ the group text was never assembled ⇒ the wrapper
-  families are nowhere in the program. Peer present ⇒ the group's
-  wrapper classes and their inherent impls compile in the declaring
-  package — the inherent impl's one home
-  ([Interfaces and dispatch](interfaces.md)).
-- **Structural satisfaction is the consumer-side story**: a consumer's
-  own types satisfy json's interfaces by having the members, whether
-  or not any peer mounted; what the peer gate controls is the
-  wrapper families only — a `JsonVec` spelling with `pouch` absent
-  produces D2, never a mystery.
-- **Binary format untouched.** Group files declare no host fns
-  (no binding obligations appear or vanish), add no binary sections, and
-  touch nothing the verifier reads — the wrapper classes are ordinary
-  program content. A consumer's binary differs only by which wrappers
-  mounted.
 - **Dev-deps are invisible to bundles-as-consumers.** A packed package
-  carries its peer groups; a consumer packing *their* app never pulls
-  the package's dev table (pass 2 is root-only), so dev-only
-  convenience packages cannot leak into consumer worlds
+  carries its closure; a consumer packing *their* app never pulls the
+  package's dev table (pass 2 is root-only), so dev-only convenience
+  packages cannot leak into consumer worlds
   ([Module bundles](bundles.md)).
-- **The LSP completes group impls unconditionally.** Peer gating is a
-  resolution-time concept the language server does not model; it embeds
-  the toolchain packages' sources and never parses manifests. The same
-  accepted divergence covers nameability: the server indexes every dep
-  it can reach (any depth, the root's dev-deps too) and completes heads
-  the compiler's D5 would refuse for an undeclaring consumer — it runs
-  no declaration-scoped filter and raises no D5. Recorded as accepted:
+- **Structural satisfaction is unaffected**: a consumer's own types
+  satisfy json's interfaces by having the members, whether the
+  interface came from a path row or a packed bundle.
+- **The LSP is advisory.** The language server embeds the toolchain
+  packages' sources, never parses manifests, indexes every dep it can
+  reach (any depth, the root's dev-deps too), and completes heads the
+  compiler's D5 would refuse for an undeclaring consumer — it runs no
+  declaration-scoped filter and raises no D5. Recorded as accepted:
   the LSP is advisory; the compiler is the law.
 
-## Consuming a peer-gated package
+## Consuming a compiled package
 
 ```jsonc
-// an app that wants json's pouch integration
+// an app that wants json's whole surface
 {
   "deps": {
-    "json":  { "path": "vendor/json" },
-    // presence is the only requirement
-    "pouch": { "path": "vendor/pouch" }
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/json.rutbundle" }
   }
 }
 ```
 
-The group mounts because `pouch` is anywhere in the closure — no extra
-declaration beyond having the package. Drop the `pouch` row and `json`
-mounts light; the first `use` naming a `JsonVec`-family wrapper
-produces D2 instead of a mystery.
+One row is the whole story: the bundle is closed, and json's own
+`deps` — `strbuild`, `pouch`, `nmapset` — ride inside it as groups, so
+every wrapper family resolves wherever json travels. The same shape
+works with `path` rows into your own tree; the walk pulls the
+declared table transitively either way.
