@@ -9,8 +9,12 @@
 //
 // The base is pouch-free by law (json.rut's base shape): the entry
 // adapters for the builtin structural targets (`[T]`, `str`, `bytes`)
-// compile here, while the Vec family lives in group-pouch.rut and the
-// set sink in group-nmapset.rut, the peer-gated integration groups.
+// compile here over nothing but the push contract. The Vec/set
+// wrapper families (`VecFlow`, `SetFlow` — the old `[peer-deps]`
+// group files) folded into this file's foot as flow's OWN source,
+// with `pouch` / `nmapset` as plain deps (the manifest's rows): no
+// presence gating, every consumer gets the whole surface, and the
+// packed bundle carries the deps closed (the v11 `deps/` wire).
 
 // The entry interface: a source becomes a pipeline. A type satisfies
 // it STRUCTURALLY — by having `into_flow` on its own inherent impl —
@@ -244,4 +248,85 @@ impl BytesFlow {
                 },
             );
     }
+}
+
+// ---- the Vec/set wrapper families (flow's own source) --------------
+//
+// The old `[peer-deps]` group files (group-pouch.rut /
+// group-nmapset.rut) folded here when the peer key retired: the
+// wrappers are plain root-module source, and `pouch` / `nmapset` are
+// plain deps (the manifest's rows), so every consumer gets the whole
+// surface and the packed bundle carries the deps closed (the v11
+// `deps/` wire).
+//
+// THE WRAPPER LAW (the structural-interfaces fork): `Vec` is pouch's
+// class, and satisfaction is having the members on the type's own
+// inherent impl — flow cannot grow members on another module's class.
+// The adapters are the spelled manufacture: `VecFlow(xs).into_flow()`
+// at the entry, `VecFlow<T>::from_flow(pipe)` at the sink (the call
+// site spells it; nothing is auto-inserted).
+
+use pouch::{ Vec };
+
+// The entry AND the sink: a growable Vec walks its backing through the
+// fused loop (the same walk `for..of` fuses), the emit's `false`
+// stopping it; `from_flow` materializes the pipeline into a fresh Vec
+// and wraps it, `collected` unwraps.
+pub class VecFlow<T>(Vec<T>);
+
+impl<T> VecFlow<T> {
+    pub fn into_flow(self) -> Flow<T> {
+        return
+            Flow::new(
+                fn (emit: fn(T) -> bool) -> nil {
+                    for (let x of self.inner) {
+                        if (!emit(x)) {
+                            return;
+                        }
+                    }
+                },
+            );
+    }
+
+    // the sink (the FromFlow member): the EXPLICIT pipeline — the
+    // call site manufactures the wrapper (`VecFlow<T>::from_flow(it)`).
+    // No new type variables (T is the class's own), so no
+    // generic-method support is needed here.
+    pub fn from_flow(it: Flow<T>) -> Self {
+        let out: Vec<T> = Vec::new();
+        it.iterate(fn (x: T) -> bool { out.push(x); return true; });
+        return VecFlow(out);
+    }
+
+    // the wrapper's unwrap: the materialized Vec
+    pub fn collected(self) -> Vec<T> { return self.inner; }
+}
+
+// ---- the mapset sink (over the nmapset dep) ------------------------
+//
+// HashSet materializes from any pipeline through the spelled wrapper.
+// The KEY union bound (`K requires i8 | … | bytes`) already admits
+// exactly the legal keys, so the put loop needs no extra admission.
+//
+// IntoFlow for mapset is DEFERRED, not skipped silently: it requires
+// walking the host table, and nmapset ships no iteration surface —
+// the exact gap json documents (its map-encode note at the wrapper
+// families' foot). When that surface lands (a host walk + keys/
+// entries), json's map encode and flow's IntoFlow grow together in
+// one step.
+
+use nmapset::{ HashSet };
+
+// The sink wrapper (the FromFlow member): the call site spells
+// `SetFlow<T>::from_flow(it)`, `items()` unwraps.
+pub class SetFlow<T>(HashSet<T>);
+
+impl<T> SetFlow<T> {
+    pub fn from_flow(it: Flow<T>) -> Self {
+        let out: HashSet<T> = HashSet();
+        it.iterate(fn (x: T) -> bool { out.put(x); return true; });
+        return SetFlow(out);
+    }
+
+    pub fn items(self) -> HashSet<T> { return self.inner; }
 }

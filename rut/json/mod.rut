@@ -24,14 +24,15 @@
 // - Error types: payloadless enum (kind) + fixed-field struct (details)
 //   — the language has no data-carrying enums.
 // - DEPENDENCY DIRECTION (the serde model): json owns the interfaces;
-//   ALL container wrappers live in json (the peer-gated group files
-//   beside this one); user types satisfy the interfaces STRUCTURALLY —
-//   by spelling the members on their own inherent impls. No runtime
-//   reflection, no registration, no containers -> json.
+//   ALL container wrappers live in json (the wrapper families at the
+//   foot of this file, over the pouch/nmapset deps); user types
+//   satisfy the interfaces STRUCTURALLY — by spelling the members on
+//   their own inherent impls. No runtime reflection, no registration,
+//   no containers -> json.
 // - THE WRAPPER LAW (the structural-interfaces fork): primitives and
 //   bare containers never satisfy anything — they have no members to
 //   have. The wrapper families (`JsonI64`, `JsonF64`, `SOpt`, `JsonArr`,
-//   and the group files' `JsonVec`/`JMap*`/`JSet`) are the spelled,
+//   and the foot-of-file `JsonVec`/`JMap*`/`JSet`) are the spelled,
 //   per-call manufacture: `encodeJson(JsonI64(64))`, never
 //   `encodeJson(64)` — nothing is auto-inserted, forever.
 //
@@ -1442,8 +1443,8 @@ impl<T> SOpt<T> {
 // JsonArr<T> — the structural array row. Encode walks forward; decode
 // counts grammatically (skip_value), rewinds, and decodes into an
 // exactly-sized column — the base is pouch-free by law, so the count
-// comes from the doc, not a growable. (The growable shape is
-// group-pouch's `JsonVec`.)
+// comes from the doc, not a growable. (The growable shape is the
+// foot-of-file `JsonVec`.)
 pub class JsonArr<T requires JsonSerialize | JsonDeserialize>([T]);
 
 impl<T> JsonArr<T> {
@@ -1606,3 +1607,265 @@ fn utf8_err(byte: u32, at: i32) -> ?DecodeJsonError {
     return DecodeJsonError { kind: DecodeErrorKind::InvalidUtf8, at: at as i64, got: f"0x{hs}{ls}", expected: "UTF-8" };
 }
 
+
+// ---- the container wrapper families (json's own source) ------------
+//
+// The old `[peer-deps]` group files (group-pouch.rut / group-nmapset.rut)
+// folded here when the peer key retired: the wrappers are plain
+// root-module source, and `pouch` / `nmapset` are plain deps (the
+// manifest's rows), so every consumer gets the whole surface and the
+// packed bundle carries the deps closed (the v11 `deps/` wire).
+//
+// THE WRAPPER LAW (the structural-interfaces fork): `Vec` is pouch's
+// class, and satisfaction is having the members on the type's own
+// inherent impl — json cannot grow members on another module's class,
+// and a bare container never derives. The wrapper is the spelled
+// manufacture: `encodeJson(JsonVec(rows))` at the entry,
+// `decodeJson<JsonVec<DocRow>>(doc)` at the sink, `to_vec()` unwraps.
+
+use pouch::{ Vec };
+
+// The survey §2.6 matrix rows, wrapped: `Vec<T>` encodes an array,
+// decodes an array — elements through T's own members, per
+// instantiation (the template law: this body monomorphizes per
+// `JsonVec<..>` shape, so `x.encode(w)` / `T::decode(r)` bind the
+// concrete members — nested `JsonVec<JsonVec<i64>>` closes
+// recursively). The bound is the ENCODE direction; the decode member
+// delegates to `T::decode` per instantiation (a decode-only T spells
+// its array shape through `JsonArr`, the base's pouch-free row).
+pub class JsonVec<T requires JsonSerialize | JsonDeserialize>(Vec<T>);
+
+impl<T> JsonVec<T> {
+    pub fn encode(self, mut w: JsonWriter) -> ?EncodeJsonError {
+        w.begin_array();
+        for (let x of self.inner) {
+            let e = x.encode(w);
+            if (e != nil) { return e; }
+        }
+        w.end_array();
+        return nil;
+    }
+
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut v = Vec<T>::new();
+        r.begin_array();
+        while (r.more()) {
+            let (x, e) = T::decode(r);
+            if (e != nil) { return (nil, e); }
+            v.push(x);
+        }
+        r.end_array();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JsonVec(v), nil);
+    }
+
+    // the unwrap: the materialized Vec
+    pub fn to_vec(self) -> Vec<T> { return self.inner; }
+}
+
+// ---- the map/set wrapper family (over the nmapset dep) -------------
+//
+// One wrapper per KEY SHAPE (`JMapStr`, `JMapI64`, `JMapBool`,
+// `JMapU64`, `JMapBytes`) plus `JSet<T>`: the KEY is a primitive, and
+// primitives carry no members, so the key-text parse cannot dispatch
+// through the type — it is baked into the wrapper. The key law (the
+// survey §2.6's prim-key policy): `str` verbatim, integers decimal,
+// `bool` true/false; an unparsable key text is WrongType naming the
+// text; duplicates that normalize together ("01" and "1") are LAST
+// WINS — nmapset's `put` semantics. (`f64` keys have no row: the union
+// bound never admitted them — floats have no stable equality contract
+// — so there was never a shape to wrap.) `bytes` keys have no JSON
+// spelling: the wrapper exists so the LAW is testable — every decode
+// answers WrongType with the disclosure in `expected`.
+//
+// The value lane is V's OWN `decode` dispatch, per instantiation: the
+// scalar values ride json's wrapper shapes (`JsonI64`, `JsonU64`, …)
+// — a bare primitive value cannot satisfy the bound, so
+// `JMapStr<JsonU64>` is the u64-valued spelling, `to_map()` answers
+// `HashMap<str, JsonU64>`, and each entry reads through its own
+// `get()`.
+//
+// THE ENCODE HALF IS NOT LANDED — disclosed, not dropped silently:
+// json can encode a map only by WALKING it, and nmapset ships no
+// iteration surface (`keys`/`values`/`iter`). An nmapset iteration
+// surface is the recorded menu item, and the encode wrappers land
+// with it. The decode half is functional.
+
+use nmapset::{ HashMap, HashSet };
+
+// ---- the key-text folds (§2.6), one private fn per key shape ------
+
+// §2.6's key-text law is LENIENT where JSON values are strict: `"01"`
+// and `"1"` normalize together (last wins), so the fold skips no
+// grammar and accepts leading zeros — only the width bound is
+// enforced (pre-checked, never wraps)
+fn key_i64(t: str) -> ?i64 {
+    let n = t.len();
+    if (n == 0) { return nil; }
+    let mut i: i32 = 0;
+    let mut neg = false;
+    let first = t.slice(0, 1).code() as i32;
+    if (first == 0x2D) {
+        neg = true;
+        i = 1;
+        if (n == 1) { return nil; }
+    }
+    let mut acc: i64 = 0;
+    while (i < n) {
+        let c = t.slice(i, i + 1).code() as i32;
+        if (c < 0x30 || c > 0x39) { return nil; }
+        if (acc < -922337203685477580i64) { return nil; }
+        acc = acc * 10;
+        if (acc < -9223372036854775807i64 - 1i64 + (c - 0x30) as i64) { return nil; }
+        acc = acc - (c - 0x30) as i64;
+        i += 1;
+    }
+    if (!neg && acc == -9223372036854775807i64 - 1i64) { return nil; }
+    if (neg) { return acc; }
+    return -acc;
+}
+
+// the u64 key fold — the base's gnu64 (the same law)
+fn key_u64(t: str) -> ?u64 {
+    return gnu64(t);
+}
+
+fn key_bool(t: str) -> ?bool {
+    if (t == "true") { return true; }
+    if (t == "false") { return false; }
+    return nil;
+}
+
+// the WrongType mint for an unparsable key text (the failure law:
+// the text names itself; `at` rides the reader's position)
+fn map_err(at: i64, kt: str, want: str) -> DecodeJsonError {
+    return DecodeJsonError {
+        kind: DecodeErrorKind::WrongType,
+        at: at,
+        got: kt,
+        expected: want,
+    };
+}
+
+// ---- the family ----------------------------------------------------
+
+pub class JMapStr<V requires JsonDeserialize>(HashMap<str, V>);
+
+impl<V> JMapStr<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<str, V>::new();
+        r.begin_object();
+        while (r.more()) {
+            let kt = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            // verbatim (escaped by the reader's string law already)
+            let kk: str = kt;
+            let (v, e) = V::decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = m.put(kk, v);
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JMapStr(m), nil);
+    }
+    pub fn to_map(self) -> HashMap<str, V> { return self.inner; }
+}
+
+pub class JMapI64<V requires JsonDeserialize>(HashMap<i64, V>);
+
+impl<V> JMapI64<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<i64, V>::new();
+        r.begin_object();
+        while (r.more()) {
+            let kt = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            let k = key_i64(kt);
+            if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
+            let kk: i64 = k;
+            let (v, e) = V::decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = m.put(kk, v);
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JMapI64(m), nil);
+    }
+    pub fn to_map(self) -> HashMap<i64, V> { return self.inner; }
+}
+
+pub class JMapBool<V requires JsonDeserialize>(HashMap<bool, V>);
+
+impl<V> JMapBool<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<bool, V>::new();
+        r.begin_object();
+        while (r.more()) {
+            let kt = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            let k = key_bool(kt);
+            if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
+            let kk: bool = k;
+            let (v, e) = V::decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = m.put(kk, v);
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JMapBool(m), nil);
+    }
+    pub fn to_map(self) -> HashMap<bool, V> { return self.inner; }
+}
+
+pub class JMapU64<V requires JsonDeserialize>(HashMap<u64, V>);
+
+impl<V> JMapU64<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut m = HashMap<u64, V>::new();
+        r.begin_object();
+        while (r.more()) {
+            let kt = r.next_key();
+            if (r.failed()) { return (nil, r.error()); }
+            let k = key_u64(kt);
+            if (k == nil) { return (nil, map_err(r.here() as i64, kt, "a key this map's key type can parse")); }
+            let kk: u64 = k;
+            let (v, e) = V::decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = m.put(kk, v);
+        }
+        r.end_object();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JMapU64(m), nil);
+    }
+    pub fn to_map(self) -> HashMap<u64, V> { return self.inner; }
+}
+
+pub class JMapBytes<V requires JsonDeserialize>(HashMap<bytes, V>);
+
+impl<V> JMapBytes<V> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        r.begin_object();
+        let kt = r.next_key();
+        if (r.failed()) { return (nil, r.error()); }
+        return (nil, map_err(r.here() as i64, kt, "a key type JSON can spell (bytes keys have no JSON spelling)"));
+    }
+    pub fn to_map(self) -> HashMap<bytes, V> { return self.inner; }
+}
+
+pub class JSet<T requires JsonDeserialize>(HashSet<T>);
+
+impl<T> JSet<T> {
+    pub fn decode(mut r: JsonReader) -> (?Self, ?DecodeJsonError) {
+        let mut s = HashSet<T>::new();
+        r.begin_array();
+        while (r.more()) {
+            let (x, e) = T::decode(r);
+            if (e != nil) { return (nil, e); }
+            let _ = s.put(x);
+        }
+        r.end_array();
+        if (r.failed()) { return (nil, r.error()); }
+        return (JSet(s), nil);
+    }
+    pub fn to_set(self) -> HashSet<T> { return self.inner; }
+}

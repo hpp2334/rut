@@ -1,23 +1,25 @@
 {
   // flow — the push-pipeline package: `Flow<E>` chains, the
-  // `IntoFlow`/`FromFlow` entry/sink interfaces. The base owns every
-  // public name (the class, the interfaces, the builtin structural
-  // adapters) and is pouch-free by law.
+  // `IntoFlow`/`FromFlow` entry/sink interfaces. The base owns the
+  // class, the interfaces, and the builtin structural adapters; the
+  // Vec/set wrapper families (`VecFlow`, `SetFlow` — the old
+  // `[peer-deps]` group files) folded into `mod.rut` as flow's own
+  // source, and `pouch` / `nmapset` are plain deps. The base's own
+  // code stays pouch-free by law (the builtin adapters ride `[T]` /
+  // `str` / `bytes`); only the wrapper families below reach into the
+  // deps. No presence gating, no light mount: every consumer gets the
+  // whole surface, and the packed bundle is CLOSED — its `deps/`
+  // carries the pouch + nmapset groups under identity dirs (the v11
+  // wire), so the wrappers' `use` heads resolve wherever flow travels.
   //
   // Publishes COMPILED (the linkable-classes phase), mirroring json's
   // manifest shape; the generic-source riding law carries the class
   // sources beside the binary, so a consumer's `Flow<i32>` compiles at
   // the consumer's link.
-  //
-  // The old `[peer-deps]` wrapper groups (VecFlow, SetFlow) retired
-  // with the key: the grammar carries `deps` + `dev-deps` only now, and
-  // presence-gated group mounting is gone. The dev-deps keep flow's own
-  // build closure intact.
   "format": "rutbundle",
   "format_version": 11,
   "name": "flow",
-    "deps": {},
-  "dev-deps": {
+  "deps": {
     "pouch": {
       "path": "../pouch"
     },

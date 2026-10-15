@@ -10,19 +10,21 @@
   // ledger carries the instantiations), so the container rows travel
   // inside json's binary.
   //
-  // The old `[peer-deps]` wrapper groups (JsonVec, JMap*, JSet) retired
-  // with the key: the grammar carries `deps` + `dev-deps` only now, and
-  // presence-gated group mounting is gone. The dev-deps keep json's own
-  // build closure intact.
+  // The wrapper families over the containers (`JsonVec`, `JMap*`,
+  // `JSet` — the old `[peer-deps]` group files) are json's OWN source
+  // now: they folded into `mod.rut`, and `pouch` / `nmapset` are plain
+  // deps. No presence gating, no light mount: every consumer gets the
+  // whole surface, and the packed bundle is CLOSED — its `deps/`
+  // carries the strbuild + pouch + nmapset groups under identity dirs
+  // (the v11 wire), so the wrappers' `use` heads resolve wherever json
+  // travels.
   "format": "rutbundle",
   "format_version": 11,
   "name": "json",
-    "deps": {
+  "deps": {
     "strbuild": {
       "path": "../strbuild"
-    }
-  },
-  "dev-deps": {
+    },
     "pouch": {
       "path": "../pouch"
     },
