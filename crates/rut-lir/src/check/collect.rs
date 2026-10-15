@@ -485,6 +485,24 @@ impl<'a> Ctx<'a> {
     /// half substitutes the class's concrete argument per instantiation.
     pub fn param_placeholder(&mut self, p: IdentId) -> TypeId {
         let name = self.intern(&format!("#{}", self.name(p)));
+        // reuse before mint: an existing `#<param>` empty-record row of
+        // this spelling is THE placeholder (the surface build mints the
+        // class templates' leaves pre-attribution; a later mint — the
+        // template window's, a hint's — must land on the SAME row or
+        // the class template splits from its own bodies). Seed-staged
+        // rows are never reused: a carried `#<param>` spelling belongs
+        // to the requester's world, never this unit's placeholders.
+        if let Some(id) = self.types.dense_id_of_name(name) {
+            let d = self.types.dense(id);
+            let in_seed = self.carried_dense.iter().any(|(s, l)| d >= *s && d < s + l);
+            if !in_seed {
+                if let Some(row) = self.types.types.get(d as usize) {
+                    if matches!(&row.kind, TyKind::Data { fields } if fields.is_empty()) {
+                        return id;
+                    }
+                }
+            }
+        }
         self.types.intern_own(RutType {
             name,
             kind: TyKind::Data { fields: vec![] },

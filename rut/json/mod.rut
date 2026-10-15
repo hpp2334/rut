@@ -1435,7 +1435,8 @@ impl<T> SOpt<T> {
         let (v, e) = T::decode(r);
         if (e != nil) { return (nil, e); }
         let some: ?T = v;
-        return (SOpt(some), nil);
+        let ok: ?Self = SOpt(some);
+        return (ok, nil);
     }
     pub fn get(self) -> ?T { return self.inner; }
 }
@@ -1487,7 +1488,8 @@ impl<T> JsonArr<T> {
         if (r.failed()) { return (nil, r.error()); }
         if (count == 0) {
             let empty: [T] = [];
-            return (JsonArr(empty), nil);
+            let none: ?Self = JsonArr(empty);
+            return (none, nil);
         }
         // materialize the fixed array — the first element seeds it
         // (pouch's `as_array` construction law, generic T has no zero)
@@ -1498,7 +1500,8 @@ impl<T> JsonArr<T> {
             a[j] = buf[j];
             j += 1;
         }
-        return (JsonArr(a), nil);
+        let ok: ?Self = JsonArr(a);
+        return (ok, nil);
     }
     pub fn to_arr(self) -> [T] { return self.inner; }
 }
@@ -1656,7 +1659,8 @@ impl<T> JsonVec<T> {
         }
         r.end_array();
         if (r.failed()) { return (nil, r.error()); }
-        return (JsonVec(v), nil);
+        let ok: ?Self = JsonVec(v);
+        return (ok, nil);
     }
 
     // the unwrap: the materialized Vec
@@ -1865,7 +1869,8 @@ impl<T> JSet<T> {
         }
         r.end_array();
         if (r.failed()) { return (nil, r.error()); }
-        return (JSet(s), nil);
+        let ok: ?Self = JSet(s);
+        return (ok, nil);
     }
     pub fn to_set(self) -> HashSet<T> { return self.inner; }
 }

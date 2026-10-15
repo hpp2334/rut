@@ -130,13 +130,21 @@ the pack). That determinism is also the honest limitation:
   original source can rebuild the same closure deterministically and
   regenerate an identical map. Treat `.rutsym` like a `.pdb`: distribute
   it only to parties who may see names and positions.
-- **Stripping and the generic-source riding law refuse each other.**
-  A compiled pkg whose surface exports generics rides its source (so
-  consumer-spelled shapes compile at the link), and the ridden text
-  would recompile clean-named beside mangled binaries — the packer
-  refuses `--strip` on such a closure and says so. A fully
-  concrete-class closure (no generic exports anywhere) strips as
-  before, and a consumer binding a stripped compiled group's surface
+- **Stripping and generics compose — the coverage law (v22).** A
+  successful pack's templates cover its generic surface by
+  construction, so `--strip` on a generic-owning closure is legal
+  unconditionally: the consumer-spelled shapes monomorphize from the
+  in-binary templates at link, never from source. The keep-set
+  therefore preserves every name the delivery law consults — the
+  exported surface's names (funcs, types, consts, interface and
+  inherent methods), the generic parameter names (the consumer's
+  substitution env spells `#{param}` against them), the template
+  rows' bound names and bounds, the bound-member stubs' member texts,
+  the instantiation ledger's owner specs, and the carried type block's
+  row names (a mirror construction reads the target row's spelling).
+  The mangle stays real where nothing consults: internal helpers,
+  lambdas, and pre-surface temporaries rename to `%N` beside the
+  sidecar. A consumer binding a stripped compiled group's surface
   later is still a loud unification miss, never a mislink.
 
 ## What is not here

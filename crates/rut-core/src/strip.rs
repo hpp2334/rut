@@ -199,6 +199,97 @@ pub fn strip_programs(groups: &mut [(String, &mut Program)]) -> Result<SymbolMap
         for (n, _) in &prog.exports {
             keep.insert(prog.interner.name(*n).to_string());
         }
+        // the delivery law's name-text surface (v22): the template rows
+        // are what a consumer request matches against (kind names,
+        // bound names), and a template's bound-member stubs resolve by
+        // member text — every one of these strings must survive the
+        // mangle or a consumer-spelled shape matches nothing
+        for t in &prog.templates {
+            match &t.kind {
+                crate::binary::TemplateKind::Free { name } => {
+                    keep.insert(prog.interner.name(*name).to_string());
+                }
+                crate::binary::TemplateKind::Method { data, name } => {
+                    keep.insert(prog.interner.name(*data).to_string());
+                    keep.insert(prog.interner.name(*name).to_string());
+                }
+            }
+            for b in &t.bounds {
+                keep.insert(prog.interner.name(*b).to_string());
+            }
+        }
+        for s in &prog.template_stubs {
+            keep.insert(prog.interner.name(s.member).to_string());
+        }
+        // a generic type export's name (the request spelling) and a
+        // generic-method class's name (the mirror row's data half)
+        for t in &prog.surface.type_exports {
+            if t.is_generic {
+                keep.insert(prog.interner.name(t.name).to_string());
+            }
+            // the generic parameter NAMES feed the consumer's
+            // substitution env (`#{param}` -> the concrete arg) — a
+            // mangled param spell orphans every template leaf
+            for p in &t.params {
+                keep.insert(prog.interner.name(*p).to_string());
+            }
+        }
+        for ih in &prog.surface.inherents {
+            if ih.methods.iter().any(|m| m.local == 0 || !m.generics.is_empty()) {
+                keep.insert(prog.interner.name(prog.types.type_at(ih.target).name).to_string());
+            }
+        }
+        for g in &prog.surface.fn_generics {
+            keep.insert(prog.interner.name(g.name).to_string());
+            for p in &g.params {
+                keep.insert(prog.interner.name(*p).to_string());
+            }
+        }
+        // THE DELIVERY LAW'S NAME SURFACE (v22): a consumer compiles
+        // against the binary's SURFACE — the riding-source lane is gone,
+        // so every exported name a consumer may spell must survive the
+        // mangle. The mangle stays real: only the non-surface tail
+        // (internal helpers, lambda names, pre-surface temporaries)
+        // renames.
+        for sf in &prog.surface.funcs {
+            keep.insert(prog.interner.name(sf.name).to_string());
+        }
+        for t in &prog.surface.type_exports {
+            keep.insert(prog.interner.name(t.name).to_string());
+        }
+        for ih in &prog.surface.inherents {
+            for m in &ih.methods {
+                keep.insert(prog.interner.name(m.name).to_string());
+            }
+        }
+        for t in &prog.surface.ifaces {
+            keep.insert(prog.interner.name(t.name).to_string());
+            for m in &t.methods {
+                keep.insert(prog.interner.name(m.name).to_string());
+            }
+        }
+        for c in &prog.surface.consts {
+            keep.insert(prog.interner.name(c.name).to_string());
+        }
+        // the carried type block's row names are consumer-facing too: a
+        // consumer's mirror construction reads the target row's NAME
+        // spell (the nominal instantiation law — `JsonArr<#T>`
+        // materializes to `JsonArr<JsonI64>` through the target's
+        // text), so the exporter's own block survives whole — the
+        // mangle stays on the fn-name tail, where the unreadable names
+        // actually live
+        if let Some(own_base) = crate::link::own_scope(prog)
+            .and_then(|s| prog.types.scope_base.get(s as usize).copied())
+        {
+            for t in prog.types.types.iter().skip(own_base as usize) {
+                keep.insert(prog.interner.name(t.name).to_string());
+                if let crate::types::TyKind::Data { fields } = &t.kind {
+                    for f in fields {
+                        keep.insert(prog.interner.name(f.name).to_string());
+                    }
+                }
+            }
+        }
     }
     // 2. the renameable union — every tail string no law consults,
     // deduplicated across the closure (interning is content-addressed

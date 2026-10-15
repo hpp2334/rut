@@ -33,7 +33,7 @@ pub use graph::GraphOutput;
 /// tests and embedders that spell a unit's module layout directly.
 pub use rut_lir::check::{ModInputs, ModScope};
 pub use loader::{
-    bundle_entry_pkg, bundle_walk_bytes, riding_gen_source, sha256_hex,
+    bundle_entry_pkg, bundle_walk_bytes, sha256_hex,
 };
 /// The pin ledger: `rut.lock` parses and renders through here —
 /// one lock per walk root, beside the root `rut.jsonc`.
@@ -41,4 +41,4 @@ pub use lock::{parse_lock, render_lock, LockError, LockFile, LockRow};
 pub use mods::{collect_module_set, mount_mod_children, ChildLookup, ModSource, ModuleSet, ModuleUnit};
 pub use pack::{pack, Archive, PackError, PackOpts, PackWorld, PkgSource, FORMAT_VERSION};
 pub use run::{Compiled, Loaded, Pkg, PkgBody, RunError, RutRun, declared_host_fns, host_pkg_ctx};
-pub use session::{GenSource, HostRow};
+pub use session::HostRow;

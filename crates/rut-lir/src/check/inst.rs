@@ -22,7 +22,10 @@ impl<'a> Ctx<'a> {
             name: fname,
             params: vec![],
             ret: TY_NIL,
-            is_method: false,
+            // the key's own shape: a Method reservation is a method slot
+            // from birth (a mirror stub that never compiles keeps it —
+            // the verifier's CallM check reads the callee's flag)
+            is_method: matches!(inst.key, FnKey::Method { .. }),
             n_captures: 0,
             regs: vec![],
             argv: vec![],
@@ -165,7 +168,21 @@ impl<'a> Ctx<'a> {
                 return Err(());
             }
             let fid = self.inst_map[&inst];
-            if FnCompiler::compile(self, &inst, fid).is_err() {
+            // the template window (v22): a body at or above the window's
+            // first fid is a TEMPLATE compilation — its substitution's
+            // values are the `#<param>` placeholder rows, and the
+            // bound-member call paths need to see them (a member the
+            // placeholder row cannot resolve mints a stub the wire's
+            // TemplateRow records)
+            let is_template = fid >= self.template_first_fid;
+            let saved_params = if is_template {
+                std::mem::replace(&mut self.template_params, inst.subst.clone())
+            } else {
+                std::mem::take(&mut self.template_params)
+            };
+            let done = FnCompiler::compile(self, &inst, fid);
+            self.template_params = saved_params;
+            if done.is_err() {
                 // a body's diags are already in ctx.diags — keep
                 // draining so a LATER body's sites report too (the
                 // first failure used to starve every body behind it).

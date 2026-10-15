@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use super::groups::{group_manifest, has_open_generic_surface, rides_compiled};
+use super::groups::{group_manifest, rides_compiled};
 use crate::pack::Archive;
 use crate::pack::{PackRead, PkgSource};
 use crate::PackError;
@@ -19,12 +19,7 @@ use crate::PackError;
 //    binds its compiled deps' surfaces at load, and those names
 //    would be mangled — refuse, never guess (host/decl leaf groups
 //    have no compiled deps and pass trivially);
-// 2. the generic-source refusal: a compiled pkg with an OPEN
-//    generic surface rides its source (the law below), and the
-//    ridden text would recompile clean-named beside mangled
-//    binaries — the combination cannot coexist soundly, refuse and
-//    say so;
-// 3. the mangle itself: one closure-wide string→string map over
+// 2. the mangle itself: one closure-wide string→string map over
 //    every encoded program, symbolication tables taken into the
 //    sidecar.
 pub(super) fn strip_arm(
@@ -40,39 +35,6 @@ pub(super) fn strip_arm(
     if !strip {
         return Ok(None);
     }
-        {
-            let root_prog = &units.programs[root_idx];
-            if has_open_generic_surface(root_prog) {
-                return Err(PackError::law(format!(
-                    "--strip refuses a generic-owning closure: the root `{root}` exports \
-                     generics, so its source rides the bundle to serve consumer-spelled \
-                     shapes at load — the ridden text would recompile clean-named beside \
-                     mangled binaries. Pack without `--strip`"
-                )));
-            }
-            for (spec, source) in sources.iter() {
-                if *spec == root || session.resolve(spec).is_err() {
-                    continue;
-                }
-                if !rides_compiled(session, spec, &units) {
-                    continue;
-                }
-                let &(idx, _) = units.linked.get(spec).unwrap();
-                if has_open_generic_surface(&units.programs[idx]) {
-                    return Err(PackError::law(format!(
-                        "--strip refuses a generic-owning closure: the compiled group \
-                         `{spec}` (from {}) exports generics, so its source rides the \
-                         bundle to serve consumer-spelled shapes at load — the ridden \
-                         text would recompile clean-named beside mangled binaries. Pack \
-                         without `--strip`",
-                        match source {
-                            PkgSource::Dir(d) => d.clone(),
-                            PkgSource::Archive { slot, .. } => archives[*slot].origin.clone(),
-                        }
-                    )));
-                }
-            }
-        }
         for (spec, source) in sources.iter() {
             if *spec == root || session.resolve(spec).is_err() {
                 continue; // the root rides compiled above; unmounted names never ride

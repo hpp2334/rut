@@ -355,7 +355,9 @@ fn packaged_generic_owner_serves_consumer_requests() {
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     let pairz_dir = dep_dir(&names, "pairz");
     assert!(names.contains(&format!("{pairz_dir}/mod.rutc")), "{names:?}");
-    assert!(names.contains(&format!("{pairz_dir}/mod.rut")), "{names:?}");
+    // v22 — the delivery law: no source rides; the generic bodies are
+    // template rows inside the binary
+    assert!(!names.contains(&format!("{pairz_dir}/mod.rut")), "{names:?}");
     // and the pack-time closure's instantiation is IN the binary's ledger
     {
         let group = rut_driver::bundle::parse_bundle(&bytes)

@@ -1418,6 +1418,10 @@ mod tests {
             exports: Vec::new(),
             inst_types: Vec::new(),
             inst_fns: Vec::new(),
+            templates: Vec::new(),
+            template_stubs: Vec::new(),
+            template_first_fid: 0,
+            template_end_fid: 0,
         };
         Vm::new(
             Rc::new(prog),

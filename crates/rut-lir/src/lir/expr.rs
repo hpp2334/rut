@@ -34,17 +34,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // method deref are native.
         if let Ok(mut t) = r {
             if let Some(e) = expected {
-                if e != t {
+                if !self.ctx.spells_same(e, t) {
                     let lo = self.ctx.ast.span(node.id()).lo;
-                    while t != e {
+                    while !self.ctx.spells_same(t, e) {
                         let step = match (self.ctx.types.kind(t).clone(), self.ctx.types.kind(e).clone()) {
-                            (TyKind::Opt { elem }, _) if elem == e => {
+                            (TyKind::Opt { elem }, _) if self.ctx.spells_same(elem, e) => {
                                 let src = self.last_reg;
                                 let d = self.new_reg(elem);
                                 self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
                                 Some(elem)
                             }
-                            (_, TyKind::Opt { elem }) if elem == t => {
+                            (_, TyKind::Opt { elem }) if self.ctx.spells_same(elem, t) => {
                                 let src = self.last_reg;
                                 let dst = self.new_reg(e);
                                 self.emit(Op::MakeOpt { dst, src, ty: e }, lo);

@@ -7,6 +7,7 @@
 //! package (rut-native's `tree_pkg`).
 
 pub mod dump;
+pub mod material;
 pub mod program;
 pub mod seeds;
 

@@ -18388,7 +18388,7 @@ msgstr ""
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:302 src/reference/bundles.md:404
+#: src/reference/embedding.md:302 src/reference/bundles.md:400
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
@@ -22927,7 +22927,7 @@ msgid ""
 "futures](launched-futures.md)."
 msgstr ""
 
-#: src/reference/compiler.md:190 src/reference/module-binary.md:106
+#: src/reference/compiler.md:190 src/reference/module-binary.md:125
 msgid "Determinism"
 msgstr ""
 
@@ -23671,7 +23671,23 @@ msgstr ""
 msgid "// host-callable names\n"
 msgstr ""
 
+#: src/reference/module-binary.md:29
+msgid "// v22: generic bodies ride the binary\n"
+msgstr ""
+
+#: src/reference/module-binary.md:30
+msgid "// bound-member stubs of the window\n"
+msgstr ""
+
+#: src/reference/module-binary.md:31
+msgid "// the window's first func\n"
+msgstr ""
+
 #: src/reference/module-binary.md:32
+msgid "// one past its last\n"
+msgstr ""
+
+#: src/reference/module-binary.md:36
 msgid ""
 "The `Surface` is the export record — functions, constants, types, interface "
 "declarations, inherent method surfaces, and the builtin names `core` "
@@ -23681,23 +23697,23 @@ msgid ""
 "above it."
 msgstr ""
 
-#: src/reference/module-binary.md:39
+#: src/reference/module-binary.md:43
 msgid "Wire layout"
 msgstr ""
 
-#: src/reference/module-binary.md:41
+#: src/reference/module-binary.md:45
 msgid ""
 "The format is little-endian, everywhere — encoded words, hash inputs, "
 "checksums. The first byte of a byte range is the least significant byte of "
 "word 0; this is a law pinned by unit tests, not an accident of the host."
 msgstr ""
 
-#: src/reference/module-binary.md:46
+#: src/reference/module-binary.md:50
 msgid ""
 "```\n"
 "offset  field\n"
 "0       magic \"RUTC\"                      # 4 bytes\n"
-"4       version: u32                      # VERSION = 21; refuses any other "
+"4       version: u32                      # VERSION = 22; refuses any other "
 "value\n"
 "8       name: str\n"
 "        name table: u32 count, then count × str\n"
@@ -23715,10 +23731,27 @@ msgid ""
 "        surface: namespace, funcs, consts, types + scope blocks + type\n"
 "                 exports, interface decls, inherent method surfaces,\n"
 "                 the native rows   # below\n"
+"        templates: u32 count, then per row (below)   # v22 — the\n"
+"                 template window's first fid precedes the count\n"
 "```"
 msgstr ""
 
-#: src/reference/module-binary.md:66
+#: src/reference/module-binary.md:72
+msgid ""
+"**Templates (v22 — generic bodies ride the binary)**: after the surface, the "
+"wire carries the template window — `template_first_fid` (every func at or "
+"above it is template-derived), then one index row per exported generic decl: "
+"the kind tag (`0` free / `1` method), the bound name(s), the `#<param>` "
+"placeholder rows in declaration order, the bound interface names, and the "
+"fid of the placeholder-compiled body (the body itself rides `funcs`). The "
+"window's bound-member stubs ride beside the rows as `(fid, param "
+"placeholder, member name)` triples. Decode validates every fid against the "
+"window and every type id against the carried blocks; a consumer-spelled "
+"shape the pack-time ledger misses monomorphizes from these rows at link (see "
+"[Bundles](bundles.md) — the delivery law)."
+msgstr ""
+
+#: src/reference/module-binary.md:85
 msgid ""
 "**Name table.** Names are interner ids everywhere — type names, field names, "
 "enum members, interface/method names, function names, exports. The binary "
@@ -23729,20 +23762,20 @@ msgid ""
 "table with the same rebase the type ids get."
 msgstr ""
 
-#: src/reference/module-binary.md:73
+#: src/reference/module-binary.md:92
 msgid ""
 "**Type kinds** encode as a one-byte tag: nil, primitives, `str`, `bytes`, "
 "arrays, enums (member + value pairs), records (field table), interface "
 "objects, `opaque`, fn types, `?T`, trace, `Weak<T>`."
 msgstr ""
 
-#: src/reference/module-binary.md:76
+#: src/reference/module-binary.md:95
 msgid ""
 "**Const tags**: `0` i64, `1` f64, `2` bool, `4` str, `5` type id. Retired "
 "tags fail decode loudly rather than being reinterpreted."
 msgstr ""
 
-#: src/reference/module-binary.md:78
+#: src/reference/module-binary.md:97
 msgid ""
 "**Funcs** serialize in full: name, param/ret types, `is_method`, capture "
 "count, the typed register table, both operand pools, the op stream, the span "
@@ -23750,7 +23783,7 @@ msgid ""
 "when the function is a bodyless thunk."
 msgstr ""
 
-#: src/reference/module-binary.md:82
+#: src/reference/module-binary.md:101
 msgid ""
 "**Instantiation ledger**: the owner-anchored identity of every instantiation "
 "the program compiled — type rows `(owner, decl, arguments, type id)` first, "
@@ -23761,7 +23794,7 @@ msgid ""
 "parameter lists beside this (see the surface below)."
 msgstr ""
 
-#: src/reference/module-binary.md:90
+#: src/reference/module-binary.md:109
 msgid ""
 "**Surface**: the exported surface rides after `exports` — the namespace "
 "head, funcs (with their async/host rows), consts, the carried type "
@@ -23775,7 +23808,7 @@ msgid ""
 "decode rejects any id its tables cannot resolve."
 msgstr ""
 
-#: src/reference/module-binary.md:101
+#: src/reference/module-binary.md:120
 msgid ""
 "**Versioning policy**: the version `u32` must equal the toolchain's exactly "
 "— there is no migration or best-effort decode. A byte that changes "
@@ -23783,7 +23816,7 @@ msgid ""
 "refused with the standard version error."
 msgstr ""
 
-#: src/reference/module-binary.md:108
+#: src/reference/module-binary.md:127
 msgid ""
 "Same AST + same dependency versions + same compiler version ⇒ byte-identical "
 "bytes. Serialization order is fixed (mount order, manifest order, pool "
@@ -23793,11 +23826,11 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:115
+#: src/reference/module-binary.md:134
 msgid "Strip levels"
 msgstr ""
 
-#: src/reference/module-binary.md:117
+#: src/reference/module-binary.md:136
 msgid ""
 "The symbolication data rides in every function: the `spans` table (pc → byte "
 "offset) and the parallel `pos` table (pc → line/col). A build that skips "
@@ -23808,7 +23841,7 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:125
+#: src/reference/module-binary.md:144
 msgid ""
 "Both strippable halves are format-legal encodings, not special cases: tail "
 "strings are opaque to the format (rewriting them to mangled `%N` names "
@@ -23819,11 +23852,11 @@ msgid ""
 "— is [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/module-binary.md:134
+#: src/reference/module-binary.md:153
 msgid "Type ids at rest and at link"
 msgstr ""
 
-#: src/reference/module-binary.md:136
+#: src/reference/module-binary.md:155
 msgid ""
 "Type ids are program-global in a linked binary only because **link** already "
 "rebased them. At rest (per module, pre-link) ids are module-local; the boot "
@@ -23834,7 +23867,7 @@ msgid ""
 "everything else."
 msgstr ""
 
-#: src/reference/module-binary.md:144
+#: src/reference/module-binary.md:163
 msgid ""
 "`type_id<T>()` values are `u32`, comparable, and unique per _instantiated_ "
 "type within a VM run: `Vec<f32>` ≠ `Vec<f64>`, `[i32; 3]` ≠ `[i32; 4]` (the "
@@ -23843,11 +23876,11 @@ msgid ""
 "layout](reified-types.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:150
+#: src/reference/module-binary.md:169
 msgid "Interface and vtable tables"
 msgstr ""
 
-#: src/reference/module-binary.md:152
+#: src/reference/module-binary.md:171
 msgid ""
 "Interfaces serialize with their member signatures; interface ids merge by "
 "name at link — an interface imported in one module and declared in another "
@@ -23855,7 +23888,7 @@ msgid ""
 "same global table."
 msgstr ""
 
-#: src/reference/module-binary.md:156
+#: src/reference/module-binary.md:175
 msgid ""
 "Interface-member slots are a global table of `(iface, member)` pairs; "
 "vtables are per-type sparse maps slot → function id, merged at link. The "
@@ -23865,92 +23898,92 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: src/reference/module-binary.md:163
+#: src/reference/module-binary.md:182
 msgid "Verification (load time)"
 msgstr ""
 
-#: src/reference/module-binary.md:165
+#: src/reference/module-binary.md:184
 msgid ""
 "Before any code executes, the verifier re-checks every function in the "
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:168 src/reference/bundles.md:322
+#: src/reference/module-binary.md:187 src/reference/bundles.md:318
 msgid "check"
 msgstr ""
 
-#: src/reference/module-binary.md:168
+#: src/reference/module-binary.md:187
 msgid "rule"
 msgstr ""
 
-#: src/reference/module-binary.md:170
+#: src/reference/module-binary.md:189
 msgid "register range"
 msgstr ""
 
-#: src/reference/module-binary.md:170
+#: src/reference/module-binary.md:189
 msgid ""
 "every register operand \\< the function's register-file size; `NOREG` legal "
 "only where an optional operand is defined"
 msgstr ""
 
-#: src/reference/module-binary.md:171
+#: src/reference/module-binary.md:190
 msgid "pool spans"
 msgstr ""
 
-#: src/reference/module-binary.md:171
+#: src/reference/module-binary.md:190
 msgid ""
 "every `(off, argc)` span lands inside its function's `argv` / `labels` pool"
 msgstr ""
 
-#: src/reference/module-binary.md:172
+#: src/reference/module-binary.md:191
 msgid "type operands"
 msgstr ""
 
-#: src/reference/module-binary.md:172
+#: src/reference/module-binary.md:191
 msgid "every type id names a row of the type table"
 msgstr ""
 
-#: src/reference/module-binary.md:173
+#: src/reference/module-binary.md:192
 msgid "jump targets"
 msgstr ""
 
-#: src/reference/module-binary.md:173
+#: src/reference/module-binary.md:192
 msgid "every `jmp`/`br`/`brtable` target is in range"
 msgstr ""
 
-#: src/reference/module-binary.md:174
+#: src/reference/module-binary.md:193
 msgid "call arity"
 msgstr ""
 
-#: src/reference/module-binary.md:174
+#: src/reference/module-binary.md:193
 msgid "call argument counts match the callee's declared signature"
 msgstr ""
 
-#: src/reference/module-binary.md:175
+#: src/reference/module-binary.md:194
 msgid "enum members"
 msgstr ""
 
-#: src/reference/module-binary.md:175
+#: src/reference/module-binary.md:194
 msgid "`EnumNew` member indices in range, target actually an enum"
 msgstr ""
 
-#: src/reference/module-binary.md:176
+#: src/reference/module-binary.md:195
 msgid "interface slots"
 msgstr ""
 
-#: src/reference/module-binary.md:176
+#: src/reference/module-binary.md:195
 msgid "`CallI` slot ids name a row of the global iface-slot table"
 msgstr ""
 
-#: src/reference/module-binary.md:177
+#: src/reference/module-binary.md:196
 msgid "host thunks"
 msgstr ""
 
-#: src/reference/module-binary.md:177
+#: src/reference/module-binary.md:196
 msgid "bodyless functions are skipped (nothing to verify)"
 msgstr ""
 
-#: src/reference/module-binary.md:179
+#: src/reference/module-binary.md:198
 msgid ""
 "A failed verification is a **load error** naming the module and function — "
 "`function name (#i): op @pc: message`. Corrupted binaries never execute. "
@@ -23959,11 +23992,11 @@ msgid ""
 "misbehaving at runtime."
 msgstr ""
 
-#: src/reference/module-binary.md:185
+#: src/reference/module-binary.md:204
 msgid "The constant pool and load-time expressions"
 msgstr ""
 
-#: src/reference/module-binary.md:187
+#: src/reference/module-binary.md:206
 msgid ""
 "Module-level `let` and `static` initializers are **folded at compile time**. "
 "The surviving forms are: literals, enum members, operators over constants, "
@@ -23973,18 +24006,18 @@ msgid ""
 "initializer is a compile error — there is no deferred evaluation."
 msgstr ""
 
-#: src/reference/module-binary.md:195
+#: src/reference/module-binary.md:214
 msgid ""
 "`type_id<T>()` never executes: it folds to a constant from the type table. "
 "`debug` position folding and trace symbolication are covered in "
 "[Diagnostics, traces, and symbolication](diagnostics.md)."
 msgstr ""
 
-#: src/reference/module-binary.md:199 src/reference/symbol-stripping.md:142
+#: src/reference/module-binary.md:218 src/reference/symbol-stripping.md:150
 msgid "What is not here"
 msgstr ""
 
-#: src/reference/module-binary.md:201
+#: src/reference/module-binary.md:220
 msgid ""
 "A `.d.rut` declaration surface does not produce a binary — it has no bodies, "
 "so it compiles to a signature surface only ([Host fns and declaration "
@@ -24176,7 +24209,7 @@ msgid ""
 "trivially. A refused world packs fine without `--strip`."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:418
+#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:414
 msgid "CLI"
 msgstr ""
 
@@ -24235,17 +24268,23 @@ msgstr ""
 
 #: src/reference/symbol-stripping.md:133
 msgid ""
-"**Stripping and the generic-source riding law refuse each other.** A "
-"compiled pkg whose surface exports generics rides its source (so "
-"consumer-spelled shapes compile at the link), and the ridden text would "
-"recompile clean-named beside mangled binaries — the packer refuses `--strip` "
-"on such a closure and says so. A fully concrete-class closure (no generic "
-"exports anywhere) strips as before, and a consumer binding a stripped "
-"compiled group's surface later is still a loud unification miss, never a "
-"mislink."
+"**Stripping and generics compose — the coverage law (v22).** A successful "
+"pack's templates cover its generic surface by construction, so `--strip` on "
+"a generic-owning closure is legal unconditionally: the consumer-spelled "
+"shapes monomorphize from the in-binary templates at link, never from source. "
+"The keep-set therefore preserves every name the delivery law consults — the "
+"exported surface's names (funcs, types, consts, interface and inherent "
+"methods), the generic parameter names (the consumer's substitution env "
+"spells `#{param}` against them), the template rows' bound names and bounds, "
+"the bound-member stubs' member texts, the instantiation ledger's owner "
+"specs, and the carried type block's row names (a mirror construction reads "
+"the target row's spelling). The mangle stays real where nothing consults: "
+"internal helpers, lambdas, and pre-surface temporaries rename to `%N` beside "
+"the sidecar. A consumer binding a stripped compiled group's surface later is "
+"still a loud unification miss, never a mislink."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:144
+#: src/reference/symbol-stripping.md:152
 msgid ""
 "`rut dump` on a `.rutc` with `--symbols`, and auto-keeping the shared "
 "surfaces of a mixed closure (so it could strip anyway), are natural "
@@ -25240,9 +25279,6 @@ msgid ""
 "declares\n"
 "                           one — the canonical name, whatever the directory\n"
 "                           grammar spelled\n"
-"mod.rut                  the root's generic-bearing source, when its "
-"surface\n"
-"                           exports generics (the riding law, below)\n"
 "rut.mods                 the root's module rows, when it has mod children\n"
 "deps/<name>@<fp16>/      one directory per dep group, keyed by the group's\n"
 "                           CONTENT IDENTITY — fp16 is the first 16 hex chars "
@@ -25258,15 +25294,11 @@ msgid ""
 "deps/<name>@<fp16>/mod.rutc    a compiled group (the ordinary case: a "
 "source\n"
 "                           body the graph linked) — bodies + surface, the\n"
-"                           linking truth; generic exports ride compiled — "
-"the\n"
-"                           binary carries the closure's instantiations in "
-"its\n"
-"                           ledger\n"
+"                           linking truth; the binary carries the closure's\n"
+"                           instantiations in its ledger AND its generic\n"
+"                           bodies as templates (v22)\n"
 "deps/<name>@<fp16>/mod.d.rut   the group's surface text, when it declares "
 "one\n"
-"deps/<name>@<fp16>/mod.rut     the group's generic-bearing source, when its\n"
-"                           surface exports generics (the riding law, below)\n"
 "deps/<name>@<fp16>/rut.mods    its module rows, when it has mod children\n"
 "deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did\n"
 "                           not link) → a declaration file set: no binary, "
@@ -25275,7 +25307,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:71
+#: src/reference/bundles.md:67
 msgid ""
 "The **`.rutc` binaries are the linking truth**: bodies plus the surface on "
 "the wire ([module binary and verification](module-binary.md)). A consumer "
@@ -25284,7 +25316,7 @@ msgid ""
 "loader never reads them."
 msgstr ""
 
-#: src/reference/bundles.md:77
+#: src/reference/bundles.md:73
 msgid ""
 "The **scope ledger** names the pack-time scope of every linked module in the "
 "closure (engine mounts included), and every row spells the owner's content "
@@ -25294,7 +25326,7 @@ msgid ""
 "agree. A reference with no ledger row is refused."
 msgstr ""
 
-#: src/reference/bundles.md:84
+#: src/reference/bundles.md:80
 msgid ""
 "**The module rows are the tree's wire form** (`rut.mods` — "
 "`deps/<ident>/rut.mods` for a group): one JSON object, mod path → source "
@@ -25306,7 +25338,7 @@ msgid ""
 "`entry.lib`/`entry.libs` keys refuses loudly at the manifest walk."
 msgstr ""
 
-#: src/reference/bundles.md:93
+#: src/reference/bundles.md:89
 msgid ""
 "**Group kinds are the packer's one decision**: a source body rides compiled "
 "iff the graph linked it; a host body (or a declared dep whose unit did not "
@@ -25314,47 +25346,46 @@ msgid ""
 "the graph's own classifier, there is no second implementation."
 msgstr ""
 
-#: src/reference/bundles.md:98
+#: src/reference/bundles.md:94
 msgid ""
-"**Generics ride compiled — and their source rides beside them** (the "
-"generic-source riding law): instantiation is owned by the declaring package, "
-"and the pack walk seeds each generic dep with the instantiations its "
-"consumers spell — the binary's instantiation ledger names every `(owner, "
-"decl, arguments)` row. A compiled pkg whose surface exports an OPEN generic "
-"surface (generic fns, generic type exports, generic methods) ALSO rides the "
-"source that serves consumer-spelled shapes: the root module (`mod.rut`), "
-"verbatim, beside the binary. The riding source's presence is the loader's "
-"dispatch marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay "
-"source-free by law. At the consumer's link, a request the ledger lacks "
-"lowers the ridden text in the consumer's session and compiles the "
-"monomorphized body with owner = the pkg's spec — one row program-wide, "
-"indistinguishable from a pack-time one, nothing persisted. The law binds "
-"both sides: a pkg that owns an open generic surface but whose bundle carries "
-"no riding source refuses at the mount (`pouch` owns an open generic surface "
-"but its bundle carries no riding source — re-pack the directory), never "
-"mislinks. `--strip` refuses the combination: the ridden text would recompile "
-"clean-named beside mangled binaries."
+"**Generics ride compiled — the delivery law (v22)**: instantiation is owned "
+"by the declaring package, and the pack walk seeds each generic dep with the "
+"instantiations its consumers spell — the binary's instantiation ledger names "
+"every `(owner, decl, arguments)` row the closure compiled. A compiled pkg "
+"whose surface exports an OPEN generic surface (generic fns, generic type "
+"exports, generic methods) ALSO carries the generic BODIES as templates "
+"inside the binary (v22 — the wire's templates section): every exported "
+"generic decl compiles once against `#<param>` placeholder rows at pack time, "
+"and a consumer-spelled shape the ledger misses monomorphizes from the "
+"template at link — one row program-wide, owner-anchored, indistinguishable "
+"from a pack-time one, nothing persisted. **A published bundle never carries "
+"source**: the ledger is the fast path, the templates the only other lane, "
+"and a request missing both is a torn or doctored bundle — the mount refuses "
+"loudly (`pouch` owns an open generic surface but its binary carries no "
+"template bodies — corrupt or doctored, re-pack the directory), never "
+"mislinks. `--strip` is legal with a generic surface unconditionally: a "
+"successful pack's templates cover by construction."
 msgstr ""
 
-#: src/reference/bundles.md:118
+#: src/reference/bundles.md:114
 msgid ""
 "**The root must compile** — a root that produces no compiled program is "
 "refused: `pack: <pkg> produced no compiled program — a host pkg (a `.d.rut` "
 "surface with no body) cannot be a bundle root; pack a source pkg instead`."
 msgstr ""
 
-#: src/reference/bundles.md:123
+#: src/reference/bundles.md:119
 msgid "The decl root (host)"
 msgstr ""
 
-#: src/reference/bundles.md:125
+#: src/reference/bundles.md:121
 msgid ""
 "A `type = \"host\"` pkg's root IS its declaration surface, so a host bundle "
 "is the manifest plus that surface, riding as source — single-package, no "
 "ledger, no groups, nothing to decode:"
 msgstr ""
 
-#: src/reference/bundles.md:129
+#: src/reference/bundles.md:125
 msgid ""
 "```text\n"
 "rut.jsonc                byte-for-byte; \"format\": \"rutbundle\", "
@@ -25365,7 +25396,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:136
+#: src/reference/bundles.md:132
 msgid ""
 "The root file rides at the canonical `mod.d.rut` name — the directory keeps "
 "its own spelling (`entry.type` or the `mod.d.rut` default root), and the "
@@ -25373,7 +25404,7 @@ msgid ""
 "entry is `mod.d.rut`, full stop."
 msgstr ""
 
-#: src/reference/bundles.md:141
+#: src/reference/bundles.md:137
 msgid ""
 "The mod tree rides the same additive rows envelope a lib body tree uses (see "
 "[layout rules](#layout-rules)): the tree mounts at pack time (a declared "
@@ -25383,7 +25414,7 @@ msgid ""
 "no rows entry: its bundle stays the two-entry shape, byte-identical."
 msgstr ""
 
-#: src/reference/bundles.md:149
+#: src/reference/bundles.md:145
 msgid ""
 "`rut pack <host-dir>` works (the surface verifies by parsing and lowering "
 "once — the exact lane a mount runs — then rides as source), `--strip` "
@@ -25394,11 +25425,11 @@ msgid ""
 "compiled bundle: the surface lowers into the pkg's host rows."
 msgstr ""
 
-#: src/reference/bundles.md:158
+#: src/reference/bundles.md:154
 msgid "The manifest — `rut.jsonc`"
 msgstr ""
 
-#: src/reference/bundles.md:160
+#: src/reference/bundles.md:156
 msgid ""
 "First entry in the zip; JSONC (the directory grammar: `//` and `/* */` "
 "comments and trailing commas are legal); the same manifest grammar the "
@@ -25406,7 +25437,7 @@ msgid ""
 "makes a bundle-shaped directory pack unchanged:"
 msgstr ""
 
-#: src/reference/bundles.md:165
+#: src/reference/bundles.md:161
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25426,7 +25457,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:182
+#: src/reference/bundles.md:178
 msgid ""
 "Directory loading **ignores** `format`/`format_version` — a directory is not "
 "a bundle — which is why the keys are safe to write into every module "
@@ -25434,7 +25465,7 @@ msgid ""
 "packs unchanged."
 msgstr ""
 
-#: src/reference/bundles.md:187
+#: src/reference/bundles.md:183
 msgid ""
 "The rest of the manifest grammar — the dep tables, `dev-deps`, `style`, and "
 "the strict-keys law — is defined in [Project structure and "
@@ -25442,15 +25473,15 @@ msgid ""
 "kinds](dependency-kinds.md)."
 msgstr ""
 
-#: src/reference/bundles.md:192
+#: src/reference/bundles.md:188
 msgid "Url deps — bundles by reference"
 msgstr ""
 
-#: src/reference/bundles.md:194
+#: src/reference/bundles.md:190
 msgid "A consumer may mount a bundle by url instead of vendoring it:"
 msgstr ""
 
-#: src/reference/bundles.md:196
+#: src/reference/bundles.md:192
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25461,14 +25492,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:204
+#: src/reference/bundles.md:200
 msgid ""
 "The pin lives beside the manifest, in the walk root's `rut.lock` (`rut "
 "install` writes it — [the rut CLI](cli.md)): the manifest row names the url, "
 "the lock pins its bytes."
 msgstr ""
 
-#: src/reference/bundles.md:208
+#: src/reference/bundles.md:204
 msgid ""
 "The mount is the bundle mount, one gate earlier: the embedder's remote "
 "produces the bytes (`DepRemote` — the standard `rut_native::HttpRemote` is "
@@ -25482,7 +25513,7 @@ msgid ""
 "metadata; loading a bundle never fetches)."
 msgstr ""
 
-#: src/reference/bundles.md:220
+#: src/reference/bundles.md:216
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's "
 "own `rut pack` output, satisfied by the rode-along groups: the archive's "
@@ -25495,11 +25526,11 @@ msgid ""
 "declared dep that did not ride."
 msgstr ""
 
-#: src/reference/bundles.md:231
+#: src/reference/bundles.md:227
 msgid "The wire version"
 msgstr ""
 
-#: src/reference/bundles.md:233
+#: src/reference/bundles.md:229
 msgid ""
 "`format_version` is 11 — the one bundle wire, both root kinds; the "
 "manifest's `type` routes lib-compiled vs host-decl. A loader refuses any "
@@ -25508,7 +25539,7 @@ msgid ""
 "directory`."
 msgstr ""
 
-#: src/reference/bundles.md:239
+#: src/reference/bundles.md:235
 msgid ""
 "Every file in the two layouts is part of the package: a bundle that dropped "
 "a declared child module would load partial — semantically wrong, so the "
@@ -25519,7 +25550,7 @@ msgid ""
 "as it always was outside bundles."
 msgstr ""
 
-#: src/reference/bundles.md:248
+#: src/reference/bundles.md:244
 msgid ""
 "**The groups mirror the manifest.** The archive root is the root's own "
 "files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the content "
@@ -25531,7 +25562,7 @@ msgid ""
 "to one identity only when their bytes are equal)."
 msgstr ""
 
-#: src/reference/bundles.md:258
+#: src/reference/bundles.md:254
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into "
 "a fresh numeric range of the consuming run's world (boot passes through), "
@@ -25544,11 +25575,11 @@ msgid ""
 "independently, each numbering its own closure."
 msgstr ""
 
-#: src/reference/bundles.md:269
+#: src/reference/bundles.md:265
 msgid "The `bundle` module"
 msgstr ""
 
-#: src/reference/bundles.md:271
+#: src/reference/bundles.md:267
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, "
 "and the reader (both root kinds) live in the driver's `rut_driver::bundle` "
@@ -25565,41 +25596,41 @@ msgid ""
 "compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
-#: src/reference/bundles.md:287
+#: src/reference/bundles.md:283
 msgid "Deterministic packing"
 msgstr ""
 
-#: src/reference/bundles.md:289
+#: src/reference/bundles.md:285
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr ""
 
-#: src/reference/bundles.md:291
+#: src/reference/bundles.md:287
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's "
 "binary, then the root's surface/source/rows, then dep groups in identity "
 "order (one group per distinct identity);"
 msgstr ""
 
-#: src/reference/bundles.md:294
+#: src/reference/bundles.md:290
 msgid "fixed (zeroed) timestamps;"
 msgstr ""
 
-#: src/reference/bundles.md:295
+#: src/reference/bundles.md:291
 msgid "STORE (no compression) — determinism over size."
 msgstr ""
 
-#: src/reference/bundles.md:297
+#: src/reference/bundles.md:293
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr ""
 
-#: src/reference/bundles.md:301
+#: src/reference/bundles.md:297
 msgid "Stripping — the private sidecar"
 msgstr ""
 
-#: src/reference/bundles.md:303
+#: src/reference/bundles.md:299
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol "
 "table** at the sibling path `<out-without-ext>.rutsym`. Every renameable "
@@ -25614,146 +25645,146 @@ msgid ""
 "against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/bundles.md:316
+#: src/reference/bundles.md:312
 msgid "Checks on load"
 msgstr ""
 
-#: src/reference/bundles.md:318
+#: src/reference/bundles.md:314
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes. The order is the law: container, then manifest and version, "
 "then every group's decode, then the mount."
 msgstr ""
 
-#: src/reference/bundles.md:322
+#: src/reference/bundles.md:318
 msgid "rule on mismatch"
 msgstr ""
 
-#: src/reference/bundles.md:324
+#: src/reference/bundles.md:320
 msgid "zip entry CRC-32"
 msgstr ""
 
-#: src/reference/bundles.md:324
+#: src/reference/bundles.md:320
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr ""
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:321
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:321
 msgid "refuse — not a rut bundle"
 msgstr ""
 
-#: src/reference/bundles.md:326
+#: src/reference/bundles.md:322
 msgid "`format_version` exactly 11"
 msgstr ""
 
-#: src/reference/bundles.md:326
+#: src/reference/bundles.md:322
 msgid ""
 "refuse — `this toolchain reads bundle format_version 11 only (found {v}) — "
 "re-pack the directory`"
 msgstr ""
 
-#: src/reference/bundles.md:327
+#: src/reference/bundles.md:323
 msgid "a host root carrying a root `mod.rutc`"
 msgstr ""
 
-#: src/reference/bundles.md:327
+#: src/reference/bundles.md:323
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr ""
 
-#: src/reference/bundles.md:328
+#: src/reference/bundles.md:324
 msgid "a host root carrying a `rut.scopes` ledger or any group entry"
 msgstr ""
 
-#: src/reference/bundles.md:328
+#: src/reference/bundles.md:324
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr ""
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:325
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not "
 "a content identity (`name@<16 hex>`)"
 msgstr ""
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:325
 msgid "refuse — a corrupt compiled bundle"
 msgstr ""
 
-#: src/reference/bundles.md:330
+#: src/reference/bundles.md:326
 msgid "an entry under a top-level prefix other than `deps/`"
 msgstr ""
 
-#: src/reference/bundles.md:330
+#: src/reference/bundles.md:326
 msgid ""
 "refuse — the archive root carries only the root's own files; dep groups ride "
 "at `deps/<name>@<fp16>/`"
 msgstr ""
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:327
 msgid "a `deps/` group directory whose name is not a content identity"
 msgstr ""
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:327
 msgid "refuse — expected `<name>@<16 hex>`"
 msgstr ""
 
-#: src/reference/bundles.md:332
+#: src/reference/bundles.md:328
 msgid "a group's manifest `name` disagreeing with its dirname's name half"
 msgstr ""
 
-#: src/reference/bundles.md:332
+#: src/reference/bundles.md:328
 msgid "refuse — names both"
 msgstr ""
 
-#: src/reference/bundles.md:333
+#: src/reference/bundles.md:329
 msgid ""
 "a group dirname's fingerprint disagreeing with the hash of its rode source "
 "set"
 msgstr ""
 
-#: src/reference/bundles.md:333
+#: src/reference/bundles.md:329
 msgid "refuse — the dirname and the content disagree"
 msgstr ""
 
-#: src/reference/bundles.md:334
+#: src/reference/bundles.md:330
 msgid "`mod.rutc` decode (root and groups): version, tables, surface ids"
 msgstr ""
 
-#: src/reference/bundles.md:334
+#: src/reference/bundles.md:330
 msgid "refuse — names the entry and the cause"
 msgstr ""
 
-#: src/reference/bundles.md:335
+#: src/reference/bundles.md:331
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr ""
 
-#: src/reference/bundles.md:335
+#: src/reference/bundles.md:331
 msgid "refuse — corrupt or doctored"
 msgstr ""
 
-#: src/reference/bundles.md:336
+#: src/reference/bundles.md:332
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr ""
 
-#: src/reference/bundles.md:336
+#: src/reference/bundles.md:332
 msgid "refuse — names the entry; a bad archive never reaches the session"
 msgstr ""
 
-#: src/reference/bundles.md:337
+#: src/reference/bundles.md:333
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr ""
 
-#: src/reference/bundles.md:337
+#: src/reference/bundles.md:333
 msgid "refuse — names the missing group"
 msgstr ""
 
-#: src/reference/bundles.md:339
+#: src/reference/bundles.md:335
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr ""
 
-#: src/reference/bundles.md:341
+#: src/reference/bundles.md:337
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package bundles at "
 "`dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can spell "
@@ -25761,7 +25792,7 @@ msgid ""
 "ARE the delivery and the publish act is a git tag:"
 msgstr ""
 
-#: src/reference/bundles.md:346
+#: src/reference/bundles.md:342
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -25775,14 +25806,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:356
+#: src/reference/bundles.md:352
 msgid ""
 "`<tag>` is a placeholder — real urls live in the worked manifests, and the "
 "real pins live in each project's committed `rut.lock` (the in-repo examples' "
 "locks are the reference; anti-rot: docs never rot pins). The laws:"
 msgstr ""
 
-#: src/reference/bundles.md:361
+#: src/reference/bundles.md:357
 msgid ""
 "**Committed artifacts, immutable tags.** `scripts/pack-std::cjs` packs all "
 "16 (deterministic — same input ⇒ byte-identical, so freshness is a pure "
@@ -25792,7 +25823,7 @@ msgid ""
 "(`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
 msgstr ""
 
-#: src/reference/bundles.md:368
+#: src/reference/bundles.md:364
 msgid ""
 "**What a compiled bundle serves.** Instantiation is owner-anchored: a "
 "compiled owner carries the generic instantiations its own pack closure "
@@ -25814,7 +25845,7 @@ msgid ""
 "wherever it travels (the ordinary closure law)."
 msgstr ""
 
-#: src/reference/bundles.md:388
+#: src/reference/bundles.md:384
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group "
 "(`json`'s and `http`'s closures both carry `strbuild`): the same identity "
@@ -25825,25 +25856,25 @@ msgid ""
 "— pin one of them with your own `deps` row."
 msgstr ""
 
-#: src/reference/bundles.md:397
+#: src/reference/bundles.md:393
 msgid "Loading"
 msgstr ""
 
-#: src/reference/bundles.md:399
+#: src/reference/bundles.md:395
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same identity-keyed groups:"
 msgstr ""
 
-#: src/reference/bundles.md:403
+#: src/reference/bundles.md:399
 msgid "// from a file\n"
 msgstr ""
 
-#: src/reference/bundles.md:404
+#: src/reference/bundles.md:400
 msgid "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
-#: src/reference/bundles.md:409
+#: src/reference/bundles.md:405
 msgid ""
 "After the offer, the package name resolves exactly as the directory form "
 "does — with one difference: a compiled group's body is the decoded program "
@@ -25854,11 +25885,11 @@ msgid ""
 "valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 
-#: src/reference/bundles.md:421
+#: src/reference/bundles.md:417
 msgid "# default output: a sibling of the dir\n"
 msgstr ""
 
-#: src/reference/bundles.md:425
+#: src/reference/bundles.md:421
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."

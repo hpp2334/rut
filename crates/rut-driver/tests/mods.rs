@@ -643,14 +643,14 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
         })
         .collect();
     let legacy_bytes = rut_driver::bundle::write_bundle(&entries).unwrap();
+    // v22: source riding is GONE — the legacy splice rides no more; the
+    // bundle mounts compiled and the delivery law serves consumer-spelled
+    // shapes from the binary's own templates
     let loaded = Pkg::from_bundle(&legacy_bytes).expect("the old envelope loads");
     let pkg = loaded.pkg("pouch").expect("pouch mounted");
-    // the spliced riding source: base, then libs in listed order
-    let gen = pkg.gen_source.as_ref().expect("the legacy splice rides");
-    assert_eq!(
-        gen.text.as_str(),
-        format!("{pouch_src}\n// the legacy splice tail\n"),
-        "the splice is base, then libs in manifest order, '\n'-joined"
+    assert!(
+        matches!(pkg.body, rut_driver::PkgBody::Compiled(_)),
+        "the legacy envelope's pouch mounts compiled"
     );
 }
 

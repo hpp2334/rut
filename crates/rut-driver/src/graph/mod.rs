@@ -67,6 +67,10 @@ pub(crate) struct Units {
     pub linked: HashMap<String, (usize, rut_core::ScopeId)>,
     /// `true` when the root produced a program (the walk succeeded)
     pub ok: bool,
+    /// the exported generics whose templates could not lower as
+    /// instantiation-independent bodies — `(owner, decl, construct)`.
+    /// FATAL at pack (the pinned stability law).
+    pub template_failures: Vec<(String, String, String)>,
 }
 
 /// Compile (or mount) every module in `root_spec`'s use closure — the
@@ -88,10 +92,12 @@ pub(crate) fn compile_units(session: &Session, root_spec: &str) -> Units {
         fresh_owners: HashSet::new(),
         dep_decls: HashMap::new(),
         root: root_spec.to_string(),
+        template_failures: Vec::new(),
     };
     let ok = c.ensure(root_spec).is_some();
     c.resolve_requests();
+    let template_failures = std::mem::take(&mut c.template_failures);
     let (diags, programs, linked) = c.finish();
-    Units { diags, programs, linked, ok }
+    Units { diags, programs, linked, ok, template_failures }
 }
 

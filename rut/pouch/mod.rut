@@ -90,17 +90,6 @@ impl<T> Vec<T> {
         return v;
     }
 
-    // `Vec<u8>` is the mutable binary builder; `freeze` copies exactly the
-    // live length (not the capacity) into the immutable `bytes`.
-    pub fn freeze(self) -> bytes {
-        let n = self.len;
-        let mut a: [u8] = [0u8; n];
-        for (let mut i = 0; i < n; i += 1) {
-            a[i] = self.buf[i];
-        }
-        return bytes::from(a);
-    }
-
     // Copy the live elements into a fresh, exactly-sized `[T]`. The
     // backing `buf` may have spare capacity, so `buf.len()` is not the
     // live length — this is the bridge from the growable `Vec` to the
@@ -120,4 +109,20 @@ impl<T> Vec<T> {
         }
         return a;
     }
+}
+
+// `Vec<u8>` is the mutable binary builder; `freeze_bytes` copies exactly
+// the live length (not the capacity) into the immutable `bytes`. The
+// module-level form is the v22 stability law's restructure: the body
+// only typechecks at T := u8 (a `[u8]` target fed from the `[T]` field),
+// so a generic member could not lower to an instantiation-independent
+// template — the concrete wrapper is the recipe's answer, and the
+// member spelling moves to the call site.
+pub fn freeze_bytes(v: Vec<u8>) -> bytes {
+    let n = v.len;
+    let mut a: [u8] = [0u8; n];
+    for (let mut i = 0; i < n; i += 1) {
+        a[i] = v.buf[i];
+    }
+    return bytes::from(a);
 }

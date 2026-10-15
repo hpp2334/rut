@@ -394,7 +394,11 @@ fn consumer_uses_pouch_vec() {
     let mut tys: Vec<u32> = p
         .inst_types
         .iter()
-        .filter(|r| p.interner.name(r.owner) == "pouch" && p.interner.name(r.decl) == "Vec")
+        .filter(|r| {
+            p.interner.name(r.owner) == "pouch"
+                && p.interner.name(r.decl) == "Vec"
+                && r.args.iter().all(|&a| p.type_name(a) == "i32")
+        })
         .map(|r| r.ty)
         .collect();
     tys.sort();

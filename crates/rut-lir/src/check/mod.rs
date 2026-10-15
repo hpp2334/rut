@@ -613,6 +613,21 @@ pub struct Ctx<'a> {
     /// copied onto the Program for link's unification
     pub ledger_types: Vec<rut_core::binary::InstTy>,
     pub ledger_fns: Vec<rut_core::binary::InstFn>,
+    /// The template window (v22): the (parameter, `#<param>` placeholder
+    /// row) pairs of the generic decl whose TEMPLATE the pass is
+    /// compiling. Inside the window, a bound-member call the placeholder
+    /// row cannot resolve (`T::decode(r)` / `v.encode(w)`) mints a
+    /// bodyless STUB instead — the wire's `TemplateRow` records it and
+    /// the link-side materialization resolves each against the concrete
+    /// argument's own surface. Empty outside the pass.
+    pub template_params: Vec<(IdentId, TypeId)>,
+    /// The bound-member stubs minted during the template window:
+    /// `(stub fid, parameter placeholder row, member name)`.
+    pub member_stubs: Vec<(u32, TypeId, IdentId)>,
+    /// The template window's first fid (v22): every func at or above it
+    /// compiles as a TEMPLATE (its substitution is the placeholder
+    /// rows). `u32::MAX` outside the pass — no body is a template.
+    pub template_first_fid: u32,
 }
 
 /// A used function: the exporter's scope-qualified id and signature.
@@ -806,6 +821,9 @@ impl<'a> Ctx<'a> {
             seed_impls: Vec::new(),
             ledger_types: Vec::new(),
             ledger_fns: Vec::new(),
+            template_params: Vec::new(),
+            member_stubs: Vec::new(),
+            template_first_fid: u32::MAX,
         }
     }
 
@@ -1331,6 +1349,91 @@ impl<'a> Ctx<'a> {
             && !name.starts_with(FRAME_PREFIX)
             && !name.starts_with(HOST_FRAME_PREFIX)
             && !name.starts_with(CKPT_PREFIX)
+    }
+
+    /// Do `a` and `b` spell the SAME type? Identity by id, else by the
+    /// row's own spelling — the name plus the kind's STRUCTURE, each
+    /// leaf spelled recursively (the layout law the verifier speaks for
+    /// cross-unit rows). Two minted rows of one spelling are ONE type;
+    /// the template window's several envs mint exactly this pair (the
+    /// placeholder leaves dedup by name unless an env minted its own
+    /// row of the same text).
+    pub fn spells_same(&self, a: TypeId, b: TypeId) -> bool {
+        if a == b {
+            return true;
+        }
+        if a == u32::MAX || b == u32::MAX {
+            return false;
+        }
+        self.type_name(a) == self.type_name(b) && self.kind_spell(a) == self.kind_spell(b)
+    }
+
+    /// A type's kind as a recursively-spelled key (leaf type ids spell
+    /// through their own names — see [`Ctx::spells_same`]).
+    fn kind_spell(&self, t: TypeId) -> String {
+        match self.types.kind(t) {
+            TyKind::Data { fields } => format!(
+                "({})",
+                fields
+                    .iter()
+                    .map(|f| format!("{}:{}", self.name(f.name), self.kind_spell(f.ty)))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            TyKind::Opt { elem } => format!("?{}", self.kind_spell(*elem)),
+            TyKind::Array { elem } => format!("[]{}", self.kind_spell(*elem)),
+            TyKind::Weak { elem } => format!("weak{}", self.kind_spell(*elem)),
+            TyKind::Future { elem } => format!("future{}", self.kind_spell(*elem)),
+            TyKind::Fn { params, ret } => format!(
+                "fn({}) -> {}",
+                params.iter().map(|&p| self.kind_spell(p)).collect::<Vec<_>>().join(","),
+                self.kind_spell(*ret)
+            ),
+            _ => self.type_name(t).to_string(),
+        }
+    }
+
+    /// Is `t` one of the CURRENT template window's placeholder rows?
+    /// True only inside the template pass (v22) — a bound-member call on
+    /// such a row mints a stub instead of resolving.
+    pub fn is_template_param(&self, t: TypeId) -> bool {
+        self.template_params.iter().any(|(_, row)| *row == t)
+    }
+
+    /// The template window's parameter index for placeholder row `t`.
+    pub fn template_param_idx(&self, t: TypeId) -> Option<u32> {
+        self.template_params.iter().position(|(_, row)| *row == t).map(|i| i as u32)
+    }
+
+    /// Mint a bodyless bound-member stub (the template window's
+    /// placeholder call): a FuncCode with no body and no host — the
+    /// stub shape the mirror law already uses — recorded for the
+    /// wire's `TemplateRow`. The link-side materialization resolves the
+    /// stub against the concrete argument's own inherent surface.
+    pub fn mint_member_stub(&mut self, param: TypeId, member: IdentId, params: Vec<TypeId>, ret: TypeId, is_method: bool) -> u32 {
+        let pname = self.template_params
+            .iter()
+            .find(|(_, row)| *row == param)
+            .map(|(n, _)| self.name(*n).to_string())
+            .unwrap_or_default();
+        let fname = self.intern(&format!("#{pname}.${}", self.name(member)));
+        let fid = self.funcs.len() as u32;
+        self.funcs.push(FuncCode {
+            name: fname,
+            params,
+            ret,
+            is_method,
+            n_captures: 0,
+            regs: vec![],
+            argv: vec![],
+            labels: vec![],
+            code: vec![],
+            spans: vec![],
+            pos: vec![],
+            host_id: None,
+        });
+        self.member_stubs.push((fid, param, member));
+        fid
     }
 
     /// Register `concrete` in `inst_data` when it spells a LOCAL

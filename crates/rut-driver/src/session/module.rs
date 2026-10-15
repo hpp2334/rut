@@ -1,4 +1,4 @@
-//! The package value: its body kinds and the generic-source rider.
+//! The package value: its body kinds.
 //!
 //! A `Pkg` is pure data — a named package. The walk (rut-native)
 //! yields them; [`crate::run::RutRun`] offers them; the compile-time
@@ -136,25 +136,6 @@ impl Default for PkgBody {
     }
 }
 
-/// The generic-bearing source a compiled bundle unit rides beside its
-/// binary (generic-source riding): the pkg's own source text (the root
-/// module's source — the exact text a directory mount
-/// compiles; an OLD published bundle's spliced legacy keys ride the
-/// reader-compat shape). A compiled pkg whose surface exports
-/// generics rides this so consumer-spelled shapes stay servable; the
-/// graph lowers it in the CONSUMER's session only when a request misses
-/// the pack-time ledger — nothing persists, `.rutc` caches stay
-/// pack-time. `None` for directory mounts and for non-generic compiled
-/// pkgs (source-free by the packer's riding law — a generic-owning pkg
-/// without the riding refuses at the mount seam).
-#[derive(Clone, Debug)]
-pub struct GenSource {
-    /// the pkg's own source: the root module's text (an old bundle's
-    /// legacy-lib splice is the compat shape) — what a source mount
-    /// recompiles from
-    pub text: String,
-}
-
 /// One package: the bare name it answers to, its entry files, its body
 /// ([`PkgBody`]), and the walker-found metadata. Pure data — offer it
 /// to a run with [`crate::run::RutRun::pkg`].
@@ -168,9 +149,6 @@ pub struct Pkg {
     pub entry: Entry,
     /// the body: `.rut` source, a decoded `.rutc`, or the native rows
     pub body: PkgBody,
-    /// the generic-bearing source a compiled bundle unit rides beside
-    /// its binary ([`GenSource`]) — the on-demand recompile's input
-    pub gen_source: Option<GenSource>,
     /// The mounted bundle's own scope ledger — the pack-time module set
     /// (this root plus its groups), already namespaced into this
     /// session's numbering. The compiled walk's dep list: v21's

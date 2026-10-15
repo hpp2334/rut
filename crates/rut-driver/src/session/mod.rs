@@ -46,7 +46,7 @@ mod error;
 mod module;
 
 pub(crate) use error::ResolveError;
-pub use module::{GenSource, HostRow, Pkg, PkgBody};
+pub use module::{HostRow, Pkg, PkgBody};
 
 use std::collections::BTreeMap;
 

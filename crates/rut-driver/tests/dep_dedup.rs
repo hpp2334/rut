@@ -440,6 +440,10 @@ entry fn main() -> i64 {
     let insts: Vec<String> = chain
         .inst_fns
         .iter()
+        // the template window (v22) is not instantiation bodies: those
+        // rows are the placeholder compilations (subst = `#<param>`
+        // rows) the bundle link lane materializes from
+        .filter(|r| r.fid < chain.template_first_fid)
         .filter(|r| chain.interner.name(r.owner) == "cell")
         .map(|r| match &r.kind {
             rut_core::binary::InstFnKind::Method { data, name, .. } => {

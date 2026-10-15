@@ -812,8 +812,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// at the boundary: every member present, signature compatible).
     /// Checking, never search; the proven pair records the itable fill
     /// demand. Same-type always widens.
+    /// Are `a` and `b` both `#<param>` placeholder rows of the same
+    /// spelling? (The template law's identity — see `widens`.)
+    pub(crate) fn same_template_row(&self, a: TypeId, b: TypeId) -> bool {
+        a != b
+            && self.ctx.ty_is_placeholder(a)
+            && self.ctx.ty_is_placeholder(b)
+            && self.ctx.type_name(a) == self.ctx.type_name(b)
+    }
+
     pub(crate) fn widens(&mut self, from: TypeId, to: TypeId) -> bool {
         if from == to {
+            return true;
+        }
+        // the template law (v22): two `#<param>` placeholder rows of the
+        // same spelling are ONE parameter — the template window's compile
+        // resolves the same generic through several envs, and equal
+        // spellings dedup to one row unless an env minted its own; the
+        // placeholder's identity IS its name
+        if self.same_template_row(from, to) {
             return true;
         }
         // mirrors of one owner-anchored instantiation unify at link —
@@ -862,6 +879,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// path carries its binding's origins.
     pub(crate) fn widens_val(&mut self, node: NodeHandle<AnyExpr>, from: TypeId, to: TypeId) -> bool {
         if from == to {
+            return true;
+        }
+        if self.same_template_row(from, to) {
             return true;
         }
         if self.ctx.same_instantiation(from, to) {

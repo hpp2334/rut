@@ -618,8 +618,11 @@ fn version_gate_rejects_stale_artifacts() {
     // first marked method row); v21 is the structural-interfaces fork —
     // the trait tables leave the wire (`SurfaceImpl` rows and the
     // native-trait name table are gone; `SurfaceIface` crosses
-    // interface decls, the program carries `ifaces`/`iface_slots`)
-    assert_eq!(VERSION, 21, "the structural-interfaces fork owns this VERSION bump");
+    // interface decls, the program carries `ifaces`/`iface_slots`);
+    // v22 is the templates section — generic bodies ride the binary
+    // (first fid + the template index after the surface; the riding
+    // law is dead), so stale v21 artifacts refuse at the gate
+    assert_eq!(VERSION, 22, "the templates section owns this VERSION bump");
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_parser::Mode::Impl,

@@ -264,6 +264,51 @@ pub struct SurfaceGenericFn {
     pub ret: TypeId,
 }
 
+/// One exported GENERIC body's template row (v22): the placeholder
+/// compilation a generic-owning package ships INSIDE its binary, so a
+/// consumer-spelled shape (`decodeJson<Todo>` — a request the pack-time
+/// closure never saw) monomorphizes at link by id substitution. The row
+/// is the INDEX — the body itself is an ordinary `FuncCode` appended
+/// after the module's functions (`fid`), compiled once at pack against
+/// the `#<param>` placeholder rows (`param_rows`, declaration order).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TemplateRow {
+    pub kind: TemplateKind,
+    /// the `#<param>` placeholder rows, in declaration order — the
+    /// substitution source the link lane maps onto a request's args
+    pub param_rows: Vec<TypeId>,
+    /// the bound names from `requires` (diagnostics only)
+    pub bounds: Vec<IdentId>,
+    /// the appended FuncCode (>= the template window's first fid)
+    pub fid: u32,
+}
+
+/// Which decl a [`TemplateRow`] compiles: a free generic fn or a
+/// method (a generic class's member, or a generic method on a plain
+/// class — `data` names the class).
+#[derive(Clone, Debug, PartialEq)]
+pub enum TemplateKind {
+    Free { name: IdentId },
+    Method { data: IdentId, name: IdentId },
+}
+
+/// One bound-member placeholder call inside a template body (v22): a
+/// member the placeholder row itself cannot name (`T::decode(r)` /
+/// `v.encode(w)`). The template's call aims at a bodyless stub (`fid`);
+/// the link-side materialization resolves the stub against the concrete
+/// argument's own inherent surface and rewrites the operand. `param` is
+/// the placeholder row the call dispatches on (a template window row —
+/// the substitution maps it to the concrete argument).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TemplateStub {
+    /// the bodyless placeholder fn the template's call aims at
+    pub fid: u32,
+    /// the template parameter placeholder row the call dispatches on
+    pub param: TypeId,
+    /// the member name (`decode`, `encode`, ..)
+    pub member: IdentId,
+}
+
 /// The usable surface a module publishes.
 /// Names are [`IdentId`]s into the surface's own [`Surface::names`]
 /// interner — including the names inside the carried [`RutType`]
@@ -523,6 +568,25 @@ pub struct Program {
     pub inst_types: Vec<InstTy>,
     /// the owner-anchored instantiation fn ledger (see [`InstFn`])
     pub inst_fns: Vec<InstFn>,
+    /// the generic-body templates (v22): placeholder compilations of
+    /// every exported generic decl, appended after `funcs` — the index
+    /// the link lane monomorphizes from (see [`TemplateRow`]). Empty on
+    /// the linked program: templates serve the pre-link owner mount.
+    pub templates: Vec<TemplateRow>,
+    /// the template window's bound-member stubs (see [`TemplateStub`])
+    pub template_stubs: Vec<TemplateStub>,
+    /// the first fid of the template window (v22): every func at or
+    /// above it is template-derived (an exported template, a nested
+    /// instantiation the template pass cascaded to, or a lambda minted
+    /// inside one) — the link lane's materialization rematerializes
+    /// each against the request's arguments. `funcs.len()` when the
+    /// module ships no templates.
+    pub template_first_fid: u32,
+    /// the template window's END (exclusive): the func count the binary
+    /// decoded with. Bodies the link lane materializes append BEYOND it
+    /// — they are real instantiations, not window entries — so link's
+    /// window drop stops here. `funcs.len()` on a fresh compile.
+    pub template_end_fid: u32,
 }
 
 impl Program {
@@ -700,7 +764,18 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// vtable + `CallI` slot dispatch is unchanged, and `IsTrait` keeps its
 /// opcode/tag as the capability probe under its new name `IsIface`.
 /// Old v20 artifacts are refused at the version byte.
-pub const VERSION: u32 = 21;
+/// v22: generic bodies ride the binary — the templates section. After
+/// the surface, the wire carries the template index (first fid, then
+/// one row per exported generic decl: kind tag, name(s), the
+/// `#<param>` placeholder rows, the bound names, the body's fid, and
+/// the row's bound-member stubs) — the bodies themselves are ordinary
+/// funcs inside the template window. A consumer-spelled shape
+/// monomorphizes at link from these rows; NO source rides a bundle
+/// anymore (v21's generic-source riding is dead — its artifacts are
+/// v21 binaries, refused here). Stale v21 artifacts refuse with the
+/// standard version error; the recipe is re-pack + re-tag + `rut
+/// install` re-pin (old CDN pins die at this gate, by law).
+pub const VERSION: u32 = 22;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -884,6 +959,46 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     // (the compiler mounts a clone of it, `Surface::names`). Decode
     // validates every row against the tables above it.
     encode_surface(&mut e, &prog.surface);
+    // the templates section (v22): the template window's first fid,
+    // then one index row per exported generic decl — the bodies ride
+    // `funcs` (every fid at or above the window start is
+    // template-derived). A program with no templates spells the window
+    // as empty regardless of the field (hand-built programs: the
+    // decode-side law is "no templates, no window").
+    let first = if prog.templates.is_empty() {
+        prog.funcs.len() as u32
+    } else {
+        prog.template_first_fid
+    };
+    e.u32(first);
+    e.u32(prog.templates.len() as u32);
+    for t in &prog.templates {
+        match &t.kind {
+            TemplateKind::Free { name } => {
+                e.u8(0);
+                e.u32(name.0);
+            }
+            TemplateKind::Method { data, name } => {
+                e.u8(1);
+                e.u32(data.0);
+                e.u32(name.0);
+            }
+        }
+        e.tys(&t.param_rows);
+        e.u32(t.bounds.len() as u32);
+        for b in &t.bounds {
+            e.u32(b.0);
+        }
+        e.u32(t.fid);
+    }
+    // the window's bound-member stubs: (fid, param placeholder row,
+    // member name) — the materialization's resolution table
+    e.u32(prog.template_stubs.len() as u32);
+    for s in &prog.template_stubs {
+        e.u32(s.fid);
+        e.u32(s.param);
+        e.u32(s.member.0);
+    }
     e.out
 }
 
@@ -1289,8 +1404,14 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     // at read, every id against the tables above — a bad binary never
     // reaches the VM
     let surface = decode_surface(&mut d, &interner, funcs.len(), ifaces.len())?;
+    // the templates section (v22): every row validated against the
+    // tables the binary carries — names against the rebuilt interner,
+    // fids against the func table, parameter indexes against the row's
+    // own placeholder list, type ids against the carried scope blocks
+    let (template_first_fid, templates, template_stubs) = decode_templates(&mut d, &interner, &surface, funcs.len())?;
     Ok(Program {
         name,
+        scope: 0,
         interner,
         surface,
         types,
@@ -1303,8 +1424,105 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         exports,
         inst_types,
         inst_fns,
-        ..Default::default()
+        templates,
+        template_stubs,
+        template_first_fid,
+        template_end_fid: nfuncs as u32,
     })
+}
+
+/// The templates section (v22) — the decode side of the encode's tail:
+/// `(first fid, rows, stubs)`.
+fn decode_templates(
+    d: &mut Dec,
+    interner: &Interner,
+    surface: &Surface,
+    funcs_len: usize,
+) -> Result<(u32, Vec<TemplateRow>, Vec<TemplateStub>), String> {
+    let first = d.u32()?;
+    if first as usize > funcs_len {
+        return Err(format!(
+            "bad template window (first fid {first} outside the func table, which carries {funcs_len})"
+        ));
+    }
+    let names_len = interner.names().len();
+    let name = |id: IdentId| -> Result<IdentId, String> {
+        if id.0 as usize >= names_len {
+            return Err(format!(
+                "bad template name id {} (the name table carries {names_len})",
+                id.0
+            ));
+        }
+        Ok(id)
+    };
+    // placeholder rows live in the exporter's carried blocks — the same
+    // law the surface's type ids speak (boot passes, everything else
+    // must land inside a carried scope block)
+    let ntypes = surface.types.len();
+    let ty = |t: TypeId| -> Result<(), String> {
+        let scope = crate::scope_of(t);
+        if scope == crate::id::BOOT_SCOPE {
+            if (t as usize) < TypeTable::boot().types.len() {
+                return Ok(());
+            }
+            return Err(format!("bad template type id {t} (outside the boot table)"));
+        }
+        match surface.scope_blocks.iter().find(|&&(b, _)| b == scope) {
+            Some(&(_, off)) => {
+                let dense = off as u64 + crate::local_of(t) as u64;
+                if dense < ntypes as u64 {
+                    Ok(())
+                } else {
+                    Err(format!("bad template type id {t} (outside scope {scope}'s block)"))
+                }
+            }
+            None => Err(format!("bad template type id {t} (no carried block for scope {scope})")),
+        }
+    };
+    let n = d.u32()? as usize;
+    let mut rows = Vec::with_capacity(n);
+    for _ in 0..n {
+        let kind = match d.u8()? {
+            0 => TemplateKind::Free { name: name(IdentId(d.u32()?))? },
+            1 => {
+                let data = name(IdentId(d.u32()?))?;
+                let name = name(IdentId(d.u32()?))?;
+                TemplateKind::Method { data, name }
+            }
+            t => return Err(format!("bad template kind tag {t}")),
+        };
+        let param_rows = d.tys()?;
+        for &p in &param_rows {
+            ty(p)?;
+        }
+        let nbounds = d.u32()? as usize;
+        let mut bounds = Vec::with_capacity(nbounds);
+        for _ in 0..nbounds {
+            bounds.push(name(IdentId(d.u32()?))?);
+        }
+        let fid = d.u32()?;
+        if fid as usize >= funcs_len || fid < first {
+            return Err(format!(
+                "bad template row (fid {fid} outside the template window [{first}, {funcs_len}))"
+            ));
+        }
+        rows.push(TemplateRow { kind, param_rows, bounds, fid });
+    }
+    let nstubs = d.u32()? as usize;
+    let mut stubs = Vec::with_capacity(nstubs);
+    for _ in 0..nstubs {
+        let sfid = d.u32()?;
+        if sfid as usize >= funcs_len || sfid < first {
+            return Err(format!(
+                "bad template stub (fid {sfid} outside the template window [{first}, {funcs_len}))"
+            ));
+        }
+        let param = d.u32()?;
+        ty(param)?;
+        let member = name(IdentId(d.u32()?))?;
+        stubs.push(TemplateStub { fid: sfid, param, member });
+    }
+    Ok((first, rows, stubs))
 }
 
 /// The surface section (v16) — the decode side of [`encode_surface`],

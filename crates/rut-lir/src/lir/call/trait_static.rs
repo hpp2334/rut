@@ -28,13 +28,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // type (an owner-anchored mirror body over a consumer's type)
         // binds through the bound's descriptor — the mirror's ledger
         // row names the type's HOME unit, link unifies it with the
-        // real body
+        // real body. The TEMPLATE window (v22) rides the same shape:
+        // the concrete is a `#<param>` placeholder row, whose member
+        // the descriptor names and the resolution MINTS A STUB for —
+        // the wire's TemplateRow records it, the link-side
+        // materialization resolves it against the concrete argument's
+        // own surface.
         // the owner's OWN instantiation may dedup onto a seed-carried
         // row (the attach's structural dedup) before any value use
         // registered it — force the inst row first, so the carried test
         // never misfires on the unit's own class
         self.ctx.ensure_local_inst_row(concrete);
-        if self.ctx.type_is_carried(concrete) {
+        let is_template_row = self.ctx.is_template_param(concrete);
+        if is_template_row || self.ctx.type_is_carried(concrete) {
             let Some(ifaces) = iface_id else {
                 self.ctx.err(sp, format!(
                     "`{}` is carried from another unit and names no interface bound here",
@@ -58,7 +64,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 aregs.push(self.last_reg);
             }
-            let fid = self.mirror_carried(concrete, iface_id, name);
+            let fid = if is_template_row {
+                self.ctx.mint_member_stub(concrete, name, ptys, ret_ty, false)
+            } else {
+                self.mirror_carried(concrete, iface_id, name)
+            };
             let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
             let _ = expected;
             { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }

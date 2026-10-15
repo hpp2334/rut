@@ -9,7 +9,8 @@ use rut_lexer::diag::Diag;
 use rut_ast::dump;
 use rut_parser::{parse, Mode};
 use rut_core::binary::Program;
-use rut_core::types::{TyKind, TypeId, TY_I32, TY_NIL};
+use rut_core::ops::Op;
+use rut_core::types::{Repr, TyKind, TypeId, TY_I32, TY_NIL};
 use rut_core::{IdentId, sym};
 
 use super::dump::ir_dump_of;
@@ -70,6 +71,12 @@ pub struct ProgramOutput {
     /// packages (owner-anchored generics): `(owner, decl, args)` — the
     /// graph resolves them after the walk
     pub requests: Vec<rut_lir::check::InstRequest>,
+    /// the exported generics whose templates could not lower as
+    /// instantiation-independent bodies — `(decl text, construct)`.
+    /// FATAL at pack (the pinned stability law); an ordinary compile
+    /// runs untouched (the window drops, the unit's own diags are not
+    /// the unit's error).
+    pub template_failures: Vec<(String, String)>,
 }
 
 /// Compile one module under `scope`, binding used function surfaces.
@@ -127,6 +134,7 @@ pub fn compile_program_resolved(
         ir_dump: String::new(),
         program: None,
         requests: Vec::new(),
+        template_failures: Vec::new(),
     };
     let (mut ast, mut diags) = parse(src, mode);
     let tree = dump::to_dump_tree(&ast);
@@ -1435,78 +1443,183 @@ pub fn compile_program_resolved(
             iface_slots.push((i as u32, m as u32));
         }
     }
-    if std::env::var("RUT_DEBUG_LINK").is_ok() {
-        let mut parts: Vec<String> = Vec::new();
-        for (s, &b) in ctx.types.scope_base.iter().enumerate() {
-            let n = ctx
-                .types
-                .types
-                .get(b as usize)
-                .map(|t| ctx.interner.name(t.name).to_string())
-                .unwrap_or("-".into());
-            parts.push(format!("s{}@{}:{}", s, b, n));
-        }
-        let own: Vec<String> = ctx.types.types
-            [ctx.types.scope_base.get(ctx.types.scope as usize).copied().unwrap_or(ctx.types.boot_len) as usize..]
+    // ---- the template pass (v22): generic bodies ride the binary ----
+    //
+    // Every exported generic decl compiles ONCE here, against its
+    // `#<param>` placeholder rows, and the body appends after the
+    // module's functions. A consumer-spelled shape the pack-time closure
+    // never saw (`decodeJson<Todo>`) monomorphizes at LINK from these
+    // rows — the delivery law: a generic surface serves requests from
+    // the pack-time ledger OR its templates, never from source. Nested
+    // generic calls inside a template cascade to the callee's own
+    // template fid (lazily emitted by the same drain, depth-first over
+    // the template graph; a cycle is the compile error it always was),
+    // and a bound-member call the placeholder row cannot resolve mints
+    // a STUB the wire records. The window's requests are consumed here —
+    // the materialization re-derives them from the template bodies.
+    let mut templates: Vec<rut_core::binary::TemplateRow> = Vec::new();
+    let mut template_stubs: Vec<rut_core::binary::TemplateStub> = Vec::new();
+    let mut template_failures: Vec<(String, String)> = Vec::new();
+    let mut template_first_fid = ctx.funcs.len() as u32;
+    let mut template_end_fid = ctx.funcs.len() as u32;
+    if !surface.fn_generics.is_empty()
+        || surface
+            .inherents
             .iter()
-            .take(8)
-            .map(|t| ctx.interner.name(t.name).to_string())
-            .collect();
-        eprintln!(
-            "DBG unit-scopes unit={} scope={} boot={} len={} {} own={:?}",
-            module_name,
-            ctx.types.scope,
-            ctx.types.boot_len,
-            ctx.types.types.len(),
-            parts.join(" "),
-            own
-        );
-    }
-    if std::env::var("RUT_DEBUG_LINK").is_ok() && module_name == "store_probe" {
-        for (ti, t) in ctx.types.types.iter().enumerate() {
-            let n = ctx.interner.name(t.name).to_string();
-            if n == "Vec<str>" || n == "Array<str>" {
-                if let rut_core::types::TyKind::Data { fields } = &t.kind {
-                    let fs: Vec<String> = fields.iter().map(|f| {
-                        let fty = f.ty;
-                        format!("{}:{}(s{},l{})", ctx.interner.name(f.name), ctx.interner.name(ctx.types.type_at(fty).name), rut_core::id::scope_of(fty), rut_core::id::local_of(fty))
-                    }).collect();
-                    eprintln!("DBG probe-desc dense={} {} ty-id=(s{},l{}) fields=[{}]", ti, n, rut_core::id::scope_of(0), 0, fs.join(", "));
+            .any(|ih| ih.methods.iter().any(|m| m.local == 0))
+    {
+        let pre_requests = ctx.inst_requests.len();
+        let pre_fns = ctx.ledger_fns.len();
+        let pre_tys = ctx.ledger_types.len();
+        ctx.template_first_fid = template_first_fid;
+        // the decl list, in surface order: the exported generic fns
+        // (the surface's fn_generics order), then the exported generic
+        // methods (a generic class's members, or a generic method on a
+        // plain class — the inherents order)
+        enum Decl {
+            Free { name: IdentId, generics: Vec<IdentId>, bounds: Vec<IdentId> },
+            Method { data: IdentId, name: IdentId, generics: Vec<IdentId>, bounds: Vec<IdentId> },
+        }
+        let mut decls: Vec<Decl> = Vec::new();
+        for g in &surface.fn_generics {
+            let node = ctx
+                .fn_nodes
+                .iter()
+                .find(|(n, _)| *n == g.name)
+                .map(|(_, n)| *n);
+            let bounds = node
+                .map(|n| ctx.ast.fn_decl(n).bounds.iter().map(|(g, _)| *g).collect())
+                .unwrap_or_default();
+            decls.push(Decl::Free { name: g.name, generics: g.params.clone(), bounds });
+        }
+        for (dname, d) in ctx.datas.clone() {
+            for (mname, mnode) in &d.methods {
+                let md = ctx.ast.method_decl(*mnode);
+                if md.vis != Some(rut_ast::ast::Vis::Pub) || md.is_async {
+                    continue;
                 }
-            }
-        }
-        for f in ctx.funcs.iter() {
-            if ctx.interner.name(f.name) != "probe_pull" { continue; }
-            for (ri, r) in f.regs.iter().enumerate().skip(10).take(14) {
-                let n = ctx
-                    .types
-                    .type_at(*r)
-                    .name;
-                eprintln!("DBG probe-reg reg{} raw={} name={} len={}", ri, r, ctx.interner.name(n), ctx.types.types.len());
-            }
-        }
-    }
-    if std::env::var("RUT_DEBUG_LINK").is_ok() {
-        let mut s4rows: Vec<String> = Vec::new();
-        for (i, t) in ctx.types.types.iter().enumerate() {
-            for f in match &t.kind {
-                rut_core::types::TyKind::Data { fields } => fields.iter().map(|f| f.ty).collect::<Vec<_>>(),
-                rut_core::types::TyKind::Opt { elem } => vec![*elem],
-                _ => vec![],
-            } {
-                if rut_core::id::scope_of(f) == 4 {
-                    s4rows.push(format!("dense{} {} -> (4,{})", i, ctx.interner.name(t.name), rut_core::id::local_of(f)));
-                    break;
+                if d.generics.is_empty() && md.generics.is_empty() {
+                    continue;
                 }
+                let mut generics = d.generics.clone();
+                generics.extend(md.generics.iter().copied());
+                let mut bounds: Vec<IdentId> =
+                    d.requires.iter().map(|(g, _)| *g).collect();
+                bounds.extend(md.bounds.iter().map(|(g, _)| *g));
+                decls.push(Decl::Method { data: dname, name: *mname, generics, bounds });
             }
         }
-        eprintln!(
-            "DBG surface unit={} types={} table_len={} s4rows={:?}",
-            module_name,
-            surface.types.len(),
-            ctx.types.types.len(),
-            s4rows.first()
-        );
+        // mint the placeholder substitutions and queue every template
+        // root — ensure_inst appends in decl order, so the exported
+        // rows' fids are in surface order
+        let mut roots = Vec::new();
+        for decl in &decls {
+            let (name, data, generics) = match decl {
+                Decl::Free { name, generics, .. } => (*name, None, generics),
+                Decl::Method { data, name, generics, .. } => (*name, Some(*data), generics),
+            };
+            let subst: Vec<(IdentId, TypeId)> = generics
+                .iter()
+                .map(|&p| (p, ctx.param_placeholder(p)))
+                .collect();
+            let key = match data {
+                Some(d) => FnKey::Method { data: d, name },
+                None => FnKey::Free(name),
+            };
+            let inst = Inst { key, subst, iface_origins: vec![] };
+            let fid = ctx.ensure_inst(inst.clone());
+            roots.push((inst, fid));
+        }
+        let failed = ctx.drain_queue().is_err();
+        // the STABILITY law (v22): a template body's repr-carrying ops
+        // must be grounded — any op whose type operand mentions a
+        // `#<param>` placeholder row bakes the placeholder's own Ref
+        // repr; a different byte means emission depended on the
+        // concrete T beyond the TypeId operands. The offending window
+        // drops (the pack's templates-must-emit gate refuses when
+        // bodies were required — the pinned recipe).
+        let stable = check_template_stability(&ctx, template_first_fid).is_none();
+        if !failed && stable && ctx.diags.is_empty() {
+            // the rows: the roots' fids, in decl order; the window's
+            // stubs ride the section table
+            for (inst, fid) in roots {
+                let (name, data) = match inst.key {
+                    FnKey::Free(n) => (n, None),
+                    FnKey::Method { data, name } => (name, Some(data)),
+                    _ => continue,
+                };
+                let kind = match data {
+                    Some(d) => rut_core::binary::TemplateKind::Method { data: d, name },
+                    None => rut_core::binary::TemplateKind::Free { name },
+                };
+                let param_rows: Vec<TypeId> = inst.subst.iter().map(|(_, t)| *t).collect();
+                let bounds = match &inst.key {
+                    FnKey::Free(n) => decls
+                        .iter()
+                        .find_map(|d| match d {
+                            Decl::Free { name: dn, bounds, .. } if *dn == *n => Some(bounds.clone()),
+                            _ => None,
+                        })
+                        .unwrap_or_default(),
+                    FnKey::Method { data: d, name: n } => decls
+                        .iter()
+                        .find_map(|decl| match decl {
+                            Decl::Method { data: dd, name: dn, bounds, .. } if *dd == *d && *dn == *n => Some(bounds.clone()),
+                            _ => None,
+                        })
+                        .unwrap_or_default(),
+                    _ => Vec::new(),
+                };
+                templates.push(rut_core::binary::TemplateRow { kind, param_rows, bounds, fid });
+            }
+            // the window's end: every body + stub the drain appended —
+            // link drops the whole range from the merged table (the
+            // templates serve the PRE-link owner mount only)
+            template_end_fid = ctx.funcs.len() as u32;
+            template_stubs = ctx
+                .member_stubs
+                .iter()
+                .map(|(fid, param, member)| rut_core::binary::TemplateStub {
+                    fid: *fid,
+                    param: *param,
+                    member: *member,
+                })
+                .collect();
+        } else {
+            // the window could not lower as placeholder-stable bodies:
+            // drop it WHOLE (funcs back to the window start, the
+            // window's ledger rows with it) — an ordinary directory
+            // compile is untouched, and the pack's gate refuses a
+            // generic-owning binary with no template bodies
+            // the FIRST failure's decl + construct — the pack's pinned
+            // refusal spells it; an ordinary compile hears nothing
+            let decl_text = roots
+                .first()
+                .map(|(inst, _)| match inst.key {
+                    FnKey::Free(n) => ctx.name(n).to_string(),
+                    FnKey::Method { data, name } => {
+                        format!("{}::{}", ctx.name(data), ctx.name(name))
+                    }
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
+            let construct = check_template_stability(&ctx, template_first_fid)
+                .map(|(_, c)| c)
+                .or_else(|| ctx.diags.first().map(|d| d.msg.clone()))
+                .unwrap_or_else(|| "the body failed to compile against its placeholder rows".into());
+            template_failures.push((decl_text, construct));
+            ctx.funcs.truncate(template_first_fid as usize);
+            template_end_fid = ctx.funcs.len() as u32;
+            ctx.ledger_fns.truncate(pre_fns);
+            ctx.ledger_types.truncate(pre_tys);
+            templates.clear();
+            template_stubs.clear();
+            template_first_fid = ctx.funcs.len() as u32;
+        }
+        ctx.inst_requests.truncate(pre_requests);
+        ctx.template_first_fid = u32::MAX;
+        ctx.template_params.clear();
+        ctx.member_stubs.clear();
     }
     let mut funcs = std::mem::take(&mut ctx.funcs);
     // resolve pc → (line, col) beside the byte-offset span
@@ -1584,7 +1697,75 @@ pub fn compile_program_resolved(
         exports,
         inst_types: ledger_types,
         inst_fns: ledger_fns,
+        templates,
+        template_stubs,
+        template_first_fid,
+        template_end_fid,
     };
-    ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program), requests }
+    ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program), requests, template_failures }
 }
 
+/// The template stability law (v22): a template body's emission must
+/// have followed the MECHANICAL rule — every repr-carrying op bakes the
+/// repr its (template-side) type operands resolve to. A different byte
+/// means emission depended on the concrete T beyond the TypeId
+/// operands, and the materialization's rewrite could not repair it.
+/// Returns `(fn name, construct)` on the first violation.
+fn check_template_stability(ctx: &Ctx, first_fid: u32) -> Option<(String, String)> {
+    for fc in ctx.funcs.iter().skip(first_fid as usize) {
+        let reg_ty = |r: u16| -> TypeId { fc.regs.get(r as usize).copied().unwrap_or(rut_core::types::TY_NIL) };
+        let field_ty = |t: TypeId, field: u32| -> Option<TypeId> {
+            match ctx.types.kind(t) {
+                TyKind::Data { fields } => fields.get(field as usize).map(|f| f.ty),
+                _ => None,
+            }
+        };
+        let arr_elem = |t: TypeId| -> Option<TypeId> {
+            match ctx.types.kind(t) {
+                TyKind::Array { elem } => Some(*elem),
+                _ => None,
+            }
+        };
+        let refuse = |fc: &rut_core::binary::FuncCode, what: &str| -> Option<(String, String)> {
+            Some((ctx.name(fc.name).to_string(), what.to_string()))
+        };
+        for op in &fc.code {
+            match op {
+                Op::GetF { obj, field, repr, .. } | Op::SetF { obj, field, repr, .. } => {
+                    let want = field_ty(reg_ty(*obj), *field).map(|f| ctx.types.repr_of(f));
+                    if let Some(w) = want {
+                        if w != *repr {
+                            return refuse(fc, "a field access whose baked repr is not the field type's");
+                        }
+                    }
+                }
+                Op::ArrNew { ty, repr, .. } => {
+                    if let Some(e) = arr_elem(*ty) {
+                        if rut_core::types::arr_elem_repr(&ctx.types, e) != *repr {
+                            return refuse(fc, "an array op whose baked repr is not the element type's");
+                        }
+                    }
+                }
+                Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
+                    if let Some(e) = arr_elem(reg_ty(*arr)) {
+                        if rut_core::types::arr_elem_repr(&ctx.types, e) != *repr {
+                            return refuse(fc, "an array element op whose baked repr is not the element type's");
+                        }
+                    }
+                }
+                Op::ArrGetF { obj, field, repr, .. } | Op::ArrSetF { obj, field, repr, .. } => {
+                    let want = field_ty(reg_ty(*obj), *field)
+                        .and_then(arr_elem)
+                        .map(|e| rut_core::types::arr_elem_repr(&ctx.types, e));
+                    if let Some(w) = want {
+                        if w != *repr {
+                            return refuse(fc, "a field-array op whose baked repr is not the element type's");
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    None
+}

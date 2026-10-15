@@ -1080,7 +1080,7 @@ fn bytes_are_an_immutable_primitive() {
     // bytes(n)/bytes::from(..), a Vec<u8> builder freezes into one, and ==
     // compares content. `Vec<u8>` is a mutable builder, not the binary type.
     let src = r#"
-use pouch::{ Vec };
+use pouch::{ Vec, freeze_bytes };
 entry fn main() -> nil {
     let z = bytes(3);
     Logger::new("app").info(f"z={z.len()}");
@@ -1090,7 +1090,7 @@ entry fn main() -> nil {
     let mut buf: Vec<u8> = Vec::new();
     buf.push(9);
     buf.push(8);
-    let f = buf.freeze();
+    let f = freeze_bytes(buf);
     Logger::new("app").info(f"f={f.len()} f0={f[0]} f1={f[1]}");
     let enc = "rut".encode();
     Logger::new("app").info(f"enc={enc.len()} dec={enc.decode()}");
@@ -2565,7 +2565,7 @@ use pouch::{ Vec };
 entry fn f(s: str) -> (bytes, str) {
     let mut out: Vec<u8> = Vec::new();
     out.push(7);
-    return (out.freeze(), s);
+    return (freeze_bytes(out), s);
 }
 "#;
     let out = compile(src, "m");

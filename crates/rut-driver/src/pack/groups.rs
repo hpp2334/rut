@@ -11,42 +11,6 @@ use crate::session::PkgBody;
 
 use std::collections::BTreeMap;
 
-/// Emit a generic-owning compiled pkg's riding source under `prefix`
-/// (empty for the root, `<pkg>/` for a group): the root module's
-/// source (`mod.rut` — the post-repeal envelope). Verbatim bytes, one
-/// entry per path. An OLD published archive being re-packed (its
-/// manifest rides the compat lane) rides at the legacy `entry.lib` +
-/// `libs` spelling instead — the reader-compat law's writer twin.
-pub(super) fn ride_generic_source(
-    manifest: &crate::bundle::Manifest,
-    prefix: &str,
-    entries: &mut Vec<(String, Vec<u8>)>,
-    read: &impl Fn(&str) -> Result<Vec<u8>, String>,
-) -> Result<(), String> {
-    let push = |rel: &str, entries: &mut Vec<(String, Vec<u8>)>| -> Result<bool, String> {
-        let rel = rel.strip_prefix("./").unwrap_or(rel);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        if entries.iter().any(|(n, _)| *n == key) {
-            return Ok(false); // already riding (a legacy libs overlap) — one entry, one copy
-        }
-        let text = read(rel)?;
-        entries.push((key, text));
-        Ok(true)
-    };
-    // the body: `mod.rut` (the root module), or the old envelope's
-    // legacy keys. Nothing rides when neither names a body — no body,
-    // nothing to recompile from.
-    if let Some(base) = &manifest.legacy_entry.lib {
-        push(base, entries)?;
-        for lib in &manifest.legacy_entry.libs {
-            push(lib, entries)?;
-        }
-    } else {
-        push("mod.rut", entries)?;
-    }
-    Ok(())
-}
-
 /// A group's parsed manifest, read from wherever its files live. A
 /// DIRECTORY group parses strict (the post-repeal grammar — the body
 /// keys refuse); an ARCHIVE group parses compat (a published bundle's
@@ -200,6 +164,30 @@ pub fn has_open_generic_surface(prog: &rut_core::binary::Program) -> bool {
         || s.inherents
             .iter()
             .any(|ih| ih.methods.iter().any(|m| !m.generics.is_empty()))
+}
+
+/// Does the program export generic BODIES — free generic fns or
+/// generic-method rows (a generic class's members)? The
+/// templates-must-emit trigger (v22): these are the decls whose bodies
+/// must ride the binary as template rows. A generic TYPE export alone
+/// (a method-less `Pair<A, B>`) carries no bodies — its instantiations
+/// are identity rows the link lane mints structurally, no template
+/// needed — so it opens a generic surface without entering this
+/// predicate. (A plain class's surface row can carry `local = 0` for a
+/// `[constructor]` whose body the caller mints — that is not a
+/// generic-method marker; the CLASS's genericity is.)
+pub fn has_generic_bodies(prog: &rut_core::binary::Program) -> bool {
+    let s = &prog.surface;
+    !s.fn_generics.is_empty()
+        || s.inherents.iter().any(|ih| {
+            let cname = prog.types.type_at(ih.target).name;
+            let class_generic = s
+                .type_exports
+                .iter()
+                .find(|t| t.name == cname)
+                .map_or(false, |t| t.is_generic);
+            class_generic || ih.methods.iter().any(|m| !m.generics.is_empty())
+        })
 }
 
 /// The generic-parameter placeholder spelling (`#<param>` — the `#` is

@@ -3,7 +3,7 @@
 //! the engine of [`Pkg::from_bundle`] and rut-native's
 //! `load_bundle_session`), the in-archive entry builder
 //! ([`bundle_entry_pkg`]), and the generic-source reader
-//! ([`riding_gen_source`]). Everything with a file, a path, or a wire
+//! Everything with a file, a path, or a wire
 //! lives in `rut-native`; every read here is an in-memory entry.
 
 use std::collections::BTreeMap;
@@ -252,10 +252,17 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     rebind_identity_owners(&mut root, &rebind, false, &ambiguous, origin)
         .map_err(err)?;
     // the root: a compiled module (the packer refuses any other root).
-    // A generic-owning root rides its source beside the binary — the
-    // on-demand recompile's input (generic-source riding); the riding
-    // law refuses a generic-owning unit that carries none
-    let gen_source = riding_source(&root_spec, &root, entries, "", &manifest).map_err(err)?;
+    // The mount seam's anti-doctoring law (v22): a generic-owning unit
+    // must carry its template bodies INSIDE the binary — a generic
+    // surface with an empty template section is a torn or doctored
+    // bundle (the pack could not have produced it). Non-generic units
+    // pass trivially.
+    if crate::pack::has_generic_bodies(&root) && root.templates.is_empty() {
+        return Err(err(format!(
+            "`{root_spec}` owns an open generic surface but its binary carries no template \
+             bodies — corrupt or doctored, re-pack the directory"
+        )));
+    }
     let mods = rows_mods(entries, "").map_err(err)?;
     pkgs.insert(
         root_spec.clone(),
@@ -263,7 +270,6 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             spec: root_spec.clone(),
             body: PkgBody::Compiled(root),
             entry: manifest.entry.clone(),
-            gen_source,
             mods,
             bundle_scopes: scopes.clone(),
             manifest: manifest.clone(),
@@ -333,13 +339,16 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                         )));
                     }
                 }
-                let gen_source = riding_source(&key, &program, entries, &format!("{prefix}/"), &dm)
-                    .map_err(err)?;
+                if crate::pack::has_generic_bodies(&program) && program.templates.is_empty() {
+                    return Err(err(format!(
+                        "`{key}` owns an open generic surface but its binary carries no template \
+                         bodies — corrupt or doctored, re-pack the directory"
+                    )));
+                }
                 Pkg {
                     spec: key.clone(),
                     body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
-                    gen_source,
                     mods: rows_mods(entries, &format!("{prefix}/")).map_err(err)?,
                     manifest: dm.clone(),
                     // the first-mount edge: the archive root pulled its groups
@@ -650,81 +659,4 @@ fn plain_source_pkg(
         manifest: manifest.clone(),
         ..Default::default()
     })
-}
-
-/// The generic-bearing source a compiled unit rides, read from the
-/// archive under `prefix` (empty for the root, `<pkg>/` for a group):
-/// the root module's source. The root source's PRESENCE is the
-/// dispatch marker the packer laid down — the packer rides source iff
-/// the pkg owns an open generic surface, so absence means a
-/// non-generic pkg (source-free by law); a generic-owning unit without
-/// the marker refuses at the mount seam ([`riding_source`]). Once the
-/// marker answers, every other riding file must be there (refuse,
-/// never guess — a corrupt archive is a load error). An OLD published
-/// bundle (the flat envelope) rides its source at the legacy
-/// `entry.lib` spelling instead — the reader-compat law keeps those
-/// loading.
-pub fn riding_gen_source(
-    entries: &[(String, Vec<u8>)],
-    prefix: &str,
-    manifest: &Manifest,
-) -> Result<Option<crate::session::GenSource>, String> {
-    let read = |rel: &str| -> Result<String, String> {
-        let rel = rel.strip_prefix("./").unwrap_or(rel);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        read_entry(entries, &key)
-    };
-    // the rows lane first: a mod-rooted compiled pkg carries no
-    // standalone root entry — its root source rides as the `""` row (the
-    // children ride beside it and mount by declaration at the pkg's
-    // own mount). The rows' presence is that pkg's dispatch marker.
-    if let Some((root, _)) = rows_body(entries, prefix)? {
-        return Ok(Some(crate::session::GenSource { text: root }));
-    }
-    let text = match read("mod.rut") {
-        Ok(t) => t,
-        // the OLD envelope: the legacy `entry.lib` spelling (+ its
-        // `libs` splice) is the marker and the source
-        Err(_) => {
-            let Some(base) = &manifest.legacy_entry.lib else {
-                return Ok(None); // no body — nothing could ride
-            };
-            match read(base) {
-                Ok(t) => {
-                    let mut text = t;
-                    for lib in &manifest.legacy_entry.libs {
-                        text.push('\n');
-                        text.push_str(&read(lib)?);
-                    }
-                    text
-                }
-                Err(_) => return Ok(None), // the marker's absence: a non-generic pkg — source-free by law
-            }
-        }
-    };
-    Ok(Some(crate::session::GenSource { text }))
-}
-
-/// The mount seam's riding law, ONE helper: read the generic-bearing
-/// source a compiled unit rides ([`riding_gen_source`]), then apply
-/// the packer's own predicate — a unit that owns an open generic
-/// surface (`has_open_generic_surface`, the same law the packer applies
-/// when it decides to ride) MUST carry that source; its absence on a
-/// generic-owning unit is a torn or doctored bundle, refused loudly
-/// here — the earliest point the decoded prog is in hand. A non-generic
-/// unit rides nothing and loads source-free by the same law.
-pub fn riding_source(
-    pkg: &str,
-    program: &rut_core::binary::Program,
-    entries: &[(String, Vec<u8>)],
-    prefix: &str,
-    manifest: &Manifest,
-) -> Result<Option<crate::session::GenSource>, String> {
-    let gen = riding_gen_source(entries, prefix, manifest)?;
-    if gen.is_none() && crate::pack::has_open_generic_surface(program) {
-        return Err(format!(
-            "`{pkg}` owns an open generic surface but its bundle carries no riding source — re-pack the directory"
-        ));
-    }
-    Ok(gen)
 }

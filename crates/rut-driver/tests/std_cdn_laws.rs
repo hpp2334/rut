@@ -212,23 +212,33 @@ fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
 }
 
 #[test]
-fn a_generic_owning_bundle_without_riding_source_refuses_at_mount() {
-    // THE GENERIC BOUNDARY, the mount seam: a compiled pkg whose
-    // surface exports generics MUST ride its source — the packer rides
-    // iff `has_open_generic_surface`, so a bundle stripped of the
-    // riding refuses LOUDLY at mount (the earliest point the decoded
-    // prog is in hand), naming the fix. The fixture is the honest torn
-    // artifact: the fresh pack, minus its riding source entries,
-    // re-written into an archive.
+fn a_generic_owning_bundle_without_template_bodies_refuses_at_mount() {
+    // THE GENERIC BOUNDARY, the mount seam (v22): a compiled pkg whose
+    // surface exports generics must carry its template bodies INSIDE
+    // the binary — the delivery law has no third lane. The fixture is
+    // the honest torn artifact: the fresh pack (binary-only — no source
+    // rides), its templates section emptied, re-written into an
+    // archive. The mount refuses LOUDLY (the earliest point the decoded
+    // program is in hand), naming the fix.
     let (url, bytes) = artifact("pouch");
     let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the committed pouch");
     assert!(
-        parsed.iter().any(|(n, _)| n == "mod.rut"),
-        "the fresh pack rides its source (the root module, `mod.rut`)"
+        !parsed.iter().any(|(n, _)| n == "mod.rut"),
+        "the fresh pack carries no source (the delivery law: ledger | templates)"
     );
     let torn: Vec<(String, Vec<u8>)> = parsed
         .into_iter()
-        .filter(|(n, _)| !(n.ends_with(".rut") && n != "rut.jsonc"))
+        .map(|(n, b)| {
+            if n == "mod.rutc" {
+                let mut prog =
+                    rut_core::binary::decode(&b).expect("decode the pouch module binary");
+                prog.templates.clear();
+                prog.template_stubs.clear();
+                (n, rut_core::binary::encode(&prog))
+            } else {
+                (n, b)
+            }
+        })
         .collect();
     let torn_bytes =
         rut_driver::bundle::write_bundle(&torn).expect("re-write the torn archive");
@@ -244,7 +254,7 @@ fn a_generic_owning_bundle_without_riding_source_refuses_at_mount() {
     )
     .expect_err("the torn bundle refuses at mount");
     assert!(err.contains("`pouch` owns an open generic surface"), "{err}");
-    assert!(err.contains("no riding source"), "{err}");
+    assert!(err.contains("no template bodies"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
     let _ = std::fs::remove_dir_all(&base);
 }

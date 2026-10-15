@@ -1086,10 +1086,13 @@ fn mount_url_dep(
     // gate 6's group reads + the generic-source marker share one entry
     // list — cloned before the root mounts
     // gate 5 — the root: a compiled module (the packer refuses any
-    // other); a generic-owning root rides its source beside the binary,
-    // and the riding law refuses a generic-owning unit that carries none
-    let gen_source = rut_driver::loader::riding_source(&root_spec, &root, &entries, "", &manifest)
-        .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
+    // other); the anti-doctoring law (v22): a generic-owning unit must
+    // carry its template bodies inside the binary
+    if rut_driver::pack::has_generic_bodies(&root) && root.templates.is_empty() {
+        return Err(LoadError::law(format!(
+            "{url}: `{root_spec}` owns an open generic surface but its binary carries no template bodies — corrupt or doctored, re-pack the directory"
+        )));
+    }
     let mods = rut_driver::loader::rows_mods(&entries, "")
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
     world.register(
@@ -1097,7 +1100,6 @@ fn mount_url_dep(
         Pkg {
             body: PkgBody::Compiled(root),
             entry: manifest.entry.clone(),
-            gen_source,
             mods,
             // the archive's rows ride ITS ROOT — the run chain's
             // close-of-world replays the archive from them (grouping
@@ -1180,12 +1182,14 @@ fn mount_url_dep(
                         )));
                     }
                 }
-                let gen_source = rut_driver::loader::riding_source(&key, &program, &entries, &format!("{prefix}/"), &dm)
-                    .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
+                if rut_driver::pack::has_generic_bodies(&program) && program.templates.is_empty() {
+                    return Err(LoadError::law(format!(
+                        "{url}: `{key}` owns an open generic surface but its binary carries no template bodies — corrupt or doctored, re-pack the directory"
+                    )));
+                }
                 Pkg {
                     body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
-                    gen_source,
                     mods: rut_driver::loader::rows_mods(&entries, &format!("{prefix}/"))
                         .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
                     manifest: dm.clone(),

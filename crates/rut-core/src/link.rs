@@ -210,6 +210,19 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
             InstFnKind::HostThunk { .. } => {}
         }
     }
+    // the template window (v22): the placeholder param rows spell the
+    // exporter's own scope exactly like every other carried id — a
+    // rebase that misses them leaves the rows dangling in the merged
+    // world, and the materialization's substitution then matches
+    // nothing (every body materializes unsubstituted)
+    for t in &prog.templates {
+        for &p in &t.param_rows {
+            id(p);
+        }
+    }
+    for s in &prog.template_stubs {
+        id(s.param);
+    }
 }
 
 /// The scope ids a program's packed ids reference, boot excluded: its
@@ -402,6 +415,19 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
             InstFnKind::HostThunk { .. } => {}
         }
     }
+    // the template window (v22): the placeholder param rows and the
+    // bound-member stubs' param rows are scope-qualified carried ids —
+    // an un-remapped row dangles in the merged world and the
+    // materialization's substitution matches nothing (see
+    // `walk_type_ids`' template arm)
+    for t in prog.templates.iter_mut() {
+        for p in t.param_rows.iter_mut() {
+            *p = rb_t(*p);
+        }
+    }
+    for s in prog.template_stubs.iter_mut() {
+        s.param = rb_t(s.param);
+    }
     // a decoded program's `scope` field is unset (the wire carries the
     // ids and the blocks, not the field) — the own scope came from the
     // carried blocks, read before the block ids rewrote
@@ -488,6 +514,17 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     final_type_base.insert(crate::id::BOOT_SCOPE, 0);
     {
         let mut cursor = out.types.types.len() as u32;
+        // the scopes a reseed STAGED rows under (the IR lane's phase B
+        // pushes the requester's descriptor rows into the owner's table
+        // beneath the requester's own scope number): no module owns that
+        // scope, so the plain own-scope sweep would leave it baseless
+        // and every staged or minted id spelling it would fall back to
+        // base 0 — the boot prefix. The staged rows are copied inside
+        // the staging module's segment at the staged block's offset; its
+        // merged base is that offset.
+        let owned: std::collections::HashSet<crate::id::ScopeId> =
+            modules.iter().map(|m| m.types.scope).collect();
+        let mut staged: Vec<(crate::id::ScopeId, u32)> = Vec::new();
         for m in modules.iter() {
             let packed = m.types.packed;
             let m_boot = if packed { m.types.boot_len } else { boot as u32 };
@@ -502,8 +539,24 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             };
             if packed {
                 final_type_base.insert(m.types.scope, cursor);
+                for (s, &b) in m.types.scope_base.iter().enumerate() {
+                    let s = s as crate::id::ScopeId;
+                    if s == crate::id::BOOT_SCOPE
+                        || s == m.types.scope
+                        || b == 0
+                        || b <= own_base
+                        || owned.contains(&s)
+                        || final_type_base.contains_key(&s)
+                    {
+                        continue;
+                    }
+                    staged.push((s, cursor + (b - own_base)));
+                }
             }
             cursor += m.types.types.len().saturating_sub(own_base as usize) as u32;
+        }
+        for (s, base) in staged {
+            final_type_base.entry(s).or_insert(base);
         }
     }
 
@@ -679,6 +732,16 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 }
             }
         }
+        // the template window (v22) dies with the module: the merged
+        // program never consults it (the templates serve the PRE-link
+        // owner mount), and every window fid is append-only — nothing
+        // outside the window references in
+        if !m.templates.is_empty() {
+            let end = m.template_end_fid.min(m.funcs.len() as u32);
+            for fi in m.template_first_fid..end {
+                plan.skip_fns.insert(fi);
+            }
+        }
         let mut next = 0u32;
         for fi in 0..m.funcs.len() as u32 {
             if plan.skip_fns.contains(&fi) {
@@ -847,8 +910,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // packed `(scope, local)` (compiler) or dense (pre-link) -> global dense.
         // A mirrored instantiation row redirects to the claiming module's row —
         // ONE instantiation program-wide, whoever compiled first.
-        let merged_names: Vec<String> =
-            out.types.types.iter().map(|t| out.interner.name(t.name).to_string()).collect();
         let map = |id: TypeId| -> TypeId {
             if id == u32::MAX {
                 return id; // TY_ANY sentinel — never a real type
@@ -861,16 +922,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 if s == crate::id::BOOT_SCOPE {
                     crate::id::local_of(id)
                 } else {
-                    let g = final_type_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id);
-                    if std::env::var("RUT_DEBUG_LINK").is_ok() && m.name == "store_probe" {
-                        let d = m.types.dense(id) as usize;
-                        let src = m.types.types.get(d).map(|t| m_interner.name(t.name).to_string()).unwrap_or("?".into());
-                        let dst = merged_names.get(g as usize).map(|n| n.clone()).unwrap_or("?".into());
-                        if src != dst {
-                            eprintln!("DBG pmap probe id={} scope={} local={} src={} -> g={} dst={}", id, s, crate::id::local_of(id), src, g, dst);
-                        }
-                    }
-                    g
+                    final_type_base.get(&s).copied().unwrap_or(0) + crate::id::local_of(id)
                 }
             } else if id < m_boot {
                 id
@@ -954,17 +1006,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         };
 
         for (di, t) in m.types.types.iter().enumerate().skip(own_base as usize) {
-            if let TyKind::Opt { elem } = &t.kind {
-                let en = m_interner.name(
-                    m.types.types.get(*elem as usize).map(|e| e.name).unwrap_or(crate::sym::NIL),
-                );
-                if en == "nil" && std::env::var("RUT_DEBUG_LINK").is_ok() {
-                    eprintln!(
-                        "DBG optnil module={} dense={} emits-at={} elem_dense={}",
-                        m.name, di, out.types.types.len(), elem
-                    );
-                }
-            }
             out.types.types.push(RutType {
                 name: nm(t.name),
                 kind: remap_kind(&t.kind, &map, &nm, &tm),
@@ -1065,13 +1106,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             if plan.skip_fns.contains(&(fi as u32)) {
                 continue;
             }
-            if std::env::var("RUT_DEBUG_EMPTYFN").is_ok() && f.code.is_empty() && f.host_id.is_none() {
-                let fname = m_interner.name(f.name).to_string();
-                if fname.contains("JsonDeserialize") {
-                    let rows: usize = m.inst_fns.iter().filter(|r| r.fid as usize == fi).count();
-                    eprintln!("DBG empty-fn module={} local={fi} name={fname} ledger_rows={rows}", m.name);
-                }
-            }
             out.funcs.push(FuncCode {
                 name: nm(f.name),
                 params: f.params.into_iter().map(|p| map(p)).collect(),
@@ -1101,6 +1135,12 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             if plan.ty_redirect.contains_key(&r.ty) {
                 continue;
             }
+            // the template window's rows (v22) die here too: their
+            // arguments spell `#<param>` placeholder rows — inert keys
+            // that would otherwise ride the merged ledger
+            if m.templates.iter().any(|t| t.param_rows.contains(&r.args.first().copied().unwrap_or(u32::MAX))) {
+                continue;
+            }
             out_types_ledger.push(InstTy {
                 owner: nm(r.owner),
                 decl: nm(r.decl),
@@ -1109,8 +1149,13 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             });
         }
         for r in m.inst_fns {
-            // dropped mirrors stay dropped (see the inst_types note)
+            // dropped mirrors stay dropped (see the inst_types note);
+            // the template window's rows (v22) die here too — they are
+            // the placeholder compilations' inert keys, never claims
             if plan.skip_fns.contains(&r.fid) {
+                continue;
+            }
+            if !m.templates.is_empty() && r.fid >= m.template_first_fid {
                 continue;
             }
             let kind = match r.kind {
@@ -1141,30 +1186,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
     out.inst_types = out_types_ledger;
     out.inst_fns = out_fns_ledger;
-
-    if std::env::var("RUT_DEBUG_LINK").is_ok() {
-        let mut bases: Vec<String> = final_type_base.iter().map(|(s, b)| format!("s{}@{}", s, b)).collect();
-        bases.sort();
-        eprintln!("DBG final-bases {}", bases.join(" "));
-        for w in [88, 89, 90, 91, 92, 93] {
-            if let Some(t) = out.types.types.get(w) {
-                eprintln!("DBG merged-row {} = {}", w, out.interner.name(t.name));
-            }
-        }
-        for (i, t) in out.types.types.iter().enumerate() {
-            let n = out.interner.name(t.name);
-            if n == "?nil" {
-                if let TyKind::Opt { elem } = &t.kind {
-                    let en = out.interner.name(
-                        out.types.types.get(*elem as usize).map(|e| e.name).unwrap_or(crate::sym::NIL),
-                    );
-                    if en != "nil" {
-                        eprintln!("DBG postlink badopt idx={} elem={} elemname={}", i, elem, en);
-                    }
-                }
-            }
-        }
-    }
 
     Ok(out)
 }

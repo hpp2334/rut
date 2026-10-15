@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
 use rut_core::binary::Program;
+use rut_core::ops::Op;
 use rut_parser::{parse, Mode};
 
 use rut_ast::ast::{Ast, ItemKind, Vis};
@@ -63,6 +64,10 @@ pub(super) struct GraphCompiler<'a> {
     /// deps' per-module decl rows (phase 3): the use validation's
     /// table, parsed once per spec and shared across consumers
     pub(super) dep_decls: HashMap<String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>>,
+    /// the exported generics whose templates could not lower as
+    /// instantiation-independent bodies — `(owner, decl, construct)`.
+    /// FATAL at pack (the pinned stability law).
+    pub(super) template_failures: Vec<(String, String, String)>,
     /// The program root's spec — the dev arm's key: only the ROOT may
     /// `use` its `dev-deps` heads (D5's allowlist reads it). From
     /// `compile_graph`/`compile_units`' `root_spec`.
@@ -522,6 +527,9 @@ impl<'a> GraphCompiler<'a> {
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
         }
+        for (decl, construct) in &out.template_failures {
+            self.template_failures.push((spec.to_string(), decl.clone(), construct.clone()));
+        }
         if !out.diags.is_empty() || out.program.is_none() {
             self.diags.extend(attribute_diags(out.diags, spec, &layout));
             if out.program.is_none() && self.diags.is_empty() {
@@ -652,12 +660,11 @@ impl<'a> GraphCompiler<'a> {
     /// owner recompiles with the seeds (the requesters' descriptors as
     /// sparse blocks — the locals match the requester's layout — plus
     /// the instantiations to materialize before its compile roots). A
-    /// PACKAGED owner grows the same way when its pkg RIDES generic
-    /// source: the ridden text lowers in this session and the
-    /// monomorphized bodies compile at the link, owner = the pkg's spec.
-    /// A packaged owner that rides no source — non-generic by the
-    /// packer's riding law — must already carry the row, or the
-    /// consumer refuses loudly (re-pack it). Seeds cascade — a
+    /// PACKAGED owner serves the request from its own binary: the
+    /// pack-time ledger first (the fast path — the closure already
+    /// compiled the shape), then its TEMPLATES (v22 — the body
+    /// monomorphizes in place by id substitution); a miss of both is a
+    /// torn or doctored bundle, refused loudly. Seeds cascade — a
     /// seeded owner's compile may request from further owners — until
     /// the queue drains; every round processes in canonical (sorted)
     /// order.
@@ -686,7 +693,7 @@ impl<'a> GraphCompiler<'a> {
                 let Some(seeds) = self.seed_pool.get(&owner).cloned() else { continue };
                 match self.body_kind.get(&owner).copied() {
                     Some(0) => self.reseed_source_owner(&owner, &seeds),
-                    Some(1) => self.reseed_compiled_owner(&owner, &seeds),
+                    Some(1) => self.reseed_ir_owner(&owner, &seeds),
                     _ => {
                         let first = &seeds[0].1;
                         let decl = first
@@ -706,7 +713,8 @@ impl<'a> GraphCompiler<'a> {
                 // program drops the bodies an earlier round already
                 // materialized (a consumer's mirror then claims nothing).
                 // The loop ends when the request queue drains; identical
-                // seeds re-materialize nothing (ensure_inst dedups).
+                // seeds re-materialize nothing (the materialization memo
+                // dedups).
                 if !self.diags.is_empty() {
                     return;
                 }
@@ -758,148 +766,458 @@ impl<'a> GraphCompiler<'a> {
         self.programs[idx] = out.program.expect("checked above");
     }
 
-    /// A packaged owner whose pkg RIDES generic source grows at the
-    /// consumer's link: the request missed the pack-time ledger, so the
-    /// ridden source lowers in THIS session (the consumer's) — same
-    /// scope as the mounted unit, the same seeds a directory owner
-    /// would get — and the recompiled program replaces the mounted one
-    /// in place. Identity is the owner's spec (`compile_program_resolved`
-    /// under the owner's name), so the materialized rows are
-    /// indistinguishable in the ledger from pack-time ones: ONE row
-    /// program-wide, link unifies the mirrors onto it. Nothing persists:
-    /// this is per-load compilation, the `.rutc` caches stay pack-time.
-    /// A compiled owner that rides no source (non-generic by the
-    /// packer's riding law) still cannot grow: the loud refusal names
-    /// the fix.
-    fn reseed_compiled_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
-        let Some((idx, scope)) = self.done.get(owner).map(|u| (u.idx, u.scope)) else {
-            return;
-        };
-        let Some(gen) = self
-            .session
-            .resolve(owner)
-            .ok()
-            .and_then(|m| m.gen_source.clone())
-        else {
-            // the no-riding law: the ledger lacks the shape AND no
-            // source rides — the binary must already carry the shape
-            self.check_compiled_owner(owner, seeds);
-            return;
-        };
-        // the unit's text: the ridden source, then the mounted mod
-        // files (phase 3 — a mod-rooted pkg's children ride the rows and
-        // mount beside it; the recompile must reassemble the SAME tree
-        // the pack-time unit compiled)
-        let mut text = gen.text.clone();
-        let mut files: Vec<(u32, String)> = vec![(0, String::new())];
-        let module = self.session.resolve(owner).ok();
-        for (path, m) in module.iter().flat_map(|m| m.mods.iter()) {
-            text.push('\n');
-            files.push((text.len() as u32, path.clone()));
-            text.push_str(&m.text);
-        }
-        // parse + bind: the ridden source's uses resolve at their
-        // load-time scopes — every foreign scope the mounted binary
-        // references is already ensured (the compiled-mount arm ran
-        // them in ledger order before pushing this unit). The layout
-        // exists BEFORE the parse: a failed parse's diags attribute
-        // the same way (byte arithmetic, text aside)
-        let layout = module
-            .as_ref()
-            .map(|m| mod_inputs_of(m, files))
-            .unwrap_or_else(|| rut_lir::check::ModInputs::flat());
-        let (ast, d) = parse(&text, Mode::Impl);
-        if !d.is_empty() {
-            self.diags.extend(attribute_diags(d, owner, &layout));
-            return;
-        }
-        // the dep heads only: a head the owner's own package claims is
-        // the intra-package lane — the compile binds it through the
-        // layout (the walk validated at the pack-time compile)
-        let mut uses = dep_use_heads(self.session, owner, &self.root, &layout, &ast);
-        // the prelude ride, exactly as the source walk spells it
-        if owner != "core" && self.session.resolve("core").is_ok() && !uses.iter().any(|u| u == "core") {
-            uses.push("core".to_string());
-        }
-        // the own-package bindings re-derive silently: the text is
-        // byte-identical, the layout the same tree
-        let own_uses = own_use_bindings(self.session, owner, &self.root, &layout, &ast);
-        let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)> = Vec::new();
-        let mut bound_scopes = HashSet::new();
-        for dep in &uses {
-            // the use law gates here too: the ridden source's heads
-            // are the OWNER pkg's uses (D5's consumer is the owner)
-            let Some(dep_unit) = self.ensure_use(owner, dep) else { return };
-            if bound_scopes.insert(dep_unit.scope) {
-                bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), dep.clone()));
-            }
-        }
-        let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
-        let out = compile_program_resolved(
-            &text,
-            Mode::Impl,
-            owner,
-            scope,
-            &bound,
-            true,
-            &Seeds { groups: &groups },
-            &layout,
-            &own_uses,
-        );
-        for r in &out.requests {
-            self.requests.push((owner.to_string(), r.clone()));
-        }
-        if !out.diags.is_empty() || out.program.is_none() {
-            self.diags.extend(attribute_diags(out.diags, owner, &layout));
-            return;
-        }
-        self.programs[idx] = out.program.expect("checked above");
-    }
-
-    /// A compiled owner without riding source cannot grow: its binary
-    /// carries exactly the instantiations the pack-time closure
-    /// requested, and no source rides to serve anything else. Each
-    /// consumer request must
-    /// already have a ledger row — link unifies the requester's mirror
-    /// onto it — or the closure was packed without this consumer,
-    /// which is a loud refusal naming the re-pack fix, never a guess.
-    fn check_compiled_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
-        let Some((idx, _)) = self.done.get(owner).map(|u| (u.idx, ())) else { return };
-        for (requester, r) in seeds {
-            let key = self.request_key(requester, r);
-            let prog = &self.programs[idx];
-            // the ledger side spells the same key: a type instantiation
-            // row (kind `t`, no methods), its arguments through the
-            // owner's own table — boot rows by id, everything else by
-            // the row's name text (the same semantic canon the request
-            // side speaks)
-            let hit = prog.inst_types.iter().any(|row| {
-                let args = row
-                    .args
-                    .iter()
-                    .map(|&a| {
-                        if rut_core::scope_of(a) == rut_core::BOOT_SCOPE {
-                            format!("b{}", rut_core::local_of(a))
-                        } else {
-                            prog.interner.name(prog.types.type_at(a).name).to_string()
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
-                key == format!("{}#t#{}<{}>#", prog.interner.name(row.owner), prog.interner.name(row.decl), args)
-            });
-            if !hit {
-                self.diags.push(Diag::new(
-                    Span::new(0, 0),
-                    format!(
-                        "instantiation `{}` was not compiled into `{owner}`'s binary and no generic source rides — \
-                         this bundle predates generic-source riding — re-pack it",
-                        key
-                    ),
-                ));
+    /// A packaged owner serves a missed request from its TEMPLATES (v22
+    /// — the delivery law's second lane): the owner program's
+    /// placeholder-compiled bodies monomorphize IN PLACE, by id
+    /// substitution. The owner's types grow the requester's argument
+    /// rows (staged at the requester's own locals — the seed law), the
+    /// template body substitutes, the repr bytes rewrite, the
+    /// repr-keyed folds re-run, and the result is appended with its
+    /// owner-anchored ledger rows — byte-equal to the directory-compiled
+    /// instantiation (the pinned law). Bound-member stubs resolve
+    /// against the concrete argument's own surface: an owner-local
+    /// member binds directly, a member template cascades to its own
+    /// materialization, a foreign generic routes a fresh InstRequest
+    /// (the cascade), and a consumer-local member mints the mirror stub
+    /// whose ledger row names the consumer (link unifies it with the
+    /// real body there — the carried-member law's direction).
+    fn reseed_ir_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
+        let Some(unit) = self.done.get(owner) else { return };
+        let idx = unit.idx;
+        // the live seeds (the pack-time ledger answers the rest — link
+        // unifies the mirror, zero new work)
+        let live: Vec<(String, rut_lir::check::InstRequest)> = seeds
+            .iter()
+            .filter(|(requester, r)| !self.ir_ledger_hit(idx, requester, r))
+            .map(|(requester, r)| (requester.clone(), r.clone()))
+            .collect();
+        // the seed law's staging, ONCE per requester: every live seed's
+        // argument rows share the requester's scope, so the union of
+        // their closures stages as ONE block at one base — a per-request
+        // staging would re-base the scope per shape and strand the
+        // earlier requests' ids (locals beyond the first block's extent
+        // densify into unrelated rows)
+        let mut requesters: Vec<String> = live.iter().map(|(re, _)| re.clone()).collect();
+        requesters.sort();
+        requesters.dedup();
+        for requester in &requesters {
+            let args: Vec<Vec<rut_core::types::TypeId>> = live
+                .iter()
+                .filter(|(re, _)| re == requester)
+                .map(|(_, r)| r.args.clone())
+                .collect();
+            if let Err(msg) = self.stage_ir_seeds(idx, owner, requester, &args) {
+                self.diags.push(Diag::new(Span::new(0, 0), msg));
                 return;
             }
         }
+        for (requester, r) in &live {
+            if r.is_fn {
+                if let Err(msg) =
+                    self.materialize_request(idx, owner, requester, true, r.decl, &r.args, None)
+                {
+                    self.diags.push(Diag::new(Span::new(0, 0), msg));
+                    return;
+                }
+            } else if r.methods.is_empty() {
+                // a type-only request: the instantiation's identity row —
+                // the staged substitution mints it (no body exists)
+                if let Err(msg) =
+                    self.materialize_request(idx, owner, requester, false, r.decl, &r.args, None)
+                {
+                    self.diags.push(Diag::new(Span::new(0, 0), msg));
+                    return;
+                }
+            } else {
+                for &m in &r.methods {
+                    if let Err(msg) =
+                        self.materialize_request(idx, owner, requester, false, r.decl, &r.args, Some(m))
+                    {
+                        self.diags.push(Diag::new(Span::new(0, 0), msg));
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /// The seed law's staging half, per requester: the union closure of
+    /// every live seed's arguments appends as ONE block beneath the
+    /// requester's own scope number (the ids carry over untouched —
+    /// link maps the staged scope onto the requester's segment), every
+    /// row's name re-interns by text (ids are per-program), and the
+    /// scope's base registers once. `materialize_request` then spells
+    /// each request's arguments straight through the block.
+    fn stage_ir_seeds(
+        &mut self,
+        idx: usize,
+        owner: &str,
+        requester: &str,
+        args_per_request: &[Vec<rut_core::types::TypeId>],
+    ) -> Result<(), String> {
+        let r_idx = self.done.get(requester).map(|u| u.idx);
+        let Some(r_idx) = r_idx else { return Ok(()) }; // hand-routed: nothing to stage
+        // read both sides immutably first
+        let mut plan: Vec<(rut_core::types::RutType, rut_core::id::ScopeId, u32)> = Vec::new();
+        {
+            let (owner_prog, r_prog) = (&self.programs[idx], &self.programs[r_idx]);
+            for args in args_per_request {
+                for &a in args {
+                    let s = rut_core::scope_of(a);
+                    if s == rut_core::BOOT_SCOPE
+                        || owner_prog
+                            .types
+                            .scope_base
+                            .get(s as usize)
+                            .copied()
+                            .unwrap_or(0)
+                            != 0
+                    {
+                        // boot, or a block the owner already carries (its
+                        // own world, or a previous staging): the id passes
+                        continue;
+                    }
+                    if owner_prog.types.scope_base.get(s as usize).is_some()
+                        && plan.iter().any(|(_, ps, _)| *ps == s)
+                    {
+                        continue; // this requester's block already staged
+                    }
+                    let closure = Self::desc_closure(r_prog, &[a], rut_core::id::ScopeId::MAX);
+                    if closure.is_empty() {
+                        continue;
+                    }
+                    let mut max_local = 0u32;
+                    for (s2, l) in closure.keys() {
+                        if *s2 == s {
+                            max_local = max_local.max(*l);
+                        }
+                    }
+                    let mut filled = 0u32;
+                    let mut cursor = owner_prog.types.types.len() as u32 + plan.len() as u32;
+                    while filled <= max_local {
+                        match closure.get(&(s, filled)) {
+                            Some(row) => plan.push((row.clone(), s, cursor)),
+                            None => plan.push((
+                                rut_core::types::RutType {
+                                    name: rut_core::sym::NIL,
+                                    kind: rut_core::types::TyKind::Nil,
+                                },
+                                s,
+                                cursor,
+                            )),
+                        }
+                        cursor += 1;
+                        filled += 1;
+                    }
+                }
+            }
+        }
+        if plan.is_empty() {
+            return Ok(());
+        }
+        // the staged rows' IDENT ids spell the REQUESTER's interner —
+        // ids are per-program, so every name re-interns here by text
+        // (the surface's own law: the text crosses, never the id). A
+        // name left as the requester's raw ident reads as an arbitrary
+        // word in the owner's interner — the mint's structural dedup
+        // then matches on garbage and the merged table spells nonsense.
+        let rename_texts: Vec<(rut_core::sym::IdentId, String)> = {
+            let req_interner = &self.programs[r_idx].interner;
+            plan.iter()
+                .flat_map(|(row, _, _)| {
+                    let mut out = vec![row.name];
+                    if let rut_core::types::TyKind::Data { fields } = &row.kind {
+                        out.extend(fields.iter().map(|f| f.name));
+                    }
+                    out
+                })
+                .map(|id| (id, req_interner.name(id).to_string()))
+                .collect()
+        };
+        let own = &mut self.programs[idx];
+        let renames: Vec<(rut_core::sym::IdentId, rut_core::sym::IdentId)> = rename_texts
+            .iter()
+            .map(|&(id, ref text)| (id, own.interner.intern(text)))
+            .filter(|&(from, to)| from != to)
+            .collect();
+        for (row, _, _) in plan.iter_mut() {
+            if let Some(&(_, to)) = renames.iter().find(|(from, _)| *from == row.name) {
+                row.name = to;
+            }
+            if let rut_core::types::TyKind::Data { fields } = &mut row.kind {
+                for f in fields.iter_mut() {
+                    if let Some(&(_, to)) = renames.iter().find(|(from, _)| *from == f.name) {
+                        f.name = to;
+                    }
+                }
+            }
+        }
+        let tail = own.types.types.len() as u32;
+        for (row, _, _) in &plan {
+            own.types.types.push(row.clone());
+        }
+        // the staged block's base: the first appended row of the scope
+        let mut first: std::collections::HashMap<rut_core::id::ScopeId, u32> =
+            std::collections::HashMap::new();
+        for (i, (_, s, _)) in plan.iter().enumerate() {
+            first.entry(*s).or_insert(tail + i as u32);
+        }
+        for (s, base) in first {
+            let need = s as usize + 1;
+            if own.types.scope_base.len() < need {
+                own.types.scope_base.resize(need, 0);
+            }
+            if own.types.scope_base[s as usize] == 0 {
+                own.types.scope_base[s as usize] = base;
+            }
+        }
+        Ok(())
+    }
+
+    /// The pack-time ledger's answer for one request — the same
+    /// name-text canon the request side speaks (boot rows by id,
+    /// everything else by the row's name text).
+    fn ir_ledger_hit(&self, idx: usize, requester: &str, r: &rut_lir::check::InstRequest) -> bool {
+        let Some(unit) = self.done.get(requester) else { return false };
+        let pidx = unit.idx;
+        let req = &self.programs[pidx];
+        let own = &self.programs[idx];
+        let canon_of = |prog: &Program, t: rut_core::types::TypeId| -> String {
+            if rut_core::scope_of(t) == rut_core::BOOT_SCOPE {
+                format!("b{}", rut_core::local_of(t))
+            } else {
+                prog.interner.name(prog.types.type_at(t).name).to_string()
+            }
+        };
+        let args = r.args.iter().map(|&a| canon_of(req, a)).collect::<Vec<_>>().join(",");
+        let owner_text = r.owner.as_str();
+        let decl_text = req.interner.name(r.decl).to_string();
+        if r.is_fn {
+            own.inst_fns.iter().any(|row| {
+                own.interner.name(row.owner) == owner_text
+                    && match &row.kind {
+                        rut_core::binary::InstFnKind::Free { name, subst, .. } => {
+                            own.interner.name(*name) == decl_text
+                                && subst.iter().map(|&t| canon_of(own, t)).collect::<Vec<_>>().join(",") == args
+                        }
+                        _ => false,
+                    }
+            })
+        } else if r.methods.is_empty() {
+            own.inst_types.iter().any(|row| {
+                own.interner.name(row.owner) == owner_text
+                    && own.interner.name(row.decl) == decl_text
+                    && row.args.iter().map(|&t| canon_of(own, t)).collect::<Vec<_>>().join(",") == args
+            })
+        } else {
+            r.methods.iter().all(|&m| {
+                let mtext = req.interner.name(m).to_string();
+                own.inst_fns.iter().any(|row| {
+                    own.interner.name(row.owner) == owner_text
+                        && match &row.kind {
+                            rut_core::binary::InstFnKind::Method { data, name, subst, .. } => {
+                                own.interner.name(*data) == decl_text
+                                    && own.interner.name(*name) == mtext
+                                    && subst.iter().map(|&t| canon_of(own, t)).collect::<Vec<_>>().join(",") == args
+                            }
+                            _ => false,
+                        }
+                })
+            })
+        }
+    }
+
+
+    /// Materialize one request against owner program `idx`: spell the
+    /// arguments through the staged block (`stage_ir_seeds` laid it —
+    /// the ids carry over untouched), find the template, substitute,
+    /// append. `method` is `Some` for a method-body request, `None` for
+    /// a free fn or a type-only request.
+    #[allow(clippy::too_many_arguments)]
+    fn materialize_request(
+        &mut self,
+        idx: usize,
+        owner: &str,
+        requester: &str,
+        is_fn: bool,
+        decl: rut_core::sym::IdentId,
+        args: &[rut_core::types::TypeId],
+        method: Option<rut_core::sym::IdentId>,
+    ) -> Result<(), String> {
+        // the seed law: rows land at the requester's own locals under
+        // the requester's scope (the union block `stage_ir_seeds`
+        // staged), so the ids carry over and the owner's substitution
+        // spells the requester's world. Boot ids are global; a scope the
+        // owner already carries (its own world, or a previous staging)
+        // passes through.
+        let r_idx = self.done.get(requester).map(|u| u.idx);
+        let mut arg_map: Vec<(rut_core::types::TypeId, rut_core::types::TypeId)> = Vec::new();
+        let owner_carries = |a: rut_core::types::TypeId| -> bool {
+            let s = rut_core::scope_of(a);
+            s == rut_core::BOOT_SCOPE
+                || self.programs[idx]
+                    .types
+                    .scope_base
+                    .get(s as usize)
+                    .copied()
+                    .unwrap_or(0)
+                    != 0
+        };
+        for &a in args {
+            if r_idx.is_some() && !owner_carries(a) {
+                // the union staging covered this requester — a miss here
+                // means the arg's closure was empty; the id passes and
+                // the substitution resolves it or the template never
+                // mentions it
+            }
+            arg_map.push((a, a));
+        }
+        // the consumer-local members' index (case (c) of the stub
+        // resolution): each program's inherent rows, keyed by scope —
+        // computed once, so the materialization never holds a second
+        // program borrow while growing the owner
+        let mut home = Homes::default();
+        for p in self.programs.iter() {
+            if p.scope == rut_core::BOOT_SCOPE {
+                continue;
+            }
+            home.name.insert(p.scope, p.name.clone());
+            let entry = home.members.entry(p.scope).or_default();
+            for ih in &p.surface.inherents {
+                let set = entry.entry(ih.target).or_default();
+                for m in &ih.methods {
+                    set.insert(p.interner.name(m.name).to_string());
+                }
+            }
+        }
+        // the request's name text spells through the REQUESTER's
+        // interner (the ids are per-program; the text is what crosses)
+        let (decl_text, method_text) = match r_idx {
+            Some(ri) => {
+                let req = &self.programs[ri];
+                (
+                    req.interner.name(decl).to_string(),
+                    method.map(|m| req.interner.name(m).to_string()),
+                )
+            }
+            None => (String::new(), None),
+        };
+        // ---- phase B: substitute + materialize, inside the owner
+        // program's borrow
+        let Self { programs, requests, .. } = self;
+        let own = &mut programs[idx];
+        // the template row, matched by (kind, name text, arity) — a
+        // BODY request only; a type-only request needs no template
+        // (its identity row mints structurally below)
+        let arity = args.len();
+        let row = if is_fn || method.is_some() {
+            own.templates.iter().enumerate().find(|(_, t)| {
+                let name_ok = match &t.kind {
+                    rut_core::binary::TemplateKind::Free { name } => {
+                        is_fn && own.interner.name(*name) == decl_text
+                    }
+                    rut_core::binary::TemplateKind::Method { data, name } => {
+                        !is_fn
+                            && own.interner.name(*data) == decl_text
+                            && method_text.as_deref() == Some(own.interner.name(*name))
+                    }
+                };
+                name_ok && t.param_rows.len() == arity
+            })
+        } else {
+            None
+        };
+        let fid = if let Some((_, trow)) = row {
+            let params = trow.param_rows.clone();
+            let first_fid = own.template_first_fid;
+            let stubs = own.template_stubs.clone();
+            // the memo: (template fid, argument values) → the
+            // materialized fid; a body reserves its slot BEFORE cloning,
+            // so recursion lands on the reserved fid (the ensure_inst
+            // pattern)
+            let mut memo: HashMap<(u32, Vec<rut_core::types::TypeId>), u32> = HashMap::new();
+            materialize_body(
+                own,
+                &home,
+                &stubs,
+                first_fid,
+                trow.fid,
+                &params,
+                &arg_map.iter().map(|(_, o)| *o).collect::<Vec<_>>(),
+                owner,
+                &mut memo,
+                requests,
+                0,
+            )?
+        } else {
+            // a type-only request: the instantiation's identity row —
+            // the class's template export substitutes structurally and
+            // the owner-anchored row mints (no body exists)
+            let base = own
+                .surface
+                .type_exports
+                .iter()
+                .find(|t| t.is_generic && own.interner.name(t.name) == decl_text);
+            let Some(base) = base else {
+                return Err(format!(
+                    "instantiation `{owner}#{decl_text}<..>` is served by neither `{owner}`'s \
+                     pack-time ledger nor its template bodies — corrupt or doctored, re-pack \
+                     the directory"
+                ));
+            };
+            let own_scope = rut_core::link::own_scope(own).unwrap_or(0);
+            let tmpl = rut_core::pack(base.scope.unwrap_or(own_scope), base.local);
+            let mut pairs = Vec::new();
+            for (p, &a) in base.params.iter().zip(args.iter()) {
+                let ptext = own.interner.name(*p).to_string();
+                let Some(row) = own
+                    .interner
+                    .lookup(&format!("#{ptext}"))
+                    .and_then(|id| own.types.dense_id_of_name(id))
+                else {
+                    return Err(format!(
+                        "`{owner}`'s template row for `{decl_text}` carries no `#{ptext}` placeholder — \
+                         corrupt or doctored, re-pack the directory"
+                    ));
+                };
+                pairs.push((row, a));
+            }
+            let ledger_rows = own.inst_fns.clone();
+            let mut sub = crate::compile::material::Substitution::new(
+                &mut own.types,
+                &mut own.interner,
+                pairs,
+                owner.to_string(),
+            )
+            .with_ledger_owners(&ledger_rows);
+            let _ = sub.run(tmpl);
+            own.inst_types.extend(std::mem::take(&mut sub.minted_inst_tys));
+            0 // no body — the kind arm below returns early
+        };
+        // the request's own ledger row: the owner-anchored identity the
+        // consumer's mirror unifies with at link. The NAME TEXTS intern
+        // in the OWNER's interner — the request's idents spell the
+        // requester's table and mean nothing here.
+        let subst_owner = own.interner.intern(owner);
+        let decl_ident = own.interner.intern(&decl_text);
+        let kind = if is_fn {
+            rut_core::binary::InstFnKind::Free {
+                name: decl_ident,
+                subst: arg_map.iter().map(|(_, o)| *o).collect(),
+                origins: vec![],
+            }
+        } else if let Some(m) = method {
+            rut_core::binary::InstFnKind::Method {
+                data: decl_ident,
+                name: own.interner.intern(&method_text.unwrap_or_default()),
+                subst: arg_map.iter().map(|(_, o)| *o).collect(),
+                origins: vec![],
+            }
+        } else {
+            return Ok(()); // a type-only request: the identity row minted above
+        };
+        own.inst_fns.push(rut_core::binary::InstFn { owner: subst_owner, kind, fid });
+        Ok(())
     }
 }
 
@@ -1474,4 +1792,371 @@ impl GraphCompiler<'_> {
             .map(|m| matches!(m.body, crate::session::PkgBody::Source { .. } | crate::session::PkgBody::Host { .. }))
             .unwrap_or(false)
     }
+}
+
+/// The consumer-local member index (the stub resolution's case (c)):
+/// every program's inherent rows, keyed by its own scope — the
+/// materialization reads it instead of holding a second program
+/// borrow while growing the owner.
+#[derive(Default)]
+struct Homes {
+    name: HashMap<rut_core::id::ScopeId, String>,
+    members: HashMap<rut_core::id::ScopeId, HashMap<u32, std::collections::HashSet<String>>>,
+}
+
+/// Materialize one template body into the owner program: reserve the
+/// fn slot, clone the template's `FuncCode` through the substitution
+/// (`TypeId`s rebuilt structurally, repr bytes recomputed, the
+/// repr-keyed folds re-run), then fix every callee operand — a
+/// bound-member stub resolves against the concrete argument's own
+/// surface, a template-window callee materializes recursively, a
+/// foreign mirror stub re-mints with the substituted ledger row and
+/// routes a fresh `InstRequest`. Returns the materialized fid.
+#[allow(clippy::too_many_arguments)]
+fn materialize_body(
+    own: &mut Program,
+    home: &Homes,
+    stubs: &[rut_core::binary::TemplateStub],
+    first_fid: u32,
+    template_fid: u32,
+    parent_params: &[rut_core::types::TypeId],
+    parent_values: &[rut_core::types::TypeId],
+    owner: &str,
+    memo: &mut HashMap<(u32, Vec<rut_core::types::TypeId>), u32>,
+    requests: &mut Vec<(String, rut_lir::check::InstRequest)>,
+    depth: u32,
+) -> Result<u32, String> {
+    if depth > 100 {
+        return Err(format!(
+            "template materialization for `{owner}` recursed past 100 frames — a generic cycle the templates cannot close"
+        ));
+    }
+    // the callee's own substitution context: a ledger row naming the
+    // fid spells its template-side arguments (the row's subst) — those
+    // run through the parent's substitution; a rowless callee (a
+    // lambda / for-of closure minted inside the template) inherits the
+    // parent's context wholesale
+    let (params, values) = match own.inst_fns.iter().find(|r| r.fid == template_fid) {
+        Some(row) => {
+            let row_subst: Vec<rut_core::types::TypeId> = match &row.kind {
+                rut_core::binary::InstFnKind::Free { subst, .. }
+                | rut_core::binary::InstFnKind::Method { subst, .. } => subst.clone(),
+                rut_core::binary::InstFnKind::HostThunk { .. } => vec![],
+            };
+            let ledger_rows = own.inst_fns.clone();
+            let mut sub = crate::compile::material::Substitution::new(
+                &mut own.types,
+                &mut own.interner,
+                parent_params.iter().cloned().zip(parent_values.iter().cloned()).collect(),
+                owner.to_string(),
+            )
+            .with_ledger_owners(&ledger_rows);
+            let vals = row_subst.iter().map(|&t| sub.run(t)).collect();
+            (row_subst, vals)
+        }
+        None => (parent_params.to_vec(), parent_values.to_vec()),
+    };
+    let key = (template_fid, values.clone());
+    if let Some(&f) = memo.get(&key) {
+        return Ok(f);
+    }
+    let source = own
+        .funcs
+        .get(template_fid as usize)
+        .ok_or_else(|| format!("template body #{template_fid} out of range in `{owner}`"))?
+        .clone();
+    let ledger_row = own.inst_fns.iter().find(|r| r.fid == template_fid).cloned();
+    if source.code.is_empty() && source.host_id.is_none() {
+        // a MIRROR STUB (the template window's request to a foreign
+        // generic): never clone an empty body — re-mint the stub with
+        // the substituted ledger row and route the request to the
+        // foreign owner (the cascade)
+        let row = ledger_row
+            .ok_or_else(|| format!("`{owner}`: bodyless fn #{template_fid} carries no ledger row"))?;
+        let owner_text = own.interner.name(row.owner).to_string();
+        let (is_fn, data_ident, name_ident): (bool, _, _) = match &row.kind {
+            rut_core::binary::InstFnKind::Free { name, .. } => {
+                (true, *name, *name)
+            }
+            rut_core::binary::InstFnKind::Method { data, name, .. } => {
+                (false, *data, *name)
+            }
+            rut_core::binary::InstFnKind::HostThunk { .. } => {
+                return Err(format!(
+                    "`{owner}`: a host thunk (#{template_fid}) rode a template call — doctored"
+                ));
+            }
+        };
+        let args: Vec<rut_core::types::TypeId> = values.clone();
+        let methods: Vec<rut_core::sym::IdentId> = if is_fn { vec![] } else { vec![name_ident] };
+        // the new stub: bodyless, its ledger row spells the substituted
+        // key — link binds the call to the foreign owner's served body
+        let data_text = own.interner.name(data_ident).to_string();
+        let name_text = own.interner.name(name_ident).to_string();
+        let stub_name = own.interner.intern(&format!("mirror#{owner_text}${data_text}${name_text}"));
+        let new_fid = own.funcs.len() as u32;
+        own.funcs.push(rut_core::binary::FuncCode {
+            name: stub_name,
+            params: vec![],
+            ret: rut_core::types::TY_NIL,
+            is_method: !is_fn,
+            n_captures: 0,
+            regs: vec![],
+            argv: vec![],
+            labels: vec![],
+            code: vec![],
+            spans: vec![],
+            pos: vec![],
+            host_id: None,
+        });
+        let k = if is_fn {
+            rut_core::binary::InstFnKind::Free {
+                name: name_ident,
+                subst: args.clone(),
+                origins: vec![],
+            }
+        } else {
+            rut_core::binary::InstFnKind::Method {
+                data: data_ident,
+                name: name_ident,
+                subst: args.clone(),
+                origins: vec![],
+            }
+        };
+        own.inst_fns.push(rut_core::binary::InstFn {
+            owner: own.interner.intern(&owner_text),
+            kind: k,
+            fid: new_fid,
+        });
+        requests.push((
+            owner.to_string(),
+            rut_lir::check::InstRequest {
+                owner: owner_text,
+                decl: data_ident,
+                args,
+                methods,
+                is_fn,
+                is_impl: false,
+                impl_target: 0,
+            },
+        ));
+        memo.insert(key, new_fid);
+        return Ok(new_fid);
+    }
+    // reserve the slot, then substitute
+    let new_fid = own.funcs.len() as u32;
+    memo.insert(key.clone(), new_fid);
+    own.funcs.push(source.clone());
+    let (mut body, minted) = {
+        let ledger_rows = own.inst_fns.clone();
+        let mut sub = crate::compile::material::Substitution::new(
+            &mut own.types,
+            &mut own.interner,
+            params.iter().cloned().zip(values.iter().cloned()).collect(),
+            owner.to_string(),
+        )
+        .with_ledger_owners(&ledger_rows);
+        let body = crate::compile::material::materialize_fn(&mut sub, &source, &mut |f| f);
+        let minted = std::mem::take(&mut sub.minted_inst_tys);
+        (body, minted)
+    };
+    // fix the callee operands against the substituted world
+    let member_stubs: HashMap<u32, (rut_core::types::TypeId, rut_core::sym::IdentId)> = stubs
+        .iter()
+        .map(|s| (s.fid, (s.param, s.member)))
+        .collect();
+    for op in body.code.iter_mut() {
+        let needs_fix = matches!(op, Op::Call { .. } | Op::CallM { .. } | Op::MakeClosure { .. });
+        if !needs_fix {
+            continue;
+        }
+        let f = match op {
+            Op::Call { func, .. } | Op::CallM { func, .. } | Op::MakeClosure { func, .. } => *func,
+            _ => unreachable!("guarded above"),
+        };
+        let fixed = if let Some((param, member)) = member_stubs.get(&f).copied() {
+            let mut sub2 = crate::compile::material::Substitution::new(
+                &mut own.types,
+                &mut own.interner,
+                params.iter().cloned().zip(values.iter().cloned()).collect(),
+                owner.to_string(),
+            );
+            let concrete = sub2.run(param);
+            resolve_member_stub(
+                own, home, stubs, first_fid, concrete, member, owner, &params, &values, memo,
+                requests, depth,
+            )?
+        } else if rut_core::scope_of(f) == rut_core::BOOT_SCOPE && f >= first_fid {
+            // a plain operand at or above the window start names THIS
+            // program's template window (own fn refs compile to plain
+            // boot-scope ids; a scope-qualified operand is a FOREIGN
+            // concrete fn reference — link maps it through the module
+            // bases, exactly as a directory-compiled instantiation's
+            // would, so it passes through untouched)
+            materialize_body(
+                own, home, stubs, first_fid, f, &params, &values, owner, memo, requests, depth + 1,
+            )?
+        } else {
+            f
+        };
+        match op {
+            Op::Call { func, .. } => *func = fixed,
+            Op::CallM { func, .. } => *func = fixed,
+            Op::MakeClosure { func, .. } => *func = fixed,
+            _ => {}
+        }
+    }
+    own.inst_types.extend(minted);
+    own.funcs[new_fid as usize] = body;
+    Ok(new_fid)
+}
+
+/// Resolve one bound-member stub: the concrete argument's own surface
+/// answers. An owner-local class binds its compiled fn directly; an
+/// instantiation of an OWN generic class materializes the member
+/// template recursively; a consumer-local class mints the mirror stub
+/// whose ledger row names the consumer (link unifies it with the real
+/// body there — the carried-member law's direction).
+#[allow(clippy::too_many_arguments)]
+fn resolve_member_stub(
+    own: &mut Program,
+    home: &Homes,
+    stubs: &[rut_core::binary::TemplateStub],
+    first_fid: u32,
+    concrete: rut_core::types::TypeId,
+    member: rut_core::sym::IdentId,
+    owner: &str,
+    params: &[rut_core::types::TypeId],
+    values: &[rut_core::types::TypeId],
+    memo: &mut HashMap<(u32, Vec<rut_core::types::TypeId>), u32>,
+    requests: &mut Vec<(String, rut_lir::check::InstRequest)>,
+    depth: u32,
+) -> Result<u32, String> {
+    let member_text = own.interner.name(member).to_string();
+    // (a) the owner's own compiled member
+    let local = own.surface.inherents.iter().find_map(|ih| {
+        if ih.target != concrete {
+            return None;
+        }
+        ih.methods
+            .iter()
+            .find(|m| own.interner.name(m.name) == member_text && m.local != 0)
+            .map(|m| m.local)
+    });
+    if let Some(local) = local {
+        return Ok(local);
+    }
+    // (b) an instantiation of an OWN generic class: the member template
+    // materializes at the concrete's arguments
+    let concrete_text = own.type_name(concrete).to_string();
+    if let Some((base, args_text)) = concrete_text.split_once('<') {
+        let args_text = args_text.strip_suffix('>').unwrap_or(args_text);
+        let arg_rows: Vec<rut_core::types::TypeId> = split_top_commas_local(args_text)
+            .iter()
+            .filter_map(|t| own.interner.lookup(t).and_then(|id| own.types.dense_id_of_name(id)))
+            .collect();
+        let trow = own.templates.iter().find(|t| {
+            t.param_rows.len() == arg_rows.len()
+                && match &t.kind {
+                    rut_core::binary::TemplateKind::Method { data, name } => {
+                        own.interner.name(*data) == base
+                            && own.interner.name(*name) == member_text
+                    }
+                    rut_core::binary::TemplateKind::Free { name } => {
+                        own.interner.name(*name) == base
+                    }
+                }
+        });
+        if let Some(trow) = trow {
+            let (f, p) = (trow.fid, trow.param_rows.clone());
+            return materialize_body(
+                own, home, stubs, first_fid, f, &p, &arg_rows, owner, memo, requests, depth + 1,
+            );
+        }
+    }
+    // (c) a consumer-local class: the mirror stub — a bodyless fn whose
+    // ledger row names the concrete's HOME unit; link unifies it with
+    // the real body there
+    let home_scope = rut_core::scope_of(concrete);
+    if home_scope != rut_core::BOOT_SCOPE {
+        if let Some(home_name) = home.name.get(&home_scope).cloned() {
+            let served = home
+                .members
+                .get(&home_scope)
+                .and_then(|m| m.get(&concrete))
+                .map(|set| set.contains(&member_text))
+                .unwrap_or(false);
+            if !served {
+                return Err(format!(
+                    "`{owner}`'s template calls `{concrete_text}.{member_text}`, but the type's \
+                     own surface does not carry that member — the shape the consumer spelled is \
+                     not satisfied; re-pack after fixing the caller"
+                ));
+            }
+            let data_ident = own
+                .interner
+                .lookup(&concrete_text)
+                .unwrap_or_else(|| own.interner.intern(&concrete_text));
+            let stub_name = own
+                .interner
+                .intern(&format!("mirror#{}${}${}", home_name, concrete_text, member_text));
+            let fid = own.funcs.len() as u32;
+            own.funcs.push(rut_core::binary::FuncCode {
+                name: stub_name,
+                params: vec![],
+                ret: rut_core::types::TY_NIL,
+                is_method: true,
+                n_captures: 0,
+                regs: vec![],
+                argv: vec![],
+                labels: vec![],
+                code: vec![],
+                spans: vec![],
+                pos: vec![],
+                host_id: None,
+            });
+            own.inst_fns.push(rut_core::binary::InstFn {
+                owner: own.interner.intern(&home_name),
+                kind: rut_core::binary::InstFnKind::Method {
+                    data: data_ident,
+                    name: member,
+                    subst: vec![],
+                    origins: vec![],
+                },
+                fid,
+            });
+            return Ok(fid);
+        }
+    }
+    Err(format!(
+        "`{owner}`'s template calls `{concrete_text}.{member_text}`, but no surface carries that \
+         member — corrupt or doctored, re-pack the directory"
+    ))
+}
+
+fn split_top_commas_local(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut cur = String::new();
+    for ch in s.chars() {
+        match ch {
+            '<' | '(' => {
+                depth += 1;
+                cur.push(ch);
+            }
+            '>' | ')' => {
+                depth = depth.saturating_sub(1);
+                cur.push(ch);
+            }
+            ',' if depth == 0 => {
+                out.push(cur.trim().to_string());
+                cur = String::new();
+            }
+            _ => cur.push(ch),
+        }
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur.trim().to_string());
+    }
+    out
 }

@@ -26,6 +26,8 @@ mod sroa;
 mod stmt;
 mod utf8;
 
+pub use peephole::refold_optprim;
+
 const NEST_MAX: u32 = 1024;
 
 /// The per-function operand pools: ops address their variadic

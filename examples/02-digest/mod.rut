@@ -1,4 +1,4 @@
-use pouch::{ Vec };
+use pouch::{ Vec, freeze_bytes };
 use calc::{ Math };
 use json::{ EncodeJsonError, JsonWriter };
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
@@ -83,7 +83,7 @@ entry fn hex_dec(s: str) -> (bytes, str) {
         }
         i = i + 1;
     }
-    return (out.freeze(), "");
+    return (freeze_bytes(out), "");
 }
 
 // ------------------------------------------------------------ base64 ---
@@ -163,7 +163,7 @@ entry fn b64_dec(s: str, url: bool) -> (bytes, str) {
         if (rem >= 3) { out.push(((w >> 8) & 255) as u8); }
         if (rem == 4) { out.push((w & 255) as u8); }
     }
-    return (out.freeze(), "");
+    return (freeze_bytes(out), "");
 }
 
 // ------------------------------------------------- hashmap hash keys ---
@@ -352,7 +352,7 @@ fn md5_impl(msg: bytes) -> bytes {
     for (let mut i = 0; i < 4; i += 1) { out.push(((w >> (i as u32 * 8)) & 0xFF) as u8); }
     w = d0;
     for (let mut i = 0; i < 4; i += 1) { out.push(((w >> (i as u32 * 8)) & 0xFF) as u8); }
-    return out.freeze();
+    return freeze_bytes(out);
 }
 
 /// SHA-1/SHA-2 padding: 0x80, zeros to n%{mod}=={res}, then the message
@@ -434,7 +434,7 @@ fn sha1_impl(msg: bytes) -> bytes {
         out.push(((ws[j] >> 8) & 0xFF) as u8);
         out.push((ws[j] & 0xFF) as u8);
     }
-    return out.freeze();
+    return freeze_bytes(out);
 }
 
 fn sha256_k() -> Vec<u32> {
@@ -520,7 +520,7 @@ fn sha256_impl(msg: bytes) -> bytes {
         out.push(((st[j] >> 8) & 0xFF) as u8);
         out.push((st[j] & 0xFF) as u8);
     }
-    return out.freeze();
+    return freeze_bytes(out);
 }
 
 fn sha512_k() -> Vec<u64> {
@@ -629,7 +629,7 @@ fn sha512_impl(msg: bytes) -> bytes {
         out.push(((st[j] >> 8) & 0xFF) as u8);
         out.push((st[j] & 0xFF) as u8);
     }
-    return out.freeze();
+    return freeze_bytes(out);
 }
 
 entry fn md5(data: bytes) -> bytes { return md5_impl(data); }

@@ -494,6 +494,44 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Ok(ret_ty);
                 }
             }
+            // the template window (v22): the receiver is a `#<param>`
+            // placeholder row — the bound's descriptor names the member
+            // and the resolution MINTS A STUB (the wire's TemplateRow
+            // records it; the link-side materialization resolves it
+            // against the concrete argument's own surface)
+            if self.ctx.is_template_param(rt) {
+                let ifaces = self.subst.iter().find_map(|(n, t)| {
+                    if *t == rt { self.iface_bounds.get(n).cloned() } else { None }
+                });
+                let Some(ifaces) = ifaces else {
+                    self.ctx.err(sp, format!(
+                        "`{}` names no interface bound here — a template's bound-member call needs one",
+                        self.ctx.type_name(rt)
+                    ));
+                    return Err(());
+                };
+                let (ptys, ret_ty, _) = self.iface_member_shape(rt, &ifaces, name, sp)?;
+                if args.len() != ptys.len() {
+                    self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                    return Err(());
+                }
+                let mut aregs = Vec::new();
+                for (i, a) in args.iter().enumerate() {
+                    let t = self.compile_expr(*a, Some(ptys[i]))?;
+                    if !self.widens_val(*a, t, ptys[i]) {
+                        self.ctx.err(self.ctx.ast.span(a.id()), format!(
+                            "argument {} is `{}`, `{}` expected",
+                            i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
+                        ));
+                    }
+                    aregs.push(self.last_reg);
+                }
+                let fid = self.ctx.mint_member_stub(rt, name, ptys, ret_ty, true);
+                let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+                let _ = expected;
+                { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+                return Ok(ret_ty);
+            }
             self.no_method_error(rt, name, sp);
             return Err(());
         }

@@ -43,8 +43,6 @@ mod.rutc                 the root's compiled binary — bodies + surface
 mod.d.rut                the root's surface text (humans, LSP), when it declares
                            one — the canonical name, whatever the directory
                            grammar spelled
-mod.rut                  the root's generic-bearing source, when its surface
-                           exports generics (the riding law, below)
 rut.mods                 the root's module rows, when it has mod children
 deps/<name>@<fp16>/      one directory per dep group, keyed by the group's
                            CONTENT IDENTITY — fp16 is the first 16 hex chars of
@@ -56,12 +54,10 @@ deps/<name>@<fp16>/      one directory per dep group, keyed by the group's
 deps/<name>@<fp16>/rut.jsonc   the group's manifest, byte-for-byte
 deps/<name>@<fp16>/mod.rutc    a compiled group (the ordinary case: a source
                            body the graph linked) — bodies + surface, the
-                           linking truth; generic exports ride compiled — the
-                           binary carries the closure's instantiations in its
-                           ledger
+                           linking truth; the binary carries the closure's
+                           instantiations in its ledger AND its generic
+                           bodies as templates (v22)
 deps/<name>@<fp16>/mod.d.rut   the group's surface text, when it declares one
-deps/<name>@<fp16>/mod.rut     the group's generic-bearing source, when its
-                           surface exports generics (the riding law, below)
 deps/<name>@<fp16>/rut.mods    its module rows, when it has mod children
 deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
                            not link) → a declaration file set: no binary, the
@@ -95,26 +91,26 @@ deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
   whose unit did not link) rides its declaration file set. Refuse,
   never guess: the packer calls the graph's own classifier, there is
   no second implementation.
-- **Generics ride compiled — and their source rides beside them** (the
-  generic-source riding law): instantiation is owned by the declaring
-  package, and the pack walk seeds each generic dep with the
-  instantiations its consumers spell — the binary's instantiation
-  ledger names every `(owner, decl, arguments)` row. A compiled pkg
-  whose surface exports an OPEN generic surface (generic fns, generic
-  type exports, generic methods) ALSO rides the source that serves
-  consumer-spelled shapes: the root module (`mod.rut`), verbatim,
-  beside the binary. The riding source's presence is the loader's
-  dispatch marker; non-generic pkgs (`http`, `ink`, `strbuild`) stay
-  source-free by law. At the consumer's link, a request the ledger
-  lacks lowers the ridden text in the consumer's session and compiles
-  the monomorphized body with owner = the pkg's spec — one row
-  program-wide, indistinguishable from a pack-time one, nothing
-  persisted. The law binds both sides: a pkg that owns an open
-  generic surface but whose bundle carries no riding source refuses at
-  the mount (`pouch` owns an open generic surface but its bundle
-  carries no riding source — re-pack the directory), never mislinks.
-  `--strip` refuses the combination: the ridden text would recompile
-  clean-named beside mangled binaries.
+- **Generics ride compiled — the delivery law (v22)**: instantiation
+  is owned by the declaring package, and the pack walk seeds each
+  generic dep with the instantiations its consumers spell — the
+  binary's instantiation ledger names every `(owner, decl, arguments)`
+  row the closure compiled. A compiled pkg whose surface exports an
+  OPEN generic surface (generic fns, generic type exports, generic
+  methods) ALSO carries the generic BODIES as templates inside the
+  binary (v22 — the wire's templates section): every exported generic
+  decl compiles once against `#<param>` placeholder rows at pack time,
+  and a consumer-spelled shape the ledger misses monomorphizes from
+  the template at link — one row program-wide, owner-anchored,
+  indistinguishable from a pack-time one, nothing persisted. **A
+  published bundle never carries source**: the ledger is the fast
+  path, the templates the only other lane, and a request missing both
+  is a torn or doctored bundle — the mount refuses loudly (`pouch`
+  owns an open generic surface but its binary carries no template
+  bodies — corrupt or doctored, re-pack the directory), never
+  mislinks. `--strip` is legal with a generic surface
+  unconditionally: a successful pack's templates cover by
+  construction.
 - **The root must compile** — a root that produces no compiled program
   is refused: `pack: <pkg> produced no compiled program — a host pkg
   (a `.d.rut` surface with no body) cannot be a bundle root; pack a

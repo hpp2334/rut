@@ -47,8 +47,8 @@ mod groups;
 mod strip;
 
 pub use error::PackError;
-pub use groups::{collect_source_group, has_open_generic_surface};
-use groups::{group_file, group_manifest, ride_generic_source, rides_compiled};
+pub use groups::{collect_source_group, has_generic_bodies, has_open_generic_surface};
+use groups::{group_file, group_manifest, rides_compiled};
 use strip::strip_arm;
 
 use std::collections::BTreeMap;
@@ -122,18 +122,14 @@ pub struct PackOpts {
 /// The pkg's own source text as the rows' `""` spelling: a source
 /// body's text, a host body's `.d.rut` root surface (the rows the
 /// tree lowered from — the `type = "host"` flavor of the same
-/// envelope), else a compiled unit's ridden root source (the rows
-/// lane's `""`, riding as the generic-source marker). A pkg with
-/// mounted mod children always answers one of the three.
+/// envelope). A pkg with mounted mod children always answers one of
+/// the two; a compiled body's tree rows spell an empty root (the
+/// binary IS the body — the `""` row is inert for it).
 fn rows_root_text(pkg: &crate::session::Pkg) -> String {
     match &pkg.body {
         PkgBody::Source { text, .. } => text.clone(),
         PkgBody::Host { root_surface, .. } => root_surface.clone().unwrap_or_default(),
-        _ => pkg
-            .gen_source
-            .as_ref()
-            .map(|g| g.text.clone())
-            .unwrap_or_default(),
+        _ => String::new(),
     }
 }
 
@@ -197,6 +193,16 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         let msgs: Vec<String> = units.diags.iter().map(|d| d.msg.clone()).collect();
         return Err(PackError::law(format!("pack: {}", msgs.join("; "))));
     }
+    // the pinned stability law (v22): a generic that cannot lower to an
+    // instantiation-independent body refuses the pack outright — no
+    // fallback lane, a published bundle carries no source
+    for (owner, decl, construct) in &units.template_failures {
+        return Err(PackError::law(format!(
+            "pack: `{owner}`'s generic `{decl}` does not lower to an instantiation-independent \
+             body ({construct}) — restructure the surface or share the directory; a published \
+             bundle carries no source"
+        )));
+    }
     // a compiled group the walk never ensured cannot ride: its binary
     // still spells ITS pack's scopes, which this output's ledger does
     // not carry — refuse, never guess (v1: use it or vendor the dep)
@@ -246,6 +252,35 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     //    every encoded program, symbolication tables taken into the
     //    sidecar.
     let symtab = strip_arm(&mut units, &session, &w.sources, &w.archives, &w.read, &root, root_idx, opts.strip)?;
+    // the templates-must-emit law (v22): a compiled program whose
+    // surface exports an OPEN generic surface must carry template
+    // bodies — the delivery law's producer half. A miss here is a
+    // compiler regression, never a packable shape (the consumer's
+    // mount seam refuses the same shape loudly).
+    for (spec, idx) in std::iter::once((root.clone(), root_idx)).chain(
+        units.linked.iter().filter(|(s, _)| s.as_str() != root && session.resolve(s).is_ok()).map(|(s, (i, _))| (s.clone(), *i)),
+    ) {
+        let prog = &units.programs[idx];
+        if !rides_compiled(&session, &spec, &units) {
+            continue;
+        }
+        if has_generic_bodies(prog) && prog.templates.is_empty() {
+            return Err(PackError::law(format!(
+                "pack: `{spec}` owns an open generic surface but its binary carries no template \
+                 bodies — corrupt or doctored, re-pack the directory"
+            )));
+        }
+        // the stability law's pack half: a template body whose
+        // repr-carrying ops are not grounded would lower wrongly for
+        // some instantiation — the HARD refusal, the recipe spelled
+        if let Some((decl, construct)) = crate::compile::material::template_stability_violation(prog) {
+            return Err(PackError::law(format!(
+                "pack: `{spec}`'s generic `{decl}` does not lower to an instantiation-independent \
+                 body ({construct}) — restructure the surface or share the directory; a published \
+                 bundle carries no source"
+            )));
+        }
+    }
     // ---- staging: the root's own files, then every dep group — so
     // the scope ledger's identity rows read fingerprints off the exact
     // bytes about to be emitted, and the emission order stays the law:
@@ -253,32 +288,17 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // in identity order.
 
     // the root's own file set (prefix ""): the spelled surface at its
-    // canonical `mod.d.rut` name, the generic riding source, the module
-    // rows. The manifest rides first (below) and the binary
-    // (`mod.rutc`) is NOT part of the fingerprint basis — the identity
-    // fingerprints the SOURCE set.
+    // canonical `mod.d.rut` name, the module rows. The manifest rides
+    // first (below) and the binary (`mod.rutc`) is NOT part of the
+    // fingerprint basis — the identity fingerprints the SOURCE set.
+    // (Since v22 a generic-owning pkg rides NO source: its generic
+    // bodies are template rows inside the binary — the delivery law.)
     let root_pkg = session.resolve(&root).map_err(|e| PackError::law(e.to_string()))?;
     let mut root_files: Vec<(String, Vec<u8>)> = Vec::new();
     if let Some(rel) = &w.manifest.entry.type_path {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let text = (w.read)(&w.root_dir, rel).map_err(PackError::law)?;
         root_files.push(("mod.d.rut".into(), text));
-    }
-    // the generic-source riding law (v7, additive): a compiled pkg whose
-    // surface exports generics ALSO rides the source that serves
-    // consumer-spelled shapes — the root module, verbatim, beside the
-    // binary. The riding source's presence is the loader's dispatch
-    // marker; non-generic pkgs stay source-free. (`--strip` refuses the
-    // combination above.) An old-envelope manifest rides its legacy
-    // keys instead — those names are not canonical, so the fingerprint
-    // sees none of them (deterministic either way).
-    if has_open_generic_surface(&units.programs[root_idx]) {
-        let mut ridden = Vec::new();
-        ride_generic_source(&w.manifest, "", &mut ridden, &|rel| (w.read)(&w.root_dir, rel))
-            .map_err(PackError::law)?;
-        for (rel, bytes) in ridden {
-            root_files.push((rel, bytes));
-        }
     }
     if !root_pkg.mods.is_empty() {
         let rows = rows_json(&rows_root_text(root_pkg), &root_pkg.mods).into_bytes();
@@ -324,15 +344,6 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 // the canonical surface name: `mod.d.rut`, whatever the
                 // directory grammar spelled
                 files.push(("mod.d.rut".into(), text));
-            }
-            // the generic-source riding law, group flavor (see the root
-            // arm above): a generic-owning compiled group rides its
-            // source beside the binary
-            if has_open_generic_surface(&units.programs[idx]) {
-                ride_generic_source(&dm, "", &mut files, &|rel| {
-                    group_file(source, rel, &w.archives, &w.read)
-                })
-                .map_err(PackError::law)?;
             }
             // the module rows, group flavor (see the root arm above)
             if let Ok(m) = session.resolve(spec) {

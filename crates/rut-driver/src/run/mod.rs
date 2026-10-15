@@ -39,7 +39,7 @@ use rut_parser::Mode;
 use crate::graph::{compile_graph, GraphOutput};
 pub use crate::session::{Pkg, PkgBody};
 
-pub use crate::session::{GenSource, HostRow};
+pub use crate::session::HostRow;
 
 /// A walk's yield: the pkgs in the closure (root included) and the
 /// root's name — offer them to a run with
