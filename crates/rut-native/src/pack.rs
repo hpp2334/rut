@@ -128,7 +128,8 @@ fn pack_dir_opts_locked(
     // the packed rut.jsonc is the directory's rut.jsonc byte-for-byte,
     // so the bundle keys must already be there — directory loading
     // ignores them, but a bundle loader refuses without them (refuse,
-    // never guess): `format_version = 10`, both root kinds
+    // never guess): `format_version` = the packer's FORMAT_VERSION
+    // (11, always), both root kinds
     let want_version = rut_driver::pack::FORMAT_VERSION;
     if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(want_version)
     {

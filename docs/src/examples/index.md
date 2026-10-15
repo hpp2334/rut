@@ -27,40 +27,31 @@ pages cross-link often: [00 — Todolist](00-todolist.md) establishes
 the pattern and [06 — GitHub viewer CLI](06-github-viewer-cli.md)
 stretches it the farthest.
 
-## The three dependency kinds
+## The two dependency tables
 
 Every package carries a `rut.jsonc` manifest (see
 [Project structure and rut.jsonc](../reference/project-structure.md)),
-and a manifest relates a package to other packages through **three
+and a manifest relates a package to other packages through **two
 tables**, all visible in the examples:
 
-- **`deps`** — ordinary dependencies, transitively mounted. The
-  common case: `03-plugin`'s `plugin/rut.jsonc` declares
-  `server = { path = "../server" }`, and
+- **`deps`** — the transitively mounted dependencies, and the
+  declaration table: a pkg may `use` exactly the heads its own
+  manifest names. The common case: `03-plugin`'s `plugin/rut.jsonc`
+  declares `server = { path = "../server" }`, and
   [05 — Todolist web](05-todolist-web.md)'s `biz` package declares
-  `ui` (which itself pulls the collection packages).
-- **`peer-deps`** — required by default: the *consumer* supplies the
-  peer and the peer is never pulled transitively. Marking a peer
-  `optional = true` flips it to a presence relation: its integration
-  file (the wrapper families the peer makes compilable) mounts only
-  when the peer is anywhere in the program's closure. The in-tree
-  example is the std `json` package's serde wrappers — `JsonVec<T>`
-  over `Vec<T>` is written in json but must not force every json
-  consumer to mount the collection packages, so those live as optional
-  peers and as `dev-deps` for json's own tests. [02 —
-  Digest](02-digest.md) consumes json *light*; [06 — GitHub viewer
-  CLI](06-github-viewer-cli.md) walks the whole closure — the peer
-  gate rides the walk — and mounts the
-  wrapper groups for real because
-  the collections are in its closure.
+  `ui` (which itself pulls the collection packages). The std `json`
+  package shows the wrapper shape — its `Vec`/map serialization
+  wrappers are json's OWN source, and the container packages are
+  plain `deps` riding along transitively.
 - **`dev-deps`** — mounted only while building the package itself,
-  never in a consumer's world. json develops against the real
-  collection packages through the both-kinds pairing while its
-  consumers mount it without them.
+  never in a consumer's world; the rows are `path`-only.
 
-The full rules — the loud missing-required-peer error, the silence of
-absent optional peers, dedup-by-origin at the splice, and what bundle
-format the packer emits — are on
+There is no third table: the grammar is strict at the top level, so a
+retired key (`peer-deps`) or flag (`inline`) refuses as the unknown
+key it now is, naming the key.
+
+The full rules — the declaration-scoped nameability law, the closed
+bundle closure, and what bundle format the packer emits — are on
 [Dependency kinds](../reference/dependency-kinds.md).
 
 ## Reading order

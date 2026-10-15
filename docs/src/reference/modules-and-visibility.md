@@ -120,7 +120,7 @@ both a declared dep and an own module edge is a loud ambiguity —
 rename one of the two.
 
 The head itself is **declaration-scoped**: a package may `use` exactly
-the heads its own manifest names — `deps` ∪ `peer-deps` ∪ (`dev-deps`
+the heads its own manifest names — `deps` ∪ (`dev-deps`
 when the package is the program root) ∪ `core`. Mounting stays
 transitive (a dep's own `deps` still join the program's closure), but
 a head that is mounted without being declared by *this* package is the

@@ -16,11 +16,11 @@
   // its remote policy (Loader + HttpRemote::project_local) — a cold start
   // networks on its misses, a warm start is pure cache; the TESTS prime
   // an offline remote from the committed artifacts (dist/std plays the
-  // wire), so the gates never touch the network. `nmapset` rides because a
-  // bundle-mounted json's pack-time ledger names its dev closure — the
-  // compiled rows reference the peer scopes, so the closure must contain
-  // them (the six-pin law); json's optional integration groups mount only
-  // for closure members, so the nmapset rows stay inert unless spelled.
+  // wire), so the gates never touch the network. json's container
+  // wrappers are json's OWN source, and its `[deps]` pull
+  // strbuild/pouch/nmapset along (the bundle is closed), so the `nmapset`
+  // row here is redundant-but-legal — an unused declared row is inert,
+  // and the app spells no `use nmapset::` head.
   // json's own `[deps]` pulls strbuild (the writer's accumulator), so the
   // embedder pairs the load with `strbuild::pkg()` — and nmapset's bundle
   // carries `nmap_host`, whose bodies bind beside it (the tests do;

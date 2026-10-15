@@ -146,8 +146,8 @@ fn manifest_text(name: &str) -> String {
   // the scaffold wrote them; `rut install` re-pins after a dep edit —
   // the sha256 key is retired from manifest rows). Unused deps are
   // legal: host pkgs merge inert unless the program mounts their pkg,
-  // inline pkgs inline per-using-consumer — this hello (ink only)
-  // runs clean with the full set declared.
+  // and every source pkg compiles only as part of the closure — this
+  // hello (ink only) runs clean with the full set declared.
   "name": "{name}",
   "deps": {{
 {rows}  }}

@@ -43,7 +43,8 @@ nightly pin, a runnable smoke test) is
 
 ```rust
 // 1. The walk (rut-native): a directory's whole closure as walked
-//    pkgs — `[deps]` recursion, the rut.lock pins, the peer gate.
+//    pkgs — `[deps]` recursion, the rut.lock pins, the root-only
+//    dev pass.
 let loaded = block_on(rut_native::load_dir_with(
     std::path::Path::new("plugins/server"),
     &rut_native::HttpRemote::project_local(project_dir),
@@ -118,9 +119,8 @@ the graph, the registration strings must spell the same tree.
 1. **auto-offer the core prelude** — unless a pkg named `core` was
    offered (first-pkg-wins override);
 2. **close the world** — every offered pkg mounts into the run's
-   internal table, then the mount-by-mount world runs its ONE
-   peer-gate append pass (a walk's yield already carried its groups;
-   the pass is idempotent per pkg);
+   internal table; the walk's yield already carried its groups, and
+   every module links — nothing appends after the walk;
 3. **the host registry** — every `.host_pkg(..)` installs against the
    mounted rows snapshot. A mounted scope whose declared rows the
    installer does not bind is the loud panic (the `.d.rut` ↔ host-impl
@@ -128,7 +128,7 @@ the graph, the registration strings must spell the same tree.
    wiring bug is never a rut diagnostic;
 4. **the closure check** — every `use` name in every offered source
    resolves against the offered world AND its consumer's own manifest
-   (nameability is declaration-scoped: `deps` ∪ `peer-deps` ∪ root
+   (nameability is declaration-scoped: `deps` ∪ root
    `dev-deps` ∪ `core`; a mounted-but-undeclared head is the dedicated
    D5 diagnostic, its host clause naming the builder doors for a hand
    offer); a miss is `Err(RunError)`, carrying the resolver's own
@@ -153,7 +153,7 @@ directory — or a packed `.rutbundle` — and yields the closure:
 
 | lane | what it does |
 |---|---|
-| `load_dir(dir)` | the walk: `[deps]` recursion (cycle guard, first-mount-wins, name-mismatch is an error), the root's `rut.lock` read fresh (an unpinned url refuses, naming `rut install`), the lock pins verified at the mount door, the root-only `[dev-deps]` pass, ONE peer-gate pass over the closed set. Url deps are the loud no-fetcher error. |
+| `load_dir(dir)` | the walk: `[deps]` recursion (cycle guard, first-mount-wins, name-mismatch is an error), the root's `rut.lock` read fresh (an unpinned url refuses, naming `rut install`), the lock pins verified at the mount door, then the root-only `[dev-deps]` pass. Url deps are the loud no-fetcher error. |
 | `load_dir_with(dir, &remote)` | the same walk; url `deps` rows are collected, gated against the root's `rut.lock`, fetched over the host's `DepRemote`, and pinned at the mount door |
 | `load_dir_fetched(dir, &map)` | the walk over PRE-fetched url bytes — the sync core; tests and offline hosts hand a `url → bytes` map |
 | `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: a directory walks (above); a `.rutbundle` loads closed (below) |
@@ -173,16 +173,15 @@ first-pkg-wins) or pick pieces with `loaded.pkg(name)`.
 | `Pkg::from_bundle(bytes)` | the pure container parse — the bundle's pkgs as a `Loaded` (below) |
 | `lower_decl_module(text, children, file)` | a `.d.rut` lowered to host rows — the wasm hosts' surface lane; `children` is the mounted `mod` tree (`NAME/mod.d.rut` files, mount with `mount_mod_children` in Decl mode) and each row carries the path it lives under |
 
-`Pkg` is pure data: the walker-found metadata (the `[deps]` table, the
-`[peer-deps]` declarations, the peer-integration group texts) is pub
-data on it, and a host whose world has no filesystem (wasm) appends
-peer groups by hand — the graph only reads.
+`Pkg` is pure data: the walker-found metadata (the `[deps]` table and
+the declaration rows the nameability law reads) is pub data on it —
+the graph only reads.
 
 Two offer lanes walk a directory **for someone else's program**:
 
 | lane | what it does |
 |---|---|
-| `rut_native::dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)` | offer one package directory — and, recursively, its `[deps]` — as walked pkgs. No dev-deps pass, no peer gate: presence is the program's own `.compile()` law. |
+| `rut_native::dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)` | offer one package directory — and, recursively, its `[deps]` — as walked pkgs. No dev-deps pass: the closure is the program's own `.compile()` law. |
 | `rut_native::tree_pkg(name)` | one toolchain-tree package (`rut/calc`, `rut/futures`, …). A pkg whose `[deps]` pull a closure is refused — offer the whole walk (`load_dir`) instead, never a silently-truncated world. |
 
 `core` is never offered — `.compile()` auto-rides it. `calc` and the
@@ -311,7 +310,7 @@ pack-time scope ledger, rebased at the close of the world; a decl
 root as the pkg's host rows), first-mount-wins, and the bundle root's
 package name is `loaded.root`. Wasm hosts `include_bytes!` the
 committed artifact and parse through `Pkg::from_bundle`. For the
-url-dep *walk* (pins, closure checks, the peer gate over archive
+url-dep *walk* (pins, closure checks, the archive's identity-keyed
 groups) stay on the `load_dir*` lanes — a bundle mount is the offer,
 not the walk. The container, the manifest grammar, and the reader are
 [module bundles](bundles.md).
@@ -345,7 +344,7 @@ contain those names.
 | `tree_pkg(name)` | one toolchain-tree package (`rut/<name>`); a `[deps]` closure is refused |
 | `load_module_source(path)` | one `.rut` file's text — a loose file is a single module, no manifest |
 | `prefetch_urls(&src, &dir, &remote)` | collect a manifest's url rows and fetch them — the `_with` lanes' input step |
-| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **compiled** root for a lib pkg, a **decl** root for a host pkg (`type` routes; `format_version` is 10); returns the bytes ([module bundles](bundles.md)) |
+| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **compiled** root for a lib pkg, a **decl** root for a host pkg (`type` routes; `format_version` is 11); returns the bytes ([module bundles](bundles.md)) |
 | `default_out_path(dir)` | the conventional pack output path |
 
 ## The run chain API (`rut-driver`)

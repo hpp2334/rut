@@ -136,5 +136,5 @@ Guards live on the store entry and clear on return; to keep data, copy
   method is one host call, keys are the closed typed set, values are
   sealed boxes, and each key carries a stable host-side handle
   ([core and the swappable packages](stdlib.md)).
-- **`json`**'s peer-gated container impls ride the same packages from the
-  rut side ([core and the swappable packages](stdlib.md)).
+- **`json`**'s container wrappers are json's own rut source over the
+  same packages ([core and the swappable packages](stdlib.md)).

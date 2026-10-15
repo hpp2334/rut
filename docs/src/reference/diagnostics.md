@@ -45,10 +45,11 @@ boundaries and keeps going, so a file yields many diagnostics, not one.
 Compilation stops before IR if any diagnostic exists; there is no
 warnings-only lane.
 
-A compile trap worth knowing: name-level misses that involve
-[Dependency kinds](dependency-kinds.md) peers have dedicated diagnostics
-(a missing optional peer's integration is never a bare
-*unresolved name*).
+A compile trap worth knowing: name-level misses are not all one shape.
+A name nothing offers is the bare *unresolved name*; a head that IS
+mounted but undeclared by its consumer gets the dedicated diagnostic
+naming the mount edge and the fix
+([Dependency kinds](dependency-kinds.md)).
 
 ## Runtime traces
 

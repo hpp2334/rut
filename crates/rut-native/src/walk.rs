@@ -1346,7 +1346,7 @@ pub(crate) fn offer_dir(
 /// **decl** bundle (a `type = "host"` root: the declaration surface
 /// mounts as the pkg's host rows — the same lane a host group rides).
 /// One wire number, the manifest's `type` routes. The gate order is
-/// the law: container CRC, manifest + exact `format_version` (10 —
+/// the law: container CRC, manifest + exact `format_version` (11 —
 /// anything else refuses with the one re-pack recipe), then each
 /// kind's payload checks — then, and only then, the mount. Refuse,
 /// never guess. The walk itself is the driver's PURE container
