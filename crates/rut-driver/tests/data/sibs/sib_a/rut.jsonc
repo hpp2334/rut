@@ -1,0 +1,13 @@
+{
+  // sib_a — the first sibling: shares the transitive `pouch` dep (a
+  // generic export), imported separately by the consumer beside its
+  // sibling. Plain path deps, no flags — the graph's dedup-by-origin
+  // is what makes the pair compile (the pre-dedup graph defined Vec
+  // twice here).
+  "name": "sib_a",
+  "deps": {
+    "pouch": {
+      "path": "../pouch"
+    }
+  }
+}

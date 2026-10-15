@@ -1,0 +1,17 @@
+{
+  // cons_sibs — the consumer: imports BOTH siblings that share the
+  // transitive `pouch` dep, separately — the exact collision shape
+  // (two consumers splicing one shared transitive dep, imported
+  // separately). Dedup-by-origin makes the double splice structurally
+  // impossible; the `appkit` workaround retires as a NECESSITY (it
+  // stays legal).
+  "name": "cons_sibs",
+    "deps": {
+    "sib_a": {
+      "path": "../sib_a"
+    },
+    "sib_b": {
+      "path": "../sib_b"
+    }
+  }
+}

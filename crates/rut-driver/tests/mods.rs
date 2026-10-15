@@ -507,7 +507,7 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
     assert_eq!(
         stems,
         vec!["http", "json", "nmapset", "pouch"],
-        "the pinned artifacts ride in dist/std-v10: {names:?}"
+        "the pinned artifacts ride in dist/std-v8: {names:?}"
     );
     for path in names.iter().filter(|p| {
         p.file_stem().unwrap().to_string_lossy() != "json"

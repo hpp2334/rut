@@ -1,0 +1,5 @@
+{
+  // base — the core-shaped base pkg: one concrete helper the
+  // pouch-shaped pkg's chain depends on, so the shared-dep world has a
+  // real two-level dep walk under it.
+  "name": "base"}

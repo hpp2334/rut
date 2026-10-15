@@ -2,7 +2,7 @@
 //! carries the ordered `(origin spec, own source)` leaf list instead of
 //! pre-combined text, and composition skips specs already present —
 //! first position wins, topological order preserved. The t1 collision
-//! shape (two pkgs both riding a shared transitive inline pkg, imported
+//! shape (two pkgs both splicing a shared transitive dep, imported
 //! separately) becomes structurally impossible: T10 compiles it green.
 //! T13 pins the other half — the dedup is semantics-preserving: in the
 //! no-collision case the composed text is byte-identical to the old
@@ -10,8 +10,8 @@
 //! compiles identically (the rest of T13 is the gates: every existing
 //! suite green untouched, bench pins BIT-IDENTICAL).
 //!
-//! Fixtures: the hermetic peers world under `tests/data/peers/`
-//! (`sib_a`/`sib_b` ride the shared inline `pouch`; `cons_sibs`
+//! Fixtures: the hermetic sibling world under `tests/data/sibs/`
+//! (`sib_a`/`sib_b` share the transitive `pouch` dep; `cons_sibs`
 //! imports both).
 
 use std::collections::{BTreeMap, HashSet};
@@ -20,7 +20,7 @@ use std::path::Path;
 use rut_driver::Seeds;
 use rut_parser::Mode;
 
-const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
+const SIBS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/sibs");
 
 mod common;
 use common as _;
@@ -65,7 +65,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn load(rel: &str) -> Result<rut_driver::Loaded, String> {
-    rut_native::load_dir(Path::new(&format!("{PEERS}/{rel}")))
+    rut_native::load_dir(Path::new(&format!("{SIBS}/{rel}")))
     .map_err(|e| e.to_string())
 }
 
@@ -306,8 +306,8 @@ fn run_main(loaded: rut_driver::Loaded) -> i64 {
 #[test]
 fn t10_sibling_imports_of_a_shared_inline_pkg_compile() {
     // the t1 collision shape: cons_sibs imports sib_a AND sib_b; both
-    // are inline units whose leaves carry the shared transitive inline
-    // pkg (pouch). Under dedup-by-origin pouch splices once, `Vec` is
+    // are inline units whose leaves carry the shared transitive dep
+    // (pouch). Under dedup-by-origin pouch splices once, `Vec` is
     // defined once, and the consumer compiles green and runs — the
     // `appkit` workaround retires as a NECESSITY (it stays legal; the
     // example is another lane's property and is not touched).
@@ -349,7 +349,7 @@ fn t10_the_collision_was_real() {
     // twice into one unit — and a doubly-spliced text does not compile
     // (duplicate type definitions). The fixture only goes green because
     // the dedup removed the second splice.
-    let pouch_src = std::fs::read_to_string(Path::new(&format!("{PEERS}/pouch/mod.rut")))
+    let pouch_src = std::fs::read_to_string(Path::new(&format!("{SIBS}/pouch/mod.rut")))
         .expect("pouch fixture source");
     let twice = format!("{pouch_src}\n\n{pouch_src}");
     let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &Seeds::none(), &rut_driver::ModInputs::flat(), &[]);

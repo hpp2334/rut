@@ -1,0 +1,11 @@
+{
+  // pouch — the hermetic stand-in: a generic class with one method,
+  // shaped like the real pkg. Depends on `base` so the shared-dep walk
+  // under the siblings is real (two levels deep).
+  "name": "pouch",
+  "deps": {
+    "base": {
+      "path": "../base"
+    }
+  }
+}

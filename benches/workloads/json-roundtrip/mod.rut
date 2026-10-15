@@ -20,9 +20,9 @@ fn assert(c: bool, m: str) { if (!c) { panic(m); } }
 // Per rep: `decodeJson<Vec<DocRow>>(&doc)` DIRECT into typed rows (the
 // schema decides the grammar; no DOM), then `encodeJson(rows)` through
 // the same encode path, then the fold. This row is the first that
-// exercises std json end to end — and the peer model's own proof (the
-// rut.toml declares `[deps] json` + `[deps] pouch`; the gate assembles
-// group-pouch because pouch is present, and the `Vec<i64>`/`Vec<str>`
+// exercises std json end to end (the manifest declares
+// `[deps] json` + `[deps] pouch` — plain path deps; json owns the
+// `JsonVec` wrapper in its own source, and the `Vec<i64>`/`Vec<str>`
 // field encodes below dispatch through it).
 //
 // THE CHECKSUM (pre-registered): defined over the ROUND-TRIPPED

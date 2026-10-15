@@ -1,8 +1,9 @@
-//! v11 compiled bundles: the mixed closure — linkable pkgs ride as
-//! `mod.rutc` binaries (bodies + surface, the linking truth), splice-needed
-//! deps (inline / generic export / interface-typed params) and host pkgs
-//! ride as source file sets under their content identities — plus the
-//! pinned equivalence (compiled bundle vs source directory ⇒ identical
+//! v11 compiled bundles: the mixed closure — linked pkgs ride as
+//! `mod.rutc` binaries (bodies + surface, the linking truth; generic
+//! owners also ride their source beside the binary), pkgs the graph
+//! never linked (declared-but-unused) and host pkgs ride as source
+//! file sets under their content identities — plus the pinned
+//! equivalence (compiled bundle vs source directory ⇒ identical
 //! linked binaries), determinism, and the refusal matrix.
 
 use std::path::{Path, PathBuf};
@@ -80,14 +81,13 @@ fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
     format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}"{extra}}}"#)
 }
 
-/// The mixed-closure world: `app` (linkable root) uses `util` (linkable
-/// → compiled group) and declares `boxy` (an explicitly `inline`d pkg →
-/// source group). With instantiation owner-anchored, generic exports
-/// link — the one splice trigger left is the `inline` flag (class
-/// methods cross no surface yet, so a method-bearing pkg keeps sharing
-/// its source). The clean mixed shape is an inline dep the linkable
-/// part of the tree does not absorb, which still rides (declared deps
-/// publish completely) as a source group a consumer can splice.
+/// The mixed-closure world: `app` (linkable root) uses `util` (linked
+/// → compiled group) and declares `boxy` without using it (declared
+/// but unlinked → source group). With instantiation owner-anchored,
+/// generic exports and iface params link — a source pkg rides compiled
+/// iff the graph linked it, so `boxy`'s class methods trigger nothing:
+/// the unused declaration still rides (declared deps publish
+/// completely) as a source group a consumer can splice.
 fn mixed_world(tag: &str) -> PathBuf {
     let root = scratch(tag);
     let app = root.join("app");
@@ -176,8 +176,8 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     assert_eq!(loaded.root, "app");
     assert_eq!(run_entry::<i64>(loaded.clone(), "go"), from_dir, "dir and bundle run identically");
 
-    // the closure mixed as declared: the linkable pkgs compiled, the
-    // explicitly inlined one a source group
+    // the closure mixed as declared: the linked pkgs compiled, the
+    // declared-but-unused one a source group
     assert!(matches!(
         loaded.pkg("app").unwrap().body,
         PkgBody::Compiled(_)
@@ -197,7 +197,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     for key in ["rut.jsonc", "rut.scopes", "mod.rutc", &format!("{util_dir}/mod.rutc"), &format!("{boxy_dir}/rut.jsonc"), &format!("{boxy_dir}/mod.rut")] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
-    assert!(!names.iter().any(|n| n == &format!("{boxy_dir}/mod.rutc")), "the inline pkg rides source, not a binary");
+    assert!(!names.iter().any(|n| n == &format!("{boxy_dir}/mod.rutc")), "the unused group rides source, not a binary");
 
     // the ledger names every linked module of the packed closure — by
     // its content identity (the one wire's row spelling)
@@ -216,7 +216,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
 #[test]
 fn a_source_group_splices_into_a_consumer_session() {
     // the mixed closure's payoff: a consumer compiled AGAINST the
-    // loaded bundle splices the source group (the inline pkg) and
+    // loaded bundle splices the source group (boxy) and
     // binds the compiled groups' surfaces — the two kinds meet in one
     // session, no directory in sight
     let root = mixed_world("splice");

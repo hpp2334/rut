@@ -1,6 +1,6 @@
 //! The decl root — a `type = "host"` pkg packs as its OWN bundle:
 //! the root IS its declaration surface (single-package, no ledger, no
-//! groups, nothing to decode), `format_version` 10 — the ONE wire
+//! groups, nothing to decode), `format_version` 11 — the ONE wire
 //! number, the manifest's `type` routes the root kind. The mechanism
 //! tests: the pack/load round trip, the url lane (pin law,
 //! name-vs-key, the leaf law), the refusal matrix, the one-wire-number

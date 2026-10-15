@@ -7,9 +7,9 @@
   // interface path: DocRow satisfies json's JsonSerialize /
   // JsonDeserialize structurally — the members live on this file's
   // inherent impls; no hand-rolled twin of the codec). Module dir
-  // because it mounts `json` + `pouch`; the peer gate assembles
-  // group-pouch onto json because pouch is present in this closure
-  // (the JsonVec wrapper is load-bearing here). The checksum is
+  // because it mounts `json` + `pouch` (plain path deps); json owns
+  // the JsonVec wrapper in its own source now — no group assembly —
+  // and the wrapper is load-bearing here. The checksum is
   // defined over the
   // ROUND-TRIPPED VALUES, not lexemes, and must equal the JS twin's.
   "name": "json_roundtrip",

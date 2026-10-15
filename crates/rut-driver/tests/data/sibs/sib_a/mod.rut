@@ -1,7 +1,7 @@
-// sib_a — T10's first sibling: rides the shared
-// transitive inline pkg (pouch, a generic export), imported separately
-// by the consumer beside its sibling. `inline = true` keeps it on the
-// splice path — the pkg graph's dedup-by-origin is what makes the pair
+// sib_a — T10's first sibling: shares the
+// transitive `pouch` dep (a generic export), imported separately
+// by the consumer beside its sibling. Plain path deps, no flags —
+// the pkg graph's dedup-by-origin is what makes the pair
 // compile (the pre-dedup graph defined Vec twice here).
 use pouch::{Vec};
 

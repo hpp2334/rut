@@ -280,7 +280,7 @@ fn scaffolded_project_runs_against_a_local_server() {
 
     // the ink-only hello runs clean against the FULL manifest — unused
     // deps are legal (host pkgs merge inert unless the program mounts
-    // their pkg, inline pkgs inline per-using-consumer), so no
+    // their pkg), so no
     // unused-dep diagnostics, and the output is the book's
     let out = rut_cmd(&root.join("cache"), &["run", dir.to_str().unwrap()]);
     assert!(
