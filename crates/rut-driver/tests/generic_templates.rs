@@ -79,13 +79,13 @@ fn compile_app(world: Vec<rut_driver::Pkg>, deps: &[&str], src: &str) -> rut_dri
     c.graph
 }
 
-/// The canonical fn inventory: (name, param spells) — stable across
-/// the two lanes' fn-table ordinals and dense type ids. (The op COUNTS
-/// are compared by the fold-parity tail, P8: the materialization's
-/// copy-propagation fold runs over `MovRef` copies the fresh
-/// compile's `Mov`-only fold keeps, so a few materialized bodies come
-/// out a couple of ops shorter — semantics-preserving, runtime-proven
-/// by the parity run below.)
+/// The canonical fn inventory: (name, param spells, op count) — stable
+/// across the two lanes' fn-table ordinals and dense type ids. The op
+/// count is the pinned fold-parity bound: the materialization's copy
+/// fold eliminates exactly the copies the fresh compile's `one_round`
+/// folded — `Mov` copies, plus template `MovRef` copies whose
+/// substituted reg types are prims (the fresh emitter's `Mov` spellings)
+/// — so the materialized bodies land on the fresh compile's op counts.
 fn inventory(prog: &rut_core::binary::Program) -> Vec<String> {
     let flat = rut_core::link::flatten(prog.clone());
     let mut out = Vec::new();
@@ -98,7 +98,12 @@ fn inventory(prog: &rut_core::binary::Program) -> Vec<String> {
             }
         };
         let params: Vec<String> = f.params.iter().map(|&t| spell(t)).collect();
-        out.push(format!("{}({})", flat.func_name(f), params.join(",")));
+        out.push(format!(
+            "{}({}) ops={}",
+            flat.func_name(f),
+            params.join(","),
+            f.code.len()
+        ));
     }
     out.sort();
     out
@@ -150,6 +155,77 @@ fn template_served_shapes_run_the_same_answer() {
             .expect("vm");
         let out: i32 = vm.call("main", ()).expect("main runs");
         assert_eq!(out, 324);
+    }
+}
+
+/// A nmapset consumer-spelled shape (`HashSet<str>`, `HashMap<i64, str>`):
+/// the named acceptance pkg, both lanes, same answer + same closures.
+///
+/// THE PINNED RESIDUAL (P8): the bundle lane of THIS pkg still trips a
+/// type-metadata mapping — the owner's materialization mints rows
+/// attributed through its own-block base with stale dense locals, and
+/// the consumer's link densifies one of them (`(2, 87)`) against the
+/// decoded owner's 33-row carried table (`type_at` OOB, types.rs:635).
+/// The directory lane runs the shape fine; pouch/json/flow parity
+/// (above) is fully green at op-count equality. P8 heals this by
+/// pinning the mint attribution to the own block's post-staging base
+/// (the mints must re-spell (own, dense - staged_extent) once the
+/// staged rows land above the own block).
+const NMAP_APP: &str = r#"
+use nmapset::{ HashSet, HashMap };
+
+entry fn main() -> i32 {
+    let words: [str] = ["a", "b", "a", "c"];
+    let set: HashSet<str> = HashSet<str>::new();
+    for (let w of words) {
+        let added = set.put(w);
+        if (added) { set.put(w); }
+    }
+    let map: HashMap<i64, str> = HashMap<i64, str>::new();
+    map.put(1, "one");
+    map.put(2, "two");
+    let two: ?str = map.get(2);
+    let extra = if (two != nil) { 1 } else { 0 };
+    return set.len() * 10 + map.len() + extra;
+}
+"#;
+
+#[test]
+#[ignore = "P8 boundary: nmapset bundle-served shapes OOB in the owner's carried table            (the mint attribution stale-base residual — see the doc comment above)"]
+fn nmapset_bundle_served_shapes_match_the_directory_lane() {
+    let dir = compile_app(pkg_world_from_dirs(&["nmapset"]), &["nmapset"], NMAP_APP);
+    let bundle = compile_app(pkg_world_from_bundles(&["nmapset"]), &["nmapset"], NMAP_APP);
+    let dprog = dir.program.clone().expect("dir program");
+    let bprog = bundle.program.clone().expect("bundle program");
+    let dflat = rut_core::link::flatten(dprog.clone());
+    let bflat = rut_core::link::flatten(bprog.clone());
+    rut_vm::verify::verify(&dflat).expect("the directory lane verifies");
+    rut_vm::verify::verify(&bflat).expect("the bundle (template-served) lane verifies");
+    let dinv = inventory(&dprog);
+    let binv = inventory(&bprog);
+    let dset: std::collections::BTreeSet<&String> = dinv.iter().collect();
+    let bset: std::collections::BTreeSet<&String> = binv.iter().collect();
+    let only_dir: Vec<&&String> = dset.difference(&bset).collect();
+    let only_bundle: Vec<&&String> = bset.difference(&dset).collect();
+    assert!(
+        only_dir.is_empty() && only_bundle.is_empty(),
+        "the two lanes' closures disagree:\n  dir-only: {only_dir:?}\n  bundle-only: {only_bundle:?}"
+    );
+    // the runtime fence: the same answer through the template-served
+    // bodies
+    for (flat, tag) in [(dflat, "dir"), (bflat, "bundle")] {
+        let mut vm = rut_vm::interp::Vm::builder()
+            .program(std::rc::Rc::new(flat))
+            .limits(rut_vm::interp::Limits {
+                fuel: Some(50_000_000),
+                heap_limit_bytes: Some(64 * 1024 * 1024),
+                interrupt_every: 1024,
+            })
+            .hooks(rut_vm::interp::HostHooks::default())
+            .build()
+            .unwrap_or_else(|e| panic!("{tag}: vm"));
+        let out: i32 = vm.call("main", ()).unwrap_or_else(|e| panic!("{tag}: {e:?}"));
+        assert_eq!(out, 42, "{tag}");
     }
 }
 
@@ -270,7 +346,6 @@ fn strip_with_a_generic_surface_is_legal_and_still_serves_shapes() {
 /// with a registered merged base (the `final_type_base` sweep in
 /// `rut-core/src/link.rs` already carries the mechanism).
 #[test]
-#[ignore = "P8 boundary: non-boot-arg bundle-served shapes OOB in type metadata (see the doc comment)"]
 fn json_bundle_served_non_boot_arg_shapes() {
     let app = r#"
 use json::{ JsonArr, JsonI64, decodeJson };

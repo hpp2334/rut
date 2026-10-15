@@ -47,7 +47,7 @@ mod groups;
 mod strip;
 
 pub use error::PackError;
-pub use groups::{collect_source_group, has_generic_bodies, has_open_generic_surface};
+pub use groups::{collect_source_group, has_generic_bodies};
 use groups::{group_file, group_manifest, rides_compiled};
 use strip::strip_arm;
 

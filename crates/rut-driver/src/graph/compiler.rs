@@ -15,6 +15,7 @@ use rut_ast::ast::{Ast, ItemKind, Vis};
 use super::build_seed_groups;
 use crate::session::{PkgBody, Session};
 use crate::compile::compile_program_resolved;
+use crate::compile::material::split_top_commas;
 use crate::Seeds;
 
 /// A resolved module: the claim ticket into the walk's tables — the
@@ -68,6 +69,15 @@ pub(super) struct GraphCompiler<'a> {
     /// instantiation-independent bodies — `(owner, decl, construct)`.
     /// FATAL at pack (the pinned stability law).
     pub(super) template_failures: Vec<(String, String, String)>,
+    /// the IR lane's staged scope blocks, per (owner spec, requester
+    /// scope): the requester scope number the seed args spell → the
+    /// FRESH scope the staged block lives under in the owner's table.
+    /// Fresh per staging: the requester's number may be a ghost (a
+    /// carried block from a replaced mount), may BE the owner's own
+    /// scope, and one requester's rows stage into several owners — one
+    /// coordinate system per staged block, mapped at link by the
+    /// staged-scope sweep.
+    pub(super) staged_scopes: HashMap<(String, rut_core::ScopeId), rut_core::ScopeId>,
     /// The program root's spec — the dev arm's key: only the ROOT may
     /// `use` its `dev-deps` heads (D5's allowlist reads it). From
     /// `compile_graph`/`compile_units`' `root_spec`.
@@ -400,7 +410,16 @@ impl<'a> GraphCompiler<'a> {
                 mapped.iter().find(|&&(p, _)| p == s).map(|&(_, l)| l).unwrap_or(s)
             }
         };
-        let program = rut_core::link::rebase(prog.clone(), &map);
+        let mut program = rut_core::link::rebase(prog.clone(), &map);
+        // the decoded table interns with the loader's block-scan spelling
+        // (`id_for` attributes the tail to the greatest registered base ≤
+        // dense) — the IR materialization appends staged blocks and mints
+        // ABOVE the own block, so every tail row would re-attribute to the
+        // staged scope with unbounded locals and map past the merged
+        // segment. Own attribution pins the tail to this module's own
+        // scope: the mints spell (own, local), which link maps through
+        // the own segment — in bounds, and stable under later stagings.
+        program.types.own_attribution = true;
         let idx = self.programs.len();
         self.programs.push(program);
         let unit = Unit { idx, scope };
@@ -842,12 +861,18 @@ impl<'a> GraphCompiler<'a> {
     }
 
     /// The seed law's staging half, per requester: the union closure of
-    /// every live seed's arguments appends as ONE block beneath the
-    /// requester's own scope number (the ids carry over untouched —
-    /// link maps the staged scope onto the requester's segment), every
-    /// row's name re-interns by text (ids are per-program), and the
-    /// scope's base registers once. `materialize_request` then spells
-    /// each request's arguments straight through the block.
+    /// every live seed's arguments appends as ONE block under a FRESH
+    /// scope allocated for this staging — never the requester's own
+    /// number, which may be a ghost (a carried block from a replaced
+    /// mount), may BE the owner's own scope, and may stage into several
+    /// owners (one coordinate system per staged block; link's
+    /// staged-scope sweep maps each block's base). The staged rows'
+    /// inner ids spelling the requester scope rewrite to the fresh
+    /// scope (a recursive kind walk); ids in other scopes pass (the
+    /// owner carries them, or a later arg stages them). Every row's
+    /// name re-interns by text (ids are per-program).
+    /// `materialize_request` spells each staged request's arguments
+    /// through the fresh scope.
     fn stage_ir_seeds(
         &mut self,
         idx: usize,
@@ -857,10 +882,12 @@ impl<'a> GraphCompiler<'a> {
     ) -> Result<(), String> {
         let r_idx = self.done.get(requester).map(|u| u.idx);
         let Some(r_idx) = r_idx else { return Ok(()) }; // hand-routed: nothing to stage
-        // read both sides immutably first
-        let mut plan: Vec<(rut_core::types::RutType, rut_core::id::ScopeId, u32)> = Vec::new();
+        // the requester scopes that need staging: non-boot, not already
+        // carried by the owner, and not staged for this (owner,
+        // requester) pair yet
+        let mut to_stage: Vec<rut_core::id::ScopeId> = Vec::new();
         {
-            let (owner_prog, r_prog) = (&self.programs[idx], &self.programs[r_idx]);
+            let owner_prog = &self.programs[idx];
             for args in args_per_request {
                 for &a in args {
                     let s = rut_core::scope_of(a);
@@ -872,43 +899,68 @@ impl<'a> GraphCompiler<'a> {
                             .copied()
                             .unwrap_or(0)
                             != 0
+                        || self.staged_scopes.contains_key(&(owner.to_string(), s))
                     {
-                        // boot, or a block the owner already carries (its
-                        // own world, or a previous staging): the id passes
                         continue;
                     }
-                    if owner_prog.types.scope_base.get(s as usize).is_some()
-                        && plan.iter().any(|(_, ps, _)| *ps == s)
-                    {
-                        continue; // this requester's block already staged
+                    if !to_stage.contains(&s) {
+                        to_stage.push(s);
                     }
-                    let closure = Self::desc_closure(r_prog, &[a], rut_core::id::ScopeId::MAX);
-                    if closure.is_empty() {
-                        continue;
-                    }
-                    let mut max_local = 0u32;
-                    for (s2, l) in closure.keys() {
-                        if *s2 == s {
-                            max_local = max_local.max(*l);
+                }
+            }
+        }
+        if to_stage.is_empty() {
+            return Ok(());
+        }
+        // read the requester's closures immutably: per staged scope, the
+        // union closure of every arg spelling it, padded 0..=max_local
+        let mut plan: Vec<(rut_core::types::RutType, rut_core::id::ScopeId, u32)> = Vec::new();
+        {
+            let r_prog = &self.programs[r_idx];
+            let mut cursor = self.programs[idx].types.types.len() as u32;
+            for &s in &to_stage {
+                let mut closure: std::collections::HashMap<
+                    (rut_core::id::ScopeId, u32),
+                    rut_core::types::RutType,
+                > = std::collections::HashMap::new();
+                for args in args_per_request {
+                    for &a in args {
+                        if rut_core::scope_of(a) != s {
+                            continue;
+                        }
+                        for ((s2, l2), row) in
+                            Self::desc_closure(r_prog, &[a], rut_core::id::ScopeId::MAX)
+                        {
+                            if s2 == s {
+                                closure.insert((s2, l2), row);
+                            }
                         }
                     }
-                    let mut filled = 0u32;
-                    let mut cursor = owner_prog.types.types.len() as u32 + plan.len() as u32;
-                    while filled <= max_local {
-                        match closure.get(&(s, filled)) {
-                            Some(row) => plan.push((row.clone(), s, cursor)),
-                            None => plan.push((
-                                rut_core::types::RutType {
-                                    name: rut_core::sym::NIL,
-                                    kind: rut_core::types::TyKind::Nil,
-                                },
-                                s,
-                                cursor,
-                            )),
-                        }
-                        cursor += 1;
-                        filled += 1;
+                }
+                if closure.is_empty() {
+                    continue;
+                }
+                let mut max_local = 0u32;
+                for (s2, l) in closure.keys() {
+                    if *s2 == s {
+                        max_local = max_local.max(*l);
                     }
+                }
+                let mut filled = 0u32;
+                while filled <= max_local {
+                    match closure.get(&(s, filled)) {
+                        Some(row) => plan.push((row.clone(), s, cursor)),
+                        None => plan.push((
+                            rut_core::types::RutType {
+                                name: rut_core::sym::NIL,
+                                kind: rut_core::types::TyKind::Nil,
+                            },
+                            s,
+                            cursor,
+                        )),
+                    }
+                    cursor += 1;
+                    filled += 1;
                 }
             }
         }
@@ -934,6 +986,17 @@ impl<'a> GraphCompiler<'a> {
                 .map(|id| (id, req_interner.name(id).to_string()))
                 .collect()
         };
+        // the fresh staging scope: allocated from the graph's counter so
+        // it collides with no mount scope in any program of this graph
+        let stage_scope = {
+            let fresh = self.next_scope;
+            self.next_scope += 1;
+            fresh
+        };
+        for &s in &to_stage {
+            self.staged_scopes
+                .insert((owner.to_string(), s), stage_scope);
+        }
         let own = &mut self.programs[idx];
         let renames: Vec<(rut_core::sym::IdentId, rut_core::sym::IdentId)> = rename_texts
             .iter()
@@ -951,26 +1014,22 @@ impl<'a> GraphCompiler<'a> {
                     }
                 }
             }
+            // the requester-scope inner ids rewrite to the fresh scope
+            for &s in &to_stage {
+                remap_kind_scope(&mut row.kind, s, stage_scope);
+            }
         }
         let tail = own.types.types.len() as u32;
-        for (row, _, _) in &plan {
+        for (row, s_old, _) in plan.iter_mut() {
+            *s_old = stage_scope;
             own.types.types.push(row.clone());
         }
-        // the staged block's base: the first appended row of the scope
-        let mut first: std::collections::HashMap<rut_core::id::ScopeId, u32> =
-            std::collections::HashMap::new();
-        for (i, (_, s, _)) in plan.iter().enumerate() {
-            first.entry(*s).or_insert(tail + i as u32);
+        // the staged block's base: the block's first appended row
+        let need = stage_scope as usize + 1;
+        if own.types.scope_base.len() < need {
+            own.types.scope_base.resize(need, 0);
         }
-        for (s, base) in first {
-            let need = s as usize + 1;
-            if own.types.scope_base.len() < need {
-                own.types.scope_base.resize(need, 0);
-            }
-            if own.types.scope_base[s as usize] == 0 {
-                own.types.scope_base[s as usize] = base;
-            }
-        }
+        own.types.scope_base[stage_scope as usize] = tail;
         Ok(())
     }
 
@@ -1044,33 +1103,24 @@ impl<'a> GraphCompiler<'a> {
         args: &[rut_core::types::TypeId],
         method: Option<rut_core::sym::IdentId>,
     ) -> Result<(), String> {
-        // the seed law: rows land at the requester's own locals under
-        // the requester's scope (the union block `stage_ir_seeds`
-        // staged), so the ids carry over and the owner's substitution
-        // spells the requester's world. Boot ids are global; a scope the
-        // owner already carries (its own world, or a previous staging)
-        // passes through.
+        // the seed law: rows land in the staged block under the fresh
+        // staging scope (`stage_ir_seeds` laid it and recorded the
+        // mapping), so the owner's substitution spells the staged
+        // world. Boot ids are global; a scope the owner already carries
+        // (its own world, or a previously staged block) passes through.
         let r_idx = self.done.get(requester).map(|u| u.idx);
         let mut arg_map: Vec<(rut_core::types::TypeId, rut_core::types::TypeId)> = Vec::new();
-        let owner_carries = |a: rut_core::types::TypeId| -> bool {
-            let s = rut_core::scope_of(a);
-            s == rut_core::BOOT_SCOPE
-                || self.programs[idx]
-                    .types
-                    .scope_base
-                    .get(s as usize)
-                    .copied()
-                    .unwrap_or(0)
-                    != 0
-        };
         for &a in args {
-            if r_idx.is_some() && !owner_carries(a) {
-                // the union staging covered this requester — a miss here
-                // means the arg's closure was empty; the id passes and
-                // the substitution resolves it or the template never
-                // mentions it
-            }
-            arg_map.push((a, a));
+            let s = rut_core::scope_of(a);
+            let staged = if s == rut_core::BOOT_SCOPE {
+                None
+            } else {
+                self.staged_scopes.get(&(owner.to_string(), s)).copied()
+            };
+            let out = staged
+                .map(|fresh| rut_core::pack(fresh, rut_core::local_of(a)))
+                .unwrap_or(a);
+            arg_map.push((a, out));
         }
         // the consumer-local members' index (case (c) of the stub
         // resolution): each program's inherent rows, keyed by scope —
@@ -1127,6 +1177,27 @@ impl<'a> GraphCompiler<'a> {
         } else {
             None
         };
+        // THE DELIVERY LAW's loud refusal: a BODY request with no
+        // template row is a torn or doctored bundle — the pack could
+        // not have produced it (a body request is never answered by the
+        // type-only identity mint below, which would fabricate
+        // `Method { .., fid: 0 }` and mislink at runtime)
+        if (is_fn || method.is_some()) && row.is_none() {
+            let what = if is_fn {
+                decl_text.clone()
+            } else {
+                format!(
+                    "{}${}",
+                    decl_text,
+                    method_text.as_deref().unwrap_or("<method>")
+                )
+            };
+            return Err(format!(
+                "instantiation `{owner}#{what}<..>` is served by neither `{owner}`'s \
+                 pack-time ledger nor its template bodies — corrupt or doctored, re-pack \
+                 the directory"
+            ));
+        }
         let fid = if let Some((_, trow)) = row {
             let params = trow.param_rows.clone();
             let first_fid = own.template_first_fid;
@@ -1206,7 +1277,7 @@ impl<'a> GraphCompiler<'a> {
                 subst: arg_map.iter().map(|(_, o)| *o).collect(),
                 origins: vec![],
             }
-        } else if let Some(m) = method {
+        } else if method.is_some() {
             rut_core::binary::InstFnKind::Method {
                 data: decl_ident,
                 name: own.interner.intern(&method_text.unwrap_or_default()),
@@ -2018,6 +2089,7 @@ fn materialize_body(
 /// whose ledger row names the consumer (link unifies it with the real
 /// body there — the carried-member law's direction).
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn resolve_member_stub(
     own: &mut Program,
     home: &Homes,
@@ -2026,8 +2098,8 @@ fn resolve_member_stub(
     concrete: rut_core::types::TypeId,
     member: rut_core::sym::IdentId,
     owner: &str,
-    params: &[rut_core::types::TypeId],
-    values: &[rut_core::types::TypeId],
+    _params: &[rut_core::types::TypeId],
+    _values: &[rut_core::types::TypeId],
     memo: &mut HashMap<(u32, Vec<rut_core::types::TypeId>), u32>,
     requests: &mut Vec<(String, rut_lir::check::InstRequest)>,
     depth: u32,
@@ -2051,7 +2123,7 @@ fn resolve_member_stub(
     let concrete_text = own.type_name(concrete).to_string();
     if let Some((base, args_text)) = concrete_text.split_once('<') {
         let args_text = args_text.strip_suffix('>').unwrap_or(args_text);
-        let arg_rows: Vec<rut_core::types::TypeId> = split_top_commas_local(args_text)
+        let arg_rows: Vec<rut_core::types::TypeId> = split_top_commas(args_text)
             .iter()
             .filter_map(|t| own.interner.lookup(t).and_then(|id| own.types.dense_id_of_name(id)))
             .collect();
@@ -2134,29 +2206,44 @@ fn resolve_member_stub(
     ))
 }
 
-fn split_top_commas_local(s: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0usize;
-    let mut cur = String::new();
-    for ch in s.chars() {
-        match ch {
-            '<' | '(' => {
-                depth += 1;
-                cur.push(ch);
+/// Rewrite every `(from, local)` type id inside `kind` to `(to, local)` —
+/// the staging half's scope rebase: the staged rows' inner ids spelling
+/// the requester's scope move into the fresh staging scope's coordinate
+/// system. Structural recursion over the type-carrying variants; the
+/// leaves and non-type payloads pass.
+fn remap_kind_scope(kind: &mut rut_core::types::TyKind, from: rut_core::id::ScopeId, to: rut_core::id::ScopeId) {
+    if from == to {
+        return;
+    }
+    let rb = |t: &mut rut_core::types::TypeId| {
+        if rut_core::scope_of(*t) == from && *t != u32::MAX {
+            *t = rut_core::pack(to, rut_core::local_of(*t));
+        }
+    };
+    match kind {
+        rut_core::types::TyKind::Nil
+        | rut_core::types::TyKind::Prim(_)
+        | rut_core::types::TyKind::Str
+        | rut_core::types::TyKind::Bytes
+        | rut_core::types::TyKind::Enum { .. }
+        | rut_core::types::TyKind::IfaceObj { .. }
+        | rut_core::types::TyKind::Opaque
+        | rut_core::types::TyKind::Trace
+        | rut_core::types::TyKind::DisposalContext => {}
+        rut_core::types::TyKind::Array { elem }
+        | rut_core::types::TyKind::Opt { elem }
+        | rut_core::types::TyKind::Weak { elem }
+        | rut_core::types::TyKind::Future { elem } => rb(elem),
+        rut_core::types::TyKind::Data { fields } => {
+            for f in fields.iter_mut() {
+                rb(&mut f.ty);
             }
-            '>' | ')' => {
-                depth = depth.saturating_sub(1);
-                cur.push(ch);
+        }
+        rut_core::types::TyKind::Fn { params, ret } => {
+            for p in params.iter_mut() {
+                rb(p);
             }
-            ',' if depth == 0 => {
-                out.push(cur.trim().to_string());
-                cur = String::new();
-            }
-            _ => cur.push(ch),
+            rb(ret);
         }
     }
-    if !cur.trim().is_empty() {
-        out.push(cur.trim().to_string());
-    }
-    out
 }

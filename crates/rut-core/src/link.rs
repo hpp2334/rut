@@ -647,20 +647,32 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // surviving fids renumber compactly (the drop closes the gaps),
         // so references and claims land on the post-skip positions
         let mut renumber: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
-        let map_func = |f: u32| -> u32 {
-            if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
-                f + func_off_plan
-            } else {
-                func_base_plan
-                    .get(&crate::id::scope_of(f))
-                    .copied()
-                    .unwrap_or(0)
-                    + crate::id::local_of(f)
-            }
-        };
+        // The instantiation-key canon: boot rows by id (global by
+        // construction), everything else by the row's NAME TEXT — the
+        // same canon `ir_ledger_hit` speaks. The id spellings
+        // (`s{dense}`) differ per copy of a row (the owner's staged
+        // copy of a consumer-spelled shape and the consumer's own row
+        // are two dense rows for one instantiation), but the TEXTS are
+        // identical by the re-intern law (the text crosses, never the
+        // id) — the name is what makes instantiation keys comparable
+        // across module (and binary) boundaries, and it is what
+        // collapses the copies onto the one-row law.
         let canonv = |vs: &[TypeId]| -> String {
             vs.iter()
-                .map(|&t| canon_type(&out.types, map(t)))
+                .map(|&t| {
+                    let g = map(t);
+                    if g == u32::MAX {
+                        "any".to_string() // TY_ANY sentinel — never a real type
+                    } else if (g as usize) < out.types.boot_len as usize {
+                        format!("b{g}")
+                    } else {
+                        // the row's name text, spelled from this module's
+                        // tables (the merged table fills during emission —
+                        // the planning phase runs first)
+                        let name = m.types.type_at(t).name;
+                        out.interner.name(nm(name)).to_string()
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join(",")
         };
@@ -755,18 +767,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             let slot = plan.renumber.get(&fid).copied().unwrap_or(fid);
             claim_fn.insert(key, slot + func_off_plan);
         }
-        let renumber = &plan.renumber;
-        let map_func = |f: u32| -> u32 {
-            if crate::id::scope_of(f) == crate::id::BOOT_SCOPE {
-                renumber.get(&f).copied().unwrap_or(f) + func_off_plan
-            } else {
-                func_base_plan
-                    .get(&crate::id::scope_of(f))
-                    .copied()
-                    .unwrap_or(0)
-                    + crate::id::local_of(f)
-            }
-        };
         deferred_all.last_mut().expect("pushed").extend(deferred_claims);
         plan.appended = m.funcs.len() - plan.skip_fns.len();
         func_off_plan += plan.appended as u32;
@@ -833,9 +833,6 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     // owner-anchored instantiation row: mirrors of one instantiation
     // (compiled once per consuming unit in a spliced closure) are ONE
     // registration once the rows unify.
-    let mut impl_owner: std::collections::HashMap<(u32, String), String> =
-        std::collections::HashMap::new();
-
     // the merged instantiation ledger: every row, with its ids mapped to
     // the global tables — the linked program documents the
     // instantiations it ships, the same wire rows a consumer's requests
@@ -1005,7 +1002,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             slot_map.get(slot as usize).copied().unwrap_or(slot)
         };
 
-        for (di, t) in m.types.types.iter().enumerate().skip(own_base as usize) {
+        for t in m.types.types.iter().skip(own_base as usize) {
             out.types.types.push(RutType {
                 name: nm(t.name),
                 kind: remap_kind(&t.kind, &map, &nm, &tm),

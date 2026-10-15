@@ -22,7 +22,7 @@ use std::collections::HashMap;
 
 use rut_core::binary::{FuncCode, InstFn, InstFnKind, InstTy, Program};
 use rut_core::ops::Op;
-use rut_core::types::{arr_elem_repr, FieldInfo, Repr, RutType, TyKind, TypeId, TypeTable};
+use rut_core::types::{arr_elem_repr, FieldInfo, RutType, TyKind, TypeId, TypeTable};
 use rut_core::Interner;
 
 /// A type substitution over an owner program's table: `#<param>`
@@ -111,6 +111,25 @@ impl<'a> Substitution<'a> {
         self.name_of(t).to_string()
     }
 
+    /// Intern a STRUCTURAL row by name first: the anonymous
+    /// instantiations' spells (`?T`, `Array<T>`, `fn(..) -> ..`,
+    /// `(A, B)`, and the nominal `Base<args>` rebuilds) are GENERATED
+    /// from the structure, so the name fully determines the row — two
+    /// substitutions reaching the same shape through different leaf
+    /// copies (the surface's pre-attribution template row vs the
+    /// window's compilation of it) must land on ONE row or the
+    /// materialized bodies disagree with their own records. The
+    /// compiler-MINTED shapes (`#cell@x@1` and friends) keep the
+    /// `(name, kind)` dedup: their names are positional, not
+    /// structural — the template's placeholder-world cell and the
+    /// concrete cell are two different rows sharing one name.
+    fn intern_structural(&mut self, ty: RutType) -> TypeId {
+        if let Some(id) = self.tt.dense_id_of_name(ty.name) {
+            return id;
+        }
+        self.tt.intern(ty)
+    }
+
     fn mk_opt(&mut self, elem: TypeId) -> TypeId {
         // the boot shortcuts mirror the compiler's `mk_opt` (the legal-
         // host-returns phase): those spell the shared boot rows
@@ -122,23 +141,23 @@ impl<'a> Substitution<'a> {
             _ => {}
         }
         let name = self.interner.intern(&format!("?{}", self.name_of(elem)));
-        self.tt.intern(RutType { name, kind: TyKind::Opt { elem } })
+        self.intern_structural(RutType { name, kind: TyKind::Opt { elem } })
     }
 
     fn mk_array(&mut self, elem: TypeId) -> TypeId {
         let name = self.interner.intern(&format!("Array<{}>", self.name_of(elem)));
-        self.tt.intern(RutType { name, kind: TyKind::Array { elem } })
+        self.intern_structural(RutType { name, kind: TyKind::Array { elem } })
     }
 
     fn mk_weak(&mut self, elem: TypeId) -> TypeId {
         let name = self.interner.intern(&format!("Weak<{}>", self.name_of(elem)));
-        self.tt.intern(RutType { name, kind: TyKind::Weak { elem } })
+        self.intern_structural(RutType { name, kind: TyKind::Weak { elem } })
     }
 
     fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
         let ps: Vec<String> = params.iter().map(|&p| self.name_of(p).to_string()).collect();
         let name = self.interner.intern(&format!("fn({}) -> {}", ps.join(", "), self.name_of(ret)));
-        self.tt.intern(RutType { name, kind: TyKind::Fn { params, ret } })
+        self.intern_structural(RutType { name, kind: TyKind::Fn { params, ret } })
     }
 
     /// Split a name's top-level argument list (`Base<a, b>` / `(a, b)`).
@@ -210,8 +229,12 @@ impl<'a> Substitution<'a> {
                     // variable's cell): the name is positional and
                     // substitution-free, the FIELDS are what mention the
                     // parameter — keep the name, re-intern the rebuilt
-                    // kind (structural interning lands it on the row a
-                    // fresh compile at these types mints)
+                    // kind with the `(name, kind)` dedup. NOT the
+                    // name-first dedup: the template's own
+                    // placeholder-world cell shares this name, and the
+                    // concrete cell is a different row (a different
+                    // field structure — the whole point of the
+                    // substitution).
                     text
                 };
                 let name = self.interner.intern(&new_text);
@@ -327,7 +350,8 @@ pub fn template_stability_violation(prog: &Program) -> Option<(String, String)> 
     None
 }
 
-fn split_top_commas(s: &str) -> Vec<String> {    let mut out = Vec::new();
+pub(crate) fn split_top_commas(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
     let mut depth = 0usize;
     let mut cur = String::new();
     for ch in s.chars() {
@@ -379,7 +403,7 @@ pub fn materialize_fn(
         out.code.push(remap_op(sub, op, map_fid));
     }
     rewrite_reprs(sub.tt, &mut out);
-    rut_lir::lir::refold_optprim(&mut out);
+    rut_lir::lir::refold_optprim(&mut out, sub.tt);
     out
 }
 

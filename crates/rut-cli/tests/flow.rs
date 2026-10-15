@@ -183,10 +183,6 @@ entry fn main() -> nil {
 }
 
 #[test]
-#[ignore = "P8 boundary: non-boot-arg shapes (the enumerate (i32,i32) tuple) served from the \
-           flow bundle's templates still mis-map at link — the seed staging's scope collides \
-           with a second owner's staged copy of the same requester rows; see \
-           rut-driver/tests/generic_templates.rs json_bundle_served_non_boot_arg_shapes"]
 fn fold_and_enumerate() {
     // fold seeds the accumulator; enumerate pairs the index
     let lines = run(

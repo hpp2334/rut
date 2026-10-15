@@ -259,6 +259,61 @@ fn a_generic_owning_bundle_without_template_bodies_refuses_at_mount() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+#[test]
+fn a_doctored_bundle_missing_one_template_row_refuses_loudly() {
+    // the anti-doctoring seam's FINE form: a bundle whose templates
+    // section merely LOSES one row (a doctored `Vec::push`) decodes and
+    // mounts — the binary looks whole — but the consumer-spelled shape
+    // the removed row served is answered by neither the pack-time
+    // ledger nor the remaining templates, and the link refuses loudly
+    // instead of fabricating a bodyless method row (the v22 delivery
+    // law: ledger | templates | refusal — never a fabricated `Method
+    // { fid: 0 }`)
+    let (url, bytes) = artifact("pouch");
+    let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the committed pouch");
+    let torn: Vec<(String, Vec<u8>)> = parsed
+        .into_iter()
+        .map(|(n, b)| {
+            if n == "mod.rutc" {
+                let mut prog =
+                    rut_core::binary::decode(&b).expect("decode the pouch module binary");
+                // drop exactly one method-body template row: Vec::push
+                let before = prog.templates.len();
+                prog.templates
+                    .retain(|t| match &t.kind {
+                        rut_core::binary::TemplateKind::Method { data, name } => {
+                            !(prog.interner.name(*data) == "Vec"
+                                && prog.interner.name(*name) == "push")
+                        }
+                        _ => true,
+                    });
+                assert_eq!(prog.templates.len(), before - 1, "the push row left");
+                (n, rut_core::binary::encode(&prog))
+            } else {
+                (n, b)
+            }
+        })
+        .collect();
+    let torn_bytes =
+        rut_driver::bundle::write_bundle(&torn).expect("re-write the doctored archive");
+    let base = std::env::temp_dir().join(format!("rut-std-cdn-row-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let mut table = BTreeMap::new();
+    table.insert(url.clone(), torn_bytes.clone());
+    let diags = load_and_compile(
+        &base,
+        &format!("\"pouch\": {{\"url\": \"{url}\"}}"),
+        table,
+        "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    return items.len() as i32;\n}\n",
+    )
+    .expect("the world loads — the refusal is the compile's diag");
+    let err = diags.join("; ");
+    assert!(err.contains("served by neither"), "{err}");
+    assert!(err.contains("push"), "{err}");
+    assert!(err.contains("re-pack the directory"), "{err}");
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 /// One consumer world over the committed CDN artifacts: rows + source →
 /// (diags, linked program, the session). Empty diags ⇒ compiled.
 fn load_compile_run(

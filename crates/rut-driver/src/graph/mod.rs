@@ -93,6 +93,7 @@ pub(crate) fn compile_units(session: &Session, root_spec: &str) -> Units {
         dep_decls: HashMap::new(),
         root: root_spec.to_string(),
         template_failures: Vec::new(),
+        staged_scopes: HashMap::new(),
     };
     let ok = c.ensure(root_spec).is_some();
     c.resolve_requests();

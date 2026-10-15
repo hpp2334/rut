@@ -1256,7 +1256,7 @@ pub fn compile_program_resolved(
             .iter()
             .enumerate()
             .skip(seed_start)
-            .map(|(i, t)| (ctx.interner.name(t.name).to_string(), t.clone()))
+            .map(|(_, t)| (ctx.interner.name(t.name).to_string(), t.clone()))
             .collect();
         for (i, row) in rows2.iter().enumerate() {
             let text = &row.0;

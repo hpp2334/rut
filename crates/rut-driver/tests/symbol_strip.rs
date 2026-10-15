@@ -296,12 +296,12 @@ fn mixed_closure_with_a_source_group_refuses_strip() {
 }
 
 #[test]
-fn strip_refuses_a_generic_owning_closure() {
-    // the generic-source interaction law: a compiled pkg that exports
-    // generics rides its source (so consumer-spelled shapes stay
-    // servable at load), and the ridden text would recompile
-    // clean-named beside mangled binaries — the combination refuses,
-    // loudly, naming the pkg and the escape hatch
+fn strip_serves_a_generic_owning_closure() {
+    // the v22 coverage law: a successful pack's templates cover its
+    // generic surface by construction, so `--strip` on a generic-owning
+    // closure is legal unconditionally — the pack succeeds, the bundle
+    // carries no source, and a consumer-spelled shape still materializes
+    // from the stripped binary's templates at link
     let root = scratch("stripgen");
     let lib = root.join("pairz");
     write(
@@ -332,16 +332,46 @@ fn strip_refuses_a_generic_owning_closure() {
          \x20   return p.fst;\n\
          }\n",
     );
-    // the ROOT arm: app itself is concrete — but pairz's group is the
-    // generic owner
-    let err = pack_dir_opts(&app, &PackOpts { strip: true }).unwrap_err().to_string();
-    assert!(err.contains("pairz"), "names the generic owner: {err}");
-    assert!(err.contains("generic"), "says why: {err}");
-    assert!(err.contains("--strip"), "names the escape hatch: {err}");
-    // the root arm: a generic root refuses the same way
-    let err = pack_dir_opts(&lib, &PackOpts { strip: true }).unwrap_err().to_string();
-    assert!(err.contains("pairz"), "names the generic root: {err}");
-    assert!(err.contains("generic"), "says why: {err}");
+    // the strip pack succeeds — the app is the root pkg, the whole
+    // closure strips
+    let (bytes, _sidecar) =
+        pack_dir_opts(&app, &PackOpts { strip: true }).expect("the stripped generic pack");
+    // the bundle carries no source entries (the delivery law: ledger |
+    // templates, never source)
+    let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse");
+    assert!(
+        !parsed
+            .iter()
+            .any(|(n, _)| n.ends_with(".rut") && !n.ends_with(".d.rut") && n != "rut.jsonc"),
+        "the stripped bundle carries source: {:?}",
+        parsed.iter().map(|(n, _)| n).collect::<Vec<_>>()
+    );
+    // and a consumer of the stripped bundle still materializes the
+    // consumer-spelled shape from the templates
+    let mut world = rut_driver::Pkg::from_bundle(&bytes).expect("mount the stripped bundle").pkgs;
+    world.push(
+        rut_driver::Pkg::source(
+            "app2",
+            "use pairz::{ Pair };\n\n\
+             entry fn go() -> i64 {\n\
+             \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\
+             \x20   return p.fst;\n\
+             }\n",
+        )
+        .manifest(rut_driver::Manifest::lib("app2", &["pairz"])),
+    );
+    let c = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+        .entrypoint("app2")
+        .compile()
+        .expect("the consumer of the stripped generic bundle compiles");
+    assert!(
+        c.graph.diags.is_empty(),
+        "diags:\n{}",
+        c.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    );
+    let flat = rut_core::link::flatten(c.graph.program.expect("linked"));
+    rut_vm::verify::verify(&flat).expect("verify");
     let _ = std::fs::remove_dir_all(&root);
 }
 

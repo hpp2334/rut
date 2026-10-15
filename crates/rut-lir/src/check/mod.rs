@@ -19,7 +19,7 @@ mod impls;
 mod inst;
 mod resolve;
 
-pub(crate) use impls::{MemberReq, MemberSrc};
+pub(crate) use impls::MemberSrc;
 
 // ---- decl indices ----
 

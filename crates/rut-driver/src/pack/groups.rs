@@ -149,33 +149,22 @@ pub(super) fn rides_compiled(
     }
 }
 
-/// Does a compiled program's surface export an OPEN generic surface —
-/// the generic-source riding trigger: exported generic fns
-/// (`launch_future<T>`), generic type exports (`Vec<T>`), or generic
-/// methods on an inherent row (`MutCtx::set<A, R>`). (The old
-/// generic-target impl arm died with the impl registrations — a
-/// generic class's own methods trigger through the inherents arm.) A
-/// false positive costs a few inert archive entries; a false negative
-/// would refuse a shape the ridden source could have served.
-pub fn has_open_generic_surface(prog: &rut_core::binary::Program) -> bool {
-    let s = &prog.surface;
-    !s.fn_generics.is_empty()
-        || s.type_exports.iter().any(|t| t.is_generic)
-        || s.inherents
-            .iter()
-            .any(|ih| ih.methods.iter().any(|m| !m.generics.is_empty()))
-}
-
 /// Does the program export generic BODIES — free generic fns or
 /// generic-method rows (a generic class's members)? The
-/// templates-must-emit trigger (v22): these are the decls whose bodies
-/// must ride the binary as template rows. A generic TYPE export alone
-/// (a method-less `Pair<A, B>`) carries no bodies — its instantiations
-/// are identity rows the link lane mints structurally, no template
-/// needed — so it opens a generic surface without entering this
-/// predicate. (A plain class's surface row can carry `local = 0` for a
-/// `[constructor]` whose body the caller mints — that is not a
+/// templates-must-emit trigger (v22 — the mount seam's anti-doctoring
+/// check and the pack's gate both read it): these are the decls whose
+/// bodies must ride the binary as template rows. A generic TYPE export
+/// alone (a method-less `Pair<A, B>`) carries no bodies — its
+/// instantiations are identity rows the link lane mints structurally,
+/// no template needed — so it opens a generic surface without entering
+/// this predicate. (A plain class's surface row can carry `local = 0`
+/// for a `[constructor]` whose body the caller mints — that is not a
 /// generic-method marker; the CLASS's genericity is.)
+///
+/// (v22 role note: the old `has_open_generic_surface` riding trigger
+/// retired with the riding law — the binary-only delivery needs the
+/// BODY-level predicate, and a generic type export alone passes the
+/// seam trivially.)
 pub fn has_generic_bodies(prog: &rut_core::binary::Program) -> bool {
     let s = &prog.surface;
     !s.fn_generics.is_empty()

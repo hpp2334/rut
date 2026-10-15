@@ -462,7 +462,7 @@ impl TypeTable {
             }
         }
         match best {
-            Some((_, s)) if own_at_best => self.scope,
+            Some(_) if own_at_best => self.scope,
             Some((_, s)) => s,
             None => self.scope,
         }

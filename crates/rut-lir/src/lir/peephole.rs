@@ -53,7 +53,19 @@ pub(crate) fn run(
 /// substituted types would emit (the store elision + the deref fold —
 /// the two repr-keyed windows; the copy/forward/fuse passes are
 /// type-independent and already ran at pack).
-pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode) {
+pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode, tt: &rut_core::types::TypeTable) {
+    // the substituted register types: a template `MovRef` whose DST reg
+    // carries a prim type is the fresh compile's `Mov` copy (the
+    // placeholder rows are ref-repr, so the template emitter spelled
+    // the prim copy as a ref copy) — the copy fold eliminates exactly
+    // the copies the fresh body's `one_round` folded, and no others
+    let regs = fc.regs.clone();
+    let is_prim_copy = |dst: u16| -> bool {
+        matches!(
+            tt.kind(regs.get(dst as usize).copied().unwrap_or(rut_core::types::TY_NIL)),
+            rut_core::types::TyKind::Prim(_)
+        )
+    };
     let mut pools = Pools {
         argv: std::mem::take(&mut fc.argv),
         argv_ix: std::collections::HashMap::new(),
@@ -64,8 +76,12 @@ pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode) {
         // copy's original (the fresh compile's `one_round` outcome) so
         // the elision below can consume the MakeOpt — the reverse order
         // strands the copy behind an already-elided box
-        let (code, spans, copied) =
-            copy_fold_once(std::mem::take(&mut fc.code), std::mem::take(&mut fc.spans), &mut pools);
+        let (code, spans, copied) = copy_fold_once(
+            std::mem::take(&mut fc.code),
+            std::mem::take(&mut fc.spans),
+            &mut pools,
+            &is_prim_copy,
+        );
         fc.code = code;
         fc.spans = spans;
         let (code, spans, changed) =
@@ -92,7 +108,12 @@ pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode) {
 /// straight-line, no clobber) are the compile-time fold's own, so
 /// every elimination is semantics-preserving; the residual op-count
 /// gap against a fresh body is the fold-parity tail (P8).
-fn copy_fold_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn copy_fold_once(
+    code: Vec<Op>,
+    spans: Vec<(u32, u32)>,
+    pools: &mut Pools,
+    is_prim_copy: &dyn Fn(u16) -> bool,
+) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
         return (code, spans, false);
@@ -130,7 +151,12 @@ fn copy_fold_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (
     let mut replace_at: HashMap<usize, Vec<(u16, u16)>> = HashMap::new();
     for pc in 0..n {
         let (dst, src) = match &code[pc] {
-            Op::Mov { dst, src } | Op::MovRef { dst, src } => (*dst, *src),
+            Op::Mov { dst, src } => (*dst, *src),
+            // a template `MovRef` folds only when the substituted reg
+            // type is a prim — that copy is the fresh compile's `Mov`
+            // (see `refold_optprim`); a ref-typed `MovRef` exists in the
+            // fresh body too and stays
+            Op::MovRef { dst, src } if is_prim_copy(*dst) => (*dst, *src),
             _ => continue,
         };
         if dst == src {
