@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use rut_native::pack_dir;
 
-
-
+mod common;
+use common::dep_dir;
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
@@ -70,7 +70,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}"{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}"{extra}}}"#)
 }
 
 /// One world, one in-memory pkg set (no filesystem): the specs'
@@ -353,14 +353,15 @@ fn packaged_generic_owner_serves_consumer_requests() {
     // shapes stay servable at load
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
-    assert!(names.contains(&"pairz/pairz.rutc".to_string()), "{names:?}");
-    assert!(names.contains(&"pairz/mod.rut".to_string()), "{names:?}");
+    let pairz_dir = dep_dir(&names, "pairz");
+    assert!(names.contains(&format!("{pairz_dir}/mod.rutc")), "{names:?}");
+    assert!(names.contains(&format!("{pairz_dir}/mod.rut")), "{names:?}");
     // and the pack-time closure's instantiation is IN the binary's ledger
     {
         let group = rut_driver::bundle::parse_bundle(&bytes)
             .unwrap()
             .into_iter()
-            .find(|(n, _)| n == "pairz/pairz.rutc")
+            .find(|(n, _)| n == &format!("{pairz_dir}/mod.rutc"))
             .unwrap()
             .1;
         let prog = rut_core::binary::decode(&group).expect("decode");

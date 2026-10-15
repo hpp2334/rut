@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 mod common;
-use common::{block_on, write_lock, Table};
+use common::{block_on, dep_dir, write_lock, Table};
 
 use rut_driver::sha256_hex;
 use rut_native::{load_dir, pack_dir};
@@ -81,7 +81,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
     // `extra` is the fragment after the name row (`, "deps": { … }`) —
     // the entry keys are repealed: the body is `mod.rut` beside the
     // manifest (the `_entry` arg names the file the caller writes)
-    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}"{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}"{extra}}}"#)
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.
@@ -473,16 +473,16 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert_eq!(packed, packed_again, "same inputs must pack byte-identically");
 
     // the rode-along group: the output carries util as a compiled group
-    // re-encoded from THIS session's units (the one .rutc path), and
-    // the url row rode byte-for-byte inside its manifest (pinless —
-    // pins live in rut.lock, not in the manifest)
+    // (re-encoded from THIS session's units, under its content
+    // identity), and the url row rode byte-for-byte inside its manifest
+    // (pinless — pins live in rut.lock, not in the manifest)
     let names: Vec<String> = rut_driver::bundle::parse_bundle(&packed)
         .unwrap()
         .into_iter()
         .map(|(n, _)| n)
         .collect();
-    assert!(names.contains(&"util/util.rutc".to_string()), "{names:?}");
-    assert!(names.contains(&"app.rutc".to_string()), "{names:?}");
+    assert!(names.contains(&format!("{}/mod.rutc", dep_dir(&names, "util"))), "{names:?}");
+    assert!(names.contains(&"mod.rutc".to_string()), "{names:?}");
     let out_manifest = rut_driver::bundle::Bundle::parse(&packed)
         .unwrap()
         .read("rut.jsonc")
@@ -535,8 +535,10 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
     map.insert(url, bytes);
     write_lock(&app, &map);
     let err = rut_native::pack_dir_fetched(&app, &map).unwrap_err().to_string();
+    // the dep mounts under its content identity — the message spells
+    // the mount key
     assert!(
-        err.contains("packed dep `codec` needs its own [dev-deps] directories"),
+        err.contains("packed dep `codec@") && err.contains("` needs its own [dev-deps] directories"),
         "{err}"
     );
     assert!(err.contains("vendor this dep"), "{err}");

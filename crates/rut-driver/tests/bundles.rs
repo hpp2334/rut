@@ -1,12 +1,15 @@
 //! Path loading — module directories (`rut.jsonc`) and `.rutbundle`
-//! archives: a v7 bundle is the COMPILED contract (`.rutc` binaries +
-//! scope ledger + mixed source groups), and the refusals gate it
+//! archives: a v11 bundle is the COMPILED contract (`mod.rutc` binaries
+//! + scope ledger + `deps/` identity groups), and the refusals gate it
 //! (version, corruption, missing groups).
 
 use std::path::Path;
 
 use rut_driver::Pkg;
 use rut_native::{load_bundle_session, load_dir, load_path_session, pack_dir};
+
+mod common;
+use common::{dep_dir, pkg_named};
 
 
 
@@ -51,9 +54,9 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn make_dir_manifest() -> String {
     // bundle-shaped: the keys a `rut pack` needs are already there,
-    // and directory loading ignores them (layout 10 — the one wire
-    // number; the packer emits 10 and the loader reads 10 only)
-    r#"{"format": "rutbundle", "format_version": 10, "name": "mod"}"#.to_string()
+    // and directory loading ignores them (layout 11 — the one wire
+    // number; the packer emits 11 and the loader reads 11 only)
+    r#"{"format": "rutbundle", "format_version": 11, "name": "mod"}"#.to_string()
 }
 
 /// A one-file module in a temp dir (one directory, one entry file).
@@ -142,12 +145,12 @@ fn refusals() {
     let err = rut_driver::Pkg::from_bundle(&not_a_bundle).unwrap_err().to_string();
     assert!(err.contains("rut.jsonc"), "{err}");
 
-    // anything that is not 10 refuses at the one-line version gate —
+    // anything that is not 11 refuses at the one-line version gate —
     // the same refusal an OLDER loader applies to a version it does
     // not know, before reading anything else (refuse, never guess).
     // ONE uniform re-pack recipe: the old wires, the reserved band,
     // anything.
-    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 11, 99, 100] {
+    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 99, 100] {
         let manifest = format!(
             r#"{{"format": "rutbundle", "format_version": {v}, "name": "x", "entry": {{"lib": "./x.rut"}}}}"#
         );
@@ -158,7 +161,7 @@ fn refusals() {
         .unwrap();
         let err = rut_driver::Pkg::from_bundle(&old).unwrap_err().to_string();
         assert!(err.contains("format_version"), "{err}");
-        assert!(err.contains("reads bundle format_version 10 only"), "{err}");
+        assert!(err.contains("reads bundle format_version 11 only"), "{err}");
         assert!(err.contains("re-pack the directory"), "{err}");
     }
 
@@ -168,7 +171,7 @@ fn refusals() {
     let old_name = rut_driver::bundle::write_bundle(&[
         (
             "rut.json".into(),
-            br#"{"format": "rutbundle", "format_version": 10, "name": "x", "entry": {"lib": "./x.rut"}}"#
+            br#"{"format": "rutbundle", "format_version": 11, "name": "x", "entry": {"lib": "./x.rut"}}"#
                 .to_vec(),
         ),
         ("x.rut".into(), src.to_vec()),
@@ -181,7 +184,7 @@ fn refusals() {
     assert!(err.contains("not a rut bundle"), "{err}");
 
     // missing `format = "rutbundle"`
-    let manifest = r#"{"format_version": 10, "name": "x", "entry": {"lib": "./x.rut"}}"#;
+    let manifest = r#"{"format_version": 11, "name": "x", "entry": {"lib": "./x.rut"}}"#;
     let no_format = rut_driver::bundle::write_bundle(&[
         ("rut.jsonc".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
@@ -206,7 +209,7 @@ fn refusals() {
     std::fs::write(dir.join("surface.d.rut"), "/// the pkg's surface doc.\n").unwrap();
     std::fs::write(
         dir.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
     )
     .unwrap();
     std::fs::remove_file(dir.join("surface.d.rut")).unwrap();
@@ -244,7 +247,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(
         m.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -256,24 +259,34 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     let bytes = pack_dir(&m).unwrap();
 
     // TWIN 1 — the same group re-spelled `type = "lib"` (and nothing
-    // else changed): the group's surface now rides the LIB arm, and its
-    // host rows refuse at load, naming the fix
-    let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
-    let lib_manifest =
-        r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#.as_bytes().to_vec();
-    let respelled: Vec<(String, Vec<u8>)> = entries
-        .iter()
-        .map(|(n, b)| {
-            if n == "s/rut.jsonc" {
-                (n.clone(), lib_manifest.clone())
-            } else {
-                (n.clone(), b.clone())
-            }
-        })
-        .collect();
-    let respelled_bytes = rut_driver::bundle::write_bundle(&respelled).unwrap();
-    let err = rut_driver::Pkg::from_bundle(&respelled_bytes).unwrap_err().to_string();
-    assert!(err.contains("s/s.d.rut"), "{err}");
+    // else changed): the surface rides the LIB arm at load, and its
+    // host rows refuse, naming the fix. The twin packs FRESH — a
+    // doctored in-archive manifest would refuse earlier, at the
+    // fingerprint-over-content law (the dirname would no longer hash
+    // to its group).
+    let s_lib = base.join("s_lib");
+    std::fs::create_dir_all(&s_lib).unwrap();
+    std::fs::write(
+        s_lib.join("rut.jsonc"),
+        r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
+    )
+    .unwrap();
+    std::fs::write(s_lib.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
+    let m_lib = base.join("m_lib");
+    std::fs::create_dir_all(&m_lib).unwrap();
+    std::fs::write(
+        m_lib.join("rut.jsonc"),
+        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"s": {"path": "../s_lib"}}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        m_lib.join("mod.rut"),
+        "entry fn main() -> i32 { return 7; }\n",
+    )
+    .unwrap();
+    let lib_bytes = pack_dir(&m_lib);
+    let err = lib_bytes.unwrap_err().to_string();
+    assert!(err.contains("s.d.rut"), "{err}");
     assert!(err.contains("`host fn ping`"), "{err}");
     assert!(err.contains("`type = \"host\"`"), "{err}");
 
@@ -291,7 +304,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m2).unwrap();
     std::fs::write(
         m2.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -301,7 +314,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     .unwrap();
     let dev_bytes = pack_dir(&m2).unwrap();
     let session = rut_driver::Pkg::from_bundle(&dev_bytes).unwrap();
-    let sf = session.pkg("s").expect("s mounted");
+    let sf = pkg_named(&session, "s");
     assert!(
         matches!(
             sf.body,
@@ -322,7 +335,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     // kind is honored from the field, pack to load)
     let session = Pkg::from_bundle(&bytes).unwrap();
     assert!(matches!(
-        session.pkg("s").expect("s mounted").body,
+        pkg_named(&session, "s").body,
         rut_driver::PkgBody::Host { .. }
     ));
 
@@ -364,7 +377,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     std::fs::create_dir_all(&main).unwrap();
     std::fs::write(
         main.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "main", "deps": {"m": {"path": "../m"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"m": {"path": "../m"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -375,12 +388,26 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
 
     let bytes = pack_dir(&main).unwrap();
     let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
-    let mut names: Vec<&str> = entries.iter().map(|(n, _)| n.as_str()).collect();
-    names.sort();
+    // v11: the root's own files at the archive root (canonical names),
+    // each dep group under its content identity
+    let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
+    let m_dir = dep_dir(&names, "m");
+    let s_dir = dep_dir(&names, "s");
+    let mut sorted = names.clone();
+    sorted.sort();
+    let mut want = vec![
+        "mod.rutc".to_string(),
+        "rut.jsonc".to_string(),
+        "rut.scopes".to_string(),
+        format!("{m_dir}/mod.rutc"),
+        format!("{m_dir}/rut.jsonc"),
+        format!("{s_dir}/mod.d.rut"),
+        format!("{s_dir}/rut.jsonc"),
+    ];
+    want.sort();
     assert_eq!(
-        names,
-        vec!["m/m.rutc", "m/rut.jsonc", "main.rutc", "rut.jsonc", "rut.scopes", "s/rut.jsonc", "s/s.d.rut"],
-        "the closure rides compiled, the host pkg as source"
+        sorted, want,
+        "the closure rides compiled, the host pkg as source, all under deps/<identity>/"
     );
 
     // determinism with deps too
@@ -395,7 +422,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         session.pkg("main").expect("m mounted").body,
         rut_driver::PkgBody::Compiled(_)
     ));
-    let sf = session.pkg("s").expect("s mounted (transitively)");
+    let sf = pkg_named(&session, "s");
     assert!(
         matches!(sf.body, rut_driver::PkgBody::Host { .. }),
         "the host pkg rode along as a host body"
@@ -403,7 +430,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // the first-mount edge + the structural manifest: a group records
     // the ARCHIVE ROOT as its puller, and every archive pkg rides its
     // own in-archive manifest
-    let mf = session.pkg("m").expect("m mounted");
+    let mf = pkg_named(&session, "m");
     assert_eq!(sf.mounted_by.as_deref(), Some("main"), "the archive root pulled its groups");
     assert_eq!(mf.mounted_by.as_deref(), Some("main"));
     assert!(session.pkg("main").unwrap().mounted_by.is_none(), "the bundle root has no parent");
@@ -417,10 +444,10 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
     assert!(g.graph.program.is_some());
 
-    // a v5 bundle missing a declared dep group is a load error naming it
+    // a v11 bundle missing a declared dep group is a load error naming it
     let stripped: Vec<(String, Vec<u8>)> = entries
         .iter()
-        .filter(|(n, _)| !n.starts_with("m/"))
+        .filter(|(n, _)| !n.starts_with(&format!("{m_dir}/")))
         .cloned()
         .collect();
     let bytes = rut_driver::bundle::write_bundle(&stripped).unwrap();
@@ -428,6 +455,34 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     assert!(err.contains("missing its `m` dependency group"), "{err}");
 
     let _ = std::fs::remove_dir_all(&base);
+}
+
+#[test]
+fn entry_keys_admit_identities_under_deps() {
+    // THE @-ADMISSION LAW (wire v11): a group's entries ride at
+    // `deps/<name>@<fp16>/…` — `@` is not in the spec alphabet, so an
+    // identity can never collide with a real package name, and the
+    // entry-key law admits it inside the `deps/` component: the key
+    // normalizer answers it, and the container writes + reads the
+    // entry back byte-for-byte.
+    let key = "deps/util@0123456789abcdef/mod.rutc";
+    assert_eq!(
+        rut_driver::bundle::bundle_key(key).unwrap().as_str(),
+        key,
+        "an identity dirname passes the entry-key law",
+    );
+    // the traversal laws keep biting around it
+    assert!(rut_driver::bundle::bundle_key("deps/../util@0123456789abcdef/mod.rutc").is_err());
+    assert!(rut_driver::bundle::bundle_key("/deps/util@0123456789abcdef/mod.rutc").is_err());
+    let bytes = rut_driver::bundle::write_bundle(&[(
+        key.to_string(),
+        b"RUTC-payload".to_vec(),
+    )])
+    .expect("the container writes identity entries");
+    let parsed = rut_driver::bundle::parse_bundle(&bytes).unwrap();
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(parsed[0].0, key);
+    assert_eq!(parsed[0].1, b"RUTC-payload");
 }
 
 #[test]
@@ -445,7 +500,7 @@ fn the_directory_manifest_speaks_jsonc() {
 {
   // the header prose
   "format": "rutbundle",
-  "format_version": 10, /* the one wire number */
+  "format_version": 11, /* the one wire number */
   "name": "mod", /* beside the value */
   "style": { "indent": "2", }, // a trailing comma, the JSONC way
 }

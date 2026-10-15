@@ -9,7 +9,7 @@
 //! an ordinary tree package) and emits from the pkgs and the reader.
 //! Same input directory ⇒ byte-identical bundle.
 //!
-//! TWO root kinds, ONE wire number (`format_version` is 10, always;
+//! TWO root kinds, ONE wire number (`format_version` is 11, always;
 //! the manifest's `type` routes): a **lib** root packs **compiled**
 //! (the root and every source dep ride as `.rutc` binaries (bodies +
 //! surface — the linking truth); host/decl pkgs ride as their
@@ -29,6 +29,13 @@
 //! group's FILE reads (manifests, `.d.rut`, source sets) dispatch on
 //! the source. The manifest rides byte-for-byte (the law) — url+sha256
 //! rows carry into the output satisfied by the rode-along groups.
+//!
+//! Groups emit at `deps/<name>@<fp16>/` — the package's CONTENT
+//! IDENTITY, fingerprinted over its own rode source set (the four
+//! canonical names among the staged entries, fixed order, absent
+//! skipped). Same source ⇒ same identity: a repack of the same group
+//! lands at the same dirname, and two identities of one name coexist
+//! side by side. The identity order is the archive's group order.
 //!
 //! Refusals (never guesses): cycles and name collisions — the graph's
 //! own laws, surfaced as pack errors; plus the v1 url-dep refusals
@@ -53,11 +60,14 @@ use crate::mods::{rows_json, ROWS_NAME};
 use crate::run::Loaded;
 use crate::session::{PkgBody, Session};
 
-/// The bundle wire version — 10, always, ONE number for both root
+/// The bundle wire version — 11, always, ONE number for both root
 /// kinds. The manifest's `type` routes the layout (a lib root packs
 /// compiled, a `type = "host"` root packs its decl surface); a reader
 /// refuses anything else with one re-pack recipe — never guesses.
-pub const FORMAT_VERSION: u64 = 10;
+/// v11: dep groups ride at `deps/<name>@<fp16>/…` (content identity),
+/// the archive root carries only the root's own files, and the entry
+/// names are canonical (`mod.rutc` / `mod.d.rut` at both levels).
+pub const FORMAT_VERSION: u64 = 11;
 
 /// Where a group's files ride from — the emission's read dispatch. The
 /// `Dir` arm carries the DIRECTORY KEY (an opaque string; the FS math
@@ -165,12 +175,16 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // the rode-along closure law: every dep an archive group's manifest
     // declares must ride in this output — a group the mount skipped
     // without a source of its own would leave the output declaring a
-    // dep without a group (v1: loud, named)
+    // dep without a group (v1: loud, named). Deps keys stay BARE
+    // (source-facing grammar); group mounts key on their identity, so
+    // the check matches by name half.
     for (spec, source) in &w.sources {
         if let PkgSource::Archive { .. } = source {
             let dm = group_manifest(source, &w.archives, &w.read).map_err(PackError::law)?;
             for dep in dm.deps.keys() {
-                if !w.sources.contains_key(dep) && *dep != root {
+                let ridden = *dep == root
+                    || w.sources.keys().any(|k| crate::bundle::mount_name(k) == dep.as_str());
+                if !ridden {
                     return Err(PackError::law(format!(
                         "packed dep `{spec}` declares `{dep}`, but that group did not ride — the output would be missing its `{dep}` group; vendor this dep (unpack the url dep into your project) instead"
                     )));
@@ -200,18 +214,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             }
         }
     }
-    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
-    // the manifest byte-for-byte, then the scope ledger
-    entries.push((MANIFEST_NAME.into(), w.manifest_bytes.clone()));
-    let mut ledger: Vec<(rut_core::id::ScopeId, String)> = units
-        .linked
-        .iter()
-        .map(|(spec, &(_, scope))| (scope, spec.clone()))
-        .collect();
-    ledger.sort();
-    entries.push(("rut.scopes".into(), ledger_text(&ledger).into_bytes()));
-    // the root's compiled binary (+ its surface text for humans, when
-    // the package declares one)
+    // the root's compiled program — produced before the strip arm (the
+    // mangle mutates `units` in place); a host root cannot pack (the
+    // decl arm lives in rut-native)
     let root_linked = units.linked.get(&root);
     let root_ok = matches!(
         (&session.resolve(&root).unwrap().body, root_linked),
@@ -241,61 +246,90 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     //    every encoded program, symbolication tables taken into the
     //    sidecar.
     let symtab = strip_arm(&mut units, &session, &w.sources, &w.archives, &w.read, &root, root_idx, opts.strip)?;
-    entries.push((format!("{name}.rutc"), rut_core::binary::encode(&units.programs[root_idx])));
+    // ---- staging: the root's own files, then every dep group — so
+    // the scope ledger's identity rows read fingerprints off the exact
+    // bytes about to be emitted, and the emission order stays the law:
+    // rut.jsonc, rut.scopes, the root's files, then the deps/ groups
+    // in identity order.
+
+    // the root's own file set (prefix ""): the spelled surface at its
+    // canonical `mod.d.rut` name, the generic riding source, the module
+    // rows. The manifest rides first (below) and the binary
+    // (`mod.rutc`) is NOT part of the fingerprint basis — the identity
+    // fingerprints the SOURCE set.
+    let root_pkg = session.resolve(&root).map_err(|e| PackError::law(e.to_string()))?;
+    let mut root_files: Vec<(String, Vec<u8>)> = Vec::new();
     if let Some(rel) = &w.manifest.entry.type_path {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let text = (w.read)(&w.root_dir, rel).map_err(PackError::law)?;
-        entries.push((bundle_key(&format!("{name}.d.rut")).map_err(PackError::law)?, text));
+        root_files.push(("mod.d.rut".into(), text));
     }
     // the generic-source riding law (v7, additive): a compiled pkg whose
     // surface exports generics ALSO rides the source that serves
     // consumer-spelled shapes — the root module, verbatim, beside the
-    // binary. The
-    // riding source's presence is the loader's dispatch marker; non-generic pkgs
-    // stay source-free. (`--strip` refuses the combination above.)
+    // binary. The riding source's presence is the loader's dispatch
+    // marker; non-generic pkgs stay source-free. (`--strip` refuses the
+    // combination above.) An old-envelope manifest rides its legacy
+    // keys instead — those names are not canonical, so the fingerprint
+    // sees none of them (deterministic either way).
     if has_open_generic_surface(&units.programs[root_idx]) {
-        ride_generic_source(&w.manifest, "", &mut entries, &|rel| (w.read)(&w.root_dir, rel))
+        let mut ridden = Vec::new();
+        ride_generic_source(&w.manifest, "", &mut ridden, &|rel| (w.read)(&w.root_dir, rel))
             .map_err(PackError::law)?;
+        for (rel, bytes) in ridden {
+            root_files.push((rel, bytes));
+        }
     }
-    // the module rows (the additive envelope section): a pkg with
-    // mounted mod children rides its tree as path-keyed source rows —
-    // `""` = the pkg's own source, `<path>` = each child — so a load
-    // mounts the tree exactly as the directory would. A flat pkg
-    // writes no rows entry: byte-identical output (the freshness gate
-    // over the committed std bundles proves it).
-    let root_pkg = session.resolve(&root).map_err(|e| PackError::law(e.to_string()))?;
     if !root_pkg.mods.is_empty() {
-        entries.push((ROWS_NAME.into(), rows_json(&rows_root_text(root_pkg), &root_pkg.mods).into_bytes()));
+        let rows = rows_json(&rows_root_text(root_pkg), &root_pkg.mods).into_bytes();
+        root_files.push((ROWS_NAME.into(), rows));
     }
-    // the dep groups, name order: source pkgs → compiled, host/decl
-    // pkgs and declared-but-unused pkgs → the declaration file set
+    // the root's identity fingerprint: the manifest plus the staged
+    // root files' canonical four, fixed order, absent skipped
+    let mut root_fp_src: Vec<(String, Vec<u8>)> =
+        vec![(MANIFEST_NAME.to_string(), w.manifest_bytes.clone())];
+    root_fp_src.extend(root_files.iter().cloned());
+    let root_fp = crate::bundle::identity::fp16_of(&root_fp_src, "");
+
+    // ---- the dep groups, staged per source and keyed by identity
+    let mut staged: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
+    // sources key → the identity it staged under (dir deps and url
+    // roots mount under BARE keys; their groups still ride under the
+    // identity, and the ledger rows spell it)
+    let mut staged_by_spec: BTreeMap<String, String> = BTreeMap::new();
     for (spec, source) in &w.sources {
         if *spec == root || session.resolve(spec).is_err() {
-            continue; // the root rode above; names are already mounted
+            continue; // the root rode above; unmounted names never ride
         }
         let dm = group_manifest(source, &w.archives, &w.read).map_err(PackError::law)?;
-        let prefix = format!("{spec}/");
+        let gname = crate::bundle::mount_name(spec);
+        if dm.name.as_deref() != Some(gname) {
+            return Err(PackError::law(format!(
+                "dep `{spec}` names itself `{}` in its manifest — expected `{gname}`",
+                dm.name.as_deref().unwrap_or("<unnamed>")
+            )));
+        }
+        let mut files: Vec<(String, Vec<u8>)> = Vec::new();
         if rides_compiled(&session, spec, &units) {
             let &(idx, _) = units.linked.get(spec).unwrap();
             // the group's manifest rides byte-for-byte: the loader reads
             // its name and mount flags from it
             let toml =
                 group_file(source, MANIFEST_NAME, &w.archives, &w.read).map_err(PackError::law)?;
-            entries.push((
-                bundle_key(&format!("{prefix}{MANIFEST_NAME}")).map_err(PackError::law)?,
-                toml,
-            ));
-            entries.push((bundle_key(&format!("{prefix}{spec}.rutc")).map_err(PackError::law)?, rut_core::binary::encode(&units.programs[idx])));
+            files.push((MANIFEST_NAME.into(), toml));
+            files.push(("mod.rutc".into(), rut_core::binary::encode(&units.programs[idx])));
             if let Some(rel) = &dm.entry.type_path {
                 let rel = rel.strip_prefix("./").unwrap_or(rel);
                 let text = group_file(source, rel, &w.archives, &w.read).map_err(PackError::law)?;
-                entries.push((bundle_key(&format!("{prefix}{rel}")).map_err(PackError::law)?, text));
+                // the canonical surface name: `mod.d.rut`, whatever the
+                // directory grammar spelled
+                files.push(("mod.d.rut".into(), text));
             }
             // the generic-source riding law, group flavor (see the root
             // arm above): a generic-owning compiled group rides its
-            // source under the group prefix
+            // source beside the binary
             if has_open_generic_surface(&units.programs[idx]) {
-                ride_generic_source(&dm, &prefix, &mut entries, &|rel| {
+                ride_generic_source(&dm, "", &mut files, &|rel| {
                     group_file(source, rel, &w.archives, &w.read)
                 })
                 .map_err(PackError::law)?;
@@ -303,8 +337,8 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             // the module rows, group flavor (see the root arm above)
             if let Ok(m) = session.resolve(spec) {
                 if !m.mods.is_empty() {
-                    entries.push((
-                        bundle_key(&format!("{prefix}{ROWS_NAME}")).map_err(PackError::law)?,
+                    files.push((
+                        ROWS_NAME.into(),
                         rows_json(&rows_root_text(m), &m.mods).into_bytes(),
                     ));
                 }
@@ -313,7 +347,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             match source {
                 PkgSource::Dir(gdir) => {
                     let mods = session.resolve(spec).map(|m| m.mods.clone()).unwrap_or_default();
-                    collect_source_group(gdir, &dm, &mods, &prefix, &w.read, &mut entries)
+                    collect_source_group(gdir, &dm, &mods, "", &w.read, &mut files)
                         .map_err(PackError::law)?;
                     // the module rows, group flavor (see the root arm
                     // above): the tree rides beside the file set
@@ -322,8 +356,8 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                             .resolve(spec)
                             .map(rows_root_text)
                             .unwrap_or_default();
-                        entries.push((
-                            bundle_key(&format!("{prefix}{ROWS_NAME}")).map_err(PackError::law)?,
+                        files.push((
+                            ROWS_NAME.into(),
                             rows_json(&text, &mods).into_bytes(),
                         ));
                     }
@@ -331,7 +365,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 PkgSource::Archive { slot, prefix: old } => {
                     // copy the archive group's file set under the new
                     // prefix — the archive already decided the set
-                    // (manifest, entry, libs), in
+                    // (manifest, binary, surface, rows), in
                     // archive order (deterministic)
                     let archive = &w.archives[*slot];
                     for (key, bytes) in &archive.entries {
@@ -341,17 +375,102 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                         if rest.is_empty() {
                             continue;
                         }
-                        entries.push((bundle_key(&format!("{prefix}{rest}")).map_err(PackError::law)?, bytes.clone()));
+                        files.push((rest.to_string(), bytes.clone()));
                     }
                 }
             }
+        }
+        // the content identity: the fingerprint over the staged file
+        // set's four canonical names, fixed order
+        let fp = crate::bundle::identity::fp16_of(&files, "");
+        let ident = crate::bundle::identity::identity(gname, &fp);
+        // a source the walk mounted under its identity must stage to
+        // exactly that identity — a mismatch is a law bug, refused
+        if let Some((_, key_fp)) = crate::bundle::parse_identity(spec) {
+            if key_fp != fp {
+                return Err(PackError::law(format!(
+                    "dep `{spec}`'s mounted identity disagrees with its staged file set \
+                     (`{key_fp}` vs `{fp}`) — refuse, never guess"
+                )));
+            }
+        }
+        if let Some(prev) = staged.get(&ident) {
+            if prev != &files {
+                return Err(PackError::law(format!(
+                    "two dep groups stage to the same identity `{ident}` with different file sets — \
+                     refuse, never guess"
+                )));
+            }
+            staged_by_spec.insert(spec.clone(), ident);
+            continue; // the same identity rode twice — one group, exact dedup
+        }
+        staged.insert(ident.clone(), files);
+        staged_by_spec.insert(spec.clone(), ident);
+    }
+
+    // ---- the scope ledger: one `<scope> = "<identity>"` row per
+    // linked module of the packed closure (engine mounts included),
+    // ascending by scope. Group rows spell their staged identity; the
+    // root's row spells the root's own (the self-row — a loader maps
+    // it to the bare-named root mount); a pkg with no rode file set
+    // (an engine mount, a dev-table pkg) fingerprints the empty set.
+    let mut ledger: Vec<(rut_core::id::ScopeId, String)> = units
+        .linked
+        .iter()
+        .map(|(spec, &(_, scope))| {
+            let row = if let Some((n, f)) = crate::bundle::parse_identity(spec) {
+                let ident = crate::bundle::identity::identity(n, f);
+                if !staged.contains_key(&ident) {
+                    return Err(PackError::law(format!(
+                        "the ledger names `{ident}`, but no group staged under that identity — \
+                         the closure and the file set disagree"
+                    )));
+                }
+                ident
+            } else if let Some(ident) = staged_by_spec.get(spec) {
+                // a group mounted under a bare key (a dir dep, a url
+                // root riding along): its row spells the identity it
+                // stages under — the load-side resolution binds the
+                // identity-mounted group
+                ident.clone()
+            } else if spec == &root {
+                crate::bundle::identity::identity(&root, &root_fp)
+            } else {
+                // no rode file set (an engine mount, a dev-table pkg):
+                // the identity of the empty set; a loader binds the
+                // bare name
+                crate::bundle::identity::identity(
+                    spec,
+                    &crate::bundle::identity::fp16_of(&[], ""),
+                )
+            };
+            Ok((scope, row))
+        })
+        .collect::<Result<Vec<_>, PackError>>()?;
+    ledger.sort();
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+    // the manifest byte-for-byte, then the scope ledger
+    entries.push((MANIFEST_NAME.into(), w.manifest_bytes.clone()));
+    entries.push(("rut.scopes".into(), ledger_text(&ledger).into_bytes()));
+    // the root's compiled binary, then its staged file set (surface,
+    // riding source, rows)
+    entries.push(("mod.rutc".into(), rut_core::binary::encode(&units.programs[root_idx])));
+    entries.extend(root_files);
+    // the dep groups, identity order — the archive mirrors the
+    // manifest's deps table
+    for (ident, files) in &staged {
+        for (rel, bytes) in files {
+            entries.push((
+                bundle_key(&format!("deps/{ident}/{rel}")).map_err(PackError::law)?,
+                bytes.clone(),
+            ));
         }
     }
     let bundle = write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))?;
     Ok((bundle, symtab))
 }
 
-/// The `rut.scopes` ledger: one `<scope> = "<spec>"` row per linked
+/// The `rut.scopes` ledger: one `<scope> = "<identity>"` row per linked
 /// module of the packed closure (engine mounts included), ascending by
 /// scope. A loader rebases every decoded program's foreign ids through
 /// it — a reference with no row is refused, never guessed.

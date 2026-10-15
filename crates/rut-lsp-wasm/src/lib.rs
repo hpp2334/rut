@@ -793,7 +793,7 @@ mod tests {
     /// every manifest must now spell (pins ride `rut_set_lock`).
     const PLUGIN_SHAPE: &str = r#"{
   "format": "rutbundle",
-  "format_version": 10,
+  "format_version": 11,
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },

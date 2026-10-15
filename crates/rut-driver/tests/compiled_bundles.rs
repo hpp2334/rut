@@ -1,14 +1,9 @@
-//! v5 compiled bundles: the mixed closure — linkable pkgs ride as
-//! `.rutc` binaries (bodies + surface, the linking truth), splice-needed
+//! v11 compiled bundles: the mixed closure — linkable pkgs ride as
+//! `mod.rutc` binaries (bodies + surface, the linking truth), splice-needed
 //! deps (inline / generic export / interface-typed params) and host pkgs
-//! ride as source file sets — plus the pinned equivalence (compiled
-//! bundle vs source directory ⇒ identical linked binaries), determinism,
-//! and the refusal matrix.
-//!
-//! The v2/v3 load scenarios this file succeeds (the dep-bundle
-//! round trips) re-launch here
-//! on v5: `rut pack` emits v5 only, and the loader reads v5 only —
-//! older layouts are refused with the one-line version error.
+//! ride as source file sets under their content identities — plus the
+//! pinned equivalence (compiled bundle vs source directory ⇒ identical
+//! linked binaries), determinism, and the refusal matrix.
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +11,9 @@ use rut_native::pack_dir;
 use rut_driver::{
     PkgBody,
 };
+
+mod common;
+use common::{dep_dir, pkg_named};
 
 
 
@@ -79,7 +77,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}"{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}"{extra}}}"#)
 }
 
 /// The mixed-closure world: `app` (linkable root) uses `util` (linkable
@@ -164,15 +162,19 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) ->
 #[test]
 fn mixed_closure_pack_load_run_equals_the_directory() {
     let root = mixed_world("mixed");
-    // THE pinned equivalence: the compiled bundle and its source
-    // directory link to the identical binary
+    // THE equivalence, post-identity: the compiled bundle and its
+    // source directory are behaviorally identical — same run result.
+    // (The v10-era BYTE pin yields to the identity law: a bundle
+    // world's groups compile under their mount keys, so the name
+    // table spells `util@<fp16>` where the directory world spells
+    // `util` — the key is part of the compile input now.)
     let dir_loaded = rut_native::load_dir(&root.join("app")).expect("dir load");
-    let from_dir = linked_binary(&dir_loaded);
+    let from_dir = run_entry::<i64>(dir_loaded, "go");
 
     let bytes = pack_dir(&root.join("app")).expect("pack");
     let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
     assert_eq!(loaded.root, "app");
-    assert_eq!(linked_binary(&loaded), from_dir, "dir and bundle compile identically");
+    assert_eq!(run_entry::<i64>(loaded.clone(), "go"), from_dir, "dir and bundle run identically");
 
     // the closure mixed as declared: the linkable pkgs compiled, the
     // explicitly inlined one a source group
@@ -181,26 +183,30 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
         PkgBody::Compiled(_)
     ));
     assert!(matches!(
-        loaded.pkg("util").unwrap().body,
+        pkg_named(&loaded, "util").body,
         PkgBody::Compiled(_)
     ));
     assert!(matches!(
-        loaded.pkg("boxy").unwrap().body,
+        pkg_named(&loaded, "boxy").body,
         PkgBody::Source { .. }
     ));
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
-    for key in ["rut.jsonc", "rut.scopes", "app.rutc", "util/util.rutc", "boxy/rut.jsonc", "boxy/mod.rut"] {
+    let util_dir = dep_dir(&names, "util");
+    let boxy_dir = dep_dir(&names, "boxy");
+    for key in ["rut.jsonc", "rut.scopes", "mod.rutc", &format!("{util_dir}/mod.rutc"), &format!("{boxy_dir}/rut.jsonc"), &format!("{boxy_dir}/mod.rut")] {
         assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
     }
-    assert!(!names.iter().any(|n| n == "boxy/boxy.rutc"), "the inline pkg rides source, not a binary");
+    assert!(!names.iter().any(|n| n == &format!("{boxy_dir}/mod.rutc")), "the inline pkg rides source, not a binary");
 
-    // the ledger names every linked module of the packed closure
+    // the ledger names every linked module of the packed closure — by
+    // its content identity (the one wire's row spelling)
     let ledger = rut_driver::bundle::parse_bundle(&bytes).unwrap();
     let ledger = ledger.iter().find(|(n, _)| n == "rut.scopes").unwrap();
     let ledger = std::str::from_utf8(&ledger.1).unwrap();
-    assert!(ledger.contains("= \"app\""), "{ledger}");
-    assert!(ledger.contains("= \"util\""), "{ledger}");
+    assert!(ledger.contains("= \"app@"), "{ledger}");
+    assert!(ledger.contains("= \"util@"), "{ledger}");
+    assert!(ledger.contains("= \"core@e3b0c44298fc1c14\""), "{ledger}");
 
     // and the mixed world dispatches: the compiled root answers
     let got: i64 = run_entry(loaded, "go");
@@ -274,7 +280,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "app"}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "app"}"#,
     );
     write(
         &app,
@@ -291,7 +297,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     let bytes = pack_dir(&app).expect("a generic root publishes compiled");
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
-    assert!(names.contains(&"app.rutc".to_string()), "{names:?}");
+    assert!(names.contains(&"mod.rutc".to_string()), "{names:?}");
     // generic-source riding: the exported template crosses compiled AND
     // the source rides beside it, so consumer-spelled shapes stay
     // servable at load
@@ -312,7 +318,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "app"}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "app"}"#,
     );
     write(
         &app,
@@ -341,11 +347,17 @@ fn stale_and_corrupt_group_binaries_are_refused() {
 
     // a pre-v16 `.rutc` (no surface section) inside the archive: the
     // decode gate refuses it loudly, before any mount
+    let names: Vec<String> = rut_driver::bundle::parse_bundle(&bytes)
+        .unwrap()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    let util_bin = format!("{}/mod.rutc", dep_dir(&names, "util"));
     let stale: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()
         .map(|(n, mut b)| {
-            if n == "util/util.rutc" {
+            if n == util_bin {
                 // MAGIC + a stale version word, then nothing — the
                 // standard version error, not a silent mount
                 b = b"RUTC".to_vec();
@@ -357,14 +369,14 @@ fn stale_and_corrupt_group_binaries_are_refused() {
     let err = rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&stale).unwrap())
         .unwrap_err()
         .to_string();
-    assert!(err.contains("util/util.rutc"), "{err}");
+    assert!(err.contains(&util_bin), "{err}");
     assert!(err.contains("version"), "{err}");
 
     // a corrupt `.rutc` payload: flip a byte INSIDE the container's
-    // stored util.rutc payload — the container CRC fires first (the
+    // stored group binary payload — the container CRC fires first (the
     // group binary is never even decoded)
     let mut corrupt = bytes.clone();
-    let needle = b"util/util.rutc";
+    let needle = util_bin.as_bytes();
     let at = corrupt
         .windows(needle.len())
         .position(|w| w == needle)

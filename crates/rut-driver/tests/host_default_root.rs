@@ -132,7 +132,7 @@ fn neither_door_is_the_loud_no_entry_error() {
         &[
             (
                 "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 10, "name": "h", "type": "host"}"#,
+                r#"{"format": "rutbundle", "format_version": 11, "name": "h", "type": "host"}"#,
             ),
         ],
     );
@@ -174,7 +174,7 @@ fn the_default_root_packs_and_loads_back() {
         &[
             (
                 "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 10, "name": "flat_host", "type": "host"}"#,
+                r#"{"format": "rutbundle", "format_version": 11, "name": "flat_host", "type": "host"}"#,
             ),
             ("mod.d.rut", "pub host fn ping() -> bool;\n"),
         ],
@@ -197,7 +197,7 @@ fn the_default_root_packs_and_loads_back() {
         &[
             (
                 "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 10, "name": "myhost", "type": "host"}"#,
+                r#"{"format": "rutbundle", "format_version": 11, "name": "myhost", "type": "host"}"#,
             ),
             ("mod.d.rut", "pub mod net;\npub host fn legacy_ping() -> bool;\n"),
             ("net/mod.d.rut", "pub host fn connect(url: str) -> i64;\n"),
@@ -217,18 +217,18 @@ fn the_default_root_packs_and_loads_back() {
 }
 
 #[test]
-fn an_old_shaped_host_bundle_loads_through_the_override_lane() {
-    // THE READER-COMPAT PROOF: the pre-amendment pack shape — a
-    // manifest spelling `entry.type` and the surface under its custom
-    // key (`http_host.d.rut`, as every committed std-vN artifact
-    // spells) — loads unchanged. The spelled entry wins, exactly as
-    // it always did; no version bump, no re-pack requirement.
+fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
+    // THE CANONICAL SURFACE LAW (wire v11): a manifest spelling
+    // `entry.type` keeps the DIRECTORY key (the directory grammar is
+    // untouched) — but the archive canonicalizes: the surface rides as
+    // `mod.d.rut`, whatever the directory spelled. The override lane
+    // is gone; the reader mounts `mod.d.rut` at both levels.
     let dir = make_pkg(
         &scratch("old-shape"),
         &[
             (
                 "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 10, "name": "http_host", "type": "host", "entry": {"type": "./http_host.d.rut"}}"#,
+                r#"{"format": "rutbundle", "format_version": 11, "name": "http_host", "type": "host", "entry": {"type": "./http_host.d.rut"}}"#,
             ),
             (
                 "http_host.d.rut",
@@ -242,8 +242,8 @@ fn an_old_shaped_host_bundle_loads_through_the_override_lane() {
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names,
-        vec!["rut.jsonc", "http_host.d.rut", rut_driver::mods::ROWS_NAME],
-        "the OLD root key rides — the committed artifacts' shape",
+        vec!["rut.jsonc", "mod.d.rut", rut_driver::mods::ROWS_NAME],
+        "the surface rides at the ONE canonical name, whatever the directory spelled",
     );
     let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
     let names: Vec<String> = rows_of(loaded.pkg("http_host").unwrap())
@@ -253,7 +253,7 @@ fn an_old_shaped_host_bundle_loads_through_the_override_lane() {
     assert_eq!(
         names,
         vec!["http_host::http_send", "http_host::net::http_status"],
-        "the spelled entry's tree mounts through the override lane (root row flat, child qualified)",
+        "the canonical surface's tree mounts (root row flat, child qualified)",
     );
     // and the surface rows carry their crossings (the readback keeps
     // the type law)

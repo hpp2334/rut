@@ -14,6 +14,16 @@ pub enum ResolveError {
     /// no module with that exact name is mounted
     #[error("cannot resolve `{spec}` — no module with that name is mounted; declare it in your `rut.jsonc` `deps`")]
     NoModule { spec: String },
+    /// several identities of one bare name are mounted (coexistence) —
+    /// a bare `use` head cannot name one; the ledger row lane binds
+    /// compiled consumers exactly, and a source consumer must arrive
+    /// through its own dep row
+    #[error(
+        "cannot resolve `{spec}` — {n} identities of that name are mounted ({list}); \
+         a bare use head is ambiguous under coexistence — mount one of them under its bare name \
+         or bind through the bundle's scope ledger"
+    )]
+    Ambiguous { spec: String, n: usize, list: String },
     /// D5: the name IS mounted — the closure pulled it in — but the
     /// CONSUMER does not declare it. Nameability is declaration-scoped:
     /// a pkg may `use` exactly the heads its own manifest names (`deps`

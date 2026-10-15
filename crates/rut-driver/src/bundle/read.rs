@@ -2,16 +2,18 @@
 //! the entry-level view (CRC-verified at parse, entries by name); the
 //! [`Layout`] is the structured view, ONE of two root kinds — the
 //! manifest's `type` routes: a lib root (no `type`) is the **compiled**
-//! layout (`.rutc` + scope ledger + ridden source), a `type = "host"`
-//! root is the **decl** layout (its `.d.rut` surface, single-package).
-//! One wire number: `format_version` is 10, always. Parsing a layout
-//! verifies what each kind carries, so a bad archive never reaches the
-//! session.
+//! layout (`mod.rutc` + scope ledger + `deps/` groups), a
+//! `type = "host"` root is the **decl** layout (its `mod.d.rut`
+//! surface, single-package). One wire number: `format_version` is 11,
+//! always. Parsing a layout verifies what each kind carries, so a bad
+//! archive never reaches the session.
 
 use super::container::{parse_bundle, BundleError};
 use super::manifest::{parse_manifest_compat, Manifest};
 use super::files::read_entry;
 use rut_core::binary::{decode, Program};
+
+use super::identity::{self, DEPS_DIR};
 
 /// A parsed `.rutbundle`: its entries in archive order. Loaders pick
 /// the entries they know (`rut.jsonc`, the rut sources); unknown extra
@@ -49,19 +51,23 @@ impl Bundle {
 #[derive(Clone, Debug)]
 pub enum GroupKind {
     /// a source pkg's compiled group: its decoded `.rutc` (v17,
-    /// decode-verified) rides `<pkg>/<pkg>.rutc` — bodies + surface,
-    /// the linking truth
+    /// decode-verified) rides `deps/<identity>/mod.rutc` — bodies +
+    /// surface, the linking truth
     Compiled(Program),
     /// a host pkg (a `.d.rut` surface, no body) or a declared-but-
-    /// never-compiled dep: the declaration file set rides under `<pkg>/`
+    /// never-compiled dep: the declaration file set rides under
+    /// `deps/<identity>/`
     Source,
 }
 
 /// The one bundle layout — ONE wire number, the manifest's `type`
 /// routes the root kind: a lib root (no `type`) is **compiled**
-/// (`<pkg>.rutc` + ledger + groups), a `type = "host"` root is
-/// **decl** (the manifest + its surface, single-package, nothing
-/// else).
+/// (`mod.rutc` + ledger + `deps/` groups), a `type = "host"` root is
+/// **decl** (the manifest + its `mod.d.rut` surface, single-package,
+/// nothing else). The archive root carries ONLY the root's own files
+/// (`rut.jsonc`, `rut.scopes`, `mod.rutc` + its surface/source/rows);
+/// every dep group rides at `deps/<name>@<fp16>/…` — the archive
+/// mirrors the manifest's `deps` table, name-free.
 #[derive(Clone, Debug)]
 pub enum Layout {
     Compiled {
@@ -69,9 +75,14 @@ pub enum Layout {
         manifest: Manifest,
         /// the root's decoded program
         root: Program,
-        /// pack-time scope → owning spec, ascending by scope
+        /// pack-time scope → owning identity, ascending by scope —
+        /// every row spells `name@fp16` (the group identities; the
+        /// loader resolves the self-row and engine rows to their bare
+        /// mounts)
         scopes: Vec<(rut_core::id::ScopeId, String)>,
-        /// `(archive prefix, payload)` per dep group, archive order
+        /// `(group prefix, payload)` per dep group, archive order —
+        /// the prefix is `deps/<name>@<fp16>`, identity-validated
+        /// (shape, manifest name, fingerprint-over-content)
         groups: Vec<(String, GroupKind)>,
     },
     /// a decl root: the pkg's declaration surface rides as its own
@@ -80,19 +91,19 @@ pub enum Layout {
     Decl {
         /// the root manifest (byte-for-byte `rut.jsonc`, parsed)
         manifest: Manifest,
-        /// the surface text (the manifest's `entry.type` file, or the
-        /// default `mod.d.rut` root when it spells none) — presence-
-        /// and UTF-8-checked here
+        /// the surface text (`mod.d.rut` — the ONE canonical name)
+        /// — presence- and UTF-8-checked here
         surface: String,
     },
 }
 
 impl Layout {
     /// Parse a bundle: manifest + version gate first (`format_version`
-    /// is 10 — one wire number for both root kinds; anything else
+    /// is 11 — one wire number for both root kinds; anything else
     /// refuses with the one re-pack recipe, never guesses), then the
-    /// kind's own checks (compiled: the scope ledger, the root and
-    /// every group's binary decode + verification; decl: the
+    /// kind's own checks (compiled: the scope ledger's identity rows,
+    /// the root and every group's binary decode + verification, every
+    /// group dirname's fingerprint-over-content; decl: the
     /// single-package law and the surface read). The load order is:
     /// container CRC (the [`Bundle::parse`] this takes),
     /// manifest/version, then the kind's payloads — the mount is the
@@ -110,12 +121,12 @@ impl Layout {
             // ONE wire number, both root kinds: the manifest's `type`
             // routes the layout — a host root is its own decl surface,
             // a lib root the compiled layout
-            Some(10) => match manifest.pkg_type {
+            Some(11) => match manifest.pkg_type {
                 super::manifest::PkgType::Host => Self::parse_decl(bundle, manifest),
                 super::manifest::PkgType::Lib => Self::parse_compiled(bundle, manifest),
             },
             other => Err(format!(
-                "this toolchain reads bundle format_version 10 only (found {}) — re-pack the directory",
+                "this toolchain reads bundle format_version 11 only (found {}) — re-pack the directory",
                 match other {
                     Some(v) => v.to_string(),
                     None => "none".to_string(),
@@ -126,14 +137,13 @@ impl Layout {
 
     /// The compiled arm: a lib root (no `type` — the grammar routes a
     /// `type = "host"` root to the decl arm), the layout the packer
-    /// emits: root `.rutc` + scope ledger + dep groups.
+    /// emits: root `mod.rutc` + scope ledger + `deps/` groups.
     fn parse_compiled(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
-        let name = manifest
-            .name
-            .clone()
-            .ok_or_else(|| "rut.jsonc has no `name`".to_string())?;
-        // the scope ledger: one `<scope> = "<spec>"` row per linked
-        // module of the packed closure, ascending by scope
+        // the scope ledger: one `<scope> = "<identity>"` row per linked
+        // module of the packed closure, ascending by scope — every row
+        // spells the owner's content identity (`name@fp16`); the
+        // explicit shape law (name + `@` + 16 lowercase hex) —
+        // `valid_spec` alone no longer suffices
         let ledger = bundle
             .read("rut.scopes")
             .map_err(|_| "no `rut.scopes` entry — a compiled bundle carries the scope ledger".to_string())?;
@@ -143,43 +153,66 @@ impl Layout {
             if line.is_empty() {
                 continue;
             }
-            let bad = || format!("rut.scopes line {}: expected `<scope> = \"<spec>\"`", lineno + 1);
+            let bad = || format!("rut.scopes line {}: expected `<scope> = \"<identity>\"`", lineno + 1);
             let (l, r) = line.split_once('=').ok_or_else(bad)?;
             let scope: u16 = l.trim().parse().map_err(|_| bad())?;
-            let spec = r.trim();
-            if !(spec.len() >= 2 && spec.starts_with('"') && spec.ends_with('"')) {
+            let row = r.trim();
+            if !(row.len() >= 2 && row.starts_with('"') && row.ends_with('"')) {
                 return Err(bad());
             }
-            let spec = spec[1..spec.len() - 1].to_string();
-            if !super::manifest::valid_spec(&spec) {
+            let row = row[1..row.len() - 1].to_string();
+            if !identity::is_identity(&row) {
                 return Err(format!(
-                    "rut.scopes line {}: `{spec}` is not a bare package name",
+                    "rut.scopes line {}: `{row}` is not a content identity (`name@<16 hex>`)",
                     lineno + 1
                 ));
             }
-            scopes.push((scope, spec));
+            scopes.push((scope, row));
         }
         scopes.sort_by_key(|&(s, _)| s);
-        // the root's compiled program
+        // the root's compiled program — the ONE canonical name
         let root = decode(
             bundle
-                .bytes(&format!("{name}.rutc"))
-                .ok_or_else(|| format!("no `{name}.rutc` entry — a compiled bundle's root is a `.rutc`"))?,
+                .bytes("mod.rutc")
+                .ok_or_else(|| "no `mod.rutc` entry — a compiled bundle's root is a `.rutc`".to_string())?,
         )
-        .map_err(|e| format!("{name}.rutc: {e}"))?;
-        // the dep groups: every archive prefix, compiled iff its
-        // `<pkg>/<pkg>.rutc` rides (the packer's group law)
-        let mut prefixes = std::collections::BTreeSet::new();
+        .map_err(|e| format!("mod.rutc: {e}"))?;
+        // the dep groups: every group rides at `deps/<identity>/…` —
+        // discovered ONLY as `deps/<comp>/rut.jsonc`; a stray
+        // top-level directory prefix refuses (the archive root
+        // carries only the root's own files — refuse, never guess)
+        let mut comps = std::collections::BTreeSet::new();
         for (n, _) in bundle.entries() {
-            if let Some((p, rest)) = n.split_once('/') {
-                if rest.is_empty() || p == "rut.scopes" {
-                    continue;
-                }
-                prefixes.insert(p.to_string());
+            let Some((top, rest)) = n.split_once('/') else {
+                continue; // the root's own files
+            };
+            if rest.is_empty() || top == "rut.scopes" {
+                continue;
             }
+            if top != DEPS_DIR {
+                return Err(format!(
+                    "bundle entry `{n}` — the archive root carries only the root's own files; \
+                     dep groups ride at `{DEPS_DIR}/<name>@<fp16>/`"
+                ));
+            }
+            let Some(comp) = rest.split('/').next() else {
+                continue;
+            };
+            if comp.is_empty() {
+                continue;
+            }
+            comps.insert(comp.to_string());
         }
         let mut groups = Vec::new();
-        for p in prefixes {
+        for comp in comps {
+            let p = format!("{DEPS_DIR}/{comp}");
+            // the dirname IS the content identity — shape law first
+            let (gname, fp) = identity::parse_identity(&comp).ok_or_else(|| {
+                format!(
+                    "bundle group directory `{p}/` is not a content identity — \
+                     expected `<name>@<16 hex>`"
+                )
+            })?;
             let manifest_text = bundle
                 .read(&format!("{p}/{}", super::files::MANIFEST_NAME))
                 .map_err(|_| {
@@ -187,12 +220,27 @@ impl Layout {
                 })?;
             let dm = parse_manifest_compat(&manifest_text)
                 .map_err(|e| format!("{p}/{}: {e}", super::files::MANIFEST_NAME))?;
-            let gname = dm.name.clone().ok_or_else(|| {
-                format!("{p}/{} has no `name`", super::files::MANIFEST_NAME)
-            })?;
-            let kind = match bundle.bytes(&format!("{p}/{gname}.rutc")) {
+            // name-vs-key: the group's manifest `name` must equal the
+            // deps key with `@fp16` stripped — the dirname's name half
+            if dm.name.as_deref() != Some(gname) {
+                return Err(format!(
+                    "bundle group `{p}/` names itself `{}` — expected `{gname}`",
+                    dm.name.as_deref().unwrap_or("<unnamed>"),
+                ));
+            }
+            // the fingerprint-over-content law: the dirname's fp16 must
+            // equal the hash of the group's rode source set — a doctored
+            // or stale dirname refuses
+            let got = identity::fp16_of(bundle.entries(), &format!("{p}/"));
+            if got != fp {
+                return Err(format!(
+                    "bundle group directory `{p}/` spells fingerprint `{fp}`, but its rode \
+                     source set hashes to `{got}` — the dirname and the content disagree"
+                ));
+            }
+            let kind = match bundle.bytes(&format!("{p}/mod.rutc")) {
                 Some(bytes) => GroupKind::Compiled(
-                    decode(bytes).map_err(|e| format!("{p}/{gname}.rutc: {e}"))?,
+                    decode(bytes).map_err(|e| format!("{p}/mod.rutc: {e}"))?,
                 ),
                 None => GroupKind::Source,
             };
@@ -202,21 +250,18 @@ impl Layout {
     }
 
     /// The decl arm: a `type = "host"` root, its surface riding as
-    /// source. Anything compiled-shaped the archive cannot legally
-    /// carry refuses: a root `.rutc` (a host bundle's root is its
-    /// surface), a scope ledger (no programs, no ledger), any dep
-    /// group (a host bundle is single-package — the grammar refuses a
-    /// host manifest's deps tables, so there is nothing for a group
-    /// to be).
+    /// source at the ONE canonical name. Anything compiled-shaped the
+    /// archive cannot legally carry refuses: a root `mod.rutc` (a host
+    /// bundle's root is its surface), a scope ledger (no programs, no
+    /// ledger), any dep group — a `deps/` entry included (a host
+    /// bundle is single-package; the grammar refuses a host manifest's
+    /// deps tables, so there is nothing for a group to be).
     fn parse_decl(bundle: &Bundle, manifest: Manifest) -> Result<Layout, String> {
-        let name = manifest
-            .name
-            .clone()
-            .ok_or_else(|| "rut.jsonc has no `name`".to_string())?;
-        if bundle.bytes(&format!("{name}.rutc")).is_some() {
-            return Err(format!(
-                "a host bundle's root is its surface, not a compiled unit — found a `{name}.rutc` entry"
-            ));
+        if bundle.bytes("mod.rutc").is_some() {
+            return Err(
+                "a host bundle's root is its surface, not a compiled unit — found a `mod.rutc` entry"
+                    .to_string(),
+            );
         }
         if bundle.bytes("rut.scopes").is_some() {
             return Err(
@@ -230,24 +275,11 @@ impl Layout {
                 ));
             }
         }
-        // the surface entry: the spelled `entry.type` when the manifest
-        // carries one, else the default root — `mod.d.rut` beside the
-        // manifest, the directory lanes' discovery mirrored over the
-        // entries. An old bundle's manifest always spells the key, so
-        // the compat shape rides this arm unchanged.
-        let spelled = manifest.entry.type_path.as_deref();
-        let rel = match spelled {
-            Some(rel) => rel.strip_prefix("./").unwrap_or(rel),
-            None => crate::decl::DECL_CHILD_FILE,
-        };
-        let surface = bundle.read(rel).map_err(|e| {
-            if spelled.is_none() {
-                "rut.jsonc names no root — spell `\"entry\": { \"type\": \
-                 \"<surface>.d.rut\" }` or pack a `mod.d.rut` beside the manifest"
-                    .to_string()
-            } else {
-                format!("{e} — a host bundle's root is its surface")
-            }
+        // the surface entry: `mod.d.rut` beside the manifest — the ONE
+        // canonical name (wire v11 canonicalizes `entry.type`'s
+        // directory spelling; the override lane is gone)
+        let surface = bundle.read(crate::decl::DECL_CHILD_FILE).map_err(|_| {
+            "a host bundle's root is `mod.d.rut` beside the manifest — no such entry".to_string()
         })?;
         Ok(Layout::Decl { manifest, surface })
     }

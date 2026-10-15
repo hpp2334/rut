@@ -101,19 +101,30 @@ impl<'a> GraphCompiler<'a> {
         (diags, programs, linked)
     }
 
-    /// Compile (or mount) `spec` if needed — every module links.
+    /// Compile (or mount) `spec` if needed — every module links. The
+    /// bookkeeping keys on the pkg's MOUNT KEY (the canonical
+    /// registration name): a bare use head bridging to an
+    /// identity-keyed group and a ledger row spelling that identity
+    /// converge on one unit, never two compilations of one pkg.
     pub(super) fn ensure(&mut self, spec: &str) -> Option<Unit> {
-        if let Some(u) = self.done.get(spec) {
+        let spec = match self.session.resolve(spec) {
+            Ok(m) => m.spec.clone(),
+            Err(e) => {
+                self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
+                return None;
+            }
+        };
+        if let Some(u) = self.done.get(&spec) {
             return Some(u.clone());
         }
-        if !self.visiting.insert(spec.to_string()) {
+        if !self.visiting.insert(spec.clone()) {
             self.diags.push(Diag::new(
                 Span::new(0, 0),
                 format!("cyclic use: `{spec}` is already being compiled"),
             ));
             return None;
         }
-        let module = match self.session.resolve(spec) {
+        let module = match self.session.resolve(&spec) {
             Ok(m) => m,
             Err(e) => {
                 self.diags.push(Diag::new(Span::new(0, 0), e.to_string()));
@@ -127,7 +138,7 @@ impl<'a> GraphCompiler<'a> {
             // the packed ids, push. `inline` is a source-shape flag and
             // does not reach here: a compiled module already linked.
             PkgBody::Compiled(prog) => {
-                self.body_kind.insert(spec.to_string(), 1);
+                self.body_kind.insert(spec.clone(), 1);
                 // the unit's scope is assigned BEFORE its deps ensure,
                 // same law as the source arm: a dep's carried seed rows
                 // may reference THIS unit's packed block (a requester's
@@ -136,26 +147,26 @@ impl<'a> GraphCompiler<'a> {
                 // mid-compile bind needs the number now
                 let scope = self.next_scope;
                 self.next_scope += 1;
-                self.in_flight.insert(spec.to_string(), scope);
-                let out = self.ensure_compiled(spec, prog, scope, &module.bundle_scopes);
-                self.in_flight.remove(spec);
+                self.in_flight.insert(spec.clone(), scope);
+                let out = self.ensure_compiled(&spec, prog, scope, &module.bundle_scopes);
+                self.in_flight.remove(&spec);
                 out
             }
             PkgBody::Host { .. } => {
-                self.body_kind.insert(spec.to_string(), 2);
-                self.ensure_host(spec)
+                self.body_kind.insert(spec.clone(), 2);
+                self.ensure_host(&spec)
             }
             PkgBody::Source { text, is_decl } => {
-                self.body_kind.insert(spec.to_string(), 0);
+                self.body_kind.insert(spec.clone(), 0);
                 // the unit's scope is assigned BEFORE its deps ensure: a
                 // compiled dep's binary may carry this unit's packed rows
                 // (the seeds it was packed with reference its consumer),
                 // and the forward mapping needs the number now
                 let scope = self.next_scope;
                 self.next_scope += 1;
-                self.in_flight.insert(spec.to_string(), scope);
-                let out = self.ensure_source(spec, module, text, *is_decl, scope);
-                self.in_flight.remove(spec);
+                self.in_flight.insert(spec.clone(), scope);
+                let out = self.ensure_source(&spec, module, text, *is_decl, scope);
+                self.in_flight.remove(&spec);
                 out
             }
         }
@@ -191,9 +202,12 @@ impl<'a> GraphCompiler<'a> {
         };
         {
             use rut_core::binary::{FuncCode, Program};
-            // the host-fn registration scope IS the package name (the
-            // registration naming has no override)
-            let host_scope = spec;
+            // the host-fn registration scope IS the package NAME (the
+            // registration naming has no override) — the bare name
+            // half of a mount key, so an identity-keyed group (a
+            // `deps/` group) registers under the same rows the
+            // embedder's registry spells
+            let host_scope = crate::bundle::mount_name(spec);
             // host functions obey the same crossing rule as `entry fn`
             //
             let boot_tt = rut_core::types::TypeTable::boot();
@@ -478,9 +492,19 @@ impl<'a> GraphCompiler<'a> {
         let mut bound_scopes = HashSet::new();
         for dep in &uses {
             let dep_unit = self.ensure_use(spec, dep)?;
+            // the binding's origin spells the exporter's MOUNT KEY (the
+            // canonical registration name — a bare head bridging to an
+            // identity-keyed group anchors its instantiation requests
+            // where the owner unit actually lives); bare mounts spell
+            // themselves, so directory worlds bind unchanged
+            let origin = self
+                .session
+                .resolve(dep)
+                .map(|m| m.spec.clone())
+                .unwrap_or_else(|_| dep.clone());
             if bound_scopes.insert(dep_unit.scope) {
                 // the exporter's spec rides the binding
-                bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), dep.clone()));
+                bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), origin));
             }
         }
 

@@ -50,7 +50,7 @@ pub use module::{GenSource, HostRow, Pkg, PkgBody};
 
 use std::collections::BTreeMap;
 
-use crate::bundle::{parse_manifest, valid_spec, ManifestError};
+use crate::bundle::{parse_manifest, valid_mount_key, ManifestError};
 
 /// The business-owned mount table. The host decides what exists; the
 /// resolver maps exact specifiers. Crate-internal: the run chain
@@ -73,11 +73,12 @@ impl Session {
         Session::default()
     }
 
-    /// Mount a pkg. Its `spec` must be a bare package name.
+    /// Mount a pkg. Its `spec` is a mount key — a bare package name or
+    /// a content identity (`name@fp16`, a `deps/` group's key).
     pub(crate) fn mount(&mut self, pkg: Pkg) -> Result<(), ManifestError> {
-        if !valid_spec(&pkg.spec) {
+        if !valid_mount_key(&pkg.spec) {
             return Err(ManifestError(format!(
-                "`{}` is not a package name — expected `[a-zA-Z0-9_]+`",
+                "`{}` is not a package name — expected `[a-zA-Z0-9_]+` or `name@<16 hex>`",
                 pkg.spec
             )));
         }
@@ -93,17 +94,45 @@ impl Session {
         self.mount(pkg)
     }
 
-    /// Exact resolution: the package name must be mounted as-is — a
-    /// miss is the bare [`ResolveError::NoModule`] text (`resolve` is
-    /// the ONE path every reference-site miss flows through).
+    /// Exact resolution: the mount key must be mounted as-is — a miss
+    /// is the bare [`ResolveError::NoModule`] text (`resolve` is the
+    /// ONE path every reference-site miss flows through). A key is a
+    /// bare name or a content identity (`deps/` groups mount under
+    /// their identity). A BARE miss bridges to the groups: exactly one
+    /// identity spelling that name binds it (the loaded-bundle lane —
+    /// a consumer outside the archive names its groups bare); several
+    /// are the loud ambiguity (coexistence never guesses).
     pub(crate) fn resolve(&self, spec: &str) -> Result<&Pkg, ResolveError> {
-        if !valid_spec(spec) {
+        if !valid_mount_key(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
-        match self.modules.get(spec) {
-            Some(m) => Ok(m),
-            None => Err(ResolveError::NoModule { spec: spec.to_string() }),
+        if let Some(m) = self.modules.get(spec) {
+            return Ok(m);
         }
+        if crate::bundle::valid_spec(spec) {
+            let matches: Vec<&str> = self
+                .modules
+                .keys()
+                .filter(|k| crate::bundle::mount_name(k) == spec)
+                .map(String::as_str)
+                .collect();
+            match matches.len() {
+                1 => return Ok(&self.modules[matches[0]]),
+                n if n > 1 => {
+                    return Err(ResolveError::Ambiguous {
+                        spec: spec.to_string(),
+                        n,
+                        list: matches
+                            .iter()
+                           .map(|m| format!("`{m}`"))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    });
+                }
+                _ => {}
+            }
+        }
+        Err(ResolveError::NoModule { spec: spec.to_string() })
     }
 
     /// Mutable exact resolution — the symbol-table apply lane's
@@ -111,7 +140,7 @@ impl Session {
     /// bundle's sidecar restores names + positions in place, before the
     /// graph compiles). Same miss diagnostics as [`Session::resolve`].
     pub(crate) fn resolve_mut(&mut self, spec: &str) -> Result<&mut Pkg, ResolveError> {
-        if !valid_spec(spec) {
+        if !valid_mount_key(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
         if self.modules.contains_key(spec) {
@@ -140,7 +169,13 @@ impl Session {
         if head == "core" || self.declares(consumer, head, root) {
             Ok(pkg)
         } else {
-            Err(ResolveError::not_declared(head, consumer, pkg.mounted_by.as_deref()))
+            // the diagnostic spells the consumer's BARE name (an
+            // identity-keyed group's row reads like any dep's)
+            Err(ResolveError::not_declared(
+                head,
+                crate::bundle::mount_name(consumer),
+                pkg.mounted_by.as_deref(),
+            ))
         }
     }
 
@@ -216,9 +251,14 @@ impl Session {
             let PkgBody::Host { host_funcs, .. } = &m.body else {
                 continue; // only host bodies declare host rows
             };
+            // the registration scope is the pkg's BARE name (the same
+            // spelling `ensure_host` registers under — an identity-
+            // keyed group's rows land where the embedder's registry
+            // spells them)
+            let scope = crate::bundle::mount_name(spec);
             for row in host_funcs {
                 let rel = row.rel_name();
-                ctx.declare(spec, &rel, row.params.clone(), row.ret);
+                ctx.declare(scope, &rel, row.params.clone(), row.ret);
                 if !row.is_async {
                     continue;
                 }
@@ -227,10 +267,10 @@ impl Session {
                 // yield is the resumption probe, take marshals the
                 // answer through the decl's own return type, cancel is
                 // the best-effort abort arm
-                ctx.declare(spec, &format!("{rel}__start"), row.params.clone(), TY_OPAQUE);
-                ctx.declare(spec, &format!("{rel}__yield"), vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
-                ctx.declare(spec, &format!("{rel}__take"), vec![TY_OPAQUE], row.ret);
-                ctx.declare(spec, &format!("{rel}__cancel"), vec![TY_OPAQUE], TY_NIL);
+                ctx.declare(scope, &format!("{rel}__start"), row.params.clone(), TY_OPAQUE);
+                ctx.declare(scope, &format!("{rel}__yield"), vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+                ctx.declare(scope, &format!("{rel}__take"), vec![TY_OPAQUE], row.ret);
+                ctx.declare(scope, &format!("{rel}__cancel"), vec![TY_OPAQUE], TY_NIL);
             }
         }
         ctx

@@ -44,7 +44,7 @@ fn make_pkg(base: &Path, files: &[(&str, &str)]) -> std::path::PathBuf {
 
 fn host_manifest(name: &str, surface: &str) -> String {
     format!(
-        r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
+        r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
     )
 }
 
@@ -288,7 +288,11 @@ fn flat_host_pkgs_pack_byte_identically() {
     let bytes = pack_dir(&dir).expect("pack");
     let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(names, vec!["rut.jsonc", "flat_host.d.rut"], "no rut.mods entry");
+    assert_eq!(
+        names,
+        vec!["rut.jsonc", "mod.d.rut"],
+        "no rut.mods entry; the surface rides at the canonical name"
+    );
     let again = pack_dir(&dir).expect("repack");
     assert_eq!(bytes, again, "deterministic");
     // and it loads back exactly as before: one flat row

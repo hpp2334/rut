@@ -20,7 +20,7 @@ fn pack_world() -> Vec<u8> {
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "deps": {"lib": {"path": "../lib"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "app", "deps": {"lib": {"path": "../lib"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -40,9 +40,15 @@ fn compiled_bundle_mounts_from_bytes_and_runs() {
     let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
     assert_eq!(loaded.root, "app");
     // the root and its dep mounted as compiled bodies — decoded
-    // programs, not sources
+    // programs, not sources. The dep group mounts under its content
+    // identity, so the lookup goes by the bare name half
     assert!(matches!(loaded.pkg("app").unwrap().body, rut_driver::PkgBody::Compiled(_)));
-    assert!(matches!(loaded.pkg("lib").unwrap().body, rut_driver::PkgBody::Compiled(_)));
+    let lib = loaded
+        .pkgs
+        .iter()
+        .find(|p| rut_driver::bundle::parse_identity(&p.spec).map(|(n, _)| n) == Some("lib"))
+        .expect("the lib group mounted");
+    assert!(matches!(lib.body, rut_driver::PkgBody::Compiled(_)));
     // the ordinary pipeline takes over: compile the chain (the
     // compiled-mount arm rebases and pushes), link, verify, run
     let g = rut_driver::RutRun::new()

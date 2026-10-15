@@ -145,7 +145,7 @@ fn every_committed_artifact_is_byte_fresh() {
 
 #[test]
 fn the_artifact_set_spells_the_one_wire_number() {
-    // every manifest packs format_version 10 — the ONE wire number;
+    // every manifest packs format_version 11 — the ONE wire number;
     // the manifest's `type` routes the root kind (read from the
     // committed bytes)
     for (dir, name) in PKGS {
@@ -154,7 +154,7 @@ fn the_artifact_set_spells_the_one_wire_number() {
         let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap();
         let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
         assert_eq!(
-            m.format_version, Some(10),
+            m.format_version, Some(11),
             "rut/{dir}: the manifest packs the one wire number"
         );
         if is_host {
@@ -312,11 +312,13 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
 }
 
 #[test]
-fn mixed_dir_and_archive_of_one_pkg_first_mount_wins() {
-    // the same pkg offered by BOTH lanes: json's url row mounts first
-    // (name order), its archive's `strbuild` group wins, and the app's
-    // own `strbuild` path row is skipped — one body, the compiled one
-    // — and the program runs over the winner
+fn mixed_dir_and_archive_of_one_pkg_bind_per_row() {
+    // the same pkg offered by BOTH lanes: json's url archive carries a
+    // `strbuild` group (mounted under its CONTENT IDENTITY) and the
+    // app's own `strbuild` path row mounts the directory under ITS
+    // mount key — two mounts of one name coexist side by side, and the
+    // consumer binds its OWN row's body. First-mount-wins is
+    // per-identity exact dedup, never per-name.
     let mut table = BTreeMap::new();
     let mut rows = String::new();
     for key in ["json", "pouch", "nmapset"] {
@@ -336,11 +338,19 @@ fn mixed_dir_and_archive_of_one_pkg_first_mount_wins() {
     )
     .expect("the mixed world loads");
     assert!(diags.is_empty(), "{}", diags.join("; "));
-    // the ARCHIVE group won (json mounts before the strbuild row) —
-    // the mounted body is the decoded binary, not the dir source
+    // the app's path row bound the DIRECTORY (its own row's body); the
+    // archive's compiled group rode beside it under its identity
     assert!(
-        matches!(session.pkg("strbuild").unwrap().body, rut_driver::PkgBody::Compiled(_)),
-        "first-mount-wins keeps the archive's compiled group"
+        matches!(session.pkg("strbuild").unwrap().body, rut_driver::PkgBody::Source { .. }),
+        "the consumer binds its own row's mount (the dir source)"
+    );
+    assert!(
+        session
+            .pkgs
+            .iter()
+            .any(|p| rut_driver::bundle::parse_identity(&p.spec).map(|(n, _)| n) == Some("strbuild")),
+        "the archive's strbuild group mounted under its content identity: {:?}",
+        session.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>()
     );
     let prog = rut_core::link::flatten(program.expect("linked"));
     rut_vm::verify::verify(&prog).expect("verify");
@@ -433,11 +443,12 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
         .expect("vm");
     let out: String = vm.call("main", ()).expect("run");
     assert_eq!(out, "hello, cdn");
-    // and strbuild_host rode the archive as the decl-surface group
-    assert!(matches!(
-        session.pkg("strbuild_host").unwrap().body,
-        rut_driver::PkgBody::Host { .. }
-    ));
+    // and strbuild_host rode the archive as the decl-surface group —
+    // under its content identity (the mount key), rows registered
+    // under the pkg's bare name
+    let sbh = common::pkg_named(&session, "strbuild_host");
+    assert!(rut_driver::bundle::is_identity(&sbh.spec), "the group mounts under its identity: {}", sbh.spec);
+    assert!(matches!(&sbh.body, rut_driver::PkgBody::Host { .. }));
     let _ = std::fs::remove_dir_all(&base);
 }
 

@@ -34,7 +34,7 @@ fn todolist(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "todolist"}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "todolist"}"#,
     );
     write(
         &dir,
@@ -166,7 +166,7 @@ fn the_single_file_private_refusal_spells_the_file() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "todolist"}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "todolist"}"#,
     );
     write(
         &dir,
@@ -201,7 +201,7 @@ fn the_single_file_module_shape_runs() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "todolist"}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "todolist"}"#,
     );
     write(
         &dir,

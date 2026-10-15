@@ -274,11 +274,12 @@ fn pack_host_root(
     rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
         .map_err(PackError::law)?;
     // entries = rut.jsonc + the surface (the root file set, prefix "")
-    // — the exact shape the container lane reads back at load
+    // — the exact shape the container lane reads back at load. The
+    // surface rides at the ONE canonical name (`mod.d.rut`, wire v11):
+    // the archive is name-free, whatever the directory grammar spelled.
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     entries.push((rut_driver::bundle::MANIFEST_NAME.into(), manifest_bytes));
-    let key = rut_driver::bundle::bundle_key(&rel).map_err(PackError::law)?;
-    entries.push((key, src.clone().into_bytes()));
+    entries.push((rut_driver::decl::DECL_CHILD_FILE.into(), src.clone().into_bytes()));
     // the mod tree rides beside the file set (the rows envelope's
     // `""` row is the root surface the reader lowers from) — flat pkgs
     // write no rows entry, so their bytes never move

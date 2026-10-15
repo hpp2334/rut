@@ -8,7 +8,7 @@
   // them through the pkg scope (`HostPkg::new("myhost")` +
   // `"net::connect"`).
   "format": "rutbundle",
-  "format_version": 10,
+  "format_version": 11,
   "name": "myhost",
   "type": "host",
   "entry": {

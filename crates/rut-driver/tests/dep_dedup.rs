@@ -22,6 +22,9 @@ use rut_parser::Mode;
 
 const PEERS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/peers");
 
+mod common;
+use common as _;
+
 
 
 
@@ -64,6 +67,216 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 fn load(rel: &str) -> Result<rut_driver::Loaded, String> {
     rut_native::load_dir(Path::new(&format!("{PEERS}/{rel}")))
     .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------
+// content identity — the coexistence law (wire v11)
+// ----------------------------------------------------------------------
+
+/// One util pkg whose manifest carries a distinguishing comment (the
+/// fingerprint basis covers `rut.jsonc` byte-for-byte, so two builds
+/// of one NAME get different identities).
+fn write_util(root: &Path, dirname: &str, version: i64, tag: &str) {
+    let dir = root.join(dirname);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("rut.jsonc"),
+        format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "util"}} // {tag}"#),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("mod.rut"),
+        format!("pub fn tag() -> i64 {{ return {version}; }}\n"),
+    )
+    .unwrap();
+}
+
+/// One consumer pkg over a url-dep util — packs to an archive whose
+/// rode-along group rides under the util's content identity. The lock
+/// rides too (the realistic fixture: a project that fetches installed).
+fn write_consumer(
+    root: &Path,
+    name: &str,
+    url: &str,
+    bytes: &[u8],
+    fndecl: &str,
+) {
+    let dir = root.join(name);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("rut.jsonc"),
+        format!(
+            r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}", "deps": {{"util": {{"url": "{url}"}}}}}}"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("mod.rut"),
+        format!("use util::{{tag}};\n{fndecl}\n"),
+    )
+    .unwrap();
+    let mut lock = std::collections::BTreeMap::new();
+    lock.insert(url.to_string(), bytes.to_vec());
+    common::write_lock(&dir, &lock);
+}
+
+fn identity_pkgs<'a>(loaded: &'a rut_driver::Loaded, name: &str) -> Vec<&'a rut_driver::Pkg> {
+    loaded
+        .pkgs
+        .iter()
+        .filter(|p| rut_driver::bundle::parse_identity(&p.spec).map(|(n, _)| n) == Some(name))
+        .collect()
+}
+
+#[test]
+fn same_name_two_identities_one_program() {
+    // THE COEXISTENCE LAW: two archives carry a group of the SAME name
+    // with different content — both mount side by side (each under its
+    // content identity), each consumer binds its own, and one program
+    // runs over both. The diamond dissolves: first-mount-wins was
+    // per-name; it is per-identity now.
+    let root = std::env::temp_dir().join(format!("rut-coexist-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+
+    write_util(&root, "util_7", 7, "the v1 build");
+    write_util(&root, "util_9", 9, "the v2 build");
+    let u1 = rut_native::pack_dir(&root.join("util_7")).expect("pack util v1");
+    let u2 = rut_native::pack_dir(&root.join("util_9")).expect("pack util v2");
+    let url1 = "https://fixtures.test/util-v1.rutbundle";
+    let url2 = "https://fixtures.test/util-v2.rutbundle";
+
+    write_consumer(&root, "a", url1, &u1, "pub fn from_a() -> i64 { return tag(); }");
+    write_consumer(&root, "b", url2, &u2, "pub fn from_b() -> i64 { return tag(); }");
+    let mut fetch_map = std::collections::BTreeMap::new();
+    fetch_map.insert(url1.to_string(), u1.clone());
+    fetch_map.insert(url2.to_string(), u2.clone());
+    let a = rut_native::pack_dir_fetched(&root.join("a"), &fetch_map).expect("pack a");
+    let b = rut_native::pack_dir_fetched(&root.join("b"), &fetch_map).expect("pack b");
+
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::write(
+        app.join("rut.jsonc"),
+        format!(
+            r#"{{"name": "app", "deps": {{"a": {{"url": "{url1}"}}, "b": {{"url": "{url2}"}}}}}}"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        app.join("mod.rut"),
+        "use a::{from_a};\nuse b::{from_b};\nentry fn main() -> i64 { return from_a() * 10 + from_b(); }\n",
+    )
+    .unwrap();
+    let mut map = std::collections::BTreeMap::new();
+    map.insert(url1.to_string(), a);
+    map.insert(url2.to_string(), b);
+    common::write_lock(&app, &map);
+    let loaded = common::block_on(rut_native::load_dir_with(&app, &common::Table::from(map)))
+        .expect("the diamond loads");
+    // both identities of `util` mounted
+    let utils = identity_pkgs(&loaded, "util");
+    assert_eq!(utils.len(), 2, "two identities of one name: {:?}", loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>());
+    // and the program runs over BOTH (v1 answers 7, v2 answers 9)
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile the diamond");
+    assert!(
+        g.graph.diags.is_empty(),
+        "{}",
+        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+    );
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(rut_vm::interp::Limits {
+            fuel: Some(2_000_000),
+            heap_limit_bytes: Some(16 * 1024 * 1024),
+            interrupt_every: 1024,
+        })
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
+    assert_eq!(vm.call::<_, i64>("main", ()).expect("run"), 79, "v1's 7 and v2's 9 both bind");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn same_identity_via_two_routes_mounts_once() {
+    // THE EXACT-DEDUP LAW: two routes carry the SAME group (same name,
+    // same bytes ⇒ same identity) — it mounts ONCE, and both consumers
+    // bind the one body.
+    let root = std::env::temp_dir().join(format!("rut-exact-dedup-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+
+    write_util(&root, "util_7", 7, "one build");
+    write_util(&root, "util_7b", 7, "one build");
+    let u1 = rut_native::pack_dir(&root.join("util_7")).expect("pack util");
+    let u1b = rut_native::pack_dir(&root.join("util_7b")).expect("pack util again");
+    assert_eq!(u1, u1b, "same content ⇒ byte-identical bundle (the determinism law)");
+    let url1 = "https://fixtures.test/util-v1.rutbundle";
+    let url2 = "https://fixtures.test/util-v1-again.rutbundle";
+
+    write_consumer(&root, "a", url1, &u1, "pub fn from_a() -> i64 { return tag(); }");
+    write_consumer(&root, "c", url2, &u1b, "pub fn from_c() -> i64 { return tag(); }");
+    let mut fetch_map = std::collections::BTreeMap::new();
+    fetch_map.insert(url1.to_string(), u1.clone());
+    fetch_map.insert(url2.to_string(), u1b.clone());
+    let a = rut_native::pack_dir_fetched(&root.join("a"), &fetch_map).expect("pack a");
+    let c = rut_native::pack_dir_fetched(&root.join("c"), &fetch_map).expect("pack c");
+
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::write(
+        app.join("rut.jsonc"),
+        format!(
+            r#"{{"name": "app", "deps": {{"a": {{"url": "{url1}"}}, "c": {{"url": "{url2}"}}}}}}"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        app.join("mod.rut"),
+        "use a::{from_a};\nuse c::{from_c};\nentry fn main() -> i64 { return from_a() + from_c(); }\n",
+    )
+    .unwrap();
+    let mut map = std::collections::BTreeMap::new();
+    map.insert(url1.to_string(), a);
+    map.insert(url2.to_string(), c);
+    common::write_lock(&app, &map);
+    let loaded = common::block_on(rut_native::load_dir_with(&app, &common::Table::from(map)))
+        .expect("the shared-dep world loads");
+    let utils = identity_pkgs(&loaded, "util");
+    assert_eq!(
+        utils.len(), 1,
+        "one identity mounts once: {:?}",
+        loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>()
+    );
+    let g = rut_driver::RutRun::new()
+        .pkgs(&loaded)
+        .entrypoint(&loaded.root)
+        .compile()
+        .expect("compile");
+    assert!(g.graph.diags.is_empty(), "{}", g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(rut_vm::interp::Limits {
+            fuel: Some(2_000_000),
+            heap_limit_bytes: Some(16 * 1024 * 1024),
+            interrupt_every: 1024,
+        })
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
+    assert_eq!(vm.call::<_, i64>("main", ()).expect("run"), 14, "both consumers bind the one body");
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// Compile, flatten, verify, and run `main` — the i64 result.

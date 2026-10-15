@@ -78,7 +78,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 /// A v6-shaped host manifest — the keys PREPEND (before any table).
 fn host_manifest(name: &str, surface: &str) -> String {
     format!(
-        r#"{{"format": "rutbundle", "format_version": 10, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
+        r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
     )
 }
 
@@ -140,8 +140,8 @@ fn host_root_packs_v6_and_loads_back() {
     let names = entry_names(&bytes);
     assert_eq!(
         names,
-        vec!["rut.jsonc".to_string(), "logger_host.d.rut".to_string()],
-        "a host bundle is its manifest + its surface, nothing else: {names:?}"
+        vec!["rut.jsonc".to_string(), "mod.d.rut".to_string()],
+        "a host bundle is its manifest + its surface (the canonical name), nothing else: {names:?}"
     );
     // the riding manifest is byte-for-byte the directory's (v6 declared)
     let toml = rut_driver::bundle::Bundle::parse(&bytes)
@@ -150,7 +150,7 @@ fn host_root_packs_v6_and_loads_back() {
         .unwrap();
     assert_eq!(toml, std::fs::read_to_string(dir.join("rut.jsonc")).unwrap());
     let m = rut_driver::bundle::parse_manifest(&toml).unwrap();
-    assert_eq!(m.format_version, Some(10), "a decl root declares 10");
+    assert_eq!(m.format_version, Some(11), "a decl root declares 11");
 
     // load: the root mounts as the pkg's host rows
     let session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
@@ -243,8 +243,8 @@ fn the_real_tree_host_pkgs_pack_and_load() {
         let names = entry_names(&bytes);
         assert_eq!(
             names,
-            vec!["rut.jsonc".to_string(), surface.to_string()],
-            "rut/{name}: {names:?}"
+            vec!["rut.jsonc".to_string(), "mod.d.rut".to_string()],
+            "rut/{name}: the surface rides at the canonical name: {names:?}"
         );
         let session = rut_driver::Pkg::from_bundle(&bytes)
             .unwrap_or_else(|e| panic!("load rut/{name}: {e}"));
@@ -268,23 +268,23 @@ fn host_pack_is_deterministic() {
 
 #[test]
 fn a_lib_root_packs_the_one_wire_number_too() {
-    // a lib root packs compiled under the SAME one wire number: 10 in
+    // a lib root packs compiled under the SAME one wire number: 11 in
     // the riding manifest, compiled root, ledger, groups — the
     // `type` row (absent ⇒ lib) routes the layout, never the version
     let base = scratch("onewire");
     let lib = base.join("util");
     write(&lib, "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "util"}"#);
+        r#"{"format": "rutbundle", "format_version": 11, "name": "util"}"#);
     write(&lib, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     let bytes = pack_dir(&lib).expect("pack the lib");
     let m = rut_driver::bundle::parse_manifest(
         &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.jsonc").unwrap(),
     )
     .unwrap();
-    assert_eq!(m.format_version, Some(10), "a lib root's manifest declares 10, the one wire number");
+    assert_eq!(m.format_version, Some(11), "a lib root's manifest declares 11, the one wire number");
     let names = entry_names(&bytes);
     assert!(names.contains(&"rut.scopes".to_string()), "{names:?}");
-    assert!(names.contains(&"util.rutc".to_string()), "{names:?}");
+    assert!(names.contains(&"mod.rutc".to_string()), "{names:?}");
     // and the same dir packs byte-identically twice (no drift from the
     // host arm sharing the code path)
     assert_eq!(bytes, pack_dir(&lib).unwrap());
@@ -310,15 +310,15 @@ fn any_other_version_refuses_with_the_one_recipe() {
     let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("reads bundle format_version 10 only"), "{err}");
+    assert!(err.contains("reads bundle format_version 11 only"), "{err}");
     assert!(err.contains("found 9"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
 
-    // a v10 lib manifest routes to the COMPILED layout (the `type`
+    // a v11 lib manifest routes to the COMPILED layout (the `type`
     // row does the routing, never the version) — a host pack carries
     // no ledger, so the compiled law refuses it
-    let v10_lib = r#"{"format": "rutbundle", "format_version": 10, "name": "h", "entry": {"lib": "./h.rut"}}"#;
-    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", v10_lib))
+    let v11_lib = r#"{"format": "rutbundle", "format_version": 11, "name": "h", "entry": {"lib": "./h.rut"}}"#;
+    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", v11_lib))
         .unwrap_err()
         .to_string();
     assert!(err.contains("no `rut.scopes` entry"), "{err}");
@@ -331,10 +331,10 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
 
     // a root `.rutc` in a host bundle: the contradiction refusal —
     // a host bundle's root is its surface, not a compiled unit
-    let with_rutc = appended(&bytes, "h.rutc", b"not a real program");
+    let with_rutc = appended(&bytes, "mod.rutc", b"not a real program");
     let err = rut_driver::Pkg::from_bundle(&with_rutc).unwrap_err().to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
-    assert!(err.contains("h.rutc"), "{err}");
+    assert!(err.contains("mod.rutc"), "{err}");
 
     // a scope ledger: no programs, no ledger
     let with_ledger = appended(&bytes, "rut.scopes", b"0 = \"h\"\n");
@@ -359,13 +359,13 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
     let stripped: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()
-        .filter(|(n, _)| n != "h.d.rut")
+        .filter(|(n, _)| n != "mod.d.rut")
         .collect();
     let err =
         rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&stripped).unwrap())
             .unwrap_err()
             .to_string();
-    assert!(err.contains("a host bundle's root is its surface"), "{err}");
+    assert!(err.contains("root is `mod.d.rut` beside the manifest"), "{err}");
 }
 
 #[test]

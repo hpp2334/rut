@@ -85,3 +85,40 @@ pub fn block_on<F: Future>(fut: F) -> F::Output {
         }
     }
 }
+
+/// The archive group a named pkg rode under — `deps/<name>@<fp16>`:
+/// tests derive the identity dir from the packed entry names (the fp16
+/// is the content's, never a constant here).
+#[allow(dead_code)]
+pub fn dep_dir(names: &[String], pkg: &str) -> String {
+    let comp = names
+        .iter()
+        .filter_map(|n| {
+            let comp = n.strip_prefix("deps/")?.split('/').next()?;
+            rut_driver::bundle::parse_identity(comp)
+                .filter(|(n, _)| *n == pkg)
+                .map(|_| comp.to_string())
+        })
+        .next()
+        .unwrap_or_else(|| panic!("no deps/ group for `{pkg}` in the archive"));
+    format!("deps/{comp}")
+}
+
+/// The walked pkg whose mount key spells `name` — a bare root or an
+/// identity-keyed group (`name@fp16`); single-instance worlds only.
+#[allow(dead_code)]
+pub fn pkg_named<'a>(
+    loaded: &'a rut_driver::Loaded,
+    name: &str,
+) -> &'a rut_driver::Pkg {
+    loaded
+        .pkgs
+        .iter()
+        .find(|p| rut_driver::bundle::mount_name(&p.spec) == name)
+        .unwrap_or_else(|| {
+            panic!(
+                "no pkg named `{name}` (mounted: {:?})",
+                loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>()
+            )
+        })
+}

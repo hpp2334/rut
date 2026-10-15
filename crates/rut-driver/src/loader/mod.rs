@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 use rut_core::id::ScopeId;
 
 use crate::bundle::{
-    bundle_key, parse_manifest_compat, read_entry, Bundle, GroupKind, Layout, Manifest,
-    PkgType,
+    fp16_of, bundle_key, parse_identity, parse_manifest_compat, read_entry, Bundle, GroupKind,
+    Layout, Manifest, PkgType, DEPS_DIR,
 };
 use crate::decl::DECL_CHILD_FILE;
 use crate::mods::{
@@ -68,6 +68,116 @@ fn namescope_ledger(
     })
 }
 
+/// Resolve one scope-ledger row's spelling to the mount key it binds:
+/// the loader's half of the identity law. Every row arrives
+/// identity-shaped (`name@fp16` — the reader's gate); the binding is
+/// (1) the group the archive carries under that exact identity —
+/// per-identity exact dedup makes the key unambiguous; (2) the
+/// archive's OWN root, when the identity is the root's own (the
+/// self-row — it maps to the bare-named root mount); (3) otherwise the
+/// bare name (engine mounts like `core`, dev-table pkgs — pkgs with no
+/// rode file set mount bare). Public so rut-native's `mount_url_dep`
+/// keeps the ONE law.
+pub fn resolve_ledger_row(
+    entries: &[(String, Vec<u8>)],
+    root_spec: &str,
+    root_fp: &str,
+    row: &str,
+) -> String {
+    let Some((name, fp)) = parse_identity(row) else {
+        return row.to_string(); // the reader gated the shape; defensive passthrough
+    };
+    let group_prefix = format!("{DEPS_DIR}/{name}@{fp}/");
+    if entries.iter().any(|(n, _)| n.starts_with(&group_prefix)) {
+        return row.to_string();
+    }
+    if name == root_spec && fp == root_fp {
+        return root_spec.to_string();
+    }
+    name.to_string()
+}
+
+/// The identity rebind, load side: the archive's binaries spell their
+/// pack-time BARE owner names (`inst_fn` rows anchor instantiations on
+/// the owner's NAME); the mount keys are content identities. Every
+/// bare name this archive binds to EXACTLY ONE group identity rewrites
+/// — the group's module name and every `inst_fn` owner spelling the
+/// bare name, in the root and every compiled group — so link's
+/// owner-anchored keys unify per identity and two identities of one
+/// name (the dissolved diamond) never collide. A name bound to SEVERAL
+/// identities is the loud refusal while a binary still spells it bare:
+/// a bare-name mirror cannot name one — re-pack with distinct dep
+/// names.
+pub fn identity_rebind_map(group_identities: &[String]) -> (BTreeMap<String, String>, Vec<String>) {
+    let mut by_name: BTreeMap<String, Vec<&String>> = BTreeMap::new();
+    for ident in group_identities {
+        if let Some((n, _)) = parse_identity(ident) {
+            by_name.entry(n.to_string()).or_default().push(ident);
+        }
+    }
+    let mut map = BTreeMap::new();
+    let mut ambiguous = Vec::new();
+    for (name, idents) in by_name {
+        if idents.len() == 1 {
+            map.insert(name, idents[0].clone());
+        } else {
+            ambiguous.push(name);
+        }
+    }
+    (map, ambiguous)
+}
+
+/// Rewrite one program's identity-bound owner names (see
+/// [`identity_rebind_map`]). `rename_module` renames the module itself
+/// to its mount key (a group rides under its identity; the root keeps
+/// its bare name).
+pub fn rebind_identity_owners(
+    prog: &mut rut_core::binary::Program,
+    map: &BTreeMap<String, String>,
+    rename_module: bool,
+    ambiguous: &[String],
+    origin: &str,
+) -> Result<(), String> {
+    if map.is_empty() && !rename_module {
+        return Ok(());
+    }
+    if rename_module {
+        if let Some(ident) = map.get(prog.name.as_str()) {
+            prog.name = ident.clone();
+        }
+    }
+    // the owner swap: collect, intern, assign (the interner borrow ends
+    // before the rows mutate)
+    let mut swaps: Vec<(rut_core::sym::IdentId, String)> = Vec::new();
+    for row in &prog.inst_fns {
+        let text = prog.interner.name(row.owner).to_string();
+        if let Some(ident) = map.get(&text) {
+            swaps.push((row.owner, ident.clone()));
+        } else if ambiguous.contains(&text) {
+            return Err(format!(
+                "{origin}: a compiled module's instantiation rows spell `{text}`, but this \
+                 archive carries several identities of that name ({}) — bare-name mirrors \
+                 cannot name one; re-pack with distinct dep names",
+                ambiguous.join(", "),
+            ));
+        }
+    }
+    if swaps.is_empty() {
+        return Ok(());
+    }
+    let mut ids: BTreeMap<String, rut_core::sym::IdentId> = BTreeMap::new();
+    for (_, ident) in &swaps {
+        ids.entry(ident.clone()).or_insert_with(|| prog.interner.intern(ident));
+    }
+    for row in &mut prog.inst_fns {
+        let text = prog.interner.name(row.owner).to_string();
+        if let Some(ident) = map.get(&text) {
+            row.owner = ids[ident];
+        }
+    }
+    Ok(())
+}
+
 /// The pure container walk: a packed `.rutbundle`'s bytes → the walked
 /// yield ([`Loaded`]) — gates, groups, and the scope ledger. No
 /// filesystem, no network: the same contract a url dep rides.
@@ -109,16 +219,38 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
         .name
         .clone()
         .ok_or_else(|| err("rut.jsonc has no `name`".into()))?;
+    // the identity rebind map: the group identities this archive
+    // carries, by bare name — the owner-name law's inputs
+    let group_idents: Vec<String> = groups
+        .iter()
+        .filter_map(|(p, _)| p.strip_prefix(&format!("{DEPS_DIR}/")).map(str::to_string))
+        .collect();
+    let (rebind, ambiguous) = identity_rebind_map(&group_idents);
+    // the root's own content identity — the self-row's binding reads
+    // it (the rode source set at the archive root)
+    let root_fp = fp16_of(entries, "");
     // the scope ledger first, namespaced: the rows shift into a fresh
     // range (the container walk starts from an empty ledger — boot
     // passes through) and the root's program rebases with the same map
     // BEFORE mounting — the graph later resolves every decoded foreign
-    // id through these rows
+    // id through these rows. Each row's spelling resolves to its mount
+    // key (the group identity, the bare root, or the bare name).
     let recorded: BTreeMap<ScopeId, String> = BTreeMap::new();
     let remap = namescope_ledger(&recorded, &scopes).map_err(err)?;
-    let scopes: Vec<(ScopeId, String)> =
-        scopes.into_iter().map(|(s, spec)| (remap(s), spec)).collect();
+    let scopes: Vec<(ScopeId, String)> = scopes
+        .into_iter()
+        .map(|(s, spec)| {
+            let key = resolve_ledger_row(entries, &root_spec, &root_fp, &spec);
+            (remap(s), key)
+        })
+        .collect();
     let root = rut_core::link::rebase(root, &remap);
+    // the identity rebind, root flavor: the root's mirrors name their
+    // pack-time owners bare — rebind to the identities (the root's own
+    // module name stays bare: that IS its mount key)
+    let mut root = root;
+    rebind_identity_owners(&mut root, &rebind, false, &ambiguous, origin)
+        .map_err(err)?;
     // the root: a compiled module (the packer refuses any other root).
     // A generic-owning root rides its source beside the binary — the
     // on-demand recompile's input (generic-source riding); the riding
@@ -145,16 +277,24 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     for (prefix, kind) in &groups {
         let dep_toml = read_entry(entries, &format!("{prefix}/rut.jsonc"))
             .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-        // the group manifest rides the compat lane: a PUBLISHED
-        // bundle's groups are forever old (the pinned CDN tags)
+        // the group manifest rides the compat lane: a repacked
+        // archive's group manifests ride byte-for-byte from any era
         let dm = parse_manifest_compat(&dep_toml)
             .map_err(|e| RunError::law(format!("{origin}: {prefix}/rut.jsonc: {e}")))?;
         let name = dm
             .name
             .clone()
             .ok_or_else(|| err(format!("{prefix}/rut.jsonc has no `name`")))?;
-        if pkgs.contains_key(&name) {
-            continue; // first mount wins (the root, an earlier group)
+        // the mount key IS the content identity — the reader validated
+        // the dirname's shape, name-vs-manifest, and fingerprint-over-
+        // content, so two identities of one name mount side by side
+        // and the same identity mounts once (exact dedup)
+        let key = prefix
+            .strip_prefix(&format!("{DEPS_DIR}/"))
+            .map(str::to_string)
+            .unwrap_or_else(|| name.clone());
+        if pkgs.contains_key(&key) {
+            continue; // first mount wins — per-identity exact dedup
         }
         let pkg = match kind {
             GroupKind::Compiled(program) => {
@@ -163,33 +303,40 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                 // (the row must be the scope the binary itself
                 // carries) is unchanged, and the stored binary is the
                 // namespaced one
-                let program = rut_core::link::rebase(program.clone(), &remap);
-                // the ledger must name the group, and the row must be
-                // the scope the binary itself carries (refuse, never
-                // guess — a mismatch is a corrupt or doctored bundle)
+                                let mut program = rut_core::link::rebase(program.clone(), &remap);
+                // the module rides under its MOUNT KEY and its owner
+                // rows rebind to the identities (the linker merges by
+                // module name and anchors instantiations on owner
+                // names — two identities of one name coexist)
+                rebind_identity_owners(&mut program, &rebind, true, &ambiguous, origin)
+                    .map_err(err)?;
+                // the ledger must name the group's identity, and the
+                // row must be the scope the binary itself carries
+                // (refuse, never guess — a mismatch is a corrupt or
+                // doctored bundle)
                 let Some(own) = rut_core::link::own_scope(&program) else {
                     return Err(err(format!(
                         "{prefix}/{}: the program carries no scope blocks",
                         name
                     )));
                 };
-                match scopes.iter().find(|(_, s)| s == &name) {
+                match scopes.iter().find(|(_, s)| s == &key) {
                     Some(&(row, _)) if row == own => {}
                     Some(&(row, _)) => {
                         return Err(err(format!(
-                            "`{name}`'s ledger row says scope {row}, but its binary carries {own}"
+                            "`{key}`'s ledger row says scope {row}, but its binary carries {own}"
                         )));
                     }
                     None => {
                         return Err(err(format!(
-                            "the scope ledger does not name `{name}` — the bundle is incomplete"
+                            "the scope ledger does not name `{key}` — the bundle is incomplete"
                         )));
                     }
                 }
-                let gen_source = riding_source(&name, &program, entries, &format!("{prefix}/"), &dm)
+                let gen_source = riding_source(&key, &program, entries, &format!("{prefix}/"), &dm)
                     .map_err(err)?;
                 Pkg {
-                    spec: name.clone(),
+                    spec: key.clone(),
                     body: PkgBody::Compiled(program),
                     entry: dm.entry.clone(),
                     gen_source,
@@ -203,18 +350,20 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             GroupKind::Source => {
                 let mut pkg = bundle_entry_pkg(entries, &format!("{prefix}/"), &dm)
                     .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-                pkg.spec = name.clone();
+                pkg.spec = key.clone();
                 // the first-mount edge: the archive root pulled its groups
                 pkg.mounted_by = Some(root_spec.clone());
                 pkg
             }
         };
-        pkgs.insert(name.clone(), pkg);
-        prefixes.insert(name.clone(), format!("{prefix}/"));
+        pkgs.insert(key.clone(), pkg);
+        prefixes.insert(key.clone(), format!("{prefix}/"));
     }
-    // every declared dep must be satisfied by a group
+    // every declared dep must be satisfied by a group — by the dep's
+    // BARE name: a group mounts under its identity, and the manifest's
+    // deps keys stay bare (source-facing grammar)
     for spec in manifest.deps.keys() {
-        if !pkgs.contains_key(spec) {
+        if !pkgs.keys().any(|k| crate::bundle::mount_name(k) == spec.as_str()) {
             return Err(err(format!(
                 "the bundle is missing its `{spec}` dependency group"
             )));
@@ -353,9 +502,11 @@ pub fn bundle_entry_pkg(
     // decl unit — no host rows, nothing exported; use sites
     // resolve-miss, correctly). An ambiguity — `entry.type` spelled,
     // no declared kind, no body anywhere — refuses, naming both fixes.
-    let pkg = if let Some(rel) = &manifest.entry.type_path {
-        let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
-        let src = read(rel)?;
+    // The surface read is the ONE canonical name (`mod.d.rut`, wire
+    // v11): the directory grammar's spelling never rides the archive.
+    let pkg = if let Some(_) = &manifest.entry.type_path {
+        let origin = format!("{prefix}{}", crate::decl::DECL_CHILD_FILE);
+        let src = read(crate::decl::DECL_CHILD_FILE)?;
         crate::decl::refuse_host_rows(&src, &origin)?;
         match root_source(entries, prefix, manifest)? {
             Some(root) => plain_source_pkg(entries, prefix, manifest, root)?,
@@ -382,13 +533,9 @@ pub fn bundle_entry_pkg(
 /// The host lane of [`bundle_entry_pkg`]: the decl tree rides the rows
 /// envelope when the tree mounts (the packer's host lane — `""` is the
 /// root `.d.rut`, each child its mod path), else the flat surface
-/// entry lowers alone — the byte-compat shape every pre-`mod` host
-/// bundle carries. The flat lane's root file is the spelled
-/// `entry.type` when the manifest carries one, else `mod.d.rut` beside
-/// the manifest — the default root, the directory lanes' discovery
-/// mirrored over the entries; neither present is the loud no-entry
-/// error naming both doors. The manifest's `namespace`/`consts` rows
-/// fold in either way.
+/// entry lowers alone — the root file is `mod.d.rut`, the ONE
+/// canonical name the packer emits at both levels. The manifest's
+/// `namespace`/`consts` rows fold in either way.
 fn host_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -414,31 +561,20 @@ fn host_entry_pkg(
         let m = crate::decl::lower_decl_module(&root, &children, &origin)?;
         return Ok(fold(m));
     }
-    let spelled = manifest.entry.type_path.as_deref();
-    let key_rel = match spelled {
-        Some(rel) => rel.strip_prefix("./").unwrap_or(rel),
-        None => DECL_CHILD_FILE,
-    };
-    let key = bundle_key(&format!("{prefix}{key_rel}"))?;
-    let src = read_entry(entries, &key).map_err(|e| {
-        if spelled.is_none() {
-            // the both-missing refusal, bundle-flavored (a packed host
-            // bundle always carries a root — a manifest that names
-            // neither door is a packaging bug, named like the
-            // directory lanes')
-            format!(
-                "module at bundle prefix `{prefix}` is a host pkg with no entry — spell \
-                 `\"entry\": {{ \"type\": \"<surface>.d.rut\" }}` or pack a `mod.d.rut` \
-                 root beside the manifest"
-            )
-        } else {
-            e
-        }
+    // the flat lane's root file is `mod.d.rut` beside the manifest —
+    // the ONE canonical name (wire v11 canonicalizes the directory
+    // grammar's `entry.type` spelling; the in-archive override lane is
+    // gone). A packed host bundle always carries a root — a manifest
+    // whose archive names none is a packaging bug, named like the
+    // directory lanes'.
+    let key = bundle_key(&format!("{prefix}{DECL_CHILD_FILE}"))?;
+    let src = read_entry(entries, &key).map_err(|_| {
+        format!(
+            "module at bundle prefix `{prefix}` is a host pkg with no entry — the root surface \
+             is `mod.d.rut` beside the manifest"
+        )
     })?;
-    let origin = match spelled {
-        Some(rel) => format!("{prefix}{rel}"),
-        None => format!("{prefix}{DECL_CHILD_FILE}"),
-    };
+    let origin = format!("{prefix}{DECL_CHILD_FILE}");
     let m = crate::decl::lower_decl_module(&src, &Default::default(), &origin)?;
     Ok(fold(m))
 }

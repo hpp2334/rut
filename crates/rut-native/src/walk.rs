@@ -101,11 +101,13 @@ impl World {
     /// Mount a pkg under `spec` — the table keeps the last; the
     /// first-mount-wins law is the CALLERS' (they resolve-check first).
     /// The spec rides the pkg (the walk's registration IS the name —
-    /// the same law the run chain's table holds).
+    /// the same law the run chain's table holds). A key is a bare
+    /// package name or a content identity (`name@fp16` — the key a
+    /// bundle group mounts under).
     fn register(&mut self, spec: &str, pkg: Pkg) -> Result<(), LoadError> {
-        if !rut_driver::bundle::valid_spec(spec) {
+        if !rut_driver::bundle::valid_mount_key(spec) {
             return Err(LoadError::law(format!(
-                "`{spec}` is not a package name — expected `[a-zA-Z0-9_]+`"
+                "`{spec}` is not a package name — expected `[a-zA-Z0-9_]+` or `name@<16 hex>`"
             )));
         }
         let mut pkg = pkg;
@@ -1010,7 +1012,11 @@ fn mount_url_dep(
                 .name
                 .clone()
                 .ok_or_else(|| LoadError::law(format!("{url}: rut.jsonc has no `name`")))?;
-            if root_spec != spec {
+            // gate 3 — name-vs-key: the bundle's `name` must equal the
+            // `[deps]` key (an identity spelling on the key side
+            // strips to its name half; keys stay bare by grammar)
+            let want = rut_driver::bundle::mount_name(spec);
+            if root_spec != want {
                 return Err(LoadError::law(format!(
                     "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
                 )));
@@ -1027,31 +1033,58 @@ fn mount_url_dep(
             return Ok(());
         }
     };
-    // gate 3 — name-vs-key
+    // gate 3 — name-vs-key (the identity strip covers a spelled
+    // identity; the grammar's keys are bare)
     let root_spec = manifest
         .name
         .clone()
         .ok_or_else(|| LoadError::law(format!("{url}: rut.jsonc has no `name`")))?;
-    if root_spec != spec {
+    let want = rut_driver::bundle::mount_name(spec);
+    if root_spec != want {
         return Err(LoadError::law(format!(
             "dep `{spec}` points at {url} — the bundle names itself `{root_spec}`"
         )));
     }
+    let entries = bundle.entries().to_vec();
+    // the archive root's own content identity — the self-row's binding
+    // and the root's no-rode-file-set mount law read it
+    let root_fp = rut_driver::bundle::fp16_of(&entries, "");
+    // the identity rebind map: the group identities this archive
+    // carries, by bare name — the owner-name law's inputs
+    let group_idents: Vec<String> = groups
+        .iter()
+        .filter_map(|(p, _)| {
+            p.strip_prefix(rut_driver::bundle::DEPS_DIR)
+                .and_then(|rest| rest.strip_prefix('/'))
+                .map(str::to_string)
+        })
+        .collect();
+    let (rebind, ambiguous) = rut_driver::loader::identity_rebind_map(&group_idents);
     // gate 4 — the ledger namespacing: this archive's rows shift into a
     // fresh range of the COMBINED world (boot passes through) and its
     // compiled programs rebase with the same map before mounting — two
     // archives never argue about a number, each binary's ids resolve
-    // through its OWN archive's rows
+    // through its OWN archive's rows. Each row's spelling resolves to
+    // its mount key (the group identity, the bare root, or the bare
+    // name).
     let remap = world.namescope_ledger(&scopes)?;
-    let scopes: Vec<(ScopeId, String)> =
-        scopes.into_iter().map(|(s, spec)| (remap(s), spec)).collect();
+    let scopes: Vec<(ScopeId, String)> = scopes
+        .into_iter()
+        .map(|(s, spec)| {
+            let key = rut_driver::loader::resolve_ledger_row(&entries, &root_spec, &root_fp, &spec);
+            (remap(s), key)
+        })
+        .collect();
     for (scope, row_spec) in &scopes {
         world.record_scope(*scope, row_spec);
     }
-    let root = rut_core::link::rebase(root, &remap);
+    let mut root = rut_core::link::rebase(root, &remap);
+    // the identity rebind, root flavor (the root's own module name
+    // stays bare: that IS its mount key)
+    rut_driver::loader::rebind_identity_owners(&mut root, &rebind, false, &ambiguous, url)
+        .map_err(LoadError::law)?;
     // gate 6's group reads + the generic-source marker share one entry
     // list — cloned before the root mounts
-    let entries = bundle.entries().to_vec();
     // gate 5 — the root: a compiled module (the packer refuses any
     // other); a generic-owning root rides its source beside the binary,
     // and the riding law refuses a generic-owning unit that carries none
@@ -1079,23 +1112,32 @@ fn mount_url_dep(
             ..Default::default()
         },
     )?;
-    // gate 6 — the group loop, no gate inline
+    // gate 6 — the group loop, no gate inline. A group mounts under its
+    // CONTENT IDENTITY (the reader validated the dirname's shape, its
+    // manifest name, and its fingerprint-over-content) — two identities
+    // of one name mount side by side, the same identity mounts once.
     let slot = world.archives.len();
     let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
     for (prefix, kind) in &groups {
         let dep_toml = read_entry(&entries, &format!("{prefix}/rut.jsonc"))
             .map_err(|e| LoadError::Bundle { origin: url.to_string(), message: e })?;
-        // the group manifest rides the compat lane: a PUBLISHED
-        // bundle's groups are forever old (the pinned CDN tags)
+        // the group manifest rides the compat lane: a repacked
+        // archive's group manifests ride byte-for-byte from any era
         let dm = parse_manifest_compat(&dep_toml)
             .map_err(|e| LoadError::law(format!("{url}: {prefix}/rut.jsonc: {e}")))?;
         let name = dm
             .name
             .clone()
             .ok_or_else(|| LoadError::law(format!("{url}: {prefix}/rut.jsonc has no `name`")))?;
-        if world.pkgs.contains_key(&name) {
-            continue; // first mount wins (an earlier archive, or a dir dep)
+        let key = prefix
+            .strip_prefix(rut_driver::bundle::DEPS_DIR)
+            .and_then(|rest| rest.strip_prefix('/'))
+            .and_then(rut_driver::bundle::parse_identity)
+            .map(|(n, f)| rut_driver::bundle::identity(n, f))
+            .unwrap_or_else(|| name.clone());
+        if world.pkgs.contains_key(&key) {
+            continue; // first mount wins — per-identity exact dedup
         }
         let pkg = match kind {
             rut_driver::bundle::GroupKind::Compiled(program) => {
@@ -1103,30 +1145,42 @@ fn mount_url_dep(
                 // shift by the same map, so the law (the row must be
                 // the scope the binary itself carries) is unchanged, and
                 // the stored binary is the namespaced one
-                let program = rut_core::link::rebase(program.clone(), &remap);
-                // the ledger must name the group, and the row must be
-                // the scope the binary itself carries (refuse, never
-                // guess — a mismatch is a corrupt or doctored bundle)
+                                let mut program = rut_core::link::rebase(program.clone(), &remap);
+                // the module rides under its MOUNT KEY and its owner
+                // rows rebind to the identities (see the loader's
+                // container walk)
+                rut_driver::loader::rebind_identity_owners(
+                    &mut program,
+                    &rebind,
+                    true,
+                    &ambiguous,
+                    url,
+                )
+                .map_err(LoadError::law)?;
+                // the ledger must name the group's identity, and the
+                // row must be the scope the binary itself carries
+                // (refuse, never guess — a mismatch is a corrupt or
+                // doctored bundle)
                 let Some(own) = rut_core::link::own_scope(&program) else {
                     return Err(LoadError::law(format!(
                         "{url}: {prefix}/{}: the program carries no scope blocks",
                         name
                     )));
                 };
-                match scopes.iter().find(|(_, s)| s == &name) {
+                match scopes.iter().find(|(_, s)| s == &key) {
                     Some(&(row, _)) if row == own => {}
                     Some(&(row, _)) => {
                         return Err(LoadError::law(format!(
-                            "{url}: `{name}`'s ledger row says scope {row}, but its binary carries {own}"
+                            "{url}: `{key}`'s ledger row says scope {row}, but its binary carries {own}"
                         )));
                     }
                     None => {
                         return Err(LoadError::law(format!(
-                            "{url}: the scope ledger does not name `{name}` — the bundle is incomplete"
+                            "{url}: the scope ledger does not name `{key}` — the bundle is incomplete"
                         )));
                     }
                 }
-                let gen_source = rut_driver::loader::riding_source(&name, &program, &entries, &format!("{prefix}/"), &dm)
+                let gen_source = rut_driver::loader::riding_source(&key, &program, &entries, &format!("{prefix}/"), &dm)
                     .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
                 Pkg {
                     body: PkgBody::Compiled(program),
@@ -1147,8 +1201,8 @@ fn mount_url_dep(
                 pkg
             }
         };
-        world.register(&name, pkg)?;
-        prefixes.insert(name.clone(), format!("{prefix}/"));
+        world.register(&key, pkg)?;
+        prefixes.insert(key.clone(), format!("{prefix}/"));
     }
     // where this archive's mounted pkgs' files live (the packer's
     // rode-along copies — the world holds the location)
@@ -1166,9 +1220,15 @@ fn mount_url_dep(
     // gate 7 — the closure check, against the COMBINED world: a
     // bundle's dep rides in-archive; if it is neither here nor mounted
     // earlier, the bundle is incomplete (a url row inside it is inert
-    // metadata — the walk never fetches at bundle load)
+    // metadata — the walk never fetches at bundle load). Deps keys stay
+    // BARE; groups mount under their identities, so the check matches
+    // by name half.
     for dep in manifest.deps.keys() {
-        if !world.pkgs.contains_key(dep) {
+        let ridden = world
+            .pkgs
+            .keys()
+            .any(|k| rut_driver::bundle::mount_name(k) == dep.as_str());
+        if !ridden {
             return Err(LoadError::law(format!(
                 "{url}: the bundle is missing its `{dep}` dependency group"
             )));

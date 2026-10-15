@@ -583,7 +583,7 @@ mod tests {
     /// every manifest must now spell (pins live in rut.lock).
     const PLUGIN_SHAPE: &str = r#"{
   "format": "rutbundle",
-  "format_version": 10,
+  "format_version": 11,
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },

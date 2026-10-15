@@ -235,7 +235,7 @@ fn bundle_world(tag: &str) -> (PathBuf, Vec<u8>) {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "deps": {"u": {"path": "../u"}, "g": {"path": "../g"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "app", "deps": {"u": {"path": "../u"}, "g": {"path": "../g"}}}"#,
     );
     write(&app, "mod.rut", "use u::{leaf};\nentry fn go() -> i32 { return leaf(); }\n");
     let u = root.join("u");
@@ -277,7 +277,9 @@ fn bundle_group_with_the_row_stripped_is_d5() {
     let (_root, bytes) = bundle_world("bundle-d5");
     let mut loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
     for p in loaded.pkgs.iter_mut() {
-        if p.spec == "g" {
+        // groups mount under their content identity — match by the
+        // bare name half
+        if rut_driver::bundle::mount_name(&p.spec) == "g" {
             p.manifest.deps.remove("u");
         }
     }
@@ -307,7 +309,7 @@ fn the_pack_lane_refuses_through_the_same_resolver() {
     write(
         &root.join("app"),
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 10, "name": "app", "deps": {"a": {"path": "../a"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 11, "name": "app", "deps": {"a": {"path": "../a"}}}"#,
     );
     write(
         &root.join("a"),

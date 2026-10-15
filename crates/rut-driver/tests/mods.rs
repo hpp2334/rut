@@ -31,6 +31,9 @@ use rut_ast::ast::Vis;
 use rut_driver::mods::{collect_module_set, DeclKind, ModSource};
 use rut_driver::{Loaded, Pkg, PkgBody};
 
+mod common;
+use common::{dep_dir, pkg_named};
+
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-mods-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -53,7 +56,7 @@ fn world(tag: &str, bundle: bool) -> PathBuf {
     let root = scratch(tag);
     let pkg = root.join("pkg");
     let keys = if bundle {
-        r#""format": "rutbundle", "format_version": 10, "#
+        r#""format": "rutbundle", "format_version": 11, "#
     } else {
         ""
     };
@@ -441,8 +444,9 @@ fn a_mod_package_packs_rows_and_loads_the_same_tree() {
         .collect();
     assert!(names.contains(&"rut.mods".to_string()), "{names:?}");
     // loading the bundle mounts the tree exactly as the directory did
+    // (the group mounts under its content identity)
     let loaded = Pkg::from_bundle(&bytes).expect("load");
-    let bundled = loaded.pkg("pkg").expect("pkg mounted");
+    let bundled = pkg_named(&loaded, "pkg");
     let dir = load(&root.join("pkg"));
     let on_disk = dir.pkg("pkg").expect("pkg mounted");
     assert_eq!(bundled.mods, on_disk.mods, "the bundle mounts the same tree");
@@ -459,7 +463,7 @@ fn flat_packages_pack_without_a_rows_entry() {
     write(
         &pkg,
         "rut.jsonc",
-        r#"{"name": "pkg", "format": "rutbundle", "format_version": 10}"#,
+        r#"{"name": "pkg", "format": "rutbundle", "format_version": 11}"#,
     );
     write(&pkg, "mod.rut", "entry fn main() -> i32 { return 7; }\n");
     let bytes = rut_native::pack_dir(&pkg).expect("pack");
@@ -472,19 +476,20 @@ fn flat_packages_pack_without_a_rows_entry() {
 }
 
 #[test]
-fn the_published_std_v8_bundles_still_load_through_reader_compat() {
-    // the pin is law: every PUBLISHED std-v8 artifact (the OLD flat
+fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
+    // the wire law: every PUBLISHED std-v8 artifact (the OLD flat
     // envelope — manifests spelling the repealed keys, sources at the
-    // legacy names) keeps loading through the reader's compat lane.
-    // The published bytes are committed at `dist/std-v8/` so the gate
-    // never networks; `dist/std` (the working envelope) is the
-    // freshness gate's business and `dist/std-v10/` the pin envelope.
+    // legacy names) refuses at the ONE version gate with the re-pack
+    // recipe — no compat lane crosses a wire number. The published
+    // bytes are committed at `dist/std-v8/` so the gate never
+    // networks; `dist/std` (the working envelope) is the freshness
+    // gate's business and `dist/std-v10/` the pin envelope.
     //
-    // ONE carve-out, the strict-keys law: the compat lane relaxes the
-    // repealed ENTRY keys only. `json`'s manifest carries `[peer-deps]`
-    // — the key left the grammar with no retired lane (D3) — so that
-    // one artifact refuses loudly naming the key, at parse and at
-    // [`Pkg::from_bundle`] (pinned in
+    // The COMPAT LANE itself survives one level down: handed the
+    // artifact's manifest TEXT directly, `parse_manifest_compat` still
+    // reads the repealed entry keys (a repacked group manifest rides
+    // byte-for-byte from any era) — the strict-keys law still refuses
+    // `[peer-deps]` there (pinned in
     // `the_peer_deps_bundle_refuses_at_the_manifest_door` below).
     let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std-v8"));
     let mut names = Vec::new();
@@ -508,15 +513,9 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
         p.file_stem().unwrap().to_string_lossy() != "json"
     }) {
         let bytes = std::fs::read(path).expect("read the bundle");
-        let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
-        let entry_names: Vec<&str> = entries.iter().map(|(n, _)| n.as_str()).collect();
-        assert!(
-            !entry_names.iter().any(|n| n.ends_with("rut.mods")),
-            "{} is old-envelope — it carries no rows section",
-            path.display()
-        );
-        // the OLD manifest grammar rides: the archive's own rut.jsonc
-        // spells the repealed keys, and the compat parse answers them
+        // the OLD manifest grammar still parses one level down: the
+        // archive's own rut.jsonc spells the repealed keys, and the
+        // compat parse answers them
         let manifest_text = rut_driver::bundle::Bundle::parse(&bytes)
             .unwrap()
             .read("rut.jsonc")
@@ -532,22 +531,15 @@ fn the_published_std_v8_bundles_still_load_through_reader_compat() {
             "{}: the strict (directory) lane refuses the same text",
             path.display()
         );
-        let loaded = Pkg::from_bundle(&bytes)
-            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        // the WIRE gate refuses the artifact itself — the re-pack
+        // recipe, never a guessed load
+        let err = Pkg::from_bundle(&bytes).unwrap_err().to_string();
         assert!(
-            loaded.pkgs.iter().any(|p| p.spec == loaded.root),
-            "{}: the root mounted",
+            err.contains("reads bundle format_version 11 only"),
+            "{}: {err}",
             path.display()
         );
-        // a flat envelope mounts no mod tree
-        for pkg in &loaded.pkgs {
-            assert!(
-                pkg.mods.is_empty(),
-                "{}: {} carries no mods",
-                path.display(),
-                pkg.spec
-            );
-        }
+        assert!(err.contains("re-pack the directory"), "{}: {err}", path.display());
     }
 }
 
@@ -570,6 +562,8 @@ fn the_peer_deps_bundle_refuses_at_the_manifest_door() {
         .unwrap();
     let err = rut_driver::bundle::parse_manifest_compat(&manifest_text).unwrap_err();
     assert_eq!(err.to_string(), "manifest: unknown key 'peer-deps'", "{err}");
+    // at the bundle door the manifest parse precedes the version gate —
+    // the unknown key refuses first, exactly like any unknown key
     let err = Pkg::from_bundle(&bytes).unwrap_err().to_string();
     assert!(err.contains("manifest: unknown key 'peer-deps'"), "{err}");
 }
@@ -583,7 +577,7 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"name": "app", "format": "rutbundle", "format_version": 10, "deps": {"pkg": {"path": "../pkg"}}}"#,
+        r#"{"name": "app", "format": "rutbundle", "format_version": 11, "deps": {"pkg": {"path": "../pkg"}}}"#,
     );
     write(
         &app,
@@ -602,9 +596,12 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
         .into_iter()
         .map(|(n, _)| n)
         .collect();
-    assert!(names.contains(&"pkg/rut.mods".to_string()), "{names:?}");
+    assert!(
+        names.contains(&format!("{}/rut.mods", dep_dir(&names, "pkg"))),
+        "{names:?}"
+    );
     let loaded = Pkg::from_bundle(&bytes).expect("load");
-    let pkg = loaded.pkg("pkg").expect("pkg group mounted");
+    let pkg = pkg_named(&loaded, "pkg");
     let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
     assert_eq!(keys, vec!["layout", "layout/grid"]);
 }
@@ -628,7 +625,7 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
     let pouch_src =
         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch/mod.rut"))
             .unwrap();
-    let legacy = r#"{"format": "rutbundle", "format_version": 10, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
+    let legacy = r#"{"format": "rutbundle", "format_version": 11, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
     let entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()

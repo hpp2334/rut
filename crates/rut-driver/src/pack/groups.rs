@@ -146,15 +146,17 @@ pub fn collect_source_group(
         // writes beside this file set
     } else {
         // a flat pkg's root module — unless there is none (a host
-        // group: the surface IS the whole pkg), which rides the
-        // `entry.type` surface
+        // group: the surface IS the whole pkg), which rides its
+        // `entry.type` surface at the canonical `mod.d.rut` name
+        // (wire v11: the archive is name-free; the directory keeps
+        // whatever spelling its grammar allows)
         if let Ok(body) = read(dir_key, "mod.rut") {
             let key = bundle_key(&format!("{prefix}mod.rut"))?;
             out.push((key, body));
         } else if let Some(rel) = &manifest.entry.type_path {
             let rel = rel.strip_prefix("./").unwrap_or(rel);
-            let key = bundle_key(&format!("{prefix}{rel}"))?;
             let body = read(dir_key, rel)?;
+            let key = bundle_key(&format!("{prefix}mod.d.rut"))?;
             out.push((key, body));
         } else {
             return Err(format!(
