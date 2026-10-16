@@ -703,6 +703,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 ));
                 return Err(());
             };
+            // the member-visibility law: NAMING a field in a literal is
+            // the read+write in one — the spelling takes the dial
+            // (struct literals are exempt, the fields always-pub)
+            if let Some(msg) = self.ctx.field_vis_err(sty, *fname) {
+                self.ctx.err(self.ctx.ast.span(v.id()), msg);
+                return Err(());
+            }
             if set[fidx] {
                 self.ctx.err(self.ctx.ast.span(v.id()), format!(
                     "duplicate field `{}` in the `{}` literal",
@@ -769,6 +776,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Record literal for a USED struct: the layout is
     /// the copied type descriptor; field names compare by string (separate
     /// ASTs intern separately), and field defaults from other modules are not carried.
+    ///
+    /// The member-visibility law holds here STRUCTURALLY, no dial read:
+    /// a used CLASS never reaches this arm (the `extern_classes` check
+    /// below refuses the instance literal outright — construction is the
+    /// class's own statics, each phase-1 gated), and a used STRUCT's
+    /// fields are always public (the field law has no dial), so every
+    /// field the descriptor carries may be spelled.
     fn compile_struct_extern(
         &mut self,
         sty: TypeId,

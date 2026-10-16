@@ -259,6 +259,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(cur_ty), self.ctx.name(seg.name)));
                                 return Err(());
                             };
+                            // the visibility law rides each GetF hop too
+                            if let Some(msg) = self.ctx.field_vis_err(cur_ty, seg.name) {
+                                self.ctx.err(sp, msg);
+                                return Err(());
+                            }
                             let fty = fields[fidx].ty;
                             let dst = self.new_reg(fty);
                             self.emit(Op::GetF { dst, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
@@ -274,6 +279,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(cur_ty), self.ctx.name(last.name)));
                             return Err(());
                         };
+                        // the final SetF target takes the dial: the WRITE
+                        // is the visibility's test (the mut-binding law
+                        // above stays the mutability's)
+                        if let Some(msg) = self.ctx.field_vis_err(cur_ty, last.name) {
+                            self.ctx.err(sp, msg);
+                            return Err(());
+                        }
                         let fty = fields[fidx].ty;
                         match op {
                             None => {
@@ -416,6 +428,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
                     return Err(());
                 };
+                // the member-visibility law: the postfix write takes the
+                // dial like the path form (structs exempt by law)
+                if let Some(msg) = self.ctx.field_vis_err(rt, name) {
+                    self.ctx.err(sp, msg);
+                    return Err(());
+                }
                 let fty = fields[fidx].ty;
                 match op {
                     None => {

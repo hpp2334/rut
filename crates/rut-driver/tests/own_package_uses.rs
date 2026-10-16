@@ -68,8 +68,8 @@ entry fn main() -> i64 {
 }
 
 pub class TodoList {
-    count: i64;
-    last: Task;
+    pub count: i64;
+    pub last: Task;
 }
 
 impl TodoList {
@@ -375,7 +375,7 @@ entry fn main() -> i64 {
             "imp",
             Vis::Self_,
             r#"pub(pkg) class Counter {
-    n: i64;
+    pub(pkg) n: i64;
 }
 
 impl Counter {

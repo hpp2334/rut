@@ -635,6 +635,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         ));
                         return Err(());
                     };
+                    // the member-visibility law rides each hop: a plain
+                    // field is module-private (structs exempt by law)
+                    if let Some(msg) = self.ctx.field_vis_err(cur_ty, seg.name) {
+                        self.ctx.err(sp, msg);
+                        return Err(());
+                    }
                     let fty = fields[fidx].ty;
                     let dst = self.new_reg(fty);
                     self.emit(Op::GetF { dst, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);

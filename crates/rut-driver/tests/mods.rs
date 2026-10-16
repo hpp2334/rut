@@ -897,7 +897,7 @@ fn pub_pkg_stays_inside_its_package() {
 // the member-visibility law — METHODS (classes/enums take the `pub`
 // dial: `pub fn` exports cross-module, a plain `fn` is module-private —
 // the declaring module and its descendants). Fields and class literals
-// land with the field lanes (phase 2).
+// gate in the section below.
 // =====================================================================
 
 /// The Counter-on-`a` fixture: a `pub class` whose inherent impl carries
@@ -1303,6 +1303,337 @@ fn for_of_gates_the_iterable_member() {
         modpkg("pkg", root_loop, vec![("a", Vis::Self_, count("pub ").as_str())]),
     ];
     assert_eq!(run_main_pkgs(&pkgs, "pkg"), 3);
+}
+
+// =====================================================================
+// the member-visibility law — FIELDS + LITERALS (the field lanes): a
+// class field's read, its write, and a literal NAMING it take the same
+// `pub` dial the methods took above. Struct fields stay always-pub —
+// the law's DataKind::Struct exemption is pinned separately below.
+// =====================================================================
+
+/// The Box-on-`a` fixture: a `pub class` with one field spelled `vis`
+/// (`None` = plain), a `pub` getter, a `pub` maker, and the
+/// same-module `inside_*` cells for every lane (read, write, literal,
+/// and the `::`-spelled path read).
+fn box_mod(vis: &str) -> String {
+    format!(
+        "pub class Box {{ {vis}v: i32 }}\n\
+         impl Box {{ pub fn get(self) -> i32 {{ return self.v; }} }}\n\
+         pub fn mk(n: i32) -> Box {{ return Box {{ v: n }}; }}\n\
+         pub fn inside_read() -> i32 {{ let b = mk(41); return b.v; }}\n\
+         pub fn inside_write() -> i32 {{ let mut b = mk(41); b.v = 42; return b.v; }}\n\
+         pub fn inside_lit() -> i32 {{ let b = Box {{ v: 41 }}; return b.get(); }}\n\
+         pub fn inside_colon() -> i32 {{ let b = mk(41); return b::v; }}\n"
+    )
+}
+
+/// A site module's three cross-module lane fns against `pfx` (the
+/// class module's qualified head) plus the `go` that sums them. The
+/// fn names carry `tag` (fn names are package-global — two site
+/// modules in one world must not collide). The literal head is a bare
+/// ident, so that lane rides a `use` of the class; every fn body
+/// type-checks even unpublished, so one compile reports each lane's
+/// verdict and one run sums 41 + 42 + 41.
+fn box_site(pfx: &str, tag: &str) -> String {
+    format!(
+        "use {pfx}::{{ Box }};\n\
+         pub fn {tag}_read() -> i32 {{ let b = {pfx}::mk(41); return b.v; }}\n\
+         pub fn {tag}_write() -> i32 {{ let mut b = {pfx}::mk(41); b.v = 42; return b.get(); }}\n\
+         pub fn {tag}_lit() -> i32 {{ let b = Box {{ v: 41 }}; return b.get(); }}\n\
+         pub fn {tag}_go() -> i32 {{ return {tag}_read() + {tag}_write() + {tag}_lit(); }}\n"
+    )
+}
+
+#[test]
+fn member_visibility_fields_matrix() {
+    let dep = modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]);
+
+    // the declaring module's own cells, every dial: the law is the
+    // dial, never the class — same-module reads, writes, literals,
+    // and the `::` path form all run (41 + 42 + 41 + 41)
+    for dial in ["", "pub ", "pub(pkg) ", "pub(super) "] {
+        let pkgs = vec![
+            dep.clone(),
+            modpkg(
+                "pkg",
+                "mod a;\nentry fn main() -> i32 { return a::inside_read() + a::inside_write() + a::inside_lit() + a::inside_colon(); }\n",
+                vec![("a", Vis::Self_, box_mod(dial).as_str())],
+            ),
+        ];
+        assert_eq!(run_main_pkgs(&pkgs, "pkg"), 165, "same-module `{dial}v`");
+    }
+
+    // plain field from the ROOT: all three lanes refuse with the
+    // phase-1 wording family — the owner prefixed, the free-fn hint
+    // after the dash
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "use a::{ Box };\nmod a;\n\
+             fn r() -> i32 { let b = a::mk(41); return b.v; }\n\
+             fn w() -> i32 { let mut b = a::mk(41); b.v = 42; return b.get(); }\n\
+             fn l() -> i32 { let b = Box { v: 41 }; return b.get(); }\n\
+             entry fn main() -> i32 { return r() + w() + l(); }\n",
+            vec![("a", Vis::Self_, box_mod("").as_str())],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert_eq!(
+        diags.iter().filter(|d| d.contains("`Box.v` — `v` is private to module `a`")).count(),
+        3,
+        "read, write, and literal each diagnose: {diags:?}"
+    );
+    assert!(
+        diags.iter().any(|d| d.contains("declare it `pub` (or `pub(pkg)`) to widen")),
+        "{diags:?}"
+    );
+
+    // plain field from a DESCENDANT (site in `a/sub`, class in `a`):
+    // the declaring module's subtree sees it — all three lanes run
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::sub::sub_go(); }\n",
+            vec![
+                ("a", Vis::Self_, format!("pub mod sub;\n{}", box_mod("")).as_str()),
+                ("a/sub", Vis::Pub, box_site("a", "sub").as_str()),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 124);
+
+    // plain field from a SIBLING subtree (class in `a/c`, site in
+    // `a/d`): refused — `a/d` is no descendant of `a/c`
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::d::d_go(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\npub mod d;\n"),
+                ("a/c", Vis::Pub, box_mod("").as_str()),
+                ("a/d", Vis::Pub, box_site("a::c", "d").as_str()),
+            ],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert_eq!(
+        diags.iter().filter(|d| d.contains("`Box.v` — `v` is private to module `a/c`")).count(),
+        3,
+        "{diags:?}"
+    );
+
+    // `pub` and `pub(pkg)`: cross to the root, a sibling subtree, and
+    // another top-level module alike
+    for dial in ["pub ", "pub(pkg) "] {
+        let pkgs = vec![
+            dep.clone(),
+            modpkg(
+                "pkg",
+                "mod a;\nmod b;\nentry fn main() -> i32 { return a::b::ab_go() + b::b_go(); }\n",
+                vec![
+                    ("a", Vis::Self_, format!("pub mod b;\n{}", box_mod(dial)).as_str()),
+                    ("a/b", Vis::Pub, box_site("a", "ab").as_str()),
+                    ("b", Vis::Pub, box_site("a", "b").as_str()),
+                ],
+            ),
+        ];
+        assert_eq!(run_main_pkgs(&pkgs, "pkg"), 124 + 124, "`{dial}v` crosses");
+    }
+
+    // `pub(super)` (class in `a/c`): the parent module's subtree —
+    // `a` and `a/d` reach the field, the root does not
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::a_go() + a::d::d_go(); }\n",
+            vec![
+                ("a", Vis::Self_, format!("pub mod c;\npub mod d;\n{}", box_site("a::c", "a")).as_str()),
+                ("a/c", Vis::Pub, box_mod("pub(super) ").as_str()),
+                ("a/d", Vis::Pub, box_site("a::c", "d").as_str()),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 124 + 124);
+
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "use a::c::{ Box };\nmod a;\n\
+             fn r() -> i32 { let b = a::c::mk(41); return b.v; }\n\
+             fn w() -> i32 { let mut b = a::c::mk(41); b.v = 42; return b.v; }\n\
+             fn l() -> i32 { let b = Box { v: 41 }; return b.get(); }\n\
+             entry fn main() -> i32 { return r() + w() + l(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\n"),
+                ("a/c", Vis::Pub, box_mod("pub(super) ").as_str()),
+            ],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| {
+            d.contains("`Box.v` — `v` is `pub(super)` — visible only in `a`'s subtree")
+        }),
+        "{diags:?}"
+    );
+
+    // the `::`-spelled path form rides the same dial (the path-chain
+    // lanes: a `b::v` read, a `b::v = ..` write)
+    let pkgs = vec![
+        dep,
+        modpkg(
+            "pkg",
+            "mod a;\n\
+             fn r() -> i32 { let b = a::mk(41); return b::v; }\n\
+             fn w() -> i32 { let mut b = a::mk(41); b::v = 42; return b.get(); }\n\
+             entry fn main() -> i32 { return r() + w(); }\n",
+            vec![("a", Vis::Self_, box_mod("").as_str())],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert_eq!(
+        diags.iter().filter(|d| d.contains("`Box.v` — `v` is private to module `a`")).count(),
+        2,
+        "the path-form read and write each diagnose: {diags:?}"
+    );
+}
+
+#[test]
+fn struct_fields_stay_public_cross_module() {
+    // the always-pub law pinned: `DataKind::Struct` has no dial — a
+    // struct field reads, writes, and literal-spells from another
+    // module exactly as before this phase
+    let point = "pub struct Point { x: i32; y: i32 }\n\
+                 pub fn mk(x: i32) -> Point { return Point { x: x, y: 0 }; }\n";
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg(
+            "pkg",
+            "use a::{ Point };\nmod a;\nentry fn main() -> i32 {\n\
+             \x20   let mut p = a::mk(40);\n\
+             \x20   p.y = 2;\n\
+             \x20   let q = Point { x: 40, y: 2 };\n\
+             \x20   return p.x + p.y + q.x + q.y;\n\
+             }\n",
+            vec![("a", Vis::Self_, point)],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 84);
+}
+
+/// The repro's `imp` module with its members' dials spelled: `pubf`
+/// fronts the two methods, `pubfld` the two fields.
+fn todolist_mod(pubf: &str, pubfld: &str) -> String {
+    format!(
+        "pub class TodoList {{ {pubfld}_id: i32; {pubfld}tasks: str }}\n\
+         impl TodoList {{\n\
+         \x20   {pubf}fn toggle_task(mut self, id: i32) {{ self._id += id; }}\n\
+         \x20   {pubf}fn append_task(mut self, t: str) {{ self.tasks = t; }}\n\
+         }}\n\
+         pub fn mk() -> TodoList {{ return TodoList {{ _id: 0, tasks: \"\" }}; }}\n"
+    )
+}
+
+#[test]
+fn the_todolist_shape_private_fields_are_errors() {
+    // the repro's FIELD/LITERAL half, methods already `pub`: the
+    // root's `list.tasks` read and the literals' `_id`/`tasks`
+    // spellings refuse with the member diagnostic (each probe fn
+    // binds its own list — a failed literal poisons its name)
+    let imp = todolist_mod("pub ", "");
+    let main_src = "use imp::{ TodoList };\nmod imp;\n\
+                    fn peek() -> i32 { let l = imp::mk(); return l.tasks.len(); }\n\
+                    fn lit_b() -> i32 { let l = TodoList { tasks: \"\", _id: 0 }; return l.tasks.len(); }\n\
+                    entry fn main() -> i32 {\n\
+                    \x20   let list = TodoList { _id: 5, tasks: \"\" };\n\
+                    \x20   return peek() + lit_b() + list.tasks.len();\n\
+                    }\n";
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg("pkg", main_src, vec![("imp", Vis::Self_, imp.as_str())]),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`TodoList.tasks` — `tasks` is private to module `imp`")),
+        "{diags:?}"
+    );
+    assert!(
+        diags.iter().any(|d| d.contains("`TodoList._id` — `_id` is private to module `imp`")),
+        "{diags:?}"
+    );
+
+    // spelling `pub` on the fields turns the same program green and
+    // correct: the root reads and writes the fields, appends through
+    // the (already pub) method ("Shutdown" = 8 codepoints, _id 5 + 3)
+    let pub_imp = todolist_mod("pub ", "pub ");
+    let main_src = "use imp::{ TodoList };\nmod imp;\n\
+                    fn peek(list: TodoList) -> i32 { return list.tasks.len(); }\n\
+                    entry fn main() -> i32 {\n\
+                    \x20   let mut list = TodoList { _id: 5, tasks: \"\" };\n\
+                    \x20   list.append_task(\"Shutdown\");\n\
+                    \x20   list.toggle_task(3);\n\
+                    \x20   return peek(list) + list._id;\n\
+                    }\n";
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg("pkg", main_src, vec![("imp", Vis::Self_, pub_imp.as_str())]),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 16);
+}
+
+#[test]
+fn the_todolist_shape_private_members_full_two_file_shape() {
+    // the repro's FULL two-file shape — the phase-1 methods PLUS this
+    // phase's fields and literal: the root's toggle_task/append_task
+    // calls, its `list.tasks` read, and the literal's `_id`/`tasks`
+    // spellings ALL refuse in one compile (each site is its own fn —
+    // the sibling-recovery walk reports every lane)
+    let imp = todolist_mod("", "");
+    let main_src = "use imp::{ TodoList };\nmod imp;\n\
+                    fn peek() -> i32 { let l = imp::mk(); return l.tasks.len(); }\n\
+                    fn lit_b() -> i32 { let l = TodoList { tasks: \"\", _id: 0 }; return 0; }\n\
+                    entry fn main() -> i32 {\n\
+                    \x20   let list = TodoList { _id: 5, tasks: \"\" };\n\
+                    \x20   let other = imp::mk();\n\
+                    \x20   other.toggle_task(1);\n\
+                    \x20   other.append_task(\"Shutdown\");\n\
+                    \x20   return peek() + lit_b();\n\
+                    }\n";
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg("pkg", main_src, vec![("imp", Vis::Self_, imp.as_str())]),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    for want in [
+        "`TodoList.toggle_task` — `toggle_task` is private to module `imp`",
+        "`TodoList.append_task` — `append_task` is private to module `imp`",
+        "`TodoList.tasks` — `tasks` is private to module `imp`",
+        "`TodoList._id` — `_id` is private to module `imp`",
+    ] {
+        assert!(diags.iter().any(|d| d.contains(want)), "missing `{want}`: {diags:?}");
+    }
+
+    // spelling `pub` on all four members turns the program green with
+    // the correct output ("Shutdown" = 8 codepoints, _id 5 + 3)
+    let pub_imp = todolist_mod("pub ", "pub ");
+    let main_src = "use imp::{ TodoList };\nmod imp;\n\
+                    entry fn main() -> i32 {\n\
+                    \x20   let mut list = TodoList { _id: 5, tasks: \"\" };\n\
+                    \x20   list.append_task(\"Shutdown\");\n\
+                    \x20   list.toggle_task(3);\n\
+                    \x20   return list.tasks.len() + list._id;\n\
+                    }\n";
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg("pkg", main_src, vec![("imp", Vis::Self_, pub_imp.as_str())]),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 16);
 }
 
 #[test]

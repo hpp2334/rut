@@ -31,6 +31,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
         if let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() {
             if let Some(fidx) = fields.iter().position(|f| f.name == name) {
+                // the member-visibility law: a plain field is
+                // module-private — the read site's module must see the
+                // declaring module through the dial (structs are
+                // always-pub, the helper exempts them)
+                if let Some(msg) = self.ctx.field_vis_err(rt, name) {
+                    self.ctx.err(sp, msg);
+                    return Err(());
+                }
                 let fty = fields[fidx].ty;
                 let dst = self.new_reg(fty);
                 self.emit(Op::GetF { dst, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);

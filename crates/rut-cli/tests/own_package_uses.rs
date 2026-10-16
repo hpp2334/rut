@@ -67,8 +67,8 @@ entry fn main() {
 }
 
 pub class TodoList {
-    count: i64;
-    last: Task;
+    pub count: i64;
+    pub last: Task;
 }
 
 impl TodoList {

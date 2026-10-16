@@ -1164,6 +1164,44 @@ impl<'a> Ctx<'a> {
         ))
     }
 
+    /// The member-visibility law, the FIELD lanes (a `.field` read, a
+    /// field write, a literal naming the field): may the CURRENT module
+    /// see `ty`'s field `name`? Structs are exempt BY LAW (fields are
+    /// always public — the field law has no dial for `DataKind::Struct`);
+    /// classes only. A record this unit holds no decl for — a used
+    /// foreign class, a carried mirror instantiation — has no dial to
+    /// read and passes: the used-class surface carries no per-field
+    /// dial at all (its literals refuse outright in
+    /// `compile_struct_extern`); carrying the dial across the wire is
+    /// the binary format's law, not this gate's. `None` = visible;
+    /// `Some` spells the crossing fix — the phase-1 wording family,
+    /// the owner (the class) prefixed.
+    pub(crate) fn field_vis_err(&self, ty: TypeId, name: IdentId) -> Option<String> {
+        let dname = self
+            .inst_data
+            .get(&ty)
+            .map(|(d, _)| *d)
+            .or_else(|| self.datas.iter().find(|(_, d)| d.ty == ty).map(|(n, _)| *n))?;
+        let d = self.find_data(dname)?;
+        if d.kind == DataKind::Struct {
+            return None;
+        }
+        // the field's dial: the decl's own member list — the generic
+        // template keeps no resolved field table (its instantiations
+        // re-read the decl), so the AST is the one source of the vis
+        let members = match self.ast.item(d.node) {
+            ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+            _ => Vec::new(),
+        };
+        let fvis = members
+            .iter()
+            .find_map(|&f| {
+                let fd = self.ast.field_decl(f);
+                (fd.name == name).then_some(fd.vis)
+            })
+            .flatten();
+        self.member_vis_err(dname, d.node.id(), name, fvis)
+    }
 
     /// Use another module's type descriptors so `(scope, local)` ids
     /// resolve for typechecking and layout. Descriptor and
