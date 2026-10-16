@@ -1041,11 +1041,21 @@ impl<'a> GraphCompiler<'a> {
         let pidx = unit.idx;
         let req = &self.programs[pidx];
         let own = &self.programs[idx];
+        // non-boot rows canon by their name text; an id that densifies
+        // OUT of its table (the pack's template-pass ledger rows carry
+        // subst ids spelling the template window's rows, which the
+        // carried blocks of a consumer's mount do not include) can
+        // never match an in-bounds request canon — it canons to a
+        // unique per-id sentinel and the row misses
         let canon_of = |prog: &Program, t: rut_core::types::TypeId| -> String {
             if rut_core::scope_of(t) == rut_core::BOOT_SCOPE {
                 format!("b{}", rut_core::local_of(t))
             } else {
-                prog.interner.name(prog.types.type_at(t).name).to_string()
+                let d = prog.types.dense(t) as usize;
+                match prog.types.types.get(d) {
+                    Some(row) => prog.interner.name(row.name).to_string(),
+                    None => format!("#oob({t})"),
+                }
             }
         };
         let args = r.args.iter().map(|&a| canon_of(req, a)).collect::<Vec<_>>().join(",");
@@ -1343,56 +1353,6 @@ fn file_display(module: &crate::session::Pkg, path: &str) -> String {
     }
 }
 
-/// The own-package use bindings one parsed unit's statements carry,
-/// derived silently — the reseed replay's twin of the validation's
-/// own lane (the text is byte-identical, the validation already ran).
-/// Each statement's head resolves through the session's own-package
-/// answer (a dep-lane head joins nothing); the interior segments walk
-/// the layout's mod tree; every leaf binds `(importing file, name)` →
-/// target module.
-pub(crate) fn own_use_bindings(
-    session: &Session,
-    spec: &str,
-    root: &str,
-    layout: &rut_lir::check::ModInputs,
-    ast: &Ast,
-) -> Vec<(String, String, String)> {
-    let mut out: Vec<(String, String, String)> = Vec::new();
-    for it in ast.module_items(ast.root).to_vec() {
-        let ItemKind::Use { path, names } = ast.item(it) else {
-            continue;
-        };
-        let head = ast.name(path[0]).to_string();
-        let from = layout.file_of(ast.span(it.id()).lo).to_string();
-        if session.resolve_use(spec, &head, root).is_ok() {
-            continue; // the dep lane — not ours
-        }
-        let Some(mut at) = session.own_use_head(spec, &head, &from) else {
-            continue;
-        };
-        let mut walked = true;
-        for &seg in &path[1..] {
-            match layout
-                .scopes
-                .get(&at)
-                .and_then(|s| s.children.get(ast.name(seg)))
-            {
-                Some((child, _vis)) => at = child.clone(),
-                None => {
-                    walked = false;
-                    break;
-                }
-            }
-        }
-        if !walked {
-            continue;
-        }
-        for &n in names {
-            out.push((from.clone(), ast.name(n).to_string(), at.clone()));
-        }
-    }
-    out
-}
 
 /// The file-module inputs a compilation resolves against (phase 3):
 /// the concatenated text's file ranges plus the scope tree built from
@@ -2018,6 +1978,14 @@ fn materialize_body(
     let new_fid = own.funcs.len() as u32;
     memo.insert(key.clone(), new_fid);
     own.funcs.push(source.clone());
+    // the template row's `data` text, read before the substitution
+    // borrows the table — the receiver test's expected spelling
+    let receiver_data_text = ledger_row.as_ref().and_then(|r| match &r.kind {
+        rut_core::binary::InstFnKind::Method { data, .. } => {
+            Some(own.interner.name(*data).to_string())
+        }
+        _ => None,
+    });
     let (mut body, minted) = {
         let ledger_rows = own.inst_fns.clone();
         let mut sub = crate::compile::material::Substitution::new(
@@ -2027,7 +1995,69 @@ fn materialize_body(
             owner.to_string(),
         )
         .with_ledger_owners(&ledger_rows);
-        let body = crate::compile::material::materialize_fn(&mut sub, &source, &mut |f| f);
+        // the method template's RECEIVER: the body spells the class's
+        // OWN bare row (`HashMap` — the record shape), whose tie to the
+        // type parameters rides the template row (`data` +
+        // `param_rows`), not any argument spell of its own — no name
+        // rebuild can derive it. Pin bare row → instantiation row
+        // (`HashMap<i64, str>` — the exact row a fresh compile mints
+        // for the consumer's shape), so the served body, its
+        // MakeRecord/field ops and the boundary checks all speak the
+        // consumer's spelling. The receiver test is textual: the first
+        // parameter names the template row's `data` (a static method
+        // like `with_capacity(n: i32)` has no receiver — its first
+        // parameter names something else).
+        if let Some(&self_row) = source.params.first() {
+            let base_text = sub.name_of(self_row).to_string();
+            let is_receiver = receiver_data_text.as_deref() == Some(base_text.as_str());
+            if is_receiver && !base_text.contains('<') {
+                let kind = sub.tt.kind(self_row).clone();
+                let row = sub.mint_instantiation(&base_text, &values, kind);
+                sub.force(self_row, row);
+            }
+        }
+        let mut body = crate::compile::material::materialize_fn(&mut sub, &source, &mut |f| f);
+        // the CONST half of the template-stability law: an op may pin a
+        // TYPE ID as a literal (`opaque::downcast<V>`'s want — the
+        // emitter bakes `Const(TypeId(#V))`). Every type OPERAND
+        // already re-spelled through the substitution; the baked
+        // literals take the same walk, each landing on a (possibly
+        // fresh) pool entry carrying the SUBSTITUTED id — a stale
+        // placeholder id makes every runtime downcast of the
+        // substituted type answer nil.
+        {
+            let mut seen: HashMap<u32, u32> = HashMap::new();
+            for op in body.code.iter_mut() {
+                let rut_core::ops::Op::Const { k, .. } = op else { continue };
+                if let Some(&to) = seen.get(k) {
+                    *k = to;
+                    continue;
+                }
+                let new_k = match own.consts.get(*k as usize) {
+                    Some(rut_core::binary::ConstVal::TypeId(t)) => {
+                        let nt = sub.run(*t);
+                        if nt == *t {
+                            *k
+                        } else {
+                            match own
+                                .consts
+                                .iter()
+                                .position(|c| matches!(c, rut_core::binary::ConstVal::TypeId(x) if *x == nt))
+                            {
+                                Some(p) => p as u32,
+                                None => {
+                                    own.consts.push(rut_core::binary::ConstVal::TypeId(nt));
+                                    (own.consts.len() - 1) as u32
+                                }
+                            }
+                        }
+                    }
+                    _ => *k,
+                };
+                seen.insert(*k, new_k);
+                *k = new_k;
+            }
+        }
         let minted = std::mem::take(&mut sub.minted_inst_tys);
         (body, minted)
     };

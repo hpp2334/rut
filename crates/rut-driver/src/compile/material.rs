@@ -84,7 +84,7 @@ impl<'a> Substitution<'a> {
         self
     }
 
-    fn name_of(&self, t: TypeId) -> &str {
+    pub(crate) fn name_of(&self, t: TypeId) -> &str {
         self.interner.name(self.tt.type_at(t).name)
     }
 
@@ -199,8 +199,65 @@ impl<'a> Substitution<'a> {
                     .iter()
                     .map(|f| FieldInfo { name: f.name, ty: self.run(f.ty) })
                     .collect();
-                if nf.iter().zip(fields.iter()).all(|(n, o)| n.ty == o.ty) {
-                    return None;
+                let fields_changed = nf.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
+                if !fields_changed {
+                    // the parameter may still ride the NAME's argument
+                    // spell: `HashMap<#K, #V>` stores `opaque` handles —
+                    // the fields never mention K/V, the substitution
+                    // lives entirely in the name. Rebuild the name
+                    // through the substitution; a row whose every arg
+                    // holds passes as itself. (The tuple and
+                    // compiler-minted spells carry no separate argument
+                    // list — their fields are the whole story — so they
+                    // stay as themselves here.)
+                    let text = self.name_of(t).to_string();
+                    let Some((base, args)) = Self::split_args(&text) else {
+                        return None;
+                    };
+                    let mut parts = Vec::new();
+                    let mut cargs = Vec::new();
+                    let mut name_changed = false;
+                    for piece in &args {
+                        let Some(row) = self.resolve_text(piece) else {
+                            return None; // an arg that is not a row: not ours to substitute
+                        };
+                        let concrete = self.run(row);
+                        let spelled = self.name_of(concrete).to_string();
+                        if spelled != *piece {
+                            name_changed = true;
+                        }
+                        parts.push(spelled);
+                        cargs.push(concrete);
+                    }
+                    if !name_changed {
+                        return None;
+                    }
+                    let new_text = format!("{base}<{}>", parts.join(", "));
+                    let name = self.interner.intern(&new_text);
+                    let row =
+                        self.intern_structural(RutType { name, kind: TyKind::Data { fields: nf } });
+                    // the owner-anchored identity row: link unifies every
+                    // mirror of this instantiation onto ONE program-wide
+                    // row — the anchor is the DECL's home pkg, the exact
+                    // key a fresh compile claims (see the field-driven
+                    // path below). The args are the SUBSTITUTED rows —
+                    // the placeholder spellings would claim the
+                    // template-era key and the merge would fold this
+                    // mint onto the template row.
+                    if let Some(base_id) = self.interner.lookup(&base) {
+                        let owner_text = self
+                            .foreign_owners
+                            .get(&base)
+                            .cloned()
+                            .unwrap_or_else(|| self.owner.clone());
+                        self.minted_inst_tys.push(InstTy {
+                            owner: self.interner.intern(&owner_text),
+                            decl: base_id,
+                            args: cargs,
+                            ty: row,
+                        });
+                    }
+                    return Some(row);
                 }
                 // the row's identity: rebuild the NAME's argument list
                 // through the substitution (the nominal instantiation law
@@ -282,6 +339,46 @@ impl<'a> Substitution<'a> {
         let out = self.rebuild(t).unwrap_or(t);
         self.map.insert(t, out);
         out
+    }
+
+    /// Pin `t` to `row` explicitly — the self-row mapping's engine.
+    /// The template body's receiver spells the class's OWN bare row
+    /// (`HashMap` — the record shape), whose tie to the type
+    /// parameters rides the template row (`data` + `param_rows`), not
+    /// any argument spell of its own; no name-arg rebuild can derive
+    /// it, so the caller pins bare row → instantiation row.
+    pub(crate) fn force(&mut self, t: TypeId, row: TypeId) {
+        self.map.insert(t, row);
+    }
+
+    /// The nominal instantiation row for `base_text<args>`: intern the
+    /// spell (name-first dedup — the exact text a fresh compile mints)
+    /// and record the owner-anchored identity row so link unifies
+    /// every mirror of this instantiation onto one program-wide row.
+    pub(crate) fn mint_instantiation(
+        &mut self,
+        base_text: &str,
+        args: &[TypeId],
+        kind: TyKind,
+    ) -> TypeId {
+        let spell: Vec<String> = args.iter().map(|&a| self.name_of(a).to_string()).collect();
+        let new_text = format!("{base_text}<{}>", spell.join(", "));
+        let name = self.interner.intern(&new_text);
+        let row = self.intern_structural(RutType { name, kind });
+        if let Some(base_id) = self.interner.lookup(base_text) {
+            let owner_text = self
+                .foreign_owners
+                .get(base_text)
+                .cloned()
+                .unwrap_or_else(|| self.owner.clone());
+            self.minted_inst_tys.push(InstTy {
+                owner: self.interner.intern(&owner_text),
+                decl: base_id,
+                args: args.to_vec(),
+                ty: row,
+            });
+        }
+        row
     }
 }
 

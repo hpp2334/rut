@@ -159,18 +159,21 @@ fn template_served_shapes_run_the_same_answer() {
 }
 
 /// A nmapset consumer-spelled shape (`HashSet<str>`, `HashMap<i64, str>`):
-/// the named acceptance pkg, both lanes, same answer + same closures.
-///
-/// THE PINNED RESIDUAL (P8): the bundle lane of THIS pkg still trips a
-/// type-metadata mapping — the owner's materialization mints rows
-/// attributed through its own-block base with stale dense locals, and
-/// the consumer's link densifies one of them (`(2, 87)`) against the
-/// decoded owner's 33-row carried table (`type_at` OOB, types.rs:635).
-/// The directory lane runs the shape fine; pouch/json/flow parity
-/// (above) is fully green at op-count equality. P8 heals this by
-/// pinning the mint attribution to the own block's post-staging base
-/// (the mints must re-spell (own, dense - staged_extent) once the
-/// staged rows land above the own block).
+/// the named acceptance pkg, both lanes, same closures + the same
+/// runtime answer. Two laws make the template-served lane honest here:
+/// (a) the template body's RECEIVER spells the class's own bare row
+/// (`HashMap` — the record shape), whose tie to the type parameters
+/// rides the template row (`data` + `param_rows`), not an argument
+/// spell of its own — the owner pins it to the instantiation row
+/// (`HashMap<i64, str>`, the exact text a fresh compile mints); and
+/// (b) the owner's minted identity rows claim under the SUBSTITUTED
+/// args — a mint claiming under the placeholder spellings (`#K, #V`)
+/// would fold onto the template-era ledger row at link and the served
+/// bodies would speak the placeholder shape. The runtime fence covers
+/// the value-typed native dispatch: `HashMap<i64, str>::get` must pick
+/// the str-value variant through the template-served body (the answer
+/// 3*10 + 2 + 1 = 33 — a wrong variant returns nil and the checksum
+/// drops to 32).
 const NMAP_APP: &str = r#"
 use nmapset::{ HashSet, HashMap };
 
@@ -191,10 +194,13 @@ entry fn main() -> i32 {
 "#;
 
 #[test]
-#[ignore = "P8 boundary: nmapset bundle-served shapes OOB in the owner's carried table            (the mint attribution stale-base residual — see the doc comment above)"]
 fn nmapset_bundle_served_shapes_match_the_directory_lane() {
-    let dir = compile_app(pkg_world_from_dirs(&["nmapset"]), &["nmapset"], NMAP_APP);
-    let bundle = compile_app(pkg_world_from_bundles(&["nmapset"]), &["nmapset"], NMAP_APP);
+    let dir_world = pkg_world_from_dirs(&["nmapset"]);
+    let dir_ctx = rut_driver::host_pkg_ctx(&dir_world);
+    let bundle_world = pkg_world_from_bundles(&["nmapset"]);
+    let bundle_ctx = rut_driver::host_pkg_ctx(&bundle_world);
+    let dir = compile_app(dir_world, &["nmapset"], NMAP_APP);
+    let bundle = compile_app(bundle_world, &["nmapset"], NMAP_APP);
     let dprog = dir.program.clone().expect("dir program");
     let bprog = bundle.program.clone().expect("bundle program");
     let dflat = rut_core::link::flatten(dprog.clone());
@@ -212,20 +218,23 @@ fn nmapset_bundle_served_shapes_match_the_directory_lane() {
         "the two lanes' closures disagree:\n  dir-only: {only_dir:?}\n  bundle-only: {only_bundle:?}"
     );
     // the runtime fence: the same answer through the template-served
-    // bodies
-    for (flat, tag) in [(dflat, "dir"), (bflat, "bundle")] {
+    // bodies, host-bound (the nmap_host fns serve the map/set natives)
+    for (flat, tag, ctx) in [(&dflat, "dir", &dir_ctx), (&bflat, "bundle", &bundle_ctx)] {
+        let mut hosts = rut_vm::interp::HostRegistry::new();
+        hosts.install_host_pkg(ctx, rut_std::nmap::pkg());
         let mut vm = rut_vm::interp::Vm::builder()
-            .program(std::rc::Rc::new(flat))
+            .program(std::rc::Rc::new(flat.clone()))
             .limits(rut_vm::interp::Limits {
                 fuel: Some(50_000_000),
                 heap_limit_bytes: Some(64 * 1024 * 1024),
                 interrupt_every: 1024,
             })
             .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(hosts)
             .build()
-            .unwrap_or_else(|e| panic!("{tag}: vm"));
+            .unwrap_or_else(|e| panic!("{tag}: vm: {e:?}"));
         let out: i32 = vm.call("main", ()).unwrap_or_else(|e| panic!("{tag}: {e:?}"));
-        assert_eq!(out, 42, "{tag}");
+        assert_eq!(out, 33, "{tag}: the value-typed native dispatch through the served bodies");
     }
 }
 
@@ -336,28 +345,55 @@ fn strip_with_a_generic_surface_is_legal_and_still_serves_shapes() {
     rut_vm::verify::verify(&flat).expect("verify");
 }
 
-/// THE P8 BOUNDARY, pinned so it cannot rot silently: a NON-boot-arg
-/// consumer shape (`JsonArr<JsonI64>` — the args are pkg rows, not boot
-/// prims) served from the json bundle's templates still trips a
-/// type-metadata mapping at link (the flattened table's tail reads one
-/// row past its end). The directory lane runs the same shape fine, and
-/// boot-arg shapes (the parity tests above) are green in both lanes.
-/// P8 heals this by giving the seed staging a per-owner scope block
-/// with a registered merged base (the `final_type_base` sweep in
-/// `rut-core/src/link.rs` already carries the mechanism).
+/// A NON-boot-arg consumer shape (`JsonArr<JsonI64>` — the args are
+/// pkg rows, not boot prims) served from the json bundle's templates:
+/// compile, verify, and RUN. The runtime fence pins the decode path's
+/// SOpt law end-to-end through the template-served bodies: `null`
+/// decodes to a PRESENT `SOpt` whose inner is nil (the null→absent
+/// row), `5` to a present inner — and the array decode answers the
+/// document's length. (The bundle lane here is compile+verify+run;
+/// the op-count equality harnesses are the parity tests above, which
+/// cover boot-arg shapes — this test's shape spends its fence on the
+/// runtime answer.)
 #[test]
 fn json_bundle_served_non_boot_arg_shapes() {
     let app = r#"
-use json::{ JsonArr, JsonI64, decodeJson };
+use json::{ JsonArr, JsonI64, SOpt, decodeJson };
 
 entry fn main() -> str {
     let (v, e) = decodeJson<JsonArr<JsonI64>>("[7,8,9]");
-    if (e != nil) { return "err"; }
+    if (e != nil) { return "err-arr"; }
     let a: [JsonI64] = v.to_arr();
-    return f"n={a.len()}";
+    let (o, e2) = decodeJson<SOpt<JsonI64>>("null");
+    if (e2 != nil) { return "err-opt"; }
+    if (o == nil) { return "opt-gone"; }
+    let inner: ?JsonI64 = o.get();
+    if (inner != nil) { return "bad-null"; }
+    let (p, e3) = decodeJson<SOpt<JsonI64>>("5");
+    if (e3 != nil) { return "err-five"; }
+    let five = if (p != nil && p.get() != nil) { 1 } else { 0 };
+    return f"n={a.len()}:{five}";
 }
 "#;
-    let graph = compile_app(pkg_world_from_bundles(&["json"]), &["json"], app);
+    let world = pkg_world_from_bundles(&["json"]);
+    let ctx = rut_driver::host_pkg_ctx(&world);
+    let graph = compile_app(world, &["json"], app);
     let flat = rut_core::link::flatten(graph.program.expect("linked"));
     rut_vm::verify::verify(&flat).expect("verify");
+    let mut hosts = rut_vm::interp::HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
+    hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(rut_vm::interp::Limits {
+            fuel: Some(400_000_000),
+            heap_limit_bytes: Some(256 * 1024 * 1024),
+            interrupt_every: 1024,
+        })
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
+    let out: String = vm.call("main", ()).unwrap_or_else(|e| panic!("run: {e:?}"));
+    assert_eq!(out, "n=3:1", "the template-served decode answers the document");
 }

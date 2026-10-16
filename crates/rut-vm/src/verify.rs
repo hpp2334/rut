@@ -4,7 +4,7 @@
 //! operands present. A failure is a load error naming the function.
 
 use rut_core::binary::{FuncCode, Program};
-use rut_core::ops::{reg_opt, Op};
+use rut_core::ops::Op;
 use rut_core::types::{Repr, TY_U8, TyKind};
 
 pub fn verify(prog: &Program) -> Result<(), String> {
