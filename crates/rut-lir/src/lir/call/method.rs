@@ -453,6 +453,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .map(|(mnode, cargs)| (dname, cargs, mnode))
             });
             if let Some((dname, class_args, mnode)) = found {
+                // the member-visibility law: a plain method is
+                // module-private — the call site's module must see the
+                // declaring module through the dial
+                let mvis = self.ctx.ast.method_decl(mnode).vis;
+                if let Some(msg) = self.ctx.member_vis_err(dname, mnode.id(), name, mvis) {
+                    self.ctx.err(sp, msg);
+                    return Err(());
+                }
                 return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, generics, args, expected, sp);
             }
             // a used class (the linkable-classes phase): the surface's
@@ -542,6 +550,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let TyKind::Enum { .. } = self.ctx.types.kind(rt).clone() {
             if let Some((ename, e)) = self.ctx.enums.iter().find(|(_, e)| e.ty == rt).cloned() {
                 if let Some((_, mnode)) = e.methods.iter().find(|(mn, _)| *mn == name).cloned() {
+                    // the member-visibility law: enum members take the
+                    // `pub` dial like a class's
+                    let mvis = self.ctx.ast.method_decl(mnode).vis;
+                    if let Some(msg) = self.ctx.member_vis_err(ename, mnode.id(), name, mvis) {
+                        self.ctx.err(sp, msg);
+                        return Err(());
+                    }
                     return self.compile_inherent_call(ename, vec![], rt, mnode, rreg, generics, args, expected, sp);
                 }
             }
@@ -575,6 +590,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             if let Some(member) = self.ctx.find_inherent_member(origin, name) {
                                 match member {
                                     MemberSrc::Local { node, data, .. } => {
+                                        // the single-origin static bind IS
+                                        // a member call — the visibility
+                                        // law rides it
+                                        let mvis = self.ctx.ast.method_decl(node).vis;
+                                        if let Some(msg) = self.ctx.member_vis_err(data, node.id(), name, mvis) {
+                                            self.ctx.err(sp, msg);
+                                            return Err(());
+                                        }
                                         let cargs = self.ctx.inst_data.get(&origin).cloned().map(|(_, a)| a).unwrap_or_default();
                                         return self.compile_inherent_call(data, cargs, origin, node, rreg, generics, args, expected, sp);
                                     }

@@ -893,6 +893,418 @@ fn pub_pkg_stays_inside_its_package() {
     );
 }
 
+// =====================================================================
+// the member-visibility law — METHODS (classes/enums take the `pub`
+// dial: `pub fn` exports cross-module, a plain `fn` is module-private —
+// the declaring module and its descendants). Fields and class literals
+// land with the field lanes (phase 2).
+// =====================================================================
+
+/// The Counter-on-`a` fixture: a `pub class` whose inherent impl carries
+/// a `bump` member spelled `vis` (`None` = plain `fn`), a `pub` maker,
+/// and a same-module `inside` that exercises the member in its own
+/// module.
+fn counter_mod(vis: Option<&str>) -> String {
+    let dial = vis.unwrap_or("");
+    format!(
+        "pub class Counter {{ n: i32 }}\n\
+         impl Counter {{\n\
+         \x20   {dial}fn bump(self) -> i32 {{ return self.n + 1; }}\n\
+         }}\n\
+         pub fn mk(n: i32) -> Counter {{ return Counter {{ n: n }}; }}\n\
+         pub fn inside() -> i32 {{ let c = Counter {{ n: 41 }}; return c.bump(); }}\n"
+    )
+}
+
+#[test]
+fn member_visibility_methods_matrix() {
+    let dep = modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]);
+    let root_calls = "mod a;\nentry fn main() -> i32 { let c = a::mk(41); return c.bump(); }\n";
+
+    // plain method from the ROOT: the new diagnostic — the owner
+    // prefixed, the free-fn wording family after the dash
+    let pkgs = vec![
+        dep.clone(),
+        modpkg("pkg", root_calls, vec![("a", Vis::Self_, counter_mod(None).as_str())]),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Counter.bump` — `bump` is private to module `a`")
+            && d.contains("declare it `pub` (or `pub(pkg)`) to widen")),
+        "{diags:?}"
+    );
+
+    // plain method from a SIBLING subtree (class in `a/c`, call in
+    // `a/d`): refused — `a/d` is no descendant of `a/c`
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::d::go(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\npub mod d;\n"),
+                ("a/c", Vis::Pub, counter_mod(None).as_str()),
+                (
+                    "a/d",
+                    Vis::Pub,
+                    "pub fn go() -> i32 { let c = a::c::mk(41); return c.bump(); }\n",
+                ),
+            ],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Counter.bump` — `bump` is private to module `a/c`")),
+        "{diags:?}"
+    );
+
+    // plain method SAME-MODULE: the ordinary law, it runs
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::inside(); }\n",
+            vec![("a", Vis::Self_, counter_mod(None).as_str())],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+
+    // plain method from a DESCENDANT (call site in `a/sub`, class in
+    // `a`): the declaring module's subtree sees it
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::sub::reach(); }\n",
+            vec![
+                ("a", Vis::Self_, format!("pub mod sub;\n{}", counter_mod(None)).as_str()),
+                (
+                    "a/sub",
+                    Vis::Pub,
+                    "pub fn reach() -> i32 { let c = a::mk(41); return c.bump(); }\n",
+                ),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+
+    // `pub`: crosses to the root
+    let pkgs = vec![
+        dep.clone(),
+        modpkg("pkg", root_calls, vec![("a", Vis::Self_, counter_mod(Some("pub ")).as_str())]),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+
+    // `pub(pkg)`: crosses within the package
+    let pkgs = vec![
+        dep.clone(),
+        modpkg("pkg", root_calls, vec![("a", Vis::Self_, counter_mod(Some("pub(pkg) ")).as_str())]),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+
+    // `pub(super)` (class in `a/c`): the parent module's subtree —
+    // `a` reaches it, `a/d` (the sibling subtree) reaches it, the root
+    // does not
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::go(); }\n",
+            vec![
+                (
+                    "a",
+                    Vis::Self_,
+                    "pub mod c;\npub fn go() -> i32 { let c = a::c::mk(41); return c.bump(); }\n",
+                ),
+                ("a/c", Vis::Pub, counter_mod(Some("pub(super) ")).as_str()),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::d::go(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\npub mod d;\n"),
+                ("a/c", Vis::Pub, counter_mod(Some("pub(super) ")).as_str()),
+                (
+                    "a/d",
+                    Vis::Pub,
+                    "pub fn go() -> i32 { let c = a::c::mk(41); return c.bump(); }\n",
+                ),
+            ],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+
+    let pkgs = vec![
+        dep,
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { let c = a::c::mk(41); return c.bump(); }\n",
+            vec![
+                ("a", Vis::Self_, "pub mod c;\n"),
+                ("a/c", Vis::Pub, counter_mod(Some("pub(super) ")).as_str()),
+            ],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Counter.bump` — `bump` is `pub(super)` — visible only in `a`'s subtree")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn member_visibility_static_calls() {
+    let dep = modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]);
+    // a private static from the root: refused, owner prefixed
+    let acc = String::from(
+        "pub class Acc { n: i32 }\n\
+         impl Acc {\n\
+         \x20   fn make(n: i32) -> Acc { return Acc { n: n }; }\n\
+         \x20   pub fn bump(self) -> i32 { return self.n + 1; }\n\
+         }\n\
+         pub fn inside() -> i32 { return Acc::make(41).bump(); }\n",
+    );
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::Acc::make(41).bump(); }\n",
+            vec![("a", Vis::Self_, acc.as_str())],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Acc.make` — `make` is private to module `a`")),
+        "{diags:?}"
+    );
+    // ...and the same static SAME-MODULE runs
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::inside(); }\n",
+            vec![("a", Vis::Self_, acc.as_str())],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+
+    // the `[constructor]` sugar `Type(..)` IS the class-method call —
+    // the seal rides the member's `pub`: a private ctor refuses from
+    // the root, answers in its own module
+    let point = String::from(
+        "pub class Point { x: i32; y: i32 }\n\
+         impl Point {\n\
+         \x20   [constructor] fn from_xy(x: i32, y: i32) -> Self { return Self { x: x, y: y }; }\n\
+         }\n\
+         pub fn inside() -> i32 { return Point(40, 2).x + 2; }\n",
+    );
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { let p = a::Point(40, 2); return p.x; }\n",
+            vec![("a", Vis::Self_, point.as_str())],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Point.from_xy` — `from_xy` is private to module `a`")),
+        "{diags:?}"
+    );
+    let pkgs = vec![
+        dep,
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::inside(); }\n",
+            vec![("a", Vis::Self_, point.as_str())],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+}
+
+#[test]
+fn member_visibility_enum_methods() {
+    let dep = modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]);
+    // `flip`/`start` spell the two members' dials
+    let mood = |flip: &str, start: &str| {
+        format!(
+            "pub enum Mood {{ Low, High }}\n\
+             impl Mood {{\n\
+             \x20   {flip}fn flipped(self) -> Mood {{ return when (self) {{ Mood::Low -> Mood::High, Mood::High -> Mood::Low }}; }}\n\
+             \x20   {start}fn start() -> Self {{ return Mood::Low; }}\n\
+             }}\n\
+             pub fn low() -> Mood {{ return Mood::Low; }}\n\
+             impl Mood {{ pub fn into_i(self) -> i32 {{ return 7; }} }}\n"
+        )
+    };
+    // the RECEIVER lane, `pub`: crosses to the root
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { let m = a::low(); return m.flipped().into_i(); }\n",
+            vec![("a", Vis::Self_, mood("pub ", "pub ").as_str())],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 7);
+
+    // ...private: refused with the member diagnostic
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { let m = a::low(); return m.flipped().into_i(); }\n",
+            vec![("a", Vis::Self_, mood("", "pub ").as_str())],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Mood.flipped` — `flipped` is private to module `a`")),
+        "{diags:?}"
+    );
+
+    // the STATIC lane: a private enum static refuses, a pub one crosses
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::Mood::start().into_i(); }\n",
+            vec![("a", Vis::Self_, mood("pub ", "").as_str())],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Mood.start` — `start` is private to module `a`")),
+        "{diags:?}"
+    );
+
+    let pkgs = vec![
+        dep,
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::Mood::start().into_i(); }\n",
+            vec![("a", Vis::Self_, mood("pub ", "pub ").as_str())],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 7);
+}
+
+#[test]
+fn the_todolist_shape_private_impl_methods_are_errors() {
+    // the repro's METHOD shape: `imp` declares a `pub class` whose
+    // inherent impl members are plain `fn` — the root's `append_task`/
+    // `toggle_task` calls refuse with the member diagnostic (the
+    // field/literal halves land in the field phase)
+    let imp = String::from(
+        "pub class TodoList { _id: u64 }\n\
+         impl TodoList {\n\
+         \x20   fn toggle_task(mut self, id: u64) { self._id += id; }\n\
+         \x20   fn append_task(mut self, t: str) { self._id += 1; }\n\
+         }\n\
+         pub fn mk() -> TodoList { return TodoList { _id: 0 }; }\n",
+    );
+    let main_src = "mod imp;\nentry fn main() -> i32 {\n\
+                    \x20   let mut list = imp::mk();\n\
+                    \x20   list.toggle_task(1);\n\
+                    \x20   list.append_task(\"Shutdown\");\n\
+                    \x20   return 0;\n\
+                    }\n";
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg("pkg", main_src, vec![("imp", Vis::Self_, imp.as_str())]),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`TodoList.toggle_task` — `toggle_task` is private to module `imp`")),
+        "{diags:?}"
+    );
+    assert!(
+        diags.iter().any(|d| d.contains("`TodoList.append_task` — `append_task` is private to module `imp`")),
+        "{diags:?}"
+    );
+    // the same class with `pub` members runs — the law is the dial,
+    // never the class
+    let pub_imp = imp
+        .replace("fn toggle_task", "pub fn toggle_task")
+        .replace("fn append_task", "pub fn append_task");
+    let pkgs = vec![
+        modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]),
+        modpkg("pkg", main_src, vec![("imp", Vis::Self_, pub_imp.as_str())]),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 0);
+}
+
+#[test]
+fn for_of_gates_the_iterable_member() {
+    // the designated `[iterable]` member takes the `pub` dial: the
+    // weave's `xs.<member>(emit)` binds at the for-of site. The
+    // accumulator rides a struct cell (the every-field-defaulted
+    // literal) — the shape the for-of capture law drives cleanly.
+    let count = |dial: &str| {
+        format!(
+            "pub struct Acc {{ hits: i32 = 0; }}\n\
+             pub class Count {{ n: i32 }}\n\
+             impl Count {{\n\
+             \x20   fn new(n: i32) -> Self {{ return Self {{ n: n }}; }}\n\
+             \x20   [iterable] {dial}fn iterate(self, emit: fn(i32) -> bool) {{\n\
+             \x20       let mut i = 1;\n\
+             \x20       while (i <= self.n) {{\n\
+             \x20           if (!emit(i)) {{ return; }}\n\
+             \x20           i += 1;\n\
+             \x20       }}\n\
+             \x20   }}\n\
+             }}\n\
+             pub fn mk(n: i32) -> Count {{ return Count::new(n); }}\n\
+             pub fn new_acc() -> Acc {{ return Acc {{ }}; }}\n\
+             pub fn sum_to(n: i32) -> i32 {{\n\
+             \x20   let mut acc: ?Acc = Acc {{ }};\n\
+             \x20   let c = Count::new(n);\n\
+             \x20   for (let v of c) {{ acc.hits += 1; }}\n\
+             \x20   return acc.hits;\n\
+             }}\n"
+        )
+    };
+    let root_loop = "mod a;\nentry fn main() -> i32 {\n\
+                     \x20   let mut acc = a::new_acc();\n\
+                     \x20   let c = a::mk(3);\n\
+                     \x20   for (let v of c) { acc.hits += 1; }\n\
+                     \x20   return acc.hits;\n\
+                     }\n";
+    let dep = modpkg("dep", "entry fn main() -> i32 { return 0; }\n", vec![]);
+    // a private marked member refuses the root's for-of
+    let pkgs = vec![
+        dep.clone(),
+        modpkg("pkg", root_loop, vec![("a", Vis::Self_, count("").as_str())]),
+    ];
+    let diags = compile_with_diags(&pkgs, "pkg");
+    assert!(
+        diags.iter().any(|d| d.contains("`Count.iterate` — `iterate` is private to module `a`")),
+        "{diags:?}"
+    );
+    // same-module for-of over the private member: runs (3 iterations)
+    let pkgs = vec![
+        dep.clone(),
+        modpkg(
+            "pkg",
+            "mod a;\nentry fn main() -> i32 { return a::sum_to(3); }\n",
+            vec![("a", Vis::Self_, count("").as_str())],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 3);
+    // and a `pub` marked member crosses: the root's for-of runs
+    let pkgs = vec![
+        dep,
+        modpkg("pkg", root_loop, vec![("a", Vis::Self_, count("pub ").as_str())]),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 3);
+}
+
 #[test]
 fn use_through_pub_mod_chain_two_levels() {
     // `use dep::alpha::beta::{cell}` — the two-level pub mod walk,

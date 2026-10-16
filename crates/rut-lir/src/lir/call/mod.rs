@@ -731,7 +731,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if ctx.vis_crosses(&from, &m, vis) {
                 None
             } else {
-                Some(format!("`{m}. {}` — {}", ctx.name(name), ctx.vis_hint(name, &from, &m, vis)))
+                Some(format!("`{m}::{}` — {}", ctx.name(name), ctx.vis_hint(name, &from, &m, vis)))
             }
         };
         if let Some(fnode) = self.ctx.fn_in(&m, name) {

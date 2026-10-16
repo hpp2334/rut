@@ -962,22 +962,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // a `[iterable]`-marked member (the designated slot)
         let info = match self.slice_info(it) {
             Some(info) => info,
-            None => {
-                if let Some((src, elem_ty)) = self.iterate_impl(it) {
+            None => match self.iterate_impl(it, sp) {
+                Some(Ok((src, elem_ty))) => {
                     if std::env::var("RUT_PROBE_BT").is_ok() {
                         eprintln!("PROBE for-of marked member found, elem={}", self.ctx.type_name(elem_ty));
                     }
                     return self.compile_for_of_iterate(var, iter_reg, src, elem_ty, is_mut, body, sp);
                 }
-                if std::env::var("RUT_PROBE_BT").is_ok() {
-                    eprintln!("PROBE for-of NO marked member on {}", self.ctx.type_name(it));
+                // the marked member exists but refused the crossing —
+                // already diagnosed, no "needs a sequence" tail
+                Some(Err(())) => return Err(()),
+                None => {
+                    if std::env::var("RUT_PROBE_BT").is_ok() {
+                        eprintln!("PROBE for-of NO marked member on {}", self.ctx.type_name(it));
+                    }
+                    self.ctx.err(sp, format!(
+                        "`for (let .. of ..)` needs a sequence — `{}` is not one and marks no `[iterable]` member",
+                        self.ctx.type_name(it)
+                    ));
+                    return Err(());
                 }
-                self.ctx.err(sp, format!(
-                    "`for (let .. of ..)` needs a sequence — `{}` is not one and marks no `[iterable]` member",
-                    self.ctx.type_name(it)
-                ));
-                return Err(());
-            }
+            },
         };
         let elem_ty = info.elem;
         let idx = self.new_reg(TY_I32);
@@ -1078,7 +1083,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// cross-package inherent rows (the linkable-classes registry):
     /// another module's marked member, a template row whose per-
     /// instantiation bodies live in its owner.
-    fn iterate_impl(&mut self, ty: TypeId) -> Option<(IterSource, TypeId)> {
+    fn iterate_impl(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> Option<Result<(IterSource, TypeId), ()>> {
         if matches!(self.ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
             // trait objects dispatch through their vtable — a concrete
             // iterable is needed at the call site in this build
@@ -1106,6 +1111,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if md.marker != Some(iterable_marker) {
                     continue;
                 }
+                // designated members take the `pub` dial: the weave's
+                // `xs.<member>(emit)` binds HERE, at the for-of site —
+                // the site's module must see the declaring module
+                if let Some(msg) = self.ctx.member_vis_err(n, mnode.id(), *mname, md.vis) {
+                    self.ctx.err(sp, msg);
+                    return Some(Err(()));
+                }
                 let env: Vec<(IdentId, TypeId)> = generics
                     .iter()
                     .cloned()
@@ -1122,10 +1134,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     );
                     return None;
                 };
-                return Some((IterSource::Local { data: n, method: *mname, env }, elem));
+                return Some(Ok((IterSource::Local { data: n, method: *mname, env }, elem)));
             }
         }
-        self.iterate_impl_extern(ty, dname, args)
+        self.iterate_impl_extern(ty, dname, args).map(Ok)
     }
 
     /// The emit parameter's element: the marked member's one non-self

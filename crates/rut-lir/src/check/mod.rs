@@ -1134,6 +1134,36 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    /// The member-visibility law (class members and impl methods take
+    /// the `pub` dial — `pub fn` exports cross-module, a plain
+    /// `fn`/unannotated member is module-private): may the CURRENT
+    /// module see `owner`'s member, whose declaration stands at
+    /// `decl_node` with `mvis` (`None` = the module-private default)?
+    /// `None` = visible; `Some` spells the crossing fix — the
+    /// free-fn wording family, the owner prefixed. Struct decls are
+    /// exempt by law (their fields are always public): the helper is
+    /// simply not called for them.
+    pub(crate) fn member_vis_err(
+        &self,
+        owner: IdentId,
+        decl_node: NodeId,
+        name: IdentId,
+        mvis: Option<Vis>,
+    ) -> Option<String> {
+        let def_mod = self.mod_of(decl_node);
+        let vis = mvis.unwrap_or(Vis::Self_);
+        let from = self.cur_mod.clone();
+        if self.vis_crosses(&from, def_mod, vis) {
+            return None;
+        }
+        Some(format!(
+            "`{}.{}` — {}",
+            self.name(owner),
+            self.name(name),
+            self.vis_hint(name, &from, def_mod, vis)
+        ))
+    }
+
 
     /// Use another module's type descriptors so `(scope, local)` ids
     /// resolve for typechecking and layout. Descriptor and
