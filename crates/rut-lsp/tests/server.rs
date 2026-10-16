@@ -717,7 +717,7 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     // ghost pinned but primed nowhere (the miss), bare unpinned —
     // pins ride `rut.lock` (the CLI's install writes it; the manifest
     // grammar carries no sha256)
-    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle";
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle";
     const GHOST_URL: &str = "https://example.invalid/ghost.rutbundle";
     const BARE_URL: &str = "https://example.invalid/bare.rutbundle";
     let pouch_cache = rut_lsp::deps::cache_path(POUCH_URL); // .rut/cache/<sha256(url)>.rutbundle

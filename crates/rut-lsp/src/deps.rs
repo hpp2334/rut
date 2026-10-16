@@ -426,9 +426,43 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
             files.push(root);
         }
         files.extend(children);
+    } else if !table.host {
+        // no source rode — the delivery law (v22): a published lib
+        // bundle is COMPILED-ONLY, its generic bodies riding the binary
+        // as templates. The editor's answer is the binary's own
+        // DECLARATION FACE: the decoded surface rendered back as
+        // Impl-mode source (classes with fields, the inherent methods,
+        // the free fns — signatures only, empty bodies), indexed under
+        // the canonical root name so a use-line `Vec` lands on
+        // `bundle:<module>/mod.rut`. Decode refuses torn bytes loudly.
+        if let Some((_, bin)) = entries.iter().find(|(n, _)| n == "mod.rutc") {
+            match rut_core::binary::decode(bin) {
+                Ok(prog) => {
+                    // the wire carries the ids and the blocks but not
+                    // the packed bookkeeping — rebase with the identity
+                    // scope map rebuilds it (the mount's own first half)
+                    let prog = rut_core::link::rebase(prog, &|s| s);
+                    files.push(BundleFile {
+                        path: "mod.rut".to_string(),
+                        src: decl_face(&prog),
+                        mode: Mode::Impl,
+                    });
+                }
+                Err(e) => return Err(format!("`mod.rutc`: {e}")),
+            }
+        }
+        // the remaining entry files still index, exactly as before
+        for e in &table.entries {
+            if e.mode != Mode::Impl {
+                continue;
+            }
+            if let Ok(src) = read_entry(&entries, &e.path) {
+                files.push(BundleFile { path: e.path.clone(), src, mode: e.mode });
+            }
+        }
     } else {
-        // no body rode (a compiled-only or surface-only bundle) — the
-        // remaining entry files still index, exactly as before
+        // a host surface carries no lib body; the remaining entry files
+        // still index, exactly as before
         for e in &table.entries {
             if e.mode != Mode::Impl {
                 continue;
@@ -439,6 +473,161 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         }
     }
     Ok(BundleIndex { module, namespace: table.namespace, consts: table.consts, files })
+}
+
+/// The compiled bundle's DECLARATION FACE (v22 — the delivery law's
+/// editor half): the decoded program's exported surface rendered back
+/// as Impl-mode rut source — the exported classes with their fields,
+/// the inherent method signatures (empty bodies — bodies are the link
+/// lane's business, never source), and the exported free fns. The
+/// interfaces ride as comments (the surface carries a generic COUNT,
+/// not parameter names, so a faithful trait re-spelling is impossible
+/// here); the consts ride [`BundleIndex::consts`] separately. This is
+/// the indexed answer for a compiled-only url dep — a consumer's
+/// `use pouch::{ Vec }` resolves against the bundle's own bytes.
+fn decl_face(prog: &rut_core::binary::Program) -> String {
+    use rut_core::types::TyKind;
+    use rut_core::types::{TypeId, TY_NIL};
+    let s = &prog.surface;
+    let own = rut_core::link::own_scope(prog);
+    let ty = |t: TypeId| -> String { ty_text(prog, t) };
+    let name = |id: rut_core::sym::IdentId| -> String {
+        prog.interner.name(id).trim_start_matches('#').to_string()
+    };
+    let mut out = String::from(
+        "// the compiled bundle's declaration face (v22 — the delivery law):\n\
+         // rendered from the binary's surface; the bodies are the link\n\
+         // lane's business, never source.\n",
+    );
+    // the exported classes: fields from the type rows, methods from the
+    // inherent surfaces (matched by the class's own type id)
+    for t in &s.type_exports {
+        if !t.is_class {
+            continue;
+        }
+        let row_id = match t.scope {
+            Some(sc) => rut_core::id::pack(sc, t.local),
+            None => match own {
+                Some(sc) => rut_core::id::pack(sc, t.local),
+                None => continue,
+            },
+        };
+        let gens = if t.params.is_empty() {
+            String::new()
+        } else {
+            let ps: Vec<String> = t.params.iter().map(|&p| name(p)).collect();
+            format!("<{}>", ps.join(", "))
+        };
+        out.push_str(&format!("\npub class {}{gens} {{\n", name(t.name)));
+        if let TyKind::Data { fields } = prog.types.kind(row_id) {
+            for f in fields {
+                out.push_str(&format!("    {}: {};\n", name(f.name), ty(f.ty)));
+            }
+        }
+        out.push_str("}\n");
+        // the inherent methods — one impl block, the class's own
+        // generics re-spelled
+        if let Some(ih) = s.inherents.iter().find(|ih| ih.target == row_id) {
+            let head_gens = gens.clone();
+            out.push_str(&format!("\nimpl{head_gens} {}{gens} {{\n", name(t.name)));
+            for m in &ih.methods {
+                let mut ps: Vec<String> = Vec::with_capacity(m.params.len() + 1);
+                if m.has_self {
+                    ps.push("mut self".to_string());
+                }
+                for &p in m.params.iter() {
+                    ps.push(format!("_: {}", ty(p)));
+                }
+                let ret = if m.ret == TY_NIL {
+                    String::new()
+                } else {
+                    format!(" -> {}", ty(m.ret))
+                };
+                let mgens = if m.generics.is_empty() {
+                    String::new()
+                } else {
+                    let gs: Vec<String> = m.generics.iter().map(|&g| name(g)).collect();
+                    format!("<{}>", gs.join(", "))
+                };
+                let marker = match m.marker {
+                    rut_core::binary::MARKER_NONE => String::new(),
+                    rut_core::binary::MARKER_DISPOSAL => " /* [disposal] */".to_string(),
+                    rut_core::binary::MARKER_ITERABLE => " /* [iterable] */".to_string(),
+                    rut_core::binary::MARKER_CONSTRUCTOR => " /* [constructor] */".to_string(),
+                    _ => String::new(),
+                };
+                out.push_str(&format!(
+                    "    pub fn {}{mgens}({}){} {{ }}{marker}\n",
+                    name(m.name),
+                    ps.join(", "),
+                    ret
+                ));
+            }
+            out.push_str("}\n");
+        }
+    }
+    // the free fns (ordinary exports only — host rows are decl/native
+    // surface, never a compiled lib's face)
+    for f in &s.funcs {
+        if f.host.is_some() {
+            continue;
+        }
+        let ps: Vec<String> = f.params.iter().enumerate().map(|(i, &p)| format!("_{}: {}", i, ty(p))).collect();
+        let ret = if f.ret == TY_NIL {
+            String::new()
+        } else {
+            format!(" -> {}", ty(f.ret))
+        };
+        let kw = if f.is_async { "pub async fn" } else { "pub fn" };
+        out.push_str(&format!("\n{kw} {}({}){ret} {{ }}\n", name(f.name), ps.join(", ")));
+    }
+    // the interfaces, as comments — the surface carries a generics
+    // COUNT, not parameter names, so a faithful trait re-spelling is
+    // impossible here; the names still document the surface
+    for i in &s.ifaces {
+        let ms: Vec<String> = i.methods.iter().map(|m| prog.interner.name(m.name).to_string()).collect();
+        out.push_str(&format!(
+            "// trait {}<{} generic params>: {}\n",
+            prog.interner.name(i.name),
+            i.generics,
+            ms.join(", ")
+        ));
+    }
+    out
+}
+
+/// One type id as rut source text, over the decoded program's own
+/// tables — boot ids answer through the shared boot prefix, carried
+/// rows name through the program interner, placeholder rows (`#T`)
+/// render as their parameter spelling (`T`).
+fn ty_text(prog: &rut_core::binary::Program, t: rut_core::types::TypeId) -> String {
+    use rut_core::types::TyKind;
+    let raw_name = |id: rut_core::types::TypeId| -> String {
+        prog.interner.name(prog.types.type_at(id).name).to_string()
+    };
+    let name = |id: rut_core::types::TypeId| -> String {
+        raw_name(id).trim_start_matches('#').to_string()
+    };
+    match prog.types.kind(t) {
+        TyKind::Nil => "nil".to_string(),
+        TyKind::Prim(p) => format!("{p:?}").to_lowercase(),
+        TyKind::Str => "str".to_string(),
+        TyKind::Bytes => "bytes".to_string(),
+        TyKind::Array { elem } => format!("[{}]", ty_text(prog, *elem)),
+        TyKind::Enum { .. }
+        | TyKind::Data { .. }
+        | TyKind::IfaceObj { .. }
+        | TyKind::Trace
+        | TyKind::DisposalContext => name(t),
+        TyKind::Opaque => "opaque".to_string(),
+        TyKind::Opt { elem } => format!("?{}", ty_text(prog, *elem)),
+        TyKind::Weak { elem } => format!("Weak<{}>", ty_text(prog, *elem)),
+        TyKind::Future { elem } => format!("Future<{}>", ty_text(prog, *elem)),
+        TyKind::Fn { params, ret } => {
+            let ps: Vec<String> = params.iter().map(|&p| ty_text(prog, p)).collect();
+            format!("fn({}) -> {}", ps.join(", "), ty_text(prog, *ret))
+        }
+    }
 }
 
 /// a bundle file's mod path: the rows lane's root rides as `mod.rut`
@@ -587,12 +776,12 @@ mod tests {
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle" }
   }
 }"#;
 
-    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle";
-    const POUCH_PIN: &str = "1bbd861905b6cc09435833d18122f0740be14b7b4bc306821634fb88d38e6f83";
+    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle";
+    const POUCH_PIN: &str = "249aba803d8a70f05952041f667b5897f4733257f00d5d7b73c6032f4ba70373";
 
     #[test]
     fn plugin_manifest_rows_path_and_url() {
@@ -713,17 +902,25 @@ mod tests {
     }
 
     #[test]
-    fn pouch_bundle_unpacks_its_own_source() {
+    fn pouch_bundle_indexes_its_declaration_face() {
+        // the delivery law (v22): a published bundle NEVER carries
+        // source — the generic bodies ride the binary as templates. The
+        // editor's answer for a compiled-only url dep is the binary's
+        // own DECLARATION FACE: the decoded surface rendered back as
+        // Impl-mode source under the canonical root name.
         let b = bundle_sources(POUCH_BUNDLE).expect("the committed pouch bundle parses");
         assert_eq!(b.module, "pouch");
         assert_eq!(b.namespace, None);
         assert!(b.consts.is_empty());
-        // the root module — the ONLY own source; `.rutc` and the scope
-        // ledger never ride, neither do dep groups
         assert_eq!(b.files.len(), 1, "files: {:?}", b.files.iter().map(|f| &f.path));
         assert_eq!(b.files[0].path, "mod.rut");
         assert_eq!(b.files[0].mode, Mode::Impl);
-        assert!(b.files[0].src.contains("class Vec"), "the real pouch source rides");
+        // the face spells the surface: the generic class with its
+        // fields, the inherent methods, the free fn
+        assert!(b.files[0].src.contains("pub class Vec<T>"), "the face: {}", b.files[0].src);
+        assert!(b.files[0].src.contains("pub fn new() -> Self"), "the face: {}", b.files[0].src);
+        assert!(b.files[0].src.contains("pub fn push(mut self, _: T)"), "the face: {}", b.files[0].src);
+        assert!(b.files[0].src.contains("pub fn freeze_bytes"), "the face: {}", b.files[0].src);
     }
 
     #[test]

@@ -70,7 +70,9 @@ source text by design; a partially translated book is a valid book.
 | embed loop | 嵌入循环 | |
 | compiled group | 编译组 | a bundle dep whose `.rutc` rides（对照 source group） |
 | source group | 源码组 | a host pkg (or a declared dep whose unit did not link) riding its declaration file set |
-| riding (generic-source) | 承载（泛型源码承载） | the riding law → 承载法则；rides beside the binary → 在二进制旁承载；generic-source riding → 泛型源码承载；a generic-owning pkg → 拥有泛型的 pkg；distinction from rode-along（随行）: riding = a pkg's OWN source beside its compiled binary |
+| riding (generic-source, RETIRED) | 承载（泛型源码承载，已废止） | the v22 delivery law repealed it — historical mentions only；the riding law → 承载法则（仅历史语境）；rides beside the binary → 在二进制旁承载 |
+| delivery law (v22) | 交付法则（v22） | generics ride compiled: 泛型走编译交付；a published bundle never carries source → 已发布的捆绑包绝不携带源码；instantiation is owner-anchored → 实例化按拥有者锚定 |
+| template (wire) | 模板 | generic bodies ride the binary as templates → 泛型代码体作为模板承载在二进制内；monomorphize from the template → 从模板单态化；template bodies → 模板代码体 |
 | scope ledger | 作用域台账 | `rut.scopes` stays code；打包期作用域 → 打包期作用域 |
 | rebase | 重定基 | packed ids rebase onto the loader's numbering |
 | symbol stripping | 符号剥离 | the `--strip` lane — compile-time name/position stripping |

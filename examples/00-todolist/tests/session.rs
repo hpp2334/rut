@@ -6,8 +6,8 @@ use std::path::Path;
 use std::task::{Context, Poll};
 use rut_vm::OpaqueRef;
 
-/// dist/std-v10 plays the wire: the PINNED artifacts (the published
-/// std-v10 bytes the manifest rows name) prime an OFFLINE
+/// dist/std-v11 plays the wire: the PINNED artifacts (the published
+/// std-v11 bytes the manifest rows name) prime an OFFLINE
 /// remote (`DepRemote::write` is the stand-in for the GET), so this
 /// gate cannot network by construction — no env, no set_var races.
 /// The Loader + the warmed remote are the same embedder shape
@@ -24,7 +24,7 @@ fn warm(base: &Path) -> rut_native::HttpRemote {
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
     let manifest =
         rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
-    let dist = base.join("../../dist/std-v10");
+    let dist = base.join("../../dist/std-v11");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
         let artifact = url.rsplit('/').next().unwrap_or_default();

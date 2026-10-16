@@ -317,15 +317,14 @@ not the walk. The container, the manifest grammar, and the reader are
 
 **What to take from a url** is the engine's instantiation law, read
 from the embedding side: a compiled bundle serves host surfaces,
-concrete-class libs, **and** — by the generic-source riding law —
-the generic owners: a request the pack-time ledger lacks lowers the
-ridden source in the consumer's world and compiles the monomorphized
-body under the declaring pkg's spec, at the link, nothing persisted
-(`Vec<MyTodo>`, `decodeJson<T>` — [module bundles](bundles.md) — the
-std-CDN section). A bundle that owns an open generic surface but
-carries no riding source refuses at the mount (`pouch` owns an open
-generic surface but its bundle carries no riding source — re-pack the
-directory), and a bundle-mounted json names its
+concrete-class libs, **and** — the delivery law (v22) — the generic
+owners: a request the pack-time ledger lacks monomorphizes from the
+template the binary carries and compiles the body under the declaring
+pkg's spec, at the link, nothing persisted (`Vec<MyTodo>`,
+`decodeJson<T>` — [module bundles](bundles.md) — the std-CDN section).
+A bundle that owns an open generic surface but whose binary carries no
+template bodies refuses at the mount (corrupt or doctored — re-pack
+the directory), and a bundle-mounted json names its
 pack-time dev closure in its ledger, so the consumer's closure must
 contain those names.
 

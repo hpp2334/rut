@@ -9,7 +9,7 @@
  * The bundle set is exhaustive over `rut/` (16 pkgs): lib pkgs pack as
  * compiled roots (their closures ride inside), host pkgs pack as decl
  * roots (single-package — the surface IS the root); `format_version`
- * is 10, always — the manifest's `type` routes the root kind. Same
+ * is 11, always — the manifest's `type` routes the root kind. Same
  * input directory ⇒ byte-identical bundle (Q4), so "pins fresh" is a
  * PURE EQUALITY gate — CI never touches the network.
  *
@@ -34,7 +34,7 @@
  *
  * Options:
  *   --tag-name <t>   the jsDelivr tag the urls spell (env
- *                    RUT_STD_TAG, default std-v10). An ADVANCING
+ *                    RUT_STD_TAG, default std-v11). An ADVANCING
  *                    number: never re-point a published tag (jsDelivr
  *                    caches aggressively; a re-pointed tag lies).
  *   -h, --help
@@ -47,7 +47,7 @@
  * envelope — repacked whenever the pack shape moves (the mod.rut
  * rename did; the `::` path-law break did), byte-checked by --check's
  * freshness half. The example projects' rut.lock rows ride the
- * committed `dist/std-v10/` bytes — the offline gates' wire — and
+ * committed `dist/std-v11/` bytes — the offline gates' wire — and
  * --check's pin half asserts every row against THEM, not against
  * dist/std. The reader's compat lane loads the old envelope; that is a
  * loading law, not a transition.
@@ -63,8 +63,8 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
-const PINNED = path.join(ROOT, "dist", "std-v10");
-const DEFAULT_TAG = "std-v10";
+const PINNED = path.join(ROOT, "dist", "std-v11");
+const DEFAULT_TAG = "std-v11";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
 // ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ const tag = takeValue("--tag-name") ?? process.env.RUT_STD_TAG ?? DEFAULT_TAG;
 if (argv.length) die(`unknown arguments: ${argv.join(" ")}`);
 if (takeFlag("--pins")) {
   die(
-    "--pins is retired: the example manifests' rows ride the committed dist/std-v10 envelope — " +
+    "--pins is retired: the example manifests' rows ride the committed dist/std-v11 envelope — " +
       "repack updates dist/std; re-pointing a tag is a publish act, not a repack"
   );
 }
@@ -157,15 +157,18 @@ const PKGS = [
 
 // The example roots' rut.lock files — the frozen pins (--check verifies
 // them; nothing rewrites them). Each lock's rows are url-keyed, sha256
-// per row; the PINNED snapshot (`dist/std-v10/`) must carry an artifact
+// per row; the PINNED snapshot (`dist/std-v11/`) must carry an artifact
 // per distinct url key — the bytes each row's sha256 commits to.
 //
-// THE BOUNDARY (the lock phase): the rows are FROZEN. The pack shape
-// moved (mod.rut), dist/std repacked — the pins did NOT move: they
-// name the std-v10 bytes, which load through the reader's compat lane
-// (a loading law, not a transition). The manifest sha256 key is
-// retired — the lock is THE pin law. --pins is gone: no tool rewrites
-// these rows anymore.
+// THE BOUNDARY (the publish act): the rows are FROZEN between
+// publishes. dist/std repacks whenever the pack shape moves — the pins
+// do NOT move until a publish act cuts the next envelope
+// (`dist/std-vNN` + tag) and every referencer re-points. The pins name
+// the std-v11 bytes, which load through the reader's primary lane (the
+// strict format_version-11 gate). The manifest sha256 key is retired —
+// the lock is THE pin law. --pins is gone: no tool rewrites these rows
+// anymore; a publish regenerates them with `rut install` against the
+// new envelope.
 const EXAMPLES = [
   "examples/00-todolist/rut.lock",
   "examples/01-sort/rut.lock",
@@ -267,7 +270,7 @@ if (doCheck) {
 
   // the example pins: every rut.lock row spells a
   // /dist/std/<key>.rutbundle url and its sha256 equals the hash of the
-  // committed envelope bytes (dist/std-v10/) — the bytes the row commits
+  // committed envelope bytes (dist/std-v11/) — the bytes the row commits
   // to. dist/std (the working envelope) is NOT the pins' reference: the
   // rename moved the pack shape, the pins did not move, and the
   // reader's compat lane loads the old envelope.
@@ -305,10 +308,10 @@ if (doCheck) {
       }
       const pin = pinOf(key);
       if (!pin) {
-        console.error(`  ${red("pin")}: dist/std-v10/${key}.rutbundle is missing — the committed envelope bytes must be committed`);
+        console.error(`  ${red("pin")}: dist/std-v11/${key}.rutbundle is missing — the committed envelope bytes must be committed`);
         drift++;
       } else if (row.sha256 !== pin) {
-        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` sha256 does not match dist/std-v10/${key}.rutbundle (the committed envelope bytes)`);
+        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` sha256 does not match dist/std-v11/${key}.rutbundle (the committed envelope bytes)`);
         drift++;
       }
     }
@@ -318,13 +321,13 @@ if (doCheck) {
     console.error("");
     die(`${drift} drift row(s) — fix with: node scripts/pack-std.cjs`);
   }
-  info(green(`all ${PKGS.length} artifacts byte-fresh, every example pin matches the committed std-v10 bytes`));
+  info(green(`all ${PKGS.length} artifacts byte-fresh, every example pin matches the committed std-v11 bytes`));
   process.exit(0);
 }
 
 // default: pack the committed working-envelope artifacts (dist/std).
 // The pins never move (see --pins above): dist/std is the freshness
-// gate's half; dist/std-v10 is the pins' half.
+// gate's half; dist/std-v11 is the pins' half.
 packAll(DIST);
 const hashes = {};
 for (const { dir } of PKGS) {
@@ -332,4 +335,4 @@ for (const { dir } of PKGS) {
   hashes[name] = sha256(fs.readFileSync(path.join(DIST, `${name}.rutbundle`)));
   console.error(`  ${green("packed")}: dist/std/${name}.rutbundle (sha256 ${hashes[name].slice(0, 16)}…)`);
 }
-info(green(`packed ${PKGS.length} artifacts → dist/std/ (the example pins ride dist/std-v10/)`));
+info(green(`packed ${PKGS.length} artifacts → dist/std/ (the example pins ride dist/std-v11/)`));

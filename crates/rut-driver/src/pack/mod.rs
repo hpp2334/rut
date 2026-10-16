@@ -234,7 +234,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         )));
     }
     let root_idx = root_linked.unwrap().0;
-    // the strip arm — after the compile walk, before any encode. Three
+    // the strip arm — after the compile walk, before any encode. Two
     // laws run here, all against the packer's OWN group-kind decisions
     // (the `sources` map + `units.linked`, the same classifier the
     // encode loop applies — never a re-derivation):
@@ -243,14 +243,11 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     //    binds its compiled deps' surfaces at load, and those names
     //    would be mangled — refuse, never guess (host/decl leaf groups
     //    have no compiled deps and pass trivially);
-    // 2. the generic-source refusal: a compiled pkg with an OPEN
-    //    generic surface rides its source (the law below), and the
-    //    ridden text would recompile clean-named beside mangled
-    //    binaries — the combination cannot coexist soundly, refuse and
-    //    say so;
-    // 3. the mangle itself: one closure-wide string→string map over
+    // 2. the mangle itself: one closure-wide string→string map over
     //    every encoded program, symbolication tables taken into the
     //    sidecar.
+    // (The riding-source refusal of the pre-v22 strip arm is dead: no
+    // source rides a compiled pkg anymore — the delivery law.)
     let symtab = strip_arm(&mut units, &session, &w.sources, &w.archives, &w.read, &root, root_idx, opts.strip)?;
     // the templates-must-emit law (v22): a compiled program whose
     // surface exports an OPEN generic surface must carry template
@@ -463,8 +460,8 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // the manifest byte-for-byte, then the scope ledger
     entries.push((MANIFEST_NAME.into(), w.manifest_bytes.clone()));
     entries.push(("rut.scopes".into(), ledger_text(&ledger).into_bytes()));
-    // the root's compiled binary, then its staged file set (surface,
-    // riding source, rows)
+    // the root's compiled binary, then its staged file set (the
+    // surface, the module rows)
     entries.push(("mod.rutc".into(), rut_core::binary::encode(&units.programs[root_idx])));
     entries.extend(root_files);
     // the dep groups, identity order — the archive mirrors the

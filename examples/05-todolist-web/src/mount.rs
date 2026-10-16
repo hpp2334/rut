@@ -5,7 +5,7 @@
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is walked by
 //! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
-//! dist/std-v10 plays the wire — the PINNED artifacts, so no gate
+//! dist/std-v11 plays the wire — the PINNED artifacts, so no gate
 //! networks). The four passes run FOR
 //! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
 //! walks a test probe the same way.
@@ -57,18 +57,18 @@ use rut_driver::{Compiled, Loaded, Pkg, RutRun};
 /// The `web` pkg's surface, verbatim — the contract the bodies bind.
 pub const WEB_D_RUT: &str = include_str!("../web/web.d.rut");
 
-const POUCH_RUT: &str = include_str!("../../../rut/pouch/mod.rut");
-// the nmap host surface, from the COMMITTED CDN artifact (the v6 decl
-// bundle — `dist/std/nmap_host.rutbundle`, sha256-pinned by the pins
-// gate). THE BUNDLE LAW: a compiled decl surface binds like the
-// hand-lowered one — the mirror's offer becomes a
-// `Pkg::from_bundle`, the wasm lane's url-dep mount. pouch and
-// nmapset stay verbatim sources: they are GENERIC owners, and a
-// compiled bundle serves only the instantiations its own pack closure
-// spelled (consumer shapes like this page's `Vec<Node>` are the
-// directory lane — see docs/src/reference/bundles.md).
+// the url-dep mounts, from the COMMITTED CDN artifacts (the v11
+// bundles, sha256-pinned by the pins gate). THE BUNDLE LAW: the
+// mirror's offer is `Pkg::from_bundle` per artifact — the in-memory
+// twin of the walk's cache lane. pouch and nmapset mount the SAME way
+// (their own committed bundles): v21 offered them as verbatim sources
+// because a compiled bundle then served only its own pack closure —
+// v22's templates serve the consumer's shapes, so the bundle twin is
+// EXACT, and both lanes compiling the same mounted programs is what
+// mount_lane's byte pin means.
 const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std/nmap_host.rutbundle");
-const NMAPSET_RUT: &str = include_str!("../../../rut/nmapset/mod.rut");
+const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
+const NMAPSET_BUNDLE: &[u8] = include_bytes!("../../../dist/std/nmapset.rutbundle");
 
 // the module trees, verbatim: root + every mounted child — the
 // mirror's whole job is an independent embedder spelling what the
@@ -211,20 +211,28 @@ pub fn web_pkg() -> Result<Pkg, String> {
 /// the app's SOURCE crosses the ABI ([`compile_app`] offers and
 /// compiles it).
 pub fn mirror_pkgs() -> Result<Vec<Pkg>, String> {
-    let nmap_host = rut_driver::Pkg::from_bundle(NMAP_HOST_BUNDLE)
-        .map_err(|e| e.to_string())?
-        .pkgs;
-    let pouch = Pkg::source("pouch", POUCH_RUT).manifest(
-        rut_driver::parse_manifest(include_str!("../../../rut/pouch/rut.jsonc"))
-            .expect("the pouch manifest is valid"),
-    );
-    let nmapset = Pkg::source("nmapset", NMAPSET_RUT).manifest(
-        rut_driver::parse_manifest(include_str!("../../../rut/nmapset/rut.jsonc"))
-            .expect("the nmapset manifest is valid"),
-    );
-    let mut pkgs = vec![web_pkg()?, pouch];
-    pkgs.extend(nmap_host);
-    pkgs.push(nmapset);
+    // every CDN row the manifest spells, mounted from the committed
+    // artifact — the walk's cache lane answers the SAME bytes, so the
+    // two offered closures are the same programs. The v11 law names an
+    // in-archive group by its CONTENT IDENTITY (`name@<fp16>` — the
+    // rode source set's fingerprint); the standalone nmap_host bundle's
+    // root mounts bare, so the mirror derives the identity spelling
+    // from the artifact's own entries — never hand-typed — and the
+    // host registration still spells the bare name half
+    // (`identity::mount_name`).
+    let entries = rut_driver::bundle::parse_bundle(NMAP_HOST_BUNDLE).map_err(|e| e.to_string())?;
+    let fp16 = rut_driver::bundle::identity::fp16_of(&entries, "");
+    let nmap_host_spec = rut_driver::bundle::identity::identity("nmap_host", &fp16);
+    let mut pkgs = vec![web_pkg()?];
+    for bytes in [NMAP_HOST_BUNDLE, POUCH_BUNDLE, NMAPSET_BUNDLE] {
+        let mut mounted = rut_driver::Pkg::from_bundle(bytes).map_err(|e| e.to_string())?.pkgs;
+        for p in mounted.iter_mut() {
+            if rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host" {
+                p.spec = nmap_host_spec.clone();
+            }
+        }
+        pkgs.extend(mounted);
+    }
     pkgs.push(ui_pkg());
     Ok(pkgs)
 }
@@ -240,7 +248,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.host_pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std-v10 plays the wire: the pinned artifacts prime ONE offline
+/// dist/std-v11 plays the wire: the pinned artifacts prime ONE offline
 /// cache per process (`DepRemote::write` is the stand-in for the GET —
 /// the ONCE-gated priming is the 03-plugin precedent), and every
 /// manifest-lane walk rides an `HttpRemote::offline` over it — a miss
@@ -261,7 +269,7 @@ fn std_remote() -> rut_native::HttpRemote {
         // (harness/softfail are dep-free) — walked for url rows exactly
         // like the loader's own prefetch walks
         let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dist = base.join("../../dist/std-v10");
+        let dist = base.join("../../dist/std-v11");
         let mut urls = std::collections::BTreeSet::new();
         for rel in [
             "rut/biz/rut.jsonc",
@@ -352,7 +360,9 @@ pub fn offer(mut run: RutRun, loaded: &Loaded) -> RutRun {
         Ok(w) => run.pkg(w),
         Err(_) => run, // unreachable: the surface is include_str!'d
     };
-    if loaded.pkgs.iter().any(|p| p.spec == "nmap_host") {
+    if loaded.pkgs.iter().any(|p| {
+        rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host"
+    }) {
         run = run.host_pkg(rut_std::nmap::pkg());
     }
     run

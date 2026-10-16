@@ -348,9 +348,9 @@ fn packaged_generic_owner_serves_consumer_requests() {
     );
 
     let bytes = pack_dir(&app).expect("pack");
-    // the generic lib rode compiled — and, the generic-source riding
-    // law, its source rides beside the binary so consumer-spelled
-    // shapes stay servable at load
+    // the generic lib rode compiled — and, the delivery law (v22), its
+    // generic bodies ride as template rows INSIDE the binary, so
+    // consumer-spelled shapes stay servable at load
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
     let pairz_dir = dep_dir(&names, "pairz");
@@ -396,10 +396,10 @@ fn packaged_generic_owner_serves_consumer_requests() {
     let got: i64 = run_entry(&session, "consumer", "go2");
     assert_eq!(got, 6, "the packaged instantiation served the consumer");
 
-    // a request the binary does not carry used to refuse — now the
-    // generic-source riding law answers it: the lib packed ALONE rides
-    // its source, so the consumer-spelled shape compiles at the link
-    // and runs
+    // a request the binary's ledger lacks used to refuse — now the
+    // delivery law (v22) answers it: the lib packed ALONE carries its
+    // generic bodies as templates, so the consumer-spelled shape
+    // monomorphizes at the link and runs
     let standalone = pack_dir(&pairz).expect("the lib packs alone");
     let mut lone = rut_driver::Pkg::from_bundle(&standalone).expect("load");
     lone.pkgs.push(

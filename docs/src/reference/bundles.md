@@ -235,11 +235,11 @@ guess: `this toolchain reads bundle format_version 11 only (found {v})
 Every file in the two layouts is part of the package: a bundle that
 dropped a declared child module would load partial — semantically
 wrong, so the closure law is checked at the mount. Compilation is the
-delivery contract — one exception, the riding law above: a pkg with an
-open generic surface rides its source beside the binary so
-consumer-spelled shapes stay servable. Source sharing as the general
-contract stays a directory (`rut run <dir>`), as it always was outside
-bundles.
+delivery contract, no exceptions — the generic bodies ride INSIDE the
+binary as templates (the delivery law above), so consumer-spelled
+shapes stay servable and a published bundle never carries source.
+Source sharing as the general contract stays a directory
+(`rut run <dir>`), as it always was outside bundles.
 
 **The groups mirror the manifest.** The archive root is the root's own
 files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the
@@ -363,21 +363,19 @@ pins). The laws:
   (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively.
 - **What a compiled bundle serves.** Instantiation is owner-anchored:
   a compiled owner carries the generic instantiations its own pack
-  closure spelled in its ledger — and, the generic-source riding law,
-  a compiled pkg whose surface exports generics also rides the source
-  that serves consumer-spelled shapes: at the consumer's link a
-  request the ledger lacks lowers the ridden text in the consumer's
-  session and compiles the monomorphized body under the declaring
-  pkg's spec (one row program-wide, nothing persisted). So the CDN
-  lane delivers **host surfaces** (decl bundles), **concrete-class
-  libs** (`http`, `ink`, `strbuild` — methods cross on the surface's
-  inherent rows), **and the generic owners** (`pouch`, `flow`,
-  `nmapset`, `json`, `futures` — `Vec<Todo>`, `Flow<i32>`,
-  `decodeJson<T>` compile at the link from the ridden source). The
-  riding law binds this lane too: a pkg that owns an open generic
-  surface but carries no riding source refuses at the mount (`pouch`
-  owns an open generic surface but its bundle carries no riding
-  source — re-pack the directory). And every bundle is **closed** —
+  closure spelled in its ledger — and its generic BODIES as templates
+  inside the binary (the delivery law): at the consumer's link a
+  request the ledger lacks monomorphizes from the template under the
+  declaring pkg's spec (one row program-wide, nothing persisted). So
+  the CDN lane delivers **host surfaces** (decl bundles),
+  **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross
+  on the surface's inherent rows), **and the generic owners**
+  (`pouch`, `flow`, `nmapset`, `json`, `futures` — `Vec<Todo>`,
+  `Flow<i32>`, `decodeJson<T>` compile at the link from the
+  templates). The law binds this lane too: a pkg that owns an open
+  generic surface but whose binary carries no template bodies refuses
+  at the mount (corrupt or doctored — re-pack the directory). And
+  every bundle is **closed** —
   a bundle-mounted json carries its `strbuild` + `pouch` + `nmapset`
   groups inside, so its wrappers' `use` heads resolve wherever it
   travels (the ordinary closure law).

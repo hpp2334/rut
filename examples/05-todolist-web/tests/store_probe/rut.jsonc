@@ -15,6 +15,6 @@
     // jsDelivr row the app's own manifests spell (the tests prime an
     // offline remote from the committed dist/std artifacts, so the gate
     // never networks)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle" }
   }
 }

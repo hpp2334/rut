@@ -118,7 +118,7 @@ project's `rut.lock`** from this CDN — that is the recommended import
 for everything the toolchain ships. A `path` row is for **your own
 local packages**: a sibling directory in the same project (the modules
 tutorial's `greet` app mounting `../pkg` is the shape). The tag
-advances with format changes (`std-v10` today) and is never re-pointed,
+advances with format changes (`std-v11` today) and is never re-pointed,
 so a lock pin at a tag stays honest forever.
 
 The std tree ships as committed per-package bundles —
@@ -133,25 +133,24 @@ is a pure byte-equality repack — CI never touches the network).
 
 **What a url row can deliver** is the engine's instantiation law, read
 from the CDN side: a compiled bundle carries the generic instantiations
-its own pack closure spelled **in its ledger**, and — by the
-generic-source riding law — a compiled pkg whose surface exports
-generics **also rides the source that serves consumer-spelled shapes**:
+its own pack closure spelled **in its ledger**, and — the delivery law
+(v22) — its exported generic decls ride **as templates inside the
+binary**:
 
 - **host surfaces and concrete-class libs deliver** — a `type = "host"`
   bundle is a declaration surface (no generics), and a lib of concrete
   classes (`http`, `ink`, `strbuild`) crosses on its surface's inherent
   rows with its whole closure riding inside;
 - **generic owners deliver too** — `pouch`, `flow`, `nmapset`, `json`,
-  `futures` ride their entry source (the root module) beside the
-  binaries, so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>`
-  compiles **at the consumer's link**: the ridden text lowers in the
-  consumer's session, the monomorphized bodies register under the
-  declaring pkg's spec (one row program-wide, identity by owner), and
-  nothing persists (`.rutc` caches stay pack-time). The riding law
-  binds both sides: a pkg that owns an open generic surface but
-  carries no riding source refuses at the mount (`pouch` owns an open
-  generic surface but its bundle carries no riding source — re-pack
-  the directory). And a bundle is **closed**: every dep its manifest
+  `futures` carry their generic bodies as templates in the binaries,
+  so a consumer's `Vec<Todo>` or `decodeJson<Vec<Todo>>` compiles **at
+  the consumer's link**: a shape the ledger lacks monomorphizes from
+  the template, the body registers under the declaring pkg's spec (one
+  row program-wide, identity by owner), and nothing persists (`.rutc`
+  caches stay pack-time). The law binds both sides: a pkg that owns an
+  open generic surface but whose binary carries no template bodies
+  refuses at the mount (corrupt or doctored — re-pack the directory).
+  And a bundle is **closed**: every dep its manifest
   declares rides as an in-archive group, so a bundle-mounted json
   carries `strbuild`, `pouch`, and `nmapset` inside — the ordinary
   closure law, nothing to supply at the consumer's side.
@@ -291,7 +290,7 @@ through the bundle's scope ledger ([Module bundles](bundles.md)).
 // an app that wants json's whole surface
 {
   "deps": {
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/json.rutbundle" }
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/json.rutbundle" }
   }
 }
 ```

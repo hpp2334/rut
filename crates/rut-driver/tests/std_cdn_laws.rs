@@ -10,12 +10,12 @@
 //!    first-mount-wins, and the scope ledgers namespace per archive
 //!    (independently packed bundles never argue about a number).
 //! 4. **The generic law, flipped** — the engine's owner-anchored
-//!    instantiation law over the CDN: a compiled std bundle whose pkg
-//!    RIDES its generic source serves consumer-spelled shapes at the
-//!    consumer's link (`Vec<i64>` from a bundle-mounted pouch
-//!    compiles and runs). A bundle stripped of its riding source
-//!    refuses loudly at mount (re-pack it). Determinism: same bundle +
-//!    same consumer ⇒ byte-identical output.
+//!    instantiation law over the CDN: a compiled std bundle carries its
+//!    generic BODIES as templates (v22), so it serves consumer-spelled
+//!    shapes at the consumer's link (`Vec<i64>` from a bundle-mounted
+//!    pouch compiles and runs). A bundle whose binary carries no
+//!    template bodies — torn or doctored — refuses loudly at mount.
+//!    Determinism: same bundle + same consumer ⇒ byte-identical output.
 //! 5. **The concrete-lib law** — a compiled concrete-class lib (the
 //!    string builder) serves its consumers from the bundle: the
 //!    classes' methods cross on the surface's inherent rows, no
@@ -344,11 +344,11 @@ fn load_compile_run(
 
 #[test]
 fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
-    // THE FLIPPED LAW: a compiled pouch whose source rides serves
-    // consumer-spelled shapes at the consumer's LINK — the ridden text
-    // lowers in the consumer's session, the monomorphized body
-    // compiles with owner = the pkg's spec, and the linked program
-    // runs. Nothing persists: the `.rutc` bytes stay pack-time.
+    // THE FLIPPED LAW: a compiled pouch whose binary carries the
+    // generic bodies as templates (v22) serves consumer-spelled shapes
+    // at the consumer's LINK — a shape the ledger lacks monomorphizes
+    // from the template with owner = the pkg's spec, and the linked
+    // program runs. Nothing persists: the `.rutc` bytes stay pack-time.
     let (url, bytes) = artifact("pouch");
     let base = std::env::temp_dir().join(format!("rut-std-cdn-vec-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);

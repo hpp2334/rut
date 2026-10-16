@@ -1,6 +1,7 @@
 //! v11 compiled bundles: the mixed closure — linked pkgs ride as
 //! `mod.rutc` binaries (bodies + surface, the linking truth; generic
-//! owners also ride their source beside the binary), pkgs the graph
+//! owners also ride their generic bodies as templates INSIDE the
+//! binary, v22), pkgs the graph
 //! never linked (declared-but-unused) and host pkgs ride as source
 //! file sets under their content identities — plus the pinned
 //! equivalence (compiled bundle vs source directory ⇒ identical

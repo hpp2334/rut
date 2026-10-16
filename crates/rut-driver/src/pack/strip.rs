@@ -1,4 +1,4 @@
-//! The strip arm — extracted from the pack pipeline's tail: three
+//! The strip arm — extracted from the pack pipeline's tail: two
 //! laws run here, all against the packer's OWN group-kind decisions
 //! (the `sources` map + `units.linked`, the same classifier the encode
 //! loop applies — never a re-derivation), then the mangle itself.
@@ -10,7 +10,7 @@ use crate::pack::Archive;
 use crate::pack::{PackRead, PkgSource};
 use crate::PackError;
 
-// the strip arm — after the compile walk, before any encode. Three
+// the strip arm — after the compile walk, before any encode. Two
 // laws run here, all against the packer's OWN group-kind decisions
 // (the `sources` map + `units.linked`, the same classifier the
 // encode loop applies — never a re-derivation):

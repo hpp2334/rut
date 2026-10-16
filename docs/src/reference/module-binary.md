@@ -65,19 +65,23 @@ offset  field
         surface: namespace, funcs, consts, types + scope blocks + type
                  exports, interface decls, inherent method surfaces,
                  the native rows   # below
-        templates: u32 count, then per row (below)   # v22 — the
-                 template window's first fid precedes the count
+        templates: window first fid, window end (exclusive), then
+                 u32 count, then per row (below)   # v22
 ```
 
 - **Templates (v22 — generic bodies ride the binary)**: after the
   surface, the wire carries the template window — `template_first_fid`
-  (every func at or above it is template-derived), then one index row
+  and `template_end_fid` (every func in `[first, end)` is
+  template-derived; the end is WIRE, not implicit, because a pack walk
+  that materializes consumer-served instantiations into a decoded dep
+  appends them AFTER the window — real ledger instantiations, not
+  window entries), then one index row
   per exported generic decl: the kind tag (`0` free / `1` method), the
   bound name(s), the `#<param>` placeholder rows in declaration order,
   the bound interface names, and the fid of the placeholder-compiled
   body (the body itself rides `funcs`). The window's bound-member stubs
   ride beside the rows as `(fid, param placeholder, member name)`
-  triples. Decode validates every fid against the window and every
+  triples. Decode validates the window against the func table and every
   type id against the carried blocks; a consumer-spelled shape the
   pack-time ledger misses monomorphizes from these rows at link (see
   [Bundles](bundles.md) — the delivery law).

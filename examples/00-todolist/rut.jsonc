@@ -5,7 +5,7 @@
   // (`load_dir_session_with`) — same host half, new mount lane.
   //
   // THE CDN ROW: `pouch` ships as a COMMITTED compiled bundle
-  // (dist/std-v10/pouch.rutbundle, jsDelivr-served at the tag, pinned in
+  // (dist/std-v11/pouch.rutbundle, jsDelivr-served at the tag, pinned in
   // rut.lock — the pin is law at the mount door on every load). pouch is a
   // GENERIC owner, and since the generic-source riding law its bundle
   // carries the source beside the binary: this app's consumer-spelled
@@ -16,6 +16,6 @@
   // wire), so the gates never touch the network.
   "name": "todolist",
     "deps": {
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v10/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle" }
   }
 }

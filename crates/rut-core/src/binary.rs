@@ -959,18 +959,29 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     // (the compiler mounts a clone of it, `Surface::names`). Decode
     // validates every row against the tables above it.
     encode_surface(&mut e, &prog.surface);
-    // the templates section (v22): the template window's first fid,
-    // then one index row per exported generic decl — the bodies ride
-    // `funcs` (every fid at or above the window start is
-    // template-derived). A program with no templates spells the window
-    // as empty regardless of the field (hand-built programs: the
-    // decode-side law is "no templates, no window").
+    // the templates section (v22): the template window's first fid, the
+    // window's END (exclusive), then one index row per exported generic
+    // decl — the bodies ride `funcs` (every fid in [first, end) is
+    // template-derived). The end is WIRE, not implicit: a pack walk
+    // that materializes consumer-served instantiations into a decoded
+    // dep appends them AFTER the window (they are real ledger
+    // instantiations, not window entries), so funcs.len() would
+    // overstate the window and the consumer's link would drop the
+    // served bodies with it. A program with no templates spells the
+    // window as empty regardless of the fields (hand-built programs:
+    // the decode-side law is "no templates, no window").
     let first = if prog.templates.is_empty() {
         prog.funcs.len() as u32
     } else {
         prog.template_first_fid
     };
+    let end = if prog.templates.is_empty() {
+        prog.funcs.len() as u32
+    } else {
+        prog.template_end_fid
+    };
     e.u32(first);
+    e.u32(end);
     e.u32(prog.templates.len() as u32);
     for t in &prog.templates {
         match &t.kind {
@@ -1327,8 +1338,11 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         let labels = d.u32s()?;
         let ncode = d.u32()? as usize;
         let mut code = Vec::with_capacity(ncode);
-        for _ in 0..ncode {
-            code.push(decode_op(&mut d)?);
+        for oi in 0..ncode {
+            match decode_op(&mut d) {
+                Ok(op) => code.push(op),
+                Err(e) => return Err(format!("func #{}/{} op {}/{}: {}", funcs.len(), nfuncs, oi, ncode, e)),
+            }
         }
         let nspans = d.u32()? as usize;
         let mut spans = Vec::with_capacity(nspans);
@@ -1408,7 +1422,8 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
     // tables the binary carries — names against the rebuilt interner,
     // fids against the func table, parameter indexes against the row's
     // own placeholder list, type ids against the carried scope blocks
-    let (template_first_fid, templates, template_stubs) = decode_templates(&mut d, &interner, &surface, funcs.len())?;
+    let (template_first_fid, template_end_fid, templates, template_stubs) =
+        decode_templates(&mut d, &interner, &surface, funcs.len())?;
     Ok(Program {
         name,
         scope: 0,
@@ -1427,7 +1442,7 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         templates,
         template_stubs,
         template_first_fid,
-        template_end_fid: nfuncs as u32,
+        template_end_fid,
     })
 }
 
@@ -1438,11 +1453,17 @@ fn decode_templates(
     interner: &Interner,
     surface: &Surface,
     funcs_len: usize,
-) -> Result<(u32, Vec<TemplateRow>, Vec<TemplateStub>), String> {
+) -> Result<(u32, u32, Vec<TemplateRow>, Vec<TemplateStub>), String> {
     let first = d.u32()?;
+    let end = d.u32()?;
     if first as usize > funcs_len {
         return Err(format!(
             "bad template window (first fid {first} outside the func table, which carries {funcs_len})"
+        ));
+    }
+    if end < first || end as usize > funcs_len {
+        return Err(format!(
+            "bad template window (end {end} outside [first {first}, the func table's {funcs_len}])"
         ));
     }
     let names_len = interner.names().len();
@@ -1522,7 +1543,7 @@ fn decode_templates(
         let member = name(IdentId(d.u32()?))?;
         stubs.push(TemplateStub { fid: sfid, param, member });
     }
-    Ok((first, rows, stubs))
+    Ok((first, end, rows, stubs))
 }
 
 /// The surface section (v16) — the decode side of [`encode_surface`],
@@ -2097,7 +2118,7 @@ impl Enc {
 
 pub(crate) struct Dec<'a> {
     b: &'a [u8],
-    pos: usize,
+    pub(crate) pos: usize,
 }
 impl<'a> Dec<'a> {
     /// A fresh decoder over the whole byte range — the shared-codec
@@ -2107,7 +2128,7 @@ impl<'a> Dec<'a> {
     }
     fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
         if self.pos + n > self.b.len() {
-            return Err("truncated module binary".into());
+            return Err(format!("truncated module binary (take {n} at pos {} of {})", self.pos, self.b.len()));
         }
         let s = &self.b[self.pos..self.pos + n];
         self.pos += n;

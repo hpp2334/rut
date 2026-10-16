@@ -1253,6 +1253,7 @@ version = "0.1.0"
 dependencies = [
  "ls-types",
  "rut-ast",
+ "rut-core",
  "rut-driver",
  "rut-lexer",
  "rut-parser",

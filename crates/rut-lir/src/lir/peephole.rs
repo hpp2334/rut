@@ -35,7 +35,7 @@ pub(crate) fn run(
         let (c, s, changed3) = fuse_once(code, spans, &mut pools);
         code = c;
         spans = s;
-        let (c, s, changed4) = opt_prim_once(code, spans, &mut pools);
+        let (c, s, _p, changed4) = opt_prim_once(code, spans, Vec::new(), &mut pools);
         code = c;
         spans = s;
         if !changed && !changed2 && !changed3 && !changed4 {
@@ -76,18 +76,25 @@ pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode, tt: &rut_core::types:
         // copy's original (the fresh compile's `one_round` outcome) so
         // the elision below can consume the MakeOpt — the reverse order
         // strands the copy behind an already-elided box
-        let (code, spans, copied) = copy_fold_once(
+        let (code, spans, pos, copied) = copy_fold_once(
             std::mem::take(&mut fc.code),
             std::mem::take(&mut fc.spans),
+            std::mem::take(&mut fc.pos),
             &mut pools,
             &is_prim_copy,
         );
         fc.code = code;
         fc.spans = spans;
-        let (code, spans, changed) =
-            opt_prim_once(std::mem::take(&mut fc.code), std::mem::take(&mut fc.spans), &mut pools);
+        fc.pos = pos;
+        let (code, spans, pos, changed) = opt_prim_once(
+            std::mem::take(&mut fc.code),
+            std::mem::take(&mut fc.spans),
+            std::mem::take(&mut fc.pos),
+            &mut pools,
+        );
         fc.code = code;
         fc.spans = spans;
+        fc.pos = pos;
         if !changed && !copied {
             break;
         }
@@ -111,12 +118,13 @@ pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode, tt: &rut_core::types:
 fn copy_fold_once(
     code: Vec<Op>,
     spans: Vec<(u32, u32)>,
+    mut pos: Vec<(u32, u32)>,
     pools: &mut Pools,
     is_prim_copy: &dyn Fn(u16) -> bool,
-) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+) -> (Vec<Op>, Vec<(u32, u32)>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
-        return (code, spans, false);
+        return (code, spans, pos, false);
     }
     let mut reads: HashMap<u16, Vec<usize>> = HashMap::new();
     let mut writes: HashMap<u16, Vec<usize>> = HashMap::new();
@@ -208,7 +216,7 @@ fn copy_fold_once(
         replace_at.entry(use_pc).or_default().push((dst, src));
     }
     if !removed.iter().any(|&b| b) {
-        return (code, spans, false);
+        return (code, spans, pos, false);
     }
     let mut kept = vec![false; n];
     let mut new_code = Vec::with_capacity(n);
@@ -263,7 +271,15 @@ fn copy_fold_once(
             new_spans.push((old_to_new[pc], lo));
         }
     }
-    (new_code, new_spans, true)
+    // `pos` is parallel to `spans` (v8) — the same kept mask filters it,
+    // so the wire's one-(line, col)-per-span law survives the fold
+    let mut new_pos = Vec::with_capacity(pos.len());
+    for (i, entry) in pos.into_iter().enumerate() {
+        if i < n && kept[i] {
+            new_pos.push(entry);
+        }
+    }
+    (new_code, new_spans, new_pos, true)
 }
 
 /// Producer forwarding: `OP d, ...; mov y, d` where `d` is defined only by
@@ -554,10 +570,15 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
 ///    `arrget[a/f] u, .. ..optprimload`: the payload is read straight out of
 ///    the raw store, a nil tag still traps `NilDeref`, and the fresh opt
 ///    value is never minted.
-fn opt_prim_once(mut code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn opt_prim_once(
+    mut code: Vec<Op>,
+    spans: Vec<(u32, u32)>,
+    mut pos: Vec<(u32, u32)>,
+    pools: &mut Pools,
+) -> (Vec<Op>, Vec<(u32, u32)>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n < 2 {
-        return (code, spans, false);
+        return (code, spans, pos, false);
     }
     let mut reads: HashMap<u16, Vec<usize>> = HashMap::new();
     let mut writes: HashMap<u16, Vec<usize>> = HashMap::new();
@@ -657,7 +678,7 @@ fn opt_prim_once(mut code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -
         removed[pc + 1] = true;
     }
     if !removed.iter().any(|&b| b) {
-        return (code, spans, false);
+        return (code, spans, pos, false);
     }
     let mut kept = vec![false; n];
     let mut new_code = Vec::with_capacity(n);
@@ -701,7 +722,14 @@ fn opt_prim_once(mut code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -
             new_spans.push((old_to_new[pc], lo));
         }
     }
-    (new_code, new_spans, true)
+    // `pos` is parallel to `spans` (v8) — the same kept mask filters it
+    let mut new_pos = Vec::with_capacity(pos.len());
+    for (i, entry) in pos.into_iter().enumerate() {
+        if i < n && kept[i] {
+            new_pos.push(entry);
+        }
+    }
+    (new_code, new_spans, new_pos, true)
 }
 
 fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
