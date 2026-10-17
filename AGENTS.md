@@ -75,7 +75,9 @@ acceptance):
   commit the artifact; the `--book` deploy lane builds and copies it
   into the rendered book (mdbook 0.5 dropped
   `output.html.additional-resources`, so the lane does the copy).
-- Anti-rot gate for book code: `cargo test -p rut-cli --test
+- Tests run through `cargo nextest run` (cargo-nextest is installed),
+  not `cargo test` — keep this for every test invocation.
+- Anti-rot gate for book code: `cargo nextest run -p rut-cli --test
   book_blocks` compiles + runs every runnable ```rut block in
   docs/src natively and must pass whenever book code blocks change.
   Blocks that cannot run yet are skipped in the test's SKIP table
