@@ -545,6 +545,19 @@ impl<'a> GraphCompiler<'a> {
             }
         }
 
+        // the deps' decl rows, keyed by the spelled head (the
+        // validated-must-bind classification input): the use-line error
+        // reads the dep's vis/kind row to name the fix — a private row
+        // its `pub`, a `pub async fn` the async gap. The tables ride the
+        // shared cache (validate filled them); a compiled dep's decls
+        // ride its binary and classify generically.
+        let dep_tables: Vec<
+            (String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>),
+        > = uses
+            .iter()
+            .filter_map(|h| self.dep_mod_table(h).cloned().map(|t| (h.clone(), t)))
+            .collect();
+
         let out = compile_program_resolved(
             &combined,
             if is_decl { Mode::Decl } else { Mode::Impl },
@@ -555,6 +568,7 @@ impl<'a> GraphCompiler<'a> {
             &Seeds::none(),
             &layout,
             &own_uses,
+            &dep_tables,
         );
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
@@ -787,6 +801,10 @@ impl<'a> GraphCompiler<'a> {
             &Seeds { groups: &groups },
             &layout,
             &own_uses,
+            // the replay of a unit that already passed the must-bind
+            // gate (same text, same bindings) — no classification input
+            // to carry
+            &[],
         );
         for r in &out.requests {
             self.requests.push((owner.to_string(), r.clone()));

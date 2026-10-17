@@ -5,10 +5,11 @@
 //! only fail later at a call site that might never be written; the
 //! graph now rejects it where it is written, positioned at the use
 //! line (`--> file:line:col`). The gate names only what the dep never
-//! declared (plus mod names, which no surface carries): visibility
-//! stays the binding's business exactly as before, so `.d.rut`
-//! surfaces, std packages, and a dep's own private rows keep loading
-//! clean. The binding case runs against a LOCAL dep — no std drift.
+//! declared (plus mod names, which no surface carries); visibility is
+//! the validated-must-bind law's (plan10 phase 2) — a leaf that binds
+//! nothing errors AT the use line, a private row naming the `pub` fix —
+//! while `.d.rut` surfaces and std packages keep loading clean. The
+//! binding case runs against a LOCAL dep — no std drift.
 
 use std::collections::BTreeMap;
 
@@ -147,14 +148,30 @@ fn a_valid_flat_import_compiles_and_the_name_runs() {
 }
 
 #[test]
-fn a_private_leaf_stays_legal_the_binding_answers_vis() {
-    // `hidden` IS declared (private) — the gate names what the dep
-    // never declared, never its internals: the import stays exactly as
-    // legal as it was (silent here; the use site answers visibility)
+fn a_private_leaf_errors_at_the_use_line() {
+    // `hidden` IS declared (private) — the validated-must-bind law
+    // (plan10 phase 2): the leaf binds nothing (the surface carries
+    // `pub` rows only), and the use line says so, naming the `pub`
+    // fix. The old silence is gone: the error is the import's own,
+    // positioned at the line it is written on.
     let src = "use util::{ hidden };\n\
                entry fn main() -> i32 { return 0; }\n";
     let g = graph_of(src);
-    assert!(g.diags.is_empty(), "zero diagnostics: {:?}", msgs(&g));
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert!(
+        g.diags[0]
+            .msg
+            .contains("`hidden` is not exported by `util`")
+            && g.diags[0].msg.contains("mark it `pub`"),
+        "got: {}",
+        g.diags[0].msg
+    );
+    assert_eq!(g.diags[0].file.as_deref(), Some("app"));
+    assert!(
+        rendered(src, &g).contains("--> app:1:1"),
+        "the arrow names the use line:\n{}",
+        rendered(src, &g)
+    );
 }
 
 #[test]

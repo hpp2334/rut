@@ -625,8 +625,9 @@ entry fn main() -> nil {
     assert_eq!(lines, vec!["a=6 b=4 c=251 d=7 n=2"]);
     assert_eq!(trap, None);
     // everywhere else, explicit generics on a static head stay a clear error
-    // (the prelude use is present, so the static route engages)
-    let bad = "use core::{ Option };\nentry fn main() -> nil { let x = Option<i32>::some(5); Logger::new(\"app\").info(f\"{x.value}\"); }";
+    // (the route engages on the path shape itself — a retired head spells
+    // the same clear error)
+    let bad = "entry fn main() -> nil { let x = Option<i32>::some(5); Logger::new(\"app\").info(f\"{x.value}\"); }";
     let out = compile_out(bad, "main");
     // explicit generics on the retired head stay a clear error
     assert!(out.diags.iter().any(|d| d.msg.contains("generic type paths (`Option<..>::some`) are not supported")));

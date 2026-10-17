@@ -28,6 +28,45 @@ fn marker_code(m: Option<rut_core::IdentId>) -> u8 {
     }
 }
 
+/// The async-gap message (plan10 phase 2): a `pub async fn` does not
+/// cross package surfaces yet, so a `use` leaf naming one binds
+/// nothing. The ONE spelling of the gap — the phase-3 flip (async rows
+/// crossing the surface) retunes this helper alone.
+fn pub_async_surface_gap(name: &str) -> String {
+    format!("`{name}` is a `pub async fn` — async fns do not cross package surfaces yet")
+}
+
+/// The use-line must-bind message for one unbound leaf. `module` is
+/// the dep module the leaf validates against (`""` = the dep's root);
+/// `row` is the dep's decl row for the name when the dep's decl text
+/// rides the mount — `None` when it does not (a compiled dep's decls
+/// ride its binary), and the bare law speaks.
+fn unbound_use_msg(
+    leaf: &str,
+    head: &str,
+    module: &str,
+    row: Option<&crate::mods::DeclRow>,
+) -> String {
+    match row {
+        // the row exists and does not cross: the `pub` fix names itself
+        Some(d) if d.vis != rut_ast::ast::Vis::Pub => {
+            let at = if module.is_empty() {
+                head.to_string()
+            } else {
+                format!("{head}::{}", module.replace('/', "::"))
+            };
+            format!("`{leaf}` is not exported by `{at}` — mark it `pub` there")
+        }
+        // a `pub` fn the surface carried nowhere is the async gap
+        Some(d) if d.kind == crate::mods::DeclKind::Fn => pub_async_surface_gap(leaf),
+        // everything else (a compiled dep's binary, a `pub` shape the
+        // surface does not carry): the bare law
+        _ => format!(
+            "`{leaf}` is not part of `{head}`'s exported surface — nothing binds in this file"
+        ),
+    }
+}
+
 fn respell_surface_ty(
     types: &rut_core::types::TypeTable,
     t: TypeId,
@@ -108,6 +147,7 @@ pub fn compile_program(
         &Seeds::none(),
         &rut_lir::check::ModInputs::flat(),
         &[],
+        &[],
     )
 }
 
@@ -121,7 +161,11 @@ pub fn compile_program(
 /// packages. `own_uses` carries the own-package use bindings the
 /// graph validation recorded: `(importing file mod path, bound name,
 /// target module)` — the bare-name ladder resolves these through the
-/// target module's decls, per file.
+/// target module's decls, per file. `dep_decls` carries the deps'
+/// per-module decl rows keyed by the spelled head (the validated-must-
+/// bind classification input: the visibility/kind row that spells the
+/// use-line fix) — a head with no entry (a compiled dep's binary, the
+/// direct lane) classifies generically.
 #[allow(clippy::too_many_arguments)]
 pub fn compile_program_resolved(
     src: &str,
@@ -133,6 +177,7 @@ pub fn compile_program_resolved(
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
     own_uses: &[(String, String, String)],
+    dep_decls: &[(String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>)],
 ) -> ProgramOutput {
     let fail = |diags: Vec<Diag>, ast_dump: String, ast_json: String| ProgramOutput {
         diags,
@@ -214,13 +259,15 @@ pub fn compile_program_resolved(
     // `UseBinding` — one use leaf's row: `file` the importing file's
     // mod path, `head` the dep head text, `leaf` the bound bare name,
     // `qualified` flat vs `head::path::{leaf}`, `composed` the
-    // host-row spelling when qualified (`net::ping`).
+    // host-row spelling when qualified (`net::ping`), `span` the use
+    // item's span (the must-bind law's error site).
     struct UseBinding {
         file: String,
         head: String,
         leaf: rut_core::IdentId,
         qualified: bool,
         composed: String,
+        span: rut_lexer::span::Span,
     }
     // the own-package claims: the graph validation's rows — a leaf
     // these claim is the intra-package import, no dep head behind it
@@ -233,6 +280,7 @@ pub fn compile_program_resolved(
         if let rut_ast::ast::ItemKind::Use { path, names } = ast.item(it) {
             let head = ast.name(path[0]).to_string();
             let file = ctx.mods.file_of(ast.span(it.id()).lo).to_string();
+            let span = ast.span(it.id());
             let prefix = path[1..]
                 .iter()
                 .map(|&s| ast.name(s).to_string())
@@ -256,6 +304,7 @@ pub fn compile_program_resolved(
                     leaf: n,
                     qualified,
                     composed,
+                    span,
                 });
             }
         }
@@ -381,6 +430,17 @@ pub fn compile_program_resolved(
     // The binding key is the SPELLED head (`head` — the use row's
     // text); `origin` (the exporter's mount key) rides the owner
     // anchors.
+    //
+    // The must-bind ledger fills alongside: every `(file, leaf)` pair a
+    // loop actually inserted, plus the names that bind AMBIENT (the
+    // flagged prelude rows, the primitive impls — a use leaf naming one
+    // stays redundant-but-legal). The validated-must-bind walk after
+    // the pass reads these; the trait lane rides `extern_iface_decls`
+    // (trait names resolve across ALL uses — the use-both gate).
+    let mut bound_sites: std::collections::HashSet<(String, rut_core::IdentId)> =
+        std::collections::HashSet::new();
+    let mut ambient_names: std::collections::HashSet<rut_core::IdentId> =
+        std::collections::HashSet::new();
     for (dep_scope, surface, tmap, origin, head) in trait_maps.iter() {
         let dep_scope = *dep_scope;
         // the namespace head's files (`use calc::{ Math }`): the
@@ -422,6 +482,7 @@ pub fn compile_program_resolved(
                 .collect();
             let ret2 = ctx.respell_future_ret(f.ret, &exports);
             for (site, id) in sites {
+                bound_sites.insert((site.clone(), id));
                 ctx.add_extern_fn(
                     &site,
                     id,
@@ -448,6 +509,7 @@ pub fn compile_program_resolved(
         for g in &surface.fn_generics {
             let text = surface.names.name(g.name);
             for (site, id) in binding_sites(head, text) {
+                bound_sites.insert((site.clone(), id));
                 let params = g
                     .params
                     .iter()
@@ -462,6 +524,7 @@ pub fn compile_program_resolved(
         // have none
         for (prim, n, i) in &surface.native_impls {
             let name = ctx.intern(surface.names.name(*n));
+            ambient_names.insert(name);
             ctx.add_builtin_impl(name, *prim, *i);
         }
         // the prelude's const stays USE-GATED: the builtin
@@ -486,12 +549,14 @@ pub fn compile_program_resolved(
                 }
             }
             for (site, id) in sites {
+                bound_sites.insert((site.clone(), id));
                 ctx.add_extern_const(&site, id, c.ty, c.bits);
             }
         }
         for t in &surface.type_exports {
             let text = surface.names.name(t.name);
             for (site, id) in binding_sites(head, text) {
+                bound_sites.insert((site.clone(), id));
                 // `scope: None` — the exporter's own scope (ordinary rows);
                 // `Some(s)` — an explicit one (a boot-targeted alias;
                 // the shared boot table needs no rebase)
@@ -604,9 +669,11 @@ pub fn compile_program_resolved(
         for (n, kind, ambient) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
                 if *ambient {
+                    ambient_names.insert(id);
                     ctx.add_extern_native_type(AMBIENT_SITE, id, *kind);
                 } else {
                     for (site, leaf) in bare_sites(head, id) {
+                        bound_sites.insert((site.clone(), leaf));
                         ctx.add_extern_native_type(&site, leaf, *kind);
                     }
                 }
@@ -615,9 +682,11 @@ pub fn compile_program_resolved(
         for (n, ambient) in &surface.native_fns {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
                 if *ambient {
+                    ambient_names.insert(id);
                     ctx.add_extern_native_fn(AMBIENT_SITE, id);
                 } else {
                     for (site, leaf) in bare_sites(head, id) {
+                        bound_sites.insert((site.clone(), leaf));
                         ctx.add_extern_native_fn(&site, leaf);
                     }
                 }
@@ -628,9 +697,64 @@ pub fn compile_program_resolved(
         if let Some(ns) = &surface.namespace {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*ns)) {
                 for (site, leaf) in bare_sites(head, id) {
+                    bound_sites.insert((site.clone(), leaf));
                     ctx.add_extern_namespace(&site, leaf);
                 }
             }
+        }
+    }
+    // ---- validated-must-bind (plan10 phase 2): every `use` leaf that
+    // binds nothing in its own file errors AT THE USE LINE — a hard
+    // error where the `use` was written, not at some later call site.
+    // The dep's decl row (when the dep's decl text rides the mount)
+    // classifies the gap: a private row names the `pub` fix, a
+    // `pub async fn` names the async gap (the one helper above; the
+    // phase-3 flip retunes it alone); a compiled dep's binary carries
+    // no decl text, so its misses state the bare law. Ambient prelude
+    // rows stay redundant-but-legal, and the trait lane binds
+    // unit-globally (trait names resolve across ALL uses — the
+    // use-both gate).
+    if ctx.allow_uses {
+        let mut bad: Vec<Diag> = Vec::new();
+        let mut reported: std::collections::HashSet<(String, rut_core::IdentId)> =
+            std::collections::HashSet::new();
+        for b in &use_bindings {
+            if bound_sites.contains(&(b.file.clone(), b.leaf))
+                || ambient_names.contains(&b.leaf)
+                || ctx.extern_iface_decls.contains_key(&b.leaf)
+            {
+                continue;
+            }
+            // one error per (file, leaf): a leaf spelled twice that
+            // binds nothing reports once (the duplicate law owns the
+            // twice-spelled shape when the leaf does bind)
+            if !reported.insert((b.file.clone(), b.leaf)) {
+                continue;
+            }
+            let leaf_text = ast.name(b.leaf).to_string();
+            // the dep module the leaf validates against: a flat leaf
+            // reads the dep's root, a qualified leaf its walked module
+            // (the composed spelling minus the leaf, `::` → `/` — the
+            // decl table's mod-path key)
+            let module = if b.qualified {
+                b.composed
+                    .rsplit_once("::")
+                    .map(|(p, _)| p)
+                    .unwrap_or("")
+                    .replace("::", "/")
+            } else {
+                String::new()
+            };
+            let drow = dep_decls
+                .iter()
+                .find(|(h, _)| h == &b.head)
+                .and_then(|(_, t)| t.get(&module))
+                .and_then(|rows| rows.iter().find(|d| d.name == leaf_text));
+            bad.push(Diag::new(b.span, unbound_use_msg(&leaf_text, &b.head, &module, drow)));
+        }
+        if !bad.is_empty() {
+            diags.append(&mut bad);
+            return fail(diags, ast_dump, ast_json);
         }
     }
     // the carried mirror rows join the instantiation maps (see

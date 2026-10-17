@@ -352,7 +352,12 @@ fn t10_the_collision_was_real() {
     let pouch_src = std::fs::read_to_string(Path::new(&format!("{SIBS}/pouch/mod.rut")))
         .expect("pouch fixture source");
     let twice = format!("{pouch_src}\n\n{pouch_src}");
-    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], true, &Seeds::none(), &rut_driver::ModInputs::flat(), &[]);
+    // loading is OFF here: the spliced text's `use` statements name deps
+    // this bare compile binds nothing of, and the validated-must-bind
+    // gate would preempt the duplicate error this test exists to prove —
+    // the use rows err-and-continue in collect, the doubly-spliced text
+    // still answers with its duplicate type definitions
+    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], false, &Seeds::none(), &rut_driver::ModInputs::flat(), &[], &[]);
     assert!(
         out.program.is_none()
             && out.diags.iter().any(|d| d.msg.contains("duplicate")),

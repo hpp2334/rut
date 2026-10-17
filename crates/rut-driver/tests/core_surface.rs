@@ -203,10 +203,13 @@ fn core_decl_matches_the_compilers_surface() {
 #[test]
 fn retired_names_are_ordinary_unknown_names() {
     // `Option` retired in v1.1: the name is an ordinary identifier now,
-    // with or without the use statement — an unresolved use falls to
-    // the plain unknown-name diagnostic, exactly like a never-existing
+    // with or without the use statement — a bare spelling falls to the
+    // plain unknown-name diagnostic, exactly like a never-existing
     // name. (The LIVE builtin names are ambient now —
-    // builtin-surface — see tests/ambient.rs.)
+    // builtin-surface — see tests/ambient.rs.) The use-spelled shape is
+    // the validated-must-bind law's (plan10 phase 2): a leaf that binds
+    // nothing errors AT THE USE LINE — the ordinary nothing-binds
+    // message, no retired-name special case anywhere.
     let out = compiled("app_main", "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n".into());
     assert!(
         out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")),
@@ -218,7 +221,9 @@ fn retired_names_are_ordinary_unknown_names() {
                  entry fn main() -> i32 { let x = Option.some(1); return 0; }\n"
                     .into());
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")),
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("`Option` is not part of `core`'s exported surface")),
         "diags: {:?}",
         out.diags
     );

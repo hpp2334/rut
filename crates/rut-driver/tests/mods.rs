@@ -2072,3 +2072,150 @@ fn own_use_and_dep_use_coexist_per_file() {
     // the root's helper is imp's (10), the child's is pkga's (7)
     assert_eq!(run_main_pkgs(&pkgs, "app"), 17);
 }
+
+// =====================================================================
+// validated-must-bind (plan10 phase 2): every `use` leaf that binds
+// nothing in its own file errors AT THE USE LINE — the hard error lands
+// where the `use` was written (the use statement's span, the importing
+// file), never at some later call site. A private dep row's message
+// names the `pub` fix; a `pub async fn`'s names the async gap (the one
+// helper the phase-3 flip retunes); type leaves bind exactly as before.
+// =====================================================================
+
+#[test]
+fn private_use_errors_at_use_line() {
+    // pkga's `helper` is plain `fn` — the flat use imports a row the
+    // surface never carried; the error is the use line's, spelling the
+    // fix (the dep row exists, it just does not cross)
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub fn dup(x: i32) -> i32 { return x + 1; }\nfn helper() -> i32 { return 9; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ dup, helper };\nentry fn main() -> i32 { return dup(41); }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "app");
+    assert!(
+        diags.iter().any(|d| d.contains("`helper` is not exported")
+            && d.contains("mark it `pub`")),
+        "{diags:?}"
+    );
+    // the control: marking it `pub` binds and runs
+    let ok = vec![
+        modpkg(
+            "pkga",
+            "pub fn dup(x: i32) -> i32 { return x + 1; }\npub fn helper() -> i32 { return 9; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ dup, helper };\nentry fn main() -> i32 { return dup(41) + helper(); }\n",
+            vec![],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&ok, "app"), 51);
+}
+
+#[test]
+fn async_use_errors_at_use_line() {
+    // pkga's `fetch` is `pub async fn` — the async gap: the row does
+    // not cross package surfaces yet (the surface's is_async hardcode
+    // is phase 3's business), so the leaf binds nothing and the use
+    // line says so
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub async fn fetch() -> nil { }\npub fn dup(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ fetch, dup };\nentry fn main() -> i32 { return dup(41); }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "app");
+    assert!(
+        diags.iter().any(|d| d.contains("`fetch` is a `pub async fn`")
+            && d.contains("do not cross package surfaces yet")),
+        "{diags:?}"
+    );
+    // and a `pub` fn the dep does carry imports and runs beside it
+    let ok = vec![
+        modpkg(
+            "pkga",
+            "pub async fn fetch() -> nil { }\npub fn dup(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ dup };\nentry fn main() -> i32 { return dup(41); }\n",
+            vec![],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&ok, "app"), 42);
+}
+
+#[test]
+fn type_leaf_still_binds() {
+    // the control: a type leaf (a struct) binds and crosses exactly as
+    // before — the must-bind law refuses only leaves nothing carries
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub struct Pair { x: i32, y: i32 }\npub fn pair(v: i32) -> Pair { return Pair { x: v, y: v + 1 }; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ Pair, pair };\nentry fn main() -> i32 { let p: Pair = pair(40); return p.y; }\n",
+            vec![],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "app"), 41);
+}
+
+#[test]
+fn anchor_no_longer_feeds_the_child() {
+    // the root's `use pkga::{ dup }` binds (the anchor row — the same
+    // head, a live binding); the CHILD's own use of the same head names
+    // a row the surface never carried. The anchor does not feed the
+    // child: the child's use line errors, in the child's file, and the
+    // root's binding is not the child's.
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub fn dup(x: i32) -> i32 { return x + 1; }\nfn helper() -> i32 { return 9; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ dup };\nmod child;\nuse child::{ go };\nentry fn main() -> i32 { return dup(41) + go(); }\n",
+            vec![(
+                "child",
+                Vis::Pub,
+                "use pkga::{ helper };\npub fn go() -> i32 { return helper(); }\n",
+            )],
+        ),
+    ];
+    let mut run = rut_driver::RutRun::new();
+    for p in &pkgs {
+        let heads: Vec<&str> =
+            pkgs.iter().map(|q| q.spec.as_str()).filter(|s| *s != p.spec).collect();
+        run = run.pkg(p.clone().manifest(rut_driver::Manifest::lib(&p.spec, &heads)));
+    }
+    let c = run.entrypoint("app").compile().expect("compile carries the diags");
+    let hit = c
+        .graph
+        .diags
+        .iter()
+        .find(|d| d.msg.contains("`helper` is not exported") && d.msg.contains("mark it `pub`"))
+        .expect("the child's use line errors");
+    // the use statement's span: the CHILD file's, not the root's
+    assert_eq!(hit.file.as_deref(), Some("app/child"), "{:?}", c.graph.diags);
+}
