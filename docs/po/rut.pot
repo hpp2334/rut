@@ -3893,7 +3893,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:208
+#: src/tutorial/modules.md:46 src/reference/modules-and-visibility.md:274
 msgid "Visibility"
 msgstr ""
 
@@ -3903,12 +3903,12 @@ msgid ""
 "— the safe default. Nothing leaks unless it says `pub`:"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:214
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:280
 #: src/reference/literals-and-inference.md:111
 msgid "Form"
 msgstr ""
 
-#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:214
+#: src/tutorial/modules.md:52 src/reference/modules-and-visibility.md:280
 #: src/reference/primitive-types.md:25
 #: src/reference/builtin-generic-types.md:85
 #: src/reference/builtin-generic-types.md:96
@@ -3921,7 +3921,7 @@ msgstr ""
 msgid "Meaning"
 msgstr ""
 
-#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:216
+#: src/tutorial/modules.md:54 src/reference/modules-and-visibility.md:282
 msgid "`pub fn ..`"
 msgstr ""
 
@@ -3937,7 +3937,7 @@ msgstr ""
 msgid "visible everywhere in this package's module tree"
 msgstr ""
 
-#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:218
+#: src/tutorial/modules.md:56 src/reference/modules-and-visibility.md:284
 msgid "`pub(super) fn ..`"
 msgstr ""
 
@@ -10685,6 +10685,83 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:100
 msgid ""
+"**Every leaf must bind — at the use line.** Validation is total and it "
+"happens where the `use` was written, before any body compiles: a leaf that "
+"binds nothing in its own file is a hard error there. A name the target "
+"declares but does not export — a private row — names the fix on the "
+"exporter's side:"
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:110
+msgid ""
+"(a qualified leaf names the walked module: `` not exported by "
+"`pkga::layout::grid` ``; the intra-package lane keeps its own visibility "
+"spelling, naming both files). A compiled dependency — a packed `.rutbundle` "
+"— carries its declarations as a binary surface with no source text, so a "
+"leaf its surface never carried states the bare law: `` `leaf` is not part of "
+"`pkga`'s exported surface — nothing binds in this file ``."
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:118
+msgid ""
+"**A `use` binds its own file.** The binding a `use` creates is visible in "
+"the file that wrote it and nowhere else: every file of a multi-file package "
+"spells its own imports, the root's `use` never feeds a child module's file, "
+"and a sibling's never feeds its sibling's. There is no ambient fallback "
+"beyond the engine's own names (the builtins below); beyond them, a bare dep "
+"name resolves in a file iff that file's own `use` bound it, and a miss at "
+"the call site says exactly which fix applies — the name rides another file's "
+"use:"
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:131
+msgid ""
+"(intra-package bindings add where that file imported it from), or the name "
+"is a mounted export no use spells at all:"
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:138
+msgid ""
+"**One name, one leaf, per file.** The duplicate-name law is NAME-level, not "
+"package-level: a leaf name spelled by more than one use leaf in the same "
+"file — whatever the heads, including twice within one list — errors at the "
+"second spelling, citing the first:"
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:143
+msgid ""
+"```text\n"
+"use pkga::{ x };\n"
+"use pkgb::{ x };\n"
+"// duplicate name `x` — `use pkga::{ x }` (mod.rut) already binds it in this "
+"file\n"
+"```"
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:149
+msgid ""
+"`use pkga::{ x }; use pkga::{ y }` is fine — the name is the rule, never the "
+"package or the list."
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:152
+msgid ""
+"**`pub async fn` crosses package surfaces.** A plain `pub async fn` exports "
+"like any `pub fn`. The exporter materializes the sugar law's export shape "
+"beside the woven body — a hidden start wrapper spelling `fn f(p) -> "
+"Future<T>` that mints the frame — and the surface row carries the declared "
+"**answer** type. The consumer's `use` binds the name, a call answers the "
+"closed `Future<answer>`, and `await` drives it like any future: the wrapper "
+"mints the frame in the one unit that knows its full layout, and the drive "
+"reaches the exporter's woven body through the frame's yield slot exactly as "
+"a local call would. The one gap is the **generic** async fn — the weave "
+"refuses generics, no row materializes, and a use leaf naming one refuses at "
+"the use line: `` `grab` is a generic `pub async fn` — generic async fns do "
+"not cross package surfaces yet ``."
+msgstr ""
+
+#: src/reference/modules-and-visibility.md:166
+msgid ""
 "The head may also name the **consumer's own package** — the intra-package "
 "import. The package's own name resolves to its root module, and a `mod` edge "
 "of its own tree resolves by walking from the file the `use` is written in "
@@ -10692,7 +10769,7 @@ msgid ""
 "positions take):"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:106
+#: src/reference/modules-and-visibility.md:172
 msgid ""
 "```rut\n"
 "use imp::{ TodoList, Task };   // beside `mod imp;` — imp's pub names\n"
@@ -10701,7 +10778,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:112
+#: src/reference/modules-and-visibility.md:178
 msgid ""
 "The leaves obey the same laws every crossing does. Each must be a "
 "declaration of the walked module, **visible from the importing file**: a "
@@ -10713,7 +10790,7 @@ msgid ""
 "own module edge is a loud ambiguity — rename one of the two."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:122
+#: src/reference/modules-and-visibility.md:188
 msgid ""
 "The head itself is **declaration-scoped**: a package may `use` exactly the "
 "heads its own manifest names — `deps` ∪ (`dev-deps` when the package is the "
@@ -10724,7 +10801,7 @@ msgid ""
 "kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:130
+#: src/reference/modules-and-visibility.md:196
 msgid ""
 "The engine's builtin names — the primitives, `opaque`, `panic`, "
 "`type_id<T>()`, `str(x)` — are **ambient**: no `use` is needed for them. The "
@@ -10738,11 +10815,11 @@ msgid ""
 "only through `use`."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:144
+#: src/reference/modules-and-visibility.md:210
 msgid "Qualified positions"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:146
+#: src/reference/modules-and-visibility.md:212
 msgid ""
 "Inside one package, a declaration of another module is nameable where a path "
 "is legal — a type annotation, a call, a field read — by **qualified "
@@ -10760,48 +10837,48 @@ msgid ""
 "structure](lexical-structure.md)). One separator, two doors:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:163
+#: src/reference/modules-and-visibility.md:229
 msgid "form"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:163 src/reference/stdlib.md:86
+#: src/reference/modules-and-visibility.md:229 src/reference/stdlib.md:86
 #: src/reference/typed-bytecode.md:114
 msgid "spelling"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:163
+#: src/reference/modules-and-visibility.md:229
 msgid "door"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:165
+#: src/reference/modules-and-visibility.md:231
 msgid "use path"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:165
+#: src/reference/modules-and-visibility.md:231
 msgid "`use pkg::a::b::{ C }`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:165
+#: src/reference/modules-and-visibility.md:231
 msgid "`::` — cross-package **and own-package module**, the import"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:166
+#: src/reference/modules-and-visibility.md:232
 msgid "qualified position"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:166
+#: src/reference/modules-and-visibility.md:232
 msgid "`a::b::C` / `a::b::f(..)`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:166
+#: src/reference/modules-and-visibility.md:232
 msgid "`::` — intra-package, at the use site"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:168
+#: src/reference/modules-and-visibility.md:234
 msgid "Module-level `let`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:170
+#: src/reference/modules-and-visibility.md:236
 msgid ""
 "Initializers must be **load-time expressions**: literals, enum members, "
 "builtin operators over load-time expressions, struct literals whose fields "
@@ -10810,18 +10887,18 @@ msgid ""
 "Calls to user functions are not load-time expressions."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:181
+#: src/reference/modules-and-visibility.md:247
 msgid ""
 "There is no mutable module state: program state is constructed in `main`, or "
 "held by the embedder and passed across the boundary. **No user code runs at "
 "load.**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:185
+#: src/reference/modules-and-visibility.md:251
 msgid "Entry points"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:187
+#: src/reference/modules-and-visibility.md:253
 msgid ""
 "The embedder loads a module and then explicitly calls an entry function — "
 "`entry fn main` for a script, sync or async. `entry fn` publishes a function "
@@ -10830,18 +10907,18 @@ msgid ""
 "ordering, no load-order bugs, deterministic and cheap loads."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:194
+#: src/reference/modules-and-visibility.md:260
 msgid "Bindings: `let` vs `let mut`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:196
+#: src/reference/modules-and-visibility.md:262
 msgid ""
 "`let x = e;` binds immutably — no reassignment, no field assignment through "
 "`x`, and no `mut self` method calls on it. It is a **read-only view of the "
 "shared object**."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:199
+#: src/reference/modules-and-visibility.md:265
 msgid ""
 "`let mut x = e;` may be reassigned and grants write access **to the object "
 "it holds**. Every non-primitive is a shared cell (see [By-reference and "
@@ -10850,59 +10927,59 @@ msgid ""
 "path must run through a `mut` binding."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:204
+#: src/reference/modules-and-visibility.md:270
 msgid ""
 "Parameters may declare `mut name` — the callee's permission to mutate **the "
 "caller's object**: `fn step(mut p: Point)` moves the caller's point; `fn "
 "area(p: Point)` promises not to."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:210
+#: src/reference/modules-and-visibility.md:276
 msgid ""
 "Modules form a tree per package (the package root is the root module "
 "`mod.rut`; each declared child is a module file). Every declaration — and "
 "every class member — carries a visibility:"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:216
+#: src/reference/modules-and-visibility.md:282
 msgid "**public** — nameable by any rut module (other packages included)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:217
+#: src/reference/modules-and-visibility.md:283
 msgid "`pub(pkg) fn ..`"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:217
+#: src/reference/modules-and-visibility.md:283
 msgid "visible everywhere inside this **package** (its whole module tree)"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:218
+#: src/reference/modules-and-visibility.md:284
 msgid "visible to the **parent module's subtree** only"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:219
+#: src/reference/modules-and-visibility.md:285
 msgid "_(unannotated)_"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:219
+#: src/reference/modules-and-visibility.md:285
 msgid ""
 "module-private — visible in this module and its descendants; **the default**"
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:221
+#: src/reference/modules-and-visibility.md:287
 msgid ""
 "Unannotated = private to the declaring module _and its descendants_ (a child "
 "module sees its ancestors' privates, never a sibling's)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:223
+#: src/reference/modules-and-visibility.md:289
 msgid ""
 "The paren forms `pub(mod)` / `pub(self)` are repealed — they parsed but "
 "gated nothing; the parser refuses them with the fix (bare private, or "
 "`pub(super)`/`pub(pkg)`/`pub`)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:226
+#: src/reference/modules-and-visibility.md:292
 msgid ""
 "Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`, `impl` (an "
 "impl exports with its target type), `fn`, `type` aliases, and the `mod` edge "
@@ -10911,14 +10988,14 @@ msgid ""
 "the _type name_ is visible."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:231
+#: src/reference/modules-and-visibility.md:297
 msgid ""
 "**Class members take the same forms**: an unannotated field or method is "
 "module-private; `pub` (optionally scoped) exposes it. See [Classes and "
 "constructors](classes.md)."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:234
+#: src/reference/modules-and-visibility.md:300
 msgid ""
 "**Struct fields are always public** — the field law has no dial (see "
 "[Structs](structs.md)). **Impl-block methods take the `pub` dial** — `pub "
@@ -10929,7 +11006,7 @@ msgid ""
 "members (see [Interfaces and dispatch](interfaces.md))."
 msgstr ""
 
-#: src/reference/modules-and-visibility.md:242
+#: src/reference/modules-and-visibility.md:308
 msgid ""
 "Visibility is checked at compile time; it has no runtime representation. "
 "Only `pub` names enter a module's export table; a non-exported declaration "
@@ -26734,6 +26811,24 @@ msgstr ""
 
 #: src/reference/dependency-kinds.md:236
 msgid ""
+"Heads are one axis of nameability; the **file** is the other. A head must be "
+"declared by the package's manifest, and a leaf must be bound by the _file_ "
+"that spells it: a `use` binds its own file — every file of a multi-file "
+"package writes its own imports, and no ambient tier backfills a leaf a file "
+"never spelled (the engine's builtin names are the only ambient set). "
+"Validation is total and lands at the use line: a leaf that binds nothing "
+"there is a hard error — a private row of the target says `` `helper` is not "
+"exported by `pkga` — mark it `pub` there ``, a surface a compiled bundle "
+"never carried states the bare law — and a leaf name spelled twice in one "
+"file errors at the second spelling (the name is the rule, never the "
+"package). `pub async fn` crosses like any `pub fn` — the consumer's call "
+"answers the closed `Future<answer>` — except the generic shape, which "
+"refuses at the use line. The full leaf law, with every diagnostic, is "
+"[Uses](modules-and-visibility.md#uses)."
+msgstr ""
+
+#: src/reference/dependency-kinds.md:252
+msgid ""
 "**This is a breaking law change.** Mounting was always transitive, and "
 "nameability used to ride along with it: a program could `use` any head the "
 "closure happened to contain. Previously-compiling programs that rode a "
@@ -26741,7 +26836,7 @@ msgid ""
 "consumer's own manifest."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:242
+#: src/reference/dependency-kinds.md:258
 msgid ""
 "Embedders and hand-mounted worlds are lawed by the same declaration table, "
 "carried structurally on the `Pkg` — `parse_manifest` for an embedded jsonc, "
@@ -26750,11 +26845,11 @@ msgid ""
 "defaulting the program's declaration host-side to the offered lib names."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:249
+#: src/reference/dependency-kinds.md:265
 msgid "Coexistence"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:251
+#: src/reference/dependency-kinds.md:267
 msgid ""
 "A dep group mounted from a bundle carries its **content identity** — "
 "`name@<16 hex>`, the first 16 hex chars of the sha256 over the group's own "
@@ -26766,23 +26861,23 @@ msgid ""
 "with a bare package name."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:260
+#: src/reference/dependency-kinds.md:276
 msgid ""
 "A bare `use` head stays exact while one identity spells the name; under "
 "several, it refuses naming them all:"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:267
+#: src/reference/dependency-kinds.md:283
 msgid ""
 "— mount one of them under its bare name (your own `deps` row) or bind "
 "through the bundle's scope ledger ([Module bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:270
+#: src/reference/dependency-kinds.md:286
 msgid "Interplay"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:272
+#: src/reference/dependency-kinds.md:288
 msgid ""
 "**Dev-deps are invisible to bundles-as-consumers.** A packed package carries "
 "its closure; a consumer packing _their_ app never pulls the package's dev "
@@ -26790,14 +26885,14 @@ msgid ""
 "into consumer worlds ([Module bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:277
+#: src/reference/dependency-kinds.md:293
 msgid ""
 "**Structural satisfaction is unaffected**: a consumer's own types satisfy "
 "json's interfaces by having the members, whether the interface came from a "
 "path row or a packed bundle."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:280
+#: src/reference/dependency-kinds.md:296
 msgid ""
 "**The LSP is advisory.** The language server embeds the toolchain packages' "
 "sources, never parses manifests, indexes every dep it can reach (any depth, "
@@ -26807,11 +26902,11 @@ msgid ""
 "law."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:287
+#: src/reference/dependency-kinds.md:303
 msgid "Consuming a compiled package"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:289
+#: src/reference/dependency-kinds.md:305
 msgid ""
 "```jsonc\n"
 "// an app that wants json's whole surface\n"
@@ -26825,7 +26920,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:298
+#: src/reference/dependency-kinds.md:314
 msgid ""
 "One row is the whole story: the bundle is closed, and json's own `deps` — "
 "`strbuild`, `pouch`, `nmapset` — ride inside it as groups, so every wrapper "

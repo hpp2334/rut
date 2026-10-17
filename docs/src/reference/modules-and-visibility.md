@@ -97,6 +97,72 @@ declare is rejected at the use line itself —
 that might never be written. An unreferenced use name is a lint, not
 an error.
 
+**Every leaf must bind — at the use line.** Validation is total and
+it happens where the `use` was written, before any body compiles: a
+leaf that binds nothing in its own file is a hard error there. A name
+the target declares but does not export — a private row — names the
+fix on the exporter's side:
+
+```text
+`helper` is not exported by `pkga` — mark it `pub` there
+```
+
+(a qualified leaf names the walked module: `` not exported by
+`pkga::layout::grid` ``; the intra-package lane keeps its own
+visibility spelling, naming both files). A compiled dependency — a
+packed `.rutbundle` — carries its declarations as a binary surface
+with no source text, so a leaf its surface never carried states the
+bare law: `` `leaf` is not part of `pkga`'s exported surface — nothing
+binds in this file ``.
+
+**A `use` binds its own file.** The binding a `use` creates is
+visible in the file that wrote it and nowhere else: every file of a
+multi-file package spells its own imports, the root's `use` never
+feeds a child module's file, and a sibling's never feeds its
+sibling's. There is no ambient fallback beyond the engine's own names
+(the builtins below); beyond them, a bare dep name resolves in a file
+iff that file's own `use` bound it, and a miss at the call site says
+exactly which fix applies — the name rides another file's use:
+
+```text
+`fetch` is bound by a `use` in the root module — write the `use` in this file
+```
+
+(intra-package bindings add where that file imported it from), or the
+name is a mounted export no use spells at all:
+
+```text
+`dup` is not bound — no `use` statement names it
+```
+
+**One name, one leaf, per file.** The duplicate-name law is
+NAME-level, not package-level: a leaf name spelled by more than one
+use leaf in the same file — whatever the heads, including twice
+within one list — errors at the second spelling, citing the first:
+
+```text
+use pkga::{ x };
+use pkgb::{ x };
+// duplicate name `x` — `use pkga::{ x }` (mod.rut) already binds it in this file
+```
+
+`use pkga::{ x }; use pkga::{ y }` is fine — the name is the rule,
+never the package or the list.
+
+**`pub async fn` crosses package surfaces.** A plain `pub async fn`
+exports like any `pub fn`. The exporter materializes the sugar law's
+export shape beside the woven body — a hidden start wrapper spelling
+`fn f(p) -> Future<T>` that mints the frame — and the surface row
+carries the declared **answer** type. The consumer's `use` binds the
+name, a call answers the closed `Future<answer>`, and `await` drives
+it like any future: the wrapper mints the frame in the one unit that
+knows its full layout, and the drive reaches the exporter's woven
+body through the frame's yield slot exactly as a local call would.
+The one gap is the **generic** async fn — the weave refuses generics,
+no row materializes, and a use leaf naming one refuses at the use
+line: `` `grab` is a generic `pub async fn` — generic async fns do
+not cross package surfaces yet ``.
+
 The head may also name the **consumer's own package** — the
 intra-package import. The package's own name resolves to its root
 module, and a `mod` edge of its own tree resolves by walking from the

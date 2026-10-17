@@ -233,6 +233,22 @@ declared is the same D5 with that dep as the consumer. dev-deps follow
 the same root-only law as their mount pass — the program root may name
 its dev-deps; a dep naming the root's dev-dep is D5.
 
+Heads are one axis of nameability; the **file** is the other. A head
+must be declared by the package's manifest, and a leaf must be bound
+by the *file* that spells it: a `use` binds its own file — every file
+of a multi-file package writes its own imports, and no ambient tier
+backfills a leaf a file never spelled (the engine's builtin names are
+the only ambient set). Validation is total and lands at the use line:
+a leaf that binds nothing there is a hard error — a private row of the
+target says `` `helper` is not exported by `pkga` — mark it `pub`
+there ``, a surface a compiled bundle never carried states the bare
+law — and a leaf name spelled twice in one file errors at the second
+spelling (the name is the rule, never the package). `pub async fn`
+crosses like any `pub fn` — the consumer's call answers the closed
+`Future<answer>` — except the generic shape, which refuses at the use
+line. The full leaf law, with every diagnostic, is
+[Uses](modules-and-visibility.md#uses).
+
 **This is a breaking law change.** Mounting was always transitive, and
 nameability used to ride along with it: a program could `use` any head
 the closure happened to contain. Previously-compiling programs that

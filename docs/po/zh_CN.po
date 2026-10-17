@@ -11042,6 +11042,119 @@ msgstr ""
 
 #: src/reference/modules-and-visibility.md:100
 msgid ""
+"**Every leaf must bind — at the use line.** Validation is total and it "
+"happens where the `use` was written, before any body compiles: a leaf that "
+"binds nothing in its own file is a hard error there. A name the target "
+"declares but does not export — a private row — names the fix on the "
+"exporter's side:"
+msgstr ""
+"**每个叶子都必须绑定——就在 use 行。**校验是全面的，发生在 `use` 写下的地方，"
+"先于任何函数体编译：在自己文件里什么也绑定不到的叶子，就在那里得到一个硬错误。"
+"目标声明了却没有导出的名字——一条私有行——会给出导出方一侧的修复方法："
+
+
+#: src/reference/modules-and-visibility.md:110
+msgid ""
+"(a qualified leaf names the walked module: `` not exported by "
+"`pkga::layout::grid` ``; the intra-package lane keeps its own visibility "
+"spelling, naming both files). A compiled dependency — a packed `.rutbundle` "
+"— carries its declarations as a binary surface with no source text, so a "
+"leaf its surface never carried states the bare law: `` `leaf` is not part of "
+"`pkga`'s exported surface — nothing binds in this file ``."
+msgstr ""
+"（限定叶子会点名走到的模块：`` not exported by `pkga::layout::grid` ``；包内车道"
+"保留自己的可见性拼法，同时点名两个文件）。编译好的依赖——打包成 `.rutbundle` "
+"的那种——以二进制表面承载声明，不带源码文本，因此其表面从未携带过的叶子陈述的是"
+"裸法则：`` `leaf` is not part of `pkga`'s exported surface — nothing binds in "
+"this file ``。"
+
+
+#: src/reference/modules-and-visibility.md:118
+msgid ""
+"**A `use` binds its own file.** The binding a `use` creates is visible in "
+"the file that wrote it and nowhere else: every file of a multi-file package "
+"spells its own imports, the root's `use` never feeds a child module's file, "
+"and a sibling's never feeds its sibling's. There is no ambient fallback "
+"beyond the engine's own names (the builtins below); beyond them, a bare dep "
+"name resolves in a file iff that file's own `use` bound it, and a miss at "
+"the call site says exactly which fix applies — the name rides another file's "
+"use:"
+msgstr ""
+"**一条 `use` 只绑定它自己的文件。**`use` 创建的绑定只在写下它的文件里可见，别处"
+"一律不可见：多文件包的每个文件都拼写自己的导入，根的 `use` 绝不喂给子模块的文件，"
+"兄弟的也绝不喂给兄弟的。除引擎自己的名字（下文的内建名字）之外没有环境回退；在此"
+"之外，一个裸依赖名当且仅当该文件自己的 `use` 绑定了它时才在该文件里解析，而调用点"
+"的脱靶会准确说出该用哪个修复——名字骑着的是另一文件的 use："
+
+
+#: src/reference/modules-and-visibility.md:131
+msgid ""
+"(intra-package bindings add where that file imported it from), or the name "
+"is a mounted export no use spells at all:"
+msgstr ""
+"（包内绑定会补充那个文件是从哪个模块导入它的），或者名字是任何 use 都没有拼写过的"
+"已挂载导出："
+
+
+#: src/reference/modules-and-visibility.md:138
+msgid ""
+"**One name, one leaf, per file.** The duplicate-name law is NAME-level, not "
+"package-level: a leaf name spelled by more than one use leaf in the same "
+"file — whatever the heads, including twice within one list — errors at the "
+"second spelling, citing the first:"
+msgstr ""
+"**一个文件内，一个名字只有一片叶子。**重名法则按名字（NAME）划定，而非按包划定："
+"同一个文件里被多于一条 use 叶子拼写的名字——无论开头是什么，包括在同一列表里拼写"
+"两次——都会在第二次拼写处报错，并引用第一次的拼写："
+
+
+#: src/reference/modules-and-visibility.md:143
+msgid ""
+"```text\n"
+"use pkga::{ x };\n"
+"use pkgb::{ x };\n"
+"// duplicate name `x` — `use pkga::{ x }` (mod.rut) already binds it in this "
+"file\n"
+"```"
+msgstr ""
+
+
+#: src/reference/modules-and-visibility.md:149
+msgid ""
+"`use pkga::{ x }; use pkga::{ y }` is fine — the name is the rule, never the "
+"package or the list."
+msgstr ""
+"`use pkga::{ x }; use pkga::{ y }` 没有问题——法则看的是名字，从来不是包，也不是"
+"列表。"
+
+
+#: src/reference/modules-and-visibility.md:152
+msgid ""
+"**`pub async fn` crosses package surfaces.** A plain `pub async fn` exports "
+"like any `pub fn`. The exporter materializes the sugar law's export shape "
+"beside the woven body — a hidden start wrapper spelling `fn f(p) -> "
+"Future<T>` that mints the frame — and the surface row carries the declared "
+"**answer** type. The consumer's `use` binds the name, a call answers the "
+"closed `Future<answer>`, and `await` drives it like any future: the wrapper "
+"mints the frame in the one unit that knows its full layout, and the drive "
+"reaches the exporter's woven body through the frame's yield slot exactly as "
+"a local call would. The one gap is the **generic** async fn — the weave "
+"refuses generics, no row materializes, and a use leaf naming one refuses at "
+"the use line: `` `grab` is a generic `pub async fn` — generic async fns do "
+"not cross package surfaces yet ``."
+msgstr ""
+"**`pub async fn` 跨越包表面。**普通的 `pub async fn` 与任何 `pub fn` 一样导出。"
+"导出方在织入的函数体旁物化糖法则的导出形态——一个拼作 `fn f(p) -> Future<T>` 的"
+"隐藏启动包装器，由它铸造帧——表面行携带声明的**应答**类型。消费方的 `use` 绑定该"
+"名字，调用应答封闭的 `Future<answer>`，`await` 像驱动任何 future 一样驱动它：包装"
+"器在唯一知道完整布局的单元里铸造帧，驱动经帧的产出槽位抵达导出方织入的函数体，与"
+"本地调用一模一样。唯一的缺口是**泛型** async fn——织入拒绝泛型，没有行物化，点名"
+"它的 use 叶子在 use 行被拒绝：`` `grab` is a generic `pub async fn` — generic "
+"async fns do not cross package surfaces yet ``。"
+
+
+#: src/reference/modules-and-visibility.md:100
+msgid ""
 "The head may also name the **consumer's own package** — the intra-package import. The package's own name resolves to its root module, and a `mod` edge of its own tree resolves by walking from the file the `use` is written in (the current module first, then the ancestors — the same walk qualified positions take):"
 msgstr ""
 "开头也可以命名**消费方自己的包** —— 这就是包内导入。包自己的名字解析到它的根模块，自己树里的一条 `mod` 边则从写下 `use` 的那个文件出发解析（先当前模块，再各级祖先 —— 与限定位置走的是同一条路）："
@@ -27649,6 +27762,34 @@ msgid ""
 "The closure check reads every mounted source's uses at every depth, so the law is per-package, not root-only: a dep naming a head it never declared is the same D5 with that dep as the consumer. dev-deps follow the same root-only law as their mount pass — the program root may name its dev-deps; a dep naming the root's dev-dep is D5."
 msgstr ""
 "闭包检查在每一层读取每个已挂载源的 use，所以这条法则按包生效，而非只作用于根：一个依赖命名自己从未声明的头，就是同一个 D5，只是消费者换成了那个依赖。dev-deps 遵循与其挂载趟相同的仅限根法则——程序根可以命名自己的 dev-deps；依赖命名根的 dev-dep 则是 D5。"
+
+
+#: src/reference/dependency-kinds.md:236
+msgid ""
+"Heads are one axis of nameability; the **file** is the other. A head must be "
+"declared by the package's manifest, and a leaf must be bound by the _file_ "
+"that spells it: a `use` binds its own file — every file of a multi-file "
+"package writes its own imports, and no ambient tier backfills a leaf a file "
+"never spelled (the engine's builtin names are the only ambient set). "
+"Validation is total and lands at the use line: a leaf that binds nothing "
+"there is a hard error — a private row of the target says `` `helper` is not "
+"exported by `pkga` — mark it `pub` there ``, a surface a compiled bundle "
+"never carried states the bare law — and a leaf name spelled twice in one "
+"file errors at the second spelling (the name is the rule, never the "
+"package). `pub async fn` crosses like any `pub fn` — the consumer's call "
+"answers the closed `Future<answer>` — except the generic shape, which "
+"refuses at the use line. The full leaf law, with every diagnostic, is "
+"[Uses](modules-and-visibility.md#uses)."
+msgstr ""
+"头是可命名性的一根轴，**文件**是另一根。头必须由包的清单声明，叶子则必须由拼写它"
+"的_文件_绑定：一条 `use` 只绑定它自己的文件——多文件包的每个文件都写自己的导入，"
+"任何环境层都不会回填某个文件从未拼写过的叶子（引擎的内建名字是唯一的环境自带集）。"
+"校验是全面的，且落在 use 行上：在那里什么也绑定不到的叶子是硬错误——目标的私有行"
+"会说 `` `helper` is not exported by `pkga` — mark it `pub` there ``，编译捆绑包"
+"从未携带过的表面则陈述裸法则——而同一个文件里拼写两次的叶子名会在第二次拼写处报错"
+"（法则看的是名字，从来不是包）。`pub async fn` 与任何 `pub fn` 一样跨越——消费方"
+"的调用应答封闭的 `Future<answer>`——唯有泛型形态例外，它在 use 行被拒绝。完整的"
+"叶子法则与全部诊断见 [use 的用法](modules-and-visibility.md#uses)。"
 
 
 #: src/reference/dependency-kinds.md:236

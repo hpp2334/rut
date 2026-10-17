@@ -348,10 +348,13 @@ entry fn t1p_els_steal(c: opaque, path: str) {
 
 // ---- registry reads (the tests' assertions) --------------------------
 
+// The registry reads never spell the row type (`Ev` is ui-`pub(pkg)`,
+// not nameable here): the field read carries its declared type, so the
+// probes size and probe the table through inference alone.
 entry fn t1p_regs_len(c: opaque) -> i32 {
     let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
-    let mut regs: HashMap<str, Ev> = root.regs;
+    let mut regs = root.regs;
     return regs.len();
 }
 
@@ -360,7 +363,7 @@ entry fn t1p_regs_len(c: opaque) -> i32 {
 entry fn t1p_regs_has(c: opaque, id: str) -> bool {
     let h = opaque::downcast<?Harness>(c);
     let mut root: T1Root = h.root;
-    let mut regs: HashMap<str, Ev> = root.regs;
+    let mut regs = root.regs;
     return regs.has(id);
 }
 
