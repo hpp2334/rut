@@ -86,10 +86,15 @@ pub(super) struct GraphCompiler<'a> {
 
 /// A linked source unit's compile inputs, recorded for the owner-side
 /// recompile (`ensure_source` replays them verbatim, seeds aside).
+/// Each bound surface rides BOTH names: `origin` the exporter's mount
+/// key (the owner-anchor spelling — a bundle group's content
+/// identity), `head` the head text the consumer's `use` spelled (the
+/// per-file binding key — the use row that binds a row of this
+/// surface).
 pub(super) struct UnitSrc {
     text: String,
     is_decl: bool,
-    bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)>,
+    bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String, String)>,
     /// the file-module layout the unit compiled with (phase 3) — the
     /// replay must reassemble the same module tree
     layout: rut_lir::check::ModInputs,
@@ -511,8 +516,11 @@ impl<'a> GraphCompiler<'a> {
         }
 
         // every dep links; its surface binds into this unit — the use
-        // law gates each head first (declared, not merely mounted)
-        let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String)> = Vec::new();
+        // law gates each head first (declared, not merely mounted).
+        // Each surface rides its mount key (`origin`, the owner
+        // anchor) AND the spelled head (the per-file binding key).
+        let mut bound: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String, String)> =
+            Vec::new();
         let mut bound_scopes = HashSet::new();
         for dep in &uses {
             let dep_unit = self.ensure_use(spec, dep)?;
@@ -528,7 +536,12 @@ impl<'a> GraphCompiler<'a> {
                 .unwrap_or_else(|_| dep.clone());
             if bound_scopes.insert(dep_unit.scope) {
                 // the exporter's spec rides the binding
-                bound.push((dep_unit.scope, self.programs[dep_unit.idx].surface.clone(), origin));
+                bound.push((
+                    dep_unit.scope,
+                    self.programs[dep_unit.idx].surface.clone(),
+                    origin,
+                    dep.clone(),
+                ));
             }
         }
 

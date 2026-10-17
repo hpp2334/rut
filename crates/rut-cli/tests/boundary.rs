@@ -18,8 +18,19 @@ fn case_world() -> Vec<rut_driver::Pkg> {
     world
 }
 
+/// The logger use line the harness appends so the original spans of
+/// `src` stay put. Appended only when `src` does not already spell it —
+/// the NAME law errors a leaf spelled twice in one file.
+fn with_logger_use(src: &str) -> String {
+    if src.contains("use ink::") {
+        src.to_string()
+    } else {
+        format!("{src}\nuse ink::{{Logger}};\n")
+    }
+}
+
 fn compile(src: &str, module: &str) -> rut_driver::Compiled {
-    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let combined = with_logger_use(src);
     match rut_driver::RutRun::new()
         .pkgs(&rut_driver::Loaded { pkgs: case_world(), root: String::new() })
         .pkg(
@@ -47,7 +58,7 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     assert!(
         out.graph.diags.is_empty(),
         "unexpected diags:\n{}",
-        rut_lexer::diag::render_diags(&format!("{src}\nuse ink::{{Logger}};\n"), &out.graph.diags)
+        rut_lexer::diag::render_diags(&with_logger_use(src), &out.graph.diags)
     );
     rut_vm::verify::verify(out.graph.program.as_ref().expect("program")).expect("verify");
     let limits = rut_vm::interp::Limits {

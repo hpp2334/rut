@@ -49,7 +49,7 @@ impl<'a> Ctx<'a> {
                 // linkable-classes phase): the stub's row must spell the
                 // same owner text the real body's row does, or the keys
                 // never unify at link. Own fns keep this unit's spec.
-                let origin = match self.extern_generic_fns.get(&n) {
+                let origin = match self.extern_generic_fn(n) {
                     Some(gf) => gf.owner.clone(),
                     None => self.own_spec.clone(),
                 };
@@ -122,7 +122,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             FnKey::Free(name) => {
-                if let Some(gf) = self.extern_generic_fns.get(&name).cloned() {
+                if let Some(gf) = self.extern_generic_fn(name).cloned() {
                     let args: Vec<TypeId> = inst.subst.iter().map(|(_, t)| *t).collect();
                     self.request_generic_fn_body(gf.owner, name, args);
                 }

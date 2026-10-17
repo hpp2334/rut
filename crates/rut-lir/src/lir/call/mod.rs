@@ -207,7 +207,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // Retired prelude spellings (`assert`, `print`, `i32(x)`, …)
         // are ordinary identifiers: they fall to the resolution miss
         // at the bottom and diagnose as the unknown names they are.
-        let core_fn = self.ctx.extern_native_fns.contains(&name);
+        let core_fn = self.ctx.is_extern_native_fn(name);
         match name {
             sym::OPAQUE => {
                 // `opaque(v)`: the erasure box. The payload IS `v` —
@@ -404,9 +404,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         // used function: signature from the surface, a direct call to the
-        // exporter's scope-qualified id. The binding gate is per file
-        // (phase 3): the name binds in the module whose file used it.
-        if self.ctx.use_bound_here(name) {
+        // exporter's scope-qualified id. The per-file key IS the gate
+        // (the per-file binding law): the name resolves only in the
+        // file whose `use` bound it.
         if let Some(ef) = self.ctx.extern_fn(name).cloned() {            // the host future lane (phase 4): an async host fn's call
             // mints the cold engine-woven frame over `__start`'s state
             // cell — the weave owns the call site
@@ -481,15 +481,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
             return Ok(ef.ret);
         }
-        }
         // a used GENERIC fn (the linkable-classes phase): the body
         // lives per argument list in the owner — infer the type
         // arguments against the placeholder signature, mint the mirror
-        // instantiation, and request the body
-        if self.ctx.use_bound_here(name) {
+        // instantiation, and request the body. Per-file key = the gate.
         if let Some(gf) = self.ctx.extern_generic_fn(name).cloned() {
             return self.compile_extern_generic_fn_call(name, &gf, generics, args, expected, sp);
-        }
         }
         // builtin bytes type-call: `bytes(n)` zeroed
         if name == sym::BYTES {
@@ -541,8 +538,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // a USED newtype class — the surface row's flag arms the same
         // construction at a distance (the third-party adapter: the
-        // consumer manufactures the wrapper over the foreign value)
-        if self.ctx.extern_newtypes.contains(&name) {
+        // consumer manufactures the wrapper over the foreign value).
+        // Per-file: the file whose `use` bound the name.
+        if self.ctx.is_extern_newtype(name) {
             return self.compile_extern_newtype_ctor(name, generics, args, expected, sp);
         }
         // a used/linked class's designated constructor — the marker
@@ -554,9 +552,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // a used type's miss — a known name, a known fix: the used
         // class's construction is a (designated) class method, a used
         // struct's a literal. An unknown name keeps the ordinary miss
-        // below.
-        if self.ctx.use_bound_here(name) {
-        if let Some(&t) = self.ctx.extern_types.get(&name) {
+        // below. Per-file key = the gate.
+        if let Some(t) = self.ctx.extern_type(name) {
             if self.ctx.extern_classes.contains(&t) {
                 self.ctx.err(sp, format!(
                     "`{}` constructs through its class methods (`{0}::new(..)`) — mark one `[constructor]` to call the class itself",
@@ -570,11 +567,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             return Err(());
         }
-        }
         let msg = self
             .ctx
             .not_in_core_scope(name)
             .or_else(|| self.ctx.use_elsewhere_hint(name))
+            .or_else(|| self.ctx.unbound_hint(name))
             .or_else(|| self.ctx.elsewhere_hint(name, "fn"))
             .unwrap_or_else(|| format!("unknown function `{}`", self.ctx.name(name)));
         self.ctx.err(sp, msg);

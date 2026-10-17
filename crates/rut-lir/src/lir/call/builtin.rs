@@ -85,14 +85,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // `new`/`downcast` statics and the `bytes`/`str` constructors —
         // AMBIENT now: the arms fire
         // whenever core is mounted, no `use` required
-        let core_ty = self.ctx.extern_native_types.get(&base).copied();
+        let core_ty = self.ctx.extern_native_type(base);
         // Explicit type args on a static head are meaningful only where the
         // member can use them (`Vec<u32>.from(..)` — the element type);
         // everywhere else they stay unsupported rather than silently ignored.
         // A used class (own or linked — the linkable-classes phase) takes
         // them the same way.
         let is_data = self.ctx.find_data(base).is_some()
-            || self.ctx.extern_types.contains_key(&base)
+            || self.ctx.extern_type(base).is_some()
             || self.ctx.extern_generics.contains_key(&base);
         if !base_generics.is_empty() && !is_data {
             self.ctx.err(sp, format!(
@@ -388,7 +388,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        if let Some(&t) = self.ctx.extern_types.get(&base) {
+        if let Some(t) = self.ctx.extern_type(base) {
             if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == t) {
                 if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|m| !m.has_self && m.name == member) {
                     return self.compile_extern_class_method_call(ih, midx, None, vec![], None, args, sp);

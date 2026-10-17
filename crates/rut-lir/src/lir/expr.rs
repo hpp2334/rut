@@ -252,7 +252,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             // revised, builtin-surface phase 2): the surface
                             // spelling IS the boot name (`sym::OPAQUE`)
                             if n == "opaque"
-                                && self.ctx.extern_native_types.get(&segs[0].name).copied()
+                                && self.ctx.extern_native_type(segs[0].name)
                                     == Some(rut_core::binary::NativeTy::Opaque)
                             {
                                 match self.ctx.types.kind(rt).clone() {
@@ -515,7 +515,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Ok(l.ty);
             }
             // a builtin fn name in value position — point at the call form
-            if (self.ctx.extern_native_fns.contains(&name)
+            if (self.ctx.is_extern_native_fn(name)
                 && name == sym::PANIC)
                 || name == sym::TYPE_ID
             {
@@ -580,9 +580,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if self.ctx.poisoned(name) {
                 return Err(()); // the failed `let` is already diagnosed
             }
+            // the terminal miss carries the binding hints: another
+            // file's `use` bound it (write the use here), or nobody's
+            // did (no `use` statement names it)
             let msg = self
                 .ctx
                 .not_in_core_scope(name)
+                .or_else(|| self.ctx.use_elsewhere_hint(name))
+                .or_else(|| self.ctx.unbound_hint(name))
                 .unwrap_or_else(|| format!("unknown name `{}`", self.ctx.name(name)));
             self.ctx.err(sp, msg);
             return Err(());
@@ -682,10 +687,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         None => None,
                     }
-                } else if self.ctx.use_bound_here(base) {
-                    self.ctx.extern_enum(base)
                 } else {
-                    None
+                    // the per-file key IS the gate: only the files
+                    // whose `use` bound the enum name resolve it
+                    self.ctx.extern_enum(base)
                 };
             if let Some((ty, members)) = enum_hit {
                 if let Some(i) = members.iter().position(|(m, _)| *m == member) {

@@ -342,18 +342,14 @@ impl<'a> Ctx<'a> {
                 // surface (`[T]` never reaches here — it is `TyArray`).
                 // The import-GATED rows (`pub builtin` — `Weak`,
                 // `DisposalContext`, …) bind in the module whose file
-                // used them (phase 3); the ambient prelude rows bind
-                // everywhere.
-                let core_ty = self
-                    .extern_native_types
-                    .get(&name)
-                    .copied()
-                    .filter(|_| !self.pub_core.contains_key(&name) || self.use_bound_here(name));
+                // used them (the per-file binding law); the ambient
+                // prelude rows bind everywhere.
+                let core_ty = self.extern_native_type(name);
                 // a declared or used type shadows a builtin name (RFC
                 // 0005: `pouch`'s `Vec` is an ordinary class, so it
                 // never reaches the builtin table)
                 let shadow = name == sym::OPAQUE
-                    && (self.find_data(name).is_some() || self.extern_types.contains_key(&name));
+                    && (self.find_data(name).is_some() || self.extern_type(name).is_some());
                 if let Some(kind) = core_ty.filter(|_| !shadow) {
                     let generics = seg.generics.clone();
                     return match (kind, generics.as_slice()) {
@@ -494,10 +490,12 @@ impl<'a> Ctx<'a> {
                         // placeholder descriptor — the interface's shape
                         // crosses the surface, so the spelling dispatches
                         // by the existing law (single concrete origin ⇒
-                        // static, merged origins ⇒ vtable). The binding
-                        // gate is per file (phase 3): the name binds in
-                        // the module whose file used it.
-                        if self.use_bound_here(name) {
+                        // static, merged origins ⇒ vtable). The NAME
+                        // gate is per file (the per-file binding law):
+                        // the trait table itself stays unit-global (an
+                        // impl may live in another module), so the
+                        // strict per-file use check arms the rung.
+                        if self.use_bound_in_file(name) {
                         if let Some(ext) = self.extern_trait(name).cloned() {
                             if seg.generics.is_empty() && ext.generics == 0 {
                                 return self.mk_iface_obj(ext.id);
@@ -528,7 +526,12 @@ impl<'a> Ctx<'a> {
                         }
                         // used type: the exporter's
                         // scope-qualified id; link rebases it
-                        if self.use_bound_here(name) {
+                        // used generic template: unit-global by law
+                        // (the impl/inst machinery reads it across
+                        // modules), so the strict per-file use check
+                        // arms the rung — the template binds for the
+                        // files whose `use` named it.
+                        if self.use_bound_in_file(name) {
                         if let Some(g) = self.extern_generics.get(&name).cloned() {
                             // a linked generic: the consumer spells the
                             // instantiation, the declaring package owns
@@ -551,13 +554,15 @@ impl<'a> Ctx<'a> {
                             return self.mk_data_inst(name, args, sp);
                         }
                         }
-                        if self.use_bound_here(name) {
-                        if let Some(&t) = self.extern_types.get(&name) {
+                        // used type: the exporter's scope-qualified id;
+                        // link rebases it. The per-file key IS the gate —
+                        // a file that wrote no `use` of the name misses
+                        // here and falls through.
+                        if let Some(t) = self.extern_type(name) {
                             if !seg.generics.is_empty() {
                                 self.err(sp, format!("used type `{}` takes no generic arguments", self.name(name)));
                             }
                             return t;
-                        }
                         }
                         // a local type alias: transparent — the
                         // name binds the target's id. A union alias errors

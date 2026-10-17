@@ -326,7 +326,7 @@ fn completer_answers_before_the_await() {
     let src = r#"
 use core::{ Future };
 use ink_host::{ create_logger, logger_log };
-use futures::{ launch_future, completer };
+use futures::{ launch_future, completer, Completer };
 
 async fn waiter(log: opaque, f: Future<u32>, done: Completer<u32>) -> nil {
     done.resolve(41);

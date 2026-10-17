@@ -1456,7 +1456,10 @@ pub(crate) fn ensure_host_async(
     name: IdentId,
     ef: &crate::check::ExternFn,
 ) -> TcResult<crate::check::HostAsyncLayout> {
-    if let Some(l) = ctx.host_async.get(&name) {
+    // the mint is per (file, fn): two files' same-named bindings are
+    // two rows (the per-file law) — each mints its own machinery
+    let key = (ctx.cur_mod.clone(), name);
+    if let Some(l) = ctx.host_async.get(&key) {
         return Ok(*l);
     }
     let sp = ctx.ast.span(ctx.ast.root.id());
@@ -1592,7 +1595,7 @@ pub(crate) fn ensure_host_async(
     ctx.frame_yield_slot.insert(frame_ty, slot);
     ctx.engine_frames.insert(frame_ty);
     let l = crate::check::HostAsyncLayout { frame_ty, start_fid, fut_inst };
-    ctx.host_async.insert(name, l);
+    ctx.host_async.insert(key, l);
     Ok(l)
 }
 

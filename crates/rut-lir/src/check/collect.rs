@@ -12,6 +12,70 @@ impl<'a> Ctx<'a> {
 
     pub fn collect(&mut self) {
         let items = self.ast.module_items(self.ast.root).to_vec();
+        // pass 0: the use rows — `used`, `use_sites`, the first-spell
+        // citations, the duplicate-name law — recorded BEFORE anything
+        // resolves (a pass-1b field type may name a used generic, and
+        // the per-file gate reads these rows). Each row is keyed by the
+        // file whose `use` wrote it.
+        for it in &items {
+            let ItemKind::Use { path, names } = self.ast.item(*it) else {
+                continue;
+            };
+            self.cur_mod = self.mod_of(it.id()).to_string();
+            // THE PER-FILE DUPLICATE-NAME LAW: a leaf name
+            // spelled by MORE THAN ONE use leaf in the SAME
+            // file — regardless of head or package, including
+            // twice within one list — errors at the second
+            // spelling, which cites the first (`use a::{ x }`
+            // already binds it in this file). `use a::{x}; use
+            // a::{y}` is fine: the NAME is the rule, not the
+            // package.
+            let sp = self.ast.span(it.id());
+            let head = path.first().map(|&h| self.name(h).to_string()).unwrap_or_default();
+            for n in names {
+                let key = (self.cur_mod.clone(), *n);
+                if let Some((prev_head, _)) = self.use_first_spell.get(&key) {
+                    self.err(
+                        sp,
+                        format!(
+                            "duplicate name `{}` — `use {}::{{ {} }}` ({}) already binds it in this file",
+                            self.name(*n),
+                            prev_head,
+                            self.name(*n),
+                            ModInputs::display(&self.cur_mod),
+                        ),
+                    );
+                } else {
+                    self.use_first_spell.insert(key, (head.clone(), sp));
+                }
+            }
+            // record what the module wrote — the binding gate for
+            // used surfaces (used, never ambient). The binding is per
+            // FILE — each name records the module whose file bound it
+            // (a flat package records one module, `""`, and gates
+            // exactly as before).
+            for n in names {
+                self.used.insert(*n);
+                let sites = self.use_sites.entry(*n).or_default();
+                if !sites.contains(&self.cur_mod) {
+                    sites.push(self.cur_mod.clone());
+                }
+            }
+            // module loading is resolved by the driver before body
+            // compilation; without it, use statements
+            // are a compile error only when the names are used
+            if !self.allow_uses {
+                for n in names {
+                    self.err(
+                        sp,
+                        format!(
+                            "module loading is not available in this build — cannot use `{}`",
+                            self.name(*n)
+                        ),
+                    );
+                }
+            }
+        }
         // pass 1a: declare types (enums, structs, classes, ifaces,
         // aliases) so every name is in scope before any field/signature
         // is resolved
@@ -111,35 +175,6 @@ impl<'a> Ctx<'a> {
                 }
                 ItemKind::ModuleLet { name, ty, init, vis, .. } => {
                     self.lets.push((*name, *ty, *init, *vis));
-                }
-                ItemKind::Use { names, .. } => {
-                    // record what the module wrote — the binding gate for
-                    // used surfaces (used, never ambient). Phase 3: the
-                    // binding is per FILE — each name records the module
-                    // whose file bound it (a flat package records one
-                    // module, `""`, and gates exactly as before).
-                    for n in names {
-                        self.used.insert(*n);
-                        let sites = self.use_sites.entry(*n).or_default();
-                        if !sites.contains(&self.cur_mod) {
-                            sites.push(self.cur_mod.clone());
-                        }
-                    }
-                    // module loading is resolved by the driver before body
-                    // compilation; without it, use statements
-                    // are a compile error only when the names are used
-                    if !self.allow_uses {
-                        let sp = self.ast.span(it.id());
-                        for n in names {
-                            self.err(
-                                sp,
-                                format!(
-                                    "module loading is not available in this build — cannot use `{}`",
-                                    self.name(*n)
-                                ),
-                            );
-                        }
-                    }
                 }
                 _ => {}
             }

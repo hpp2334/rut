@@ -1619,10 +1619,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 }
                                 None => None,
                             }
-                        } else if self.ctx.use_bound_here(ename) {
-                            self.ctx.extern_enum(ename)
                         } else {
-                            None
+                            // the per-file key IS the gate
+                            self.ctx.extern_enum(ename)
                         };
                     if let Some((ety, members)) = enum_hit {
                         if ety == scrut_ty {

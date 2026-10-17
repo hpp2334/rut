@@ -4,13 +4,17 @@ use super::*;
 
 impl<'a> Ctx<'a> {
 
-    /// Bind a used function before body compilation. `is_async` marks
-    /// the host future lane (`host async fn`); `host` carries the
-    /// row's registration name (`<scope>::<name>`) when the exporter
-    /// is a decl/native module — the minted row family's host ids
-    /// derive from it.
+    /// Bind a used function before body compilation. `site` is the
+    /// importing file's mod path (`""` = the root) — the per-file
+    /// binding law: the row resolves only in files whose own `use`
+    /// wrote the name (ambient prelude rows pass [`AMBIENT_SITE`]).
+    /// `is_async` marks the host future lane (`host async fn`);
+    /// `host` carries the row's registration name (`<scope>::<name>`)
+    /// when the exporter is a decl/native module — the minted row
+    /// family's host ids derive from it.
     pub fn add_extern_fn(
         &mut self,
+        site: &str,
         name: IdentId,
         func: u32,
         params: Vec<TypeId>,
@@ -32,7 +36,7 @@ impl<'a> Ctx<'a> {
         };
         let params = params.iter().map(|t| remap(*t)).collect();
         self.extern_fns
-            .insert(name, ExternFn { func, params, ret, is_async, host });
+            .insert((site.to_string(), name), ExternFn { func, params, ret, is_async, host });
     }
 
     /// Bind a `builtin impl` numeric method of a primitive (core only):
@@ -58,37 +62,64 @@ impl<'a> Ctx<'a> {
             .map(|(_, i)| *i)
     }
 
+    /// The used fn bound in the CURRENT file (the per-file binding
+    /// law), with the ambient prelude rows as the fallback: a
+    /// `prelude builtin` spelling resolves in every file, a
+    /// use-bound row only where its `use` was written.
     pub fn extern_fn(&self, name: IdentId) -> Option<&ExternFn> {
-        self.extern_fns.get(&name)
+        self.extern_fns
+            .get(&(self.cur_mod.clone(), name))
+            .or_else(|| self.extern_fns.get(&(AMBIENT_SITE.to_string(), name)))
     }
 
-    /// Bind a used constant (native modules: `calc::PI`).
-    pub fn add_extern_const(&mut self, name: IdentId, ty: TypeId, bits: u64) {
-        self.extern_consts.insert(name, (ty, bits));
+    /// Bind a used constant (native modules: `calc::PI`) in `site`.
+    pub fn add_extern_const(&mut self, site: &str, name: IdentId, ty: TypeId, bits: u64) {
+        self.extern_consts.insert((site.to_string(), name), (ty, bits));
     }
 
+    /// The used constant bound in the CURRENT file (ambient fallback
+    /// included — none of today's const rows are ambient, but the
+    /// shape is the one law).
     pub fn extern_const(&self, name: IdentId) -> Option<(TypeId, u64)> {
-        self.extern_consts.get(&name).copied()
+        self.extern_consts
+            .get(&(self.cur_mod.clone(), name))
+            .or_else(|| self.extern_consts.get(&(AMBIENT_SITE.to_string(), name)))
+            .copied()
     }
 
-    /// Bind a used type name to the exporter's scope-qualified id.
-    pub fn add_extern_type(&mut self, name: IdentId, ty: TypeId, is_class: bool, newtype: bool) {
-        self.extern_types.insert(name, ty);
+    /// Bind a used type name to the exporter's scope-qualified id, in
+    /// `site` (the per-file binding law).
+    pub fn add_extern_type(&mut self, site: &str, name: IdentId, ty: TypeId, is_class: bool, newtype: bool) {
+        self.extern_types.insert((site.to_string(), name), ty);
         if is_class {
             self.extern_classes.insert(ty);
         }
         if newtype {
-            self.extern_newtypes.insert(name);
+            self.extern_newtypes.insert((site.to_string(), name));
         }
+    }
+
+    /// The used type bound in the CURRENT file — the bare-name type
+    /// ladder's per-file answer.
+    pub fn extern_type(&self, name: IdentId) -> Option<TypeId> {
+        self.extern_types
+            .get(&(self.cur_mod.clone(), name))
+            .or_else(|| self.extern_types.get(&(AMBIENT_SITE.to_string(), name)))
+            .copied()
     }
 
     /// Bind a linked generic: the template row (registered from the
     /// exporter's carried block), its parameter names in order, and the
     /// declaring pkg — the owner every instantiation of it is requested
-    /// from. The name still rides `extern_types` (the bare template
-    /// spells the owner's own row, e.g. in a `type_id<T>()` probe).
+    /// from. The name still rides `extern_generics` (the bare template
+    /// spells the owner's own row, e.g. in a `type_id<T>()` probe);
+    /// the template-table itself is unit-global by law (an impl may
+    /// live in a different module than its type), while the NEWTYPE
+    /// arming row — the call-construction flag, keyed by the site's
+    /// name binding — binds per file.
     pub fn add_extern_generic(
         &mut self,
+        site: &str,
         name: IdentId,
         owner: String,
         params: Vec<IdentId>,
@@ -98,7 +129,7 @@ impl<'a> Ctx<'a> {
     ) {
         self.decl_owner.insert(name, owner.clone());
         if newtype {
-            self.extern_newtypes.insert(name);
+            self.extern_newtypes.insert((site.to_string(), name));
         }
         self.extern_generics.insert(
             name,
@@ -108,9 +139,21 @@ impl<'a> Ctx<'a> {
 
     /// Bind a used core builtin container (`Array`/`Option`/
     /// `Result`/`Opaque`): the type constructor is the
-    /// compiler's own; the binding gates the NAME.
-    pub fn add_extern_native_type(&mut self, name: IdentId, kind: rut_core::binary::NativeTy) {
-        self.extern_native_types.insert(name, kind);
+    /// compiler's own; the binding gates the NAME. `site` is the
+    /// importing file — or [`AMBIENT_SITE`] for the prelude's ambient
+    /// rows (they bind in every unit).
+    pub fn add_extern_native_type(&mut self, site: &str, name: IdentId, kind: rut_core::binary::NativeTy) {
+        self.extern_native_types.insert((site.to_string(), name), kind);
+    }
+
+    /// The core builtin container bound in the CURRENT file — the
+    /// ambient prelude rows answer everywhere, the `pub builtin`
+    /// spellings only where the `use` was written.
+    pub fn extern_native_type(&self, name: IdentId) -> Option<rut_core::binary::NativeTy> {
+        self.extern_native_types
+            .get(&(self.cur_mod.clone(), name))
+            .or_else(|| self.extern_native_types.get(&(AMBIENT_SITE.to_string(), name)))
+            .copied()
     }
 
     /// Bind a trait from a used module's surface: the
@@ -241,15 +284,19 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Bind a used enum (the linkable-classes phase): the member paths
-    /// (`EncodeErrorKind.Depth`) resolve through this registry; the
-    /// descriptor row itself rides the carried type block.
-    pub fn add_extern_enum(&mut self, name: IdentId, ty: TypeId, members: Vec<(IdentId, i64)>) {        self.extern_enums.insert(name, (ty, members));
+    /// Bind a used enum (the linkable-classes phase) in `site`: the
+    /// member paths (`EncodeErrorKind.Depth`) resolve through this
+    /// registry; the descriptor row itself rides the carried type block.
+    pub fn add_extern_enum(&mut self, site: &str, name: IdentId, ty: TypeId, members: Vec<(IdentId, i64)>) {
+        self.extern_enums
+            .insert((site.to_string(), name), (ty, members));
     }
 
-    /// The used enum's (type id, members), if bound.
+    /// The used enum bound in the CURRENT file (the per-file law).
     pub fn extern_enum(&self, name: IdentId) -> Option<(TypeId, Vec<(IdentId, i64)>)> {
-        self.extern_enums.get(&name).cloned()
+        self.extern_enums
+            .get(&(self.cur_mod.clone(), name))
+            .cloned()
     }
 
     /// Is this type row a bare placeholder leaf for one of `params`
@@ -390,10 +437,11 @@ impl<'a> Ctx<'a> {
     }
 
     /// Bind a used module's exported generic fn (the linkable-classes
-    /// phase): the placeholder signature the call site checks against,
-    /// and the declaring pkg the body requests route to.
+    /// phase) in `site`: the placeholder signature the call site
+    /// checks against, and the declaring pkg the body requests route to.
     pub fn add_extern_generic_fn(
         &mut self,
+        site: &str,
         name: IdentId,
         owner: String,
         params: Vec<IdentId>,
@@ -401,11 +449,14 @@ impl<'a> Ctx<'a> {
         ret: TypeId,
     ) {
         self.extern_generic_fns
-            .insert(name, ExternGenericFn { owner, params, args, ret });
+            .insert((site.to_string(), name), ExternGenericFn { owner, params, args, ret });
     }
 
+    /// The used generic fn bound in the CURRENT file (the per-file law).
     pub fn extern_generic_fn(&self, name: IdentId) -> Option<&ExternGenericFn> {
-        self.extern_generic_fns.get(&name)
+        self.extern_generic_fns
+            .get(&(self.cur_mod.clone(), name))
+            .or_else(|| self.extern_generic_fns.get(&(AMBIENT_SITE.to_string(), name)))
     }
 
     /// The used class whose inherent surface answers `name` on
@@ -483,20 +534,35 @@ impl<'a> Ctx<'a> {
         leaves
     }
 
-    /// Bind a used core compiler-lowered function (`own`,
-    /// `downcast`, `assert`/`panic`, the `str`/`bytes` natives).
-    pub fn add_extern_native_fn(&mut self, name: IdentId) {
-        self.extern_native_fns.insert(name);
+    /// Bind a used core compiler-lowered fn (`own`, `downcast`,
+    /// `assert`/`panic`, the `str`/`bytes` natives) — `site` is the
+    /// importing file, or [`AMBIENT_SITE`] for the prelude's ambient rows.
+    pub fn add_extern_native_fn(&mut self, site: &str, name: IdentId) {
+        self.extern_native_fns.insert((site.to_string(), name));
     }
 
-    /// Bind a namespace head: `use calc::{Math}`.
-    pub fn add_extern_namespace(&mut self, name: IdentId) {
-        self.extern_namespaces.insert(name);
+    /// Is the core compiler-lowered fn callable in the CURRENT file?
+    /// The ambient prelude rows answer everywhere; the `pub builtin`
+    /// spellings only where the `use` was written.
+    pub fn is_extern_native_fn(&self, name: IdentId) -> bool {
+        self.extern_native_fns.contains(&(self.cur_mod.clone(), name))
+            || self.extern_native_fns.contains(&(AMBIENT_SITE.to_string(), name))
     }
 
-    /// Is `name` a bound namespace head?
+    /// Bind a namespace head (`use calc::{Math}`) in `site`.
+    pub fn add_extern_namespace(&mut self, site: &str, name: IdentId) {
+        self.extern_namespaces.insert((site.to_string(), name));
+    }
+
+    /// Is `name` a namespace head bound in the CURRENT file?
     pub fn is_extern_namespace(&self, name: IdentId) -> bool {
-        self.extern_namespaces.contains(&name)
+        self.extern_namespaces.contains(&(self.cur_mod.clone(), name))
+    }
+
+    /// Does the CURRENT file's bindings arm the newtype call
+    /// construction for `name`? (the per-file law)
+    pub fn is_extern_newtype(&self, name: IdentId) -> bool {
+        self.extern_newtypes.contains(&(self.cur_mod.clone(), name))
     }
 
 

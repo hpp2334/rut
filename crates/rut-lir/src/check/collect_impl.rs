@@ -157,10 +157,10 @@ impl<'a> Ctx<'a> {
                 return None;
             }
             Some((e.ty, None, name))
-        } else if self.extern_native_types.contains_key(&name) {
+        } else if self.extern_native_type(name).is_some() {
             self.err(sp, "a builtin class takes no impl blocks — its members are the engine's closed contract (markers and impls live on user struct and class decls)");
             None
-        } else if self.extern_types.contains_key(&name) || self.extern_generics.contains_key(&name) {
+        } else if self.extern_type(name).is_some() || self.extern_generics.contains_key(&name) {
             self.err(sp, "inherent impls live in the type's module — a used type is satisfied where it was declared");
             None
         } else if sym::primitive_ty(name).is_some() {
@@ -210,8 +210,8 @@ impl<'a> Ctx<'a> {
             || self.find_data(n).is_some()
             || self.find_iface(n).is_some()
             || self.find_alias(n).is_some()
-            || self.extern_native_types.contains_key(&n)
-            || self.extern_types.contains_key(&n)
+            || self.extern_native_type(n).is_some()
+            || self.extern_type(n).is_some()
     }
 
 
@@ -567,7 +567,7 @@ impl<'a> Ctx<'a> {
                         .find_data(tname)
                         .map(|d| d.newtype)
                         .unwrap_or(false)
-                        || self.extern_newtypes.contains(&tname);
+                        || self.is_extern_newtype(tname);
                     if is_newtype {
                         self.err(
                             sp,
@@ -678,8 +678,8 @@ impl<'a> Ctx<'a> {
             || self.find_data(n).is_some()
             || self.find_iface(n).is_some()
             || self.find_alias(n).is_some()
-            || self.extern_native_types.contains_key(&n)
-            || self.extern_types.contains_key(&n)
+            || self.extern_native_type(n).is_some()
+            || self.extern_type(n).is_some()
             || self.extern_generics.contains_key(&n)
     }
 }

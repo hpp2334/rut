@@ -47,6 +47,17 @@ fn case_ctx() -> rut_vm::interp::HostPkgContext {
     rut_driver::host_pkg_ctx(&world)
 }
 
+/// The logger use line the harness appends so the original spans of
+/// `src` stay put. Appended only when `src` does not already spell it —
+/// the NAME law errors a leaf spelled twice in one file.
+fn with_logger_use(src: &str) -> String {
+    if src.contains("use ink::") {
+        src.to_string()
+    } else {
+        format!("{src}\nuse ink::{{Logger}};\n")
+    }
+}
+
 fn run_case(src: &str, fuel: u64) -> (Vec<String>, Option<String>, u64) {
     let (lines, trap, vm) = run_case_keep_vm(src, fuel);
     let out = lines.borrow().clone();
@@ -61,7 +72,7 @@ fn run_case_keep_vm(
     fuel: u64,
 ) -> (Rc<RefCell<Vec<String>>>, Option<String>, rut_vm::interp::Vm) {
     // append the logger use so the original spans stay put
-    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let combined = with_logger_use(src);
     let out = compile(&combined, "main");
     assert!(
         out.graph.diags.is_empty(),
@@ -102,7 +113,7 @@ fn run_case_keep_vm(
 /// the AST dumps + IR render a `CompileOutput` carries (the dump tests).
 fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
     use rut_ast::dump as ast_dump;
-    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let combined = with_logger_use(src);
     let (ast, diags) = rut_parser::parse(&combined, rut_parser::Mode::Impl);
     let tree = ast_dump::to_dump_tree(&ast);
     let ast_dump = ast_dump::render_text(&tree, &combined);
@@ -138,7 +149,7 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
 /// case world's heads (`ink`, `pouch`, `calc` — the libs the world
 /// mounts, `Logger`'s use appended above included).
 fn compile(src: &str, module: &str) -> rut_driver::Compiled {
-    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let combined = with_logger_use(src);
     let mut chain = rut_driver::RutRun::new()
         .pkg(
             rut_driver::Pkg::source(module, &combined)
@@ -983,7 +994,7 @@ struct Point { x: i32; y: i32 }
 entry fn get_point() -> Point { return Point { x: 1, y: 2 }; }
 "#;
     let out = compile(src, "m");
-    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let combined = with_logger_use(src);
     let d = out
         .graph
         .diags
@@ -1001,7 +1012,7 @@ struct Point { x: i32; y: i32 }
 entry fn put_point(p: Point) -> nil { }
 "#;
     let out = compile(src, "m");
-    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let combined = with_logger_use(src);
     let d = out
         .graph
         .diags
@@ -1586,7 +1597,7 @@ entry fn main() -> nil {
 }
 "#;
     let out = compile(src, "main");
-    let combined = format!("{src}\nuse ink::{{Logger}};\n");
+    let combined = with_logger_use(src);
     assert!(
         out.graph.diags.is_empty(),
         "unexpected diags:\n{}",
@@ -2257,7 +2268,7 @@ impl P { [disposal] fn dispose(self, cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
     let out = compile(
-        &format!("{src}\nuse ink::{{Logger}};\n"),
+        &with_logger_use(src),
         "main",
     );
     assert!(
@@ -2278,7 +2289,7 @@ impl<T> Box2<T> { [disposal] fn dispose(mut self, cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
     let out = compile(
-        &format!("{src}\nuse ink::{{Logger}};\n"),
+        &with_logger_use(src),
         "main",
     );
     assert!(

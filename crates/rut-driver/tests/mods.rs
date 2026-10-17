@@ -1760,8 +1760,8 @@ fn use_bindings_are_per_file() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`cell` is use-bound in the root module")
-            && d.contains("needs its own `use`")),
+        diags.iter().any(|d| d.contains("`cell` is bound by a `use` in the root module")
+            && d.contains("write the `use` in this file")),
         "{diags:?}"
     );
 }
@@ -1843,4 +1843,232 @@ fn qualified_static_call_through_the_mod_path() {
         ),
     ];
     assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
+}
+
+// =====================================================================
+// the per-file binding law (plan10 phase 1): every `use` binds its own
+// file — two files' same-named imports are two live rows; a leaf bound
+// twice in ONE file is the second spelling's error; nothing binds
+// ambient except the flagged prelude rows.
+// =====================================================================
+
+#[test]
+fn two_files_same_name_both_live() {
+    // the E3 world, now green: the root's `use pkga::{dup}` and the
+    // child's `use pkgb::{dup}` are two live bindings — the root's
+    // dup(41) calls pkga's (+1), the child's dup(10) calls pkgb's (×2).
+    // Under the old unit-global last-writer-wins the root's call stole
+    // pkgb's row (`argument 1 is i64, str expected`); today each file
+    // resolves through its own import.
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub fn dup(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "pkgb",
+            "pub fn dup(x: i32) -> i32 { return x * 2; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "mod child;\nuse pkga::{ dup };\nuse child::{ go };\nentry fn main() -> i32 {\n    return dup(41) + go();\n}\n",
+            vec![(
+                "child",
+                Vis::Pub,
+                "use pkgb::{ dup };\npub fn go() -> i32 { return dup(10); }\n",
+            )],
+        ),
+    ];
+    // 42 (pkga's dup at the root) + 20 (pkgb's dup in the child)
+    assert_eq!(run_main_pkgs(&pkgs, "app"), 62);
+}
+
+#[test]
+fn one_file_two_heads_same_leaf_errors() {
+    // the NAME law: `dup` spelled by two use leaves in the SAME file —
+    // different heads, same file — errors at the second spelling,
+    // citing the first
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub fn dup(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "pkgb",
+            "pub fn dup(s: str) -> str { return s; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ dup };\nuse pkgb::{ dup };\nentry fn main() -> i32 { return dup(41); }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "app");
+    assert!(
+        diags.iter().any(|d| d.contains("duplicate name `dup`")
+            && d.contains("`use pkga::{ dup }`")
+            && d.contains("already binds it in this file")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn one_file_same_head_same_leaf_twice_errors() {
+    // the user's exact ruling: `use a::{x}; use a::{x, y}` errors —
+    // the leaf `x` is spelled twice in this file, the package is
+    // irrelevant. A single list's self-duplicate (`use a::{ x, x }`)
+    // gets the same treatment.
+    let a = modpkg(
+        "pkga",
+        "pub fn x() -> i32 { return 1; }\npub fn y() -> i32 { return 2; }\n",
+        vec![],
+    );
+    // two statements, one head, same leaf
+    let twice = vec![
+        a.clone(),
+        modpkg(
+            "app",
+            "use pkga::{ x };\nuse pkga::{ x, y };\nentry fn main() -> i32 { return x(); }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&twice, "app");
+    assert!(
+        diags.iter().any(|d| d.contains("duplicate name `x`")
+            && d.contains("`use pkga::{ x }`")
+            && d.contains("already binds it in this file")),
+        "{diags:?}"
+    );
+    // twice within ONE list
+    let self_dup = vec![
+        a.clone(),
+        modpkg(
+            "app",
+            "use pkga::{ x, x };\nentry fn main() -> i32 { return x(); }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&self_dup, "app");
+    assert!(
+        diags.iter().any(|d| d.contains("duplicate name `x`")
+            && d.contains("already binds it in this file")),
+        "{diags:?}"
+    );
+    // the control: two leaves, one head, DIFFERENT names — fine
+    let ok = vec![
+        a,
+        modpkg(
+            "app",
+            "use pkga::{ x };\nuse pkga::{ y };\nentry fn main() -> i32 { return x() + y(); }\n",
+            vec![],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&ok, "app"), 3);
+}
+
+#[test]
+fn unimported_name_errors_with_hint() {
+    // the E4 world, flipped: `dup` is written in NO use statement of
+    // the unit — the root's sibling use of `other` binds only `other`,
+    // and the child's bare dup() call is the loud not-bound error
+    // naming the exact fix
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub fn other() -> i32 { return 7; }\npub fn dup(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "mod child;\nuse pkga::{ other };\nuse child::{ go };\nentry fn main() -> i32 {\n    return go();\n}\n",
+            vec![(
+                "child",
+                Vis::Pub,
+                "pub fn go() -> i32 {\n    return dup(41);\n}\n",
+            )],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "app");
+    assert!(
+        diags.iter()
+            .any(|d| d.contains("`dup` is not bound — no `use` statement names it")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn other_file_binding_names_the_module() {
+    // the root's `use` bound `dup`; the child's bare call misses and
+    // the hint names where the binding lives (the root module) and the
+    // fix (write the use in this file)
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub fn dup(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "mod child;\nuse pkga::{ dup };\nuse child::{ go };\nentry fn main() -> i32 {\n    return go();\n}\n",
+            vec![(
+                "child",
+                Vis::Pub,
+                "pub fn go() -> i32 {\n    return dup(41);\n}\n",
+            )],
+        ),
+    ];
+    let diags = compile_with_diags(&pkgs, "app");
+    assert!(
+        diags.iter().any(|d| d.contains("`dup` is bound by a `use` in the root module")
+            && d.contains("write the `use` in this file")),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn core_prelude_stays_ambient() {
+    // the control: the flagged prelude rows (`string_join`, `panic`)
+    // resolve use-less in EVERY file of a multi-file pkg — the ambient
+    // bit is the documented prelude law, untouched by the per-file
+    // binding of dep names
+    let pkgs = vec![
+        modpkg(
+            "app",
+            "mod child;\nuse child::{ go };\nentry fn main() -> i32 {\n    return go();\n}\n",
+            vec![(
+                "child",
+                Vis::Pub,
+                "pub fn go() -> i32 {\n    let s = string_join([\"a\", \"b\"]);\n    if (s != \"ab\") { panic(\"join diverged\"); }\n    return 9;\n}\n",
+            )],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "app"), 9);
+}
+
+#[test]
+fn own_use_and_dep_use_coexist_per_file() {
+    // the root own-imports `helper` from its `imp` module; the child
+    // dep-imports a same-named `helper` from pkga — two files, two
+    // live bindings, neither feeds the other
+    let pkgs = vec![
+        modpkg(
+            "pkga",
+            "pub fn helper() -> i32 { return 7; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "mod child;\nmod imp;\nuse imp::{ helper };\nuse child::{ go };\nentry fn main() -> i32 {\n    return helper() + go();\n}\n",
+            vec![
+                ("child", Vis::Pub, "use pkga::{ helper };\npub fn go() -> i32 { return helper(); }\n"),
+                ("imp", Vis::Self_, "pub fn helper() -> i32 { return 10; }\n"),
+            ],
+        ),
+    ];
+    // the root's helper is imp's (10), the child's is pkga's (7)
+    assert_eq!(run_main_pkgs(&pkgs, "app"), 17);
 }

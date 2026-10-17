@@ -21,6 +21,17 @@ mod resolve;
 
 pub(crate) use impls::MemberSrc;
 
+// ---- the per-file binding law ----
+
+/// The ambient site key: the wildcard "file" the core prelude's
+/// AMBIENT rows (`prelude builtin` — the documented prelude law) bind
+/// under. Every module resolves through it — the accessors fall back
+/// to it after the per-file key misses — while a use binding never
+/// collides with it (a real mod path is never this text). Public
+/// because the driver's binding passes spell it at the ambient
+/// inserts.
+pub const AMBIENT_SITE: &str = "\0ambient";
+
 // ---- decl indices ----
 
 #[derive(Clone, Debug)]
@@ -420,31 +431,43 @@ pub struct Ctx<'a> {
     /// `entry fn` names: the host-callable surface
     pub entries: Vec<IdentId>,
     /// used functions, bound before body compilation:
-    /// name -> signature + the exporter's scope-qualified function id
-    pub extern_fns: std::collections::HashMap<IdentId, ExternFn>,
+    /// `(binding file mod path, name)` -> signature + the exporter's
+    /// scope-qualified function id. Per-file (the per-file binding
+    /// law): a `use` binds ITS OWN file — file A's `use pkga::{dup}`
+    /// and file B's `use pkgb::{dup}` are two live bindings. The
+    /// ambient prelude rows (the `prelude builtin` spellings) bind
+    /// under [`AMBIENT_SITE`], the wildcard site every module resolves
+    /// through.
+    pub extern_fns: std::collections::HashMap<(String, IdentId), ExternFn>,
     /// The host future lane's minted machinery, one per async host fn
-    /// this unit calls (phase 4): extern fn name -> layout (the hidden
-    /// `#hframe@` frame type, the `__start` thunk, the Future inst).
-    /// Idempotent per fn — the mint runs at the first call site.
-    pub host_async: std::collections::HashMap<IdentId, HostAsyncLayout>,
+    /// this unit calls (phase 4): `(binding file, extern fn name)` ->
+    /// layout (the hidden `#hframe@` frame type, the `__start` thunk,
+    /// the Future inst). Idempotent per (file, fn) — the mint runs at
+    /// the first call site of that file's binding.
+    pub host_async: std::collections::HashMap<(String, IdentId), HostAsyncLayout>,
     /// core's `builtin impl` numeric methods: method
     /// name → `(receiver prim, lowering id)` — ambient on primitives
     pub builtin_impls: std::collections::HashMap<IdentId, Vec<(TypeId, rut_core::ops::Intrinsic)>>,
-    /// used constants (native modules: `calc`): name -> (type, bits)
-    pub extern_consts: std::collections::HashMap<IdentId, (TypeId, u64)>,
-    /// used types: name -> the exporter's scope-qualified type id
-    pub extern_types: std::collections::HashMap<IdentId, TypeId>,
-    /// used types that are `class` (no outside record literal)
+    /// used constants (native modules: `calc::PI`):
+    /// `(binding file, name)` -> (type, bits) — per-file
+    pub extern_consts: std::collections::HashMap<(String, IdentId), (TypeId, u64)>,
+    /// used types: `(binding file, name)` -> the exporter's
+    /// scope-qualified type id — per-file (the binding law)
+    pub extern_types: std::collections::HashMap<(String, IdentId), TypeId>,
+    /// used types that are `class` (no outside record literal) — a
+    /// property of the type ROW (global by construction: the row is
+    /// reached only through the per-file name binding)
     pub extern_classes: std::collections::HashSet<TypeId>,
     /// used types spelled `class Name(Wrapped);` — the call
-    /// construction's arming set, keyed by the bound NAME (the
-    /// construction site has the name, and the flag is the nominal
-    /// class's, not the row's)
-    pub extern_newtypes: std::collections::HashSet<IdentId>,
-    /// used core builtin containers: name -> constructor.
-    /// The prelude is used, never ambient — `Array`/`Opaque` resolve
-    /// only through this map
-    pub extern_native_types: std::collections::HashMap<IdentId, rut_core::binary::NativeTy>,
+    /// construction's arming set, keyed by `(binding file, the bound
+    /// NAME)` (the construction site has the name, and the flag is the
+    /// nominal class's, not the row's) — per-file
+    pub extern_newtypes: std::collections::HashSet<(String, IdentId)>,
+    /// used core builtin containers: `(binding file, name)` ->
+    /// constructor. The prelude is used, never ambient — `Array`/
+    /// `Opaque` resolve only through this map; the ambient prelude
+    /// rows bind under [`AMBIENT_SITE`]
+    pub extern_native_types: std::collections::HashMap<(String, IdentId), rut_core::binary::NativeTy>,
     /// used core builtin ifaces: name -> contract
     /// (`Disposal`/`Index`/`Iterable`)
     /// ifaces exported by used modules' surfaces:
@@ -452,11 +475,12 @@ pub struct Ctx<'a> {
     /// name binds only when the module used it — the use-both gate.
     pub extern_iface_decls: std::collections::HashMap<IdentId, ExternIface>,
     /// trait impls registered by used modules' surfaces
-    /// used enums (the linkable-classes phase): name → (the enum's
-    /// type id, its members as bound) — a used enum's member paths
-    /// (`EncodeErrorKind.Depth`) resolve through this registry; the
-    /// descriptor row itself rides the carried type block
-    pub extern_enums: std::collections::HashMap<IdentId, (TypeId, Vec<(IdentId, i64)>)>,
+    /// used enums (the linkable-classes phase): `(binding file, name)`
+    /// → (the enum's type id, its members as bound) — a used enum's
+    /// member paths (`EncodeErrorKind.Depth`) resolve through this
+    /// registry; the descriptor row itself rides the carried type
+    /// block. Per-file (the binding law).
+    pub extern_enums: std::collections::HashMap<(String, IdentId), (TypeId, Vec<(IdentId, i64)>)>,
     /// inherent method surfaces bound from used modules' surfaces (the
     /// linkable-classes phase): the class-method rows a consumer's
     /// `b.append(..)` / `Logger.new(..)` resolve through
@@ -469,10 +493,11 @@ pub struct Ctx<'a> {
     /// never registers — its `Name(v)` surface already IS the
     /// construction, the marker diagnoses there.
     pub class_ctors: std::collections::HashMap<IdentId, IdentId>,
-    /// generic fns bound from used modules' surfaces: name → the
-    /// placeholder signature + parameter names. The call mints the
-    /// mirror instantiation and requests the body from the owner.
-    pub extern_generic_fns: std::collections::HashMap<IdentId, ExternGenericFn>,
+    /// generic fns bound from used modules' surfaces:
+    /// `(binding file, name)` → the placeholder signature + parameter
+    /// names. The call mints the mirror instantiation and requests the
+    /// body from the owner. Per-file (the binding law).
+    pub extern_generic_fns: std::collections::HashMap<(String, IdentId), ExternGenericFn>,
     /// the emit-closure signature of each desugared `for..of`,
     /// recorded at the creation site and read when the queue compiles the fn:
     /// body node → (element type, captures, the loop var's cell when
@@ -483,13 +508,15 @@ pub struct Ctx<'a> {
     pub for_of_sigs:
         std::collections::HashMap<u32, (TypeId, Vec<Capture>, Option<TypeId>, bool)>,
     /// used core compiler-lowered functions (`own`, `downcast`,
-    /// `assert`/`panic`, the `str`/`bytes` natives): the name is callable
-    /// only when bound
-    pub extern_native_fns: std::collections::HashSet<IdentId>,
+    /// `assert`/`panic`, the `str`/`bytes` natives):
+    /// `(binding file, name)` — the name is callable only where bound;
+    /// the ambient prelude rows bind under [`AMBIENT_SITE`]
+    pub extern_native_fns: std::collections::HashSet<(String, IdentId)>,
     /// Bound namespace heads (`Math` for `calc`) — the qualified
-    /// access form `<namespace>::<member>`. Name-generic: the
-    /// LIR routes by membership here, never by a hardcoded string.
-    pub extern_namespaces: std::collections::HashSet<IdentId>,
+    /// access form `<namespace>::<member>`, keyed `(binding file,
+    /// head)`. Name-generic: the LIR routes by membership here, never
+    /// by a hardcoded string. Per-file (the binding law).
+    pub extern_namespaces: std::collections::HashSet<(String, IdentId)>,
     /// instantiated generic types: id -> (decl, type args)
     pub inst_data: std::collections::HashMap<TypeId, (IdentId, Vec<TypeId>)>,
     /// monomorphization cache: (decl, type args) -> id
@@ -559,6 +586,10 @@ pub struct Ctx<'a> {
     /// other packages). Empty = flat (the unit's own uses gate
     /// everything, exactly as before).
     pub use_sites: std::collections::HashMap<IdentId, Vec<String>>,
+    /// The first spelling of every use-bound `(file, name)`: the use
+    /// head's text + the use item's span — the duplicate-name law's
+    /// citation ("`use a::{ x }` already binds it in this file").
+    pub use_first_spell: std::collections::HashMap<(String, IdentId), (String, Span)>,
     /// The packages this unit's `use` statements name — a qualified
     /// head that names one of these is the cross-package spelling the
     /// position grammar refuses, and the diagnostic names the use fix.
@@ -579,6 +610,12 @@ pub struct Ctx<'a> {
     /// `Surface::core`), keyed by IdentId — a resolution
     /// miss that hits it names the fix: `use core::{ Name }`
     pub pub_core: std::collections::HashMap<IdentId, &'static str>,
+    /// every value-lane name the mounted dep surfaces EXPORT (fns,
+    /// generic fns, consts, types) — the terminal-miss hint's input:
+    /// a name in here that no `use` bound in this file spells the
+    /// exact fix ("no `use` statement names it") instead of a plain
+    /// unknown-name.
+    pub dep_exports: std::collections::HashSet<IdentId>,
     // instantiation queue
     pub inst_map: std::collections::HashMap<Inst, u32>,
     queue: Vec<Inst>,
@@ -805,10 +842,12 @@ impl<'a> Ctx<'a> {
             mods: ModInputs::flat(),
             cur_mod: String::new(),
             use_sites: std::collections::HashMap::new(),
+            use_first_spell: std::collections::HashMap::new(),
             used_pkgs: std::collections::HashSet::new(),
             own_uses: std::collections::HashMap::new(),
             extern_origins: std::collections::HashMap::new(),
             pub_core,
+            dep_exports: std::collections::HashSet::new(),
             inst_map: std::collections::HashMap::new(),
             queue: Vec::new(),
             decl_owner: std::collections::HashMap::new(),
@@ -910,18 +949,22 @@ impl<'a> Ctx<'a> {
         Ok(cur)
     }
 
-    /// Is the name use-bound by the CURRENT module's file? Uses bind
-    /// per file; a flat package (no per-file records) gates exactly as
-    /// before — every binding counts. An own-package binding claims
-    /// the name for its file: the dep lanes must not bind it there.
-    pub(crate) fn use_bound_here(&self, name: IdentId) -> bool {
+    /// Is the name use-bound by the CURRENT file? The STRICT per-file
+    /// gate — the `None => true` ambient arm is gone (the per-file
+    /// binding law): a name no `use` wrote is bound nowhere. Serves
+    /// the lanes whose tables stay unit-global by law (iface
+    /// descriptors, generic templates — impls may live in a different
+    /// module than their trait); every re-keyed value-lane table
+    /// answers per-file through its `(site, name)` key instead. An
+    /// own-package binding claims the name for its file: the dep
+    /// lanes must not bind it there.
+    pub(crate) fn use_bound_in_file(&self, name: IdentId) -> bool {
         if self.own_uses.contains_key(&(self.cur_mod.clone(), name)) {
             return false;
         }
-        match self.use_sites.get(&name) {
-            None => true,
-            Some(sites) => sites.iter().any(|m| *m == self.cur_mod),
-        }
+        self.use_sites
+            .get(&name)
+            .map_or(false, |sites| sites.iter().any(|m| *m == self.cur_mod))
     }
 
     /// The module an own-package `use` binding in the CURRENT file
@@ -993,8 +1036,8 @@ impl<'a> Ctx<'a> {
     }
 
     /// The "bound elsewhere" hint: the name rides another file's
-    /// `use` — this module needs its own. An own-package binding says
-    /// where the name comes from (imported there from module X).
+    /// `use` — write the `use` in this file. An own-package binding
+    /// says where the name comes from (imported there from module X).
     pub(crate) fn use_elsewhere_hint(&self, name: IdentId) -> Option<String> {
         let sites = self.use_sites.get(&name)?;
         let other = sites.iter().find(|m| **m != self.cur_mod)?;
@@ -1008,11 +1051,24 @@ impl<'a> Ctx<'a> {
             None => String::new(),
         };
         Some(format!(
-            "`{}` is use-bound in {}{} — this module needs its own `use` to bind it",
+            "`{}` is bound by a `use` in {}{} — write the `use` in this file",
             self.name(name),
             where_,
             note
         ))
+    }
+
+    /// The "not bound" hint: the name IS a mounted dep's export, but
+    /// no `use` statement of this compilation names it — the exact
+    /// fix is writing one. `None` when the name is nobody's export
+    /// (the caller keeps its plain unknown-name diagnostic).
+    pub(crate) fn unbound_hint(&self, name: IdentId) -> Option<String> {
+        self.dep_exports.contains(&name).then(|| {
+            format!(
+                "`{}` is not bound — no `use` statement names it",
+                self.name(name)
+            )
+        })
     }
 
     /// A struct/class declared in module `m`.

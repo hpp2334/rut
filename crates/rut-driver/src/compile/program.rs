@@ -4,7 +4,7 @@
 //! fight; the module owns the surface snapshot, the seed attach, and
 //! the debug dumps.
 
-use rut_lir::check::{Ctx, FnKey, Inst};
+use rut_lir::check::{Ctx, FnKey, Inst, AMBIENT_SITE};
 use rut_lexer::diag::Diag;
 use rut_ast::dump;
 use rut_parser::{parse, Mode};
@@ -91,12 +91,19 @@ pub fn compile_program(
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
 ) -> ProgramOutput {
+    // the direct lane's third tuple element is both the mount key and
+    // the spelled head (a hand-offered surface binds under the name
+    // its caller passed)
+    let uses4: Vec<(rut_core::ScopeId, rut_core::binary::Surface, String, String)> = uses
+        .iter()
+        .map(|(s, surf, o)| (*s, surf.clone(), o.clone(), o.clone()))
+        .collect();
     compile_program_resolved(
         src,
         mode,
         module_name,
         scope,
-        uses,
+        &uses4,
         !uses.is_empty(),
         &Seeds::none(),
         &rut_lir::check::ModInputs::flat(),
@@ -121,7 +128,7 @@ pub fn compile_program_resolved(
     mode: Mode,
     module_name: &str,
     scope: rut_core::ScopeId,
-    uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String)],
+    uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
     allow_uses: bool,
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
@@ -147,16 +154,30 @@ pub fn compile_program_resolved(
     // resolves its members by name even though the member name is never
     // written in `use { .. }`. Surface names are
     // ids in the exporter's interner (`surface.names`) — re-interned by
-    // text into this module's.
-    for (_, surface, _) in uses {
+    // text into this module's. The texts also feed `dep_exports` (the
+    // terminal-miss hint's "a use statement could name it" table).
+    let mut dep_export_leaf_texts: Vec<String> = Vec::new();
+    for (_, surface, ..) in uses {
         for f in &surface.funcs {
-            ast.interner.intern(surface.names.name(f.name));
+            let text = surface.names.name(f.name);
+            ast.interner.intern(text);
+            dep_export_leaf_texts.push(text.rsplit("::").next().unwrap_or(text).to_string());
+        }
+        for g in &surface.fn_generics {
+            let text = surface.names.name(g.name);
+            dep_export_leaf_texts.push(text.rsplit("::").next().unwrap_or(text).to_string());
         }
         for c in &surface.consts {
-            ast.interner.intern(surface.names.name(c.name));
+            let text = surface.names.name(c.name);
+            ast.interner.intern(text);
+            dep_export_leaf_texts.push(text.rsplit("::").next().unwrap_or(text).to_string());
         }
         for t in &surface.ifaces {
             ast.interner.intern(surface.names.name(t.name));
+        }
+        for t in &surface.type_exports {
+            let text = surface.names.name(t.name);
+            dep_export_leaf_texts.push(text.rsplit("::").next().unwrap_or(text).to_string());
         }
     }
     let mut ctx = Ctx::new_scoped(&ast, scope);
@@ -183,28 +204,111 @@ pub fn compile_program_resolved(
             }
         }
     }
-    // the QUALIFIED-use leaves (phase 2): `use pkg::a::b::{ leaf }`
-    // composes `a::b::leaf` — the spelling a host mod tree's surface
-    // rows carry (`net::connect`) — keyed by the use head (the dep
-    // pkg). A host mod row binds under its LEAF name through this
-    // map; flat rows keep the bare-name lane below.
-    let mut qualified_leaves: std::collections::HashMap<(String, String), rut_core::IdentId> =
-        std::collections::HashMap::new();
+    // ---- T1: the per-file binding index. One walk over the AST's use
+    // items (the `dep_use_heads` walk's shape), each leaf keyed by the
+    // importing file's mod path (`layout.file_of`; `""` = the root).
+    // This is the single source of truth for "which file bound what
+    // from which head": the binding loops below insert every dep row
+    // per (file, leaf) row instead of unit-globally.
+    //
+    // `UseBinding` — one use leaf's row: `file` the importing file's
+    // mod path, `head` the dep head text, `leaf` the bound bare name,
+    // `qualified` flat vs `head::path::{leaf}`, `composed` the
+    // host-row spelling when qualified (`net::ping`).
+    struct UseBinding {
+        file: String,
+        head: String,
+        leaf: rut_core::IdentId,
+        qualified: bool,
+        composed: String,
+    }
+    // the own-package claims: the graph validation's rows — a leaf
+    // these claim is the intra-package import, no dep head behind it
+    let own_claims: std::collections::HashSet<(String, rut_core::IdentId)> = own_uses
+        .iter()
+        .filter_map(|(site, name, _)| ast.interner.lookup(name).map(|id| (site.clone(), id)))
+        .collect();
+    let mut use_bindings: Vec<UseBinding> = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         if let rut_ast::ast::ItemKind::Use { path, names } = ast.item(it) {
-            if path.len() < 2 {
-                continue;
-            }
             let head = ast.name(path[0]).to_string();
+            let file = ctx.mods.file_of(ast.span(it.id()).lo).to_string();
             let prefix = path[1..]
                 .iter()
                 .map(|&s| ast.name(s).to_string())
                 .collect::<Vec<_>>()
                 .join("::");
             for &n in names {
-                let composed = format!("{prefix}::{}", ast.name(n));
-                qualified_leaves.insert((head.clone(), composed), n);
+                // the intra-package lane: the graph validation
+                // recorded these leaves in `own_uses` — they bind
+                // through the target module, never through a dep head
+                if own_claims.contains(&(file.clone(), n)) {
+                    continue;
+                }
+                let (qualified, composed) = if path.len() >= 2 {
+                    (true, format!("{prefix}::{}", ast.name(n)))
+                } else {
+                    (false, String::new())
+                };
+                use_bindings.push(UseBinding {
+                    file: file.clone(),
+                    head: head.clone(),
+                    leaf: n,
+                    qualified,
+                    composed,
+                });
             }
+        }
+    }
+    // the binding sites for one dep surface row: `text` is the row's
+    // surface spelling — bare, or `net::ping` for a host mod row.
+    // Answers the `(binding file, bound leaf)` pairs: a host mod row
+    // binds under the LEAF of the qualified use that composed its
+    // spelling; a bare row binds in every file whose use leaf (flat
+    // or qualified) matches, skipping sites an own-package binding
+    // claims (today's `use_bound_here` guard, hoisted into the
+    // binding). `head` is the SPELLED head text — the use row's key.
+    let binding_sites = |head: &str, text: &str| -> Vec<(String, rut_core::IdentId)> {
+        if text.contains("::") {
+            use_bindings
+                .iter()
+                .filter(|b| b.qualified && b.head == head && b.composed == text)
+                .map(|b| (b.file.clone(), b.leaf))
+                .collect()
+        } else {
+            let Some(id) = ast.interner.lookup(text) else {
+                return Vec::new();
+            };
+            use_bindings
+                .iter()
+                .filter(|b| {
+                    b.head == head
+                        && b.leaf == id
+                        && !own_claims.contains(&(b.file.clone(), id))
+                })
+                .map(|b| (b.file.clone(), b.leaf))
+                .collect()
+        }
+    };
+    // the bare-row lane keyed by a KNOWN id (the natives' names: the
+    // `ambient` bit rules ambient vs per-file, the leaf id is at hand)
+    let bare_sites = |head: &str, id: rut_core::IdentId| -> Vec<(String, rut_core::IdentId)> {
+        use_bindings
+            .iter()
+            .filter(|b| {
+                b.head == head && b.leaf == id && !own_claims.contains(&(b.file.clone(), id))
+            })
+            .map(|b| (b.file.clone(), b.leaf))
+            .collect()
+    };
+    // the value-lane names the mounted dep surfaces export — the
+    // terminal-miss hint's table: a miss on one of these names the
+    // exact fix ("no `use` statement names it") instead of a plain
+    // unknown-name. Only ids the interner already carries record (no
+    // new interns — the name table's byte-stability is load-bearing).
+    for text in &dep_export_leaf_texts {
+        if let Some(id) = ctx.interner.lookup(text) {
+            ctx.dep_exports.insert(id);
         }
     }
     // the orphan rule's locality input: this unit's own
@@ -227,8 +331,9 @@ pub fn compile_program_resolved(
         &rut_core::binary::Surface,
         std::collections::HashMap<u32, u32>,
         String,
+        String,
     )> = Vec::new();
-    for (dep_scope, surface, origin) in uses {
+    for (dep_scope, surface, origin, head) in uses {
         // ---- pass 1: interface declarations from every surface. A
         // descriptor registers when its name was used (the use-both
         // gate's binding); inst-descriptor rows ride nameless.
@@ -256,44 +361,69 @@ pub fn compile_program_resolved(
             tmap.insert(t.local, cid);
             ext_trait.insert(text.to_string(), cid);
         }
-        trait_maps.push((*dep_scope, surface, tmap, origin.clone()));
+        trait_maps.push((*dep_scope, surface, tmap, origin.clone(), head.clone()));
     }
     // ---- pass 2: type descriptors (types first: descriptors must be in
     // the table before any own type is interned — TypeTable::use_block;
     // names re-intern from the exporter's interner)
-    for (_, surface, tmap, _) in &trait_maps {
+    for (_, surface, tmap, _, _) in &trait_maps {
         ctx.use_types(surface.types.clone(), &surface.names, &surface.scope_blocks, tmap);
     }
     // the seeds' requester rows join AFTER the roots (see the seed
     // half below the drain): the owner's own block must intern at the
     // exact locals the un-seeded compile gave it, or every surface id
     // an earlier-compiled consumer already bound goes stale.
-    // ---- pass 3: fns, consts, types, impls, natives
-    for (dep_scope, surface, tmap, origin) in trait_maps.iter() {
+    // ---- pass 3: fns, consts, types, impls, natives. Every lane
+    // binds per (file, leaf) off `use_bindings` — a flat row binds in
+    // every file whose leaf matches, a host mod row in the file whose
+    // qualified use composed its spelling; no site, no binding (the
+    // per-file binding law; the vacuous name-table lookup is gone).
+    // The binding key is the SPELLED head (`head` — the use row's
+    // text); `origin` (the exporter's mount key) rides the owner
+    // anchors.
+    for (dep_scope, surface, tmap, origin, head) in trait_maps.iter() {
         let dep_scope = *dep_scope;
+        // the namespace head's files (`use calc::{ Math }`): the
+        // namespace's MEMBER rows — the fns and consts the surface
+        // exposes through the head — resolve there, reached qualified
+        // (`Math::sqrt(..)`); the member names themselves are never in
+        // a use list
+        let ns_sites: Vec<String> = surface
+            .namespace
+            .and_then(|ns| ast.interner.lookup(surface.names.name(ns)))
+            .map(|ns_id| {
+                use_bindings
+                    .iter()
+                    .filter(|b| b.head == head.as_str() && b.leaf == ns_id)
+                    .map(|b| b.file.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
         for f in &surface.funcs {
             let text = surface.names.name(f.name);
-            // the binding gate: a flat row binds by its bare name when
-            // the unit wrote it (`use` leaf or code); a host mod row's
-            // surface spelling is `path::name` (`net::connect`) — it
-            // binds under the LEAF of the qualified use that named it
-            // (`use myhost::net::{ connect }`), never under the bare
-            // text and never through a flat use
-            let id = if text.contains("::") {
-                qualified_leaves
-                    .get(&(origin.clone(), text.to_string()))
-                    .copied()
-            } else {
-                ctx.ast.interner.lookup(text)
-            };
-            if let Some(id) = id {
-                let exports: Vec<(rut_core::IdentId, TypeId)> = surface
-                    .type_exports
-                    .iter()
-                    .map(|t| (t.name, rut_core::pack(dep_scope, t.local)))
-                    .collect();
-                let ret2 = ctx.respell_future_ret(f.ret, &exports);
+            let mut sites = binding_sites(head, text);
+            // the namespace ride: the head's files resolve the members
+            if !ns_sites.is_empty() {
+                if let Some(id) = ast.interner.lookup(text) {
+                    for f2 in &ns_sites {
+                        if !sites.iter().any(|(s, _)| s == f2) {
+                            sites.push((f2.clone(), id));
+                        }
+                    }
+                }
+            }
+            if sites.is_empty() {
+                continue;
+            }
+            let exports: Vec<(rut_core::IdentId, TypeId)> = surface
+                .type_exports
+                .iter()
+                .map(|t| (t.name, rut_core::pack(dep_scope, t.local)))
+                .collect();
+            let ret2 = ctx.respell_future_ret(f.ret, &exports);
+            for (site, id) in sites {
                 ctx.add_extern_fn(
+                    &site,
                     id,
                     rut_core::pack(dep_scope, f.local),
                     f.params.clone(),
@@ -314,15 +444,16 @@ pub fn compile_program_resolved(
         // by `use_types`)
         // exported generic fns (the linkable-classes phase): the
         // placeholder signature + the declaring pkg — the call site
-        // infers against it and requests the body
+        // infers against it and requests the body. Per (file, leaf).
         for g in &surface.fn_generics {
-            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(g.name)) {
+            let text = surface.names.name(g.name);
+            for (site, id) in binding_sites(head, text) {
                 let params = g
                     .params
                     .iter()
                     .map(|&p| ctx.intern(surface.names.name(p)))
                     .collect();
-                ctx.add_extern_generic_fn(id, origin.clone(), params, g.args.clone(), g.ret);
+                ctx.add_extern_generic_fn(&site, id, origin.clone(), params, g.args.clone(), g.ret);
             }
         }
         // the integer prims' numeric methods (core's `builtin impl`
@@ -336,18 +467,31 @@ pub fn compile_program_resolved(
         // the prelude's const stays USE-GATED: the builtin
         // names ride ambient (builtin-surface phase 2 — `core` is bound
         // into every unit), its const does not — `NAN` is
-        // `use core::{NAN}` explicit. Other pkgs' consts bind with their
-        // surface (they arrive only via that pkg's use anyway).
+        // `use core::{NAN}` explicit. Other pkgs' consts bind where
+        // their use (or their namespace head, whose members ride the
+        // head — `Math::PI` needs no `use` of `PI`) was written.
         let is_prelude = !surface.native_types.is_empty();
         for c in &surface.consts {
-            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(c.name)) {
-                if !is_prelude || ctx.used.contains(&id) {
-                    ctx.add_extern_const(id, c.ty, c.bits);
+            let text = surface.names.name(c.name);
+            let Some(id) = ast.interner.lookup(text) else { continue };
+            let mut sites: Vec<(String, rut_core::IdentId)> =
+                binding_sites(head, text).into_iter().collect();
+            if !is_prelude {
+                // the namespace head's files resolve the namespace's
+                // constants through the qualified form
+                for f in &ns_sites {
+                    if !sites.iter().any(|(s, _)| s == f) {
+                        sites.push((f.clone(), id));
+                    }
                 }
+            }
+            for (site, id) in sites {
+                ctx.add_extern_const(&site, id, c.ty, c.bits);
             }
         }
         for t in &surface.type_exports {
-            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(t.name)) {
+            let text = surface.names.name(t.name);
+            for (site, id) in binding_sites(head, text) {
                 // `scope: None` — the exporter's own scope (ordinary rows);
                 // `Some(s)` — an explicit one (a boot-targeted alias;
                 // the shared boot table needs no rebase)
@@ -356,9 +500,9 @@ pub fn compile_program_resolved(
                 // a used enum: the member paths resolve through the
                 // registry; the descriptor row rode use_types above
                 if let TyKind::Enum { members } = ctx.types.kind(ty_id).clone() {
-                    ctx.add_extern_enum(id, ty_id, members);
+                    ctx.add_extern_enum(&site, id, ty_id, members);
                 }
-                ctx.add_extern_type(id, ty_id, t.is_class, t.newtype);
+                ctx.add_extern_type(&site, id, ty_id, t.is_class, t.newtype);
                 // the type's origin pkg rides the binding
                 ctx.extern_origins.insert(id, origin.clone());
                 // a linked generic: the template row (its placeholder
@@ -373,6 +517,7 @@ pub fn compile_program_resolved(
                         .collect();
                     let template_row = rut_core::pack(scope, t.local);
                     ctx.add_extern_generic(
+                        &site,
                         id,
                         origin.clone(),
                         params,
@@ -450,32 +595,40 @@ pub fn compile_program_resolved(
         // core's native surface: builtin containers, ifaces, and
         // compiler-lowered fns. Each row's ambient bit rules the
         // binding — an AMBIENT row (the `prelude builtin` spellings)
-        // binds in every unit, no `use` needed and the use statement
-        // itself stays redundant-but-legal; a non-ambient row (the
-        // `pub builtin` spellings) resolves only through
-        // `use core::{ .. }`, the exact pattern the namespace head
-        // below already uses. Pkg mounting (ink/pouch/calc fns, consts,
-        // namespace heads) stays use-gated.
+        // binds under the AMBIENT site, in every unit, no `use`
+        // needed and the use statement itself stays redundant-but-
+        // legal; a non-ambient row (the `pub builtin` spellings)
+        // binds per file — only in the files whose `use` spelled it
+        // (the per-file law). Pkg mounting (ink/pouch/calc fns,
+        // consts, namespace heads) stays use-gated.
         for (n, kind, ambient) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if *ambient || ctx.used.contains(&id) {
-                    ctx.add_extern_native_type(id, *kind);
+                if *ambient {
+                    ctx.add_extern_native_type(AMBIENT_SITE, id, *kind);
+                } else {
+                    for (site, leaf) in bare_sites(head, id) {
+                        ctx.add_extern_native_type(&site, leaf, *kind);
+                    }
                 }
             }
         }
         for (n, ambient) in &surface.native_fns {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
-                if *ambient || ctx.used.contains(&id) {
-                    ctx.add_extern_native_fn(id);
+                if *ambient {
+                    ctx.add_extern_native_fn(AMBIENT_SITE, id);
+                } else {
+                    for (site, leaf) in bare_sites(head, id) {
+                        ctx.add_extern_native_fn(&site, leaf);
+                    }
                 }
             }
         }
-        // the namespace head (`Math`): bound like the natives — resolving
-        // exactly when the module wrote it in `use { .. }`
+        // the namespace head (`Math`): bound in the files whose `use`
+        // wrote it — resolving exactly there
         if let Some(ns) = &surface.namespace {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*ns)) {
-                if ctx.used.contains(&id) {
-                    ctx.add_extern_namespace(id);
+                for (site, leaf) in bare_sites(head, id) {
+                    ctx.add_extern_namespace(&site, leaf);
                 }
             }
         }

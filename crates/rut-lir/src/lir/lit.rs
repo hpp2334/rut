@@ -441,7 +441,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(self.mint_newtype(inst, val, sp));
         }
         // the concrete form: the carried row IS the layout
-        let ty = self.ctx.extern_types.get(&name).cloned();
+        let ty = self.ctx.extern_type(name);
         let fty = ty.and_then(|ty| match self.ctx.types.kind(ty) {
             TyKind::Data { fields } if fields.len() == 1 => Some(fields[0].ty),
             _ => None,

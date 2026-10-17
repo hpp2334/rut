@@ -455,7 +455,7 @@ entry fn main() -> i64 { return sub::go(); }
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
     assert!(
         g.diags[0].msg.contains(
-            "`helper` is use-bound in the root module (imported there from module `imp`) — this module needs its own `use` to bind it"
+            "`helper` is bound by a `use` in the root module (imported there from module `imp`) — write the `use` in this file"
         ),
         "got: {}",
         g.diags[0].msg
