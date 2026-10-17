@@ -547,6 +547,18 @@ pub struct Ctx<'a> {
     /// Future instantiation and its yield's vtable slot — minted by the
     /// weave before the body compiles, read by every call site
     pub async_layout: std::collections::HashMap<u32, AsyncLayout>,
+    /// the exported async fns' start wrappers (plan10 phase 3): woven
+    /// fid → the `#start@` wrapper's fid. The wrapper IS the crossing
+    /// ABI — declared params in, the armed frame cell out — and the
+    /// surface row's `local` names it. Idempotent per woven fid.
+    pub async_starts: std::collections::HashMap<u32, u32>,
+    /// the crossed async calls' annotation layouts (plan10 phase 3):
+    /// `(binding file, extern fn name)` → the frame/ckpt rows the
+    /// importing register statically spells. ANNOTATION only — the
+    /// runtime cell is the exporter's (minted by its start wrapper);
+    /// the await's field ops verify against these rows' fixed prefix.
+    /// Idempotent per (file, fn) — the host lane's mint law.
+    pub crossed_async: std::collections::HashMap<(String, IdentId), AsyncLayout>,
     /// the `async { }` blocks' mint plans (v20): block node → captures
     /// (the frame's value fields, first-reference order) + the answer
     /// type + the infer-pass flag. Recorded by the block's call site
@@ -833,6 +845,8 @@ impl<'a> Ctx<'a> {
             completer_minted: std::collections::HashMap::new(),
             select_all_minted: std::collections::HashMap::new(),
             async_layout: std::collections::HashMap::new(),
+            async_starts: std::collections::HashMap::new(),
+            crossed_async: std::collections::HashMap::new(),
             async_block_sigs: std::collections::HashMap::new(),
             async_block_founds: std::collections::HashMap::new(),
             frame_yield_slot: std::collections::HashMap::new(),

@@ -1655,3 +1655,179 @@ pub(crate) fn compile_host_async_call(
     c.ctx.engine_frames.insert(layout.frame_ty);
     Ok(c.ctx.mk_future(ef.ret))
 }
+
+// ---- the crossed-export lane (plan10 phase 3): `pub async fn` ----
+//
+// An exported async fn crosses through its START WRAPPER — the
+// owner-side materialization of the sugar law's call shape
+// (`async fn f(p) -> T` ≡ `fn f(p) -> Future<T> { mint the frame;
+// return it }`): declared params into a fresh frame's LOCALS_BASE
+// fields, the s0 checkpoint armed, the frame cell the answer. The
+// surface row spells the REAL `is_async` and the ANSWER type (the
+// host-row convention) with `local` naming the wrapper, so the
+// importer's call is the ordinary cross-package Call; the driven half
+// stays the exporter's woven body, reached through the frame's yield
+// slot exactly as for a local call. The spike's verdict (recorded in
+// the phase commit): the WEAVE cannot cross to the importer — the
+// cell-backed-locals law grows the frame type while the OWNER's body
+// compiles, so an importer-minted frame under-sizes the driven half's
+// field ops; the wrapper keeps every mint in the unit that knows the
+// layout.
+
+impl<'a> Ctx<'a> {
+    /// Materialize the start wrapper of one exported async fn: the
+    /// plain fn the surface row's `local` names. `params`/`ret` are the
+    /// DECLARED signature the caller resolved for the row (one
+    /// resolution, one spelling). Idempotent per woven fid — the
+    /// wrapper is one body per export, whatever the local call traffic
+    /// wove first.
+    pub fn ensure_async_start(&mut self, name: IdentId, fid: u32, params: Vec<TypeId>, ret: TypeId) -> u32 {
+        if let Some(&s) = self.async_starts.get(&fid) {
+            return s;
+        }
+        let layout = *self
+            .async_layout
+            .get(&fid)
+            .expect("the export's woven layout (the eager root wove it)");
+        let fut_ty = self.mk_future(ret);
+        // regs: r0.. the argument values (the CALL ABI — args land at
+        // 0..n), then the frame, then the s0 staging register
+        let n = params.len();
+        let mut regs = params.clone();
+        regs.push(layout.frame_ty);
+        regs.push(layout.ckpt_ty);
+        let frame = n as u16;
+        let ckpt = (n + 1) as u16;
+        let mut code = Vec::with_capacity(2 * n + 3);
+        code.push(Op::NewCell { dst: frame, ty: layout.frame_ty });
+        for (i, p) in params.iter().enumerate() {
+            code.push(Op::SetF {
+                obj: frame,
+                field: af::LOCALS_BASE + i as u32,
+                val: i as u16,
+                repr: self.types.repr_of(*p),
+            });
+        }
+        code.push(Op::EnumNew { dst: ckpt, ty: layout.ckpt_ty, member: 0 });
+        code.push(Op::SetF {
+            obj: frame,
+            field: af::STATE_FIELD,
+            val: ckpt,
+            repr: self.types.repr_of(layout.ckpt_ty),
+        });
+        code.push(Op::Ret { val: Some(frame) });
+        let sname = self.intern(&format!("{}{}", af::START_PREFIX, self.name(name)));
+        let sfid = self.funcs.len() as u32;
+        self.funcs.push(rut_core::binary::FuncCode {
+            name: sname,
+            regs,
+            params,
+            ret: fut_ty,
+            is_method: false,
+            n_captures: 0,
+            argv: vec![],
+            labels: vec![],
+            code,
+            spans: vec![],
+            pos: vec![],
+            host_id: None,
+        });
+        self.async_starts.insert(fid, sfid);
+        sfid
+    }
+}
+
+/// The crossed call's ANNOTATION layout (plan10 phase 3): the frame and
+/// checkpoint rows the importing register statically spells. The
+/// runtime cell is the EXPORTER's (its start wrapper minted it — full
+/// layout, body locals included); these rows carry the fixed engine
+/// prefix plus the declared params, exactly what the await's field ops
+/// verify against. No vtable fill: the yield slot's fill belongs to the
+/// exporter's own frame row (its unit laid it), and the driving loop
+/// dispatches by the cell's dynamic type. Idempotent per (file, fn) —
+/// the host lane's mint law.
+fn ensure_crossed_async(ctx: &mut Ctx, name: IdentId, ef: &crate::check::ExternFn) -> Layout {
+    let key = (ctx.cur_mod.clone(), name);
+    if let Some(&l) = ctx.crossed_async.get(&key) {
+        return l;
+    }
+    let ckpt_name = ctx.intern(&format!("{}{}", af::CKPT_PREFIX, ctx.name(name)));
+    let s0 = ctx.intern("#s0");
+    let ckpt_ty = ctx.types.intern(RutType {
+        name: ckpt_name,
+        kind: TyKind::Enum { members: vec![(s0, 0)] },
+    });
+    // the fixed engine prefix, then the declared params — the field
+    // INDICES the await's ops spell; the names stay engine-reserved
+    // (the consumer has no param names — the surface carries types)
+    let mut fields = vec![
+        FieldInfo { name: ctx.intern("state"), ty: ckpt_ty },
+        FieldInfo { name: ctx.intern("cancelled"), ty: TY_BOOL },
+        FieldInfo { name: ctx.intern("awaiter"), ty: TY_OPAQUE },
+        FieldInfo { name: ctx.intern("pending"), ty: TY_OPAQUE },
+        FieldInfo { name: ctx.intern("answer"), ty: ef.ret },
+    ];
+    for (i, p) in ef.params.iter().enumerate() {
+        fields.push(FieldInfo { name: ctx.intern(&format!("#arg{i}")), ty: *p });
+    }
+    let frame_name = ctx.intern(&format!("{}{}", af::FRAME_PREFIX, ctx.name(name)));
+    let frame_ty = ctx.types.intern(RutType {
+        name: frame_name,
+        kind: TyKind::Data { fields },
+    });
+    let fut_inst = ctx.mk_future_inst(sym::FUTURE, ef.ret);
+    let slot = ctx.iface_slot(fut_inst, 0).expect("Future has exactly one member");
+    let l = Layout { frame_ty, ckpt_ty, fut_inst, yield_slot: slot };
+    ctx.crossed_async.insert(key, l);
+    l
+}
+
+/// The crossed async call site (`compile_free_fn_call`'s extern arm,
+/// the non-host `is_async` split): an ordinary cross-package Call into
+/// the exporter's start wrapper — declared params in, the armed frame
+/// cell out — typed as the closed `Future<ret>` class. The register
+/// keeps the annotation frame's type (the await's field ops verify
+/// against it); the expression's type is the Future the caller sees.
+pub(crate) fn compile_crossed_async_call(
+    c: &mut FnCompiler,
+    name: IdentId,
+    ef: &crate::check::ExternFn,
+    args: &[NodeHandle<AnyExpr>],
+    _expected: Option<TypeId>,
+    sp: rut_lexer::span::Span,
+) -> TcResult<TypeId> {
+    let sp_lo = sp.lo;
+    if args.len() != ef.params.len() {
+        c.ctx.err(sp, format!(
+            "call arity: {} args for {} params",
+            args.len(),
+            ef.params.len()
+        ));
+        return Err(());
+    }
+    let mut aregs = Vec::new();
+    for (i, a) in args.iter().enumerate() {
+        let t = c.compile_expr(*a, Some(ef.params[i]))?;
+        if !c.widens(t, ef.params[i]) {
+            c.ctx.err(c.ctx.ast.span(a.id()), format!(
+                "argument {} is `{}`, `{}` expected",
+                i + 1, c.ctx.type_name(t), c.ctx.type_name(ef.params[i])
+            ));
+        }
+        c.widen_to_slot(t, ef.params[i], sp_lo);
+        aregs.push(c.last_reg);
+    }
+    let layout = ensure_crossed_async(c.ctx, name, ef);
+    // the crossing: the exporter's start wrapper answers the armed
+    // frame cell — the call's value IS the frame
+    let frame = c.new_reg(layout.frame_ty);
+    {
+        let (argv_off, argc) = c.pool_args(&aregs);
+        c.emit(Op::Call { func: ef.func, argv_off, argc, dst: frame }, sp_lo);
+    }
+    // the consume's spelling: the call's type IS the closed
+    // `Future<ret>` class — generic inference unifies through the
+    // element, structurally
+    c.last_reg = frame;
+    Ok(c.ctx.mk_future(ef.ret))
+}

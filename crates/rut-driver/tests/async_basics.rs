@@ -561,3 +561,107 @@ entry fn main() -> nil {
     run_loop(&mut vm, 100);
     assert_eq!(*sink.borrow(), vec!["r=5"]);
 }
+
+// ---- the crossed-export lane (plan10 phase 3): `pub async fn` ----
+
+#[test]
+fn crossed_async_runs_through_the_kit_wrapper() {
+    // criterion 2: a `pub async fn` crossing a package surface goes
+    // through the KIT's async wrapper. The exporter materializes the
+    // crossing eagerly — the woven body roots like every `pub fn` and
+    // the surface row (real `is_async`, ANSWER ret) carries the
+    // `#start@fetch` wrapper as `local` — so the importer's call is
+    // the ordinary cross-package Call into the wrapper, and only the
+    // wrapper-driven weave can produce the observed answer: the log
+    // line names the awaited value, the ABI proof rides verify (a call
+    // into the WOVEN body instead of the wrapper would carry the
+    // declared arity into the (frame, cx) pair and fail), and the
+    // white-box asserts the KIT's frame + wrapper crossed the link
+    const KIT: &str = r#"
+use futures::{ sleep };
+
+pub async fn fetch(x: i32) -> i32 {
+    await sleep(3);
+    return x + 1;
+}
+"#;
+    let src = r#"
+use ink_host::{ create_logger, logger_log };
+use futures::{ launch_future };
+use kit::{ fetch };
+
+async fn go(log: opaque) -> nil {
+    let v = await fetch(41);
+    logger_log(log, 2, f"fetched {v}");
+}
+
+entry fn main() -> nil {
+    let log = create_logger("kit");
+    launch_future(go(log));
+}
+"#;
+    // setup's shape plus the kit pkg: the async pair, the kit (its own
+    // manifest declaring the futures dep), the lowered ink_host, app
+    let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
+        .expect("the ink_host surface is valid")
+        .named("ink_host");
+    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        .expect("the async pair walks")
+        .pkgs;
+    pkgs.push(
+        rut_driver::Pkg::source("kit", KIT).manifest(rut_driver::Manifest::lib("kit", &["futures"])),
+    );
+    pkgs.push(ink_host);
+    pkgs.push(
+        rut_driver::Pkg::source("app", src)
+            .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host", "kit"])),
+    );
+    let expected = rut_driver::declared_host_fns(&pkgs);
+    let compiled = rut_driver::RutRun::new()
+        .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let prog = compiled.graph.program.expect("linked program");
+    let flat = rut_core::link::flatten(prog);
+    rut_vm::verify::verify(&flat).expect("verify — the crossed call's ABI is the wrapper's");
+    // white-box: the KIT's frame row (the wrapper mints its cells) is
+    // in the merged table with a FILLED Future yield slot (the woven
+    // driven half), and the `#start@fetch` wrapper rode the fn table
+    let frame_row = flat
+        .types
+        .types
+        .iter()
+        .position(|t| flat.interner.name(t.name) == "#frame@fetch")
+        .expect("the kit's woven frame crossed the link");
+    assert!(
+        flat.vtables[frame_row].iter().any(|f| f.is_some()),
+        "the driven half fills the kit frame's yield slot"
+    );
+    assert!(
+        flat.funcs.iter().any(|f| flat.interner.name(f.name) == "#start@fetch"),
+        "the start wrapper rode the kit's fn table"
+    );
+    let sink = Rc::new(RefCell::new(Vec::<String>::new()));
+    let sink2 = sink.clone();
+    let ctx = rut_driver::host_pkg_ctx(&pkgs);
+    let mut hosts = HostRegistry::new();
+    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
+    hosts.verify_against(&expected);
+    let limits = Limits {
+        fuel: Some(4_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+        .expect("vm");
+    vm.call::<_, ()>("main", ()).expect("main");
+    run_loop(&mut vm, 100);
+    // the observable only the wrapper-driven weave produces: the
+    // crossed future parked on the kit's own `await sleep(3)` (a
+    // multi-state weave, resumed by the timer) and answered 42
+    assert_eq!(*sink.borrow(), vec!["fetched 42"]);
+    assert_eq!(vm.now_ms(), 3, "the kit's own await advanced the clock");
+}

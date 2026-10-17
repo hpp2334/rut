@@ -60,6 +60,15 @@ pub const RUN_CONTEXT_FRAME_FIELD: &str = "frame";
 pub const FRAME_PREFIX: &str = "#frame@";
 /// The checkpoint enum's name prefix (`#ckpt@<fn>`).
 pub const CKPT_PREFIX: &str = "#ckpt@";
+/// The exported async fn's start wrapper's name prefix
+/// (`#start@<fn>`, plan10 phase 3): the OWNER-side materialization of
+/// the crossing call shape — declared params into a fresh frame's
+/// LOCALS_BASE fields, the s0 checkpoint armed, the frame cell the
+/// answer. The surface row's `local` names it (the woven driven half
+/// keeps the fn's own fid, reachable only through the frame's yield
+/// slot); `#` is unspellable in rut source, so the namespace is
+/// engine-reserved.
+pub const START_PREFIX: &str = "#start@";
 /// The sleep future's reserved frame/ckpt names (no node suffix — the
 /// engine-minted body finds them by exactly these names).
 pub const SLEEP_FRAME: &str = "#frame@sleep";

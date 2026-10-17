@@ -411,7 +411,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // mints the cold engine-woven frame over `__start`'s state
             // cell — the weave owns the call site
             if ef.is_async {
-                return crate::lir::asyncfn::compile_host_async_call(self, name, &ef, &args, expected, sp);
+                if ef.host.is_some() {
+                    return crate::lir::asyncfn::compile_host_async_call(self, name, &ef, &args, expected, sp);
+                }
+                // the crossed rut-owned export (plan10 phase 3): an
+                // ordinary Call into the exporter's start wrapper — the
+                // wrapper IS the weave's call shape, the driven half
+                // stays the exporter's woven body
+                return crate::lir::asyncfn::compile_crossed_async_call(self, name, &ef, &args, expected, sp);
             }
             // the engine-backed sleep future: minting rides
             // the first `__sleep` call — the host set's `sleep` wrapper

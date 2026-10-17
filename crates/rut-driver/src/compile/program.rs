@@ -28,12 +28,13 @@ fn marker_code(m: Option<rut_core::IdentId>) -> u8 {
     }
 }
 
-/// The async-gap message (plan10 phase 2): a `pub async fn` does not
-/// cross package surfaces yet, so a `use` leaf naming one binds
-/// nothing. The ONE spelling of the gap — the phase-3 flip (async rows
-/// crossing the surface) retunes this helper alone.
+/// The async-gap message (plan10 phase 3): the surface carries the
+/// real `is_async` now, so a plain `pub async fn` crosses — its start
+/// wrapper rides the row and the importer calls it like any used fn.
+/// What still binds nothing is the GENERIC async fn (the weave refuses
+/// generics, so no row materializes) — the one spelling of the gap.
 fn pub_async_surface_gap(name: &str) -> String {
-    format!("`{name}` is a `pub async fn` — async fns do not cross package surfaces yet")
+    format!("`{name}` is a generic `pub async fn` — generic async fns do not cross package surfaces yet")
 }
 
 /// The use-line must-bind message for one unbound leaf. `module` is
@@ -57,8 +58,9 @@ fn unbound_use_msg(
             };
             format!("`{leaf}` is not exported by `{at}` — mark it `pub` there")
         }
-        // a `pub` fn the surface carried nowhere is the async gap
-        Some(d) if d.kind == crate::mods::DeclKind::Fn => pub_async_surface_gap(leaf),
+        // a `pub async fn` that crossed nowhere is the generic refusal
+        // (the weave refuses generics, so the surface carried no row)
+        Some(d) if d.kind == crate::mods::DeclKind::Fn && d.is_async => pub_async_surface_gap(leaf),
         // everything else (a compiled dep's binary, a `pub` shape the
         // surface does not carry): the bare law
         _ => format!(
@@ -808,10 +810,12 @@ pub fn compile_program_resolved(
         if !ctx.ast.fn_decl(node).generics.is_empty() {
             continue;
         }
-        // async fns ride the weave at their call sites
-        if ctx.ast.fn_decl(node).is_async {
-            continue;
-        }
+        // a `pub async fn` roots too (plan10 phase 3): the export
+        // materializes its woven body eagerly — the surface row needs
+        // the woven layout (the start wrapper mints frames of it), and
+        // an uncalled export must cross exactly like a called one.
+        // GENERIC async fns skipped above stay uncrossed (the weave
+        // refuses generics; the use line speaks the gap).
         roots.push(Inst { key: FnKey::Free(name), subst: vec![], iface_origins: vec![] });
     }
     // library surface, class half (the linkable-classes phase): every
@@ -897,15 +901,46 @@ pub fn compile_program_resolved(
     }
     // exported surface: every `pub` fn + its signature, for using modules
     let mut surface = rut_core::binary::Surface::default();
-    for (name, _) in &ctx.exports {
+    let pub_exports = ctx.exports.clone();
+    for (name, _) in &pub_exports {
         if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![], iface_origins: vec![] }) {
             if let Some(f) = ctx.funcs.get(fid as usize) {
+                // the async rows carry the REAL `is_async` (plan10
+                // phase 3): the woven body's ABI is the (frame, cx)
+                // pair, so the row's signature re-resolves off the DECL
+                // in the fn's own module — the ANSWER type on the row
+                // (the host-row convention) — and `local` names the
+                // start wrapper the importer's call aims at. A sync row
+                // keeps reading the compiled FuncCode verbatim.
+                let node = ctx.fn_nodes.iter().find(|(n, _)| n == name).map(|(_, n)| *n);
+                let is_async = node.map(|n| ctx.ast.fn_decl(n).is_async).unwrap_or(false);
+                let (params, ret, local) = if is_async {
+                    let n = node.expect("an async export has its decl node");
+                    let fd = ctx.ast.fn_decl(n).clone();
+                    let saved_mod = ctx.cur_mod.clone();
+                    ctx.cur_mod = ctx.mod_of(n.id()).to_string();
+                    let mut ps = Vec::new();
+                    for p in &fd.params {
+                        match ctx.ast.param(*p) {
+                            rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                                ps.push(ctx.resolve_type(*t, &[]));
+                            }
+                            _ => ps.push(TY_I32),
+                        }
+                    }
+                    let r = fd.ret.map(|r| ctx.resolve_type(r, &[])).unwrap_or(TY_NIL);
+                    ctx.cur_mod = saved_mod;
+                    let start = ctx.ensure_async_start(*name, fid, ps.clone(), r);
+                    (ps, r, start)
+                } else {
+                    (f.params.clone(), f.ret, fid)
+                };
                 surface.funcs.push(rut_core::binary::SurfaceFn {
                     name: *name,
-                    params: f.params.clone(),
-                    ret: f.ret,
-                    local: fid,
-                    is_async: false,
+                    params,
+                    ret,
+                    local,
+                    is_async,
                     host: None,
                 });
             }

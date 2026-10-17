@@ -224,13 +224,18 @@ fn mount_rec(
 // ---------------------------------------------------------------------
 
 /// One collected declaration: the name, the visibility it was declared
-/// with, and the kind — the flat per-module decl rows phase 3 keys
-/// resolution and visibility on.
+/// with, the kind, and the fn async marker — the flat per-module decl
+/// rows phase 3 keys resolution and visibility on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeclRow {
     pub name: String,
     pub vis: Vis,
     pub kind: DeclKind,
+    /// the decl's async marker (plan10 phase 3): the unbound-use law
+    /// speaks the async gap only for an async row — a plain `pub async
+    /// fn` crosses through its start wrapper now, so what still binds
+    /// nothing is the generic shape
+    pub is_async: bool,
 }
 
 /// The declaration kinds the collection records.
@@ -415,24 +420,24 @@ pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
 pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
     let mut out = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
-        let (name, vis, kind) = match ast.item(it) {
-            ItemKind::Fn(d) => (d.name, d.vis, DeclKind::Fn),
-            ItemKind::Alias(d) => (d.name, d.vis, DeclKind::Alias),
-            ItemKind::ModuleLet { vis, name, .. } => (*name, *vis, DeclKind::ModuleLet),
-            ItemKind::Enum { vis, name, .. } => (*name, *vis, DeclKind::Enum),
-            ItemKind::Struct { vis, name, .. } => (*name, *vis, DeclKind::Struct),
-            ItemKind::Class { vis, name, .. } => (*name, *vis, DeclKind::Class),
-            ItemKind::Interface { vis, name, .. } => (*name, *vis, DeclKind::Interface),
-            ItemKind::ModDecl { vis, name } => (*name, *vis, DeclKind::Mod),
+        let (name, vis, kind, is_async) = match ast.item(it) {
+            ItemKind::Fn(d) => (d.name, d.vis, DeclKind::Fn, d.is_async),
+            ItemKind::Alias(d) => (d.name, d.vis, DeclKind::Alias, false),
+            ItemKind::ModuleLet { vis, name, .. } => (*name, *vis, DeclKind::ModuleLet, false),
+            ItemKind::Enum { vis, name, .. } => (*name, *vis, DeclKind::Enum, false),
+            ItemKind::Struct { vis, name, .. } => (*name, *vis, DeclKind::Struct, false),
+            ItemKind::Class { vis, name, .. } => (*name, *vis, DeclKind::Class, false),
+            ItemKind::Interface { vis, name, .. } => (*name, *vis, DeclKind::Interface, false),
+            ItemKind::ModDecl { vis, name } => (*name, *vis, DeclKind::Mod, false),
             // a `host fn` surface row — the host tree's leaf decl: the
             // declaring `pub` rides it, so a qualified use validates
             // (`pub host fn` crosses, a bare `host fn` is private)
-            ItemKind::SurfaceFn { linkage: Linkage::Host, vis, name, .. } => {
-                (*name, *vis, DeclKind::HostFn)
+            ItemKind::SurfaceFn { linkage: Linkage::Host, vis, name, is_async, .. } => {
+                (*name, *vis, DeclKind::HostFn, *is_async)
             }
             _ => continue,
         };
-        out.push(DeclRow { name: ast.name(name).to_string(), vis, kind });
+        out.push(DeclRow { name: ast.name(name).to_string(), vis, kind, is_async });
     }
     out
 }

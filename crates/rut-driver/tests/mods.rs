@@ -2123,11 +2123,13 @@ fn private_use_errors_at_use_line() {
 
 #[test]
 fn async_use_errors_at_use_line() {
-    // pkga's `fetch` is `pub async fn` — the async gap: the row does
-    // not cross package surfaces yet (the surface's is_async hardcode
-    // is phase 3's business), so the leaf binds nothing and the use
-    // line says so
-    let pkgs = vec![
+    // the phase-3 flip: a plain `pub async fn` CROSSES now (the surface
+    // row carries the real `is_async`, the exporter's start wrapper
+    // rides `local`), so `fetch` binds and the world compiles beside
+    // the ordinary `pub fn`; what still binds nothing is the GENERIC
+    // async fn (the weave refuses generics — no row materializes) and
+    // the use line says so, in the retuned gap's one spelling
+    let ok = vec![
         modpkg(
             "pkga",
             "pub async fn fetch() -> nil { }\npub fn dup(x: i32) -> i32 { return x + 1; }\n",
@@ -2139,10 +2141,25 @@ fn async_use_errors_at_use_line() {
             vec![],
         ),
     ];
-    let diags = compile_with_diags(&pkgs, "app");
+    assert_eq!(run_main_pkgs(&ok, "app"), 42);
+    // the generic shape: `grab<T>` crosses nowhere — the leaf binds
+    // nothing and the use line names the generic refusal
+    let gap = vec![
+        modpkg(
+            "pkga",
+            "pub async fn grab<T>(v: T) -> T { return v; }\npub fn dup(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use pkga::{ grab, dup };\nentry fn main() -> i32 { return dup(41); }\n",
+            vec![],
+        ),
+    ];
+    let diags = compile_with_diags(&gap, "app");
     assert!(
-        diags.iter().any(|d| d.contains("`fetch` is a `pub async fn`")
-            && d.contains("do not cross package surfaces yet")),
+        diags.iter().any(|d| d.contains("`grab` is a generic `pub async fn`")
+            && d.contains("generic async fns do not cross package surfaces yet")),
         "{diags:?}"
     );
     // and a `pub` fn the dep does carry imports and runs beside it
@@ -2159,6 +2176,65 @@ fn async_use_errors_at_use_line() {
         ),
     ];
     assert_eq!(run_main_pkgs(&ok, "app"), 42);
+}
+
+// =====================================================================
+// `pub async fn` crosses package surfaces (plan10 phase 3): the
+// exporter materializes the crossing eagerly — the woven body roots
+// like every `pub fn`, the surface row carries the REAL `is_async`
+// with the ANSWER ret (the host-row convention) and `local` naming the
+// `#start@` wrapper — and the importing call site lowers as the
+// ordinary cross-package Call into that wrapper, typed as the closed
+// `Future<T>`.
+// =====================================================================
+
+#[test]
+fn pub_async_crosses_package_surface() {
+    // criterion 1, compile half: the anchor-free world compiles — the
+    // importer's own `use` binds the async row (no ambient/anchor
+    // fallback), the pub async export weaves eagerly owner-side, and
+    // the importing call site compiles inside the importer's own woven
+    // body (`await fetch(..)` — the crossed call through the exported
+    // start wrapper)
+    let pkgs = vec![
+        modpkg(
+            "kit",
+            "pub async fn fetch(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use kit::{ fetch };\npub async fn go() -> i32 { return await fetch(20); }\nentry fn main() -> nil { }\n",
+            vec![],
+        ),
+    ];
+    assert_eq!(compile_with_diags(&pkgs, "app"), Vec::<String>::new());
+    // criterion 1, per-file half: the phase-1/2 laws stay intact — a
+    // use binds only its own file, so a child spelling `fetch` without
+    // its own `use` misses at the call, naming the root's binding
+    let per_file = vec![
+        modpkg(
+            "kit",
+            "pub async fn fetch(x: i32) -> i32 { return x + 1; }\n",
+            vec![],
+        ),
+        modpkg(
+            "app",
+            "use kit::{ fetch };\nmod child;\nuse child::{ go };\nentry fn main() -> nil { }\n",
+            vec![(
+                "child",
+                Vis::Pub,
+                "pub async fn go() -> i32 { return await fetch(20); }\n",
+            )],
+        ),
+    ];
+    let diags = compile_with_diags(&per_file, "app");
+    assert!(
+        diags.iter().any(|d| d.contains(
+            "`fetch` is bound by a `use` in the root module — write the `use` in this file"
+        )),
+        "{diags:?}"
+    );
 }
 
 #[test]
