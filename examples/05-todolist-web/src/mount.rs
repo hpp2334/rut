@@ -130,8 +130,12 @@ fn ui_manifest() -> rut_driver::Manifest {
 
 /// biz's manifest, from its REAL rut.jsonc (the root's own — its
 /// `name` is the ABI spec `app`) plus the structural `web` row: the
-/// app shell crosses `tim_after`.
-fn biz_manifest() -> rut_driver::Manifest {
+/// app shell crosses `tim_after`. `pub(crate)`: the WASM lane's
+/// `boot_page` (`web_dom.rs`) states the SAME declaration for the
+/// handed-over rows — nameability is declaration-scoped, so an app
+/// pkg composed without its manifest refuses its own `use ui::` /
+/// `use web::` crossings at the link.
+pub(crate) fn biz_manifest() -> rut_driver::Manifest {
     declare_web(
         rut_driver::parse_manifest(include_str!("../rut/biz/rut.jsonc"))
             .expect("the biz manifest is valid"),

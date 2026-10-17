@@ -229,11 +229,16 @@ fn boot_page(rows: &str) -> Result<(), String> {
         .map_err(|e| format!("the app's module rows did not parse: {e}"))?;
     let mods = rut_driver::mods::mount_rows(&root, &children, rut_parser::Mode::Impl, "mod.rut")
         .map_err(|e| format!("the app's module tree did not mount: {e}"))?;
+    // the SAME declaration the native mirror's `biz_pkg` states
+    // (mount.rs): the manifest row set (ui + the std closure + the
+    // structural `web` row) is what makes the app's crossings nameable
+    // — a pkg composed without its manifest refuses its own `use`s at
+    // the link (nameability is declaration-scoped)
+    let base = rut_driver::Pkg::source("app", root).manifest(crate::mount::biz_manifest());
     let app = rut_driver::Pkg {
         spec: "app".into(),
-        body: rut_driver::PkgBody::Source { text: root, is_decl: false },
         mods,
-        ..rut_driver::Pkg::source("app", "")
+        ..base
     };
     let run = crate::mount::mirror_run()?;
     let mut compiled = crate::mount::compile_root_pkg(run, app)?;

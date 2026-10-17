@@ -1466,7 +1466,7 @@ fn member_visibility_fields_matrix() {
             "pkg",
             "use a::c::{ Box };\nmod a;\n\
              fn r() -> i32 { let b = a::c::mk(41); return b.v; }\n\
-             fn w() -> i32 { let mut b = a::c::mk(41); b.v = 42; return b.v; }\n\
+             fn w() -> i32 { let mut b = a::c::mk(41); b.v = 42; return b.get(); }\n\
              fn l() -> i32 { let b = Box { v: 41 }; return b.get(); }\n\
              entry fn main() -> i32 { return r() + w() + l(); }\n",
             vec![
@@ -1476,11 +1476,12 @@ fn member_visibility_fields_matrix() {
         ),
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
-    assert!(
-        diags.iter().any(|d| {
+    assert_eq!(
+        diags.iter().filter(|d| {
             d.contains("`Box.v` — `v` is `pub(super)` — visible only in `a`'s subtree")
-        }),
-        "{diags:?}"
+        }).count(),
+        3,
+        "the read, the write, and the literal each diagnose: {diags:?}"
     );
 
     // the `::`-spelled path form rides the same dial (the path-chain
