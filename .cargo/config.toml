@@ -1,0 +1,13 @@
+# Repo-local cargo configuration.
+#
+# Ad-hoc sign every binary linked for Intel macOS. Unsigned Mach-O execs
+# consult taskgated, which can wedge under concurrent unsigned exec load
+# (parallel builds), stalling every subsequent exec by ~26-35s each.
+# Apple Silicon links already ad-hoc-sign by default; Intel does not.
+#
+# The new Apple linker (1221.4+) dropped `-Wl,-adhoc_sign`, so signing
+# rides the `codesign-cc.sh` wrapper (on PATH via CARGO_HOME/bin): link
+# exactly as rustc asked, then `codesign -f -s -` the `-o` output.
+# Scoped to this target only — other targets are unaffected.
+[target.x86_64-apple-darwin]
+linker = "scripts/codesign-cc.sh"
