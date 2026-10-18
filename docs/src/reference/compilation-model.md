@@ -21,7 +21,7 @@ publish:  compile (pkg → object + surface + templates)
 consume:  compile (app; validates `use` against the archive surface)
           → instantiate (ledger hit | template substitution + repr refold)
           → link (resolve + relocate — arithmetic only)
-          → load (mount, rebase, verify, run)
+          → load (mount, install host rows, rebase, verify, run)
 ```
 
 | stage | side | what happens | more |
@@ -31,7 +31,7 @@ consume:  compile (app; validates `use` against the archive surface)
 | archive | publish | the object set + symbol tables, shaded to the closure, one file | [Module bundles](bundles.md) |
 | instantiate | consume | the only consumer-side codegen: template substitution, ledger lookups, repr refolds — one row program-wide per shape | [The compiler pipeline](compiler.md) |
 | link | consume | scope resolution + relocation + merge — arithmetic only, never type-aware, never code-generating | [Loading and the embed loop](loading.md) |
-| load | consume | mount, rebase the ids onto the loader's numbering, verify, run | [Loading and the embed loop](loading.md) |
+| load | consume | mount, install host rows, rebase the ids onto the loader's numbering, verify, run | [Loading and the embed loop](loading.md) |
 
 The stages are the model's wiring, not the API's surface: embedders
 compose intent-level verbs — publish is `rut pack`

@@ -216,7 +216,8 @@ url row inside a packed bundle is inert metadata; loading a bundle
 never fetches).
 
 Because the manifest rides byte-for-byte, url rows carry into a
-consumer's own `rut pack` output, satisfied by the rode-along groups:
+consumer's own `rut pack` output, satisfied by the groups the archive
+carries:
 the archive's groups re-encode from the consumer session's units (one
 `.rutc` path) or copy their file sets under the new identity prefixes,
 and the same manifest + lock still pack byte-identically. The pack

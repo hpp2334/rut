@@ -532,6 +532,3 @@ fn staged_lane_produces_what_the_reference_lane_would() {
         .expect("staged compile");
     assert_eq!(run_compiled::<i32>(staged, "go"), 260, "staged == reference");
 }
-
-
-

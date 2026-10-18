@@ -2,8 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: The rut Book\n"
-"POT-Creation-Date: 1970-01-01 00:00:00+00:00
-"
+"POT-Creation-Date: 1970-01-01 00:00:00+00:00\n"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -18474,7 +18473,7 @@ msgstr ""
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:302 src/reference/bundles.md:401
+#: src/reference/embedding.md:302 src/reference/bundles.md:402
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
@@ -21998,7 +21997,9 @@ msgid "load"
 msgstr ""
 
 #: src/reference/compilation-model.md:34
-msgid "mount, rebase the ids onto the loader's numbering, verify, run"
+msgid ""
+"mount, install host rows, rebase the ids onto the loader's numbering, "
+"verify, run"
 msgstr ""
 
 #: src/reference/compilation-model.md:36
@@ -24270,7 +24271,7 @@ msgid ""
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:191 src/reference/bundles.md:321
+#: src/reference/module-binary.md:191 src/reference/bundles.md:322
 msgid "check"
 msgstr ""
 
@@ -24571,7 +24572,7 @@ msgid ""
 "trivially. A refused world packs fine without `--strip`."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:415
+#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:416
 msgid "CLI"
 msgstr ""
 
@@ -25876,21 +25877,21 @@ msgstr ""
 #: src/reference/bundles.md:218
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's "
-"own `rut pack` output, satisfied by the rode-along groups: the archive's "
-"groups re-encode from the consumer session's units (one `.rutc` path) or "
-"copy their file sets under the new identity prefixes, and the same manifest "
-"+ lock still pack byte-identically. The pack refuses, loudly and named, the "
-"cases that would emit a bundle the loader must reject: an archive source "
-"group still declaring `dev-deps` directories (vendor the dep), a compiled "
-"group the consumer's closure never uses (it cannot ride unpackaged), and a "
-"declared dep that did not ride."
+"own `rut pack` output, satisfied by the groups the archive carries: the "
+"archive's groups re-encode from the consumer session's units (one `.rutc` "
+"path) or copy their file sets under the new identity prefixes, and the same "
+"manifest + lock still pack byte-identically. The pack refuses, loudly and "
+"named, the cases that would emit a bundle the loader must reject: an archive "
+"source group still declaring `dev-deps` directories (vendor the dep), a "
+"compiled group the consumer's closure never uses (it cannot ride "
+"unpackaged), and a declared dep that did not ride."
 msgstr ""
 
-#: src/reference/bundles.md:229
+#: src/reference/bundles.md:230
 msgid "The wire version"
 msgstr ""
 
-#: src/reference/bundles.md:231
+#: src/reference/bundles.md:232
 msgid ""
 "`format_version` is 11 — the one bundle wire, both root kinds; the "
 "manifest's `type` routes lib-compiled vs host-decl. A loader refuses any "
@@ -25899,7 +25900,7 @@ msgid ""
 "directory`."
 msgstr ""
 
-#: src/reference/bundles.md:237
+#: src/reference/bundles.md:238
 msgid ""
 "Every file in the two layouts is part of the package: a bundle that dropped "
 "a declared child module would load partial — semantically wrong, so the "
@@ -25911,7 +25912,7 @@ msgid ""
 "outside bundles."
 msgstr ""
 
-#: src/reference/bundles.md:247
+#: src/reference/bundles.md:248
 msgid ""
 "**The groups mirror the manifest.** The archive root is the root's own "
 "files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the content "
@@ -25923,7 +25924,7 @@ msgid ""
 "to one identity only when their bytes are equal)."
 msgstr ""
 
-#: src/reference/bundles.md:257
+#: src/reference/bundles.md:258
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into "
 "a fresh numeric range of the consuming run's world (boot passes through), "
@@ -25936,11 +25937,11 @@ msgid ""
 "independently, each numbering its own closure."
 msgstr ""
 
-#: src/reference/bundles.md:268
+#: src/reference/bundles.md:269
 msgid "The `bundle` module"
 msgstr ""
 
-#: src/reference/bundles.md:270
+#: src/reference/bundles.md:271
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, "
 "and the reader (both root kinds) live in the driver's `rut_driver::bundle` "
@@ -25957,41 +25958,41 @@ msgid ""
 "compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
-#: src/reference/bundles.md:286
+#: src/reference/bundles.md:287
 msgid "Deterministic packing"
 msgstr ""
 
-#: src/reference/bundles.md:288
+#: src/reference/bundles.md:289
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr ""
 
-#: src/reference/bundles.md:290
+#: src/reference/bundles.md:291
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's "
 "binary, then the root's surface/source/rows, then dep groups in identity "
 "order (one group per distinct identity);"
 msgstr ""
 
-#: src/reference/bundles.md:293
+#: src/reference/bundles.md:294
 msgid "fixed (zeroed) timestamps;"
 msgstr ""
 
-#: src/reference/bundles.md:294
+#: src/reference/bundles.md:295
 msgid "STORE (no compression) — determinism over size."
 msgstr ""
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:297
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr ""
 
-#: src/reference/bundles.md:300
+#: src/reference/bundles.md:301
 msgid "Stripping — the private sidecar"
 msgstr ""
 
-#: src/reference/bundles.md:302
+#: src/reference/bundles.md:303
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol "
 "table** at the sibling path `<out-without-ext>.rutsym`. Every renameable "
@@ -26006,146 +26007,146 @@ msgid ""
 "against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/bundles.md:315
+#: src/reference/bundles.md:316
 msgid "Checks on load"
 msgstr ""
 
-#: src/reference/bundles.md:317
+#: src/reference/bundles.md:318
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes. The order is the law: container, then manifest and version, "
 "then every group's decode, then the mount."
 msgstr ""
 
-#: src/reference/bundles.md:321
+#: src/reference/bundles.md:322
 msgid "rule on mismatch"
 msgstr ""
 
-#: src/reference/bundles.md:323
+#: src/reference/bundles.md:324
 msgid "zip entry CRC-32"
 msgstr ""
 
-#: src/reference/bundles.md:323
+#: src/reference/bundles.md:324
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr ""
 
-#: src/reference/bundles.md:324
+#: src/reference/bundles.md:325
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
-#: src/reference/bundles.md:324
+#: src/reference/bundles.md:325
 msgid "refuse — not a rut bundle"
 msgstr ""
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:326
 msgid "`format_version` exactly 11"
 msgstr ""
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:326
 msgid ""
 "refuse — `this toolchain reads bundle format_version 11 only (found {v}) — "
 "re-pack the directory`"
 msgstr ""
 
-#: src/reference/bundles.md:326
+#: src/reference/bundles.md:327
 msgid "a host root carrying a root `mod.rutc`"
 msgstr ""
 
-#: src/reference/bundles.md:326
+#: src/reference/bundles.md:327
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr ""
 
-#: src/reference/bundles.md:327
+#: src/reference/bundles.md:328
 msgid "a host root carrying a `rut.scopes` ledger or any group entry"
 msgstr ""
 
-#: src/reference/bundles.md:327
+#: src/reference/bundles.md:328
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr ""
 
-#: src/reference/bundles.md:328
+#: src/reference/bundles.md:329
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not "
 "a content identity (`name@<16 hex>`)"
 msgstr ""
 
-#: src/reference/bundles.md:328
+#: src/reference/bundles.md:329
 msgid "refuse — a corrupt compiled bundle"
 msgstr ""
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:330
 msgid "an entry under a top-level prefix other than `deps/`"
 msgstr ""
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:330
 msgid ""
 "refuse — the archive root carries only the root's own files; dep groups ride "
 "at `deps/<name>@<fp16>/`"
 msgstr ""
 
-#: src/reference/bundles.md:330
+#: src/reference/bundles.md:331
 msgid "a `deps/` group directory whose name is not a content identity"
 msgstr ""
 
-#: src/reference/bundles.md:330
+#: src/reference/bundles.md:331
 msgid "refuse — expected `<name>@<16 hex>`"
 msgstr ""
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:332
 msgid "a group's manifest `name` disagreeing with its dirname's name half"
 msgstr ""
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:332
 msgid "refuse — names both"
 msgstr ""
 
-#: src/reference/bundles.md:332
+#: src/reference/bundles.md:333
 msgid ""
 "a group dirname's fingerprint disagreeing with the hash of its rode source "
 "set"
 msgstr ""
 
-#: src/reference/bundles.md:332
+#: src/reference/bundles.md:333
 msgid "refuse — the dirname and the content disagree"
 msgstr ""
 
-#: src/reference/bundles.md:333
+#: src/reference/bundles.md:334
 msgid "`mod.rutc` decode (root and groups): version, tables, surface ids"
 msgstr ""
 
-#: src/reference/bundles.md:333
+#: src/reference/bundles.md:334
 msgid "refuse — names the entry and the cause"
 msgstr ""
 
-#: src/reference/bundles.md:334
+#: src/reference/bundles.md:335
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr ""
 
-#: src/reference/bundles.md:334
+#: src/reference/bundles.md:335
 msgid "refuse — corrupt or doctored"
 msgstr ""
 
-#: src/reference/bundles.md:335
+#: src/reference/bundles.md:336
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr ""
 
-#: src/reference/bundles.md:335
+#: src/reference/bundles.md:336
 msgid "refuse — names the entry; a bad archive never reaches the session"
 msgstr ""
 
-#: src/reference/bundles.md:336
+#: src/reference/bundles.md:337
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr ""
 
-#: src/reference/bundles.md:336
+#: src/reference/bundles.md:337
 msgid "refuse — names the missing group"
 msgstr ""
 
-#: src/reference/bundles.md:338
+#: src/reference/bundles.md:339
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr ""
 
-#: src/reference/bundles.md:340
+#: src/reference/bundles.md:341
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package bundles at "
 "`dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can spell "
@@ -26153,7 +26154,7 @@ msgid ""
 "ARE the delivery and the publish act is a git tag:"
 msgstr ""
 
-#: src/reference/bundles.md:345
+#: src/reference/bundles.md:346
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -26167,14 +26168,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:355
+#: src/reference/bundles.md:356
 msgid ""
 "`<tag>` is a placeholder — real urls live in the worked manifests, and the "
 "real pins live in each project's committed `rut.lock` (the in-repo examples' "
 "locks are the reference; anti-rot: docs never rot pins). The laws:"
 msgstr ""
 
-#: src/reference/bundles.md:360
+#: src/reference/bundles.md:361
 msgid ""
 "**Committed artifacts, immutable tags.** `scripts/pack-std::cjs` packs all "
 "16 (deterministic — same input ⇒ byte-identical, so freshness is a pure "
@@ -26184,7 +26185,7 @@ msgid ""
 "(`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
 msgstr ""
 
-#: src/reference/bundles.md:367
+#: src/reference/bundles.md:368
 msgid ""
 "**What a compiled bundle serves.** Instantiation is owner-anchored: a "
 "compiled owner carries the generic instantiations its own pack closure "
@@ -26204,7 +26205,7 @@ msgid ""
 "travels (the ordinary closure law)."
 msgstr ""
 
-#: src/reference/bundles.md:385
+#: src/reference/bundles.md:386
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group "
 "(`json`'s and `http`'s closures both carry `strbuild`): the same identity "
@@ -26215,25 +26216,25 @@ msgid ""
 "— pin one of them with your own `deps` row."
 msgstr ""
 
-#: src/reference/bundles.md:394
+#: src/reference/bundles.md:395
 msgid "Loading"
 msgstr ""
 
-#: src/reference/bundles.md:396
+#: src/reference/bundles.md:397
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same identity-keyed groups:"
 msgstr ""
 
-#: src/reference/bundles.md:400
+#: src/reference/bundles.md:401
 msgid "// from a file\n"
 msgstr ""
 
-#: src/reference/bundles.md:401
+#: src/reference/bundles.md:402
 msgid "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
-#: src/reference/bundles.md:406
+#: src/reference/bundles.md:407
 msgid ""
 "After the offer, the package name resolves exactly as the directory form "
 "does — with one difference: a compiled group's body is the decoded program "
@@ -26244,11 +26245,11 @@ msgid ""
 "valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 
-#: src/reference/bundles.md:418
+#: src/reference/bundles.md:419
 msgid "# default output: a sibling of the dir\n"
 msgstr ""
 
-#: src/reference/bundles.md:422
+#: src/reference/bundles.md:423
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."

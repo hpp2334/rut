@@ -19055,7 +19055,7 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/embedding.md:302 src/reference/bundles.md:401
+#: src/reference/embedding.md:302 src/reference/bundles.md:402
 msgid "\"vendor/plugin.rutbundle\""
 msgstr "\"vendor/plugin.rutbundle\""
 
@@ -25120,7 +25120,7 @@ msgid ""
 msgstr "在任何代码执行之前，校验器会重新检查二进制里的每个函数："
 
 
-#: src/reference/module-binary.md:191 src/reference/bundles.md:321
+#: src/reference/module-binary.md:191 src/reference/bundles.md:322
 msgid "check"
 msgstr "检查"
 
@@ -25434,7 +25434,7 @@ msgid ""
 msgstr "宿主与声明的叶子组没有编译依赖，平凡地通过。被拒绝的世界不加 `--strip` 照样打包。"
 
 
-#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:415
+#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:416
 msgid "CLI"
 msgstr "CLI"
 
@@ -26753,24 +26753,31 @@ msgstr ""
 
 #: src/reference/bundles.md:218
 msgid ""
-"Because the manifest rides byte-for-byte, url rows carry into a consumer's own `rut pack` output, satisfied by the rode-along groups: the archive's groups re-encode from the consumer session's units (one `.rutc` path) or copy their file sets under the new identity prefixes, and the same manifest + lock still pack byte-identically. The pack refuses, loudly and named, the cases that would emit a bundle the loader must reject: an archive source group still declaring `dev-deps` directories (vendor the dep), a compiled group the consumer's closure never uses (it cannot ride unpackaged), and a declared dep that did not ride."
-msgstr ""
-"因为清单逐字节搭乘，url 行会带进消费者自己的 `rut pack` 输出，由随行组满足：档案的组从消费者会话的单元重新编码（同一条`.rutc` 路径），或把文件集复制到新的标识前缀下，同一清单 +锁仍打包出逐字节相同的结果。打包会响亮、点名地拒绝会让加载器必须拒绝的产出：仍在声明 `dev-deps` 目录的档案源码组（改为 vendor该依赖）、消费者闭包从不使用的编译组（未打包无法搭乘）、以及没有搭乘的声明依赖。"
+"Because the manifest rides byte-for-byte, url rows carry into a consumer's "
+"own `rut pack` output, satisfied by the groups the archive carries: the "
+"archive's groups re-encode from the consumer session's units (one `.rutc` "
+"path) or copy their file sets under the new identity prefixes, and the same "
+"manifest + lock still pack byte-identically. The pack refuses, loudly and "
+"named, the cases that would emit a bundle the loader must reject: an archive "
+"source group still declaring `dev-deps` directories (vendor the dep), a "
+"compiled group the consumer's closure never uses (it cannot ride "
+"unpackaged), and a declared dep that did not ride."
+msgstr "因为清单逐字节搭乘，url 行会带进消费者自己的 `rut pack` 输出，由档案携带的组满足：档案的组从消费者会话的单元重新编码（同一条`.rutc` 路径），或把文件集复制到新的标识前缀下，同一清单 +锁仍打包出逐字节相同的结果。打包会响亮、点名地拒绝会让加载器必须拒绝的产出：仍在声明 `dev-deps` 目录的档案源码组（改为 vendor该依赖）、消费者闭包从不使用的编译组（未打包无法搭乘）、以及没有搭乘的声明依赖。"
 
 
-#: src/reference/bundles.md:229
+#: src/reference/bundles.md:230
 msgid "The wire version"
 msgstr "线上版本"
 
 
-#: src/reference/bundles.md:231
+#: src/reference/bundles.md:232
 msgid ""
 "`format_version` is 11 — the one bundle wire, both root kinds; the manifest's `type` routes lib-compiled vs host-decl. A loader refuses any other value **before reading anything else** — refuse, never guess: `this toolchain reads bundle format_version 11 only (found {v}) — re-pack the directory`."
 msgstr ""
 "`format_version` 是 11——唯一的捆绑包线格式，两种根皆然；清单的 `type` 路由 lib 编译与宿主decl。加载器**在读任何其他内容之前**拒绝其他值——拒绝，绝不猜测：`this toolchain reads bundleformat_version 11 only (found {v}) — re-pack the directory`。"
 
 
-#: src/reference/bundles.md:237
+#: src/reference/bundles.md:238
 msgid ""
 "Every file in the two layouts is part of the package: a bundle that dropped "
 "a declared child module would load partial — semantically wrong, so the "
@@ -26783,249 +26790,249 @@ msgid ""
 msgstr "两种布局里的每个文件都是包的一部分：丢了声明子模块的捆绑包会加载出不完整——语义错误——因此闭包法则在挂载时检查。编译是契约，绝无例外——泛型代码体作为模板承载在二进制之内（上面的实例化独立），消费者拼形因此始终有得服务，而已发布的捆绑包绝不携带源码。作为一般契约的源码共享仍是目录（`rut run <dir>`），一如捆绑包之外的从前。"
 
 
-#: src/reference/bundles.md:247
+#: src/reference/bundles.md:248
 msgid ""
 "**The groups mirror the manifest.** The archive root is the root's own files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the content identity, fingerprinted over the group's own rode source set, and the reader recomputes the fingerprint and refuses a mismatch (a doctored or stale dirname). Same source ⇒ same dirname, so a repack of an unchanged group lands at the same directory and the two identities of one name coexist side by side (the packer exact-dedups one identity's file set — two groups stage to one identity only when their bytes are equal)."
 msgstr ""
 "**组映射清单**。档案根是根自己的文件；每个依赖 riding 在`deps/<name>@<fp16>/`——目录名就是内容标识，以组自己的承载源码集取指纹，读取器会重算指纹并在不匹配时拒绝（被篡改或过期的目录名）。同一源码⇒ 同一目录名，因此未改动组的重新打包落在同一目录，同一名字的两个标识并肩共存（打包器对一个标识精确去重——两组只在字节相等时才并入同一标识）。"
 
 
-#: src/reference/bundles.md:257
+#: src/reference/bundles.md:258
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into a fresh numeric range of the consuming run's world (boot passes through), and its binaries rebase with that same map **before** mounting — so two independently packed bundles can share one world without their pack-time numberings ever arguing. First-mount-wins still decides which body a shared group name keeps, and a group's ledger row must still be the scope its own binary carries (refuse, never guess — that check is per archive). The CDN lane below is the reason this exists: per-package bundles are packed independently, each numbering its own closure."
 msgstr ""
 
 
-#: src/reference/bundles.md:268
+#: src/reference/bundles.md:269
 msgid "The `bundle` module"
 msgstr "`bundle` 模块"
 
 
-#: src/reference/bundles.md:270
+#: src/reference/bundles.md:271
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, and the reader (both root kinds) live in the driver's `rut_driver::bundle` module — **pure and in-memory**: the walk adds every filesystem read. That half lives in `rut-native`, whose one-method `Source` trait is the one filesystem door: `rut_native::FsSource::at(dir)` is the real filesystem (the CLI, native hosts); an in-memory path→bytes map serves tests and wasm hosts. The packer needs the walk and lives beside it (`rut_native::pack_dir`) — it returns the bundle bytes; writing the output file stays with the caller. Loading a bundle into a run goes through `rut_native::load_bundle_session(path)` (the file read) or `rut_driver::Pkg::from_bundle(&bytes)` (the pure parse) over the parsed `rut_driver::bundle::Bundle` and its `rut_driver::bundle::Layout` — the compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
 
-#: src/reference/bundles.md:286
+#: src/reference/bundles.md:287
 msgid "Deterministic packing"
 msgstr "确定性打包"
 
 
-#: src/reference/bundles.md:288
+#: src/reference/bundles.md:289
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr "相同目录 + 相同工具链 ⇒ 逐字节相同的 `.rutbundle`："
 
 
-#: src/reference/bundles.md:290
+#: src/reference/bundles.md:291
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's binary, then the root's surface/source/rows, then dep groups in identity order (one group per distinct identity);"
 msgstr "固定条目顺序——先 `rut.jsonc`，再作用域台账、根的二进制、根的表面/源码/模块行，然后按标识顺序排列 dep组（每个不同标识一组）；"
 
 
-#: src/reference/bundles.md:293
+#: src/reference/bundles.md:294
 msgid "fixed (zeroed) timestamps;"
 msgstr "固定（清零）的时间戳；"
 
 
-#: src/reference/bundles.md:294
+#: src/reference/bundles.md:295
 msgid "STORE (no compression) — determinism over size."
 msgstr "STORE（不压缩）——确定性优先于体积。"
 
 
-#: src/reference/bundles.md:296
+#: src/reference/bundles.md:297
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module binary and verification](module-binary.md)): bundles are content-cacheable, and two builds of the same module diff to nothing."
 msgstr ""
 "这是模块二进制的确定性法则向上一层的延伸（[模块二进制与校验](module-binary.md)）：捆绑包可按内容缓存，同一模块的两次构建 diff 为零。"
 
 
-#: src/reference/bundles.md:300
+#: src/reference/bundles.md:301
 msgid "Stripping — the private sidecar"
 msgstr "剥离——私有的旁车"
 
 
-#: src/reference/bundles.md:302
+#: src/reference/bundles.md:303
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol table** at the sibling path `<out-without-ext>.rutsym`. Every renameable name in the `.rutc` binaries mangles to `%N` and every function's span/position tables leave — the sidecar carries exactly what left, so supplying it at load restores real names and line/col for stack-trace symbolication. The sidecar is never an entry inside the archive. It needs a fully-compiled closure (a source group that could bind a compiled group's surface is a pointed refusal); without `--strip`, packing is unchanged. The whole law lives in [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md). `run` accepts `--symbols <file.rutsym>` against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 "`rut pack <dir> --strip` 在上述内容之外，**外加一份私有符号表**，写在旁边的路径 `<out-without-ext>.rutsym`。`.rutc` 二进制里每个可改名的名字都改名为 `%N`，每个函数的区间/位置表都离开——旁车携带的正是离开的东西，因此在加载时提供它就能为栈追踪符号化还原真实名字与行/列。旁车绝不是归档里的一个条目。它需要一个全编译的闭包（可能绑定某编译组表面的源码组会被明确拒绝）；不加 `--strip` 时，打包一切照旧。完整的法则见[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)。`run` 对编译的捆绑包接受 `--symbols <file.rutsym>`（[rut CLI](cli.md)）。"
 
 
-#: src/reference/bundles.md:315
+#: src/reference/bundles.md:316
 msgid "Checks on load"
 msgstr "加载时的检查"
 
 
-#: src/reference/bundles.md:317
+#: src/reference/bundles.md:318
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle never executes. The order is the law: container, then manifest and version, then every group's decode, then the mount."
 msgstr "每项检查都在加载时、编译与链接之前运行——坏捆绑包绝不执行。顺序即法则：容器，然后清单与版本，然后每个组的解码，最后挂载。"
 
 
-#: src/reference/bundles.md:321
+#: src/reference/bundles.md:322
 msgid "rule on mismatch"
 msgstr "不匹配时的规则"
 
 
-#: src/reference/bundles.md:323
+#: src/reference/bundles.md:324
 msgid "zip entry CRC-32"
 msgstr "zip 条目 CRC-32"
 
 
-#: src/reference/bundles.md:323
+#: src/reference/bundles.md:324
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr "拒绝——损坏的捆绑包（点名该条目）"
 
 
-#: src/reference/bundles.md:324
+#: src/reference/bundles.md:325
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
 
-#: src/reference/bundles.md:324
+#: src/reference/bundles.md:325
 msgid "refuse — not a rut bundle"
 msgstr "拒绝——不是 rut 捆绑包"
 
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:326
 msgid "`format_version` exactly 11"
 msgstr "`format_version` 恰为 11"
 
 
-#: src/reference/bundles.md:325
+#: src/reference/bundles.md:326
 msgid ""
 "refuse — `this toolchain reads bundle format_version 11 only (found {v}) — re-pack the directory`"
 msgstr ""
 "拒绝——`this toolchain reads bundle format_version 11 only (found {v}) —re-pack the directory`"
 
 
-#: src/reference/bundles.md:326
+#: src/reference/bundles.md:327
 msgid "a host root carrying a root `mod.rutc`"
 msgstr "宿主根带着根 `mod.rutc`"
 
 
-#: src/reference/bundles.md:326
+#: src/reference/bundles.md:327
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr "拒绝——宿主捆绑包的根是它的表面，不是编译单元"
 
 
-#: src/reference/bundles.md:327
+#: src/reference/bundles.md:328
 msgid "a host root carrying a `rut.scopes` ledger or any group entry"
 msgstr "宿主根带着 `rut.scopes` 台账或任何组条目"
 
 
-#: src/reference/bundles.md:327
+#: src/reference/bundles.md:328
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr "拒绝——宿主捆绑包即其面，单包"
 
 
-#: src/reference/bundles.md:328
+#: src/reference/bundles.md:329
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not a content identity (`name@<16 hex>`)"
 msgstr "编译根没有 `rut.scopes` 台账，或台账行不是内容标识（`name@<16 hex>`）"
 
 
-#: src/reference/bundles.md:328
+#: src/reference/bundles.md:329
 msgid "refuse — a corrupt compiled bundle"
 msgstr "拒绝——损坏的编译捆绑包"
 
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:330
 msgid "an entry under a top-level prefix other than `deps/`"
 msgstr "顶层前缀不是 `deps/` 的条目"
 
 
-#: src/reference/bundles.md:329
+#: src/reference/bundles.md:330
 msgid ""
 "refuse — the archive root carries only the root's own files; dep groups ride at `deps/<name>@<fp16>/`"
 msgstr "拒绝——档案根只携带根自己的文件；dep 组 riding 在 `deps/<name>@<fp16>/`"
 
 
-#: src/reference/bundles.md:330
+#: src/reference/bundles.md:331
 msgid "a `deps/` group directory whose name is not a content identity"
 msgstr "名字不是内容标识的 `deps/` 组目录"
 
 
-#: src/reference/bundles.md:330
+#: src/reference/bundles.md:331
 msgid "refuse — expected `<name>@<16 hex>`"
 msgstr "拒绝——期望 `<name>@<16 hex>`"
 
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:332
 msgid "a group's manifest `name` disagreeing with its dirname's name half"
 msgstr "组的清单 `name` 与其目录名的名字半不符"
 
 
-#: src/reference/bundles.md:331
+#: src/reference/bundles.md:332
 msgid "refuse — names both"
 msgstr "拒绝——两者都点名"
 
 
-#: src/reference/bundles.md:332
+#: src/reference/bundles.md:333
 msgid ""
 "a group dirname's fingerprint disagreeing with the hash of its rode source set"
 msgstr "组目录名的指纹与其承载源码集的哈希不符"
 
 
-#: src/reference/bundles.md:332
+#: src/reference/bundles.md:333
 msgid "refuse — the dirname and the content disagree"
 msgstr "拒绝——目录名与内容不符"
 
 
-#: src/reference/bundles.md:333
+#: src/reference/bundles.md:334
 msgid "`mod.rutc` decode (root and groups): version, tables, surface ids"
 msgstr "`mod.rutc` 解码（根与组）：版本、表、表面 id"
 
 
-#: src/reference/bundles.md:333
+#: src/reference/bundles.md:334
 msgid "refuse — names the entry and the cause"
 msgstr "拒绝——点出条目与原因"
 
 
-#: src/reference/bundles.md:334
+#: src/reference/bundles.md:335
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr "编译组的台账行与其二进制自身的作用域一致"
 
 
-#: src/reference/bundles.md:334
+#: src/reference/bundles.md:335
 msgid "refuse — corrupt or doctored"
 msgstr "拒绝——损坏或被篡改"
 
 
-#: src/reference/bundles.md:335
+#: src/reference/bundles.md:336
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 
-#: src/reference/bundles.md:335
+#: src/reference/bundles.md:336
 msgid "refuse — names the entry; a bad archive never reaches the session"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 
-#: src/reference/bundles.md:336
+#: src/reference/bundles.md:337
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr "每个已声明依赖都被一个组满足（编译根）"
 
 
-#: src/reference/bundles.md:336
+#: src/reference/bundles.md:337
 msgid "refuse — names the missing group"
 msgstr "拒绝——点出缺失的组"
 
 
-#: src/reference/bundles.md:338
+#: src/reference/bundles.md:339
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr "CDN 上的 std 树——按包交付"
 
 
-#: src/reference/bundles.md:340
+#: src/reference/bundles.md:341
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package bundles at `dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can spell (16 today). jsDelivr's gh lane serves repo files at a ref, so the artifacts ARE the delivery and the publish act is a git tag:"
 msgstr ""
 "标准树（`rut/`）以**提交入库**的每包捆绑包交付于 `dist/std/<pkg>.rutbundle`——`deps`行可拼写的每个包一个捆绑包（今天 16 个）。jsDelivr 的 gh 车道按 ref 服务仓库文件，因此工件就是交付本身，发布动作是一个git tag："
 
 
-#: src/reference/bundles.md:345
+#: src/reference/bundles.md:346
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -27039,21 +27046,21 @@ msgid ""
 msgstr ""
 
 
-#: src/reference/bundles.md:355
+#: src/reference/bundles.md:356
 msgid ""
 "`<tag>` is a placeholder — real urls live in the worked manifests, and the real pins live in each project's committed `rut.lock` (the in-repo examples' locks are the reference; anti-rot: docs never rot pins). The laws:"
 msgstr ""
 "`<tag>` 是占位符——真实 url 在成形的清单里，真实固定值在每个项目已提交的 `rut.lock` 里（仓库内示例的锁就是参照；防腐：文档永不腐烂固定值）。法则如下："
 
 
-#: src/reference/bundles.md:360
+#: src/reference/bundles.md:361
 msgid ""
 "**Committed artifacts, immutable tags.** `scripts/pack-std::cjs` packs all 16 (deterministic — same input ⇒ byte-identical, so freshness is a pure equality gate: `--check` repacks and byte-compiles, no network; the retired `--pins` flag is gone — the pins live in `rut.lock` now, written by `rut install`, and no manifest tool rewrites them anymore). Tags advance (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively."
 msgstr ""
 "**入库工件，不可变 tag**。`scripts/pack-std::cjs` 打包全部 16 个（确定性——同输入 ⇒同字节，因此新鲜度是纯相等门：`--check` 重打包并逐字节比较，不碰网络；已废除的 `--pins` 旗标没有了——固定值如今住在`rut.lock`，由 `rut install` 写入，没有任何清单工具再改写它们）。tag只前进（`std-vNN`），绝不重指——jsDelivr 缓存很激进。"
 
 
-#: src/reference/bundles.md:367
+#: src/reference/bundles.md:368
 msgid ""
 "**What a compiled bundle serves.** Instantiation is owner-anchored: a "
 "compiled owner carries the generic instantiations its own pack closure "
@@ -27074,52 +27081,52 @@ msgid ""
 msgstr "**编译捆绑包能服务什么**。实例化按拥有者锚定：编译的拥有者携带其打包闭包在台账里拼写的泛型实例化——并把其泛型代码体作为模板携带在二进制内（实例化独立）：在消费者的链接处，台账没有的请求从模板单态化，并以声明包的 spec 编译函数体（全程序一行，不持久化）。因此 CDN 车道交付**宿主表面**（decl 捆绑包）、**具体类库**（`http`、`ink`、`strbuild`——方法经表面的固有行跨越）、**以及泛型拥有者**（`pouch`、`flow`、`nmapset`、`json`、`futures`——`Vec<Todo>`、`Flow<i32>`、`decodeJson<T>` 在链接处从模板编译）。法则同样约束这条车道：拥有开放泛型表面但二进制不带模板代码体的包在挂载时拒绝（损坏或被篡改——重新打包目录）。而且每个捆绑包都是**封闭**的——捆绑包挂载的 json 把自己的 `strbuild` + `pouch` + `nmapset` 组带在体内，它的包装器无论走到哪里都可解析（普通闭包法则）。"
 
 
-#: src/reference/bundles.md:385
+#: src/reference/bundles.md:386
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group (`json`'s and `http`'s closures both carry `strbuild`): the same identity mounts once (exact dedup), two identities of one name coexist side by side, and the per-archive ledger namespacing keeps every binary's ids resolving through its own archive's rows. A bare `use` head under several identities of one name is the loud ambiguity ([Dependency kinds](dependency-kinds.md)) — pin one of them with your own `deps` row."
 msgstr ""
 "**重复挂载是安全的。**两个档案可以携带同一组（`json` 与 `http` 的闭包都带`strbuild`）：同一标识只挂载一次（精确去重），同一名字的两个标识并肩共存，而每档案的台账命名空间让每个二进制的 id都经自己档案的行解析。同一名字的多个标识之下，裸 `use` 头是响亮的歧义（[Dependencykinds](dependency-kinds.md)）——用自己的 `deps` 行固定其中一个。"
 
 
-#: src/reference/bundles.md:394
+#: src/reference/bundles.md:395
 msgid "Loading"
 msgstr "加载"
 
 
-#: src/reference/bundles.md:396
+#: src/reference/bundles.md:397
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same name resolution, same compile, same identity-keyed groups:"
 msgstr "捆绑包是目录形式之外的又一种解析来源——同名解析、同编译、同以标识为键的组："
 
 
-#: src/reference/bundles.md:400
+#: src/reference/bundles.md:401
 msgid ""
 "// from a file\n"
 msgstr ""
 "// from a file\n"
 
 
-#: src/reference/bundles.md:401
+#: src/reference/bundles.md:402
 msgid ""
 "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
 
-#: src/reference/bundles.md:406
+#: src/reference/bundles.md:407
 msgid ""
 "After the offer, the package name resolves exactly as the directory form does — with one difference: a compiled group's body is the decoded program itself. The run assigns it a fresh scope, rebases its packed ids through the ledger, and pushes it; source groups offer as sources and compile exactly as a directory world. Then the normal pipeline takes over ([Loading and the embed loop](loading.md)). Loose directories and loose `.rut` files stay valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 "提供之后，包名的解析与目录形式完全一致——只有一个差别：编译组的函数体就是解码后的程序本身。运行给它分配全新作用域，经台账重定基其打包id，然后推入；源码组作为源码提供，并像目录世界一样精确编译。之后常规流水线接管（[Loading and the embedloop](loading.md)）。散目录与散 `.rut` 文件仍是合法的共享布局；捆绑包打包它们，但不强制。"
 
 
-#: src/reference/bundles.md:418
+#: src/reference/bundles.md:419
 msgid ""
 "# default output: a sibling of the dir\n"
 msgstr ""
 "# default output: a sibling of the dir\n"
 
 
-#: src/reference/bundles.md:422
+#: src/reference/bundles.md:423
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by tests (the linked binaries are equal)."
 msgstr "打包形态与其目录编译出完全相同的程序——由测试钉住（链接后的二进制相等）。"
@@ -28733,14 +28740,15 @@ msgstr ""
 "对模块目录执行 `run` 是开发期的部署路径；`pack` + `run <bundle>` 是发布路径——两者运行完全相同的契约（[加载与嵌入循环](loading.md)）。"
 
 
-
 #: src/SUMMARY.md:99 src/reference/compilation-model.md:1
 msgid "The compilation model"
 msgstr "编译模型"
 
+
 #: src/SUMMARY.md:115 src/reference/glossary.md:1
 msgid "Glossary"
 msgstr "术语表"
+
 
 #: src/reference/compilation-model.md:3
 msgid ""
@@ -28755,21 +28763,26 @@ msgid ""
 "build is correct exactly when it equals the reference build."
 msgstr "rut 的编译是确定性的：声明的闭包是纯输入，全程序编译是**确定性参考模式**——同一闭包进来，无论哪台机器、哪一天，出去的都是字节一致的程序。一个包**编译**为目标文件（代码 + 表面 + 模板）；目标文件与其符号表构成**归档**——`.rutbundle`，唯一的发布单元。消费者针对归档的表面编译自己的源码；**实例化**阶段物化消费者拼写的泛型；**链接器**解析并重定基——只做算术。暂存构建正确，当且仅当它等于参考构建。"
 
+
 #: src/reference/compilation-model.md:14
 msgid "The pipeline"
 msgstr "流水线"
+
 
 #: src/reference/compilation-model.md:27
 msgid "side"
 msgstr "侧"
 
+
 #: src/reference/compilation-model.md:27
 msgid "more"
 msgstr "详见"
 
+
 #: src/reference/compilation-model.md:29
 msgid "compile"
 msgstr "编译"
+
 
 #: src/reference/compilation-model.md:29
 msgid ""
@@ -28777,42 +28790,52 @@ msgid ""
 "encode"
 msgstr "源码 → 目标文件：词法/语法分析、解析、类型检查、单态化、优化、编码"
 
+
 #: src/reference/compilation-model.md:29 src/reference/compilation-model.md:32
 msgid "[The compiler pipeline](compiler.md)"
 msgstr "[编译器流水线](compiler.md)"
+
 
 #: src/reference/compilation-model.md:30 src/reference/glossary.md:14
 msgid "declaration entry"
 msgstr "声明条目"
 
+
 #: src/reference/compilation-model.md:30 src/reference/compilation-model.md:31
 msgid "publish"
 msgstr "发布"
+
 
 #: src/reference/compilation-model.md:30
 msgid "the group's surface text, generated at pack — never hand-maintained"
 msgstr "组的表面文本，打包期生成——绝不手工维护"
 
+
 #: src/reference/compilation-model.md:30 src/reference/compilation-model.md:31
 msgid "[Module bundles](bundles.md)"
 msgstr "[模块捆绑包](bundles.md)"
+
 
 #: src/reference/compilation-model.md:31 src/reference/glossary.md:13
 msgid "archive"
 msgstr "归档"
 
+
 #: src/reference/compilation-model.md:31
 msgid "the object set + symbol tables, shaded to the closure, one file"
 msgstr "目标文件集 + 符号表，收纳进闭包，一个文件"
+
 
 #: src/reference/compilation-model.md:32 src/reference/glossary.md:17
 msgid "instantiate"
 msgstr "实例化"
 
+
 #: src/reference/compilation-model.md:32 src/reference/compilation-model.md:33
 #: src/reference/compilation-model.md:34
 msgid "consume"
 msgstr "消费"
+
 
 #: src/reference/compilation-model.md:32
 msgid ""
@@ -28820,9 +28843,11 @@ msgid ""
 "refolds — one row program-wide per shape"
 msgstr "唯一的消费者侧代码生成：模板替换、台账查找、表示重折——每个形状全程序一行"
 
+
 #: src/reference/compilation-model.md:33 src/reference/glossary.md:18
 msgid "link"
 msgstr "链接"
+
 
 #: src/reference/compilation-model.md:33 src/reference/glossary.md:18
 msgid ""
@@ -28830,17 +28855,23 @@ msgid ""
 "never code-generating"
 msgstr "作用域解析 + 重定位 + 合并——只做算术，绝无类型感知，绝无代码生成"
 
+
 #: src/reference/compilation-model.md:33 src/reference/compilation-model.md:34
 msgid "[Loading and the embed loop](loading.md)"
 msgstr "[加载与嵌入循环](loading.md)"
+
 
 #: src/reference/compilation-model.md:34
 msgid "load"
 msgstr "加载"
 
+
 #: src/reference/compilation-model.md:34
-msgid "mount, rebase the ids onto the loader's numbering, verify, run"
-msgstr "挂载，把 id 重定基到加载者的编号，验证，运行"
+msgid ""
+"mount, install host rows, rebase the ids onto the loader's numbering, "
+"verify, run"
+msgstr "挂载，安装宿主行，把 id 重定基到加载者的编号，验证，运行"
+
 
 #: src/reference/compilation-model.md:36
 msgid ""
@@ -28850,13 +28881,16 @@ msgid ""
 "([Embedding and native modules](embedding.md))."
 msgstr "这些阶段是模型的内部接线，不是 API 表面：嵌入方组合意图级的动词——发布是 `rut pack`（[rut CLI](cli.md)）；消费是运行链 `RutRun::new().pkg(..).entrypoint(..).compile()`（[嵌入与原生模块](embedding.md)）。"
 
+
 #: src/reference/compilation-model.md:42
 msgid "The reference, and the equivalence contract"
 msgstr "参考模式与等价契约"
 
+
 #: src/reference/compilation-model.md:44
 msgid "Two statements are the mode's contract:"
 msgstr "两句话构成这一模式的契约："
+
 
 #: src/reference/compilation-model.md:46
 msgid ""
@@ -28868,6 +28902,7 @@ msgid ""
 "pipeline](compiler.md))."
 msgstr "**参考模式是确定性的。**全程序编译是声明闭包的纯函数：在任何地方都字节一致，与缓存、挂载无关，也与消费者恰好如何拼写其泛型无关。相同源码 + 相同依赖版本 + 相同编译器版本 ⇒ 字节一致的输出——这正是捆绑包可 diff、可按内容寻址的原因（[编译器流水线](compiler.md)）。"
 
+
 #: src/reference/compilation-model.md:53
 msgid ""
 "**Staged equals reference.** A staged build — the archive-mounted lane — is "
@@ -28877,6 +28912,7 @@ msgid ""
 "and identical bytes where the lanes make bytes comparable."
 msgstr "**暂存等于参考。**暂存构建——经归档挂载的车道——正确，当且仅当它对同一闭包产出参考构建会产出的东西。等价是钉死的，不是假设的：黄金测试让一个闭包跑过两条车道并比较结果——相同的运行行为，以及车道间可比较之处的相同字节。"
 
+
 #: src/reference/compilation-model.md:60
 msgid ""
 "The reference is also the widest dialect: it serves any source closure. A "
@@ -28884,9 +28920,11 @@ msgid ""
 "— it never produces more than the reference would."
 msgstr "参考模式也是最宽的方言：它服务任何源码闭包。暂存构建_派生自_参考模式，并由等价授权——它绝不会产出比参考模式更多的东西。"
 
+
 #: src/reference/compilation-model.md:64
 msgid "Instantiation is lazy"
 msgstr "实例化是惰性的"
+
 
 #: src/reference/compilation-model.md:66
 msgid ""
@@ -28894,11 +28932,13 @@ msgid ""
 "things relevant here:"
 msgstr "只有消费者拼写的形状才会物化。编译的拥有者在这里携带两样相关的东西："
 
+
 #: src/reference/compilation-model.md:69
 msgid ""
 "its **ledger** — the `(owner, decl, arguments)` rows its own pack closure "
 "spelled (the pre-instantiated bodies), and"
 msgstr "它的**台账**——其打包闭包拼写的 `(owner, decl, arguments)` 各行（预实例化代码体）；以及"
+
 
 #: src/reference/compilation-model.md:71
 msgid ""
@@ -28906,6 +28946,7 @@ msgid ""
 "`#<param>` placeholder rows, riding inside the binary ([Module "
 "bundles](bundles.md))."
 msgstr "它的**模板**——每个导出的泛型声明对 `#<param>` 占位行只编译一次，承载在二进制之内（[模块捆绑包](bundles.md)）。"
+
 
 #: src/reference/compilation-model.md:75
 msgid ""
@@ -28917,15 +28958,18 @@ msgid ""
 "program."
 msgstr "在消费者的实例化阶段，台账能满足的请求就是一次查找；台账没有的形状从模板单态化——全程序一行、按拥有者锚定，与打包期的一行无法区分，不持久化任何东西。没人拼写的形状哪里都不会编译：正是这种惰性让某个消费者一次性的 `Vec<Todo>` 进不了其他所有消费者的程序。"
 
+
 #: src/reference/compilation-model.md:82
 msgid "Two truths: linking and editing"
 msgstr "两种真相：链接与编辑"
+
 
 #: src/reference/compilation-model.md:84
 msgid ""
 "Every published group carries both truths, and neither contaminates the "
 "other:"
 msgstr "每个发布的组同时携带两种真相，且互不污染："
+
 
 #: src/reference/compilation-model.md:87
 msgid ""
@@ -28934,12 +28978,14 @@ msgid ""
 "alone ([Module binary and verification](module-binary.md))."
 msgstr "**目标文件**（`mod.rutc`）是_链接的真相_：线上的函数体加表面。消费者仅凭二进制就绑定编译组的导出（[模块二进制与验证](module-binary.md)）。"
 
+
 #: src/reference/compilation-model.md:91
 msgid ""
 "The **declaration entry** (`mod.d.rut`) is the _editing truth_: the group's "
 "surface text, **generated** at pack time from the validated surface — never "
 "hand-maintained, so it cannot drift from what links."
 msgstr "**声明条目**（`mod.d.rut`）是_编辑的真相_：组的表面文本，打包期从验证过的表面**生成**——绝不手工维护，因此不会与链接的东西漂移。"
+
 
 #: src/reference/compilation-model.md:96
 msgid ""
@@ -28949,15 +28995,18 @@ msgid ""
 "they ride for humans and tooling."
 msgstr "这就是 TypeScript 的 `.d.ts` 模式：把声明放在编译产物旁边，从负责链接的东西生成它，并让运行时无视它。加载器从不读编译组的声明条目；它们为人类与工具随行。"
 
+
 #: src/reference/compilation-model.md:101
 msgid "The editor's ladder"
 msgstr "编辑器的阶梯"
+
 
 #: src/reference/compilation-model.md:103
 msgid ""
 "Editor-facing data degrades gracefully — and nothing editor-facing is ever "
 "load-required:"
 msgstr "面向编辑器的数据优雅降级——而且没有任何面向编辑器的东西是加载所必需的："
+
 
 #: src/reference/compilation-model.md:106
 msgid ""
@@ -28967,12 +29016,14 @@ msgid ""
 "the owner's private code."
 msgstr "**声明条目（完整）**——名字、类型、结构：编辑器看待依赖的首要视图。对依赖成员的跳转到定义落在声明上——声明是名字发布的地方；函数体是拥有者的私有代码。"
 
+
 #: src/reference/compilation-model.md:110
 msgid ""
 "**Object surface (names + types)** — the binary's own surface section, "
 "always present, is the floor: tooling can read names and signatures from the "
 "decoded object alone ([Module binary and verification](module-binary.md))."
 msgstr "**目标文件表面（名字 + 类型）**——二进制自带的表面节永远在场，是阶梯的底：工具仅凭解码的目标文件就能读到名字与签名（[模块二进制与验证](module-binary.md)）。"
+
 
 #: src/reference/compilation-model.md:115
 msgid ""
@@ -28983,13 +29034,16 @@ msgid ""
 "floor holds on stripped bundles too."
 msgstr "剥离为运行时隐私移除名字，并携带一份私有旁车以恢复它们（[符号剥离与 `.rutsym` 旁车](symbol-stripping.md)）；链接器与实例化机制所咨询的表面各行按构造保留，因此阶梯的底在剥离后的捆绑包上同样成立。"
 
+
 #: src/reference/compilation-model.md:121
 msgid "Where to read more"
 msgstr "延伸阅读"
 
+
 #: src/reference/compilation-model.md:123
 msgid "[The compiler pipeline](compiler.md) — the compile stage, stage by stage."
 msgstr "[编译器流水线](compiler.md)——compile 阶段，逐段展开。"
+
 
 #: src/reference/compilation-model.md:125
 msgid ""
@@ -28997,16 +29051,19 @@ msgid ""
 "CDN lane."
 msgstr "[模块捆绑包](bundles.md)——归档：布局、标识、检查、CDN 车道。"
 
+
 #: src/reference/compilation-model.md:127
 msgid ""
 "[Module binary and verification](module-binary.md) — the object on the wire."
 msgstr "[模块二进制与验证](module-binary.md)——线上的目标文件。"
+
 
 #: src/reference/compilation-model.md:129
 msgid ""
 "[Loading and the embed loop](loading.md) — the consume tail: offer, link, "
 "verify, boot."
 msgstr "[加载与嵌入循环](loading.md)——消费的尾部：offer、链接、验证、启动。"
+
 
 #: src/reference/glossary.md:3
 msgid ""
@@ -29015,17 +29072,21 @@ msgid ""
 "community's word and documents only the delta — there are exactly two."
 msgstr "本书为[编译模型](compilation-model.md)所用的词汇。凡是标准工具链词汇的直觉八九不离十的地方，rut 就用社区的词，只记载差异——而差异恰好只有两处。"
 
+
 #: src/reference/glossary.md:7
 msgid "The vocabulary"
 msgstr "词汇表"
+
 
 #: src/reference/glossary.md:9
 msgid "term"
 msgstr "术语"
 
+
 #: src/reference/glossary.md:11
 msgid "deterministic reference mode"
 msgstr "确定性参考模式"
+
 
 #: src/reference/glossary.md:11
 msgid ""
@@ -29034,15 +29095,18 @@ msgid ""
 "fallback ([The compilation model](compilation-model.md))"
 msgstr "对声明闭包的全程序编译——在任何地方都字节一致；是其他每条车道接受度量的契约，不是退路（[编译模型](compilation-model.md)）"
 
+
 #: src/reference/glossary.md:12
 msgid "object file"
 msgstr "目标文件"
+
 
 #: src/reference/glossary.md:12
 msgid ""
 "a package's compiled binary (`mod.rutc`): bodies + surface — the linking "
 "truth ([Module binary and verification](module-binary.md))"
 msgstr "一个包编译出的二进制（`mod.rutc`）：函数体 + 表面——链接的真相（[模块二进制与验证](module-binary.md)）"
+
 
 #: src/reference/glossary.md:13
 msgid ""
@@ -29051,15 +29115,18 @@ msgid ""
 "bundles](bundles.md))"
 msgstr "发布的 `.rutbundle`——目标文件及其符号表，收纳进闭包；uber-jar / Go `.a` 语义；唯一的发布单元（[模块捆绑包](bundles.md)）"
 
+
 #: src/reference/glossary.md:14
 msgid ""
 "the generated surface text (`mod.d.rut`) a compiled group carries for humans "
 "and tooling — the editing truth; generated at pack, never hand-maintained"
 msgstr "编译组为人类与工具携带的生成表面文本（`mod.d.rut`）——编辑的真相；打包期生成，绝不手工维护"
 
+
 #: src/reference/glossary.md:15
 msgid "symbol table"
 msgstr "符号表"
+
 
 #: src/reference/glossary.md:15
 msgid ""
@@ -29068,9 +29135,11 @@ msgid ""
 "bundles](bundles.md))"
 msgstr "归档的作用域台账（`rut.scopes`）：每个链接的模块一行，拼写加载器赖以重定位的内容标识（[模块捆绑包](bundles.md)）"
 
+
 #: src/reference/glossary.md:16
 msgid "templates"
 msgstr "模板"
+
 
 #: src/reference/glossary.md:16
 msgid ""
@@ -29079,6 +29148,7 @@ msgid ""
 "consumer-spelled shape can materialize at the consumer"
 msgstr "实例化无关的代码体：导出的泛型声明对 `#<param>` 占位行只编译一次，承载在二进制内，于是任何消费者拼写的形状都能在消费者处物化"
 
+
 #: src/reference/glossary.md:17
 msgid ""
 "the consumer-side materialization of the generics the consumer spelled — "
@@ -29086,9 +29156,11 @@ msgid ""
 "codegen"
 msgstr "消费者拼写的泛型在消费者侧的物化——模板替换、台账查找、表示重折；唯一的消费者侧代码生成"
 
+
 #: src/reference/glossary.md:19
 msgid "load + relocate"
 msgstr "加载 + 重定基"
+
 
 #: src/reference/glossary.md:19
 msgid ""
@@ -29096,9 +29168,11 @@ msgid ""
 "numbering (dynamic relocation, PIE-style)"
 msgstr "把解码后的归档挂载进一次运行：其 id 重定基到加载者自己的编号（动态重定位，PIE 风格）"
 
+
 #: src/reference/glossary.md:20
 msgid "pre-instantiated bodies"
 msgstr "预实例化代码体"
+
 
 #: src/reference/glossary.md:20
 msgid ""
@@ -29106,9 +29180,11 @@ msgid ""
 "duplicates"
 msgstr "打包闭包已经编译过的台账各行——≈ COMDAT 折重的副本"
 
+
 #: src/reference/glossary.md:21
 msgid "auto-linked core / prelude"
 msgstr "自动链接的 core / prelude"
+
 
 #: src/reference/glossary.md:21
 msgid ""
@@ -29116,9 +29192,11 @@ msgid ""
 "runtime ([core and the swappable packages](stdlib.md))"
 msgstr "`core`——除非被覆盖，自动 offer 并链接，类似 Go 的运行时（[core 与可交换的包](stdlib.md)）"
 
+
 #: src/reference/glossary.md:22
 msgid "host bindings"
 msgstr "宿主绑定"
+
 
 #: src/reference/glossary.md:22
 msgid ""
@@ -29126,15 +29204,18 @@ msgid ""
 "modules](embedding.md))"
 msgstr "宿主包及其各行——FFI 表面（[嵌入与原生模块](embedding.md)）"
 
+
 #: src/reference/glossary.md:23
 msgid "compilation session"
 msgstr "编译会话"
+
 
 #: src/reference/glossary.md:23
 msgid ""
 "the run's internal compile state (`RutRun`) — an implementation detail, "
 "never user-facing vocabulary"
 msgstr "运行的内部编译状态（`RutRun`）——实现细节，绝不是用户侧词汇"
+
 
 #: src/reference/glossary.md:25
 msgid ""
@@ -29143,9 +29224,11 @@ msgid ""
 "([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md))."
 msgstr "已是社区标准、保持不变：**pkg**、**manifest**、**`[deps]`**、**`rut.lock`**、**install**、**fetch**、**url + sha256 固定值**、**pack**（[依赖种类](dependency-kinds.md)、[rut CLI](cli.md)）。"
 
+
 #: src/reference/glossary.md:30
 msgid "Delta 1 — instantiation independence"
 msgstr "差异一——实例化独立"
+
 
 #: src/reference/glossary.md:32
 msgid ""
@@ -29154,6 +29237,7 @@ msgid ""
 "body — one row program-wide, identity by owner. Consumer spelling picks "
 "shapes; it never changes bodies."
 msgstr "用平实的话说这份契约：同一个泛型替换，无论哪个消费者拼写、无论哪次会话、无论挂载的是拥有者的哪一个副本，都得到同一个代码体——全程序一行，标识归于拥有者。消费方拼写挑选形状；它绝不改变代码体。"
+
 
 #: src/reference/glossary.md:37
 msgid ""
@@ -29167,9 +29251,11 @@ msgid ""
 "the separate-compilation contract**."
 msgstr "这就是泛型的分离编译：一个包发布时不知道消费者会拼写什么形状，而每个形状仍只链接到唯一一个代码体——拥有者自己的闭包已编译过就是台账命中，否则向二进制携带的模板做一次替换（[模块捆绑包](bundles.md)）。这个性质没有标准工具链词可叫——它的根基是 C++ 模板实例化与 COMDAT 折重——所以 rut 描述它而不给它造牌子：**实例化独立，分离编译契约**。"
 
+
 #: src/reference/glossary.md:47
 msgid "Delta 2 — surface validation at compile"
 msgstr "差异二——编译期表面校验"
+
 
 #: src/reference/glossary.md:49
 msgid ""
@@ -29181,9 +29267,11 @@ msgid ""
 "pipeline](compiler.md))."
 msgstr "消费者在没有源码的情况下对着归档编译：消费者的 **compile** 阶段读取目标文件的**表面**——导出的名字、签名、类型——正如 rustc 读取依赖的元数据。`use` 头、成员集与类型在消费者编译期校验；缺一个成员是编译诊断，绝不是链接或加载时的惊吓（[编译器流水线](compiler.md)）。"
 
+
 #: src/reference/glossary.md:56
 msgid "Internal vocabulary"
 msgstr "内部词汇"
+
 
 #: src/reference/glossary.md:58
 msgid ""
@@ -29191,3 +29279,4 @@ msgid ""
 "in source comments and trace output. They are not part of the model, and the "
 "book avoids them."
 msgstr "引擎内部词汇——seeds、reseed、graph walk、dev 表——可能出现在源码注释与追踪输出里。它们不是模型的一部分，本书回避它们。"
+
