@@ -525,6 +525,22 @@ impl Vm {
             TyKind::Array { elem } => *elem,
             _ => TY_ANY,
         };
+        // Ref-valued elements transfer OWNERSHIP to the array: the block
+        // stores bare pointers, while the argv registers' references die
+        // with this frame (frame-exit release, or an earlier register
+        // reuse) — without the retain the elements are freed under the
+        // array and any later element read resolves a recycled slot (the
+        // mutation-closure misbind family). `ArrSet` keeps the same law;
+        // the release walk's element collection (`collect_ref_children`)
+        // drops the array's reference at cell death. Opt-prim stores are
+        // never ref-typed, and `alloc_array`'s Opt arm still declines the
+        // incoming references.
+        if elem != TY_ANY && self.type_repr[elem as usize].is_ref() {
+            for &e in elems {
+                let v = self.cur_regs[e as usize];
+                self.heap.retain(v);
+            }
+        }
         let vals: Vec<Slot> = elems.iter().map(|&e| self.cur_regs[e as usize]).collect();
         let c = self.heap.alloc_array(elem, vals, &self.prog.types)?;
         let old = self.cur_regs[dst as usize];
