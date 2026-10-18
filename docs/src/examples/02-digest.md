@@ -192,7 +192,7 @@ fn fnv1a32(b: &[u8]) -> u32 {
 }
 ```
 
-The same session runs under 50 M fuel for the demos and raises to
+The same run executes under 50 M fuel for the demos and raises to
 500 M for the 64 KiB stress blob — budgets are the host's call, per
 call.
 

@@ -6,7 +6,7 @@
 //! `type = "host"` root is the **decl** layout (its `mod.d.rut`
 //! surface, single-package). One wire number: `format_version` is 11,
 //! always. Parsing a layout verifies what each kind carries, so a bad
-//! archive never reaches the session.
+//! archive never reaches the run.
 
 use super::container::{parse_bundle, BundleError};
 use super::manifest::{parse_manifest_compat, Manifest};

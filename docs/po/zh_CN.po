@@ -6699,7 +6699,7 @@ msgstr "经典案例：由两道门禁编译并运行的可运行程序"
 
 #: src/examples/index.md:23
 msgid ""
-"All Cargo commands run from the repository root. The runnable crates share one session pattern — compile the module, verify the binary, bind host fns, then drive it through typed `vm.call` sites — so the pages cross-link often: [00 — Todolist](00-todolist.md) establishes the pattern and [06 — GitHub viewer CLI](06-github-viewer-cli.md) stretches it the farthest."
+"All Cargo commands run from the repository root. The runnable crates share one run pattern — compile the module, verify the binary, bind host fns, then drive it through typed `vm.call` sites — so the pages cross-link often: [00 — Todolist](00-todolist.md) establishes the pattern and [06 — GitHub viewer CLI](06-github-viewer-cli.md) stretches it the farthest."
 msgstr ""
 "所有 Cargo 命令都从仓库根目录运行。可运行的 crate 共享同一套会话模式——编译模块、校验二进制、绑定宿主 fn，然后经由带类型的 `vm.call` 站点驱动它——所以各页频繁互相链接：[00 — 待办清单](00-todolist.md)确立这一模式，[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)把它拉伸到最远。"
 
@@ -6746,7 +6746,7 @@ msgstr ""
 
 #: src/examples/00-todolist.md:3
 msgid ""
-"The first runnable host example, and the template for the rest of the chapter: a Rust program embeds rut, compiles a rut **library** (there is no `main` in it), and drives the library through its `entry fn` surface. The split is two sides — `mod.rut` (the rut module) owns the data and the logic as a `TodoList` class with full CRUD; `src/main.rs` owns the session: compile, verify, then a scripted conversation of `vm.call`s. The one-sentence design rule: **the host owns the session, rut owns the data.**"
+"The first runnable host example, and the template for the rest of the chapter: a Rust program embeds rut, compiles a rut **library** (there is no `main` in it), and drives the library through its `entry fn` surface. The split is two sides — `mod.rut` (the rut module) owns the data and the logic as a `TodoList` class with full CRUD; `src/main.rs` owns the run: compile, verify, then a scripted conversation of `vm.call`s. The one-sentence design rule: **the host owns the run, rut owns the data.**"
 msgstr ""
 
 #: src/examples/00-todolist.md:12 src/examples/01-sort.md:11
@@ -6765,7 +6765,7 @@ msgstr ""
 
 #: src/examples/00-todolist.md:16
 msgid ""
-"# the same session asserted as a test\n"
+"# the same run asserted as a test\n"
 msgstr ""
 "# 同一会话以测试形式断言\n"
 
@@ -6980,7 +6980,7 @@ msgstr "\"ship the demo\""
 
 #: src/examples/00-todolist.md:175
 msgid ""
-"The session runs under explicit budgets — fuel and a heap limit — so a runaway module fails loudly instead of hanging the host ([Resource limits and fuel](../reference/resource-limits.md)):"
+"The run executes under explicit budgets — fuel and a heap limit — so a runaway module fails loudly instead of hanging the host ([Resource limits and fuel](../reference/resource-limits.md)):"
 msgstr ""
 "会话在显式预算下运行——燃料与堆限额——所以失控的模块会响亮地失败，而不是把宿主吊死（[资源限制与燃料](../reference/resource-limits.md)）："
 
@@ -7322,7 +7322,7 @@ msgstr "燃料预算让算法差异从宿主一侧免费可见。"
 
 #: src/examples/01-sort.md:220
 msgid ""
-"Deep-dives: [the bytecode VM](../core-concepts/the-vm.md) explains what a unit of fuel counts; [02 — Digest](02-digest.md) takes the same session shape to the byte level."
+"Deep-dives: [the bytecode VM](../core-concepts/the-vm.md) explains what a unit of fuel counts; [02 — Digest](02-digest.md) takes the same run shape to the byte level."
 msgstr ""
 "深挖：[字节码 VM](../core-concepts/the-vm.md) 解释一个单位的燃料数的是什么；[02 — 摘要](02-digest.md)把同一会话形状带到字节层面。"
 
@@ -7577,8 +7577,8 @@ msgstr ""
 
 #: src/examples/02-digest.md:195
 msgid ""
-"The same session runs under 50 M fuel for the demos and raises to 500 M for the 64 KiB stress blob — budgets are the host's call, per call."
-msgstr "同一会话在演示时跑在 50 M 燃料下，对 64 KiB 压力数据块上调到 500 M——预算由宿主逐次调用决定。"
+"The same run executes under 50 M fuel for the demos and raises to 500 M for the 64 KiB stress blob — budgets are the host's call, per call."
+msgstr "同一次运行在演示时跑在 50 M 燃料下，对 64 KiB 压力数据块上调到 500 M——预算由宿主逐次调用决定。"
 
 #: src/examples/02-digest.md:201
 msgid ""
@@ -7621,8 +7621,8 @@ msgstr ""
 
 #: src/examples/03-plugin.md:21
 msgid ""
-"The demo drives one scripted session twice — once against the directory, once against the packed bundle — and prints both transcripts plus the round-trip proof. Abridged:"
-msgstr "演示把同一段脚本化会话跑两遍——一遍对着目录，一遍对着打包后的捆绑包——并打印两份对话记录加往返证明。节选："
+"The demo drives one scripted run twice — once against the directory, once against the packed bundle — and prints both transcripts plus the round-trip proof. Abridged:"
+msgstr "演示把同一段脚本化运行跑两遍——一遍对着目录，一遍对着打包后的捆绑包——并打印两份对话记录加往返证明。节选："
 
 #: src/examples/03-plugin.md:37
 msgid ""
@@ -22321,7 +22321,7 @@ msgstr "3. 编译图"
 
 #: src/reference/loading.md:23
 msgid ""
-"`.compile()` mounts the offers into the run's internal table, then compiles each module (sources, in dependency post-order) — every module links; there is no splice lane and nothing appends after the walk. Every use path resolves through the session's one resolver door, so a mounted-but-undeclared head is the dedicated D5 diagnostic naming the mount edge and the fix; host packages synthesize bodyless thunks from their declared surfaces; a bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md))."
+"`.compile()` mounts the offers into the run's internal table, then compiles each module (sources, in dependency post-order) — every module links; there is no splice lane and nothing appends after the walk. Every use path resolves through the run's one resolver door, so a mounted-but-undeclared head is the dedicated D5 diagnostic naming the mount edge and the fix; host packages synthesize bodyless thunks from their declared surfaces; a bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md))."
 msgstr ""
 "`.compile()`把提供挂入运行的内部表，然后编译每个模块（源码，按依赖后序）——每个模块都链接；没有拼接车道，遍历之后也没有任何追加。每条 use路径都经会话唯一的解析门解析，因此已挂载未声明的头就是专门的 D5 诊断，点名挂载边与修复；宿主包从声明的表面合成无体thunk；捆绑包的编译包在全新、重定基的作用域推入解码后的二进制（[The compiler pipeline](compiler.md)）。"
 
@@ -23077,14 +23077,14 @@ msgstr ""
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's "
 "own `rut pack` output, satisfied by the groups the archive carries: the "
-"archive's groups re-encode from the consumer session's units (one `.rutc` "
+"archive's groups re-encode from the consumer run's units (one `.rutc` "
 "path) or copy their file sets under the new identity prefixes, and the same "
 "manifest + lock still pack byte-identically. The pack refuses, loudly and "
 "named, the cases that would emit a bundle the loader must reject: an archive "
 "source group still declaring `dev-deps` directories (vendor the dep), a "
 "compiled group the consumer's closure never uses (it cannot ride "
 "unpackaged), and a declared dep that did not ride."
-msgstr "因为清单逐字节搭乘，url 行会带进消费者自己的 `rut pack` 输出，由档案携带的组满足：档案的组从消费者会话的单元重新编码（同一条`.rutc` 路径），或把文件集复制到新的标识前缀下，同一清单 +锁仍打包出逐字节相同的结果。打包会响亮、点名地拒绝会让加载器必须拒绝的产出：仍在声明 `dev-deps` 目录的档案源码组（改为 vendor该依赖）、消费者闭包从不使用的编译组（未打包无法搭乘）、以及没有搭乘的声明依赖。"
+msgstr "因为清单逐字节搭乘，url 行会带进消费者自己的 `rut pack` 输出，由档案携带的组满足：档案的组从消费者运行的单元重新编码（同一条`.rutc` 路径），或把文件集复制到新的标识前缀下，同一清单 +锁仍打包出逐字节相同的结果。打包会响亮、点名地拒绝会让加载器必须拒绝的产出：仍在声明 `dev-deps` 目录的档案源码组（改为 vendor该依赖）、消费者闭包从不使用的编译组（未打包无法搭乘）、以及没有搭乘的声明依赖。"
 
 #: src/reference/bundles.md:230
 msgid "The wire version"
@@ -23283,8 +23283,8 @@ msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
 
 #: src/reference/bundles.md:336
-msgid "refuse — names the entry; a bad archive never reaches the session"
-msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
+msgid "refuse — names the entry; a bad archive never reaches the run"
+msgstr "拒绝 —— 命名该条目；坏包永不抵达运行"
 
 #: src/reference/bundles.md:337
 msgid "every declared dep satisfied by a group (compiled roots)"
@@ -23942,8 +23942,8 @@ msgid "The mount law — three passes"
 msgstr "挂载法则——三遍"
 
 #: src/reference/dependency-kinds.md:171
-msgid "All loader-owned; the session stays I/O-free."
-msgstr "全部由加载器拥有；会话保持无 I/O。"
+msgid "All loader-owned; the run stays I/O-free."
+msgstr "全部由加载器拥有；运行保持无 I/O。"
 
 #: src/reference/dependency-kinds.md:173
 msgid ""
@@ -24893,10 +24893,10 @@ msgstr "差异一——实例化独立"
 #: src/reference/glossary.md:32
 msgid ""
 "The contract in plain words: the same generic substitution, spelled by any "
-"consumer, in any session, against any mount of the owner, yields the same "
+"consumer, in any run, against any mount of the owner, yields the same "
 "body — one row program-wide, identity by owner. Consumer spelling picks "
 "shapes; it never changes bodies."
-msgstr "用平实的话说这份契约：同一个泛型替换，无论哪个消费者拼写、无论哪次会话、无论挂载的是拥有者的哪一个副本，都得到同一个代码体——全程序一行，标识归于拥有者。消费方拼写挑选形状；它绝不改变代码体。"
+msgstr "用平实的话说这份契约：同一个泛型替换，无论哪个消费者拼写、无论哪次运行、无论挂载的是拥有者的哪一个副本，都得到同一个代码体——全程序一行，标识归于拥有者。消费方拼写挑选形状；它绝不改变代码体。"
 
 #: src/reference/glossary.md:37
 msgid ""

@@ -328,7 +328,7 @@ examples/05-todolist-web/
   compile) FOR REAL — the manifest, not a Rust fn, is the module list.
   The tests prime an offline remote from the committed dist/std
   artifacts (dist/std plays the wire), so the gates never network.
-* **both lanes, one closure.** The wasm lane keeps the `Session`
+* **both lanes, one closure.** The wasm lane keeps the run
   I/O-free (wasm hosts mount in memory), so `src/mount.rs` registers
   the same packages BY HAND — one `register_module` per package, keyed
   by the pkg's bare name (the registration scope IS the pkg name),
@@ -438,11 +438,11 @@ retired; freshness is the read's job now.
 | `src/web_dom.rs` | wasm32: web_sys bodies + the raw `rut_web_alloc/boot/pump/last_error` ABI |
 | `src/fake_dom.rs` | the host twin: a HashMap element tree with the same semantics (appendChild moves) + a virtual timer clock |
 | `src/host.rs` | the native page owner (boot/fire/advance/pump) |
-| `src/mount.rs` | the session mount — TWO LANES over one closure: `load_dir_session` on `rut/biz` (native) and the per-package `register_module` mirror (wasm); both register `web.d.rut` by hand |
+| `src/mount.rs` | the run's mount — TWO LANES over one closure: `load_dir_session` on `rut/biz` (native) and the per-package `register_module` mirror (wasm); both register `web.d.rut` by hand |
 | `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch the biz module's tree and hand over the ROWS WIRE (the `rut.mods` codec — the manifest's `mod` declarations, mirrored); the stylesheet keys ONLY lowered tokens |
 | `gen/` | wasm-bindgen's generated browser glue (gitignored) — produced by the build recipe below, never committed |
 | `tests/store.rs` | the store's laws, DOM-free over `tests/store_probe/` (18: the 9 machine laws + the 8 atom twins + the foreign-container guard) |
-| `tests/todolist_app.rs` | the twin gate: 18 scripted sessions asserting the tree AND the turn order on the lowered DOM |
+| `tests/todolist_app.rs` | the twin gate: 18 scripted runs asserting the tree AND the turn order on the lowered DOM |
 | `tests/t1_lowering.rs` / `tests/t1_diff.rs` | the framework's bed: 14 lowering snapshots + 18 diff/lifecycle/trap tests (32) |
 | `tests/app_law.rs` | **the grep gate**: reads the biz module TREE (every mounted file) and fails loud if biz ever sinks to the DOM's vocabulary or names a retired store API (4 tests) |
 | `tests/host_surface.rs` | the crossing + trap matrix (22 tests) |
@@ -496,7 +496,7 @@ node tests/e2e-browser.mjs      # the artifact (from examples/05-todolist-web)
 
 **Lane 1 — the twin (the real gate, always on).** `cargo test -p
 todolist-web`, 95 tests over the SAME sources the browser runs (the
-manifest session's subgraphs and the app session mount `rut/` for
+manifest run's subgraphs and the app run's mount of `rut/` for
 real):
 
 * **the framework's bed (32)** — 14 lowering snapshots pinning every
@@ -506,7 +506,7 @@ real):
   patches one token, a keyed reorder preserves element identity and
   listener ids, retirement tracks live ids only, stale fire = the
   loud trap with the page surviving.
-* **the app sessions (18)** — scripted twin sessions asserting the
+* **the app runs (18)** — scripted twin runs asserting the
   tree, the counts line EXACT every turn (through the `counts$`
   derivation's pull-on-read), deadline-then-sequence commits
   (deadline order ACROSS kinds on the virtual clock), the client
@@ -547,14 +547,14 @@ exact command if it cannot), runs the real wasm-bindgen CLI
 (version-matched to Cargo.lock), then drives the REAL artifact + REAL
 glue through the loader's own ABI sequence (import glue → `default()`
 → `initSync()` → `alloc` → write → `boot` → `last_error`) on a
-~60-line fake DOM: the full scripted session, headless, no browser
+~60-line fake DOM: the full scripted run, headless, no browser
 needed. Missing artifact or CLI → exit 1 with the exact build
 command.
 
 **Lane 3 — the browser tier (when a browser + driver exist).**
 Tier 2 of the same script: the glue generated into `gen/` exactly as
 the manual recipe says, the dir served over http, Firefox headless via
-raw WebDriver HTTP (no npm deps), the same session typed and clicked
+raw WebDriver HTTP (no npm deps), the same run typed and clicked
 on the live DOM. `gen/` is gitignored, so nothing is cleaned up
 afterwards — the tree stays at HEAD-clean and the page keeps working
 locally. Missing binaries = loud skip with the manual recipe (exit

@@ -18,7 +18,7 @@ cargo run -p plugin         # from the repo root
 cargo test -p plugin        # transcript asserted + bundle round-trip gates
 ```
 
-The demo drives one scripted session twice — once against the
+The demo drives one scripted run twice — once against the
 directory, once against the packed bundle — and prints both
 transcripts plus the round-trip proof. Abridged:
 

@@ -98,7 +98,7 @@ fuel used: 1014105 of Some(50000000)
   algorithm names come back as `Result.err` strings, not traps
 - **budgets are the host's call**
   ([resource limits](../../docs/src/reference/resource-limits.md)) — the demo runs under
-  50 M fuel; the 64 KiB stress test raises the same session to 500 M
+  50 M fuel; the 64 KiB stress test raises the same run to 500 M
 - **the FNV/djb2/sdbm trio never shifts 64-bit words** — a deliberate
   demonstration that `&*`/`&+`/`^` alone carry the classic hash keys
 - **the serde model, lived in** (the rut-json batch): a user type

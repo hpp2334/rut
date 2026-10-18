@@ -9,7 +9,7 @@ The split:
 | file | role |
 |---|---|
 | `mod.rut` | **the rut part** — insertion / bubble / selection (loop-shaped) + quicksort / merge sort (recursion, in-place vs. out-of-place), a deterministic `fill`, and the `entry fn` surface the host calls. No `main` — it's a library |
-| `src/main.rs` | **the Rust part** — the embedder: compile → verify → drive the session through `vm.call` |
+| `src/main.rs` | **the Rust part** — the embedder: compile → verify → drive the run through `vm.call` |
 | `tests/session.rs` | asserts every algorithm, edge cases, cross-algorithm agreement, the JSON round trip, and trap cleanliness; runs under `cargo test --workspace` |
 
 ## Run it
@@ -63,7 +63,7 @@ and the host holds the handle. Results come back three ways:
 - **wrapping escapes** ([primitive types](../../docs/src/reference/primitive-types.md)) —
   `fill`'s LCG runs on `&*`/`&+`
   so the u32 math never traps (plain `*` — and `<<` — would)
-- **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the session runs under fuel + heap limits,
+- **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the run executes under fuel + heap limits,
   and `main.rs` prints fuel per algorithm: quick < insertion <
   selection < bubble, as it should be
 - the executable M1 surface — structs, `opaque.new`/`opaque.downcast`,

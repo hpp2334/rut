@@ -7580,10 +7580,10 @@ msgstr ""
 #: src/examples/index.md:23
 msgid ""
 "All Cargo commands run from the repository root. The runnable crates share "
-"one session pattern — compile the module, verify the binary, bind host fns, "
-"then drive it through typed `vm.call` sites — so the pages cross-link often: "
-"[00 — Todolist](00-todolist.md) establishes the pattern and [06 — GitHub "
-"viewer CLI](06-github-viewer-cli.md) stretches it the farthest."
+"one run pattern — compile the module, verify the binary, bind host fns, then "
+"drive it through typed `vm.call` sites — so the pages cross-link often: [00 "
+"— Todolist](00-todolist.md) establishes the pattern and [06 — GitHub viewer "
+"CLI](06-github-viewer-cli.md) stretches it the farthest."
 msgstr ""
 
 #: src/examples/index.md:30
@@ -7652,9 +7652,9 @@ msgid ""
 "chapter: a Rust program embeds rut, compiles a rut **library** (there is no "
 "`main` in it), and drives the library through its `entry fn` surface. The "
 "split is two sides — `mod.rut` (the rut module) owns the data and the logic "
-"as a `TodoList` class with full CRUD; `src/main.rs` owns the session: "
-"compile, verify, then a scripted conversation of `vm.call`s. The "
-"one-sentence design rule: **the host owns the session, rut owns the data.**"
+"as a `TodoList` class with full CRUD; `src/main.rs` owns the run: compile, "
+"verify, then a scripted conversation of `vm.call`s. The one-sentence design "
+"rule: **the host owns the run, rut owns the data.**"
 msgstr ""
 
 #: src/examples/00-todolist.md:12 src/examples/01-sort.md:11
@@ -7670,7 +7670,7 @@ msgid "# from the repo root\n"
 msgstr ""
 
 #: src/examples/00-todolist.md:16
-msgid "# the same session asserted as a test\n"
+msgid "# the same run asserted as a test\n"
 msgstr ""
 
 #: src/examples/00-todolist.md:19
@@ -7874,7 +7874,7 @@ msgstr ""
 
 #: src/examples/00-todolist.md:175
 msgid ""
-"The session runs under explicit budgets — fuel and a heap limit — so a "
+"The run executes under explicit budgets — fuel and a heap limit — so a "
 "runaway module fails loudly instead of hanging the host ([Resource limits "
 "and fuel](../reference/resource-limits.md)):"
 msgstr ""
@@ -8224,8 +8224,8 @@ msgstr ""
 #: src/examples/01-sort.md:220
 msgid ""
 "Deep-dives: [the bytecode VM](../core-concepts/the-vm.md) explains what a "
-"unit of fuel counts; [02 — Digest](02-digest.md) takes the same session "
-"shape to the byte level."
+"unit of fuel counts; [02 — Digest](02-digest.md) takes the same run shape to "
+"the byte level."
 msgstr ""
 
 #: src/examples/02-digest.md:3
@@ -8470,7 +8470,7 @@ msgstr ""
 
 #: src/examples/02-digest.md:195
 msgid ""
-"The same session runs under 50 M fuel for the demos and raises to 500 M for "
+"The same run executes under 50 M fuel for the demos and raises to 500 M for "
 "the 64 KiB stress blob — budgets are the host's call, per call."
 msgstr ""
 
@@ -8526,9 +8526,9 @@ msgstr ""
 
 #: src/examples/03-plugin.md:21
 msgid ""
-"The demo drives one scripted session twice — once against the directory, "
-"once against the packed bundle — and prints both transcripts plus the "
-"round-trip proof. Abridged:"
+"The demo drives one scripted run twice — once against the directory, once "
+"against the packed bundle — and prints both transcripts plus the round-trip "
+"proof. Abridged:"
 msgstr ""
 
 #: src/examples/03-plugin.md:37
@@ -25052,11 +25052,11 @@ msgid ""
 "`.compile()` mounts the offers into the run's internal table, then compiles "
 "each module (sources, in dependency post-order) — every module links; there "
 "is no splice lane and nothing appends after the walk. Every use path "
-"resolves through the session's one resolver door, so a "
-"mounted-but-undeclared head is the dedicated D5 diagnostic naming the mount "
-"edge and the fix; host packages synthesize bodyless thunks from their "
-"declared surfaces; a bundle's compiled packages push their decoded binaries "
-"at fresh, rebased scopes ([The compiler pipeline](compiler.md))."
+"resolves through the run's one resolver door, so a mounted-but-undeclared "
+"head is the dedicated D5 diagnostic naming the mount edge and the fix; host "
+"packages synthesize bodyless thunks from their declared surfaces; a bundle's "
+"compiled packages push their decoded binaries at fresh, rebased scopes ([The "
+"compiler pipeline](compiler.md))."
 msgstr ""
 
 #: src/reference/loading.md:24
@@ -25935,8 +25935,8 @@ msgstr ""
 msgid ""
 "Because the manifest rides byte-for-byte, url rows carry into a consumer's "
 "own `rut pack` output, satisfied by the groups the archive carries: the "
-"archive's groups re-encode from the consumer session's units (one `.rutc` "
-"path) or copy their file sets under the new identity prefixes, and the same "
+"archive's groups re-encode from the consumer run's units (one `.rutc` path) "
+"or copy their file sets under the new identity prefixes, and the same "
 "manifest + lock still pack byte-identically. The pack refuses, loudly and "
 "named, the cases that would emit a bundle the loader must reject: an archive "
 "source group still declaring `dev-deps` directories (vendor the dep), a "
@@ -26188,7 +26188,7 @@ msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr ""
 
 #: src/reference/bundles.md:336
-msgid "refuse — names the entry; a bad archive never reaches the session"
+msgid "refuse — names the entry; a bad archive never reaches the run"
 msgstr ""
 
 #: src/reference/bundles.md:337
@@ -27048,7 +27048,7 @@ msgid "The mount law — three passes"
 msgstr ""
 
 #: src/reference/dependency-kinds.md:171
-msgid "All loader-owned; the session stays I/O-free."
+msgid "All loader-owned; the run stays I/O-free."
 msgstr ""
 
 #: src/reference/dependency-kinds.md:173
@@ -28195,9 +28195,9 @@ msgstr ""
 #: src/reference/glossary.md:32
 msgid ""
 "The contract in plain words: the same generic substitution, spelled by any "
-"consumer, in any session, against any mount of the owner, yields the same "
-"body — one row program-wide, identity by owner. Consumer spelling picks "
-"shapes; it never changes bodies."
+"consumer, in any run, against any mount of the owner, yields the same body — "
+"one row program-wide, identity by owner. Consumer spelling picks shapes; it "
+"never changes bodies."
 msgstr ""
 
 #: src/reference/glossary.md:37

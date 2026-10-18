@@ -218,7 +218,7 @@ never fetches).
 Because the manifest rides byte-for-byte, url rows carry into a
 consumer's own `rut pack` output, satisfied by the groups the archive
 carries:
-the archive's groups re-encode from the consumer session's units (one
+the archive's groups re-encode from the consumer run's units (one
 `.rutc` path) or copy their file sets under the new identity prefixes,
 and the same manifest + lock still pack byte-identically. The pack
 refuses, loudly and named, the cases that would emit a bundle the
@@ -333,7 +333,7 @@ and version, then every group's decode, then the mount.
 | a group dirname's fingerprint disagreeing with the hash of its rode source set | refuse — the dirname and the content disagree |
 | `mod.rutc` decode (root and groups): version, tables, surface ids | refuse — names the entry and the cause |
 | a compiled group's ledger row agrees with its binary's own scope | refuse — corrupt or doctored |
-| a riding source entry that fails to read or decode (UTF-8) | refuse — names the entry; a bad archive never reaches the session |
+| a riding source entry that fails to read or decode (UTF-8) | refuse — names the entry; a bad archive never reaches the run |
 | every declared dep satisfied by a group (compiled roots) | refuse — names the missing group |
 
 ## The std tree on a CDN — the per-package delivery

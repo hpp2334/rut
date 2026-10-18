@@ -21,7 +21,7 @@ Each project has its own page in this chapter; the classics share
 | [The playground corpus](playground-corpus.md) | `cd demo && npm run smoke` | the classics: runnable programs, compiled and run by two gates |
 
 All Cargo commands run from the repository root. The runnable crates
-share one session pattern — compile the module, verify the binary,
+share one run pattern — compile the module, verify the binary,
 bind host fns, then drive it through typed `vm.call` sites — so the
 pages cross-link often: [00 — Todolist](00-todolist.md) establishes
 the pattern and [06 — GitHub viewer CLI](06-github-viewer-cli.md)

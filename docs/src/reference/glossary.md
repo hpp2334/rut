@@ -30,7 +30,7 @@ Already community-standard, unchanged: **pkg**, **manifest**,
 ## Delta 1 — instantiation independence
 
 The contract in plain words: the same generic substitution, spelled by
-any consumer, in any session, against any mount of the owner, yields
+any consumer, in any run, against any mount of the owner, yields
 the same body — one row program-wide, identity by owner. Consumer
 spelling picks shapes; it never changes bodies.
 

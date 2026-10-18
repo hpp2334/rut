@@ -168,7 +168,7 @@ The tables decide mounting; what a mounted head lets its consumer
 
 ## The mount law — three passes
 
-All loader-owned; the session stays I/O-free.
+All loader-owned; the run stays I/O-free.
 
 1. **The `deps` walk.** Recursive, name order, first-mount-wins,
    cycle guard, name-mismatch error. A dep mounted from a url bundle

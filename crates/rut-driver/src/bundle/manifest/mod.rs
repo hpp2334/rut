@@ -55,7 +55,7 @@
 //!
 //! The dep kinds: `deps` is today's transitively-mounted table;
 //! `dev-deps` mounts only while building the pkg itself (the loader's
-//! law — the Session never sees a dev table). The grammar carries only
+//! law — the run never sees a dev table). The grammar carries only
 //! these two dep tables: `peer-deps` (the presence-mounted peer kind)
 //! and `inline` are RETIRED — a manifest carrying either refuses as
 //! the unknown key it now is (the strict-keys law).
@@ -158,7 +158,7 @@ pub struct Manifest {
     /// `sha256` pin key is retired from the grammar (pins live in
     /// `rut.lock`): the strict lane refuses it, the bundle reader's
     /// compat lane parses it as inert metadata. Kept for the host to
-    /// resolve; the Session does not read the filesystem or the network.
+    /// resolve; the run does not read the filesystem or the network.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
     /// `dev-deps` — mounted ONLY when building/testing
     /// the pkg itself (the program root), never in a consumer's world.

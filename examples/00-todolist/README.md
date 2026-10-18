@@ -9,8 +9,8 @@ The split:
 | file | role |
 |---|---|
 | `mod.rut` | **the rut part** — `TodoList` class with full CRUD (`add` / `len` / `title_of` / `render` / `set_done` / `remove`) + the `entry fn` surface the host calls. No `main` — it's a library |
-| `src/main.rs` | **the Rust part** — the embedder: compile → verify → drive the session through `vm.call` |
-| `tests/session.rs` | asserts the whole CRUD session; runs under `cargo test --workspace` |
+| `src/main.rs` | **the Rust part** — the embedder: compile → verify → drive the run through `vm.call` |
+| `tests/session.rs` | asserts the whole CRUD run; runs under `cargo test --workspace` |
 
 ## Run it
 
@@ -36,7 +36,7 @@ fuel used: 680 of Some(1000000)
 
 ## The design
 
-**The host owns the session; rut owns the data.**
+**The host owns the run; rut owns the data.**
 
 1. `createContainer()` → `opaque` — rut boxes a fresh container and the
    host holds the handle (`Value::Opaque`, the Rust-side handle —
@@ -64,7 +64,7 @@ fuel used: 680 of Some(1000000)
   with no entry still emits every entry it declares (`entry fn main`
   stays the ordinary script name)
 - **budgets** ([resource limits](../../docs/src/reference/resource-limits.md)) — the
-  session runs under fuel + heap limits;
+  run executes under fuel + heap limits;
   embedder mistakes (wrong value shape) come back as named traps, never
   silent zeros
 - the executable M1 surface — classes (`Self {}` construction,

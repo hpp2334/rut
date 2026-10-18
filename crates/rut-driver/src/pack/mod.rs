@@ -24,7 +24,7 @@
 //! A `[deps]` row may pin a **url**: the fetched `.rutbundle`'s groups
 //! ride along ([`PkgSource::Archive`] locations, enumerated closed — no
 //! recursion). `.rutc` emission stays ONE path: archive-backed
-//! compiled modules were rebased onto this session's numbering by the
+//! compiled modules were rebased onto the run's numbering by the
 //! walk, so they encode from `units` exactly like dir deps; only the
 //! group's FILE reads (manifests, `.d.rut`, source sets) dispatch on
 //! the source. The manifest rides byte-for-byte (the law) — url+sha256

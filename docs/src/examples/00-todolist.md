@@ -5,15 +5,15 @@ chapter: a Rust program embeds rut, compiles a rut **library** (there
 is no `main` in it), and drives the library through its `entry fn`
 surface. The split is two sides — `mod.rut` (the rut module) owns the data and the
 logic as a `TodoList` class with full CRUD; `src/main.rs` owns the
-session: compile, verify, then a scripted conversation of `vm.call`s.
-The one-sentence design rule: **the host owns the session, rut owns
+run: compile, verify, then a scripted conversation of `vm.call`s.
+The one-sentence design rule: **the host owns the run, rut owns
 the data.**
 
 ## Run it
 
 ```sh
 cargo run -p todolist        # from the repo root
-cargo test -p todolist       # the same session asserted as a test
+cargo test -p todolist       # the same run asserted as a test
 ```
 
 The run prints an abridged transcript like this:
@@ -172,7 +172,7 @@ let vmf = add("implement the VM");
 let demo = add("ship the demo");
 ```
 
-The session runs under explicit budgets — fuel and a heap limit — so
+The run executes under explicit budgets — fuel and a heap limit — so
 a runaway module fails loudly instead of hanging the host
 ([Resource limits and fuel](../reference/resource-limits.md)):
 

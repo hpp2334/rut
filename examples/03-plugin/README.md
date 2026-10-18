@@ -5,7 +5,7 @@ of [00-todolist](../00-todolist), [01-sort](../01-sort), and
 [02-digest](../02-digest) — but loaded as a **module directory**:
 `plugin/rut.json` names the module (`plugin`), `plugin/mod.rut` is
 the whole plugin (adapter + business logic), `src/lib.rs` is the
-embedder SDK, and `src/main.rs` drives a scripted session through **both
+embedder SDK, and `src/main.rs` drives a scripted run through **both
 load forms** — the directory and a v5 **compiled** `.rutbundle` packed
 from it at runtime
 ([bundles](../../docs/src/reference/bundles.md)). This is the first
@@ -71,7 +71,7 @@ cargo run -p plugin
 
 The transcript prints at the end, followed by the packed-form run: the
 same directory packed to a v5 compiled `.rutbundle` in temp, loaded
-back, and driven through the identical session — the printed
+back, and driven through the identical run — the printed
 "identical" line is the round-trip proof. `tests/session.rs` asserts the transcript exactly,
 proves every line crossed the nested render (`emits == renders`), and
 gates the bundle form: round-trip equality, byte-determinism, and the

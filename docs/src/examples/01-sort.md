@@ -219,4 +219,4 @@ for algo in ["insertion", "bubble", "selection", "quick", "merge"] {
 
 Deep-dives: [the bytecode VM](../core-concepts/the-vm.md) explains
 what a unit of fuel counts; [02 — Digest](02-digest.md) takes the
-same session shape to the byte level.
+same run shape to the byte level.
