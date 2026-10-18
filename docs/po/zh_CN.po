@@ -6701,7 +6701,7 @@ msgstr "经典案例：由两道门禁编译并运行的可运行程序"
 msgid ""
 "All Cargo commands run from the repository root. The runnable crates share one run pattern — compile the module, verify the binary, bind host fns, then drive it through typed `vm.call` sites — so the pages cross-link often: [00 — Todolist](00-todolist.md) establishes the pattern and [06 — GitHub viewer CLI](06-github-viewer-cli.md) stretches it the farthest."
 msgstr ""
-"所有 Cargo 命令都从仓库根目录运行。可运行的 crate 共享同一套会话模式——编译模块、校验二进制、绑定宿主 fn，然后经由带类型的 `vm.call` 站点驱动它——所以各页频繁互相链接：[00 — 待办清单](00-todolist.md)确立这一模式，[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)把它拉伸到最远。"
+"所有 Cargo 命令都从仓库根目录运行。可运行的 crate 共享同一套运行模式——编译模块、校验二进制、绑定宿主 fn，然后经由带类型的 `vm.call` 站点驱动它——所以各页频繁互相链接：[00 — 待办清单](00-todolist.md)确立这一模式，[06 — GitHub 查看器 CLI](06-github-viewer-cli.md)把它拉伸到最远。"
 
 #: src/examples/index.md:30
 msgid "The two dependency tables"
@@ -6767,7 +6767,7 @@ msgstr ""
 msgid ""
 "# the same run asserted as a test\n"
 msgstr ""
-"# 同一会话以测试形式断言\n"
+"# 同一次运行以测试形式断言\n"
 
 #: src/examples/00-todolist.md:19
 msgid "The run prints an abridged transcript like this:"
@@ -6982,7 +6982,7 @@ msgstr "\"ship the demo\""
 msgid ""
 "The run executes under explicit budgets — fuel and a heap limit — so a runaway module fails loudly instead of hanging the host ([Resource limits and fuel](../reference/resource-limits.md)):"
 msgstr ""
-"会话在显式预算下运行——燃料与堆限额——所以失控的模块会响亮地失败，而不是把宿主吊死（[资源限制与燃料](../reference/resource-limits.md)）："
+"运行在显式预算下执行——燃料与堆限额——所以失控的模块会响亮地失败，而不是把宿主吊死（[资源限制与燃料](../reference/resource-limits.md)）："
 
 #: src/examples/00-todolist.md:187
 msgid ""
@@ -7324,7 +7324,7 @@ msgstr "燃料预算让算法差异从宿主一侧免费可见。"
 msgid ""
 "Deep-dives: [the bytecode VM](../core-concepts/the-vm.md) explains what a unit of fuel counts; [02 — Digest](02-digest.md) takes the same run shape to the byte level."
 msgstr ""
-"深挖：[字节码 VM](../core-concepts/the-vm.md) 解释一个单位的燃料数的是什么；[02 — 摘要](02-digest.md)把同一会话形状带到字节层面。"
+"深挖：[字节码 VM](../core-concepts/the-vm.md) 解释一个单位的燃料数的是什么；[02 — 摘要](02-digest.md)把同一运行形状带到字节层面。"
 
 #: src/examples/02-digest.md:3
 msgid ""
@@ -22323,7 +22323,7 @@ msgstr "3. 编译图"
 msgid ""
 "`.compile()` mounts the offers into the run's internal table, then compiles each module (sources, in dependency post-order) — every module links; there is no splice lane and nothing appends after the walk. Every use path resolves through the run's one resolver door, so a mounted-but-undeclared head is the dedicated D5 diagnostic naming the mount edge and the fix; host packages synthesize bodyless thunks from their declared surfaces; a bundle's compiled packages push their decoded binaries at fresh, rebased scopes ([The compiler pipeline](compiler.md))."
 msgstr ""
-"`.compile()`把提供挂入运行的内部表，然后编译每个模块（源码，按依赖后序）——每个模块都链接；没有拼接车道，遍历之后也没有任何追加。每条 use路径都经会话唯一的解析门解析，因此已挂载未声明的头就是专门的 D5 诊断，点名挂载边与修复；宿主包从声明的表面合成无体thunk；捆绑包的编译包在全新、重定基的作用域推入解码后的二进制（[The compiler pipeline](compiler.md)）。"
+"`.compile()`把提供挂入运行的内部表，然后编译每个模块（源码，按依赖后序）——每个模块都链接；没有拼接车道，遍历之后也没有任何追加。每条 use路径都经运行唯一的解析门解析，因此已挂载未声明的头就是专门的 D5 诊断，点名挂载边与修复；宿主包从声明的表面合成无体thunk；捆绑包的编译包在全新、重定基的作用域推入解码后的二进制（[The compiler pipeline](compiler.md)）。"
 
 #: src/reference/loading.md:24
 msgid "4. link + flatten"
@@ -23280,7 +23280,7 @@ msgstr "拒绝——损坏或被篡改"
 
 #: src/reference/bundles.md:336
 msgid "a riding source entry that fails to read or decode (UTF-8)"
-msgstr "拒绝 —— 命名该条目；坏包永不抵达会话"
+msgstr "承载源码条目读取或解码（UTF-8）失败"
 
 #: src/reference/bundles.md:336
 msgid "refuse — names the entry; a bad archive never reaches the run"

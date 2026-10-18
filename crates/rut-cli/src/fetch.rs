@@ -1,4 +1,4 @@
-//! the `fetch` subcommand: warm the bundle cache, discard the session.
+//! the `fetch` subcommand: warm the bundle cache, discard the run.
 
 use crate::{cache, install};
 
@@ -12,7 +12,7 @@ pub(crate) struct FetchArgs {
 /// `rut fetch <dir>` — pre-populate the bundle cache: download the
 /// closure's url deps through the shared progress loop, then load the
 /// directory's graph with the cache-first fetcher — every fetch a
-/// cache hit now — and discard the session. CI warms the cache while
+/// cache hit now — and discard the run. CI warms the cache while
 /// the network is up; the later offline `run` hits only the cache. A
 /// `.rutbundle` input is refused: bundles are closed — there is
 /// nothing to fetch.
