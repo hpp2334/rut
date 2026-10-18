@@ -417,17 +417,21 @@ pub struct Ctx<'a> {
     /// free fn decl nodes: (name, Fn node)
     pub fn_nodes: Vec<(IdentId, NodeHandle<FnNode>)>,
     /// lambda capture lists, filled when the lambda is created:
-    /// lambda node → one `Capture` per capture. `cell: Some` marks a
-    /// promoted binding — the closure shares the binding's slot cell
-    /// (the capture law); `None` is the immediate-slot copy.
-    pub lambda_info: std::collections::HashMap<NodeId, Vec<Capture>>,
-    /// lambda signatures: body node → (resolved param types incl.
-    /// expected-type inference, ret type, the creation site's
-    /// substitution). The substitution re-arms the body compiler's type
-    /// env — a lambda nested inside a generic fn/method resolves its
-    /// annotations (and any lambda it creates) against the enclosing
-    /// generics, which its own unit-local Inst doesn't carry.
-    pub lambda_sigs: std::collections::HashMap<NodeId, (Vec<TypeId>, TypeId, Vec<(IdentId, TypeId)>)>,
+    /// the instantiation's fid → one `Capture` per capture. `cell:
+    /// Some` marks a promoted binding — the closure shares the
+    /// binding's slot cell (the capture law); `None` is the
+    /// immediate-slot copy. Fid-keyed (not node-keyed): one lambda
+    /// node compiles once per enclosing generic substitution, and
+    /// each instantiation's closure carries its own captures-as-typed.
+    pub lambda_info: std::collections::HashMap<u32, Vec<Capture>>,
+    /// lambda signatures: the instantiation's fid → (resolved param
+    /// types incl. expected-type inference, ret type, the creation
+    /// site's substitution). The substitution re-arms the body
+    /// compiler's type env — a lambda nested inside a generic
+    /// fn/method resolves its annotations (and any lambda it creates)
+    /// against the enclosing generics, which its own unit-local Inst
+    /// key carries as the instantiation's identity.
+    pub lambda_sigs: std::collections::HashMap<u32, (Vec<TypeId>, TypeId, Vec<(IdentId, TypeId)>)>,
     /// `entry fn` names: the host-callable surface
     pub entries: Vec<IdentId>,
     /// used functions, bound before body compilation:
@@ -500,11 +504,13 @@ pub struct Ctx<'a> {
     pub extern_generic_fns: std::collections::HashMap<(String, IdentId), ExternGenericFn>,
     /// the emit-closure signature of each desugared `for..of`,
     /// recorded at the creation site and read when the queue compiles the fn:
-    /// body node → (element type, captures, the loop var's cell when
-    /// the loop var itself is captured — the emit closure binds it
-    /// cell-backed and stores the incoming element into the shared
-    /// cell at frame entry, so both loop forms see one variable — and
-    /// the header's `mut` flag, the loop var's write law in the body)
+    /// the instantiation's fid → (element type, captures, the loop var's
+    /// cell when the loop var itself is captured — the emit closure
+    /// binds it cell-backed and stores the incoming element into the
+    /// shared cell at frame entry, so both loop forms see one variable —
+    /// and the header's `mut` flag, the loop var's write law in the
+    /// body). Fid-keyed: one loop body may compile under several
+    /// enclosing generic substitutions, each with its own element typing.
     pub for_of_sigs:
         std::collections::HashMap<u32, (TypeId, Vec<Capture>, Option<TypeId>, bool)>,
     /// used core compiler-lowered functions (`own`, `downcast`,
@@ -563,8 +569,10 @@ pub struct Ctx<'a> {
     /// (the frame's value fields, first-reference order) + the answer
     /// type + the infer-pass flag. Recorded by the block's call site
     /// BEFORE the weave queues; the weave reads it when the block
-    /// instantiation compiles.
-    pub async_block_sigs: std::collections::HashMap<NodeId, AsyncBlockSig>,
+    /// instantiation compiles. Fid-keyed: one block node may compile
+    /// under several enclosing generic substitutions (the reseeded
+    /// multi-seed shape) and each instantiation's plan is its own.
+    pub async_block_sigs: std::collections::HashMap<u32, AsyncBlockSig>,
     /// the infer passes' harvest: block fid → each `return`'s found
     /// type, in order. The call site unifies it into the answer type and
     /// re-weaves when the first guess missed.

@@ -403,7 +403,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Lambda { params, ret, body } => (params.clone(), *ret, *body),
             _ => return Ok(()),
         };
-        let caps = ctx.lambda_info.get(&lambda_node).cloned().unwrap_or_default();
+        let caps = ctx.lambda_info.get(&fid).cloned().unwrap_or_default();
         let mut c = FnCompiler {
             ctx,
             regs: Vec::new(),
@@ -442,7 +442,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // accept that an unannotated param's type must be reconstructible;
         // the creation site stored only captures. To stay correct, the
         // creation site also stores the resolved param/ret types:
-        let saved = c.ctx.lambda_sigs.get(&lambda_node).cloned();
+        let saved = c.ctx.lambda_sigs.get(&fid).cloned();
         // the creation site's substitution re-arms this compiler's type
         // env: a lambda inside a generic fn/method resolves annotations
         // against the enclosing generics
@@ -556,7 +556,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// frame entry — a stashed inner lambda sees the value current at
     /// call time, exactly like the fused `while`-shaped form.
     fn compile_for_of_emit_fn(ctx: &mut Ctx<'a>, fid: u32, body: NodeId, var: IdentId) -> TcResult<()> {
-        let Some((elem_ty, caps, var_cell, is_mut)) = ctx.for_of_sigs.get(&body.0).cloned() else {
+        let Some((elem_ty, caps, var_cell, is_mut)) = ctx.for_of_sigs.get(&fid).cloned() else {
             return Ok(()); // creation site already diagnosed
         };
         let mut c = FnCompiler {

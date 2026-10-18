@@ -1023,11 +1023,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // param/ret types AND the creation site's substitution (the
         // body compiler re-arms its type env from it, so a lambda
         // inside a generic fn/method — and any lambda IT creates —
-        // resolves annotations against the enclosing generics)
-        self.ctx.lambda_sigs.insert(lambda_node, (ptys.clone(), ret_ty, self.subst.clone()));
-        self.ctx.lambda_info.insert(lambda_node, caps.clone());
-        let inst = crate::check::Inst { key: crate::check::FnKey::Lambda(lambda_node), subst: vec![], iface_origins: vec![] };
+        // resolves annotations against the enclosing generics).
+        // Keyed by the INSTANTIATION's fid: one lambda node compiles
+        // once per enclosing generic substitution (a reseeded owner
+        // materializes the same body under several seeds), and the
+        // node alone would collapse them onto one body — the LAST
+        // writer's substitution silently mistyping every other
+        // instantiation's closure.
+        let inst = crate::check::Inst {
+            key: crate::check::FnKey::Lambda(lambda_node),
+            subst: self.subst.clone(),
+            iface_origins: vec![],
+        };
         let fid = self.ctx.ensure_inst(inst);
+        self.ctx.lambda_sigs.insert(fid, (ptys.clone(), ret_ty, self.subst.clone()));
+        self.ctx.lambda_info.insert(fid, caps.clone());
         // the surface fn type spells the DECLARED params only — the
         // capture tail is ABI, never type-checked against
         let fty = self.ctx.mk_fn_ty(ptys.clone(), ret_ty);

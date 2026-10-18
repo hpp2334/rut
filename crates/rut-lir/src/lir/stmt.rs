@@ -1295,15 +1295,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             var_cell = Some(cty);
             var_cell_reg = Some(crec);
         }
-        self.ctx
-            .for_of_sigs
-            .insert(body.id().0, (elem_ty, caps.clone(), var_cell, is_mut));
         let emit = crate::check::Inst {
             key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
-            subst: vec![],
+            subst: self.subst.clone(),
             iface_origins: vec![],
         };
         let fid = self.ctx.ensure_inst(emit);
+        // the sig keys by the instantiation's fid: one loop body may
+        // compile under several enclosing generic substitutions (the
+        // reseeded multi-seed shape), each with its own element typing
+        self.ctx
+            .for_of_sigs
+            .insert(fid, (elem_ty, caps.clone(), var_cell, is_mut));
         // the surface fn type spells the element parameter only — the
         // capture tail (and a promoted loop var's cell) is ABI
         let fty = self.ctx.mk_fn_ty(vec![elem_ty], TY_BOOL);

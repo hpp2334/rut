@@ -395,10 +395,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 ));
             }
         }
-        let ret = {
-            let ret0 = gf.ret;
-            self.ctx.subst_template_ty(ret0, &env)
-        };
+        let ret = self.ctx.subst_template_ty(gf.ret, &env);
         let _ = expected;
         let subst: Vec<(IdentId, TypeId)> = gf
             .params

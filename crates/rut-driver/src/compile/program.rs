@@ -438,7 +438,24 @@ fn compile_program_inner(
     for (dep_scope, surface, origin, head) in uses {
         // ---- pass 1: interface declarations from every surface. A
         // descriptor registers when its name was used (the use-both
-        // gate's binding); inst-descriptor rows ride nameless.
+        // gate's binding); inst-descriptor rows ride nameless. A
+        // descriptor whose local the surface's OWN type rows reference
+        // in an `[interface]` row ALSO registers — namelessly when the
+        // name was not used: `use_types` remaps those rows' iface ids
+        // through this pass's trait map, and an unregistered local
+        // leaves the id stale. The re-shipped rows carry the
+        // intermediate exporter's private numbering, so the stale id
+        // names whatever interface happens to sit at that index in
+        // THIS table — the cross-scope misbind that mistypes every
+        // signature mentioning it (the duplicate-boot-scope family).
+        let iface_refs: std::collections::HashSet<u32> = surface
+            .types
+            .iter()
+            .filter_map(|d| match &d.kind {
+                TyKind::IfaceObj { iface_id } => Some(*iface_id),
+                _ => None,
+            })
+            .collect();
         let impl_trait_texts: std::collections::HashSet<&str> = std::collections::HashSet::new();
         let mut tmap: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         for t in &surface.ifaces {
@@ -451,17 +468,35 @@ fn compile_program_inner(
                 .interner
                 .lookup(text)
                 .filter(|id| ctx.used.contains(id));
-            if !is_inst_desc && used_name.is_none() && !impl_trait_texts.contains(text) {
+            let carried_ref = iface_refs.contains(&t.local);
+            if !carried_ref && !is_inst_desc && used_name.is_none() && !impl_trait_texts.contains(text) {
                 continue;
             }
-            let reg_name = if is_inst_desc { None } else { used_name };
+            let reg_name = if is_inst_desc || (carried_ref && used_name.is_none()) {
+                None
+            } else {
+                used_name
+            };
+            // a re-export must never steal an existing NAME binding:
+            // the declaring surface's row carries the true generics
+            // count and origin (a carried-ref re-registration exists to
+            // decode the re-shipped rows' ids, not to rebind the name)
+            let reg_name = match reg_name {
+                Some(n) if ctx.extern_iface_decls.contains_key(&n) => None,
+                r => r,
+            };
             let cid = ctx.add_extern_iface_decl(reg_name, t, &surface.names);
             // the trait's origin pkg rides the binding
             if let Some(n) = reg_name {
                 ctx.extern_origins.insert(n, origin.clone());
             }
             tmap.insert(t.local, cid);
-            ext_trait.insert(text.to_string(), cid);
+            // ext_trait stays name-resolution surface: a carried-ref
+            // re-registration (the name never used here) does not make
+            // the trait text resolvable
+            if reg_name.is_some() || is_inst_desc {
+                ext_trait.insert(text.to_string(), cid);
+            }
         }
         trait_maps.push((*dep_scope, surface, tmap, origin.clone(), head.clone()));
     }
@@ -1251,23 +1286,36 @@ fn compile_program_inner(
         surface.types = ctx.types.types[boot_len..].to_vec();
         // the type block's interface-object references: each carried
         // `[interface] ..` row names an interface-table index the consumer's
-        // `use_types` remaps through the interface map — generic ifaces'
-        // per-argument-list INST DESCRIPTORS ride here (their base
-        // declarations export above; neither row carries signatures —
-        // dispatch reads the impl rows)
+        // `use_types` remaps through the interface map. EVERY referenced
+        // id must ride — the per-argument-list INST DESCRIPTORS of
+        // generic ifaces AND bare base declarations alike: a carried row
+        // crosses with ids in THIS unit's private numbering (this unit's
+        // own `use_types` already remapped the original exporter's ids
+        // into it), so a referenced id the surface does not re-declare
+        // lands in the consumer unmapped — a stale index that names
+        // whatever interface sits at that position in the consumer's
+        // table, silently mistyping every signature that mentions it.
+        // (Re-declared base rows are safe at link: the global iface
+        // table dedups by name and only checks member agreement.)
         let mut inst_traits: Vec<u32> = Vec::new();
         for d in &surface.types {
             if let rut_core::types::TyKind::IfaceObj { iface_id } = d.kind {
                 if iface_id == u32::MAX || inst_traits.contains(&iface_id) {
                     continue;
                 }
-                // only GENERIC ifaces' per-argument-list descriptors — a
-                // row whose spelled name has no `<` is a base
-                // declaration, exported (with its methods) by its
-                // declaring unit alone; re-exporting it bare would
-                // collide with that row at link
-                let Some(row) = ctx.ifaces.get(iface_id as usize) else { continue };
-                if !ctx.interner.name(row.name).contains('<') {
+                if ctx.ifaces.get(iface_id as usize).is_none() {
+                    continue;
+                }
+                // this unit's OWN declarations export through the decl
+                // lane below (with their true generics count) —
+                // re-exporting them here would double-declare the local
+                // and the two registrations would split the consumer's
+                // identity for one interface
+                if ctx
+                    .iface_decls
+                    .iter()
+                    .any(|(_, info)| info.id == iface_id)
+                {
                     continue;
                 }
                 inst_traits.push(iface_id);
@@ -1278,10 +1326,23 @@ fn compile_program_inner(
             if surface.ifaces.iter().any(|t| t.local == tid) {
                 continue;
             }
+            // a re-declared BARE base row carries the base's true
+            // generics count (the distinct `#`-leaves across its
+            // placeholder signatures — the crossing template law): a
+            // consumer that binds THIS row (the declaring surface not
+            // yet seen, or never — the transitive shape) type-checks
+            // `Base<args>` spellings against it. Inst descriptors keep
+            // the historical 0 (they never bind a name).
+            let bare = !ctx.interner.name(row.name).contains('<');
+            let generics = if bare {
+                ctx.carried_trait_leaves(row).len()
+            } else {
+                0
+            };
             surface.ifaces.push(rut_core::binary::SurfaceIface {
                 local: tid,
                 name: row.name,
-                generics: 0,
+                generics,
                 methods: row.methods.clone(),
             });
         }

@@ -916,9 +916,13 @@ pub(crate) fn compile_async_block(
     // the two-pass weave: pass 1 records the returns' found types
     // (infer), the call site unifies them into the answer type, pass 2
     // re-weaves against it — unless the expected type already named it.
+    // The Inst carries the creation site's substitution (one async
+    // block node compiles once per enclosing generic substitution —
+    // the reseeded multi-seed shape) and the sig keys by the
+    // instantiation's fid.
     let inst = crate::check::Inst {
         key: crate::check::FnKey::AsyncBlock(node),
-        subst: vec![],
+        subst: c.subst.clone(),
         iface_origins: vec![],
     };
     let fid = c.ctx.ensure_inst(inst.clone());
@@ -930,7 +934,7 @@ pub(crate) fn compile_async_block(
         ret,
         infer,
     };
-    c.ctx.async_block_sigs.insert(node, plan(guess, expected_elem.is_none()));
+    c.ctx.async_block_sigs.insert(fid, plan(guess, expected_elem.is_none()));
     if !c.ctx.async_layout.contains_key(&fid) {
         c.ctx.compile_queue(inst.clone())?;
     }
@@ -967,7 +971,7 @@ pub(crate) fn compile_async_block(
     // pass 2: the found answer re-weaves (checks now armed). The
     // expected-typed path weaves once, checked from the start.
     if expected_elem.is_none() {
-        c.ctx.async_block_sigs.insert(node, plan(elem, false));
+        c.ctx.async_block_sigs.insert(fid, plan(elem, false));
         c.ctx.compile_queue(inst.clone())?;
         if c.ctx.diags.len() > diags_before {
             return Err(());
@@ -983,7 +987,7 @@ pub(crate) fn compile_async_block(
 /// The weaved body of one `async { }` block instantiation: the mint
 /// plan supplies captures + answer; the shared weave does the rest.
 pub(crate) fn compile_async_block_fn(ctx: &mut Ctx, fid: u32, node: NodeId) -> TcResult<()> {
-    let Some(sig) = ctx.async_block_sigs.get(&node).cloned() else {
+    let Some(sig) = ctx.async_block_sigs.get(&fid).cloned() else {
         return Ok(()); // no plan — the block was never a call site
     };
     let name = ctx.intern(&format!("#async@{}", node.0));
