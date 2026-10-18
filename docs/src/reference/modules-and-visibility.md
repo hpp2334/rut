@@ -38,8 +38,9 @@ spellings, probed beside the declaring file in order:
 2. the **single-file form** — `NAME.rut` in the same directory.
 
 Both spellings present is a loud ambiguity error naming both — the
-mount is undecidable until you delete one. There are no inline
-`mod X { .. }` blocks — files are the one mechanism. The package's
+mount is undecidable until you delete one. In an implementation file
+there are no inline `mod X { .. }` blocks — files are the one
+mechanism. The package's
 root module is `mod.rut` beside its manifest ([Project
 structure](project-structure.md)); a child's own declarations may
 declare grandchildren (`layout/mod.rut` declaring `pub mod grid;`
@@ -54,6 +55,15 @@ visibility read identically over either shape. `mod` versus `pub mod`
 feeds the same visibility law every declaration follows (below): a
 `pub mod` child's `pub` members cross packages; a plain `mod` child is
 the package's own.
+
+**The inline form lives in declaration files** (`.d.rut`, wire 12):
+`pub? mod NAME { <declarations> }` nests declarations in the grammar —
+host-fn signatures, nested `mod` blocks, type declarations — no
+bodies, recursively. This is how a published group's consolidated
+declaration entry spells its whole mod tree in ONE file ([Module
+bundles](bundles.md)): structure lives in the grammar, never in paths.
+A directory tree and its consolidated entry are two spellings of one
+truth — they lower to the same path-qualified rows.
 
 ### Uses
 

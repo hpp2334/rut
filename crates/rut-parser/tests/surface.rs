@@ -478,3 +478,113 @@ fn std_surface_parses_clean() {
     assert!(files.iter().any(|f| f.to_string_lossy().ends_with("core.d.rut")));
     assert!(failures.is_empty(), "std surface regressions:\n{}", failures.join("\n"));
 }
+
+#[test]
+fn inline_mod_blocks_parse_in_decl_files() {
+    // wire v12 — the declaration entry lane: `pub? mod NAME { .. }`
+    // nests declarations in the grammar (structure in the grammar,
+    // never in paths), recursively, and the block's items parse with
+    // their own spans so the deps lane can stamp mod paths from the
+    // nesting. Implementation files keep the refusal.
+    let src = "\
+pub mod net {
+    pub mod tls {
+        pub host fn handshake(c: opaque) -> opaque;
+    }
+    pub host fn connect(url: str) -> opaque;
+}
+mod solo {
+    pub host fn ping() -> bool;
+}
+pub host fn legacy() -> bool;
+";
+    let (ast, diags) = parse(src, Mode::Decl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 3);
+    let ItemKind::ModInline { vis, name, items: net } = ast.item(items[0]) else {
+        panic!("expected a ModInline, got {:?}", ast.item(items[0]));
+    };
+    assert_eq!(*vis, Vis::Pub);
+    assert_eq!(ast.name(*name), "net");
+    assert_eq!(net.len(), 2, "the nested edge + the row: {net:?}");
+    let ItemKind::ModInline { name, items: tls, .. } = ast.item(net[0]) else {
+        panic!("expected the nested ModInline, got {:?}", ast.item(net[0]));
+    };
+    assert_eq!(ast.name(*name), "tls");
+    assert_eq!(tls.len(), 1);
+    let ItemKind::SurfaceFn { name, .. } = ast.item(tls[0]) else {
+        panic!("expected the nested row");
+    };
+    assert_eq!(ast.name(*name), "handshake");
+    let ItemKind::SurfaceFn { name, .. } = ast.item(net[1]) else {
+        panic!("expected the level-one row");
+    };
+    assert_eq!(ast.name(*name), "connect");
+
+    // the file-form edge still parses beside inline blocks, and the
+    // inline form is DECL-ONLY
+    let (_, diags) = parse("mod gone { }", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("inline `mod { }` blocks are gone")),
+        "implementation files keep the refusal: {diags:?}"
+    );
+}
+
+#[test]
+fn bodiless_signatures_parse_clean_in_decl_files() {
+    // the declaration entry's fn spellings: a free fn signature and a
+    // class's bodiless method signatures are DECLARATIONS (no bodies) —
+    // they parse clean in Decl mode; the same shapes in an
+    // implementation file keep today's diagnostics.
+    let src = "\
+pub class Flow<E> {
+    drive: fn(fn(E) -> bool) -> nil;
+
+    pub fn new(f: fn(fn(E) -> bool) -> nil) -> Self;
+    pub fn map<R>(f: fn(E) -> R) -> Flow<R>;
+}
+
+pub fn freeze(v: Flow<u8>) -> bytes;
+
+pub async fn tick() -> bool;
+
+pub struct Pair {
+    fst: i32;
+    snd: i32;
+}
+";
+    let (ast, diags) = parse(src, Mode::Decl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.module_items(ast.root);
+    assert_eq!(items.len(), 4, "{items:?}");
+    // a struct stays fields-only (methods are classes' impl surface)
+    let ItemKind::Struct { methods, .. } = ast.item(items[3]) else {
+        panic!("expected the struct");
+    };
+    assert!(methods.is_empty());
+    let ItemKind::Class { methods, .. } = ast.item(items[0]) else {
+        panic!("expected the class");
+    };
+    assert_eq!(methods.len(), 2, "the bodiless members ride the class");
+    let ItemKind::Fn(d) = ast.item(items[1]) else {
+        panic!("expected the free fn");
+    };
+    assert_eq!(ast.name(d.name), "freeze");
+    assert_eq!(d.generics.len(), 0);
+    // the bodiless spelling carries an empty block (the arena's fn
+    // shape) — no machine lowers it
+    assert_eq!(
+        ast.span(d.body.id()).lo, ast.span(d.body.id()).hi,
+        "the empty body: zero-width at the semi"
+    );
+
+    // implementation files keep the laws
+    let (_, diags) = parse("pub fn f(x: i32) -> i32;", Mode::Impl);
+    assert!(!diags.is_empty(), "a bodiless fn refuses in .rut");
+    let (_, diags) = parse("class C {\n    pub fn m(self) -> C;\n}", Mode::Impl);
+    assert!(
+        diags.iter().any(|d| d.msg.contains("methods live in `impl` blocks")),
+        "class members keep the impl-blocks law in .rut: {diags:?}"
+    );
+}

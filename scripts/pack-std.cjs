@@ -7,11 +7,12 @@
  * publish ADVANCES the number, never rewrites a tag).
  *
  * The bundle set is exhaustive over `rut/` (16 pkgs): lib pkgs pack as
- * compiled roots (their closures ride inside), host pkgs pack as decl
- * roots (single-package — the surface IS the root); `format_version`
- * is 11, always — the manifest's `type` routes the root kind. Same
- * input directory ⇒ byte-identical bundle (Q4), so "pins fresh" is a
- * PURE EQUALITY gate — CI never touches the network.
+ * compiled roots (their closures ride inside, each group carrying its
+ * GENERATED declaration entry), host pkgs pack as decl roots
+ * (single-package — the ONE consolidated surface entry is the root);
+ * `format_version` is 12, always — the manifest's `type` routes the
+ * root kind. Same input directory ⇒ byte-identical bundle (Q4), so
+ * "pins fresh" is a PURE EQUALITY gate — CI never touches the network.
  *
  * Usage:
  *   node scripts/pack-std.cjs              pack all 16 → dist/std/
@@ -34,23 +35,26 @@
  *
  * Options:
  *   --tag-name <t>   the jsDelivr tag the urls spell (env
- *                    RUT_STD_TAG, default std-v11). An ADVANCING
- *                    number: never re-point a published tag (jsDelivr
- *                    caches aggressively; a re-pointed tag lies).
+ *                    RUT_STD_TAG). `--check` defaults it to std-v11
+ *                    (the pins' committed envelope — the locks name
+ *                    those bytes until a publish re-pins); `--tag`
+ *                    defaults it to std-v12 (the NEXT tag — publish
+ *                    advances, never re-points).
  *   -h, --help
  *
  * No pushing, no network. The `rut fetch` / `rut run` human lane hits
  * jsDelivr once per bundle, then caches; every offline gate is green
  * because the committed artifact IS the seed.
  *
- * THE PIN BOUNDARY (the file-modules phase): dist/std is the WORKING
- * envelope — repacked whenever the pack shape moves (the mod.rut
- * rename did; the `::` path-law break did), byte-checked by --check's
- * freshness half. The example projects' rut.lock rows ride the
- * committed `dist/std-v11/` bytes — the offline gates' wire — and
- * --check's pin half asserts every row against THEM, not against
- * dist/std. The reader's compat lane loads the old envelope; that is a
- * loading law, not a transition.
+ * THE PIN BOUNDARY: dist/std is the WORKING envelope — repacked
+ * whenever the pack shape moves (the wire-12 declaration-entry lane
+ * did), byte-checked by --check's freshness half. The example
+ * projects' rut.lock rows ride the committed `dist/std-v11/` bytes —
+ * the offline gates' wire — and --check's pin half asserts every row
+ * against THEM, not against dist/std. `dist/std-v12/` is the CUT
+ * envelope for the next publish (byte-identical to dist/std; the tag
+ * lane a consumer re-pins to). The reader's old lane loads v11
+ * forever; migration is a re-pin, not a break.
  */
 "use strict";
 
@@ -64,7 +68,10 @@ const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
 const PINNED = path.join(ROOT, "dist", "std-v11");
+const CUT = path.join(ROOT, "dist", "std-v12");
+// the pins' tag (the locks' url rows) and the NEXT publish tag
 const DEFAULT_TAG = "std-v11";
+const NEXT_TAG = "std-v12";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
 // ---------------------------------------------------------------------------
@@ -115,7 +122,10 @@ function takeFlag(flag) {
 }
 const doCheck = takeFlag("--check");
 const doTag = takeFlag("--tag");
-const tag = takeValue("--tag-name") ?? process.env.RUT_STD_TAG ?? DEFAULT_TAG;
+const isTagMode = doTag;
+const tag = takeValue("--tag-name")
+  ?? process.env.RUT_STD_TAG
+  ?? (isTagMode ? NEXT_TAG : DEFAULT_TAG);
 if (argv.length) die(`unknown arguments: ${argv.join(" ")}`);
 if (takeFlag("--pins")) {
   die(
@@ -216,7 +226,10 @@ if (doTag) {
 Publish the committed dist/std/ artifacts to jsDelivr (the gh lane
 serves repo files at a ref — the artifacts are already committed; this
 tag IS the publish). Tags are IMMUTABLE in practice: publish advances
-std-vNN, never rewrites:
+std-vNN, never rewrites. The cut envelope for this publish is
+dist/std-v12/ (byte-identical to dist/std/ — the tag names THESE
+bytes); after publishing, re-pin consumers with \`rut install\` against
+the new tag's urls:
 
   git tag ${tag}
   git push origin ${tag}
@@ -267,6 +280,24 @@ if (doCheck) {
     }
   }
   fs.rmSync(tmp, { recursive: true, force: true });
+
+  // the CUT envelope (dist/std-v12/): byte-identical to dist/std while
+  // the cut stands — the tag names these bytes, so a drift between the
+  // working envelope and the cut one is publish poison.
+  for (const { dir } of PKGS) {
+    const name = pkgName(dir);
+    const cut = path.join(CUT, `${name}.rutbundle`);
+    const working = path.join(DIST, `${name}.rutbundle`);
+    if (!fs.existsSync(cut)) {
+      console.error(`  ${red("missing")}: dist/std-v12/${name}.rutbundle (the cut envelope is committed)`);
+      drift++;
+      continue;
+    }
+    if (!fs.readFileSync(cut).equals(fs.readFileSync(working))) {
+      console.error(`  ${red("drift")}: dist/std-v12/${name}.rutbundle (the cut envelope moved from dist/std — re-cut it: cp dist/std/*.rutbundle dist/std-v12/)`);
+      drift++;
+    }
+  }
 
   // the example pins: every rut.lock row spells a
   // /dist/std/<key>.rutbundle url and its sha256 equals the hash of the

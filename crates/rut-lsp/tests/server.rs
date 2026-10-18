@@ -780,7 +780,7 @@ fn main() -> nil {
 /// — the std surface's pouch index carries the relative `rut/pouch/mod.rut`
 /// origin instead, so this uri on the wire PROVES the cached bytes
 /// mounted
-const BUNDLE_POUCH_ORIGIN: &str = "bundle:pouch/mod.rut";
+const BUNDLE_POUCH_ORIGIN: &str = "bundle:pouch/mod.d.rut";
 
 #[tokio::test]
 async fn dep_walk_resolves_path_and_cached_url_deps() {

@@ -47,7 +47,7 @@ fn hello_world(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
     write(&dir, "mod.rut", "entry fn main() -> nil { return; }\n");
     root
@@ -146,7 +146,7 @@ fn a_dir_with_a_path_dep_caches_one_closed_entry() {    let root = scratch("dep"
     write(
         &hello,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
     );
     write(&hello, "mod.rut", "use calc::{ seven };\nentry fn main() -> nil {\n    let n = seven();\n    return;\n}\n");
     let calc = root.join("calc");

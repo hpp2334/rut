@@ -241,19 +241,25 @@ impl UseFrame {
 // ---- mod decl ----
 
 /// `pub? mod NAME;` — a file-module DECLARATION: the body lives in the
-/// sibling `NAME/mod.rut`; the loader mounts it. The inline
-/// `mod NAME { .. }` block form is gone — one mechanism, files only —
-/// and diagnosing it still produces the decl (the stray block is
-/// skipped so the tail keeps parsing).
+/// sibling `NAME/mod.rut`; the loader mounts it. In implementation
+/// files the inline `mod NAME { .. }` block form is gone — one
+/// mechanism, files only — and diagnosing it still produces the decl
+/// (the stray block is skipped so the tail keeps parsing). In a
+/// DECLARATION file (`Mode::Decl`, wire v12) the inline form IS
+/// legal — the declaration entry lane nests declarations in the
+/// grammar — and the block parses as an [`ItemKind::ModInline`].
 pub(crate) struct ModDeclFrame {
     vis: Vis,
     lo: u32,
     name: IdentId,
+    /// the inline form is out for its block (Decl mode): the frame
+    /// relays the inline module's item upward when it pops
+    inline: bool,
 }
 
 impl ModDeclFrame {
     pub(crate) fn new(vis: Vis) -> Self {
-        ModDeclFrame { vis, lo: 0, name: IdentId(0) }
+        ModDeclFrame { vis, lo: 0, name: IdentId(0), inline: false }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -263,6 +269,17 @@ impl ModDeclFrame {
         };
         self.name = name;
         if p.eat_punct(Tok::LBrace) {
+            if p.mode == Mode::Decl {
+                // the inline declaration module: the frame collects the
+                // nested declarations (it consumed the `{` above); this
+                // frame stays underneath and relays its item
+                self.inline = true;
+                return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(
+                    self.vis,
+                    self.lo,
+                    self.name,
+                )));
+            }
             p.err_here(
                 "inline `mod { }` blocks are gone — the body lives in `NAME/mod.rut` beside this file",
             );
@@ -288,8 +305,76 @@ impl ModDeclFrame {
         Step::Pop(Done::Item(node))
     }
 
-    pub(crate) fn absorb(&mut self, _p: &mut Parser, _d: Done) -> Step {
+    pub(crate) fn absorb(&mut self, _p: &mut Parser, d: Done) -> Step {
+        if self.inline {
+            // the inline module popped — relay its item upward
+            match d {
+                Done::Item(i) => return Step::Pop(Done::Item(i)),
+                Done::Failed => return Step::Pop(Done::Failed),
+                _ => unreachable!("mod decl frame's inline child yields an item"),
+            }
+        }
         unreachable!("mod decl frame pushes no children")
+    }
+}
+
+/// The inline declaration module's frame — `pub? mod NAME { <decls> }`
+/// in a `.d.rut` (Decl mode only). Declarations only, recursively:
+/// every item classifies through the module-item dispatch (Decl mode
+/// already refuses bodies), nested `mod` blocks recurse through the
+/// same frame. Collects until the matching `}`, then pops the
+/// [`ItemKind::ModInline`] item.
+pub(crate) struct ModInlineFrame {
+    vis: Vis,
+    lo: u32,
+    name: IdentId,
+    items: Vec<NodeHandle<AnyItem>>,
+    /// cursor position when the current item started (progress guard)
+    before: usize,
+}
+
+impl ModInlineFrame {
+    /// The `{` was already consumed by [`ModDeclFrame::step`].
+    fn from_decl(vis: Vis, lo: u32, name: IdentId) -> Self {
+        ModInlineFrame { vis, lo, name, items: Vec::new(), before: 0 }
+    }
+
+    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        loop {
+            if p.eat_punct(Tok::RBrace) || p.at_eof() {
+                let items = std::mem::take(&mut self.items);
+                let node = p.item(
+                    ItemKind::ModInline { vis: self.vis, name: self.name, items },
+                    Span::new(self.lo, p.span().hi),
+                );
+                return Step::Pop(Done::Item(node));
+            }
+            self.before = p.pos;
+            match classify_item(p) {
+                Some(fr) => return Step::Push(fr),
+                None => self.recover(p),
+            }
+        }
+    }
+
+    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
+        match d {
+            Done::Item(i) => self.items.push(i),
+            Done::Failed => self.recover(p),
+            _ => unreachable!("inline mod frame receives items"),
+        }
+        self.step(p)
+    }
+
+    /// the module frame's recovery, scoped to the block: guarantee
+    /// progress and resync (an unbalanced `}` is left for the frame's
+    /// own loop top to take)
+    fn recover(&mut self, p: &mut Parser) {
+        if p.pos == self.before {
+            p.err_here("expected a declaration");
+            p.bump();
+        }
+        p.sync_stmt();
     }
 }
 
@@ -1001,9 +1086,13 @@ impl TypeBodyFrame {
                 BodyMode::Class { allow_pub, is_struct } => {
                     let lo = p.span();
                     // members default to module-private;
-                    // `pub` (+ scopes) exposes them. FIELDS ONLY since the
-                    // impl blocks returned: a `fn` member
-                    // diagnoses and is parsed (bodiless) to stay in sync.
+                    // `pub` (+ scopes) exposes them. FIELDS ONLY in an
+                    // implementation file — methods live in `impl`
+                    // blocks there (the `fn` member diagnoses and is
+                    // parsed bodiless to stay in sync). In a DECLARATION
+                    // file a bodiless method signature IS the class's
+                    // interface (the `.d.ts` shape — the declaration
+                    // entry lane): it parses clean, no `impl` block.
                     let mut vis: Option<Vis> = None;
                     let mut is_static = false;
                     while let Tok::Ident(m) = p.tok().clone() {
@@ -1034,10 +1123,12 @@ impl TypeBodyFrame {
                     }
                     match p.tok().clone() {
                         Tok::Ident(kw) if kw == "fn" => {
-                            p.err(
-                                lo,
-                                "methods live in `impl` blocks —type bodies declare fields only",
-                            );
+                            if p.mode != Mode::Decl {
+                                p.err(
+                                    lo,
+                                    "methods live in `impl` blocks —type bodies declare fields only",
+                                );
+                            }
                             if is_static {
                                 p.err(
                                     lo,
@@ -1376,6 +1467,8 @@ pub(crate) struct FnFrame {
     bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
     params: Option<Vec<NodeHandle<AnyParam>>>,
     ret: Option<NodeHandle<AnyTy>>,
+    /// the bodiless spelling's `;` end (Decl mode) — the empty body's span
+    semi_hi: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -1401,6 +1494,7 @@ impl FnFrame {
             bounds: Vec::new(),
             params: None,
             ret: None,
+            semi_hi: 0,
         }
     }
 
@@ -1413,9 +1507,6 @@ impl FnFrame {
             }
             s
         };
-        if p.mode == Mode::Decl {
-            p.err(Span::new(self.lo, self.lo + 2), "implementation in a declaration file");
-        }
         let Some(name) = p.expect_ident("a function name") else {
             return Step::Pop(Done::Failed);
         };
@@ -1442,6 +1533,10 @@ impl FnFrame {
 
     /// The fn body — a stray `where` clause (removed) diagnoses
     /// with the inline replacement and is skipped so the `{` still parses.
+    /// In a DECLARATION file a bodiless signature (`fn f(..);`) is the
+    /// legal spelling — a declaration, no body — and pops clean; a
+    /// braced body is implementation and diagnoses (the recovery
+    /// parses it so the file's tail stays sane).
     fn body(&mut self, p: &mut Parser) -> Step {
         if p.at_kw("where") {
             p.err_here(
@@ -1451,8 +1546,40 @@ impl FnFrame {
                 p.bump();
             }
         }
+        if p.mode == Mode::Decl {
+            if matches!(p.tok(), Tok::Semi) {
+                self.semi_hi = p.span().hi;
+                p.bump();
+                return self.pop(p);
+            }
+            p.err(Span::new(self.lo, self.lo + 2), "implementation in a declaration file");
+        }
         self.stage = FnSStage::Body;
         Step::Push(Frame::Block(BlockFrame::lax(p, self.lo)))
+    }
+
+    /// The bodiless pop (Decl mode only): the fn node carries an EMPTY
+    /// block — the arena's fn shape has no bodiless arm, and no machine
+    /// ever lowers a declaration-file fn (the declaration lane reads
+    /// signatures only).
+    fn pop(&mut self, p: &mut Parser) -> Step {
+        let at = self.semi_hi;
+        let body = p.block(Vec::new(), Span::new(at, at));
+        let f = p.fn_decl(
+            FnData {
+                vis: self.vis,
+                is_async: self.is_async,
+                entry: self.entry,
+                name: self.name,
+                generics: std::mem::take(&mut self.generics),
+                params: self.params.take().expect("fn without params"),
+                ret: self.ret.take(),
+                bounds: std::mem::take(&mut self.bounds),
+                body,
+            },
+            Span::new(self.lo, p.span().hi),
+        );
+        Step::Pop(Done::Item(f.into()))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {

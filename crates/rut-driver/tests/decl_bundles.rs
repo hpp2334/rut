@@ -75,10 +75,10 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-/// A v6-shaped host manifest — the keys PREPEND (before any table).
+/// A host manifest — the keys PREPEND (before any table).
 fn host_manifest(name: &str, surface: &str) -> String {
     format!(
-        r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
+        r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
     )
 }
 
@@ -150,7 +150,7 @@ fn host_root_packs_v6_and_loads_back() {
         .unwrap();
     assert_eq!(toml, std::fs::read_to_string(dir.join("rut.jsonc")).unwrap());
     let m = rut_driver::bundle::parse_manifest(&toml).unwrap();
-    assert_eq!(m.format_version, Some(11), "a decl root declares 11");
+    assert_eq!(m.format_version, Some(12), "a decl root declares 12");
 
     // load: the root mounts as the pkg's host rows
     let session = rut_driver::Mounted::from_bundle(&bytes).expect("load");
@@ -276,14 +276,14 @@ fn a_lib_root_packs_the_one_wire_number_too() {
     let base = scratch("onewire");
     let lib = base.join("util");
     write(&lib, "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "util"}"#);
+        r#"{"format": "rutbundle", "format_version": 12, "name": "util"}"#);
     write(&lib, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
     let bytes = pack_dir(&lib).expect("pack the lib");
     let m = rut_driver::bundle::parse_manifest(
         &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.jsonc").unwrap(),
     )
     .unwrap();
-    assert_eq!(m.format_version, Some(11), "a lib root's manifest declares 11, the one wire number");
+    assert_eq!(m.format_version, Some(12), "a lib root's manifest declares 12, the current wire");
     let names = entry_names(&bytes);
     assert!(names.contains(&"rut.scopes".to_string()), "{names:?}");
     assert!(names.contains(&"mod.rutc".to_string()), "{names:?}");
@@ -301,9 +301,10 @@ fn strip_refuses_on_a_host_root() {
 
 #[test]
 fn any_other_version_refuses_with_the_one_recipe() {
-    // ONE wire number: a v9 manifest — host flavor or lib flavor —
+    // ONE wire family: a v9 manifest — host flavor or lib flavor —
     // refuses with the same uniform re-pack recipe; the pairing laws
-    // are gone, the version gate is the whole law
+    // are gone, the version gate is the whole law (11 stays readable —
+    // the old lane — everything else refuses)
     let dir = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
     let v9_host = format!(
@@ -312,11 +313,11 @@ fn any_other_version_refuses_with_the_one_recipe() {
     let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("reads bundle format_version 11 only"), "{err}");
+    assert!(err.contains("reads bundle format_version 12 (and the old 11 lane) only"), "{err}");
     assert!(err.contains("found 9"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
 
-    // a v11 lib manifest routes to the COMPILED layout (the `type`
+    // an 11 lib manifest routes to the COMPILED layout (the `type`
     // row does the routing, never the version) — a host pack carries
     // no ledger, so the compiled law refuses it
     let v11_lib = r#"{"format": "rutbundle", "format_version": 11, "name": "h", "entry": {"lib": "./h.rut"}}"#;

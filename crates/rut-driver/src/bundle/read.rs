@@ -4,8 +4,10 @@
 //! manifest's `type` routes: a lib root (no `type`) is the **compiled**
 //! layout (`mod.rutc` + scope ledger + `deps/` groups), a
 //! `type = "host"` root is the **decl** layout (its `mod.d.rut`
-//! surface, single-package). One wire number: `format_version` is 11,
-//! always. Parsing a layout verifies what each kind carries, so a bad
+//! surface, single-package). One wire family: `format_version` is 12
+//! (the current wire — every group carries ONE generated declaration
+//! entry); the 11 lane reads forever (a published bundle is forever
+//! old). Parsing a layout verifies what each kind carries, so a bad
 //! archive never reaches the run.
 
 use super::container::{parse_bundle, BundleError};
@@ -60,7 +62,8 @@ pub enum GroupKind {
     Source,
 }
 
-/// The one bundle layout — ONE wire number, the manifest's `type`
+/// The one bundle layout — ONE wire family (`format_version` 12; the
+/// 11 lane reads forever), the manifest's `type`
 /// routes the root kind: a lib root (no `type`) is **compiled**
 /// (`mod.rutc` + ledger + `deps/` groups), a `type = "host"` root is
 /// **decl** (the manifest + its `mod.d.rut` surface, single-package,
@@ -99,15 +102,15 @@ pub enum Layout {
 
 impl Layout {
     /// Parse a bundle: manifest + version gate first (`format_version`
-    /// is 11 — one wire number for both root kinds; anything else
-    /// refuses with the one re-pack recipe, never guesses), then the
-    /// kind's own checks (compiled: the scope ledger's identity rows,
-    /// the root and every group's binary decode + verification, every
-    /// group dirname's fingerprint-over-content; decl: the
-    /// single-package law and the surface read). The load order is:
-    /// container CRC (the [`Bundle::parse`] this takes),
-    /// manifest/version, then the kind's payloads — the mount is the
-    /// caller's.
+    /// is 12 — one wire family for both root kinds; 11, the old lane,
+    /// reads forever; anything else refuses with the one re-pack
+    /// recipe, never guesses), then the kind's own checks (compiled:
+    /// the scope ledger's identity rows, the root and every group's
+    /// binary decode + verification, every group dirname's
+    /// fingerprint-over-content; decl: the single-package law and the
+    /// surface read). The load order is: container CRC (the
+    /// [`Bundle::parse`] this takes), manifest/version, then the kind's
+    /// payloads — the mount is the caller's.
     pub fn parse(bundle: &Bundle) -> Result<Layout, String> {
         let manifest_text = match bundle.read(super::files::MANIFEST_NAME) {
             Ok(text) => text,
@@ -118,15 +121,21 @@ impl Layout {
             return Err("rut.jsonc has no `format = \"rutbundle\"` — not a rut bundle".into());
         }
         match manifest.format_version {
-            // ONE wire number, both root kinds: the manifest's `type`
+            // ONE wire family, both root kinds: the manifest's `type`
             // routes the layout — a host root is its own decl surface,
-            // a lib root the compiled layout
-            Some(11) => match manifest.pkg_type {
+            // a lib root the compiled layout. 12 is the current wire
+            // (generated declaration entries); 11 is the OLD lane,
+            // read forever — a published bundle is forever old, and a
+            // `rut.lock` pin to v11 bytes keeps working (migration is a
+            // re-pin, not a break). A v11 archive never carries
+            // generated entries, so nothing below dispatches on the
+            // number: the layout grammar is one, the lanes additive.
+            Some(11) | Some(12) => match manifest.pkg_type {
                 super::manifest::PkgType::Host => Self::parse_decl(bundle, manifest),
                 super::manifest::PkgType::Lib => Self::parse_compiled(bundle, manifest),
             },
             other => Err(format!(
-                "this toolchain reads bundle format_version 11 only (found {}) — re-pack the directory",
+                "this toolchain reads bundle format_version 12 (and the old 11 lane) only (found {}) — re-pack the directory",
                 match other {
                     Some(v) => v.to_string(),
                     None => "none".to_string(),

@@ -39,7 +39,10 @@ pub use loader::{
 /// one lock per walk root, beside the root `rut.jsonc`.
 pub use lock::{parse_lock, render_lock, LockError, LockFile, LockRow};
 pub use mods::{collect_module_set, mount_mod_children, ChildLookup, ModSource, ModuleSet, ModuleUnit};
-pub use pack::{pack, pack_inline_pkg, Archive, PackError, PackOpts, PackWorld, PkgSource, FORMAT_VERSION};
+pub use pack::{
+    pack, pack_inline_pkg, lower_inline_entry, normalize_decl_tree, rows_agree, Archive,
+    PackError, PackOpts, PackWorld, PkgSource, FORMAT_VERSION,
+};
 #[allow(deprecated)] // the deprecated one-release aliases re-export with the real names
 pub use run::{
     Bundle, Compiled, Mounted, MountedBody, Offer, RunError, RutRun, Walk, declared_host_fns,

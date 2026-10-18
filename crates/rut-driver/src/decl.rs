@@ -24,7 +24,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rut_ast::ast::{AnyTy, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
+use rut_ast::ast::{AnyTy, AnyItem, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
 use rut_core::types::{
     TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL,
     TY_OPAQUE, TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
@@ -138,16 +138,26 @@ pub fn lower_decl_module(
     })
 }
 
-/// One module's `host fn` rows, off its parsed items — the row-lowering
-/// both lanes share (the host tree recursion and the lib-surface law's
-/// root probe).
+/// One module's `host fn` rows, off the module's OWN items — the
+/// row-lowering both lanes share (the host tree recursion, the inline
+/// form, and the lib-surface law's root probe).
 fn lower_rows(
     ast: &Ast,
     path: &str,
     display: &str,
     rows: &mut Vec<HostRow>,
 ) -> Result<(), String> {
-    for it in ast.module_items(ast.root).to_vec() {
+    lower_rows_in(ast, ast.module_items(ast.root), path, display, rows)
+}
+
+fn lower_rows_in(
+    ast: &Ast,
+    items: &[NodeHandle<AnyItem>],
+    path: &str,
+    display: &str,
+    rows: &mut Vec<HostRow>,
+) -> Result<(), String> {
+    for &it in items {
         let ItemKind::SurfaceFn { linkage: Linkage::Host, is_async, name, params, ret, .. } = ast.item(it)
         else {
             continue;
@@ -202,6 +212,13 @@ fn lower_rows(
 /// file's diagnostics name (the root's `origin`, a child's
 /// `<mod path>/mod.d.rut`); a child that is not in the mounted map —
 /// or one that does not parse — is the loud error.
+///
+/// The INLINE form (`mod NAME { .. }`, wire v12) lowers in place: the
+/// nested declarations are walked at the child's mod path, no mounted
+/// file involved — the consolidated declaration entry a bundle group
+/// rides speaks this shape, and a normalized inline entry must lower
+/// to the same rows its file-tree form did (the generation invariant
+/// the pack round-trip gate pins).
 fn lower_module(
     ast: &Ast,
     path: &str,
@@ -217,35 +234,90 @@ fn lower_module(
     };
     lower_rows(ast, path, &display, rows)?;
     for it in ast.module_items(ast.root).to_vec() {
-        let ItemKind::ModDecl { vis: _, name } = ast.item(it) else {
+        match ast.item(it) {
+            ItemKind::ModDecl { vis: _, name } => {
+                let name = ast.name(*name).to_string();
+                let child_path = join_path(path, &name);
+                let Some(child) = children.get(&child_path) else {
+                    return Err(format!(
+                        "`mod {name};` in {display} — no `{child_path}` module is mounted \
+                         (the loader mounts `{child_path}/{DECL_CHILD_FILE}` beside the declaring file)"
+                    ));
+                };
+                if !lowered.insert(child_path.clone()) {
+                    continue; // first mount wins — one lowering per child
+                }
+                let (child_ast, diags) = parse(&child.text, Mode::Decl);
+                if !diags.is_empty() {
+                    let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
+                    return Err(format!(
+                        "{child_path}/{DECL_CHILD_FILE}: the surface does not parse: {}",
+                        msgs.join("; ")
+                    ));
+                }
+                lower_module(&child_ast, &child_path, children, origin, rows, lowered)?;
+            }
+            ItemKind::ModInline { vis: _, name, items } => {
+                // the inline declaration module: the nested declarations
+                // lower at the child's mod path — no mounted file, no
+                // children-map entry. First-wins applies to the same
+                // FILE-FORM edge (an inline block and a `mod NAME;` for
+                // one path would double-lower); the inline walk lowers
+                // its own items directly, once.
+                let name = ast.name(*name).to_string();
+                let child_path = join_path(path, &name);
+                if !lowered.insert(format!("inline:{child_path}")) {
+                    return Err(format!(
+                        "`mod {name} {{ .. }}` in {display} — the module is already declared \
+                         (one declaration per name, the one-name-one-decl law)"
+                    ));
+                }
+                lower_inline(ast, items, &child_path, &display, origin, rows, lowered)?;
+            }
+            _ => continue,
+        }
+    }
+    Ok(())
+}
+
+/// Lower an INLINE module's items: its `host fn` rows at its mod path,
+/// then its nested `mod` edges (file-form refuses — no children map
+/// backs a nested file lookup; inline blocks recurse). The structural
+/// twin of [`lower_module`], one parse deeper.
+fn lower_inline(
+    ast: &Ast,
+    items: &[NodeHandle<AnyItem>],
+    path: &str,
+    display: &str,
+    origin: &str,
+    rows: &mut Vec<HostRow>,
+    lowered: &mut BTreeSet<String>,
+) -> Result<(), String> {
+    lower_rows_in(ast, items, path, display, rows)?;
+    for &it in items {
+        let ItemKind::ModInline { vis: _, name, items: nested } = ast.item(it) else {
             continue;
         };
         let name = ast.name(*name).to_string();
-        let child_path = if path.is_empty() {
-            name.clone()
-        } else {
-            format!("{path}/{name}")
-        };
-        let Some(child) = children.get(&child_path) else {
+        let child_path = join_path(path, &name);
+        if !lowered.insert(format!("inline:{child_path}")) {
             return Err(format!(
-                "`mod {name};` in {display} — no `{child_path}` module is mounted \
-                 (the loader mounts `{child_path}/{DECL_CHILD_FILE}` beside the declaring file)"
-            ));
-        };
-        if !lowered.insert(child_path.clone()) {
-            continue; // first mount wins — one lowering per child
-        }
-        let (child_ast, diags) = parse(&child.text, Mode::Decl);
-        if !diags.is_empty() {
-            let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
-            return Err(format!(
-                "{child_path}/{DECL_CHILD_FILE}: the surface does not parse: {}",
-                msgs.join("; ")
+                "`mod {name} {{ .. }}` in {display} — the module is already declared \
+                 (one declaration per name, the one-name-one-decl law)"
             ));
         }
-        lower_module(&child_ast, &child_path, children, origin, rows, lowered)?;
+        lower_inline(ast, nested, &child_path, display, origin, rows, lowered)?;
     }
     Ok(())
+}
+
+/// `a + sep + b` (or just `b` under the root)
+fn join_path(path: &str, name: &str) -> String {
+    if path.is_empty() {
+        name.to_string()
+    } else {
+        format!("{path}/{name}")
+    }
 }
 
 /// The lib-surface law: `host fn` text lives only in `type = "host"`

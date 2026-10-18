@@ -56,7 +56,7 @@ fn world(tag: &str, bundle: bool) -> PathBuf {
     let root = scratch(tag);
     let pkg = root.join("pkg");
     let keys = if bundle {
-        r#""format": "rutbundle", "format_version": 11, "#
+        r#""format": "rutbundle", "format_version": 12, "#
     } else {
         ""
     };
@@ -467,7 +467,7 @@ fn flat_packages_pack_without_a_rows_entry() {
     write(
         &pkg,
         "rut.jsonc",
-        r#"{"name": "pkg", "format": "rutbundle", "format_version": 11}"#,
+        r#"{"name": "pkg", "format": "rutbundle", "format_version": 12}"#,
     );
     write(&pkg, "mod.rut", "entry fn main() -> i32 { return 7; }\n");
     let bytes = rut_native::pack_dir(&pkg).expect("pack");
@@ -539,7 +539,7 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
         // recipe, never a guessed load
         let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
         assert!(
-            err.contains("reads bundle format_version 11 only"),
+            err.contains("reads bundle format_version 12 (and the old 11 lane) only"),
             "{}: {err}",
             path.display()
         );
@@ -581,7 +581,7 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"name": "app", "format": "rutbundle", "format_version": 11, "deps": {"pkg": {"path": "../pkg"}}}"#,
+        r#"{"name": "app", "format": "rutbundle", "format_version": 12, "deps": {"pkg": {"path": "../pkg"}}}"#,
     );
     write(
         &app,
@@ -629,7 +629,7 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
     let pouch_src =
         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch/mod.rut"))
             .unwrap();
-    let legacy = r#"{"format": "rutbundle", "format_version": 11, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
+    let legacy = r#"{"format": "rutbundle", "format_version": 12, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
     let entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()

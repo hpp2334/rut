@@ -78,8 +78,10 @@ fn classify_item(
         // is already in scope; only its methods classify (via Member nodes)
         ItemKind::BuiltinImpl { .. } => {}
         // methods classify via their own Member nodes; mod decls are
-        // namespaces, their names classify in a later phase
-        ItemKind::Impl { .. } | ItemKind::ModDecl { .. } | ItemKind::Module { .. } => {}
+        // namespaces, their names classify in a later phase (the
+        // inline form's nested items classify through the same
+        // Member/Type nodes)
+        ItemKind::Impl { .. } | ItemKind::ModDecl { .. } | ItemKind::ModInline { .. } | ItemKind::Module { .. } => {}
         // use names classify best-effort by the capitalization law until
         // real resolution (M2): the path segments read as their heads
         // (lowercase = a module → namespace, capitalized = a type), the

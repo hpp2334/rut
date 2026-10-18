@@ -54,9 +54,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn make_dir_manifest() -> String {
     // bundle-shaped: the keys a `rut pack` needs are already there,
-    // and directory loading ignores them (layout 11 — the one wire
-    // number; the packer emits 11 and the loader reads 11 only)
-    r#"{"format": "rutbundle", "format_version": 11, "name": "mod"}"#.to_string()
+    // and directory loading ignores them (layout 12 — the current
+    // wire; the packer emits 12 and the loader reads 12 plus the old
+    // 11 lane forever)
+    r#"{"format": "rutbundle", "format_version": 12, "name": "mod"}"#.to_string()
 }
 
 /// A one-file module in a temp dir (one directory, one entry file).
@@ -149,12 +150,13 @@ fn refusals() {
     let err = rut_driver::Mounted::from_bundle(&not_a_bundle).unwrap_err().to_string();
     assert!(err.contains("rut.jsonc"), "{err}");
 
-    // anything that is not 11 refuses at the one-line version gate —
-    // the same refusal an OLDER loader applies to a version it does
-    // not know, before reading anything else (refuse, never guess).
-    // ONE uniform re-pack recipe: the old wires, the reserved band,
-    // anything.
-    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 99, 100] {
+    // anything outside the wire family refuses at the one-line version
+    // gate — the same refusal an OLDER loader applies to a version it
+    // does not know, before reading anything else (refuse, never
+    // guess). ONE uniform re-pack recipe: the old wires, the reserved
+    // band, anything. (11 stays readable — the old lane, a published
+    // bundle is forever old.)
+    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 99, 100] {
         let manifest = format!(
             r#"{{"format": "rutbundle", "format_version": {v}, "name": "x", "entry": {{"lib": "./x.rut"}}}}"#
         );
@@ -165,7 +167,7 @@ fn refusals() {
         .unwrap();
         let err = rut_driver::Mounted::from_bundle(&old).unwrap_err().to_string();
         assert!(err.contains("format_version"), "{err}");
-        assert!(err.contains("reads bundle format_version 11 only"), "{err}");
+        assert!(err.contains("reads bundle format_version 12 (and the old 11 lane) only"), "{err}");
         assert!(err.contains("re-pack the directory"), "{err}");
     }
 
@@ -213,7 +215,7 @@ fn refusals() {
     std::fs::write(dir.join("surface.d.rut"), "/// the pkg's surface doc.\n").unwrap();
     std::fs::write(
         dir.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 11, "name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
     )
     .unwrap();
     std::fs::remove_file(dir.join("surface.d.rut")).unwrap();
@@ -251,7 +253,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(
         m.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -280,7 +282,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m_lib).unwrap();
     std::fs::write(
         m_lib.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"s": {"path": "../s_lib"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s_lib"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -308,7 +310,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m2).unwrap();
     std::fs::write(
         m2.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -383,7 +385,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     std::fs::create_dir_all(&main).unwrap();
     std::fs::write(
         main.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 11, "name": "main", "deps": {"m": {"path": "../m"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"m": {"path": "../m"}}}"#,
     )
     .unwrap();
     std::fs::write(
@@ -394,17 +396,21 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
 
     let bytes = pack_dir(&main).unwrap();
     let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
-    // v11: the root's own files at the archive root (canonical names),
-    // each dep group under its content identity
+    // v12: the root's own files at the archive root (canonical names —
+    // the GENERATED declaration entry beside the binary), each dep
+    // group under its content identity (a compiled group rides its own
+    // generated entry; the host group its consolidated one)
     let names: Vec<String> = entries.iter().map(|(n, _)| n.clone()).collect();
     let m_dir = dep_dir(&names, "m");
     let s_dir = dep_dir(&names, "s");
     let mut sorted = names.clone();
     sorted.sort();
     let mut want = vec![
+        "mod.d.rut".to_string(),
         "mod.rutc".to_string(),
         "rut.jsonc".to_string(),
         "rut.scopes".to_string(),
+        format!("{m_dir}/mod.d.rut"),
         format!("{m_dir}/mod.rutc"),
         format!("{m_dir}/rut.jsonc"),
         format!("{s_dir}/mod.d.rut"),

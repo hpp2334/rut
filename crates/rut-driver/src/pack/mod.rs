@@ -9,7 +9,7 @@
 //! an ordinary tree package) and emits from the pkgs and the reader.
 //! Same input directory ⇒ byte-identical bundle.
 //!
-//! TWO root kinds, ONE wire number (`format_version` is 11, always;
+//! TWO root kinds, ONE wire family (`format_version` is 12, always;
 //! the manifest's `type` routes): a **lib** root packs **compiled**
 //! (the root and every source dep ride as `.rutc` binaries (bodies +
 //! surface — the linking truth); host/decl pkgs ride as their
@@ -42,9 +42,15 @@
 //! below. Source sharing stays what it always was outside bundles: a
 //! directory (`rut run <dir>`).
 
+mod decl_entry;
 mod error;
 mod groups;
 mod strip;
+
+pub use decl_entry::{
+    check_round_trip, facts_of_program, facts_of_text, lower_inline_entry, normalize_decl_tree,
+    render_program_entry, rows_agree,
+};
 
 pub use error::PackError;
 pub use groups::{collect_source_group, has_generic_bodies};
@@ -60,14 +66,21 @@ use crate::mods::{rows_json, ROWS_NAME};
 use crate::run::Walk;
 use crate::session::{MountedBody, Session};
 
-/// The bundle wire version — 11, always, ONE number for both root
+/// The bundle wire version — 12, always, ONE number for both root
 /// kinds. The manifest's `type` routes the layout (a lib root packs
 /// compiled, a `type = "host"` root packs its decl surface); a reader
 /// refuses anything else with one re-pack recipe — never guesses.
-/// v11: dep groups ride at `deps/<name>@<fp16>/…` (content identity),
-/// the archive root carries only the root's own files, and the entry
-/// names are canonical (`mod.rutc` / `mod.d.rut` at both levels).
-pub const FORMAT_VERSION: u64 = 11;
+/// v12: every group carries ONE generated declaration entry — a
+/// compiled group's `mod.d.rut` is rendered from the validated surface
+/// (the `.d.ts` pattern: generated, never hand-maintained; omitted
+/// under `--strip`), a host group's rides as the tree normalized into
+/// the one-file inline form (`mod NAME { .. }`, structure in the
+/// grammar, never in paths). (v11: dep groups ride at
+/// `deps/<name>@<fp16>/…` (content identity), the archive root carries
+/// only the root's own files, and the entry names are canonical —
+/// unchanged; the reader still loads the 11 lane, so pinned v11
+/// artifacts keep working and migration is a re-pin, not a break.)
+pub const FORMAT_VERSION: u64 = 12;
 
 /// Assemble a one-member **source** bundle — a rut package whose body
 /// is the text — as a [`Bundle`](crate::Bundle) handle. A pack method
@@ -153,7 +166,7 @@ fn rows_root_text(pkg: &crate::session::Mounted) -> String {
 /// serialized symbol table. Deterministic end to end: same input dir
 /// ⇒ byte-identical bundle ⇒ byte-identical symtab.
 pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
-    let name = w
+    let _name = w
         .manifest
         .name
         .clone()
@@ -298,18 +311,22 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // rut.jsonc, rut.scopes, the root's files, then the deps/ groups
     // in identity order.
 
-    // the root's own file set (prefix ""): the spelled surface at its
-    // canonical `mod.d.rut` name, the module rows. The manifest rides
-    // first (below) and the binary (`mod.rutc`) is NOT part of the
-    // fingerprint basis — the identity fingerprints the SOURCE set.
-    // (Since v22 a generic-owning pkg rides NO source: its generic
-    // bodies are template rows inside the binary — the delivery law.)
+    // the root's own file set (prefix ""): the GENERATED declaration
+    // entry at its canonical `mod.d.rut` name (wire v12 — rendered from
+    // the validated surface, the `.d.ts` pattern; round-trip gated
+    // below; `--strip` omits it — plaintext would leak the names the
+    // binary mangles), the module rows. The manifest rides first (below)
+    // and the binary (`mod.rutc`) is NOT part of the fingerprint basis —
+    // the identity fingerprints the SOURCE set. (Since v22 a
+    // generic-owning pkg rides NO source: its generic bodies are
+    // template rows inside the binary — the delivery law.)
     let root_pkg = session.resolve(&root).map_err(|e| PackError::law(e.to_string()))?;
     let mut root_files: Vec<(String, Vec<u8>)> = Vec::new();
-    if let Some(rel) = &w.manifest.entry.type_path {
-        let rel = rel.strip_prefix("./").unwrap_or(rel);
-        let text = (w.read)(&w.root_dir, rel).map_err(PackError::law)?;
-        root_files.push(("mod.d.rut".into(), text));
+    if !opts.strip {
+        let entry = decl_entry::render_program_entry(&units.programs[root_idx]);
+        decl_entry::check_round_trip(&root, &units.programs[root_idx], &entry)
+            .map_err(PackError::law)?;
+        root_files.push(("mod.d.rut".into(), entry.into_bytes()));
     }
     if !root_pkg.mods.is_empty() {
         let rows = rows_json(&rows_root_text(root_pkg), &root_pkg.mods).into_bytes();
@@ -349,12 +366,33 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 group_file(source, MANIFEST_NAME, &w.archives, &w.read).map_err(PackError::law)?;
             files.push((MANIFEST_NAME.into(), toml));
             files.push(("mod.rutc".into(), rut_core::binary::encode(&units.programs[idx])));
-            if let Some(rel) = &dm.entry.type_path {
-                let rel = rel.strip_prefix("./").unwrap_or(rel);
-                let text = group_file(source, rel, &w.archives, &w.read).map_err(PackError::law)?;
-                // the canonical surface name: `mod.d.rut`, whatever the
-                // directory grammar spelled
-                files.push(("mod.d.rut".into(), text));
+            // the GENERATED declaration entry (wire v12) — rendered from
+            // the validated surface, round-trip gated, `--strip` omitted
+            // (the strip law). An ARCHIVE-sourced group copies the entry
+            // its own archive carries instead: the group's content
+            // identity is the archive's law (the mount key's fingerprint
+            // pins the rode source set), and a v11 group's file set is
+            // exactly what its archive vouches for — the ladder's
+            // object-surface floor serves its editor face.
+            match source {
+                PkgSource::Dir(_) if !opts.strip => {
+                    let entry = decl_entry::render_program_entry(&units.programs[idx]);
+                    decl_entry::check_round_trip(spec, &units.programs[idx], &entry)
+                        .map_err(PackError::law)?;
+                    files.push(("mod.d.rut".into(), entry.into_bytes()));
+                }
+                PkgSource::Archive { slot, prefix } => {
+                    let key = bundle_key(&format!("{prefix}mod.d.rut"))
+                        .map_err(PackError::law)?;
+                    if let Some((_, bytes)) = w.archives[*slot]
+                        .entries
+                        .iter()
+                        .find(|(n, _)| *n == key)
+                    {
+                        files.push(("mod.d.rut".into(), bytes.clone()));
+                    }
+                }
+                _ => {}
             }
             // the module rows, group flavor (see the root arm above)
             if let Ok(m) = session.resolve(spec) {
@@ -369,19 +407,56 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             match source {
                 PkgSource::Dir(gdir) => {
                     let mods = session.resolve(spec).map(|m| m.mods.clone()).unwrap_or_default();
-                    collect_source_group(gdir, &dm, &mods, "", &w.read, &mut files)
-                        .map_err(PackError::law)?;
-                    // the module rows, group flavor (see the root arm
-                    // above): the tree rides beside the file set
-                    if !mods.is_empty() {
-                        let text = session
-                            .resolve(spec)
-                            .map(rows_root_text)
-                            .unwrap_or_default();
-                        files.push((
-                            ROWS_NAME.into(),
-                            rows_json(&text, &mods).into_bytes(),
-                        ));
+                    let is_host = matches!(
+                        session.resolve(spec).map(|m| &m.body),
+                        Ok(MountedBody::Host { .. })
+                    );
+                    if is_host {
+                        // the host group's ONE consolidated declaration
+                        // entry (wire v12): the tree normalized into the
+                        // single-file inline form — and the round-trip
+                        // gate: the entry must lower to the same rows the
+                        // file-tree form did (the loader law, checked at
+                        // pack)
+                        let m = session.resolve(spec).map_err(|e| PackError::law(e.to_string()))?;
+                        let (root_text, host_rows) = match &m.body {
+                            MountedBody::Host { root_surface, host_funcs, .. } => (
+                                root_surface.clone().unwrap_or_default(),
+                                host_funcs.clone(),
+                            ),
+                            _ => (String::new(), Vec::new()),
+                        };
+                        let entry =
+                            decl_entry::normalize_decl_tree(&root_text, &mods)
+                                .map_err(PackError::law)?;
+                        let entry_rows =
+                            decl_entry::lower_inline_entry(&entry, &format!("{gdir}/mod.d.rut"))
+                                .map_err(PackError::law)?;
+                        if !decl_entry::rows_agree(&host_rows, &entry_rows) {
+                            return Err(PackError::law(format!(
+                                "dep `{spec}`: the consolidated declaration entry does not lower to \
+                                 the tree's own rows — the generation invariant refuses the pack"
+                            )));
+                        }
+                        let toml = group_file(source, MANIFEST_NAME, &w.archives, &w.read)
+                            .map_err(PackError::law)?;
+                        files.push((MANIFEST_NAME.into(), toml));
+                        files.push(("mod.d.rut".into(), entry.into_bytes()));
+                    } else {
+                        collect_source_group(gdir, &dm, &mods, "", &w.read, &mut files)
+                            .map_err(PackError::law)?;
+                        // the module rows, group flavor (see the root arm
+                        // above): the tree rides beside the file set
+                        if !mods.is_empty() {
+                            let text = session
+                                .resolve(spec)
+                                .map(rows_root_text)
+                                .unwrap_or_default();
+                            files.push((
+                                ROWS_NAME.into(),
+                                rows_json(&text, &mods).into_bytes(),
+                            ));
+                        }
                     }
                 }
                 PkgSource::Archive { slot, prefix: old } => {

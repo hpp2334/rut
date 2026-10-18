@@ -323,9 +323,19 @@ pub enum ItemKind {
     Module { items: Vec<NodeHandle<AnyItem>> },
     /// `pub? mod NAME;` — a file-module DECLARATION: the body lives in
     /// the sibling `NAME/mod.rut` (the loader mounts it — declarations
-    /// are the graph). There is no inline `mod NAME { .. }` block —
-    /// one mechanism, files only.
+    /// are the graph). In implementation files the inline
+    /// `mod NAME { .. }` block form is gone — one mechanism, files
+    /// only.
     ModDecl { vis: Vis, name: IdentId },
+    /// `pub? mod NAME { <declarations> }` — the INLINE module form,
+    /// declaration files only (wire v12): a `.d.rut` nests its
+    /// declarations in the grammar — structure lives in the grammar,
+    /// never in paths. Declarations only, recursively: `host fn`
+    /// signatures, `mod` edges (file-form and inline), type decls —
+    /// no bodies (a `.d.rut` is body-free by law; the parser refuses
+    /// them in Decl mode as always). The consolidated declaration
+    /// entry a bundle group rides parses to exactly this shape.
+    ModInline { vis: Vis, name: IdentId, items: Vec<NodeHandle<AnyItem>> },
     /// `use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — `path[0]` is
     /// the package, the middle segments name modules, and the leaf
     /// names are the imports. The flat forms (`use pkg::{A, B};` /

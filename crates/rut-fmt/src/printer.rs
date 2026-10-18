@@ -653,6 +653,21 @@ impl<'a> P<'a> {
                 self.text(self.a.name(name));
                 self.text(";");
             }
+            ItemKind::ModInline { vis, name, items } => {
+                // the declaration file's inline module (wire v12): the
+                // nested declarations print through the item walk
+                if let Some(v) = vis_opt(vis) {
+                    self.text(v);
+                    self.sp();
+                }
+                self.text("mod ");
+                self.text(self.a.name(name));
+                self.text(" {");
+                for it in items {
+                    self.item(it);
+                }
+                self.text("}");
+            }
             ItemKind::Use { path, names } => {
                 // the full path — package, modules, in order — then the
                 // leaf names in braces

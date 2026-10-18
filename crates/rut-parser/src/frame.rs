@@ -12,8 +12,9 @@ use rut_lexer::token::Tok;
 
 use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame};
 use crate::item::{
-    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, ModDeclFrame, TypeAliasFrame, UseFrame,
-    InterfaceFrame, MethodFrame, ModuleLetFrame, ParamsFrame, SurfaceFrame, TyDeclFrame, TypeBodyFrame,
+    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, ModDeclFrame, ModInlineFrame,
+    TypeAliasFrame, UseFrame, InterfaceFrame, MethodFrame, ModuleLetFrame, ParamsFrame,
+    SurfaceFrame, TyDeclFrame, TypeBodyFrame,
 };
 use crate::stmt::{BlockFrame, IfFrame, PatternFrame, StmtFrame, WhenFrame};
 use crate::ty::TypeFrame;
@@ -54,6 +55,7 @@ pub(crate) enum Frame {
     Pub(PubFrame),
     Use(UseFrame),
     ModDecl(ModDeclFrame),
+    ModInline(ModInlineFrame),
     Alias(TypeAliasFrame),
     ModuleLet(ModuleLetFrame),
     Enum(EnumFrame),
@@ -86,6 +88,7 @@ impl Frame {
                 Frame::Pub(f) => f.step(p),
                 Frame::Use(f) => f.step(p),
                 Frame::ModDecl(f) => f.step(p),
+                Frame::ModInline(f) => f.step(p),
                 Frame::Alias(f) => f.step(p),
                 Frame::ModuleLet(f) => f.step(p),
                 Frame::Enum(f) => f.step(p),
@@ -114,6 +117,7 @@ impl Frame {
                 Frame::Pub(f) => f.absorb(p, d),
                 Frame::Use(f) => f.absorb(p, d),
                 Frame::ModDecl(f) => f.absorb(p, d),
+                Frame::ModInline(f) => f.absorb(p, d),
                 Frame::Alias(f) => f.absorb(p, d),
                 Frame::ModuleLet(f) => f.absorb(p, d),
                 Frame::Enum(f) => f.absorb(p, d),

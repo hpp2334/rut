@@ -81,7 +81,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
     // `extra` is the fragment after the name row (`, "deps": { … }`) —
     // the entry keys are repealed: the body is `mod.rut` beside the
     // manifest (the `_entry` arg names the file the caller writes)
-    format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}"{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}"{extra}}}"#)
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.

@@ -347,10 +347,30 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         .clone()
         .ok_or_else(|| format!("`{MANIFEST_NAME}` has no `name`"))?;
     let mut files = Vec::new();
-    // the decl surface first (entry.type — Decl mode), verbatim
+    // the declaration entry, ONE per group (wire v12 — the `.d.ts`
+    // lane): the manifest's spelled surface first (`entry.type` — a
+    // host root's, the default `mod.d.rut` included), then the
+    // archive's own `mod.d.rut` probe — a compiled group's GENERATED
+    // entry, which the manifest never names (a compiled manifest spells
+    // no entry keys). The entry indexes as ONE Decl file; the nesting
+    // (the inline `mod` blocks) stamps the mod paths at index time.
+    // Absent (old bundles, stripped packs) the ladder falls to the
+    // binary's object-surface floor below.
+    let mut decl_pushed = false;
     if let Some(e) = table.entries.iter().find(|e| e.mode == Mode::Decl) {
         if let Ok(src) = read_entry(&entries, &e.path) {
             files.push(BundleFile { path: e.path.clone(), src, mode: e.mode });
+            decl_pushed = true;
+        }
+    }
+    if !decl_pushed {
+        if let Ok(src) = read_entry(&entries, rut_driver::decl::DECL_CHILD_FILE) {
+            files.push(BundleFile {
+                path: rut_driver::decl::DECL_CHILD_FILE.to_string(),
+                src,
+                mode: Mode::Decl,
+            });
+            decl_pushed = true;
         }
     }
     // the tree: rows entry first (the additive envelope — the pack
@@ -429,26 +449,30 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     } else if !table.host {
         // no source rode — the delivery law (v22): a published lib
         // bundle is COMPILED-ONLY, its generic bodies riding the binary
-        // as templates. The editor's answer is the binary's own
-        // DECLARATION FACE: the decoded surface rendered back as
-        // Impl-mode source (classes with fields, the inherent methods,
-        // the free fns — signatures only, empty bodies), indexed under
-        // the canonical root name so a use-line `Vec` lands on
-        // `bundle:<module>/mod.rut`. Decode refuses torn bytes loudly.
-        if let Some((_, bin)) = entries.iter().find(|(n, _)| n == "mod.rutc") {
-            match rut_core::binary::decode(bin) {
-                Ok(prog) => {
-                    // the wire carries the ids and the blocks but not
-                    // the packed bookkeeping — rebase with the identity
-                    // scope map rebuilds it (the mount's own first half)
-                    let prog = rut_core::link::rebase(prog, &|s| s);
-                    files.push(BundleFile {
-                        path: "mod.rut".to_string(),
-                        src: decl_face(&prog),
-                        mode: Mode::Impl,
-                    });
+        // as templates. The editor's answer is the DECLARATION ENTRY
+        // when the group carries one (wire v12 — pushed above); the
+        // floor beneath it is the binary's own DECLARATION FACE: the
+        // decoded surface rendered back as Impl-mode source (classes
+        // with fields, the inherent methods, the free fns — signatures
+        // only, empty bodies), indexed under the canonical root name so
+        // a use-line `Vec` lands on `bundle:<module>/mod.rut`. Decode
+        // refuses torn bytes loudly.
+        if !decl_pushed {
+            if let Some((_, bin)) = entries.iter().find(|(n, _)| n == "mod.rutc") {
+                match rut_core::binary::decode(bin) {
+                    Ok(prog) => {
+                        // the wire carries the ids and the blocks but not
+                        // the packed bookkeeping — rebase with the identity
+                        // scope map rebuilds it (the mount's own first half)
+                        let prog = rut_core::link::rebase(prog, &|s| s);
+                        files.push(BundleFile {
+                            path: "mod.rut".to_string(),
+                            src: decl_face(&prog),
+                            mode: Mode::Impl,
+                        });
+                    }
+                    Err(e) => return Err(format!("`mod.rutc`: {e}")),
                 }
-                Err(e) => return Err(format!("`mod.rutc`: {e}")),
             }
         }
         // the remaining entry files still index, exactly as before
@@ -679,6 +703,111 @@ pub fn index_dep(
     // the authoritative spelling, not the `.d.rut` filename convention
     // `analysis::mode_of` speaks for open documents)
     idx.mode = Some(mode);
+    mint_pkg_rows(&mut idx, namespace, consts);
+    idx
+}
+
+/// [`index_dep`] with the file's mod path stamped — one mounted
+/// module of a mod-carrying dep (the dep walk / bundle loader call
+/// this per file; `mod_path` `""` is the pkg root's `mod.rut`).
+pub fn index_dep_mod(
+    name: &str,
+    uri: &str,
+    mod_path: &str,
+    src: &str,
+    mode: Mode,
+    namespace: Option<&str>,
+    consts: &[(String, f64)],
+) -> DefIndex {
+    let mut idx = index_dep(name, uri, src, mode, namespace, consts);
+    idx.mod_path = Some(mod_path.to_string());
+    idx
+}
+
+/// One declaration entry's module indexes — the wire-v12 consumption
+/// of a group's consolidated `mod.d.rut`: ONE Decl parse, and one
+/// `(mod path, index)` pair per nested inline module, each stamped with
+/// the mod path its nesting spells. Structure lives in the grammar,
+/// never in paths: the file is one, the modules many, the parse one.
+/// `mod_path` prefixes every stamp (the file's own position — `""` for
+/// a group root). The namespace head and the consts mint on the
+/// pkg-root module only (they are the MANIFEST's rows, the pkg's own).
+pub fn index_dep_decl_group(
+    name: &str,
+    uri: &str,
+    mod_path: &str,
+    src: &str,
+    namespace: Option<&str>,
+    consts: &[(String, f64)],
+) -> Vec<(String, DefIndex)> {
+    // the ordinary parse once — the mode is the caller's (Decl: the
+    // declaration entry lane)
+    let normalized = rut_lexer::lexer::normalize(src);
+    let (toks, _) = rut_lexer::lexer::lex(&normalized);
+    let (ast, _) = rut_parser::parse(&normalized, Mode::Decl);
+    // the module slices: the root's items, then each inline module's,
+    // path-stamped, first-wins (the loader's own edge law)
+    let mut modules: Vec<(String, Vec<rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>>)> =
+        vec![(String::new(), ast.module_items(ast.root).to_vec())];
+    collect_inline_modules(&ast, ast.module_items(ast.root), mod_path, &mut modules);
+    modules
+        .into_iter()
+        .map(|(path, items)| {
+            let mut idx = crate::hover::index_items(&normalized, &ast, &toks, &items);
+            // the entry uri for the file's own module; a `#<mod path>`
+            // suffix for the nested ones — one index per module, one
+            // origin each (the faces' defs store dedups by origin), the
+            // (module, mod_path) pair remaining the real key
+            idx.origin = if path == mod_path {
+                uri.to_string()
+            } else {
+                format!("{uri}#{path}")
+            };
+            idx.module = Some(name.to_string());
+            // the parse mode rides the index — the definition layer's
+            // body-over-decl preference reads it
+            idx.mode = Some(Mode::Decl);
+            idx.mod_path = Some(path.clone());
+            // the manifest's head rows mint on the pkg root only
+            if path == mod_path {
+                mint_pkg_rows(&mut idx, namespace, consts);
+            }
+            (path, idx)
+        })
+        .collect()
+}
+
+/// The inline modules of one parsed item list, depth-first, path-stamped
+/// under `prefix`. First-wins: a repeated inline edge never mounts
+/// twice.
+fn collect_inline_modules(
+    ast: &rut_ast::ast::Ast,
+    items: &[rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>],
+    prefix: &str,
+    out: &mut Vec<(String, Vec<rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>>)>,
+) {
+    for &it in items {
+        let rut_ast::ast::ItemKind::ModInline { name, items: nested, .. } = ast.item(it) else {
+            continue;
+        };
+        let name = ast.name(*name).to_string();
+        let path = if prefix.is_empty() {
+            name
+        } else {
+            format!("{prefix}/{name}")
+        };
+        if out.iter().any(|(p, _)| *p == path) {
+            continue; // first mount wins
+        }
+        out.push((path.clone(), nested.clone()));
+        collect_inline_modules(ast, nested, &path, out);
+    }
+}
+
+/// The namespace head + consts, minted onto one dep index (the
+/// qualified-access rows — [`index_dep`]'s tail, shared with the
+/// declaration-entry splitter).
+fn mint_pkg_rows(idx: &mut DefIndex, namespace: Option<&str>, consts: &[(String, f64)]) {
     if let Some(head) = namespace {
         // the module's free fns become the head's methods — the
         // qualified-access surface the engine routes by the bound
@@ -707,6 +836,7 @@ pub fn index_dep(
                 line: 1,
             })
             .collect();
+        let module = idx.module.clone().unwrap_or_default();
         idx.types.push(TyDef {
             name: head.to_string(),
             name_span: None,
@@ -720,7 +850,7 @@ pub fn index_dep(
             alias_target: None,
             doc: vec![format!(
                 "the module's namespace head — `use {}::{{ {head} }}` binds it; members are reached qualified",
-                name
+                module
             )],
             span: Span::new(0, 0),
             line: 1,
@@ -738,24 +868,6 @@ pub fn index_dep(
             line: 1,
         });
     }
-    idx
-}
-
-/// [`index_dep`] with the file's mod path stamped — one mounted
-/// module of a mod-carrying dep (the dep walk / bundle loader call
-/// this per file; `mod_path` `""` is the pkg root's `mod.rut`).
-pub fn index_dep_mod(
-    name: &str,
-    uri: &str,
-    mod_path: &str,
-    src: &str,
-    mode: Mode,
-    namespace: Option<&str>,
-    consts: &[(String, f64)],
-) -> DefIndex {
-    let mut idx = index_dep(name, uri, src, mode, namespace, consts);
-    idx.mod_path = Some(mod_path.to_string());
-    idx
 }
 
 #[cfg(test)]
@@ -772,7 +884,7 @@ mod tests {
     /// every manifest must now spell (pins live in rut.lock).
     const PLUGIN_SHAPE: &str = r#"{
   "format": "rutbundle",
-  "format_version": 11,
+  "format_version": 12,
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
@@ -902,25 +1014,84 @@ mod tests {
     }
 
     #[test]
-    fn pouch_bundle_indexes_its_declaration_face() {
-        // the delivery law (v22): a published bundle NEVER carries
-        // source — the generic bodies ride the binary as templates. The
-        // editor's answer for a compiled-only url dep is the binary's
-        // own DECLARATION FACE: the decoded surface rendered back as
-        // Impl-mode source under the canonical root name.
+    fn pouch_bundle_indexes_its_declaration_entry() {
+        // wire v12: a published bundle carries its GENERATED declaration
+        // entry — the editor's primary view. The entry parses in Decl
+        // mode and spells the surface: the generic class with its
+        // fields, the bodiless method signatures, the free fn.
         let b = bundle_sources(POUCH_BUNDLE).expect("the committed pouch bundle parses");
         assert_eq!(b.module, "pouch");
         assert_eq!(b.namespace, None);
         assert!(b.consts.is_empty());
         assert_eq!(b.files.len(), 1, "files: {:?}", b.files.iter().map(|f| &f.path));
-        assert_eq!(b.files[0].path, "mod.rut");
-        assert_eq!(b.files[0].mode, Mode::Impl);
-        // the face spells the surface: the generic class with its
-        // fields, the inherent methods, the free fn
-        assert!(b.files[0].src.contains("pub class Vec<T>"), "the face: {}", b.files[0].src);
-        assert!(b.files[0].src.contains("pub fn new() -> Self"), "the face: {}", b.files[0].src);
-        assert!(b.files[0].src.contains("pub fn push(mut self, _: T)"), "the face: {}", b.files[0].src);
-        assert!(b.files[0].src.contains("pub fn freeze_bytes"), "the face: {}", b.files[0].src);
+        assert_eq!(b.files[0].path, "mod.d.rut", "{:?}", b.files.iter().map(|f| &f.path));
+        assert_eq!(b.files[0].mode, Mode::Decl);
+        assert!(b.files[0].src.contains("GENERATED by rut pack"), "the entry: {}", b.files[0].src);
+        assert!(b.files[0].src.contains("pub class Vec<T>"), "the entry: {}", b.files[0].src);
+        assert!(b.files[0].src.contains("pub fn new() -> Self;"), "the entry: {}", b.files[0].src);
+        assert!(b.files[0].src.contains("pub fn push(mut self,"), "the entry: {}", b.files[0].src);
+        assert!(b.files[0].src.contains("pub fn freeze_bytes"), "the entry: {}", b.files[0].src);
+    }
+
+    #[test]
+    fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
+        // the CDN-shaped dep lane end to end: the committed pouch
+        // bundle (a compiled v12 root) unpacks to its generated
+        // declaration entry; indexing it yields the hover/signature
+        // facts and the member surface a consumer's editor offers —
+        // from the ENTRY, one Decl parse, no binary decode
+        let b = bundle_sources(POUCH_BUNDLE).expect("the committed pouch bundle parses");
+        assert_eq!(b.files.len(), 1);
+        let f = &b.files[0];
+        assert_eq!(f.path, "mod.d.rut");
+        assert_eq!(f.mode, Mode::Decl);
+        let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", &f.src, b.namespace.as_deref(), &b.consts);
+        assert_eq!(idxs.len(), 1, "a flat entry: one module");
+        let idx = &idxs[0].1;
+        assert_eq!(idx.mode, Some(Mode::Decl));
+        // the hover facts: the class row with its fields …
+        let vec = idx.ty("Vec").expect("the class indexes");
+        assert_eq!(vec.form, TyForm::Class);
+        assert!(vec.fields.iter().any(|m| m.name == "buf"), "{:?}", vec.fields.iter().map(|m| &m.name));
+        assert!(vec.fields.iter().any(|m| m.name == "len"));
+        // … and its member signatures — the completion surface
+        let names: Vec<&str> = vec.methods.iter().map(|m| m.name.as_str()).collect();
+        assert!(names.contains(&"new"), "{names:?}");
+        assert!(names.contains(&"push"), "{names:?}");
+        let push = vec.methods.iter().find(|m| m.name == "push").expect("push");
+        assert!(push.src.contains("pub fn push(mut self"), "the verbatim signature: {}", push.src);
+        // the free fn indexes as a module-level fn with its signature
+        let freeze = idx.fns.iter().find(|f| f.name == "freeze_bytes").expect("freeze_bytes");
+        assert!(freeze.src.starts_with("fn freeze_bytes"), "{}", freeze.src);
+        assert!(freeze.owner.is_none());
+    }
+
+    #[test]
+    fn the_decl_entry_indexes_whole() {
+        // the v12 consumption: ONE Decl parse of the consolidated entry,
+        // the inline nesting stamping one index per module — hover
+        // facts from every level land with their mod paths
+        let src = "\
+pub mod net {
+    pub host fn connect(url: str) -> opaque;
+}
+pub host fn legacy_ping() -> bool;
+";
+        let idxs = index_dep_decl_group("myhost", "bundle:myhost/mod.d.rut", "", src, None, &[]);
+        let paths: Vec<&str> = idxs.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(paths, vec!["", "net"], "{paths:?}");
+        let (root, net) = (&idxs[0].1, &idxs[1].1);
+        // the root's own rows + the inline edge
+        assert!(root.fns.iter().any(|f| f.name == "legacy_ping"));
+        assert_eq!(root.mods.len(), 1);
+        assert_eq!(root.mods[0].name, "net");
+        // the child's rows, stamped at their mod path
+        assert_eq!(net.mod_path.as_deref(), Some("net"));
+        assert!(net.fns.iter().any(|f| f.name == "connect"));
+        // one parse, two modules: the origins stay distinct (one per
+        // index — the defs store's key)
+        assert_eq!(idxs[0].1.origin, "bundle:myhost/mod.d.rut");
+        assert_eq!(idxs[1].1.origin, "bundle:myhost/mod.d.rut#net");
     }
 
     #[test]

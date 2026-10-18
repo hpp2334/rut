@@ -35,7 +35,7 @@ fn hello_world(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
     write(&dir, "mod.rut", "entry fn main() -> nil { return; }\n");
     root
@@ -166,7 +166,7 @@ fn two_entries(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
     write(
         &dir,
@@ -228,7 +228,7 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
     // a pure library shape compiles clean — the designation is where
     // the run stops, never a source diagnostic
@@ -274,7 +274,7 @@ fn a_root_parse_error_names_the_file_line_and_column() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
     write(
         &dir,
@@ -306,7 +306,7 @@ fn an_error_in_a_mod_child_names_the_spec_path_label() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
     write(&dir, "mod.rut", "mod layout;\nentry fn main() -> nil { return; }\n");
     write(
@@ -334,14 +334,14 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
     write(
         &hello,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
     );
     write(&hello, "mod.rut", "use calc::{pi};\nentry fn main() -> nil { return; }\n");
     let calc = root.join("calc");
     write(
         &calc,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "calc"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "calc"}"#,
     );
     write(&calc, "mod.rut", "pub fn pi() -> f64 {\n    let = 7;\n}\n");
     let out = Command::new(rut())
@@ -366,7 +366,7 @@ fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "hello"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
     write(
         &dir,

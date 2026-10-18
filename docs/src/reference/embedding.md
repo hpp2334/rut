@@ -365,7 +365,7 @@ contain those names.
 | `tree_pkg(name)` | one toolchain-tree package (`rut/<name>`); a `[deps]` closure is refused |
 | `load_module_source(path)` | one `.rut` file's text — a loose file is a single module, no manifest |
 | `prefetch_urls(&src, &dir, &remote)` | collect a manifest's url rows and fetch them — the `_with` lanes' input step |
-| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **compiled** root for a lib pkg, a **decl** root for a host pkg (`type` routes; `format_version` is 11); returns the bytes ([module bundles](bundles.md)) |
+| `pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family | pack a module directory into a deterministic `.rutbundle` — a **compiled** root for a lib pkg, a **decl** root for a host pkg (`type` routes; `format_version` is 12); returns the bytes ([module bundles](bundles.md)) |
 | `default_out_path(dir)` | the conventional pack output path |
 
 ## The run chain API (`rut-driver`)

@@ -66,9 +66,13 @@ pub const WEB_D_RUT: &str = include_str!("../web/web.d.rut");
 // v22's templates serve the consumer's shapes, so the bundle twin is
 // EXACT, and both lanes compiling the same mounted programs is what
 // mount_lane's byte pin means.
-const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std/nmap_host.rutbundle");
-const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
-const NMAPSET_BUNDLE: &[u8] = include_bytes!("../../../dist/std/nmapset.rutbundle");
+// the PINNED envelope (`dist/std-v11`) — the same bytes the offline
+// cache primes below, so the mirror's hand offers and the manifest
+// lane's walk ride ONE wire. dist/std is the working envelope; the
+// committed pins name the std-v11 bytes.
+const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v11/nmap_host.rutbundle");
+const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v11/pouch.rutbundle");
+const NMAPSET_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v11/nmapset.rutbundle");
 
 // the module trees, verbatim: root + every mounted child — the
 // mirror's whole job is an independent embedder spelling what the

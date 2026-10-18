@@ -362,9 +362,23 @@ impl<'a> Walk<'a> {
                     // host tree's as `<path>/mod.d.rut`, the rows
                     // lane's root as `mod.rut`) — its mod path stamps
                     // the index in the file's own mode; flat files
-                    // keep today's shape
-                    let idx = match deps::bundle_file_mod_path(&f.path) {
-                        Some(p) => deps::index_dep_mod(
+                    // keep today's shape. A DECL file is the
+                    // declaration entry (wire v12): ONE parse, and the
+                    // inline nesting stamps one index per module —
+                    // the consolidated group entry indexes whole.
+                    let idxs: Vec<_> = match deps::bundle_file_mod_path(&f.path) {
+                        Some(p) if f.mode == Mode::Decl => deps::index_dep_decl_group(
+                            &b.module,
+                            &uri,
+                            &p,
+                            &f.src,
+                            b.namespace.as_deref(),
+                            &b.consts,
+                        )
+                        .into_iter()
+                        .map(|(_, idx)| idx)
+                        .collect(),
+                        Some(p) => vec![deps::index_dep_mod(
                             &b.module,
                             &uri,
                             &p,
@@ -372,17 +386,19 @@ impl<'a> Walk<'a> {
                             f.mode,
                             b.namespace.as_deref(),
                             &b.consts,
-                        ),
-                        None => deps::index_dep(
+                        )],
+                        None => vec![deps::index_dep(
                             &b.module,
                             &uri,
                             &f.src,
                             f.mode,
                             b.namespace.as_deref(),
                             &b.consts,
-                        ),
+                        )],
                     };
-                    self.insert(Self::mark(idx, direct));
+                    for idx in idxs {
+                        self.insert(Self::mark(idx, direct));
+                    }
                 }
             }
             Err(e) => {

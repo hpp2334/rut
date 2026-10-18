@@ -44,7 +44,7 @@ fn make_pkg(base: &Path, files: &[(&str, &str)]) -> std::path::PathBuf {
 
 fn host_manifest(name: &str, surface: &str) -> String {
     format!(
-        r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
+        r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
     )
 }
 
@@ -309,20 +309,25 @@ fn flat_host_pkgs_pack_byte_identically() {
 
 #[test]
 fn a_host_tree_packs_into_the_rows_envelope_and_loads_back() {
-    // the tree rides the additive `rut.mods` rows envelope (`""` = the
-    // root surface, `<path>` = each child); the archive reader mounts
-    // the decl children and the rows come back path-qualified
+    // wire v12: the tree rides ONE consolidated declaration entry —
+    // the tree normalized into the inline `mod` blocks (no rows
+    // envelope) — and the archive reader lowers the inline nesting,
+    // the rows coming back path-qualified exactly as the file tree's
     let dir = tree_world("pack");
     let bytes = pack_dir(&dir).expect("pack");
     let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
-    assert!(
-        names.contains(&rut_driver::mods::ROWS_NAME),
-        "the tree rides the rows envelope: {names:?}"
+    assert_eq!(
+        names,
+        vec!["rut.jsonc", "mod.d.rut"],
+        "the tree consolidates into ONE entry: {names:?}"
     );
+    let entry = bundle.read("mod.d.rut").unwrap();
+    assert!(entry.contains("mod net {"), "the inline form: {entry}");
+    assert!(entry.contains("mod tls {"), "the nesting splices recursively: {entry}");
     let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let m = loaded.pkg("myhost").unwrap();
-    assert_eq!(m.mods.keys().collect::<Vec<_>>(), vec!["net", "net/tls"]);
+    assert!(m.mods.is_empty(), "the tree lives in the grammar: {:?}", m.mods.keys().collect::<Vec<_>>());
     assert_eq!(
         rows_of(m).iter().map(|r| r.full_name("myhost")).collect::<Vec<_>>(),
         vec!["myhost::legacy_ping", "myhost::net::connect", "myhost::net::tls::handshake"],

@@ -79,7 +79,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}"{extra}}}"#)
+    format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}"{extra}}}"#)
 }
 
 /// The mixed-closure world: `app` (linkable root) uses `util` (linked
@@ -287,7 +287,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "app"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
     );
     write(
         &app,
@@ -324,7 +324,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "app"}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
     );
     write(
         &app,

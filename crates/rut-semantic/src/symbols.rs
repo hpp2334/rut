@@ -76,6 +76,20 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             find_name(toks, span, ast.name(*name), false),
             vec![],
         )),
+        // the declaration file's inline module — the same outline
+        // entry, its nested declarations riding as children
+        ItemKind::ModInline { name, items, .. } => {
+            let children = items
+                .iter()
+                .filter_map(|&i| item_symbol(toks, ast, i))
+                .collect();
+            Some(sym(
+                ast.name(*name),
+                SymKind::Module,
+                find_name(toks, span, ast.name(*name), false),
+                children,
+            ))
+        }
         ItemKind::Alias(d) => Some(sym(
             ast.name(d.name),
             SymKind::Class,

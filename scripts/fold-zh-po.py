@@ -25,19 +25,17 @@ from fold_po_lib import parse, quote, mech, esc
 POT = 'docs/po/rut.pot'
 PO = 'docs/po/zh_CN.po'
 
-# Fresh translations for the strings this sweep changed (plan5-phase(6)
-# std v10: the tag bump + the pouch/json pin rows' new shas — ALL
-# mechanical cutovers, carried by MECH in fold_po_lib.py; no new prose).
-# Terminology per docs/po/GLOSSARY.md. Everything not mech-carried
+# Fresh translations for the strings this sweep changed (the
+# declaration-entries phase — wire 12): the consolidated inline entry,
+# the universal generated entry, the strip policy's other half, the
+# editor's ladder, the old-lane-reads-forever wire law. Terminology per
+# docs/po/GLOSSARY.md (声明条目 / 编辑的真相 / 旁车 / 内联形式; the
+# `.d.ts` pattern and `mod.d.rut` stay code). Everything not FRESH here
 # either keeps its msgstr byte-for-byte (unchanged msgid) or folds to
 # "" — the English fallback BY DESIGN. Code blocks fold to "" (the
 # untranslated set is code-only). FRESH is pruned after every landed
-# sweep; the plan5-phase(4) mut-law entries landed and are pruned here;
-# see the git history of this file.
+# sweep; see the git history of this file.
 FRESH = {}
-
-
-
 
 
 

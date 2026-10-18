@@ -1,6 +1,6 @@
 {
   "format": "rutbundle",
-  "format_version": 11,
+  "format_version": 12,
   "name": "core",
   "type": "host",
   "entry": {

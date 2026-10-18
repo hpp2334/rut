@@ -267,9 +267,18 @@ fn param_names(ast: &Ast, params: &[NodeHandle<AnyParam>]) -> Vec<String> {
 /// consumed — the decl layer's name-span recovery rides it (no re-lex,
 /// no parser changes).
 pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
+    index_items(src, ast, toks, ast.module_items(ast.root))
+}
+
+/// [`index`] over a GIVEN item list — one module slice of a document.
+/// The deps lane's declaration-entry splitter runs this once per nested
+/// inline module of a consolidated `.d.rut` (one parse, per-module
+/// indexes, each stamped with its mod path), so a bundle group's whole
+/// surface indexes from ONE Decl parse of ONE file.
+pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<AnyItem>]) -> DefIndex {
     let mut idx = DefIndex::default();
     let mut pending_lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis, Span)> = Vec::new();
-    for h in ast.module_items(ast.root) {
+    for h in items {
         let span = ast.span(h.id());
         match ast.item(*h) {
             ItemKind::Class { vis, name, generics, fields, methods, .. } => {
@@ -525,6 +534,20 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
                 // the ident span (decl-site hover/definition target) and
                 // the edge vis; the mounted `NAME/mod.rut` lives in its
                 // own index, found through the chain by mod path
+                idx.mods.push(ModDef {
+                    name: ast.name(*name).to_string(),
+                    name_span: ident_span(toks, span, ast.name(*name)),
+                    vis: *vis,
+                    doc: doc_before(src, span.lo),
+                    span,
+                    line: line_of(src, span.lo),
+                });
+            }
+            ItemKind::ModInline { vis, name, .. } => {
+                // the declaration entry's inline module — the SAME
+                // namespace edge; the nested declarations index into the
+                // child module's own (mod-path-stamped) index, built by
+                // the deps lane's one-parse splitter
                 idx.mods.push(ModDef {
                     name: ast.name(*name).to_string(),
                     name_span: ident_span(toks, span, ast.name(*name)),

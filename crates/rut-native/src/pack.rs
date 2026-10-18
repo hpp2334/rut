@@ -214,24 +214,24 @@ fn pack_dir_opts_locked(
 
 /// Pack a `type = "host"` directory as a **decl root** —
 /// single-package, byte-deterministic: the manifest byte-for-byte plus
-/// its declaration surface file set (the same file-set shape a host
-/// group rides inside a compiled bundle). The pack-time VERIFICATION is
-/// the surface's own parse + lower over its mounted mod tree (the
-/// exact lane a mount runs) — the lowered module is discarded; decls
-/// ride as source and the embedding Rust binds the bodies. A host pkg
-/// has no deps, no programs, no ledger — nothing else to emit.
-///
-/// The surface's mod tree rides the additive `rut.mods` rows envelope
-/// (`""` = the root surface, `<path>` = each child): the tree mounts
-/// from the directory (`NAME/mod.d.rut` beside the declaring file) and
-/// the rows entry is written ONLY when children exist — a flat host
-/// pkg packs byte-identically, no new entries, no version bump.
+/// its ONE consolidated declaration entry (wire v12 — the tree
+/// normalized into the single-file inline form). The pack-time
+/// VERIFICATION is two-fold: the surface's tree parse + lower (the
+/// exact lane a mount runs — a broken `.d.rut` or a declared child
+/// with no mounted file refuses), and the generation invariant — the
+/// consolidated entry must lower to the same rows the file-tree form
+/// did. A host pkg has no deps, no programs, no ledger — nothing else
+/// to emit.
 ///
 /// The root surface is the spelled `entry.type` when the manifest
 /// carries one, else `mod.d.rut` beside the manifest — the load lane's
 /// default-root discovery, mirrored (the pack must verify the exact
 /// layout the reader mounts back). Neither present refuses, naming
-/// both doors.
+/// both doors. The entry rides at the ONE canonical name (`mod.d.rut`):
+/// the archive is name-free, whatever the directory grammar spelled. A
+/// FLAT host pkg's entry is its surface verbatim — its bytes stay the
+/// two-entry shape (the rows envelope is the v11 lane; the reader
+/// loads both forever).
 fn pack_host_root(
     dir: &Path,
     manifest: &Manifest,
@@ -269,27 +269,33 @@ fn pack_host_root(
     let mods: BTreeMap<String, rut_driver::ModSource> =
         rut_driver::mount_mod_children(&src, &root_canon, rut_driver::Mode::Decl, "mod.d.rut", &mut lookup)
             .map_err(PackError::law)?;
-    // the verification: the surface + its tree parse and lower into
-    // host rows — a broken `.d.rut` (or a declared child with no
-    // mounted file) refuses to pack (discard the output)
-    rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
+    // the verification, half one: the surface + its tree parse and
+    // lower into host rows — the exact lane a mount runs
+    let tree = rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
         .map_err(PackError::law)?;
-    // entries = rut.jsonc + the surface (the root file set, prefix "")
-    // — the exact shape the container lane reads back at load. The
-    // surface rides at the ONE canonical name (`mod.d.rut`, wire v11):
-    // the archive is name-free, whatever the directory grammar spelled.
+    // half two, the generation invariant: the ONE consolidated entry
+    // (the tree normalized into the inline form) must lower to the same
+    // rows the file-tree form did
+    let tree_rows = match &tree.body {
+        rut_driver::MountedBody::Host { host_funcs, .. } => host_funcs.clone(),
+        _ => Vec::new(),
+    };
+    let entry = rut_driver::normalize_decl_tree(&src, &mods).map_err(PackError::law)?;
+    let entry_rows = rut_driver::lower_inline_entry(&entry, &src_path.display().to_string())
+        .map_err(PackError::law)?;
+    if !rut_driver::rows_agree(&tree_rows, &entry_rows) {
+        return Err(PackError::law(format!(
+            "{}: the consolidated declaration entry does not lower to the tree's own rows — \
+             the generation invariant refuses the pack",
+            src_path.display()
+        )));
+    }
+    // entries = rut.jsonc + the ONE consolidated entry — the exact shape
+    // the container lane reads back at load (the canonical `mod.d.rut`
+    // name; wire v12 carries no rows envelope for host roots)
     let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
     entries.push((rut_driver::bundle::MANIFEST_NAME.into(), manifest_bytes));
-    entries.push((rut_driver::decl::DECL_CHILD_FILE.into(), src.clone().into_bytes()));
-    // the mod tree rides beside the file set (the rows envelope's
-    // `""` row is the root surface the reader lowers from) — flat pkgs
-    // write no rows entry, so their bytes never move
-    if !mods.is_empty() {
-        entries.push((
-            rut_driver::mods::ROWS_NAME.into(),
-            rut_driver::mods::rows_json(&src, &mods).into_bytes(),
-        ));
-    }
+    entries.push((rut_driver::decl::DECL_CHILD_FILE.into(), entry.into_bytes()));
     write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))
 }
 

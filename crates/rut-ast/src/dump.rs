@@ -97,6 +97,15 @@ fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
                 fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
                 "ModDecl"
             }
+            ItemKind::ModInline { vis, name, items } => {
+                fields.push(field("vis", DumpVal::Vis(*vis)));
+                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+                fields.push(field(
+                    "items",
+                    DumpVal::Nodes(items.iter().map(|&i| node_dump(a, i.id())).collect()),
+                ));
+                "ModInline"
+            }
             ItemKind::Use { path, names } => {
                 fields.push(field("path", DumpVal::Idents(path.iter().map(|&x| a.name(x).to_string()).collect())));
                 fields.push(field("names", DumpVal::Idents(names.iter().map(|&x| a.name(x).to_string()).collect())));

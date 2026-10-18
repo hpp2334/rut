@@ -181,11 +181,20 @@ mod tests {
         // the determinism contract, pinned at the byte level: any
         // upgrade that shifts the writer's output fails here loudly.
         // (The one-time shift off the hand-rolled writer was accepted;
-        // stability starts at this hash.)
+        // stability starts at that hash.)
+        //
+        // WIRE 12 RE-PIN (the plan's ONE deliberate bump — the
+        // declaration-entries lane): the fixture's `format_version`
+        // moved 11 -> 12 with the wire, which moves the manifest bytes,
+        // which moves the archive bytes. The shift is INTENDED: the
+        // failure message this test refused with was
+        // "the .rutbundle byte layout moved — is the shift intended?
+        //  re-pin consciously: <hash>" — and the hash below is the
+        // conscious re-pin of exactly that message.
         let entries = vec![
             (
                 "rut.jsonc".to_string(),
-                br#"{"format": "rutbundle", "format_version": 11, "name": "golden"}"#.to_vec(),
+                br#"{"format": "rutbundle", "format_version": 12, "name": "golden"}"#.to_vec(),
             ),
             ("golden.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
         ];
@@ -197,7 +206,7 @@ mod tests {
             .collect();
         assert_eq!(
             hex,
-            "aedcde7ef9c296f8a38bfdfd1c4970721f8fa0a5806bec134e8d3356fda37ee7",
+            "e7f97f09f4649be341bac18fb6783abcdb7941c072d83e3a6a752b280a979171",
             "the .rutbundle byte layout moved — is the shift intended? re-pin consciously: {hex}"
         );
     }

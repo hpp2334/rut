@@ -34,7 +34,7 @@ fn util_world(tag: &str) -> std::path::PathBuf {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 11, "name": "app", "deps": {"util": {"path": "../util"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"util": {"path": "../util"}}}"#,
     );
     write(
         &app,

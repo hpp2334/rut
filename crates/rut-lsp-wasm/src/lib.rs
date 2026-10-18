@@ -678,9 +678,24 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
         // a mounted mod child rides as `<path>/mod.rut` (a host tree's
         // as `<path>/mod.d.rut`, the rows lane's root as `mod.rut`) —
         // its mod path stamps the index in the file's own mode; flat
-        // files keep today's shape
-        let mut idx = match rut_lsp::deps::bundle_file_mod_path(&f.path) {
-            Some(p) => rut_lsp::deps::index_dep_mod(
+        // files keep today's shape. A DECL file is the declaration
+        // entry (wire v12): ONE parse, the inline nesting stamps one
+        // index per module — the consolidated group entry indexes whole.
+        let idxs: Vec<_> = match rut_lsp::deps::bundle_file_mod_path(&f.path) {
+            Some(p) if f.mode == rut_parser::Mode::Decl => {
+                rut_lsp::deps::index_dep_decl_group(
+                    &b.module,
+                    &uri,
+                    &p,
+                    &f.src,
+                    b.namespace.as_deref(),
+                    &b.consts,
+                )
+                .into_iter()
+                .map(|(_, idx)| idx)
+                .collect()
+            }
+            Some(p) => vec![rut_lsp::deps::index_dep_mod(
                 &b.module,
                 &uri,
                 &p,
@@ -688,20 +703,26 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
                 f.mode,
                 b.namespace.as_deref(),
                 &b.consts,
-            ),
-            None => rut_lsp::deps::index_dep(
+            )],
+            None => vec![rut_lsp::deps::index_dep(
                 &b.module,
                 &uri,
                 &f.src,
                 f.mode,
                 b.namespace.as_deref(),
                 &b.consts,
-            ),
+            )],
         };
-        idx.direct_dep = direct;
-        match defs.iter().position(|d| d.origin == uri) {
-            Some(slot) => defs[slot] = idx,
-            None => defs.push(idx),
+        for mut idx in idxs {
+            idx.direct_dep = direct;
+            // one uri per module: the shared entry uri for the root
+            // stamp, `#<mod path>` for the nested ones (the (module,
+            // mod_path) pair is the real key; the uri only names the
+            // origin in diagnostics)
+            match defs.iter().position(|d| d.origin == uri) {
+                Some(slot) => defs[slot] = idx,
+                None => defs.push(idx),
+            }
         }
         paths.push(f.path.clone());
     }
@@ -1152,7 +1173,7 @@ mod tests {
         rut_begin();
         let out = take(rut_add_bundle(POUCH_BUNDLE.as_ptr(), POUCH_BUNDLE.len()));
         assert_eq!(out["module"], "pouch");
-        assert_eq!(out["files"], serde_json::json!(["mod.rut"]));
+        assert_eq!(out["files"], serde_json::json!(["mod.d.rut"]));
         // a corrupt archive is the error envelope, never silent state
         rut_begin();
         let junk = b"definitely not a zip";
@@ -1169,7 +1190,7 @@ mod tests {
         let locs = take(rut_definition(uri.as_ptr(), uri.len(), 0, 13)); // the use-line `Vec`
         let uris: Vec<&str> = locs.as_array().unwrap().iter().map(|l| l["uri"].as_str().unwrap()).collect();
         assert!(
-            uris.contains(&"bundle:pouch/mod.rut"),
+            uris.contains(&"bundle:pouch/mod.d.rut"),
             "the bundle index answers go-to-definition: {uris:?}"
         );
         // and the member surface hovers through the named module
@@ -1391,12 +1412,13 @@ mod tests {
             .collect();
         let want: Vec<&str> = b.files.iter().map(|f| f.path.as_str()).collect();
         assert_eq!(paths, want, "the envelope's files ride bundle_sources'");
-        // the real source rides, mode + mod path spelled
+        // the generated declaration entry rides, mode + mod path spelled
+        // (wire v12 — the entry IS the surface the extension writes back)
         let f = &out["files"][0];
-        assert_eq!(f["path"], "mod.rut");
-        assert_eq!(f["mode"], "Impl");
+        assert_eq!(f["path"], "mod.d.rut");
+        assert_eq!(f["mode"], "Decl");
         assert_eq!(f["mod_path"], "");
-        assert!(f["src"].as_str().unwrap().contains("class Vec"), "the real pouch source rides");
+        assert!(f["src"].as_str().unwrap().contains("class Vec"), "the pouch entry rides");
         // NO indexing side effect — the defs store ends where it started
         let origins_after: std::collections::BTreeSet<String> =
             state().defs.iter().map(|d| d.origin.clone()).collect();

@@ -28,7 +28,7 @@ pub(crate) mod lookup;
 mod render;
 pub(crate) mod types;
 
-pub use build::index;
+pub use build::{index, index_items};
 pub use bindings::{Binding, BindKind};
 pub use lookup::{hover, HoverOut};
 pub(crate) use render::{binding_markdown, render_let};

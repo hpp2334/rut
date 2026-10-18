@@ -176,14 +176,24 @@ fn chain_for<'a>(
 /// `&TyDef`s). A mono-file pkg — body-only (pouch) or surface-only
 /// (calc, the host surfaces) — is unchanged: all its hits are one
 /// kind.
+///
+/// One precedence above the body law: a MOUNTED dep (the dep walk's
+/// or a pinned bundle's own index) outranks the ambient std embed —
+/// the embed is the zero-fetch fast path for toolchain pkgs, a
+/// fallback, never the answer when the real thing is mounted. The
+/// embed's indexes are the only ones carrying `src_path` (the true
+/// `rut/...` repo path), which marks them here.
 fn prefer_bodies<'a, T: Copy>(hits: &[(&'a DefIndex, T)]) -> Vec<(&'a DefIndex, T)> {
-    let bodies: Vec<(&DefIndex, T)> = hits
+    let mounted: Vec<(&DefIndex, T)> =
+        hits.iter().copied().filter(|(i, _)| i.src_path.is_none()).collect();
+    let pool: &[(&DefIndex, T)] = if mounted.is_empty() { hits } else { &mounted };
+    let bodies: Vec<(&DefIndex, T)> = pool
         .iter()
         .copied()
         .filter(|(i, _)| i.mode != Some(Mode::Decl))
         .collect();
     if bodies.is_empty() {
-        hits.to_vec()
+        pool.to_vec()
     } else {
         bodies
     }

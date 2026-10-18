@@ -81,7 +81,7 @@ fn write_util(root: &Path, dirname: &str, version: i64, tag: &str) {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("rut.jsonc"),
-        format!(r#"{{"format": "rutbundle", "format_version": 11, "name": "util"}} // {tag}"#),
+        format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "util"}} // {tag}"#),
     )
     .unwrap();
     std::fs::write(
@@ -106,7 +106,7 @@ fn write_consumer(
     std::fs::write(
         dir.join("rut.jsonc"),
         format!(
-            r#"{{"format": "rutbundle", "format_version": 11, "name": "{name}", "deps": {{"util": {{"url": "{url}"}}}}}}"#
+            r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "deps": {{"util": {{"url": "{url}"}}}}}}"#
         ),
     )
     .unwrap();
