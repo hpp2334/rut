@@ -417,3 +417,121 @@ fn stale_and_corrupt_group_binaries_are_refused() {
     );
 }
 
+/// The one-closure fixture for the lane-equivalence golden: the std
+/// `pouch` package (self-contained — no deps) plus a consumer whose
+/// shape (`Vec<i32>`) exists only because the consumer spells it.
+/// The consumer compiles identically in both lanes.
+const POUCH_APP: &str = r#"
+use pouch::{ Vec };
+
+entry fn go() -> i32 {
+    let items: Vec<i32> = Vec<i32>::new();
+    items.push(20);
+    items.push(items[0] * 2);
+    let n = items.len();
+    return n * 100 + items[0] + items[1];
+}
+"#;
+
+fn run_compiled<R: rut_vm::interp::Ret>(g: rut_driver::Compiled, entry: &str) -> R {
+    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
+    let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
+    rut_vm::verify::verify(&flat).expect("verify");
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(2_000_000),
+        heap_limit_bytes: Some(16 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
+    vm.call::<_, R>(entry, ()).expect("run")
+}
+
+/// The lane-equivalence golden (staged == reference, L-eq): ONE
+/// closure — the std `pouch` package plus a consumer spelling a shape
+/// pouch's own closure never spells — compiled through BOTH lanes.
+/// (a) The REFERENCE lane: the whole-program compile over the closure
+/// as sources, one graph. (b) The STAGED lane: pouch packed to an
+/// archive, the archive walked + mounted into a fresh run, the consumer
+/// compiled against its surface (instantiating `Vec<i32>` from the
+/// templates), linked. The lanes must agree on the run result — a
+/// staged build is correct exactly when it equals the reference build.
+/// Linked BYTES are pinned per lane (each lane is deterministic against
+/// itself — the reference law), not ACROSS lanes: the staged world's
+/// compile input carries the archive's mount keys (the identity law),
+/// so its name table is not byte-comparable with the directory world's;
+/// the run result is the cross-lane contract (byte-level parity of the
+/// two lanes' fn inventories is the generic-templates suite's law).
+#[test]
+fn staged_lane_produces_what_the_reference_lane_would() {
+    let tree = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let pouch = tree.join("rut/pouch");
+
+    // (a) the reference lane: the whole closure as sources, one graph
+    let dir_pkg = rut_native::tree_pkg("pouch").expect("walk rut/pouch");
+    let reference = rut_driver::RutRun::new()
+        .pkg(dir_pkg)
+        .pkg(
+            rut_driver::Pkg::source("app", POUCH_APP)
+                .manifest(rut_driver::Manifest::lib("app", &["pouch"])),
+        )
+        .entrypoint("app")
+        .compile()
+        .expect("reference compile");
+    let ref_bytes = rut_core::binary::encode(
+        &reference
+            .graph
+            .program
+            .clone()
+            .expect("linked program"),
+    );
+    assert!(!ref_bytes.is_empty());
+    assert_eq!(run_compiled::<i32>(reference, "go"), 260);
+
+    // L-ref sanity: the reference lane recompiles to identical bytes
+    let recompiled = rut_driver::RutRun::new()
+        .pkg(rut_native::tree_pkg("pouch").expect("walk rut/pouch"))
+        .pkg(
+            rut_driver::Pkg::source("app", POUCH_APP)
+                .manifest(rut_driver::Manifest::lib("app", &["pouch"])),
+        )
+        .entrypoint("app")
+        .compile()
+        .expect("reference recompile");
+    let ref_bytes_again = rut_core::binary::encode(
+        &recompiled
+            .graph
+            .program
+            .clone()
+            .expect("linked program"),
+    );
+    assert_eq!(ref_bytes_again, ref_bytes, "the reference lane is deterministic");
+
+    // (b) the staged lane: pack the closure to an archive, walk +
+    // mount it, compile the consumer against its surface
+    let bytes = pack_dir(&pouch).expect("pack the closure");
+    let archive = rut_driver::Pkg::from_bundle(&bytes).expect("decode the archive");
+    assert_eq!(archive.root, "pouch");
+    assert!(matches!(
+        archive.pkg("pouch").unwrap().body,
+        PkgBody::Compiled(_)
+    ));
+    let staged = rut_driver::RutRun::new()
+        .pkgs(&archive)
+        .pkg(
+            rut_driver::Pkg::source("app", POUCH_APP)
+                .manifest(rut_driver::Manifest::lib("app", &["pouch"])),
+        )
+        .entrypoint("app")
+        .compile()
+        .expect("staged compile");
+    assert_eq!(run_compiled::<i32>(staged, "go"), 260, "staged == reference");
+}
+
+
+

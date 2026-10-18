@@ -12,7 +12,7 @@ example:
 | [`03-plugin/`](03-plugin/) | `cargo run -p plugin` | a module directory + [`.rutbundle`](../docs/src/reference/bundles.md) chat-moderator plugin; re-entrant `vm.call`, both `opaque` directions; the pouch dep rides its CDN bundle (pinned) and the moderator's muted list is a consumer-spelled `Vec<str>` — the pack's rode-along law carries the pouch group inside the published bundle |
 | [`04-custom-async/`](04-custom-async/) | parse-only — no runnable harness yet (the disclosed follow-up); the dir carries its `rut.jsonc` for the shape law | a user-written launcher (`launch_custom`) over the CLOSED builtin `Future` class — per-checkpoint stats, cancellation probes read as data inside the async body (`cx.cancelled()`), resume state at each checkpoint (`cx.checkpoint()`). The engine mints every future (`async fn`/`async {}`/`sleep`); a user type cannot BE a future. `await` targets engine-woven futures in v1 (join not yet landed) |
 | [`05-todolist-web/`](05-todolist-web/) | `cargo test -p todolist-web` + `node tests/e2e-browser.mjs` | the full page app: a todolist with a simulated server (request table + per-kind `tim_after` latency) whose brain is pure rut — ten DOM/timer crossings over web_sys on wasm32, the fake-DOM twin as the cargo gate, a through-the-artifact e2e in node and Firefox headless; the wasm mirror takes the `nmap_host` surface from the committed CDN artifact (`mount_bundle_bytes` over `include_bytes!`) |
-| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`mod.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.jsonc` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their bundles would serve the shapes the same way since the riding law) |
+| [`06-github-viewer-cli/`](06-github-viewer-cli/) | `cargo run -p rgh -- --repo=… --ref=… list` | `rgh` — a GitHub viewer over the jsDelivr CDN whose brain is rut (`mod.rut`, an ASYNC free fn over the redesigned std `rut/http` lane): argv carving, the tree JSON decode, and the human-size formatter run in the VM; `send` resolves at headers, the list drains in one body await, the download walks the byte stream chunk by chunk through the sync `append_file` row; the embedder launches the brain (`boot` + `launch_future`), pumps the loop to idle, exits with the brain's i32; the offline suite rides the fixture lane keyed on method+URL with virtual-clock chunk arrival; the std closure mounts through the project manifest (`rut.jsonc` — the url carrier), with `http` riding the committed CDN bundle (sha256-pinned) and the generic owners on path rows (the tree checkout is this example's hermetic test input; their bundles would serve the shapes the same way — the binaries carry the template bodies) |
 
 Every rut program here is a module dir with a `rut.jsonc` — the
 manifest is the deps carrier, and since the nameability law it is the
@@ -22,7 +22,7 @@ else's `deps` is mounted-not-nameable — the D5 diagnostic names the
 mount edge and the row to add; the old ambient tier is gone).
 `00`/`01`/`02` declare their third-party pkgs as URL rows pinned to
 the committed artifacts (`pouch`, plus `json` + `nmapset` for `02` —
-the generic owners, served since the generic-source riding law);
+the generic owners, served from the committed bundles' templates);
 `calc` is a declared path row into the toolchain tree wherever a
 program names it (`01`/`02` spell the row; `00` never uses `calc` and
 declares nothing for it), and their embedders
@@ -50,14 +50,13 @@ The std tree ships as committed per-package bundles
 on every load, offline or not (the committed artifact IS the cache; a
 project manifest is the only url carrier, and the embedder seeds the
 fetcher from it — [embedding](../docs/src/reference/embedding.md)).
-The delivery is the engine's instantiation law plus the generic-source
-riding law: a compiled bundle carries its pack closure's
-instantiations in its ledger, and a compiled pkg whose surface exports
-generics rides the source that serves consumer-spelled shapes — so the
+The delivery is the engine's instantiation law: a compiled bundle
+carries its pack closure's instantiations in its ledger and its
+generic bodies as templates inside the binaries — so the
 CDN delivers **host surfaces** (the v6 decl bundles), **concrete-class
 libs** (`http` — 06 rides it), **and the generic owners** (`pouch`,
 `nmapset`, `json`, `futures` — the examples' `Vec<Todo>` and
-`Vec<str>` shapes compile from the bundles at the link). And every
+`Vec<str>` shapes monomorphize from the templates at the link). And every
 bundle is CLOSED: a bundle-mounted json carries its `strbuild` +
 `pouch` + `nmapset` groups inside, so its wrappers resolve wherever it
 travels ([dependency kinds](../docs/src/reference/dependency-kinds.md),

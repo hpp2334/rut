@@ -56,7 +56,8 @@ deps/<name>@<fp16>/mod.rutc    a compiled group (the ordinary case: a source
                            body the graph linked) — bodies + surface, the
                            linking truth; the binary carries the closure's
                            instantiations in its ledger AND its generic
-                           bodies as templates (v22)
+                           bodies as templates (instantiation-independent
+                           bodies)
 deps/<name>@<fp16>/mod.d.rut   the group's surface text, when it declares one
 deps/<name>@<fp16>/rut.mods    its module rows, when it has mod children
 deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
@@ -91,14 +92,15 @@ deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
   whose unit did not link) rides its declaration file set. Refuse,
   never guess: the packer calls the graph's own classifier, there is
   no second implementation.
-- **Generics ride compiled — the delivery law (v22)**: instantiation
+- **Generics ride compiled — instantiation independence (the
+  separate-compilation contract)**: instantiation
   is owned by the declaring package, and the pack walk seeds each
   generic dep with the instantiations its consumers spell — the
   binary's instantiation ledger names every `(owner, decl, arguments)`
   row the closure compiled. A compiled pkg whose surface exports an
   OPEN generic surface (generic fns, generic type exports, generic
   methods) ALSO carries the generic BODIES as templates inside the
-  binary (v22 — the wire's templates section): every exported generic
+  binary (the wire's templates section): every exported generic
   decl compiles once against `#<param>` placeholder rows at pack time,
   and a consumer-spelled shape the ledger misses monomorphizes from
   the template at link — one row program-wide, owner-anchored,
@@ -235,8 +237,9 @@ guess: `this toolchain reads bundle format_version 11 only (found {v})
 Every file in the two layouts is part of the package: a bundle that
 dropped a declared child module would load partial — semantically
 wrong, so the closure law is checked at the mount. Compilation is the
-delivery contract, no exceptions — the generic bodies ride INSIDE the
-binary as templates (the delivery law above), so consumer-spelled
+contract, no exceptions — the generic bodies ride INSIDE the
+binary as templates (instantiation independence, above), so
+consumer-spelled
 shapes stay servable and a published bundle never carries source.
 Source sharing as the general contract stays a directory
 (`rut run <dir>`), as it always was outside bundles.
@@ -364,7 +367,7 @@ pins). The laws:
 - **What a compiled bundle serves.** Instantiation is owner-anchored:
   a compiled owner carries the generic instantiations its own pack
   closure spelled in its ledger — and its generic BODIES as templates
-  inside the binary (the delivery law): at the consumer's link a
+  inside the binary (instantiation independence): at the consumer's link a
   request the ledger lacks monomorphizes from the template under the
   declaring pkg's spec (one row program-wide, nothing persisted). So
   the CDN lane delivers **host surfaces** (decl bundles),

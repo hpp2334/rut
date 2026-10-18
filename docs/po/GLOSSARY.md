@@ -70,8 +70,21 @@ source text by design; a partially translated book is a valid book.
 | embed loop | 嵌入循环 | |
 | compiled group | 编译组 | a bundle dep whose `.rutc` rides（对照 source group） |
 | source group | 源码组 | a host pkg (or a declared dep whose unit did not link) riding its declaration file set |
-| riding (generic-source, RETIRED) | 承载（泛型源码承载，已废止） | the v22 delivery law repealed it — historical mentions only；the riding law → 承载法则（仅历史语境）；rides beside the binary → 在二进制旁承载 |
-| delivery law (v22) | 交付法则（v22） | generics ride compiled: 泛型走编译交付；a published bundle never carries source → 已发布的捆绑包绝不携带源码；instantiation is owner-anchored → 实例化按拥有者锚定 |
+| riding (generic-source, RETIRED) | 承载（泛型源码承载，已废止） | generic-source riding is retired — historical mentions in source comments only（仅历史语境）；the riding law → 承载法则（仅历史语境，勿在用户可见文本使用）；rides beside the binary → 在二进制旁承载 |
+| delivery law (v22, RETIRED) | 交付法则（v22，已废止） | the branded law name is retired from user-facing prose — sweep it（用户可见文本一律改用规范名）：the concept is now instantiation independence（实例化独立）+ templates（模板） |
+| instantiation independence | 实例化独立 | the separate-compilation contract → 分离编译契约；the same substitution ⇒ the same body, one row program-wide → 同一替换必得同一代码体，全程序一行；consumer spelling picks shapes, never changes bodies → 消费方拼写挑选形状，绝不改变代码体；no standard word — describe, don't brand → 无标准词——描述而不造词 |
+| deterministic reference mode | 确定性参考模式 | whole-program compilation → 全程序编译；the contract, not a fallback → 是契约，不是退路；byte-identical everywhere → 任何机器、任何日期都字节一致 |
+| archive | 归档 | the `.rutbundle`（stays code）；uber-jar / Go `.a` semantics → uber-jar / Go `.a` 语义；the sole publication unit → 唯一的发布单元；shade the closure → 收纳闭包 |
+| object file | 目标文件 | `mod.rutc` stays code；linking truth → 链接的真相 |
+| declaration entry | 声明条目 | generated at pack, never hand-maintained → 打包期生成，绝不手工维护；editing truth → 编辑的真相；the `.d.ts` pattern → `.d.ts` 模式（stays code） |
+| linking truth | 链接的真相 | the object; a consumer binds exports from the binary alone → 消费方仅凭二进制绑定导出 |
+| editing truth | 编辑的真相 | the declaration entry → 即声明条目 |
+| surface validation at compile | 编译期表面校验 | the consumer compile reads the object's surface (the rustc-reads-metadata precedent) → 消费者编译读取目标文件的表面（rustc 读元数据的前例） |
+| load + relocate | 加载 + 重定基 | ids rebase onto the loader's numbering → id 重定基到加载者的编号 |
+| compilation session | 编译会话 | impl detail — `RutRun` stays code; never user-facing → 实现细节，绝不出现在用户侧 |
+| pre-instantiated bodies | 预实例化代码体 | ≈ COMDAT-folded duplicates → ≈ COMDAT 折重的副本 |
+| auto-linked core / prelude | 自动链接的 core / prelude | like Go's runtime → 类似 Go 的运行时 |
+| host bindings | 宿主绑定 | host pkg / rows（FFI）→ 宿主包及其行 |
 | template (wire) | 模板 | generic bodies ride the binary as templates → 泛型代码体作为模板承载在二进制内；monomorphize from the template → 从模板单态化；template bodies → 模板代码体 |
 | scope ledger | 作用域台账 | `rut.scopes` stays code；打包期作用域 → 打包期作用域 |
 | rebase | 重定基 | packed ids rebase onto the loader's numbering |

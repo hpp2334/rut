@@ -2,7 +2,9 @@
 
 Compilation is AOT, in-process, and deterministic. There is no JIT and no
 deoptimization: whatever the checker proves is final, and the emitted
-bytecode is the whole story.
+bytecode is the whole story. The model around this stage — the
+deterministic reference, the archive, instantiate + link — is
+[The compilation model](compilation-model.md).
 
 ```
 source ─► lex/parse (rut-lexer, rut-parser)      [The frontend](frontend.md)

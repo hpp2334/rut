@@ -317,8 +317,8 @@ not the walk. The container, the manifest grammar, and the reader are
 
 **What to take from a url** is the engine's instantiation law, read
 from the embedding side: a compiled bundle serves host surfaces,
-concrete-class libs, **and** — the delivery law (v22) — the generic
-owners: a request the pack-time ledger lacks monomorphizes from the
+concrete-class libs, **and** — by instantiation independence — the
+generic owners: a request the pack-time ledger lacks monomorphizes from the
 template the binary carries and compiles the body under the declaring
 pkg's spec, at the link, nothing persisted (`Vec<MyTodo>`,
 `decodeJson<T>` — [module bundles](bundles.md) — the std-CDN section).

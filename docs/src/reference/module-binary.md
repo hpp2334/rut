@@ -26,7 +26,7 @@ pub struct Program {
     pub consts: Vec<ConstVal>,      // the constant pool
     pub funcs: Vec<FuncCode>,       // the code ([Typed bytecode](typed-bytecode.md))
     pub exports: Vec<(IdentId, u32)>,   // host-callable names
-    pub templates: Vec<TemplateRow>,    // v22: generic bodies ride the binary
+    pub templates: Vec<TemplateRow>,    // instantiation-independent bodies
     pub template_stubs: Vec<TemplateStub>, // bound-member stubs of the window
     pub template_first_fid: u32,    // the window's first func
     pub template_end_fid: u32,      // one past its last
@@ -66,10 +66,10 @@ offset  field
                  exports, interface decls, inherent method surfaces,
                  the native rows   # below
         templates: window first fid, window end (exclusive), then
-                 u32 count, then per row (below)   # v22
+                 u32 count, then per row (below)   # template bodies ride the binary
 ```
 
-- **Templates (v22 — generic bodies ride the binary)**: after the
+- **Templates (instantiation-independent bodies)**: after the
   surface, the wire carries the template window — `template_first_fid`
   and `template_end_fid` (every func in `[first, end)` is
   template-derived; the end is WIRE, not implicit, because a pack walk
@@ -84,7 +84,7 @@ offset  field
   triples. Decode validates the window against the func table and every
   type id against the carried blocks; a consumer-spelled shape the
   pack-time ledger misses monomorphizes from these rows at link (see
-  [Bundles](bundles.md) — the delivery law).
+  [Bundles](bundles.md) — instantiation independence).
 
 - **Name table.** Names are interner ids everywhere — type names, field
   names, enum members, interface/method names, function names, exports.

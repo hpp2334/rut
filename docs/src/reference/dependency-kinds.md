@@ -133,9 +133,9 @@ is a pure byte-equality repack — CI never touches the network).
 
 **What a url row can deliver** is the engine's instantiation law, read
 from the CDN side: a compiled bundle carries the generic instantiations
-its own pack closure spelled **in its ledger**, and — the delivery law
-(v22) — its exported generic decls ride **as templates inside the
-binary**:
+its own pack closure spelled **in its ledger**, and — by instantiation
+independence — its exported generic decls ride **as templates inside
+the binary**:
 
 - **host surfaces and concrete-class libs deliver** — a `type = "host"`
   bundle is a declaration surface (no generics), and a lib of concrete

@@ -96,6 +96,7 @@
 
 ## Toolchain
 
+- [The compilation model](reference/compilation-model.md)
 - [The frontend](reference/frontend.md)
 - [The compiler pipeline](reference/compiler.md)
 - [Typed bytecode](reference/typed-bytecode.md)
@@ -111,3 +112,4 @@
 - [Project structure and rut.jsonc](reference/project-structure.md)
 - [Dependency kinds](reference/dependency-kinds.md)
 - [The rut CLI](reference/cli.md)
+- [Glossary](reference/glossary.md)

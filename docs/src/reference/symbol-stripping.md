@@ -130,12 +130,13 @@ the pack). That determinism is also the honest limitation:
   original source can rebuild the same closure deterministically and
   regenerate an identical map. Treat `.rutsym` like a `.pdb`: distribute
   it only to parties who may see names and positions.
-- **Stripping and generics compose — the coverage law (v22).** A
+- **Stripping and generics compose.** A
   successful pack's templates cover its generic surface by
   construction, so `--strip` on a generic-owning closure is legal
   unconditionally: the consumer-spelled shapes monomorphize from the
   in-binary templates at link, never from source. The keep-set
-  therefore preserves every name the delivery law consults — the
+  therefore preserves every name instantiation independence (the
+  separate-compilation contract) consults — the
   exported surface's names (funcs, types, consts, interface and
   inherent methods), the generic parameter names (the consumer's
   substitution env spells `#{param}` against them), the template
