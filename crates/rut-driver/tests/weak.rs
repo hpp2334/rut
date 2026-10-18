@@ -42,7 +42,7 @@ use std::rc::Rc;
 
 
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -54,7 +54,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -128,12 +128,14 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let ink = rut_native::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
     let out = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&ink)
+        ink
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(
                 // the root DECLARES its uses structurally (ink; the
                 // logger use is appended above)
-                rut_driver::Pkg::source("app_main", &combined)
+                rut_driver::Mounted::source("app_main", &combined)
                     .manifest(rut_driver::Manifest::lib("app_main", &["ink"])),
             )
             .entrypoint("app_main")
@@ -403,13 +405,13 @@ entry fn main() -> i32 {
     return probe_o(w);
 }
 "#;
-    let mut chain = rut_driver::RutRun::new().pkgs(&weak_host);
+    let mut chain = weak_host.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
     let ctx = rut_driver::host_pkg_ctx(&weak_host.pkgs);
     chain = chain
         .pkg(
             // the root DECLARES its uses structurally (the weak_host
             // surface's names)
-            rut_driver::Pkg::source("app_main", src)
+            rut_driver::Mounted::source("app_main", src)
                 .manifest(rut_driver::Manifest::lib("app_main", &["weak_host"])),
         )
         .entrypoint("app_main");

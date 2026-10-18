@@ -4,7 +4,7 @@
 
 /// The toolchain libs a single-file case declares by use (`ink`,
 /// `pouch`) — walked from the tree as real packages.
-fn case_world() -> Vec<rut_driver::Pkg> {
+fn case_world() -> Vec<rut_driver::Mounted> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."); // repo root
     let mut world = Vec::new();
     for d in ["rut/ink", "rut/pouch"] {
@@ -31,14 +31,16 @@ fn with_logger_use(src: &str) -> String {
 
 fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = with_logger_use(src);
-    match rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: case_world(), root: String::new() })
+    let world = case_world();
+    match world
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
-            rut_driver::Pkg::source(module, &combined)
+            rut_driver::Mounted::source(module, &combined)
                 .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
         )
-        .host_pkg(rut_std::logger::pkg(|_msg| {}))
-        .host_pkg(rut_std::math::pkg())
+        .pkg(rut_std::logger::pkg(|_msg| {}))
+        .pkg(rut_std::math::pkg())
         .entrypoint(module)
         .compile()
     {

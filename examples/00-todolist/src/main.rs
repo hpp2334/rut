@@ -16,7 +16,7 @@ use std::task::{Context, Poll};
 /// manifest); a warm start is pure cache hits — the remote is the
 /// only thing an embedder names, and only when the manifest declares
 /// url rows (this one does).
-fn load(base: &Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
+fn load(base: &Path) -> Result<rut_driver::Walk, rut_driver::RunError> {
     let remote = rut_native::HttpRemote::project_local(base);
     block_on(rut_native::load_path_session_with(base, &remote))
 }
@@ -43,8 +43,10 @@ fn main() {
     // does not know by name), verify, drive
     let loaded = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
         .expect("load the module dir");
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");

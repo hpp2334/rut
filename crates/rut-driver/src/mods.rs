@@ -37,7 +37,7 @@ use std::collections::BTreeMap;
 use rut_ast::ast::{Ast, ItemKind, Linkage, Vis};
 use rut_parser::{parse, Mode};
 
-use crate::session::{Pkg, PkgBody};
+use crate::session::{Mounted, MountedBody};
 
 /// The bundle entry that carries a package's module rows — the
 /// additive envelope section (`<pkg>/rut.mods` for a dep group).
@@ -293,14 +293,14 @@ impl ModuleSet {
 /// same files the loader mounted, re-parsed for their declaration
 /// rows (the host rows ride as [`DeclKind::HostFn`], so a qualified
 /// use validates against the path-carrying tree). A hand-built host
-/// body with no retained surface (`core`, `Pkg::host`) collects no
+/// body with no retained surface (`core`, `Mounted::host`) collects no
 /// root unit — its rows carry no mod tree to speak of.
-pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
+pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>) {
     let mut problems: Vec<String> = Vec::new();
     let mut set = ModuleSet::default();
     // the flavor: a host body's tree speaks Decl and mounts
     // `NAME/mod.d.rut`; everything else is the lib shape
-    let host = matches!(&pkg.body, PkgBody::Host { .. });
+    let host = matches!(&pkg.body, MountedBody::Host { .. });
     let (mode, child_file) = if host {
         (Mode::Decl, crate::decl::DECL_CHILD_FILE)
     } else {
@@ -310,7 +310,7 @@ pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
     // a compiled root's children still collect below, the root's AST
     // rides the binary)
     let root_declares: BTreeMap<String, Vis> = match &pkg.body {
-        PkgBody::Source { text, is_decl } => {
+        MountedBody::Source { text, is_decl } => {
             let m = if *is_decl { Mode::Decl } else { Mode::Impl };
             let (ast, diags) = parse(text, m);
             if !diags.is_empty() {
@@ -327,7 +327,7 @@ pub fn collect_module_set(spec: &str, pkg: &Pkg) -> (ModuleSet, Vec<String>) {
                 declared
             }
         }
-        PkgBody::Host { root_surface: Some(text), .. } => {
+        MountedBody::Host { root_surface: Some(text), .. } => {
             let (ast, diags) = parse(text, Mode::Decl);
             if !diags.is_empty() {
                 problems.extend(diags.iter().map(|d| format!("`{spec}` ({child_file}): {}", d.msg)));
@@ -853,7 +853,7 @@ mod tests {
 
     /// A host-body pkg from a root surface + mounted tree — the shape
     /// `lower_decl_module` yields (the dep tables read it as found).
-    fn host_pkg(root: &str, children: &[(&str, Vis, &str)]) -> Pkg {
+    fn host_pkg(root: &str, children: &[(&str, Vis, &str)]) -> Mounted {
         let mut mods = BTreeMap::new();
         for (path, vis, text) in children {
             mods.insert(
@@ -861,9 +861,9 @@ mod tests {
                 ModSource { path: path.to_string(), vis: *vis, text: text.to_string(), file: "mod.d.rut".to_string() },
             );
         }
-        Pkg {
+        Mounted {
             spec: "myhost".to_string(),
-            body: crate::session::PkgBody::Host {
+            body: crate::session::MountedBody::Host {
                 host_funcs: vec![],
                 consts: vec![],
                 native_types: vec![],
@@ -950,7 +950,7 @@ mod tests {
     fn a_source_tree_collects_exactly_as_before() {
         // the lib shape is untouched by the host arm: Impl children,
         // `mod.rut` spellings, no host rows
-        let mut pkg = Pkg::source(
+        let mut pkg = Mounted::source(
             "app",
             "mod layout;\nentry fn main() {}\n",
         );

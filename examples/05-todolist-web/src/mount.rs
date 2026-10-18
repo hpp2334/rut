@@ -11,7 +11,7 @@
 //! walks a test probe the same way.
 //!
 //! THE MIRROR (the wasm lane): wasm has no filesystem, so
-//! [`mirror_pkgs`] offers the same closure by hand — one `Pkg` per
+//! [`mirror_pkgs`] offers the same closure by hand — one `Mounted` per
 //! package, the same mount properties the manifests state, everything
 //! `include_str!`/`include_bytes!` (the rut-wasm ink/ink_host
 //! precedent). Nothing here knows the app's SOURCE: the root's TREE
@@ -47,7 +47,7 @@
 
 use std::collections::BTreeMap;
 use rut_core::binary::Program;
-use rut_driver::{Compiled, Loaded, Pkg, RutRun};
+use rut_driver::{Compiled, Walk, Mounted, RutRun};
 
 // ---- the packages, embedded verbatim --------------------------------
 // The mirror reads the SAME files the manifest names. wasm32 has no
@@ -59,7 +59,7 @@ pub const WEB_D_RUT: &str = include_str!("../web/web.d.rut");
 
 // the url-dep mounts, from the COMMITTED CDN artifacts (the v11
 // bundles, sha256-pinned by the pins gate). THE BUNDLE LAW: the
-// mirror's offer is `Pkg::from_bundle` per artifact — the in-memory
+// mirror's offer is `Mounted::from_bundle` per artifact — the in-memory
 // twin of the walk's cache lane. pouch and nmapset mount the SAME way
 // (their own committed bundles): v21 offered them as verbatim sources
 // because a compiled bundle then served only its own pack closure —
@@ -146,7 +146,7 @@ pub(crate) fn biz_manifest() -> rut_driver::Manifest {
 /// mounted children (all `pub mod` — biz crosses into each). The pkg
 /// rides its real manifest ([`ui_manifest`]) — the mirror states the
 /// same declaration the walk reads.
-pub fn ui_pkg() -> Pkg {
+pub fn ui_pkg() -> Mounted {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
         child_mod("store", rut_ast::ast::Vis::Pub, UI_STORE),
         child_mod("widget", rut_ast::ast::Vis::Pub, UI_WIDGET),
@@ -155,8 +155,8 @@ pub fn ui_pkg() -> Pkg {
         child_mod("components", rut_ast::ast::Vis::Pub, UI_COMPONENTS),
     ]
     .into();
-    let base = Pkg::source("ui", UI_ROOT).manifest(ui_manifest());
-    Pkg { spec: "ui".into(), mods, ..base }
+    let base = Mounted::source("ui", UI_ROOT).manifest(ui_manifest());
+    Mounted { spec: "ui".into(), mods, ..base }
 }
 
 /// biz's module tree, offered whole: the root module (the law header +
@@ -166,15 +166,15 @@ pub fn ui_pkg() -> Pkg {
 /// wasm lane (loader.js's rows wire) compose. The pkg rides its real
 /// manifest ([`biz_manifest`]) — the root declares exactly what its
 /// modules `use`.
-pub fn biz_pkg() -> Pkg {
+pub fn biz_pkg() -> Mounted {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
         child_mod("domain", rut_ast::ast::Vis::Pub, BIZ_DOMAIN),
         child_mod("world", rut_ast::ast::Vis::Pub, BIZ_WORLD),
         child_mod("app", rut_ast::ast::Vis::Self_, BIZ_APP),
     ]
     .into();
-    let base = Pkg::source("app", BIZ_ROOT).manifest(biz_manifest());
-    Pkg { spec: "app".into(), mods, ..base }
+    let base = Mounted::source("app", BIZ_ROOT).manifest(biz_manifest());
+    Mounted { spec: "app".into(), mods, ..base }
 }
 
 /// The rut/ project root — the manifest lane's walk point. Native
@@ -199,7 +199,7 @@ pub fn probe_dir(probe: &str) -> std::path::PathBuf {
 /// surface with no artifact and no path/url, so [`rut_driver::Manifest::lib`]
 /// is its only declaration spelling (it `use`s nothing — the row set
 /// is empty).
-pub fn web_pkg() -> Result<Pkg, String> {
+pub fn web_pkg() -> Result<Mounted, String> {
     Ok(rut_driver::lower_decl_module(WEB_D_RUT, &BTreeMap::new(), "web.d.rut")?
         .named("web")
         .manifest(rut_driver::Manifest::lib("web", &[])))
@@ -214,7 +214,7 @@ pub fn web_pkg() -> Result<Pkg, String> {
 /// where the pkg names the surface). The ROOT is deliberately absent:
 /// the app's SOURCE crosses the ABI ([`compile_app`] offers and
 /// compiles it).
-pub fn mirror_pkgs() -> Result<Vec<Pkg>, String> {
+pub fn mirror_pkgs() -> Result<Vec<Mounted>, String> {
     // every CDN row the manifest spells, mounted from the committed
     // artifact — the walk's cache lane answers the SAME bytes, so the
     // two offered closures are the same programs. The v11 law names an
@@ -229,7 +229,7 @@ pub fn mirror_pkgs() -> Result<Vec<Pkg>, String> {
     let nmap_host_spec = rut_driver::bundle::identity::identity("nmap_host", &fp16);
     let mut pkgs = vec![web_pkg()?];
     for bytes in [NMAP_HOST_BUNDLE, POUCH_BUNDLE, NMAPSET_BUNDLE] {
-        let mut mounted = rut_driver::Pkg::from_bundle(bytes).map_err(|e| e.to_string())?.pkgs;
+        let mut mounted = rut_driver::Mounted::from_bundle(bytes).map_err(|e| e.to_string())?.pkgs;
         for p in mounted.iter_mut() {
             if rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host" {
                 p.spec = nmap_host_spec.clone();
@@ -249,7 +249,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
     for p in mirror_pkgs()? {
         run = run.pkg(p);
     }
-    Ok(run.host_pkg(rut_std::nmap::pkg()))
+    Ok(run.pkg(rut_std::nmap::pkg()))
 }
 
 /// dist/std-v11 plays the wire: the pinned artifacts prime ONE offline
@@ -311,7 +311,7 @@ fn std_remote() -> rut_native::HttpRemote {
 /// rut.jsonc text cannot carry it, and the embedder's registration is
 /// what puts `web` in these worlds.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn walk_dir(dir: &std::path::Path) -> Result<Loaded, String> {
+pub fn walk_dir(dir: &std::path::Path) -> Result<Walk, String> {
     use std::future::Future as _;
     let remote = std_remote();
     let fut = rut_native::load_dir_with(dir, &remote);
@@ -337,7 +337,7 @@ pub fn walk_dir(dir: &std::path::Path) -> Result<Loaded, String> {
 /// four passes), answered as the yield plus its root name. Offer with
 /// [`offer`], compile with [`compile_walk`].
 #[cfg(not(target_arch = "wasm32"))]
-pub fn project() -> Result<Loaded, String> {
+pub fn project() -> Result<Walk, String> {
     walk_dir(&project_dir())
 }
 
@@ -348,7 +348,7 @@ pub fn project() -> Result<Loaded, String> {
 /// fixture is the deliberate exception: no crossings is its point, so
 /// its test loads bare.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn probe(probe: &str) -> Result<Loaded, String> {
+pub fn probe(probe: &str) -> Result<Walk, String> {
     walk_dir(&probe_dir(probe))
 }
 
@@ -358,8 +358,8 @@ pub fn probe(probe: &str) -> Result<Loaded, String> {
 /// `HashMap<str, i64>` — a mounted decl pkg's rows demand bodies;
 /// probes without the scope skip the install, the blanket law's gate).
 /// The core prelude auto-offers at `.compile()`.
-pub fn offer(mut run: RutRun, loaded: &Loaded) -> RutRun {
-    run = run.pkgs(loaded);
+pub fn offer(mut run: RutRun, loaded: &Walk) -> RutRun {
+    run = loaded.pkgs.iter().fold(run, |r, p| r.pkg(p.clone()));
     run = match web_pkg() {
         Ok(w) => run.pkg(w),
         Err(_) => run, // unreachable: the surface is include_str!'d
@@ -367,15 +367,15 @@ pub fn offer(mut run: RutRun, loaded: &Loaded) -> RutRun {
     if loaded.pkgs.iter().any(|p| {
         rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host"
     }) {
-        run = run.host_pkg(rut_std::nmap::pkg());
+        run = run.pkg(rut_std::nmap::pkg());
     }
     run
 }
 
 /// The declared host rows of a walked world + the `web` surface — the
 /// `.d.rut` ↔ binding contract's expected table (`verify_against`).
-pub fn expected_host_fns(loaded: &Loaded) -> rut_vm::interp::ExpectedHostFns {
-    let mut pkgs: Vec<Pkg> = loaded.pkgs.clone();
+pub fn expected_host_fns(loaded: &Walk) -> rut_vm::interp::ExpectedHostFns {
+    let mut pkgs: Vec<Mounted> = loaded.pkgs.clone();
     if let Ok(w) = web_pkg() {
         pkgs.push(w);
     }
@@ -386,7 +386,7 @@ pub fn expected_host_fns(loaded: &Loaded) -> rut_vm::interp::ExpectedHostFns {
 /// half for the ABI tree (the pkg's root module is its body, its
 /// `mod` children its tree). Diags are the error text; the compiled
 /// run comes back (its registry carries every `.host_pkg` install).
-pub fn compile_root_pkg(run: RutRun, pkg: Pkg) -> Result<Compiled, String> {
+pub fn compile_root_pkg(run: RutRun, pkg: Mounted) -> Result<Compiled, String> {
     let spec = pkg.spec.clone();
     let compiled = run
         .pkg(pkg)
@@ -403,7 +403,7 @@ pub fn compile_app(run: RutRun) -> Result<Compiled, String> {
 
 /// Compile a walked world from its root pkg — THE MANIFEST LANE's
 /// compile half ([`offer`] runs inside).
-pub fn compile_walk(loaded: &Loaded) -> Result<Compiled, String> {
+pub fn compile_walk(loaded: &Walk) -> Result<Compiled, String> {
     let compiled = offer(RutRun::new(), loaded)
         .entrypoint(&loaded.root)
         .compile()

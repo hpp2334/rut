@@ -57,11 +57,11 @@ fn classics_run_clean() {
         .unwrap_or_else(|e| panic!("{name}: {e}"));
         let mut chain = rut_driver::RutRun::new()
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-            .pkg(rut_driver::Pkg::source("main", &src).manifest(manifest));
+            .pkg(rut_driver::Mounted::source("main", &src).manifest(manifest));
         for d in ["rut/ink", "rut/pouch", "rut/nmapset"] {
             let pkgs = rut_native::dir_pkgs(&tree.join(d))
                 .unwrap_or_else(|e| panic!("mount {d}: {e}"));
-            chain = chain.pkgs(&pkgs);
+            chain = pkgs.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
         }
         let out = match chain.entrypoint("main").compile() {
             Ok(c) => c,

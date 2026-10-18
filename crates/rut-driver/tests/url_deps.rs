@@ -30,7 +30,7 @@ use rut_native::{load_dir, pack_dir};
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -42,7 +42,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -107,9 +107,11 @@ fn resealed(bytes: &[u8], key: &str, text: &str) -> Vec<u8> {
     rut_driver::bundle::write_bundle(&entries).unwrap()
 }
 
-fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
-    let g = rut_driver::RutRun::new()
-        .pkgs(loaded)
+fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -118,9 +120,11 @@ fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
 }
 
 /// Mount + mount_std + compile + flatten + run one entry.
-fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) -> R {
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R {
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
@@ -169,7 +173,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     // bundle's compiled root
     assert!(matches!(
         loaded.pkg("util").unwrap().body,
-        rut_driver::PkgBody::Compiled(_)
+        rut_driver::MountedBody::Compiled(_)
     ));
     assert_eq!(run_entry::<i64>(loaded, "go"), 42);
 
@@ -276,7 +280,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     );
 
     // the direct bundle lane
-    let err = rut_driver::Pkg::from_bundle(&doctored).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&doctored).unwrap_err().to_string();
     assert!(
         err.contains("the bundle is missing its `ghost` dependency group"),
         "{err}"
@@ -323,13 +327,13 @@ fn embedder_mount_outranks_the_url_dep() {
 
     let mut chain = rut_driver::RutRun::new()
         // the embedder's own mount, offered first
-        .pkg(rut_driver::Pkg::source("util", "// the embedder's"));
+        .pkg(rut_driver::Mounted::source("util", "// the embedder's"));
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
     write_lock(&app, &table);
     let walked = block_on(rut_native::dir_pkgs_with(&app, &Table::from(table))).expect("mount");
     assert_eq!(walked.root, "app");
-    chain = chain.pkgs(&walked);
+    chain = walked.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
     // the compile closes the world; the closure check would name a
     // wrong winner, so just compile the offered world's root
     let g = chain
@@ -419,8 +423,8 @@ fn colliding_pack_numberings_namespace_per_archive() {
     write_lock(&app, &table);
     let session = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .expect("colliding numberings namespace per archive");
-    assert!(matches!(session.pkg("util_a").unwrap().body, rut_driver::PkgBody::Compiled(_)));
-    assert!(matches!(session.pkg("util_b").unwrap().body, rut_driver::PkgBody::Compiled(_)));
+    assert!(matches!(session.pkg("util_a").unwrap().body, rut_driver::MountedBody::Compiled(_)));
+    assert!(matches!(session.pkg("util_b").unwrap().body, rut_driver::MountedBody::Compiled(_)));
     // and the value semantics survive both rebases: 2*1 + 3*2 = 8
     assert_eq!(run_entry::<i64>(session, "go"), 8);
 }
@@ -491,7 +495,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert!(!out_manifest.contains("sha256"), "{out_manifest}");
 
     // the packed artifact runs, straight from the output bytes
-    let session = rut_driver::Pkg::from_bundle(&packed).expect("load");
+    let session = rut_driver::Mounted::from_bundle(&packed).expect("load");
     assert_eq!(session.root, "app");
     assert_eq!(run_entry::<i64>(session, "go"), 42);
 

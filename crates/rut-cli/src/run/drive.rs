@@ -10,7 +10,7 @@ pub(crate) fn run_entry(compiled: rut_driver::Compiled, entry: &str, fuel: Optio
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    // the installs rode the chain (`.host_pkg(..)`); the compiled run
+    // the installs rode the chain (`.pkg(..)`); the compiled run
     // carries the joined registry — the builder door takes it whole
     let mut vm = match rut_vm::interp::Vm::builder()
         .compiled(compiled)

@@ -1,8 +1,8 @@
 //! The driver's pure walk remainder: the pin arithmetic
-//! ([`sha256_hex`]), the packed-container walk ([`bundle_walk_bytes`],
-//! the engine of [`Pkg::from_bundle`] and rut-native's
-//! `load_bundle_session`), the in-archive entry builder
-//! ([`bundle_entry_pkg`]), and the generic-source reader
+//! ([`sha256_hex`]), the decoded-archive mount assembly
+//! (`walk_decoded` — the per-world half of
+//! [`crate::Bundle::parse`](crate::Bundle) + offer), the in-archive
+//! entry builder ([`bundle_entry_pkg`]), and the generic-source reader
 //! Everything with a file, a path, or a wire
 //! lives in `rut-native`; every read here is an in-memory entry.
 
@@ -11,15 +11,15 @@ use std::collections::BTreeMap;
 use rut_core::id::ScopeId;
 
 use crate::bundle::{
-    fp16_of, bundle_key, parse_identity, parse_manifest_compat, read_entry, Bundle, GroupKind,
+    fp16_of, bundle_key, parse_identity, parse_manifest_compat, read_entry, GroupKind,
     Layout, Manifest, PkgType, DEPS_DIR,
 };
 use crate::decl::DECL_CHILD_FILE;
 use crate::mods::{
     mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME,
 };
-use crate::run::{Loaded, RunError};
-use crate::session::{Pkg, PkgBody};
+use crate::run::{Walk, RunError};
+use crate::session::{Mounted, MountedBody};
 use crate::Mode;
 
 /// The hex sha256 of `bytes` — the pin law's arithmetic. Public so a
@@ -178,23 +178,19 @@ pub fn rebind_identity_owners(
     Ok(())
 }
 
-/// The pure container walk: a packed `.rutbundle`'s bytes → the walked
-/// yield ([`Loaded`]) — gates, groups, and the scope ledger. No
-/// filesystem, no network: the same contract a url dep rides.
-/// [`Pkg::from_bundle`] is its public face; rut-native's
-/// `load_bundle_session` adds only the file read.
-pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
+/// The decoded archive's mount assembly, per world: entries + layout
+/// (already CRC-verified and decode-verified at
+/// [`crate::Bundle::parse`]) → the walked yield ([`Walk`]) — the
+/// scope-ledger namespacing, the identity rebind, the group mounts.
+/// No filesystem, no network: the same contract a url dep rides.
+/// This is the per-offer half; the decode half ran once at parse.
+pub(crate) fn walk_decoded(
+    entries: &[(String, Vec<u8>)],
+    layout: Layout,
+) -> Result<Walk, RunError> {
     let origin = "bundle";
     let err = |msg: String| RunError::law(format!("{origin}: {msg}"));
-    // gate 1: the container — every entry's CRC-32 verified
-    let bundle = Bundle::parse(bytes)
-        .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-    // gate 2 + 3: the manifest/version, then every group's decode +
-    // verification — the layout parse refuses anything it cannot
-    // decode, so a bad binary never reaches the table
-    let layout =
-        Layout::parse(&bundle).map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-    let mut pkgs: BTreeMap<String, Pkg> = BTreeMap::new();
+    let mut pkgs: BTreeMap<String, Mounted> = BTreeMap::new();
     let (manifest, root, scopes, groups) = match layout {
         Layout::Compiled { manifest, root, scopes, groups } => (manifest, root, scopes, groups),
         Layout::Decl { manifest, .. } => {
@@ -202,7 +198,6 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             // pkg's host rows through `bundle_entry_pkg` (the lane a
             // host group rides inside a bundle). Single-package: no
             // groups, no ledger, no closure — a LEAF, done.
-            let entries = bundle.entries();
             let root_spec = manifest
                 .name
                 .clone()
@@ -211,10 +206,9 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                 .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
             pkg.spec = root_spec.clone();
             pkgs.insert(root_spec.clone(), pkg);
-            return Ok(Loaded { pkgs: pkgs.into_values().collect(), root: root_spec });
+            return Ok(Walk { pkgs: pkgs.into_values().collect(), root: root_spec });
         }
     };
-    let entries = bundle.entries();
     let root_spec = manifest
         .name
         .clone()
@@ -266,9 +260,9 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
     let mods = rows_mods(entries, "").map_err(err)?;
     pkgs.insert(
         root_spec.clone(),
-        Pkg {
+        Mounted {
             spec: root_spec.clone(),
-            body: PkgBody::Compiled(root),
+            body: MountedBody::Compiled(root),
             entry: manifest.entry.clone(),
             mods,
             bundle_scopes: scopes.clone(),
@@ -345,9 +339,9 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
                          bodies — corrupt or doctored, re-pack the directory"
                     )));
                 }
-                Pkg {
+                Mounted {
                     spec: key.clone(),
-                    body: PkgBody::Compiled(program),
+                    body: MountedBody::Compiled(program),
                     entry: dm.entry.clone(),
                     mods: rows_mods(entries, &format!("{prefix}/")).map_err(err)?,
                     manifest: dm.clone(),
@@ -378,7 +372,20 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Loaded, RunError> {
             )));
         }
     }
-    Ok(Loaded { pkgs: pkgs.into_values().collect(), root: root_spec })
+    Ok(Walk { pkgs: pkgs.into_values().collect(), root: root_spec })
+}
+
+/// The packed-container walk: a packed `.rutbundle`'s bytes → the
+/// walked yield ([`Walk`]). The retired spelling of the load stage's
+/// decode + mount pair — one shot per call. Decode ONCE and reuse the
+/// handle instead: `Bundle::parse(bytes)` then `run.pkg(&bundle)` (or
+/// `bundle.walk()` for the raw mount assembly).
+#[deprecated = "decode once, offer many: `Bundle::parse(bytes)` then \
+                `run.pkg(&bundle)` — the handle relocates + mounts per \
+                world without re-decoding"]
+pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Walk, RunError> {
+    let bundle = crate::run::Bundle::parse(bytes)?;
+    bundle.walk()
 }
 
 /// The rows lane: the archive's `rut.mods` entry at `prefix` — the
@@ -469,7 +476,7 @@ fn entry_child_lookup<'a>(
     }
 }
 
-/// Build a package's entry [`Pkg`] from bundle entries under
+/// Build a package's entry [`Mounted`] from bundle entries under
 /// `prefix` (empty for the root, `<pkg>/` for a dep group) — the
 /// in-archive counterpart of a directory mount: the declared kind
 /// dispatches (a `type = "host"` pkg is a decl surface whose mod tree
@@ -481,7 +488,7 @@ pub fn bundle_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
-) -> Result<Pkg, String> {
+) -> Result<Mounted, String> {
     // the host lane: the decl tree rides the rows envelope when the
     // tree mounts (the packer's host lane), else the flat surface
     // entry lowers alone — the byte-compat shape
@@ -497,8 +504,8 @@ pub fn bundle_entry_pkg(
     // `""` row is the root source; children mount by declaration) —
     // regardless of the entry keys the manifest spells
     if let Some((root, mods)) = rows_body(entries, prefix)? {
-        return Ok(Pkg {
-            body: PkgBody::Source { text: root, is_decl: false },
+        return Ok(Mounted {
+            body: MountedBody::Source { text: root, is_decl: false },
             entry: manifest.entry.clone(),
             mods,
             manifest: manifest.clone(),
@@ -526,8 +533,8 @@ pub fn bundle_entry_pkg(
                      surface-only dev state"
                 ));
             }
-            None => Pkg {
-                body: PkgBody::Source { text: src, is_decl: true },
+            None => Mounted {
+                body: MountedBody::Source { text: src, is_decl: true },
                 entry: manifest.entry.clone(),
                 manifest: manifest.clone(),
                 ..Default::default()
@@ -549,8 +556,8 @@ fn host_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
-) -> Result<Pkg, String> {
-    let fold = |mut m: Pkg| -> Pkg {
+) -> Result<Mounted, String> {
+    let fold = |mut m: Mounted| -> Mounted {
         m.entry = manifest.entry.clone();
         m.namespace = manifest.namespace.clone();
         m.manifest = manifest.clone();
@@ -559,7 +566,7 @@ fn host_entry_pkg(
             .iter()
             .map(|(name, v)| (name.clone(), rut_core::types::TY_F64, v.to_bits()))
             .collect();
-        if let PkgBody::Host { consts: rows, .. } = &mut m.body {
+        if let MountedBody::Host { consts: rows, .. } = &mut m.body {
             *rows = consts;
         }
         m
@@ -599,7 +606,7 @@ fn plain_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
-) -> Result<Pkg, String> {
+) -> Result<Mounted, String> {
     let src = match root_source(entries, prefix, manifest)? {
         Some(src) => src,
         None => {
@@ -649,11 +656,11 @@ fn plain_source_pkg(
     prefix: &str,
     manifest: &Manifest,
     src: String,
-) -> Result<Pkg, String> {
+) -> Result<Mounted, String> {
     let mut lookup = entry_child_lookup(entries, prefix);
     let mods = mount_mod_children(&src, &format!("\u{0}{prefix}"), Mode::Impl, "mod.rut", &mut lookup)?;
-    Ok(Pkg {
-        body: PkgBody::Source { text: src, is_decl: false },
+    Ok(Mounted {
+        body: MountedBody::Source { text: src, is_decl: false },
         entry: manifest.entry.clone(),
         mods,
         manifest: manifest.clone(),

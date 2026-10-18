@@ -10,7 +10,7 @@ use rut_parser::Mode;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 #[allow(dead_code)]

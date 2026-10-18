@@ -330,7 +330,7 @@ msgstr ""
 msgid "Diagnostics, traces, and symbolication"
 msgstr ""
 
-#: src/SUMMARY.md:108 src/reference/embedding.md:295 src/reference/bundles.md:1
+#: src/SUMMARY.md:108 src/reference/embedding.md:316 src/reference/bundles.md:1
 msgid "Module bundles"
 msgstr ""
 
@@ -637,7 +637,7 @@ msgid "// 1. compile the module — the core prelude auto-rides\n"
 msgstr ""
 
 #: src/quick-start/installation.md:88 src/core-concepts/host-boundary.md:33
-#: src/reference/embedding.md:91 src/reference/host-fns.md:169
+#: src/reference/embedding.md:95 src/reference/host-fns.md:169
 msgid "\"app\""
 msgstr ""
 
@@ -3922,8 +3922,8 @@ msgstr ""
 #: src/reference/builtin-generic-types.md:96
 #: src/reference/literals-and-inference.md:111 src/reference/opaque.md:14
 #: src/reference/async.md:180 src/reference/host-futures.md:34
-#: src/reference/embedding.md:333 src/reference/embedding.md:351
-#: src/reference/embedding.md:381 src/reference/value-boundary.md:97
+#: src/reference/embedding.md:355 src/reference/embedding.md:373
+#: src/reference/embedding.md:401 src/reference/value-boundary.md:97
 #: src/reference/host-fns.md:297 src/reference/native-containers.md:103
 #: src/reference/templates.md:39
 msgid "Meaning"
@@ -7888,9 +7888,9 @@ msgid ""
 msgstr ""
 
 #: src/examples/00-todolist.md:192 src/examples/01-sort.md:206
-#: src/examples/02-digest.md:199 src/examples/03-plugin.md:213
+#: src/examples/02-digest.md:199 src/examples/03-plugin.md:214
 #: src/examples/04-custom-async.md:127 src/examples/05-todolist-web.md:244
-#: src/examples/06-github-viewer-cli.md:213
+#: src/examples/06-github-viewer-cli.md:212
 #: src/examples/playground-corpus.md:188
 msgid "Takeaways"
 msgstr ""
@@ -8640,12 +8640,12 @@ msgid ""
 "makes a **nested** `vm.call(\"render_line\")` to format the wire line:"
 msgstr ""
 
-#: src/examples/03-plugin.md:122 src/reference/embedding.md:81
+#: src/examples/03-plugin.md:122 src/reference/embedding.md:85
 #: src/reference/host-fns.md:158
 msgid "\"server\""
 msgstr ""
 
-#: src/examples/03-plugin.md:123 src/reference/embedding.md:82
+#: src/examples/03-plugin.md:123 src/reference/embedding.md:86
 #: src/reference/host-fns.md:161
 msgid "\"emit\""
 msgstr ""
@@ -8657,10 +8657,11 @@ msgstr ""
 #: src/examples/03-plugin.md:134
 msgid ""
 "// the built pkg rides the run chain:\n"
-"// RutRun::new().pkgs(&loaded).host_pkg(pkg.build())...compile()\n"
+"// loaded.pkgs.iter().fold(RutRun::new(), |r, p| r.pkg(p.clone()))\n"
+"//   .pkg(pkg.build())...compile()\n"
 msgstr ""
 
-#: src/examples/03-plugin.md:139
+#: src/examples/03-plugin.md:140
 msgid ""
 "(The comment above this code in the source is worth reading too.) The bus "
 "stays mutably borrowed _across_ the nested call — the value boundary's "
@@ -8671,7 +8672,7 @@ msgid ""
 "broadcast row):"
 msgstr ""
 
-#: src/examples/03-plugin.md:147
+#: src/examples/03-plugin.md:148
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -8687,18 +8688,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/03-plugin.md:164
+#: src/examples/03-plugin.md:165
 msgid "The packaging: one directory, two load forms"
 msgstr ""
 
-#: src/examples/03-plugin.md:166
+#: src/examples/03-plugin.md:167
 msgid ""
 "The plugin is a **module directory** — a manifest naming the entry plus its "
 "deps, loadable as-is and packable unchanged ([Project structure and "
 "rut.jsonc](../reference/project-structure.md)):"
 msgstr ""
 
-#: src/examples/03-plugin.md:170
+#: src/examples/03-plugin.md:171
 msgid ""
 "```jsonc\n"
 "// plugin/rut.jsonc\n"
@@ -8714,7 +8715,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/examples/03-plugin.md:183
+#: src/examples/03-plugin.md:184
 msgid ""
 "`server/` is the interesting dependency: a **pure declaration surface** — a "
 "host package whose manifest points at a `.d.rut` decl file, with the Rust "
@@ -8722,7 +8723,7 @@ msgid ""
 "files](../reference/host-fns.md)):"
 msgstr ""
 
-#: src/examples/03-plugin.md:194
+#: src/examples/03-plugin.md:195
 msgid ""
 "`main.rs` packs the same directory with `rut_native::pack_dir_opts_with` — a "
 "**compiled** bundle: the plugin rides as a `.rutc` binary, its host pkg "
@@ -8731,19 +8732,19 @@ msgid ""
 "the proof. The CLI drives the same loader for any self-contained module:"
 msgstr ""
 
-#: src/examples/03-plugin.md:202
+#: src/examples/03-plugin.md:203
 msgid "# a module directory (rut.jsonc)\n"
 msgstr ""
 
-#: src/examples/03-plugin.md:203
+#: src/examples/03-plugin.md:204
 msgid "# -> mod.rutbundle\n"
 msgstr ""
 
-#: src/examples/03-plugin.md:204
+#: src/examples/03-plugin.md:205
 msgid "# the packed form\n"
 msgstr ""
 
-#: src/examples/03-plugin.md:207
+#: src/examples/03-plugin.md:208
 msgid ""
 "The Rust side mirrors the rut layering: business code calls typed methods "
 "(`p.join(\"ada\")`, `p.msg(...)`), and `vm.call` happens in exactly one "
@@ -8752,37 +8753,37 @@ msgid ""
 "didn't subscribe."
 msgstr ""
 
-#: src/examples/03-plugin.md:215
+#: src/examples/03-plugin.md:216
 msgid ""
 "**One directory is one module**; the manifest names the entry and the deps, "
 "and the same directory packs to a `.rutbundle` unchanged."
 msgstr ""
 
-#: src/examples/03-plugin.md:217
+#: src/examples/03-plugin.md:218
 msgid ""
 "**Registration by name, not by closure** — callbacks never cross the "
 "boundary as values, in either direction."
 msgstr ""
 
-#: src/examples/03-plugin.md:219
+#: src/examples/03-plugin.md:220
 msgid ""
 "**Re-entrancy is sound by construction**: a host fn can call back into rut "
 "mid-op, and the borrow guard turns a would-be data race into a loud trap."
 msgstr ""
 
-#: src/examples/03-plugin.md:222
+#: src/examples/03-plugin.md:223
 msgid ""
 "**Both `opaque` directions** compose: rut-state-out, host-state-in, and "
 "neither side can inspect what the other erased."
 msgstr ""
 
-#: src/examples/03-plugin.md:224
+#: src/examples/03-plugin.md:225
 msgid ""
 "The layering discipline — adapters own the crossing protocol, business logic "
 "stays pure — is what keeps a plugin auditable."
 msgstr ""
 
-#: src/examples/03-plugin.md:227
+#: src/examples/03-plugin.md:228
 msgid ""
 "The crossing rules this example lives on are in [the host "
 "boundary](../core-concepts/host-boundary.md); the load forms are specified "
@@ -9521,7 +9522,7 @@ msgstr ""
 msgid ""
 "`src/main.rs` shows the whole program closure in one chain — the walk feeds "
 "the run, the async pair and `calc` offer beside it, and the host bodies ride "
-"`.host_pkg(..)`:"
+"`pkg(Offer::Host(..))` — `pkg(hp)` coerces:"
 msgstr ""
 
 #: src/examples/06-github-viewer-cli.md:186
@@ -9532,15 +9533,11 @@ msgstr ""
 msgid "// example-local rows\n"
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:188
-msgid "// the manifest closure\n"
-msgstr ""
-
 #: src/examples/06-github-viewer-cli.md:190
 msgid "\"calc\""
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:199
+#: src/examples/06-github-viewer-cli.md:198
 msgid ""
 "The walk pulls json's own `deps` along — `strbuild`, `pouch`, `nmapset` — so "
 "the whole serde surface, wrapper families included, is in the closure "
@@ -9554,39 +9551,39 @@ msgid ""
 "under `rut run`, which offers the std http pair by presence."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:215
+#: src/examples/06-github-viewer-cli.md:214
 msgid ""
 "**An async rut program in production shape**: the brain awaits at the fetch "
 "sites only; the embedder launches, pumps to idle, and exits with the brain's "
 "code."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:218
+#: src/examples/06-github-viewer-cli.md:217
 msgid ""
 "**Headers-first send + one-shot body/stream** is the whole mental model of "
 "the std http lane — drain JSON in one await, stream files chunk by chunk."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:221
+#: src/examples/06-github-viewer-cli.md:220
 msgid ""
 "**Failures are values end to end**: transport errors, 404s, wire deaths, and "
 "io errors all become messages plus exit codes."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:223
+#: src/examples/06-github-viewer-cli.md:222
 msgid ""
 "**The fixture lane is the test gate**: recorded replies keyed on method + "
 "URL, deterministic chunks on a virtual clock, zero network."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:226
+#: src/examples/06-github-viewer-cli.md:225
 msgid ""
 "The closure is load-bearing here: json's `Vec<T>` serde wrappers are json's "
 "own source, compiled where json compiles — the container packages ride along "
 "as json's plain deps."
 msgstr ""
 
-#: src/examples/06-github-viewer-cli.md:230
+#: src/examples/06-github-viewer-cli.md:229
 msgid ""
 "The lane's declarations live in the std tree; for the runner behind `rut "
 "run`, see [the rut CLI](../reference/cli.md)."
@@ -16662,7 +16659,7 @@ msgstr ""
 msgid "Resumption"
 msgstr ""
 
-#: src/reference/resource-limits.md:51 src/reference/embedding.md:446
+#: src/reference/resource-limits.md:51 src/reference/embedding.md:466
 msgid "`OutOfMemory`"
 msgstr ""
 
@@ -16678,7 +16675,7 @@ msgstr ""
 msgid "raise limit / free refs → `resume()`"
 msgstr ""
 
-#: src/reference/resource-limits.md:52 src/reference/embedding.md:445
+#: src/reference/resource-limits.md:52 src/reference/embedding.md:465
 msgid "`OutOfFuel`"
 msgstr ""
 
@@ -17178,7 +17175,7 @@ msgstr ""
 msgid "read / advance the deterministic virtual clock"
 msgstr ""
 
-#: src/reference/async.md:187 src/reference/embedding.md:392
+#: src/reference/async.md:187 src/reference/embedding.md:412
 msgid "`vm.next_deadline() -> Option<u64>`"
 msgstr ""
 
@@ -17198,7 +17195,7 @@ msgid ""
 "no completion"
 msgstr ""
 
-#: src/reference/async.md:189 src/reference/embedding.md:394
+#: src/reference/async.md:189 src/reference/embedding.md:414
 msgid "`vm.pending_tasks() -> usize`"
 msgstr ""
 
@@ -17748,7 +17745,7 @@ msgid "// returned immediately: the future parks\n"
 msgstr ""
 
 #: src/reference/host-futures.md:78
-msgid "// the built pkg rides the run chain: .host_pkg(pkg.build())\n"
+msgid "// the built pkg rides the run chain: .pkg(pkg.build())\n"
 msgstr ""
 
 #: src/reference/host-futures.md:82
@@ -17987,52 +17984,54 @@ msgstr ""
 msgid ""
 "// 2. The chain (rut-driver): offer the walk's yield, hand over the\n"
 "//    host bodies, name the root — and ONE terminal step compiles.\n"
+"//    `pkg(..)` is the ONE offering verb over the Offer classification;\n"
+"//    `&Bundle` and `HostPkg` coerce in (`impl Into`).\n"
 msgstr ""
 
-#: src/reference/embedding.md:56
+#: src/reference/embedding.md:60
 msgid "// first-pkg-wins\n"
 msgstr ""
 
-#: src/reference/embedding.md:57
-msgid "// calc's bodies\n"
+#: src/reference/embedding.md:61
+msgid "// calc's bodies (Offer::Host)\n"
 msgstr ""
 
-#: src/reference/embedding.md:58
+#: src/reference/embedding.md:62
 msgid "\"{s}\""
 msgstr ""
 
-#: src/reference/embedding.md:61
+#: src/reference/embedding.md:65
 msgid "/* render and exit */"
 msgstr ""
 
-#: src/reference/embedding.md:63
+#: src/reference/embedding.md:67
 msgid "// 3. Boot and drive — `Vm::builder()` is the only construction door.\n"
 msgstr ""
 
-#: src/reference/embedding.md:71
+#: src/reference/embedding.md:75
 msgid "// the run's product; also .limits/.hooks/.hosts\n"
 msgstr ""
 
-#: src/reference/embedding.md:73
+#: src/reference/embedding.md:77
 msgid "\"compute\""
 msgstr ""
 
-#: src/reference/embedding.md:76
+#: src/reference/embedding.md:80
 msgid ""
 "A hand-rolled pkg for your own host rows rides the same chain step (the raw "
 "`register!` escape hatch on the bare registry — same machinery, flat names — "
 "stays for hosts that bind outside the chain):"
 msgstr ""
 
-#: src/reference/embedding.md:84
+#: src/reference/embedding.md:88
 msgid "// re-entrant rut calls are legal here (see \"Native fn rules\")\n"
 msgstr ""
 
-#: src/reference/embedding.md:89 src/reference/host-fns.md:167
+#: src/reference/embedding.md:93 src/reference/host-fns.md:167
 msgid "/* ..offers.. */"
 msgstr ""
 
-#: src/reference/embedding.md:95
+#: src/reference/embedding.md:99
 msgid ""
 "**Rows under a surface's `mod` tree register scope-relatively.** A `type = "
 "\"host\"` pkg may organize its surface as a module tree (`pub mod net;` in "
@@ -18042,66 +18041,66 @@ msgid ""
 "the pkg scope — the scope prefixes once, at the install:"
 msgstr ""
 
-#: src/reference/embedding.md:103 src/reference/host-fns.md:261
+#: src/reference/embedding.md:107 src/reference/host-fns.md:261
 msgid "\"http_host\""
 msgstr ""
 
-#: src/reference/embedding.md:104
+#: src/reference/embedding.md:108
 msgid "\"net::http_status\""
 msgstr ""
 
-#: src/reference/embedding.md:105
+#: src/reference/embedding.md:109
 msgid "// → http_host::net::http_status\n"
 msgstr ""
 
-#: src/reference/embedding.md:106
+#: src/reference/embedding.md:110
 msgid "\"stream::http_body\""
 msgstr ""
 
-#: src/reference/embedding.md:107
+#: src/reference/embedding.md:111
 msgid ""
 "// → http_host::stream::http_body (+ family)\n"
 "// a bare spelling stays the ROOT row's shape (\"map_new\", not "
 "\"net::map_new\")\n"
 msgstr ""
 
-#: src/reference/embedding.md:111
+#: src/reference/embedding.md:115
 msgid ""
 "A path spelling for a row the surface declares flat (or vice versa) fails "
 "the install's contract check by name — the declared rows are the graph, the "
 "registration strings must spell the same tree."
 msgstr ""
 
-#: src/reference/embedding.md:115
+#: src/reference/embedding.md:119
 msgid "The `.compile()` law"
 msgstr ""
 
-#: src/reference/embedding.md:117
+#: src/reference/embedding.md:121
 msgid "`RutRun::compile()` is the single terminal step. In order:"
 msgstr ""
 
-#: src/reference/embedding.md:119
+#: src/reference/embedding.md:123
 msgid ""
 "**auto-offer the core prelude** — unless a pkg named `core` was offered "
 "(first-pkg-wins override);"
 msgstr ""
 
-#: src/reference/embedding.md:121
+#: src/reference/embedding.md:125
 msgid ""
 "**close the world** — every offered pkg mounts into the run's internal "
 "table; the walk's yield already carried its groups, and every module links — "
 "nothing appends after the walk;"
 msgstr ""
 
-#: src/reference/embedding.md:124
+#: src/reference/embedding.md:128
 msgid ""
-"**the host registry** — every `.host_pkg(..)` installs against the mounted "
+"**the host registry** — every `Offer::Host` installs against the mounted "
 "rows snapshot. A mounted scope whose declared rows the installer does not "
 "bind is the loud panic (the `.d.rut` ↔ host-impl contract); an unmounted "
 "scope's rows merge inert — an embedder wiring bug is never a rut diagnostic;"
 msgstr ""
 
-#: src/reference/embedding.md:129
+#: src/reference/embedding.md:133
 msgid ""
 "**the closure check** — every `use` name in every offered source resolves "
 "against the offered world AND its consumer's own manifest (nameability is "
@@ -18111,11 +18110,11 @@ msgid ""
 "carrying the resolver's own diagnostic;"
 msgstr ""
 
-#: src/reference/embedding.md:136
+#: src/reference/embedding.md:140
 msgid "**parse → check → LIR → link.**"
 msgstr ""
 
-#: src/reference/embedding.md:138
+#: src/reference/embedding.md:142
 msgid ""
 "Shape/closure failures (a bad package name, a missing entrypoint, an "
 "unresolved use) are `Err(RunError)`. Compile diagnostics are NOT errors: "
@@ -18123,40 +18122,40 @@ msgid ""
 "`compiled.graph.diags` before trusting `compiled.graph.program`."
 msgstr ""
 
-#: src/reference/embedding.md:143
+#: src/reference/embedding.md:147
 msgid ""
 "The registry is consumed by `.build()`: every host thunk the program "
 "declares is resolved against it once, at boot. A declared-but-unbound fn is "
 "a **construction error**, never a mid-run trap."
 msgstr ""
 
-#: src/reference/embedding.md:147
+#: src/reference/embedding.md:151
 msgid "The walk vs the offer"
 msgstr ""
 
-#: src/reference/embedding.md:149
+#: src/reference/embedding.md:153
 msgid "Two doors produce `Pkg`s; both feed the same chain."
 msgstr ""
 
-#: src/reference/embedding.md:151
+#: src/reference/embedding.md:155
 msgid ""
 "**The walk** ([`rut-native`](#getting-the-crates)) reads a module directory "
 "— or a packed `.rutbundle` — and yields the closure:"
 msgstr ""
 
-#: src/reference/embedding.md:154 src/reference/embedding.md:182
+#: src/reference/embedding.md:158 src/reference/embedding.md:203
 msgid "lane"
 msgstr ""
 
-#: src/reference/embedding.md:154 src/reference/embedding.md:182
+#: src/reference/embedding.md:158 src/reference/embedding.md:203
 msgid "what it does"
 msgstr ""
 
-#: src/reference/embedding.md:156
+#: src/reference/embedding.md:160
 msgid "`load_dir(dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:156
+#: src/reference/embedding.md:160
 msgid ""
 "the walk: `[deps]` recursion (cycle guard, first-mount-wins, name-mismatch "
 "is an error), the root's `rut.lock` read fresh (an unpinned url refuses, "
@@ -18164,100 +18163,161 @@ msgid ""
 "root-only `[dev-deps]` pass. Url deps are the loud no-fetcher error."
 msgstr ""
 
-#: src/reference/embedding.md:157
+#: src/reference/embedding.md:161
 msgid "`load_dir_with(dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:157
+#: src/reference/embedding.md:161
 msgid ""
 "the same walk; url `deps` rows are collected, gated against the root's "
 "`rut.lock`, fetched over the host's `DepRemote`, and pinned at the mount door"
 msgstr ""
 
-#: src/reference/embedding.md:158
+#: src/reference/embedding.md:162
 msgid "`load_dir_fetched(dir, &map)`"
 msgstr ""
 
-#: src/reference/embedding.md:158
+#: src/reference/embedding.md:162
 msgid ""
 "the walk over PRE-fetched url bytes — the sync core; tests and offline hosts "
 "hand a `url → bytes` map"
 msgstr ""
 
-#: src/reference/embedding.md:159 src/reference/embedding.md:340
+#: src/reference/embedding.md:163 src/reference/embedding.md:362
 msgid "`load_path_session(path)` / `load_path_session_with(path, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:159
+#: src/reference/embedding.md:163
 msgid ""
 "dispatch on the shape: a directory walks (above); a `.rutbundle` loads "
 "closed (below)"
 msgstr ""
 
-#: src/reference/embedding.md:161
-msgid ""
-"The yield is `rut_driver::Loaded { pkgs, root }` — pure pkgs plus the root's "
-"name. Offer it with `.pkgs(&loaded)` (every pkg, first-pkg-wins) or pick "
-"pieces with `loaded.pkg(name)`."
-msgstr ""
-
 #: src/reference/embedding.md:165
-msgid "**The offer** is a `Pkg` value handed to the chain by hand:"
+msgid ""
+"The yield is `rut_driver::Walk { pkgs, root }` — pure pkgs plus the root's "
+"name. Offer each pkg through `pkg(..)` (first-pkg-wins — fold the walk into "
+"the chain) or pick pieces with `walked.pkg(name)`."
 msgstr ""
 
-#: src/reference/embedding.md:167 src/reference/embedding.md:241
+#: src/reference/embedding.md:169
+msgid ""
+"**The offer** is ONE verb, `RutRun::pkg(..)`, over the `Offer` "
+"classification — the same lib/host pair the manifest `type` field spells:"
+msgstr ""
+
+#: src/reference/embedding.md:173
+msgid "offer"
+msgstr ""
+
+#: src/reference/embedding.md:173
+msgid "what it is"
+msgstr ""
+
+#: src/reference/embedding.md:175
+msgid "`pkg(&bundle)` — `Offer::Lib(&Bundle)`"
+msgstr ""
+
+#: src/reference/embedding.md:175
+msgid ""
+"a decoded `.rutbundle` archive: `Bundle::parse(&bytes)` decodes + verifies "
+"ONCE (CRC, version, group decode), the handle is reusable across runs, and "
+"each offer only relocates + mounts"
+msgstr ""
+
+#: src/reference/embedding.md:176
+msgid "`pkg(rut_std::math::pkg())` — `Offer::Host(hp)`"
+msgstr ""
+
+#: src/reference/embedding.md:176
+msgid "host bodies — the embedding Rust's own rows"
+msgstr ""
+
+#: src/reference/embedding.md:177
+msgid "`pkg(pack_inline_pkg(name, text))`"
+msgstr ""
+
+#: src/reference/embedding.md:177
+msgid ""
+"ephemeral source as a one-member source bundle — a pack method that "
+"assembles, never compiles; the run compiles the member when it is offered"
+msgstr ""
+
+#: src/reference/embedding.md:178
+msgid "`pkg(mounted)`"
+msgstr ""
+
+#: src/reference/embedding.md:178
+msgid "the walked pkg data (deprecated bridge — offer bundles instead)"
+msgstr ""
+
+#: src/reference/embedding.md:180
+msgid ""
+"An archive handle carries its strip restore too: "
+"`bundle.restore_symbols(&map)` — applied once, before any offer; every "
+"subsequent offer carries the restored names ([symbol "
+"stripping](symbol-stripping.md))."
+msgstr ""
+
+#: src/reference/embedding.md:185
+msgid ""
+"The mounted pkg **data** behind the walk (the constructors tests and hosts "
+"spell by hand) is `Mounted`:"
+msgstr ""
+
+#: src/reference/embedding.md:188 src/reference/embedding.md:262
 msgid "constructor"
 msgstr ""
 
-#: src/reference/embedding.md:167
+#: src/reference/embedding.md:188
 msgid "builds"
 msgstr ""
 
-#: src/reference/embedding.md:169
-msgid "`Pkg::source(name, text)`"
+#: src/reference/embedding.md:190
+msgid "`Mounted::source(name, text)`"
 msgstr ""
 
-#: src/reference/embedding.md:169
+#: src/reference/embedding.md:190
 msgid "the ordinary `.rut` body"
 msgstr ""
 
-#: src/reference/embedding.md:170
-msgid "`Pkg::decl(name, text)`"
+#: src/reference/embedding.md:191
+msgid "`Mounted::decl(name, text)`"
 msgstr ""
 
-#: src/reference/embedding.md:170
+#: src/reference/embedding.md:191
 msgid "a `.d.rut` surface (declaration mode)"
 msgstr ""
 
-#: src/reference/embedding.md:171
-msgid "`Pkg::host(name, rows)`"
+#: src/reference/embedding.md:192
+msgid "`Mounted::host(name, rows)`"
 msgstr ""
 
-#: src/reference/embedding.md:171
+#: src/reference/embedding.md:192
 msgid "the native rows — exported constants, bodyless host fns"
 msgstr ""
 
-#: src/reference/embedding.md:172
-msgid "`Pkg::compiled(name, program)`"
+#: src/reference/embedding.md:193
+msgid "`Mounted::compiled(name, program)`"
 msgstr ""
 
-#: src/reference/embedding.md:172
+#: src/reference/embedding.md:193
 msgid "a decoded `.rutc` binary pushed as-is"
 msgstr ""
 
-#: src/reference/embedding.md:173
-msgid "`Pkg::from_bundle(bytes)`"
+#: src/reference/embedding.md:194
+msgid "`Mounted::from_bundle(bytes)`"
 msgstr ""
 
-#: src/reference/embedding.md:173
-msgid "the pure container parse — the bundle's pkgs as a `Loaded` (below)"
+#: src/reference/embedding.md:194
+msgid "the pure parse — the bundle's pkgs as a `Walk` (below)"
 msgstr ""
 
-#: src/reference/embedding.md:174 src/reference/embedding.md:367
+#: src/reference/embedding.md:195 src/reference/embedding.md:387
 msgid "`lower_decl_module(text, children, file)`"
 msgstr ""
 
-#: src/reference/embedding.md:174
+#: src/reference/embedding.md:195
 msgid ""
 "a `.d.rut` lowered to host rows — the wasm hosts' surface lane; `children` "
 "is the mounted `mod` tree (`NAME/mod.d.rut` files, mount with "
@@ -18265,39 +18325,39 @@ msgid ""
 "under"
 msgstr ""
 
-#: src/reference/embedding.md:176
+#: src/reference/embedding.md:197
 msgid ""
-"`Pkg` is pure data: the walker-found metadata (the `[deps]` table and the "
-"declaration rows the nameability law reads) is pub data on it — the graph "
-"only reads."
+"`Mounted` is pure data: the walker-found metadata (the `[deps]` table and "
+"the declaration rows the nameability law reads) is pub data on it — the "
+"graph only reads."
 msgstr ""
 
-#: src/reference/embedding.md:180
+#: src/reference/embedding.md:201
 msgid "Two offer lanes walk a directory **for someone else's program**:"
 msgstr ""
 
-#: src/reference/embedding.md:184
+#: src/reference/embedding.md:205
 msgid "`rut_native::dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:184
+#: src/reference/embedding.md:205
 msgid ""
 "offer one package directory — and, recursively, its `[deps]` — as walked "
 "pkgs. No dev-deps pass: the closure is the program's own `.compile()` law."
 msgstr ""
 
-#: src/reference/embedding.md:185
+#: src/reference/embedding.md:206
 msgid "`rut_native::tree_pkg(name)`"
 msgstr ""
 
-#: src/reference/embedding.md:185
+#: src/reference/embedding.md:206
 msgid ""
 "one toolchain-tree package (`rut/calc`, `rut/futures`, …). A pkg whose "
 "`[deps]` pull a closure is refused — offer the whole walk (`load_dir`) "
 "instead, never a silently-truncated world."
 msgstr ""
 
-#: src/reference/embedding.md:187
+#: src/reference/embedding.md:208
 msgid ""
 "`core` is never offered — `.compile()` auto-rides it. `calc` and the async "
 "pair are ordinary tree packages: the host offers "
@@ -18306,11 +18366,11 @@ msgid ""
 "packages](stdlib.md))."
 msgstr ""
 
-#: src/reference/embedding.md:193
+#: src/reference/embedding.md:214
 msgid "Hand mounts carry a manifest"
 msgstr ""
 
-#: src/reference/embedding.md:195
+#: src/reference/embedding.md:216
 msgid ""
 "A hand-offered world is lawed by the same declaration table as a walked one "
 "— nameability is declaration-scoped, so a consumer may `use` exactly the "
@@ -18318,15 +18378,15 @@ msgid ""
 "as a file. Two builder doors:"
 msgstr ""
 
-#: src/reference/embedding.md:200
+#: src/reference/embedding.md:221
 msgid ""
 "**Real manifests** — parse the embedded jsonc and stamp it: "
-"`Pkg::manifest(parse_manifest(include_str!(\"../pkg/rut.jsonc\")))`. The "
+"`Mounted::manifest(parse_manifest(include_str!(\"../pkg/rut.jsonc\")))`. The "
 "tree's own `rut.jsonc` stays the single source of truth; the wasm host "
 "mounts every std pkg this way."
 msgstr ""
 
-#: src/reference/embedding.md:204
+#: src/reference/embedding.md:225
 msgid ""
 "**Ad-hoc surfaces** — `Manifest::lib(name, &[heads])` stamps the structural "
 "form directly, no json text anywhere. 05's `web` package is the worked "
@@ -18334,7 +18394,7 @@ msgid ""
 "declaration of the heads its sources name."
 msgstr ""
 
-#: src/reference/embedding.md:209
+#: src/reference/embedding.md:230
 msgid ""
 "A hand offer has no walk edge, so D5's mount edge renders the structural "
 "clause — _\"offered by the host\"_ — and the fix names the two builder "
@@ -18343,7 +18403,7 @@ msgid ""
 "declarations by uses."
 msgstr ""
 
-#: src/reference/embedding.md:215
+#: src/reference/embedding.md:236
 msgid ""
 "The wasm playground rides the same law with a host-side default: the page's "
 "compile lane accepts an optional consumer manifest (jsonc) beside the source "
@@ -18356,11 +18416,11 @@ msgid ""
 "declared set is D5."
 msgstr ""
 
-#: src/reference/embedding.md:225
+#: src/reference/embedding.md:246
 msgid "Url deps — the remote policy (`DepRemote` + `HttpRemote`)"
 msgstr ""
 
-#: src/reference/embedding.md:227
+#: src/reference/embedding.md:248
 msgid ""
 "The embedder owns exactly three things: the fs policy (\\[`Source`\\]), the "
 "remote policy (\\[`DepRemote`\\]), and its own runtime. The `_with` lanes "
@@ -18369,7 +18429,7 @@ msgid ""
 "closed — they load with no remote named at all."
 msgstr ""
 
-#: src/reference/embedding.md:233
+#: src/reference/embedding.md:254
 msgid ""
 "The standard remote is **`rut_native::HttpRemote`** — cache-first: a hit "
 "NEVER touches the network, a miss GETs (redirects on, loud status errors, a "
@@ -18379,81 +18439,81 @@ msgid ""
 "noop-waker `block_on` poll loop the examples spell."
 msgstr ""
 
-#: src/reference/embedding.md:241 src/reference/templates.md:17
+#: src/reference/embedding.md:262 src/reference/templates.md:17
 #: src/reference/cli.md:56 src/reference/cli.md:97 src/reference/cli.md:211
 #: src/reference/cli.md:307
 msgid "behavior"
 msgstr ""
 
-#: src/reference/embedding.md:243
+#: src/reference/embedding.md:264
 msgid "`HttpRemote::project_local(project)`"
 msgstr ""
 
-#: src/reference/embedding.md:243
+#: src/reference/embedding.md:264
 msgid ""
 "`<project>/.rut/cache` — hermetic, project-local; networks on a miss (the "
 "`http` feature, default on)"
 msgstr ""
 
-#: src/reference/embedding.md:244
+#: src/reference/embedding.md:265
 msgid "`HttpRemote::at(root)`"
 msgstr ""
 
-#: src/reference/embedding.md:244
+#: src/reference/embedding.md:265
 msgid "an explicit cache root, wire on"
 msgstr ""
 
-#: src/reference/embedding.md:245
+#: src/reference/embedding.md:266
 msgid "`HttpRemote::offline(root)`"
 msgstr ""
 
-#: src/reference/embedding.md:245
+#: src/reference/embedding.md:266
 msgid ""
 "**cache-only** — a miss never networks; the guaranteed-offline lane (CI "
 "gates, wasm-adjacent hosts)"
 msgstr ""
 
-#: src/reference/embedding.md:246
+#: src/reference/embedding.md:267
 msgid "`path_for(url)` / `evict(url)`"
 msgstr ""
 
-#: src/reference/embedding.md:246
+#: src/reference/embedding.md:267
 msgid "the concrete entry path / delete a poisoned entry"
 msgstr ""
 
-#: src/reference/embedding.md:248
+#: src/reference/embedding.md:269
 msgid ""
 "**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts): prime an "
 "`offline` remote, then load over it. The committed std artifacts play the "
 "wire — `DepRemote::write` is the stand-in for the GET:"
 msgstr ""
 
-#: src/reference/embedding.md:254
+#: src/reference/embedding.md:275
 msgid "// parsed from rut.jsonc\n"
 msgstr ""
 
-#: src/reference/embedding.md:255
+#: src/reference/embedding.md:276
 msgid "// prime the cache\n"
 msgstr ""
 
-#: src/reference/embedding.md:260
+#: src/reference/embedding.md:281
 msgid ""
 "**Memory hosts** (wasm, in-process tests) hand-roll the trait — one required "
 "method, sync impls are first-class via `std::future::ready`:"
 msgstr ""
 
-#: src/reference/embedding.md:271
+#: src/reference/embedding.md:292
 msgid "\"no bytes for {url}\""
 msgstr ""
 
-#: src/reference/embedding.md:283
+#: src/reference/embedding.md:304
 msgid ""
 "The walk still owns WHAT the bytes are: the pin is **lock law** — the root's "
 "`rut.lock` (url → sha256), gated before any fetch and verified at the mount "
 "door on every load — fresh fetch, cache hit, vendored map, test fixture."
 msgstr ""
 
-#: src/reference/embedding.md:288
+#: src/reference/embedding.md:309
 msgid ""
 "**The filesystem policy** is `rut_native::Source` — string keys, all key "
 "math in the impl. `FsSource::at(dir)` is the real filesystem with the root "
@@ -18463,37 +18523,39 @@ msgid ""
 "`dir_pkgs`\\-shaped collectors of your own."
 msgstr ""
 
-#: src/reference/embedding.md:297
+#: src/reference/embedding.md:318
 msgid ""
 "A packed `.rutbundle` is the same contract zipped — loading it never fetches "
 "(bundles are closed; their closure rode inside at pack time):"
 msgstr ""
 
-#: src/reference/embedding.md:301
+#: src/reference/embedding.md:322
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:302 src/reference/bundles.md:402
+#: src/reference/embedding.md:323 src/reference/bundles.md:402
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
-#: src/reference/embedding.md:303
-msgid "// from bytes (embedders, tests, wasm): the pure container parse\n"
+#: src/reference/embedding.md:324
+msgid ""
+"// from bytes (embedders, tests, wasm): decode + verify ONCE —\n"
+"// the handle is reusable across runs (offer it with pkg(&bundle))\n"
 msgstr ""
 
-#: src/reference/embedding.md:308
+#: src/reference/embedding.md:330
 msgid ""
 "Both root kinds load (a compiled root with its groups and its pack-time "
 "scope ledger, rebased at the close of the world; a decl root as the pkg's "
 "host rows), first-mount-wins, and the bundle root's package name is "
 "`loaded.root`. Wasm hosts `include_bytes!` the committed artifact and parse "
-"through `Pkg::from_bundle`. For the url-dep _walk_ (pins, closure checks, "
-"the archive's identity-keyed groups) stay on the `load_dir*` lanes — a "
-"bundle mount is the offer, not the walk. The container, the manifest "
-"grammar, and the reader are [module bundles](bundles.md)."
+"through `Bundle::parse`. For the url-dep _walk_ (pins, closure checks, the "
+"archive's identity-keyed groups) stay on the `load_dir*` lanes — a bundle "
+"mount is the offer, not the walk. The container, the manifest grammar, and "
+"the reader are [module bundles](bundles.md)."
 msgstr ""
 
-#: src/reference/embedding.md:318
+#: src/reference/embedding.md:340
 msgid ""
 "**What to take from a url** is the engine's instantiation law, read from the "
 "embedding side: a compiled bundle serves host surfaces, concrete-class libs, "
@@ -18507,39 +18569,39 @@ msgid ""
 "closure in its ledger, so the consumer's closure must contain those names."
 msgstr ""
 
-#: src/reference/embedding.md:331
+#: src/reference/embedding.md:353
 msgid "The walk API (`rut-native`)"
 msgstr ""
 
-#: src/reference/embedding.md:333 src/reference/embedding.md:351
-#: src/reference/embedding.md:381 src/reference/value-boundary.md:97
+#: src/reference/embedding.md:355 src/reference/embedding.md:373
+#: src/reference/embedding.md:401 src/reference/value-boundary.md:97
 #: src/reference/native-containers.md:103 src/reference/templates.md:39
 msgid "API"
 msgstr ""
 
-#: src/reference/embedding.md:335
+#: src/reference/embedding.md:357
 msgid "`Source`"
 msgstr ""
 
-#: src/reference/embedding.md:335
+#: src/reference/embedding.md:357
 msgid ""
 "the one filesystem door, STRING keys: `read(key)`, `resolve(from, spec)`, "
 "`root()` — the key math is the impl's; a `Path` crosses nothing"
 msgstr ""
 
-#: src/reference/embedding.md:336
+#: src/reference/embedding.md:358
 msgid "`FsSource::at(dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:336
+#: src/reference/embedding.md:358
 msgid "the real filesystem with the root baked in"
 msgstr ""
 
-#: src/reference/embedding.md:337
+#: src/reference/embedding.md:359
 msgid "`DepRemote`"
 msgstr ""
 
-#: src/reference/embedding.md:337
+#: src/reference/embedding.md:359
 msgid ""
 "the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = "
 "Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the "
@@ -18549,217 +18611,205 @@ msgid ""
 "fixtures) are first-class"
 msgstr ""
 
-#: src/reference/embedding.md:338
+#: src/reference/embedding.md:360
 msgid "`HttpRemote`"
 msgstr ""
 
-#: src/reference/embedding.md:338
+#: src/reference/embedding.md:360
 msgid ""
 "the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss "
 "GETs on a private worker thread and writes back atomically; `project_local` "
 "/ `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete"
 msgstr ""
 
-#: src/reference/embedding.md:339
+#: src/reference/embedding.md:361
 msgid ""
 "`load_dir(dir)` / `load_dir_with(dir, &remote)` / `load_dir_fetched(dir, "
 "&map)`"
 msgstr ""
 
-#: src/reference/embedding.md:339
+#: src/reference/embedding.md:361
 msgid ""
-"the walk and its fetched lanes — the yield is `rut_driver::Loaded` ([the "
-"walk vs the offer](#the-walk-vs-the-offer))"
+"the walk and its fetched lanes — the yield is `rut_driver::Walk` ([the walk "
+"vs the offer](#the-walk-vs-the-offer))"
 msgstr ""
 
-#: src/reference/embedding.md:340
+#: src/reference/embedding.md:362
 msgid "dispatch on the shape: directory walk or closed `.rutbundle`"
 msgstr ""
 
-#: src/reference/embedding.md:341
+#: src/reference/embedding.md:363
 msgid "`load_bundle_session(path)`"
 msgstr ""
 
-#: src/reference/embedding.md:341
+#: src/reference/embedding.md:363
 msgid ""
 "load a packed `.rutbundle` from disk — the pure container lane plus the file "
 "read"
 msgstr ""
 
-#: src/reference/embedding.md:342
+#: src/reference/embedding.md:364
 msgid "`dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:342
+#: src/reference/embedding.md:364
 msgid ""
 "the OFFER lane: a package directory walked for someone else's program (no "
 "dev pass, no gate)"
 msgstr ""
 
-#: src/reference/embedding.md:343
+#: src/reference/embedding.md:365
 msgid "`tree_pkg(name)`"
 msgstr ""
 
-#: src/reference/embedding.md:343
+#: src/reference/embedding.md:365
 msgid "one toolchain-tree package (`rut/<name>`); a `[deps]` closure is refused"
 msgstr ""
 
-#: src/reference/embedding.md:344
+#: src/reference/embedding.md:366
 msgid "`load_module_source(path)`"
 msgstr ""
 
-#: src/reference/embedding.md:344
+#: src/reference/embedding.md:366
 msgid "one `.rut` file's text — a loose file is a single module, no manifest"
 msgstr ""
 
-#: src/reference/embedding.md:345
+#: src/reference/embedding.md:367
 msgid "`prefetch_urls(&src, &dir, &remote)`"
 msgstr ""
 
-#: src/reference/embedding.md:345
+#: src/reference/embedding.md:367
 msgid ""
 "collect a manifest's url rows and fetch them — the `_with` lanes' input step"
 msgstr ""
 
-#: src/reference/embedding.md:346
+#: src/reference/embedding.md:368
 msgid ""
 "`pack_dir(dir)` / `pack_dir_with(dir, &remote)` / `pack_dir_opts(..)` family"
 msgstr ""
 
-#: src/reference/embedding.md:346
+#: src/reference/embedding.md:368
 msgid ""
 "pack a module directory into a deterministic `.rutbundle` — a **compiled** "
 "root for a lib pkg, a **decl** root for a host pkg (`type` routes; "
 "`format_version` is 11); returns the bytes ([module bundles](bundles.md))"
 msgstr ""
 
-#: src/reference/embedding.md:347
+#: src/reference/embedding.md:369
 msgid "`default_out_path(dir)`"
 msgstr ""
 
-#: src/reference/embedding.md:347
+#: src/reference/embedding.md:369
 msgid "the conventional pack output path"
 msgstr ""
 
-#: src/reference/embedding.md:349
+#: src/reference/embedding.md:371
 msgid "The run chain API (`rut-driver`)"
 msgstr ""
 
-#: src/reference/embedding.md:353
-msgid "`RutRun::new()`"
+#: src/reference/embedding.md:375
+msgid "`.pkg(offer)`"
 msgstr ""
 
-#: src/reference/embedding.md:353
-msgid "the chain's head; compose with the chain methods, end at `.compile()`"
-msgstr ""
-
-#: src/reference/embedding.md:354
-msgid "`.pkg(pkg)` / `.pkgs(&loaded)`"
-msgstr ""
-
-#: src/reference/embedding.md:354
-msgid "offer — FIRST OFFER WINS: a pkg whose name is already offered is ignored"
-msgstr ""
-
-#: src/reference/embedding.md:355
-msgid "`.host_pkg(host_pkg)`"
-msgstr ""
-
-#: src/reference/embedding.md:355
+#: src/reference/embedding.md:375
 msgid ""
-"hand over one host pkg's bodies; installed at `.compile()` against the rows "
-"snapshot"
+"the ONE offering verb over the `Offer` classification — `pkg(&bundle)` "
+"(`Offer::Lib`), `pkg(host_pkg)` (`Offer::Host`), `pkg(pack_inline_pkg(name, "
+"text))` for ephemeral source. FIRST OFFER WINS: a pkg whose name is already "
+"offered is ignored"
 msgstr ""
 
-#: src/reference/embedding.md:356 src/reference/loading.md:55
-msgid "`.symbols(&map)`"
-msgstr ""
-
-#: src/reference/embedding.md:356
-msgid ""
-"restore a stripped artifact's symbol table into the offered compiled pkgs "
-"([symbol stripping](symbol-stripping.md))"
-msgstr ""
-
-#: src/reference/embedding.md:357
+#: src/reference/embedding.md:376
 msgid "`.entrypoint(name)`"
 msgstr ""
 
-#: src/reference/embedding.md:357
+#: src/reference/embedding.md:376
 msgid "the root pkg — the graph compiles it and its transitive uses"
 msgstr ""
 
-#: src/reference/embedding.md:358
+#: src/reference/embedding.md:377
 msgid "`.compile() -> Result<Compiled, RunError>`"
 msgstr ""
 
-#: src/reference/embedding.md:358
+#: src/reference/embedding.md:377
 msgid "the terminal step ([the law](#the-compile-law))"
 msgstr ""
 
-#: src/reference/embedding.md:359
+#: src/reference/embedding.md:378
 msgid "`Compiled { graph, hosts }`"
 msgstr ""
 
-#: src/reference/embedding.md:359
+#: src/reference/embedding.md:378
 msgid ""
 "the linked graph (diags inside — check `graph.diags` before trusting "
-"`graph.program`) and the host registry every `.host_pkg(..)` installed"
+"`graph.program`) and the host registry every `Offer::Host` installed"
 msgstr ""
 
-#: src/reference/embedding.md:360
-msgid "`Loaded { pkgs, root }`"
+#: src/reference/embedding.md:379
+msgid "`Bundle::parse(&bytes)`"
 msgstr ""
 
-#: src/reference/embedding.md:360
-msgid "a walk's yield; `loaded.pkg(name)` picks one pkg"
+#: src/reference/embedding.md:379
+msgid ""
+"decode + verify an archive ONCE (CRC, version, group decode) — the handle is "
+"reusable across runs; `bundle.restore_symbols(&map)` restores a stripped "
+"artifact's names on the handle ([symbol stripping](symbol-stripping.md)); "
+"`bundle.walk()` is the raw mount assembly"
 msgstr ""
 
-#: src/reference/embedding.md:361
-msgid "`Pkg::source / decl / host / compiled / from_bundle`"
+#: src/reference/embedding.md:380
+msgid "`Walk { pkgs, root }`"
 msgstr ""
 
-#: src/reference/embedding.md:361
-msgid "the offer constructors ([the offer](#the-walk-vs-the-offer))"
+#: src/reference/embedding.md:380
+msgid "a walk's yield; `walked.pkg(name)` picks one pkg"
 msgstr ""
 
-#: src/reference/embedding.md:362
+#: src/reference/embedding.md:381
+msgid "`Mounted::source / decl / host / compiled / from_bundle`"
+msgstr ""
+
+#: src/reference/embedding.md:381
+msgid "the walked pkg data's constructors ([the offer](#the-walk-vs-the-offer))"
+msgstr ""
+
+#: src/reference/embedding.md:382
 msgid "`RunError`"
 msgstr ""
 
-#: src/reference/embedding.md:362
+#: src/reference/embedding.md:382
 msgid ""
 "why a run refused to compose or compile — shape (bad name, missing "
 "entrypoint) or closure (a `use` nothing offered resolves); the message IS "
 "the diagnostic"
 msgstr ""
 
-#: src/reference/embedding.md:363
+#: src/reference/embedding.md:383
 msgid "`declared_host_fns(pkgs)`"
 msgstr ""
 
-#: src/reference/embedding.md:363
+#: src/reference/embedding.md:383
 msgid ""
 "the declared rows, async-expanded, flattened — the raw lane's "
 "`verify_against` input"
 msgstr ""
 
-#: src/reference/embedding.md:364
+#: src/reference/embedding.md:384
 msgid "`host_pkg_ctx(pkgs)`"
 msgstr ""
 
-#: src/reference/embedding.md:364
+#: src/reference/embedding.md:384
 msgid ""
 "the declared rows, partitioned by scope — for hosts that build registries "
 "OUTSIDE the chain (a bench probe's fresh `Vm` per iteration, a raw-row "
 "host's `verify_against`)"
 msgstr ""
 
-#: src/reference/embedding.md:365
+#: src/reference/embedding.md:385
 msgid "`compile_module(src, mode, name)`"
 msgstr ""
 
-#: src/reference/embedding.md:365
+#: src/reference/embedding.md:385
 msgid ""
 "the single-source lane: the core prelude auto-rides, the source offers as "
 "the root pkg, one `.compile()` — returns diags, AST/IR dumps, and the "
@@ -18767,73 +18817,74 @@ msgid ""
 "a host that wants them offers `rut_native::tree_pkg(..)`"
 msgstr ""
 
-#: src/reference/embedding.md:366
+#: src/reference/embedding.md:386
 msgid ""
 "`compile_program(src, mode, name)` / `compile_program_resolved(..)` / "
 "`ir_dump_of(..)`"
 msgstr ""
 
-#: src/reference/embedding.md:366
+#: src/reference/embedding.md:386
 msgid "the raw pipeline pieces (tooling)"
 msgstr ""
 
-#: src/reference/embedding.md:367
+#: src/reference/embedding.md:387
 msgid ""
 "lower a `.d.rut` surface to host rows (`children` = the mounted `mod` tree — "
 "a declared child with no mounted `NAME/mod.d.rut` is a loud error; "
 "registration is path-qualified, `pkg::net::connect`)"
 msgstr ""
 
-#: src/reference/embedding.md:368
+#: src/reference/embedding.md:388
 msgid "`bundle::{parse_manifest, Bundle, Layout, ..}`"
 msgstr ""
 
-#: src/reference/embedding.md:368
+#: src/reference/embedding.md:388
 msgid ""
 "the container codec, the `rut.jsonc` grammar, the reader (both root kinds) — "
 "pure, in-memory"
 msgstr ""
 
-#: src/reference/embedding.md:369
-msgid "`pack::{pack, PackOpts, ..}`"
+#: src/reference/embedding.md:389
+msgid "`pack::{pack, pack_inline_pkg, PackOpts, ..}`"
 msgstr ""
 
-#: src/reference/embedding.md:369
+#: src/reference/embedding.md:389
 msgid ""
 "the pure emit half of packing (`rut-native` owns the walk + dev tables + the "
-"gate)"
+"gate); `pack_inline_pkg(name, text)` assembles a one-member source bundle — "
+"never compiles"
 msgstr ""
 
-#: src/reference/embedding.md:370
+#: src/reference/embedding.md:390
 msgid "`sha256_hex(bytes)`"
 msgstr ""
 
-#: src/reference/embedding.md:370
+#: src/reference/embedding.md:390
 msgid "pin arithmetic (pure)"
 msgstr ""
 
-#: src/reference/embedding.md:372
+#: src/reference/embedding.md:392
 msgid ""
 "`mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut` ([host fns "
 "and declaration files](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:375
+#: src/reference/embedding.md:395
 msgid ""
 "The driver is provably pure: no fs, no net, no walk, no `std::path` anywhere "
 "in `rut-driver` — everything with a filesystem or a wire lives in "
 "`rut-native`."
 msgstr ""
 
-#: src/reference/embedding.md:379
+#: src/reference/embedding.md:399
 msgid "VM API (`rut_vm::interp`)"
 msgstr ""
 
-#: src/reference/embedding.md:383
+#: src/reference/embedding.md:403
 msgid "`Vm::builder()`"
 msgstr ""
 
-#: src/reference/embedding.md:383
+#: src/reference/embedding.md:403
 msgid ""
 "the construction door: `.compiled(x)` (anything `IntoVmParts` — the driver's "
 "`Compiled`) or `.program(rc)` for embedders holding a decoded binary, each "
@@ -18842,260 +18893,260 @@ msgid ""
 "mechanism law; explicit setters win over the compiled parts"
 msgstr ""
 
-#: src/reference/embedding.md:384
+#: src/reference/embedding.md:404
 msgid "`HostRegistry::new()`"
 msgstr ""
 
-#: src/reference/embedding.md:384
+#: src/reference/embedding.md:404
 msgid "an empty binding table (the raw lane)"
 msgstr ""
 
-#: src/reference/embedding.md:385
+#: src/reference/embedding.md:405
 msgid "`HostPkg::new(scope)`"
 msgstr ""
 
-#: src/reference/embedding.md:385
+#: src/reference/embedding.md:405
 msgid ""
 "a pkg builder; rows register under bare names or scope-relative paths "
 "(`\"net::connect\"` — a row under the pkg's `mod net` tree; the scope itself "
 "is never part of the row name) and the scope prefixes once, at the install"
 msgstr ""
 
-#: src/reference/embedding.md:386 src/reference/loading.md:53
+#: src/reference/embedding.md:406 src/reference/loading.md:53
 msgid "`pkg_fn!` / `pkg_async_fn!`"
 msgstr ""
 
-#: src/reference/embedding.md:386
+#: src/reference/embedding.md:406
 msgid ""
 "the builder's sugar: one spelling → one row / the five-row async family (the "
 "spelling may carry the mod path: `\"net::send\"` → `net::send__start` et al)"
 msgstr ""
 
-#: src/reference/embedding.md:387
+#: src/reference/embedding.md:407
 msgid "`hosts.register::<_, (P…), R, _>(name, f)`"
 msgstr ""
 
-#: src/reference/embedding.md:387
+#: src/reference/embedding.md:407
 msgid "the raw lane: bind one body under a full `scope::name` string"
 msgstr ""
 
-#: src/reference/embedding.md:388
+#: src/reference/embedding.md:408
 msgid "`hosts.verify_against(&expected)`"
 msgstr ""
 
-#: src/reference/embedding.md:388
+#: src/reference/embedding.md:408
 msgid ""
 "the raw lane's net: panic on declared-unbound / bound-undeclared / signature "
 "drift"
 msgstr ""
 
-#: src/reference/embedding.md:389
+#: src/reference/embedding.md:409
 msgid "`vm.call::<A, R>(export, args)`"
 msgstr ""
 
-#: src/reference/embedding.md:389
+#: src/reference/embedding.md:409
 msgid ""
 "call an export with Rust values, get a Rust value back ([value "
 "boundary](value-boundary.md))"
 msgstr ""
 
-#: src/reference/embedding.md:390
+#: src/reference/embedding.md:410
 msgid "`vm.resume::<R>()`"
 msgstr ""
 
-#: src/reference/embedding.md:390
+#: src/reference/embedding.md:410
 msgid "resume a budget-parked call after refueling"
 msgstr ""
 
-#: src/reference/embedding.md:391
+#: src/reference/embedding.md:411
 msgid "`vm.run_ready()`"
 msgstr ""
 
-#: src/reference/embedding.md:391
+#: src/reference/embedding.md:411
 msgid "drain the async ready queue once; returns frames run"
 msgstr ""
 
-#: src/reference/embedding.md:392
+#: src/reference/embedding.md:412
 msgid "the earliest timer deadline, if any"
 msgstr ""
 
-#: src/reference/embedding.md:393
+#: src/reference/embedding.md:413
 msgid "`vm.set_now(t_ms)`"
 msgstr ""
 
-#: src/reference/embedding.md:393
+#: src/reference/embedding.md:413
 msgid "advance the virtual clock"
 msgstr ""
 
-#: src/reference/embedding.md:394
+#: src/reference/embedding.md:414
 msgid "unfinished async work"
 msgstr ""
 
-#: src/reference/embedding.md:395
+#: src/reference/embedding.md:415
 msgid "`vm.fuel_used` / `vm.heap_usage()`"
 msgstr ""
 
-#: src/reference/embedding.md:395
+#: src/reference/embedding.md:415
 msgid "budget meters"
 msgstr ""
 
-#: src/reference/embedding.md:396
+#: src/reference/embedding.md:416
 msgid "`vm.alloc_opaque_str(s)`"
 msgstr ""
 
-#: src/reference/embedding.md:396
+#: src/reference/embedding.md:416
 msgid "mint an `opaque` box over host-built text (the logger's named logger)"
 msgstr ""
 
-#: src/reference/embedding.md:397
+#: src/reference/embedding.md:417
 msgid "`vm.call_host_row(row, &[Value])`"
 msgstr ""
 
-#: src/reference/embedding.md:397
+#: src/reference/embedding.md:417
 msgid "dispatch a registered row by name (test/tooling reads)"
 msgstr ""
 
-#: src/reference/embedding.md:399
+#: src/reference/embedding.md:419
 msgid "The canonical async driving loop (single-threaded; the host owns it):"
 msgstr ""
 
-#: src/reference/embedding.md:405
+#: src/reference/embedding.md:425
 msgid "// advance to the next timer\n"
 msgstr ""
 
-#: src/reference/embedding.md:412
+#: src/reference/embedding.md:432
 msgid ""
 "Cap the loop in embedders that cannot prove termination, so a program that "
 "never idles fails loudly instead of hanging."
 msgstr ""
 
-#: src/reference/embedding.md:415
+#: src/reference/embedding.md:435
 msgid "Limits"
 msgstr ""
 
-#: src/reference/embedding.md:419
+#: src/reference/embedding.md:439
 msgid "// ops per turn; None = unlimited\n"
 msgstr ""
 
-#: src/reference/embedding.md:421
+#: src/reference/embedding.md:441
 msgid "// ops between interrupt checks\n"
 msgstr ""
 
-#: src/reference/embedding.md:425
+#: src/reference/embedding.md:445
 msgid ""
 "Exhaustion and interrupts surface as traps ([resource "
 "limits](resource-limits.md)). A trap inside re-entrant work propagates to "
 "the embedder parked at the host op; `vm.resume::<R>()` re-runs the turn."
 msgstr ""
 
-#: src/reference/embedding.md:429
+#: src/reference/embedding.md:449
 msgid "Native fn rules"
 msgstr ""
 
-#: src/reference/embedding.md:431
+#: src/reference/embedding.md:451
 msgid ""
 "A body is `FnMut(&mut Vm, P…) -> R` or `-> Result<R, Trap>`; the Rust "
 "parameter types **are** the declared row (compile error at the register site "
 "for a type that does not cross — [value boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:434
+#: src/reference/embedding.md:454
 msgid ""
 "Native fns run **outside** the op budget. The host is trusted to be fast — "
 "or to hand the work to a future ([async host fns](host-fns.md))."
 msgstr ""
 
-#: src/reference/embedding.md:436
+#: src/reference/embedding.md:456
 msgid ""
 "Re-entrancy: a body may call `vm.call` on rut exports. Nested calls draw the "
 "same fuel pool; borrows held by the outer body are guarded ([value "
 "boundary](value-boundary.md))."
 msgstr ""
 
-#: src/reference/embedding.md:439
+#: src/reference/embedding.md:459
 msgid ""
 "Failures are values: return `Err(Trap)` — `Trap { kind, msg }`. The fn traps "
 "cleanly and the error propagates as an `Err` to the embedder with the rut "
 "backtrace intact. Traps never unwind Rust."
 msgstr ""
 
-#: src/reference/embedding.md:443
+#: src/reference/embedding.md:463
 msgid "`TrapKind`"
 msgstr ""
 
-#: src/reference/embedding.md:443
+#: src/reference/embedding.md:463
 msgid "raised by"
 msgstr ""
 
-#: src/reference/embedding.md:445
+#: src/reference/embedding.md:465
 msgid "budget exhaustion"
 msgstr ""
 
-#: src/reference/embedding.md:446 src/reference/cli.md:61
+#: src/reference/embedding.md:466 src/reference/cli.md:61
 msgid "heap limit"
 msgstr ""
 
-#: src/reference/embedding.md:447
+#: src/reference/embedding.md:467
 msgid "`Interrupted`"
 msgstr ""
 
-#: src/reference/embedding.md:447
+#: src/reference/embedding.md:467
 msgid "interrupt flag"
 msgstr ""
 
-#: src/reference/embedding.md:448
+#: src/reference/embedding.md:468
 msgid "`Overflow` / `DivByZero`"
 msgstr ""
 
-#: src/reference/embedding.md:448
+#: src/reference/embedding.md:468
 msgid "arithmetic"
 msgstr ""
 
-#: src/reference/embedding.md:449
+#: src/reference/embedding.md:469
 msgid "`IndexOutOfBounds`"
 msgstr ""
 
-#: src/reference/embedding.md:449
+#: src/reference/embedding.md:469
 msgid "sequence access"
 msgstr ""
 
-#: src/reference/embedding.md:450
+#: src/reference/embedding.md:470
 msgid "`Panic`"
 msgstr ""
 
-#: src/reference/embedding.md:450
+#: src/reference/embedding.md:470
 msgid "`panic`"
 msgstr ""
 
-#: src/reference/embedding.md:451
+#: src/reference/embedding.md:471
 msgid "`BadUnbox`"
 msgstr ""
 
-#: src/reference/embedding.md:451
+#: src/reference/embedding.md:471
 msgid "a failed unbox"
 msgstr ""
 
-#: src/reference/embedding.md:452
+#: src/reference/embedding.md:472
 msgid "`NilDeref`"
 msgstr ""
 
-#: src/reference/embedding.md:452
+#: src/reference/embedding.md:472
 msgid "nil where a reference is required"
 msgstr ""
 
-#: src/reference/embedding.md:453
+#: src/reference/embedding.md:473
 msgid "`Invalid`"
 msgstr ""
 
-#: src/reference/embedding.md:453
+#: src/reference/embedding.md:473
 msgid "everything else, including boundary mismatches"
 msgstr ""
 
-#: src/reference/embedding.md:455
+#: src/reference/embedding.md:475
 msgid "The engine's own natives"
 msgstr ""
 
-#: src/reference/embedding.md:457
+#: src/reference/embedding.md:477
 msgid ""
 "The VM boots with internal native calls in the same dispatch family — the "
 "`str`/`bytes` members, the `f\"...\"` concatenation lowering, array "
@@ -19104,73 +19155,73 @@ msgid ""
 "registered modules."
 msgstr ""
 
-#: src/reference/embedding.md:463
+#: src/reference/embedding.md:483
 msgid "Host-side helpers (`rut-std`)"
 msgstr ""
 
-#: src/reference/embedding.md:465
+#: src/reference/embedding.md:485
 msgid ""
 "One `pkg()` builder per module; each rides the chain — "
-"`.host_pkg(rut_std::math::pkg())` — and installs at `.compile()` against the "
-"rows snapshot (see [host fns](host-fns.md) for the asymmetric contract — an "
+"`.pkg(rut_std::math::pkg())` — and installs at `.compile()` against the rows "
+"snapshot (see [host fns](host-fns.md) for the asymmetric contract — an "
 "unmounted scope merges inert, so hosts blanket-install their subset):"
 msgstr ""
 
-#: src/reference/embedding.md:471
+#: src/reference/embedding.md:491
 msgid "builder"
 msgstr ""
 
-#: src/reference/embedding.md:471
+#: src/reference/embedding.md:491
 msgid "binds"
 msgstr ""
 
-#: src/reference/embedding.md:473 src/reference/cli.md:68
+#: src/reference/embedding.md:493 src/reference/cli.md:68
 msgid "`math::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:473
+#: src/reference/embedding.md:493
 msgid "`calc`'s float functions, both widths"
 msgstr ""
 
-#: src/reference/embedding.md:474
+#: src/reference/embedding.md:494
 msgid "`logger::pkg(sink)`"
 msgstr ""
 
-#: src/reference/embedding.md:474
+#: src/reference/embedding.md:494
 msgid "`ink_host`'s two rows, routed to a `FnMut(&str)` sink"
 msgstr ""
 
-#: src/reference/embedding.md:475 src/reference/cli.md:70
+#: src/reference/embedding.md:495 src/reference/cli.md:70
 msgid "`nmap::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:475
+#: src/reference/embedding.md:495
 msgid "the native key table behind `nmapset` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/embedding.md:476
+#: src/reference/embedding.md:496
 msgid "`strbuild::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:476
+#: src/reference/embedding.md:496
 msgid ""
 "the string builder's rows behind `strbuild` ([stdlib](stdlib.md)) — growth "
 "is charged against the embedder's heap budget"
 msgstr ""
 
-#: src/reference/embedding.md:477 src/reference/cli.md:72
+#: src/reference/embedding.md:497 src/reference/cli.md:72
 msgid "`async_host::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:477
+#: src/reference/embedding.md:497
 msgid "the launcher rows (`__launch`/`__abort`/`__sleep`/`__sleep_yield`)"
 msgstr ""
 
-#: src/reference/embedding.md:478 src/reference/cli.md:73
+#: src/reference/embedding.md:498 src/reference/cli.md:73
 msgid "`http::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:478
+#: src/reference/embedding.md:498
 msgid ""
 "the std HTTP lanes (reqwest; native builds only); `http::pkg_with(f)` is the "
 "fixture twin, returning `(HostPkg, HttpFixture)`. The `http_host` surface is "
@@ -19178,26 +19229,26 @@ msgid ""
 "readbacks, `stream::http_body`/`http_stream_next`)"
 msgstr ""
 
-#: src/reference/embedding.md:479 src/reference/cli.md:71
+#: src/reference/embedding.md:499 src/reference/cli.md:71
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:479 src/reference/stdlib.md:134
+#: src/reference/embedding.md:499 src/reference/stdlib.md:134
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
-#: src/reference/embedding.md:481
+#: src/reference/embedding.md:501
 msgid "In-tree examples"
 msgstr ""
 
-#: src/reference/embedding.md:483
+#: src/reference/embedding.md:503
 msgid ""
 "[03 — Plugin](../examples/03-plugin.md): a Rust chat server driving a rut "
 "moderator plugin, loaded from a module directory and from a packed "
 "`.rutbundle`; re-entrant `emit` crossings."
 msgstr ""
 
-#: src/reference/embedding.md:486
+#: src/reference/embedding.md:506
 msgid ""
 "[06 — GitHub viewer CLI](../examples/06-github-viewer-cli.md): walks the std "
 "packages, binds example-local I/O rows, launches an async entry fn, and "
@@ -19983,7 +20034,7 @@ msgid ""
 "The registered callable's Rust shape **is** the `.d.rut` row. The "
 "**installer lane** is a `HostPkg` builder per pkg — rows under bare names, "
 "the scope (the pkg's name) spelled once — handed to the chain with "
-"`.host_pkg(..)`:"
+"`pkg(Offer::Host(..))` — `pkg(hp)` coerces:"
 msgstr ""
 
 #: src/reference/host-fns.md:157
@@ -20039,7 +20090,7 @@ msgstr ""
 #: src/reference/host-fns.md:198
 msgid ""
 "One installer per pkg: a duplicate row name inside a builder panics, a "
-"second `.host_pkg(..)` for the same scope panics (at the `.compile()` "
+"second `Offer::Host` for the same scope panics (at the `.compile()` "
 "install), and a pkg cannot spell another pkg's rows — the scope comes solely "
 "from `HostPkg::new`."
 msgstr ""
@@ -20154,8 +20205,7 @@ msgid "/* best-effort cancel */"
 msgstr ""
 
 #: src/reference/host-fns.md:277
-msgid ""
-"// the built pkg rides the chain: RutRun::new()...host_pkg(http.build())\n"
+msgid "// the built pkg rides the chain: RutRun::new()...pkg(http.build())\n"
 msgstr ""
 
 #: src/reference/host-fns.md:279
@@ -21265,9 +21315,9 @@ msgstr ""
 
 #: src/reference/stdlib.md:165
 msgid ""
-"Embedder side: `.host_pkg(rut_std::logger::pkg(|s| println!(\"{s}\")))` on "
-"the run chain ([embedding](embedding.md)). Offering `ink` pulls `ink_host` "
-"along (`deps`)."
+"Embedder side: `.pkg(rut_std::logger::pkg(|s| println!(\"{s}\")))` on the "
+"run chain ([embedding](embedding.md)). Offering `ink` pulls `ink_host` along "
+"(`deps`)."
 msgstr ""
 
 #: src/reference/stdlib.md:169
@@ -21801,9 +21851,9 @@ msgstr ""
 
 #: src/reference/stdlib.md:407
 msgid ""
-"Embedder side: `.host_pkg(rut_std::strbuild::pkg())` on the run chain. "
-"Offering `strbuild` pulls `strbuild_host` along (`deps`); offering `json` "
-"pulls both (its writer rides the builder)."
+"Embedder side: `.pkg(rut_std::strbuild::pkg())` on the run chain. Offering "
+"`strbuild` pulls `strbuild_host` along (`deps`); offering `json` pulls both "
+"(its writer rides the builder)."
 msgstr ""
 
 #: src/reference/stdlib.md:411
@@ -24599,8 +24649,9 @@ msgstr ""
 #: src/reference/symbol-stripping.md:115
 msgid ""
 "Embedders get the same lane as library calls: the packer's `pack_dir_opts` "
-"returns the sidecar bytes beside the bundle, and `.symbols(&map)` on the run "
-"chain restores into the offered compiled pkgs."
+"returns the sidecar bytes beside the bundle, and "
+"`bundle.restore_symbols(&map)` on the decoded archive handle restores into "
+"pkgs."
 msgstr ""
 
 #: src/reference/symbol-stripping.md:120
@@ -24975,7 +25026,7 @@ msgid ""
 "runs the root-only `[dev-deps]` pass ([Dependency "
 "kinds](dependency-kinds.md)). A `.rutbundle` loads closed from the zip — "
 "groups mounting under their content identities ([Module "
-"bundles](bundles.md)). The yield is `rut_driver::Loaded { pkgs, root }`."
+"bundles](bundles.md)). The yield is `rut_driver::Walk { pkgs, root }`."
 msgstr ""
 
 #: src/reference/loading.md:22
@@ -24984,12 +25035,12 @@ msgstr ""
 
 #: src/reference/loading.md:22
 msgid ""
-"`RutRun::new().pkgs(&loaded)` offers every walked pkg — first-pkg-wins — and "
-"`.host_pkg(..)` hands over the host bodies. `core` auto-rides unless a pkg "
-"named `core` was offered; the closure check refuses a `use` name nothing "
-"offered resolves — and a head that IS mounted but undeclared by its consumer "
-"(nameability is declaration-scoped: `deps` ∪ root `dev-deps` ∪ `core`; "
-"[Dependency kinds](dependency-kinds.md))."
+"`pkg(..)` — the ONE offering verb — offers every walked pkg (first-pkg-wins; "
+"fold the walk into the chain) and `Offer::Host` hands over the host bodies. "
+"`core` auto-rides unless a pkg named `core` was offered; the closure check "
+"refuses a `use` name nothing offered resolves — and a head that IS mounted "
+"but undeclared by its consumer (nameability is declaration-scoped: `deps` ∪ "
+"root `dev-deps` ∪ `core`; [Dependency kinds](dependency-kinds.md))."
 msgstr ""
 
 #: src/reference/loading.md:23
@@ -25081,15 +25132,17 @@ msgid "`rut_native::load_dir(dir)` / `load_dir_with(dir, &remote)`"
 msgstr ""
 
 #: src/reference/loading.md:49
-msgid "the walk: a directory's whole closure as `rut_driver::Loaded`"
+msgid "the walk: a directory's whole closure as `rut_driver::Walk`"
 msgstr ""
 
 #: src/reference/loading.md:50
-msgid "`rut_native::load_bundle_session(path)` / `Pkg::from_bundle(&bytes)`"
+msgid "`rut_native::load_bundle_session(path)` / `Bundle::parse(&bytes)`"
 msgstr ""
 
 #: src/reference/loading.md:50
-msgid "load a packed `.rutbundle` from a file / from bytes"
+msgid ""
+"load a packed `.rutbundle` from a file / decode its bytes into a reusable "
+"handle"
 msgstr ""
 
 #: src/reference/loading.md:51
@@ -25116,19 +25169,23 @@ msgid ""
 msgstr ""
 
 #: src/reference/loading.md:54
-msgid "`RutRun::new().pkg(..).host_pkg(..).entrypoint(..).compile()`"
+msgid "`RutRun::new().pkg(..).entrypoint(..).compile()`"
 msgstr ""
 
 #: src/reference/loading.md:54
 msgid ""
-"the run chain: offers, host bodies, the root — one terminal step compiles "
-"(`Result<Compiled, RunError>`)"
+"the run chain: offers (`Offer::Lib(&bundle)` / `Offer::Host(hp)`), the root "
+"— one terminal step compiles (`Result<Compiled, RunError>`)"
+msgstr ""
+
+#: src/reference/loading.md:55
+msgid "`bundle.restore_symbols(&map)`"
 msgstr ""
 
 #: src/reference/loading.md:55
 msgid ""
-"restore a [stripped artifact's](symbol-stripping.md) private symbol table "
-"into the offered compiled pkgs"
+"restore a [stripped artifact's](symbol-stripping.md) private symbol table on "
+"the decoded archive handle — once, before any offer"
 msgstr ""
 
 #: src/reference/loading.md:56
@@ -25525,10 +25582,10 @@ msgstr ""
 msgid ""
 "**The stripped artifact's private symbol table.** Name resolution and "
 "position lookup follow the loaded program — so supplying a `.rutsym` sidecar "
-"at load time (`run --symbols`, or `.symbols(&map)` on the run chain) "
-"restores real names and line/col before any trace is taken. The sidecar's "
-"law — what mangles, what stays, the mixed-closure refusal — is [Symbol "
-"stripping and `.rutsym` sidecars](symbol-stripping.md)."
+"at load time (`run --symbols`, or `bundle.restore_symbols(&map)` on the "
+"decoded archive handle) restores real names and line/col before any trace is "
+"taken. The sidecar's law — what mangles, what stays, the mixed-closure "
+"refusal — is [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
 #: src/reference/diagnostics.md:138
@@ -25953,7 +26010,7 @@ msgid ""
 "returns the bundle bytes; writing the output file stays with the caller. "
 "Loading a bundle into a run goes through "
 "`rut_native::load_bundle_session(path)` (the file read) or "
-"`rut_driver::Pkg::from_bundle(&bytes)` (the pure parse) over the parsed "
+"`rut_driver::Bundle::parse(&bytes)` (the decode-once handle) over the parsed "
 "`rut_driver::bundle::Bundle` and its `rut_driver::bundle::Layout` — the "
 "compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
@@ -27269,8 +27326,14 @@ msgstr ""
 
 #: src/reference/cli.md:45
 msgid ""
-"load the whole graph, compile it, run the entry designation (below) "
-"([project structure](project-structure.md))"
+"**cache-first**: the run key is sha256 over the closure's sources, "
+"manifests, `rut.lock` pins, and the toolchain version — a hit in "
+"`.rut/cache/<key>.rutbundle` mounts the cached archive; a miss is the "
+"whole-program compile (the deterministic reference — [the compilation "
+"model](compilation-model.md)), whose archive then emits into the cache. "
+"`--no-cache` (alias `--repack`) forces the miss path; the fresh archive "
+"still refreshes the entry. A host-rooted directory never reaches the cache "
+"(it refuses at the door — a host root is a declaration leaf, nothing to run)"
 msgstr ""
 
 #: src/reference/cli.md:46
@@ -27278,7 +27341,9 @@ msgid "`mod.rutbundle`"
 msgstr ""
 
 #: src/reference/cli.md:46
-msgid "the packed form of the same contract ([module bundles](bundles.md))"
+msgid ""
+"the packed form of the same contract — decoded directly, no cache lane "
+"([module bundles](bundles.md))"
 msgstr ""
 
 #: src/reference/cli.md:48
@@ -27347,7 +27412,7 @@ msgid "every 1024 ops"
 msgstr ""
 
 #: src/reference/cli.md:64
-msgid "Bodies bound by `run` (each rides the chain as `.host_pkg(..)`):"
+msgid "Bodies bound by `run` (each rides the chain as `pkg(Offer::Host(..))`):"
 msgstr ""
 
 #: src/reference/cli.md:66

@@ -46,7 +46,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-fn load() -> rut_driver::Loaded {
+fn load() -> rut_driver::Walk {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let remote = warm(base);
     block_on(rut_native::load_path_session_with(base, &remote)).expect("load the module dir")
@@ -57,8 +57,10 @@ fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     // CDN bundle, pinned), the walk yields the pkgs — then the chain
     // (the core prelude auto-offers at `.compile()`)
     let loaded = load();
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");

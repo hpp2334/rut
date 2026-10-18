@@ -24,13 +24,12 @@ fn run(src: &str) -> Result<Vec<String>, String> {
         );
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
             // the probe DECLARES its uses structurally — the world's
             // heads (the fmt lane must not change them, and doesn't:
             // both texts compile over the same declaration)
-            rut_driver::Pkg::source("probe", src)
+            rut_driver::Mounted::source("probe", src)
                 .manifest(rut_driver::Manifest::lib("probe", &["calc", "ink", "pouch"])),
         )
         .entrypoint("probe")

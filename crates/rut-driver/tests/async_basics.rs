@@ -23,7 +23,7 @@ const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut")
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -35,7 +35,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -66,12 +66,11 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     // the root DECLARES its uses structurally (the async pair + the
     // lowered ink_host surface)
     pkgs.push(
-        rut_driver::Pkg::source("app", src)
+        rut_driver::Mounted::source("app", src)
             .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host"])),
     );
     let expected = rut_driver::declared_host_fns(&pkgs);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -126,11 +125,10 @@ fn diags_of(src: &str) -> Vec<String> {
     // the root DECLARES its uses structurally (the async pair + the
     // lowered ink_host surface)
     pkgs.push(
-        rut_driver::Pkg::source("app", src)
+        rut_driver::Mounted::source("app", src)
             .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host"])),
     );
-    rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs, root: String::new() })
+    rut_driver::Walk { pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap()
@@ -609,16 +607,15 @@ entry fn main() -> nil {
         .expect("the async pair walks")
         .pkgs;
     pkgs.push(
-        rut_driver::Pkg::source("kit", KIT).manifest(rut_driver::Manifest::lib("kit", &["futures"])),
+        rut_driver::Mounted::source("kit", KIT).manifest(rut_driver::Manifest::lib("kit", &["futures"])),
     );
     pkgs.push(ink_host);
     pkgs.push(
-        rut_driver::Pkg::source("app", src)
+        rut_driver::Mounted::source("app", src)
             .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host", "kit"])),
     );
     let expected = rut_driver::declared_host_fns(&pkgs);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();

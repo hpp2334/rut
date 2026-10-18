@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 mod common;
 use common::{block_on, write_lock};
 
-use rut_driver::{PkgBody, PackOpts};
+use rut_driver::{MountedBody, PackOpts};
 use rut_native::{load_dir_with, pack_dir, pack_dir_opts, DepRemote, RemoteError};
 
 // ------------------------------------------------------------------
@@ -28,7 +28,7 @@ use rut_native::{load_dir_with, pack_dir, pack_dir_opts, DepRemote, RemoteError}
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -40,7 +40,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -153,10 +153,10 @@ fn host_root_packs_v6_and_loads_back() {
     assert_eq!(m.format_version, Some(11), "a decl root declares 11");
 
     // load: the root mounts as the pkg's host rows
-    let session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let session = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     assert_eq!(session.root, "logger_host");
     match &session.pkg("logger_host").unwrap().body {
-        PkgBody::Host { host_funcs, .. } => {
+        MountedBody::Host { host_funcs, .. } => {
             let names: Vec<&str> = host_funcs.iter().map(|r| r.name.as_str()).collect();
             assert_eq!(names, vec!["make_logger", "log"], "{names:?}");
         }
@@ -199,10 +199,12 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     assert_eq!(session.root, "app");
     assert!(matches!(
         session.pkg("logger_host").unwrap().body,
-        PkgBody::Host { .. }
+        MountedBody::Host { .. }
     ));
-    let units = rut_driver::RutRun::new()
-        .pkgs(&session)
+    let units = session
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&session.root)
         .compile()
         .expect("compile the walk");
@@ -246,10 +248,10 @@ fn the_real_tree_host_pkgs_pack_and_load() {
             vec!["rut.jsonc".to_string(), "mod.d.rut".to_string()],
             "rut/{name}: the surface rides at the canonical name: {names:?}"
         );
-        let session = rut_driver::Pkg::from_bundle(&bytes)
+        let session = rut_driver::Mounted::from_bundle(&bytes)
             .unwrap_or_else(|e| panic!("load rut/{name}: {e}"));
         assert_eq!(session.root, name);
-        assert!(matches!(session.pkg(name).unwrap().body, PkgBody::Host { .. }));
+        assert!(matches!(session.pkg(name).unwrap().body, MountedBody::Host { .. }));
     }
 }
 
@@ -307,7 +309,7 @@ fn any_other_version_refuses_with_the_one_recipe() {
     let v9_host = format!(
         r#"{{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}}}"#
     );
-    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
+    let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
         .unwrap_err()
         .to_string();
     assert!(err.contains("reads bundle format_version 11 only"), "{err}");
@@ -318,7 +320,7 @@ fn any_other_version_refuses_with_the_one_recipe() {
     // row does the routing, never the version) — a host pack carries
     // no ledger, so the compiled law refuses it
     let v11_lib = r#"{"format": "rutbundle", "format_version": 11, "name": "h", "entry": {"lib": "./h.rut"}}"#;
-    let err = rut_driver::Pkg::from_bundle(&resealed(&bytes, "rut.jsonc", v11_lib))
+    let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", v11_lib))
         .unwrap_err()
         .to_string();
     assert!(err.contains("no `rut.scopes` entry"), "{err}");
@@ -332,13 +334,13 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
     // a root `.rutc` in a host bundle: the contradiction refusal —
     // a host bundle's root is its surface, not a compiled unit
     let with_rutc = appended(&bytes, "mod.rutc", b"not a real program");
-    let err = rut_driver::Pkg::from_bundle(&with_rutc).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&with_rutc).unwrap_err().to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
     assert!(err.contains("mod.rutc"), "{err}");
 
     // a scope ledger: no programs, no ledger
     let with_ledger = appended(&bytes, "rut.scopes", b"0 = \"h\"\n");
-    let err = rut_driver::Pkg::from_bundle(&with_ledger).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&with_ledger).unwrap_err().to_string();
     assert!(err.contains("no programs"), "{err}");
 
     // a dep group: single-package law
@@ -352,7 +354,7 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
             rut_driver::bundle::parse_bundle(&group_manifest).unwrap(),
         ).collect();
     let with_group = rut_driver::bundle::write_bundle(&entries).unwrap();
-    let err = rut_driver::Pkg::from_bundle(&with_group).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&with_group).unwrap_err().to_string();
     assert!(err.contains("single-package"), "{err}");
 
     // a missing surface: the root IS the surface — no entry, no bundle
@@ -362,7 +364,7 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
         .filter(|(n, _)| n != "mod.d.rut")
         .collect();
     let err =
-        rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&stripped).unwrap())
+        rut_driver::Mounted::from_bundle(&rut_driver::bundle::write_bundle(&stripped).unwrap())
             .unwrap_err()
             .to_string();
     assert!(err.contains("root is `mod.d.rut` beside the manifest"), "{err}");
@@ -458,7 +460,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
         block_on(load_dir_with(&app, &Counting(table))).expect("load");
     assert!(matches!(
         session.pkg("logger_host").unwrap().body,
-        PkgBody::Host { .. }
+        MountedBody::Host { .. }
     ));
     // the leaf mounted; the dir dep mounted beside it — one fetch shape,
     // zero walking
@@ -495,8 +497,10 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     table.insert(url.to_string(), bytes);
     write_lock(&app, &table);
     let session = block_on(load_dir_with(&app, &common::Table::from(table))).expect("load");
-    let g = rut_driver::RutRun::new()
-        .pkgs(&session)
+    let g = session
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&session.root)
         .compile()

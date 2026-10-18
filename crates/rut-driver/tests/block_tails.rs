@@ -13,7 +13,7 @@
 use rut_vm::interp::Vm;
 
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    match rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile() {
+    match rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile() {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
             diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
@@ -33,7 +33,7 @@ fn one_diag(src: &str) -> String {
 /// compile + run `main` returning i32
 fn run_main(src: &str) -> i32 {
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Pkg::source("app", src))
+        .pkg(rut_driver::Mounted::source("app", src))
         .entrypoint("app")
         .compile()
         .expect("compile");

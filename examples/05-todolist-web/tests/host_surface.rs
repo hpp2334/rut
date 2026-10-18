@@ -247,7 +247,7 @@ fn guard_stale_listener_ids_are_host_drift() {
 
 // ---- the boot contract, both ways ----
 
-fn mounted_probe() -> rut_driver::Loaded {
+fn mounted_probe() -> rut_driver::Walk {
     mount::probe("harness").expect("the harness probe mounts")
 }
 

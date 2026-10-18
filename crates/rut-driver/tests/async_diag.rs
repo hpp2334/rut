@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -26,7 +26,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -50,10 +50,9 @@ fn diags_of(src: &str) -> Vec<String> {
     let async_pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
         .expect("the async pair walks")
         .pkgs;
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: async_pkgs, root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: async_pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
-            rut_driver::Pkg::source("app", src)
+            rut_driver::Mounted::source("app", src)
                 .manifest(rut_driver::Manifest::lib("app", &["futures"])),
         )
         .entrypoint("app")
@@ -238,7 +237,7 @@ entry fn main() -> nil {
     let compiled = rut_driver::RutRun::new()
         .pkg(engine)
         .pkg(
-            rut_driver::Pkg::source("app", src)
+            rut_driver::Mounted::source("app", src)
                 .manifest(rut_driver::Manifest::lib("app", &["my_engine"])),
         )
         .entrypoint("app")

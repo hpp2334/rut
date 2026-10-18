@@ -46,7 +46,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-fn load() -> rut_driver::Loaded {
+fn load() -> rut_driver::Walk {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let remote = warm(base);
     block_on(rut_native::load_path_session_with(base, &remote)).expect("load the module dir")
@@ -58,9 +58,11 @@ fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     // toolchain tree), the walk yields exactly the declared closure —
     // then the chain (the core prelude auto-rides; no hand offers)
     let loaded = load();
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
-        .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");

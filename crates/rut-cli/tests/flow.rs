@@ -49,19 +49,18 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
     for b in ["flow"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
-        world.extend(rut_driver::Pkg::from_bundle(&bytes).unwrap_or_else(|e| panic!("mount {b}: {e:?}")).pkgs);
+        world.extend(rut_driver::Mounted::from_bundle(&bytes).unwrap_or_else(|e| panic!("mount {b}: {e:?}")).pkgs);
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     // the root DECLARES its uses structurally — exactly the heads this
     // world mounts (calc, ink, pouch, nmapset, flow; the bundles ride
     // their own committed manifests)
     world.push(
-        rut_driver::Pkg::source("app", src)
+        rut_driver::Mounted::source("app", src)
             .manifest(rut_driver::Manifest::lib("app", &["calc", "flow", "ink", "nmapset", "pouch"])),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -456,11 +455,11 @@ fn unannotated_lambda_diagnoses_with_the_fix() {
     let mut world = rut_native::dir_pkgs(&base.join("rut/ink")).expect("ink").pkgs;
     for b in ["pouch", "nmapset", "flow"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle"))).expect(b);
-        world.extend(rut_driver::Pkg::from_bundle(&bytes).expect("mount bundle").pkgs);
+        world.extend(rut_driver::Mounted::from_bundle(&bytes).expect("mount bundle").pkgs);
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     world.push(
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "app",
             r#"
 use pouch::{ Vec };
@@ -479,8 +478,7 @@ entry fn main() -> nil {
             &["pouch", "nmapset", "flow", "ink", "ink_host", "calc"],
         )),
     );
-    let out = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();

@@ -179,20 +179,19 @@ impl Response {
 
 `src/main.rs` shows the whole program closure in one chain — the walk
 feeds the run, the async pair and `calc` offer beside it, and the
-host bodies ride `.host_pkg(..)`:
+host bodies ride `pkg(Offer::Host(..))` — `pkg(hp)` coerces:
 
 ```rust
 let loaded = block_on(rut_native::load_path_session_with(base, &remote))?;
 let rgh_host = rut_native::dir_pkgs(&base::join("rgh_host"))?;   // example-local rows
 
-let mut chain = rut_driver::RutRun::new().pkgs(&loaded);        // the manifest closure
+let mut chain = loaded.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
 chain = chain
     .pkg(rut_native::tree_pkg("calc")?)
-    .pkgs(&rgh_host)
-    .host_pkg(rut_std::math::pkg())
-    .host_pkg(rut_std::nmap::pkg())
-    .host_pkg(rut_std::async_host::pkg())
-    .host_pkg(rut_std::http::pkg());
+    .pkg(rut_std::math::pkg())
+    .pkg(rut_std::nmap::pkg())
+    .pkg(rut_std::async_host::pkg())
+    .pkg(rut_std::http::pkg());
 let compiled = chain.entrypoint(&root).compile()?;
 ```
 

@@ -37,22 +37,24 @@ fn pack_world() -> Vec<u8> {
 fn compiled_bundle_mounts_from_bytes_and_runs() {
     let bytes = pack_world();
     // the mount: bytes in, no fs
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     assert_eq!(loaded.root, "app");
     // the root and its dep mounted as compiled bodies — decoded
     // programs, not sources. The dep group mounts under its content
     // identity, so the lookup goes by the bare name half
-    assert!(matches!(loaded.pkg("app").unwrap().body, rut_driver::PkgBody::Compiled(_)));
+    assert!(matches!(loaded.pkg("app").unwrap().body, rut_driver::MountedBody::Compiled(_)));
     let lib = loaded
         .pkgs
         .iter()
         .find(|p| rut_driver::bundle::parse_identity(&p.spec).map(|(n, _)| n) == Some("lib"))
         .expect("the lib group mounted");
-    assert!(matches!(lib.body, rut_driver::PkgBody::Compiled(_)));
+    assert!(matches!(lib.body, rut_driver::MountedBody::Compiled(_)));
     // the ordinary pipeline takes over: compile the chain (the
     // compiled-mount arm rebases and pushes), link, verify, run
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()

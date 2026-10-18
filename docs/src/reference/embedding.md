@@ -52,10 +52,14 @@ let loaded = block_on(rut_native::load_dir_with(
 
 // 2. The chain (rut-driver): offer the walk's yield, hand over the
 //    host bodies, name the root — and ONE terminal step compiles.
-let compiled = rut_driver::RutRun::new()
-    .pkgs(&loaded)                                     // first-pkg-wins
-    .host_pkg(rut_std::math::pkg())                    // calc's bodies
-    .host_pkg(rut_std::logger::pkg(|s| println!("{s}")))
+//    `pkg(..)` is the ONE offering verb over the Offer classification;
+//    `&Bundle` and `HostPkg` coerce in (`impl Into`).
+let compiled = loaded
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone())) // first-pkg-wins
+    .pkg(rut_std::math::pkg())                         // calc's bodies (Offer::Host)
+    .pkg(rut_std::logger::pkg(|s| println!("{s}")))
     .entrypoint(&loaded.root)
     .compile()?;
 if !compiled.graph.diags.is_empty() { /* render and exit */ }
@@ -87,7 +91,7 @@ rut_vm::pkg_fn!(server, "emit", (OpaqueRef, &str, &str) -> (),
 
 let compiled = rut_driver::RutRun::new()
     /* ..offers.. */
-    .host_pkg(server.build())
+    .pkg(server.build())
     .entrypoint("app")
     .compile()?;
 ```
@@ -121,7 +125,7 @@ the graph, the registration strings must spell the same tree.
 2. **close the world** — every offered pkg mounts into the run's
    internal table; the walk's yield already carried its groups, and
    every module links — nothing appends after the walk;
-3. **the host registry** — every `.host_pkg(..)` installs against the
+3. **the host registry** — every `Offer::Host` installs against the
    mounted rows snapshot. A mounted scope whose declared rows the
    installer does not bind is the loud panic (the `.d.rut` ↔ host-impl
    contract); an unmounted scope's rows merge inert — an embedder
@@ -158,22 +162,39 @@ directory — or a packed `.rutbundle` — and yields the closure:
 | `load_dir_fetched(dir, &map)` | the walk over PRE-fetched url bytes — the sync core; tests and offline hosts hand a `url → bytes` map |
 | `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: a directory walks (above); a `.rutbundle` loads closed (below) |
 
-The yield is `rut_driver::Loaded { pkgs, root }` — pure pkgs plus the
-root's name. Offer it with `.pkgs(&loaded)` (every pkg,
-first-pkg-wins) or pick pieces with `loaded.pkg(name)`.
+The yield is `rut_driver::Walk { pkgs, root }` — pure pkgs plus the
+root's name. Offer each pkg through `pkg(..)` (first-pkg-wins — fold
+the walk into the chain) or pick pieces with `walked.pkg(name)`.
 
-**The offer** is a `Pkg` value handed to the chain by hand:
+**The offer** is ONE verb, `RutRun::pkg(..)`, over the `Offer`
+classification — the same lib/host pair the manifest `type` field
+spells:
+
+| offer | what it is |
+|---|---|
+| `pkg(&bundle)` — `Offer::Lib(&Bundle)` | a decoded `.rutbundle` archive: `Bundle::parse(&bytes)` decodes + verifies ONCE (CRC, version, group decode), the handle is reusable across runs, and each offer only relocates + mounts |
+| `pkg(rut_std::math::pkg())` — `Offer::Host(hp)` | host bodies — the embedding Rust's own rows |
+| `pkg(pack_inline_pkg(name, text))` | ephemeral source as a one-member source bundle — a pack method that assembles, never compiles; the run compiles the member when it is offered |
+| `pkg(mounted)` | the walked pkg data (deprecated bridge — offer bundles instead) |
+
+An archive handle carries its strip restore too:
+`bundle.restore_symbols(&map)` — applied once, before any offer; every
+subsequent offer carries the restored names
+([symbol stripping](symbol-stripping.md)).
+
+The mounted pkg **data** behind the walk (the constructors tests and
+hosts spell by hand) is `Mounted`:
 
 | constructor | builds |
 |---|---|
-| `Pkg::source(name, text)` | the ordinary `.rut` body |
-| `Pkg::decl(name, text)` | a `.d.rut` surface (declaration mode) |
-| `Pkg::host(name, rows)` | the native rows — exported constants, bodyless host fns |
-| `Pkg::compiled(name, program)` | a decoded `.rutc` binary pushed as-is |
-| `Pkg::from_bundle(bytes)` | the pure container parse — the bundle's pkgs as a `Loaded` (below) |
+| `Mounted::source(name, text)` | the ordinary `.rut` body |
+| `Mounted::decl(name, text)` | a `.d.rut` surface (declaration mode) |
+| `Mounted::host(name, rows)` | the native rows — exported constants, bodyless host fns |
+| `Mounted::compiled(name, program)` | a decoded `.rutc` binary pushed as-is |
+| `Mounted::from_bundle(bytes)` | the pure parse — the bundle's pkgs as a `Walk` (below) |
 | `lower_decl_module(text, children, file)` | a `.d.rut` lowered to host rows — the wasm hosts' surface lane; `children` is the mounted `mod` tree (`NAME/mod.d.rut` files, mount with `mount_mod_children` in Decl mode) and each row carries the path it lives under |
 
-`Pkg` is pure data: the walker-found metadata (the `[deps]` table and
+`Mounted` is pure data: the walker-found metadata (the `[deps]` table and
 the declaration rows the nameability law reads) is pub data on it —
 the graph only reads.
 
@@ -198,7 +219,7 @@ exactly the heads ITS manifest names — the manifest just travels
 structurally instead of as a file. Two builder doors:
 
 - **Real manifests** — parse the embedded jsonc and stamp it:
-  `Pkg::manifest(parse_manifest(include_str!("../pkg/rut.jsonc")))`.
+  `Mounted::manifest(parse_manifest(include_str!("../pkg/rut.jsonc")))`.
   The tree's own `rut.jsonc` stays the single source of truth; the wasm
   host mounts every std pkg this way.
 - **Ad-hoc surfaces** — `Manifest::lib(name, &[heads])` stamps the
@@ -301,15 +322,16 @@ fetches (bundles are closed; their closure rode inside at pack time):
 // from a file: the walk adds only the file read
 let loaded = rut_native::load_bundle_session(Path::new("vendor/plugin.rutbundle"))?;
 
-// from bytes (embedders, tests, wasm): the pure container parse
-let loaded = rut_driver::Pkg::from_bundle(&bytes)?;
+// from bytes (embedders, tests, wasm): decode + verify ONCE —
+// the handle is reusable across runs (offer it with pkg(&bundle))
+let bundle = rut_driver::Bundle::parse(&bytes)?;
 ```
 
 Both root kinds load (a compiled root with its groups and its
 pack-time scope ledger, rebased at the close of the world; a decl
 root as the pkg's host rows), first-mount-wins, and the bundle root's
 package name is `loaded.root`. Wasm hosts `include_bytes!` the
-committed artifact and parse through `Pkg::from_bundle`. For the
+committed artifact and parse through `Bundle::parse`. For the
 url-dep *walk* (pins, closure checks, the archive's identity-keyed
 groups) stay on the `load_dir*` lanes — a bundle mount is the offer,
 not the walk. The container, the manifest grammar, and the reader are
@@ -336,7 +358,7 @@ contain those names.
 | `FsSource::at(dir)` | the real filesystem with the root baked in |
 | `DepRemote` | the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the call site owns HOW bytes arrive (transport, cache, offline policy). Dyn-compatible (hand-rolled boxing, no async-trait), deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
 | `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss GETs on a private worker thread and writes back atomically; `project_local` / `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete |
-| `load_dir(dir)` / `load_dir_with(dir, &remote)` / `load_dir_fetched(dir, &map)` | the walk and its fetched lanes — the yield is `rut_driver::Loaded` ([the walk vs the offer](#the-walk-vs-the-offer)) |
+| `load_dir(dir)` / `load_dir_with(dir, &remote)` / `load_dir_fetched(dir, &map)` | the walk and its fetched lanes — the yield is `rut_driver::Walk` ([the walk vs the offer](#the-walk-vs-the-offer)) |
 | `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: directory walk or closed `.rutbundle` |
 | `load_bundle_session(path)` | load a packed `.rutbundle` from disk — the pure container lane plus the file read |
 | `dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)` | the OFFER lane: a package directory walked for someone else's program (no dev pass, no gate) |
@@ -350,15 +372,13 @@ contain those names.
 
 | API | Meaning |
 |---|---|
-| `RutRun::new()` | the chain's head; compose with the chain methods, end at `.compile()` |
-| `.pkg(pkg)` / `.pkgs(&loaded)` | offer — FIRST OFFER WINS: a pkg whose name is already offered is ignored |
-| `.host_pkg(host_pkg)` | hand over one host pkg's bodies; installed at `.compile()` against the rows snapshot |
-| `.symbols(&map)` | restore a stripped artifact's symbol table into the offered compiled pkgs ([symbol stripping](symbol-stripping.md)) |
+| `.pkg(offer)` | the ONE offering verb over the `Offer` classification — `pkg(&bundle)` (`Offer::Lib`), `pkg(host_pkg)` (`Offer::Host`), `pkg(pack_inline_pkg(name, text))` for ephemeral source. FIRST OFFER WINS: a pkg whose name is already offered is ignored |
 | `.entrypoint(name)` | the root pkg — the graph compiles it and its transitive uses |
 | `.compile() -> Result<Compiled, RunError>` | the terminal step ([the law](#the-compile-law)) |
-| `Compiled { graph, hosts }` | the linked graph (diags inside — check `graph.diags` before trusting `graph.program`) and the host registry every `.host_pkg(..)` installed |
-| `Loaded { pkgs, root }` | a walk's yield; `loaded.pkg(name)` picks one pkg |
-| `Pkg::source / decl / host / compiled / from_bundle` | the offer constructors ([the offer](#the-walk-vs-the-offer)) |
+| `Compiled { graph, hosts }` | the linked graph (diags inside — check `graph.diags` before trusting `graph.program`) and the host registry every `Offer::Host` installed |
+| `Bundle::parse(&bytes)` | decode + verify an archive ONCE (CRC, version, group decode) — the handle is reusable across runs; `bundle.restore_symbols(&map)` restores a stripped artifact's names on the handle ([symbol stripping](symbol-stripping.md)); `bundle.walk()` is the raw mount assembly |
+| `Walk { pkgs, root }` | a walk's yield; `walked.pkg(name)` picks one pkg |
+| `Mounted::source / decl / host / compiled / from_bundle` | the walked pkg data's constructors ([the offer](#the-walk-vs-the-offer)) |
 | `RunError` | why a run refused to compose or compile — shape (bad name, missing entrypoint) or closure (a `use` nothing offered resolves); the message IS the diagnostic |
 | `declared_host_fns(pkgs)` | the declared rows, async-expanded, flattened — the raw lane's `verify_against` input |
 | `host_pkg_ctx(pkgs)` | the declared rows, partitioned by scope — for hosts that build registries OUTSIDE the chain (a bench probe's fresh `Vm` per iteration, a raw-row host's `verify_against`) |
@@ -366,7 +386,7 @@ contain those names.
 | `compile_program(src, mode, name)` / `compile_program_resolved(..)` / `ir_dump_of(..)` | the raw pipeline pieces (tooling) |
 | `lower_decl_module(text, children, file)` | lower a `.d.rut` surface to host rows (`children` = the mounted `mod` tree — a declared child with no mounted `NAME/mod.d.rut` is a loud error; registration is path-qualified, `pkg::net::connect`) |
 | `bundle::{parse_manifest, Bundle, Layout, ..}` | the container codec, the `rut.jsonc` grammar, the reader (both root kinds) — pure, in-memory |
-| `pack::{pack, PackOpts, ..}` | the pure emit half of packing (`rut-native` owns the walk + dev tables + the gate) |
+| `pack::{pack, pack_inline_pkg, PackOpts, ..}` | the pure emit half of packing (`rut-native` owns the walk + dev tables + the gate); `pack_inline_pkg(name, text)` assembles a one-member source bundle — never compiles |
 | `sha256_hex(bytes)` | pin arithmetic (pure) |
 
 `mode` is `Mode::Impl` for `.rut` and `Mode::Decl` for `.d.rut`
@@ -463,7 +483,7 @@ their own registered modules.
 ## Host-side helpers (`rut-std`)
 
 One `pkg()` builder per module; each rides the chain —
-`.host_pkg(rut_std::math::pkg())` — and installs at `.compile()`
+`.pkg(rut_std::math::pkg())` — and installs at `.compile()`
 against the rows snapshot (see [host fns](host-fns.md) for the
 asymmetric contract — an unmounted scope merges inert, so hosts
 blanket-install their subset):

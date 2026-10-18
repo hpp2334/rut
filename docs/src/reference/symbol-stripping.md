@@ -114,7 +114,7 @@ rut run <mod.rutbundle> [--symbols <file.rutsym>]
 
 Embedders get the same lane as library calls: the packer's
 `pack_dir_opts` returns the sidecar bytes beside the bundle, and
-`.symbols(&map)` on the run chain restores into the offered compiled
+`bundle.restore_symbols(&map)` on the decoded archive handle restores into
 pkgs.
 
 ## Determinism and limitations

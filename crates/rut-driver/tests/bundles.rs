@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use rut_driver::Pkg;
+use rut_driver::Mounted;
 use rut_native::{load_bundle_session, load_dir, load_path_session, pack_dir};
 
 mod common;
@@ -20,7 +20,7 @@ use common::{dep_dir, pkg_named};
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -32,7 +32,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -73,9 +73,11 @@ fn make_dir(base: &Path) -> std::path::PathBuf {
     dir
 }
 
-fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
-    let g = rut_driver::RutRun::new()
-        .pkgs(loaded)
+fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -114,16 +116,18 @@ fn in_memory_bytes_load_without_a_file() {
     let base = std::env::temp_dir().join(format!("rut-bundle-mem-{}", std::process::id()));
     let dir = make_dir(&base);
     let bytes = pack_dir(&dir).unwrap();
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).unwrap();
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).unwrap();
     assert_eq!(loaded.root, "mod");
     // the root mounts as a compiled body — the decoded `.rutc`
     assert!(matches!(
         loaded.pkg("mod").unwrap().body,
-        rut_driver::PkgBody::Compiled(_)
+        rut_driver::MountedBody::Compiled(_)
     ));
     assert!(
-        rut_driver::RutRun::new()
-            .pkgs(&loaded)
+        loaded
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .entrypoint(&loaded.root)
             .compile()
             .unwrap()
@@ -142,7 +146,7 @@ fn refusals() {
 
     // no rut.jsonc entry at all
     let not_a_bundle = rut_driver::bundle::write_bundle(&[("x.rut".into(), src.to_vec())]).unwrap();
-    let err = rut_driver::Pkg::from_bundle(&not_a_bundle).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&not_a_bundle).unwrap_err().to_string();
     assert!(err.contains("rut.jsonc"), "{err}");
 
     // anything that is not 11 refuses at the one-line version gate —
@@ -159,7 +163,7 @@ fn refusals() {
             ("x.rut".into(), src.to_vec()),
         ])
         .unwrap();
-        let err = rut_driver::Pkg::from_bundle(&old).unwrap_err().to_string();
+        let err = rut_driver::Mounted::from_bundle(&old).unwrap_err().to_string();
         assert!(err.contains("format_version"), "{err}");
         assert!(err.contains("reads bundle format_version 11 only"), "{err}");
         assert!(err.contains("re-pack the directory"), "{err}");
@@ -177,7 +181,7 @@ fn refusals() {
         ("x.rut".into(), src.to_vec()),
     ])
     .unwrap();
-    let err = rut_driver::Pkg::from_bundle(&old_name)
+    let err = rut_driver::Mounted::from_bundle(&old_name)
         .unwrap_err()
         .to_string();
     assert!(err.contains("no `rut.jsonc` entry"), "{err}");
@@ -190,7 +194,7 @@ fn refusals() {
         ("x.rut".into(), src.to_vec()),
     ])
     .unwrap();
-    let err = rut_driver::Pkg::from_bundle(&no_format).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&no_format).unwrap_err().to_string();
     assert!(err.contains("rutbundle"), "{err}");
 
     // corruption: flip a payload byte, the CRC check fires (gate 1 —
@@ -199,7 +203,7 @@ fn refusals() {
     let mut bytes = pack_dir(&dir).unwrap();
     let at = 30 + make_dir_manifest().len();
     bytes[at] ^= 0x01;
-    let err = rut_driver::Pkg::from_bundle(&bytes).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&bytes).unwrap_err().to_string();
     assert!(err.contains("CRC"), "{err}");
 
     // a pack whose declared surface file is missing refuses loudly
@@ -313,18 +317,20 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     )
     .unwrap();
     let dev_bytes = pack_dir(&m2).unwrap();
-    let session = rut_driver::Pkg::from_bundle(&dev_bytes).unwrap();
+    let session = rut_driver::Mounted::from_bundle(&dev_bytes).unwrap();
     let sf = pkg_named(&session, "s");
     assert!(
         matches!(
             sf.body,
-            rut_driver::PkgBody::Source { is_decl: true, .. }
+            rut_driver::MountedBody::Source { is_decl: true, .. }
         ),
         "the surface-only group is a decl unit: {:?}",
         sf.body
     );
-    let g = rut_driver::RutRun::new()
-        .pkgs(&session)
+    let g = session
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&session.root)
         .compile()
         .unwrap();
@@ -333,10 +339,10 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
 
     // and the declared host spelling still mounts as a host body (the
     // kind is honored from the field, pack to load)
-    let session = Pkg::from_bundle(&bytes).unwrap();
+    let session = Mounted::from_bundle(&bytes).unwrap();
     assert!(matches!(
         pkg_named(&session, "s").body,
-        rut_driver::PkgBody::Host { .. }
+        rut_driver::MountedBody::Host { .. }
     ));
 
     let _ = std::fs::remove_dir_all(&base);
@@ -420,11 +426,11 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     assert_eq!(session.root, "main");
     assert!(matches!(
         session.pkg("main").expect("m mounted").body,
-        rut_driver::PkgBody::Compiled(_)
+        rut_driver::MountedBody::Compiled(_)
     ));
     let sf = pkg_named(&session, "s");
     assert!(
-        matches!(sf.body, rut_driver::PkgBody::Host { .. }),
+        matches!(sf.body, rut_driver::MountedBody::Host { .. }),
         "the host pkg rode along as a host body"
     );
     // the first-mount edge + the structural manifest: a group records
@@ -436,8 +442,10 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     assert!(session.pkg("main").unwrap().mounted_by.is_none(), "the bundle root has no parent");
     assert_eq!(mf.manifest.name.as_deref(), Some("m"));
     assert!(mf.manifest.deps.contains_key("s"), "the group's own dep rows ride");
-    let g = rut_driver::RutRun::new()
-        .pkgs(&session)
+    let g = session
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&session.root)
         .compile()
         .unwrap();
@@ -451,7 +459,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         .cloned()
         .collect();
     let bytes = rut_driver::bundle::write_bundle(&stripped).unwrap();
-    let err = rut_driver::Pkg::from_bundle(&bytes).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&bytes).unwrap_err().to_string();
     assert!(err.contains("missing its `m` dependency group"), "{err}");
 
     let _ = std::fs::remove_dir_all(&base);

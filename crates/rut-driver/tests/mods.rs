@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 
 use rut_ast::ast::Vis;
 use rut_driver::mods::{collect_module_set, DeclKind, ModSource};
-use rut_driver::{Loaded, Pkg, PkgBody};
+use rut_driver::{Walk, Mounted, MountedBody};
 
 mod common;
 use common::{dep_dir, pkg_named};
@@ -79,13 +79,15 @@ fn world(tag: &str, bundle: bool) -> PathBuf {
     root
 }
 
-fn load(dir: &Path) -> Loaded {
+fn load(dir: &Path) -> Walk {
     rut_native::load_dir(dir).expect("load the walk")
 }
 
-fn run_main(loaded: Loaded) -> i64 {
-    let c = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+fn run_main(loaded: Walk) -> i64 {
+    let c = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -117,7 +119,7 @@ fn mod_tree_mounts_two_levels_and_runs() {
     assert_eq!(loaded.root, "pkg");
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
     // the root file IS the body — never spliced, never a child row
-    let PkgBody::Source { text, is_decl } = &pkg.body else {
+    let MountedBody::Source { text, is_decl } = &pkg.body else {
         panic!("pkg has a source body");
     };
     assert!(!*is_decl);
@@ -334,8 +336,10 @@ fn a_mod_files_uses_join_the_closure_check() {
         "layout/mod.rut",
         "use nosuch::{Thing};\npub fn span() -> i32 { return 1; }\n",
     );
-    let err = rut_driver::RutRun::new()
-        .pkgs(&load(&pkg))
+    let err = load(&pkg)
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("pkg")
         .compile()
         .unwrap_err()
@@ -393,7 +397,7 @@ fn mod_rut_beside_an_entry_type_surface_is_the_root() {
     write(&pkg, "mod.rut", "entry fn main() -> i32 { return 7; }\n");
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
-    let PkgBody::Source { text, is_decl } = &pkg.body else { panic!("source body") };
+    let MountedBody::Source { text, is_decl } = &pkg.body else { panic!("source body") };
     assert!(!*is_decl, "the mod.rut is a body, not the dev state");
     assert_eq!(text, "entry fn main() -> i32 { return 7; }\n");
     assert_eq!(run_main(loaded), 7);
@@ -411,7 +415,7 @@ fn entry_type_only_without_mod_rut_is_still_the_dev_state() {
     write(&pkg, "pkg.d.rut", "/// documented surface, no body yet.\n");
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
-    let PkgBody::Source { is_decl, .. } = &pkg.body else { panic!("source body") };
+    let MountedBody::Source { is_decl, .. } = &pkg.body else { panic!("source body") };
     assert!(*is_decl, "no `mod.rut` — today's surface-only dev state stands");
     assert!(pkg.mods.is_empty());
 }
@@ -445,7 +449,7 @@ fn a_mod_package_packs_rows_and_loads_the_same_tree() {
     assert!(names.contains(&"rut.mods".to_string()), "{names:?}");
     // loading the bundle mounts the tree exactly as the directory did
     // (the group mounts under its content identity)
-    let loaded = Pkg::from_bundle(&bytes).expect("load");
+    let loaded = Mounted::from_bundle(&bytes).expect("load");
     let bundled = pkg_named(&loaded, "pkg");
     let dir = load(&root.join("pkg"));
     let on_disk = dir.pkg("pkg").expect("pkg mounted");
@@ -533,7 +537,7 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
         );
         // the WIRE gate refuses the artifact itself — the re-pack
         // recipe, never a guessed load
-        let err = Pkg::from_bundle(&bytes).unwrap_err().to_string();
+        let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
         assert!(
             err.contains("reads bundle format_version 11 only"),
             "{}: {err}",
@@ -564,7 +568,7 @@ fn the_peer_deps_bundle_refuses_at_the_manifest_door() {
     assert_eq!(err.to_string(), "manifest: unknown key 'peer-deps'", "{err}");
     // at the bundle door the manifest parse precedes the version gate —
     // the unknown key refuses first, exactly like any unknown key
-    let err = Pkg::from_bundle(&bytes).unwrap_err().to_string();
+    let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
     assert!(err.contains("manifest: unknown key 'peer-deps'"), "{err}");
 }
 
@@ -600,7 +604,7 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
         names.contains(&format!("{}/rut.mods", dep_dir(&names, "pkg"))),
         "{names:?}"
     );
-    let loaded = Pkg::from_bundle(&bytes).expect("load");
+    let loaded = Mounted::from_bundle(&bytes).expect("load");
     let pkg = pkg_named(&loaded, "pkg");
     let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
     assert_eq!(keys, vec!["layout", "layout/grid"]);
@@ -646,10 +650,10 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
     // v22: source riding is GONE — the legacy splice rides no more; the
     // bundle mounts compiled and the delivery law serves consumer-spelled
     // shapes from the binary's own templates
-    let loaded = Pkg::from_bundle(&legacy_bytes).expect("the old envelope loads");
+    let loaded = Mounted::from_bundle(&legacy_bytes).expect("the old envelope loads");
     let pkg = loaded.pkg("pouch").expect("pouch mounted");
     assert!(
-        matches!(pkg.body, rut_driver::PkgBody::Compiled(_)),
+        matches!(pkg.body, rut_driver::MountedBody::Compiled(_)),
         "the legacy envelope's pouch mounts compiled"
     );
 }
@@ -665,10 +669,10 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
 
 /// A mod pkg offered by hand (the run lane's pure mount — the walker's
 /// shape, no filesystem).
-fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::Pkg {
-    rut_driver::Pkg {
+fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::Mounted {
+    rut_driver::Mounted {
         spec: spec.to_string(),
-        body: rut_driver::PkgBody::Source { text: root.to_string(), is_decl: false },
+        body: rut_driver::MountedBody::Source { text: root.to_string(), is_decl: false },
         mods: mods
             .into_iter()
             .map(|(p, v, t)| {
@@ -684,7 +688,7 @@ fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::P
 
 /// Compile the offered pkgs (entrypoint `spec`), handing back the
 /// diagnostic messages.
-fn compile_with_diags(pkgs: &[rut_driver::Pkg], entry: &str) -> Vec<String> {
+fn compile_with_diags(pkgs: &[rut_driver::Mounted], entry: &str) -> Vec<String> {
     let mut run = rut_driver::RutRun::new();
     // the hand world declares loosely: every pkg names every other
     // (the law bounds uses by declarations, never declarations by
@@ -698,7 +702,7 @@ fn compile_with_diags(pkgs: &[rut_driver::Pkg], entry: &str) -> Vec<String> {
     c.graph.diags.iter().map(|d| d.msg.clone()).collect()
 }
 
-fn run_main_pkgs(pkgs: &[rut_driver::Pkg], entry: &str) -> i64 {
+fn run_main_pkgs(pkgs: &[rut_driver::Mounted], entry: &str) -> i64 {
     let mut run = rut_driver::RutRun::new();
     // the same loose table as [`compile_with_diags`]
     for p in pkgs {

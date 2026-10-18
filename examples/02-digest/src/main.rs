@@ -102,7 +102,7 @@ fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
 /// this directory; the remote policy is the project-local cache. A
 /// cold start networks on its misses (the CDN, pinned by the
 /// manifest); a warm start is pure cache hits.
-fn load(base: &std::path::Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
+fn load(base: &std::path::Path) -> Result<rut_driver::Walk, rut_driver::RunError> {
     let remote = rut_native::HttpRemote::project_local(base);
     block_on(rut_native::load_path_session_with(base, &remote))
 }
@@ -129,15 +129,17 @@ fn main() {
     // closure — then the chain (the core prelude auto-rides; no hand
     // offers), verify, drive
     let loaded = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         // json's writer rides the strbuild pkg — its `strbuild_host` rows
         // are in this closure's declared set, so the bodies install here
-        .host_pkg(rut_std::strbuild::pkg())
+        .pkg(rut_std::strbuild::pkg())
         // nmapset's bundle carries `nmap_host` — its bodies bind beside
         // the writer's (the ledger law brought the group in)
-        .host_pkg(rut_std::nmap::pkg())
-        .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
+        .pkg(rut_std::nmap::pkg())
+        .pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");

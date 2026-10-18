@@ -11,7 +11,7 @@ use rut_parser::Mode;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -23,7 +23,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -203,7 +203,7 @@ fn binary_round_trips_the_whole_surface() {
 fn graph_compiles_and_links_uses_in_order() {
     let out = graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(
+            .pkg(rut_driver::Mounted::source(
                 "math",
                 "pub fn seven() -> i32 { return 7; }\n\
                  entry fn main() -> i32 { return seven(); }\n",
@@ -211,7 +211,7 @@ fn graph_compiles_and_links_uses_in_order() {
             // the consumer declares the head it names (the nameability
             // law — mounted-but-undeclared is D5)
             .pkg(
-                rut_driver::Pkg::source(
+                rut_driver::Mounted::source(
                     "app_main",
                     "use math::{ seven };\n\
                      entry fn main() -> i32 { return seven(); }\n",
@@ -242,7 +242,7 @@ fn graph_compiles_and_links_uses_in_order() {
 fn graph_threads_a_type_through_a_chain() {
     let out = graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source(
+            .pkg(rut_driver::Mounted::source(
                 "geo_base",
                 "struct Point { x: i32; y: i32; }\n\
                  pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
@@ -251,7 +251,7 @@ fn graph_threads_a_type_through_a_chain() {
             // the chain's consumers declare the heads they name (the
             // nameability law — mounted-but-undeclared is D5)
             .pkg(
-                rut_driver::Pkg::source(
+                rut_driver::Mounted::source(
                     "geo_mid",
                     "use geo_base::{Point, origin};\n\
                      pub fn shifted() -> Point { return origin(); }\n\
@@ -260,7 +260,7 @@ fn graph_threads_a_type_through_a_chain() {
                 .manifest(rut_driver::Manifest::lib("geo_mid", &["geo_base"])),
             )
             .pkg(
-                rut_driver::Pkg::source(
+                rut_driver::Mounted::source(
                     "app_main",
                     "use geo_base::{Point};\n\
                      use geo_mid::{shifted};\n\
@@ -334,8 +334,10 @@ fn loads_a_directory_graph() {
     std::fs::write(lib.join("mod.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
 
     let loaded = rut_native::load_dir(&app).expect("load_dir");
-    let out = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let out = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile_dir");
@@ -366,9 +368,9 @@ fn consumer_uses_pouch_vec() {
     let out = graph_of(
         rut_driver::RutRun::new()
             // core first: the pouch source uses its prelude names
-            .pkg(rut_driver::Pkg::source("pouch", coll_src))
+            .pkg(rut_driver::Mounted::source("pouch", coll_src))
             .pkg(
-                rut_driver::Pkg::source(
+                rut_driver::Mounted::source(
                     "app_main",
                     "use pouch::{ Vec };\n\
                      entry fn main() -> i32 {\n\

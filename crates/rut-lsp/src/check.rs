@@ -20,7 +20,7 @@
 //!
 //! The world assembly is conservative by law: a package mounts from its
 //! (module, mod_path)-stamped file indexes; a lib body mounts as
-//! `Pkg::source` + its mod tree, a host surface (a `.d.rut` group)
+//! `Mounted::source` + its mod tree, a host surface (a `.d.rut` group)
 //! lowers through `lower_decl_module` into real host rows (so `use
 //! ink_host::{ create_logger }` binds and type-checks); `core` never
 //! mounts (the engine auto-offers the real prelude, and first-pkg-wins
@@ -33,7 +33,7 @@ use std::str::FromStr;
 
 use ls_types::{Diagnostic, Uri};
 use rut_ast::ast::Vis;
-use rut_driver::{lower_decl_module, Manifest, ModSource, Pkg, RutRun};
+use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
 use rut_lexer::diag::Diag;
 use rut_lexer::lexer::normalize;
 use rut_parser::Mode;
@@ -240,7 +240,7 @@ pub fn check_doc(
     out
 }
 
-/// The world's pkgs: a lib body mounts as `Pkg::source` + its mod tree;
+/// The world's pkgs: a lib body mounts as `Mounted::source` + its mod tree;
 /// a host surface lowers into real host rows (`lower_decl_module` — the
 /// loader's own move, so `use ink_host::{ .. }` binds and type-checks).
 /// Every pkg's manifest declares every other mounted head: the editor
@@ -248,7 +248,7 @@ pub fn check_doc(
 /// CLI's business — an unmounted head misses as a span-0 diag, which
 /// skips. Impl-only for source bodies: mixed-mode groups are not a
 /// coherent unit and mount nothing.
-fn build_world(groups: &[PkgFiles]) -> Vec<Pkg> {
+fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
     let names: Vec<String> = groups.iter().map(|g| g.module.clone()).collect();
     let mut out = Vec::new();
     for g in groups {
@@ -262,7 +262,7 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Pkg> {
             if g.files.values().any(|f| f.mode != Mode::Impl) {
                 continue;
             }
-            let mut p = Pkg::source(&g.module, root.text.clone());
+            let mut p = Mounted::source(&g.module, root.text.clone());
             for (path, f) in &g.files {
                 if path.is_empty() {
                     continue;

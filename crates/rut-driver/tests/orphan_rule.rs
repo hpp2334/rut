@@ -55,7 +55,7 @@ impl IntBox {
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -67,7 +67,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -97,7 +97,7 @@ fn graph(modules: &[(&str, &str)]) -> GraphOutput {
         let heads: Vec<&str> =
             modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
         chain = chain
-            .pkg(rut_driver::Pkg::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
     }
     let (root, _) = modules.last().expect("root module");
     graph_of(chain.entrypoint(root).compile())
@@ -296,7 +296,7 @@ fn consumer_proves_jsonserialize_on_its_own_type() {
         chain
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .pkg(
-                rut_driver::Pkg::source(
+                rut_driver::Mounted::source(
                     "main",
                     "\
 use json::{ encodeJson, JsonSerialize, JsonWriter, EncodeJsonError };

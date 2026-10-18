@@ -89,10 +89,9 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
         .pkgs,
     );
     let expected = rut_driver::declared_host_fns(&world);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
-            rut_driver::Pkg::source("app_re", SRC)
+            rut_driver::Mounted::source("app_re", SRC)
                 .manifest(rut_driver::Manifest::lib("app_re", &["pouch", "re"])),
         )
         .entrypoint("app_re")

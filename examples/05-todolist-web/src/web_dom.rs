@@ -234,8 +234,8 @@ fn boot_page(rows: &str) -> Result<(), String> {
     // structural `web` row) is what makes the app's crossings nameable
     // — a pkg composed without its manifest refuses its own `use`s at
     // the link (nameability is declaration-scoped)
-    let base = rut_driver::Pkg::source("app", root).manifest(crate::mount::biz_manifest());
-    let app = rut_driver::Pkg {
+    let base = rut_driver::Mounted::source("app", root).manifest(crate::mount::biz_manifest());
+    let app = rut_driver::Mounted {
         spec: "app".into(),
         mods,
         ..base

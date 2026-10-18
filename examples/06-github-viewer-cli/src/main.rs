@@ -50,7 +50,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 /// pinned `http` bundle; a warm start is pure cache), then the
 /// embedder half every lane owns (rgh_host's rows, offered beside the
 /// closure).
-fn load_rgh() -> Result<(rut_driver::Loaded, rut_driver::Loaded), String> {
+fn load_rgh() -> Result<(rut_driver::Walk, rut_driver::Walk), String> {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let remote = rut_native::HttpRemote::project_local(base);
     let loaded = block_on(rut_native::load_path_session_with(base, &remote))
@@ -88,18 +88,22 @@ fn main() {
     let src =
         std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("mod.rut"))
             .expect("read mod.rut");
-    let mut chain = rut_driver::RutRun::new().pkgs(&loaded);
+    let mut chain = loaded.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
     // the async pair (the launcher set `boot` drives)
     for p in async_pkgs {
         chain = chain.pkg(p);
     }
-    let chain = chain
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .pkgs(&rgh_host)
-        .host_pkg(rut_std::math::pkg())
-        .host_pkg(rut_std::nmap::pkg())
-        .host_pkg(rut_std::async_host::pkg())
-        .host_pkg(rut_std::http::pkg());
+    let chain = rgh_host
+        .pkgs
+        .iter()
+        .fold(
+            chain.pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc")),
+            |r, p| r.pkg(p.clone()),
+        )
+        .pkg(rut_std::math::pkg())
+        .pkg(rut_std::nmap::pkg())
+        .pkg(rut_std::async_host::pkg())
+        .pkg(rut_std::http::pkg());
     let compiled = match chain.entrypoint(&root).compile() {
         Ok(c) => c,
         Err(e) => {
@@ -137,7 +141,7 @@ fn main() {
     // own pkg, bound by hand)
     // the decl ↔ the bodies, loudly: every mounted pkg's host rows
     // must have a binding with the declared signature
-    let mut world: Vec<rut_driver::Pkg> = loaded.pkgs.clone();
+    let mut world: Vec<rut_driver::Mounted> = loaded.pkgs.clone();
     world.extend(rgh_host.pkgs.iter().cloned());
     let expected = rut_driver::declared_host_fns(&world);
     let mut compiled2 = compiled;

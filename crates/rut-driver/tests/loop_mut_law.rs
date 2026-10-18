@@ -15,7 +15,7 @@ use std::rc::Rc;
 /// walked from the tree as a real package. `pouch` stays out: its own
 /// un-mut for-c headers are a phase-3 corpus site under the new law,
 /// and these cases need no Vec (plain arrays carry the element views).
-fn world() -> Vec<rut_driver::Pkg> {
+fn world() -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
     for d in ["rut/ink"] {
         world.extend(
@@ -30,13 +30,15 @@ fn world() -> Vec<rut_driver::Pkg> {
 fn chain(src: &str) -> rut_driver::RutRun {
     // the logger use appended so the original spans stay put
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
-    rut_driver::RutRun::new()
-        .pkg(
-            rut_driver::Pkg::source("test", &combined)
+    let world = world();
+    world.iter().fold(
+        rut_driver::RutRun::new().pkg(
+            rut_driver::Mounted::source("test", &combined)
                 .manifest(rut_driver::Manifest::lib("test", &["ink"])),
-        )
-        .pkgs(&rut_driver::Loaded { pkgs: world(), root: String::new() })
-        .entrypoint("test")
+        ),
+        |r, p| r.pkg(p.clone()),
+    )
+    .entrypoint("test")
 }
 
 fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
@@ -411,7 +413,7 @@ entry fn main() -> nil {
 
 const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 
-fn async_pkgs(src: &str) -> Vec<rut_driver::Pkg> {
+fn async_pkgs(src: &str) -> Vec<rut_driver::Mounted> {
     let ink_host = rut_driver::lower_decl_module(INK_HOST_DECL, &std::collections::BTreeMap::new(), "ink_host.d.rut")
         .expect("the ink_host surface is valid")
         .named("ink_host");
@@ -420,7 +422,7 @@ fn async_pkgs(src: &str) -> Vec<rut_driver::Pkg> {
         .pkgs;
     pkgs.push(ink_host);
     pkgs.push(
-        rut_driver::Pkg::source("app", src)
+        rut_driver::Mounted::source("app", src)
             .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host"])),
     );
     pkgs
@@ -429,8 +431,7 @@ fn async_pkgs(src: &str) -> Vec<rut_driver::Pkg> {
 fn async_setup(src: &str) -> (rut_vm::interp::Vm, Rc<RefCell<Vec<String>>>) {
     let pkgs = async_pkgs(src);
     let expected = rut_driver::declared_host_fns(&pkgs);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: pkgs.clone(), root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -462,8 +463,7 @@ fn async_setup(src: &str) -> (rut_vm::interp::Vm, Rc<RefCell<Vec<String>>>) {
 
 fn async_diags_of(src: &str) -> Vec<String> {
     let pkgs = async_pkgs(src);
-    rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs, root: String::new() })
+    rut_driver::Walk { pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap()

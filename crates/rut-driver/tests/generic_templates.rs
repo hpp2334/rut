@@ -39,7 +39,7 @@ entry fn main() -> i32 {
 }
 "#;
 
-fn pkg_world_from_dirs(names: &[&str]) -> Vec<rut_driver::Pkg> {
+fn pkg_world_from_dirs(names: &[&str]) -> Vec<rut_driver::Mounted> {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut world = Vec::new();
     for d in names {
@@ -50,7 +50,7 @@ fn pkg_world_from_dirs(names: &[&str]) -> Vec<rut_driver::Pkg> {
     world
 }
 
-fn pkg_world_from_bundles(names: &[&str]) -> Vec<rut_driver::Pkg> {
+fn pkg_world_from_bundles(names: &[&str]) -> Vec<rut_driver::Mounted> {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut world = Vec::new();
     for b in names {
@@ -58,16 +58,18 @@ fn pkg_world_from_bundles(names: &[&str]) -> Vec<rut_driver::Pkg> {
         // archive, no second mount under other specs
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
-        world.extend(rut_driver::Pkg::from_bundle(&bytes).expect("mount the bundle").pkgs);
+        world.extend(rut_driver::Mounted::from_bundle(&bytes).expect("mount the bundle").pkgs);
     }
     world
 }
 
-fn compile_app(world: Vec<rut_driver::Pkg>, deps: &[&str], src: &str) -> rut_driver::GraphOutput {
-    let loaded = rut_driver::Loaded { pkgs: world, root: String::new() };
-    let c = rut_driver::RutRun::new()
-        .pkgs(&loaded)
-        .pkg(rut_driver::Pkg::source("app", src).manifest(rut_driver::Manifest::lib("app", deps)))
+fn compile_app(world: Vec<rut_driver::Mounted>, deps: &[&str], src: &str) -> rut_driver::GraphOutput {
+    let loaded = rut_driver::Walk { pkgs: world, root: String::new() };
+    let c = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .pkg(rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib("app", deps)))
         .entrypoint("app")
         .compile()
         .expect("the consumer compiles");
@@ -246,8 +248,8 @@ fn committed_generic_bundles_carry_template_rows_in_surface_order() {
     for name in ["json", "flow", "pouch", "nmapset"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{name}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
-        for pkg in rut_driver::Pkg::from_bundle(&bytes).expect("mount").pkgs {
-            let rut_driver::PkgBody::Compiled(p) = &pkg.body else { continue };
+        for pkg in rut_driver::Mounted::from_bundle(&bytes).expect("mount").pkgs {
+            let rut_driver::MountedBody::Compiled(p) = &pkg.body else { continue };
             if p.templates.is_empty() {
                 continue; // a concrete-only unit carries no window
             }
@@ -327,12 +329,11 @@ fn strip_with_a_generic_surface_is_legal_and_still_serves_shapes() {
         parsed.iter().map(|(n, _)| n).collect::<Vec<_>>()
     );
     // and it still serves a consumer-spelled shape
-    let mut world = rut_driver::Pkg::from_bundle(&bytes).expect("mount the stripped pouch").pkgs;
+    let mut world = rut_driver::Mounted::from_bundle(&bytes).expect("mount the stripped pouch").pkgs;
     world.push(
-        rut_driver::Pkg::source("app", VEC_APP).manifest(rut_driver::Manifest::lib("app", &["pouch"])),
+        rut_driver::Mounted::source("app", VEC_APP).manifest(rut_driver::Manifest::lib("app", &["pouch"])),
     );
-    let c = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let c = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .expect("the consumer of the stripped bundle compiles");

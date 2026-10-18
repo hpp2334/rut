@@ -27,7 +27,7 @@ const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapse
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -39,7 +39,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -59,11 +59,11 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn world_with(app_src: &str) -> rut_driver::Loaded {
+fn world_with(app_src: &str) -> rut_driver::Walk {
     let mut loaded = rut_native::dir_pkgs(std::path::Path::new(NMAPSET_DIR)).expect("mount pkg");
     // the root DECLARES its nmapset use
     loaded.pkgs.push(
-        rut_driver::Pkg::source("app_main", app_src)
+        rut_driver::Mounted::source("app_main", app_src)
             .manifest(rut_driver::Manifest::lib("app_main", &["nmapset"])),
     );
     loaded
@@ -71,8 +71,10 @@ fn world_with(app_src: &str) -> rut_driver::Loaded {
 
 fn compile_pkg_app(app_src: &str) -> rut_driver::GraphOutput {
     graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&world_with(app_src))
+        world_with(app_src)
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .entrypoint("app_main")
             .compile(),
     )
@@ -101,8 +103,10 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
             "the nmap_host surface must cross through the [deps] mount: {ctx:?}"
         );
     }
-    let out = rut_driver::RutRun::new()
-        .pkgs(&world)
+    let out = world
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app_main")
         .compile()
         .unwrap();

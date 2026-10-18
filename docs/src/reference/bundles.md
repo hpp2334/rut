@@ -279,7 +279,7 @@ hosts. The packer needs the walk and lives beside it
 (`rut_native::pack_dir`) — it returns the bundle bytes; writing the
 output file stays with the caller. Loading a bundle into a run goes
 through `rut_native::load_bundle_session(path)` (the file read) or
-`rut_driver::Pkg::from_bundle(&bytes)` (the pure parse) over the
+`rut_driver::Bundle::parse(&bytes)` (the decode-once handle) over the
 parsed `rut_driver::bundle::Bundle` and its `rut_driver::bundle::Layout`
 — the compiled root and its ledger + groups, or the decl root and its
 surface.
@@ -401,7 +401,7 @@ same name resolution, same compile, same identity-keyed groups:
 // from a file
 let loaded = rut_native::load_bundle_session(Path::new("vendor/plugin.rutbundle"))?;
 // from bytes (embedders, tests, wasm) — the pure container parse
-let loaded = rut_driver::Pkg::from_bundle(&bytes)?;
+let bundle = rut_driver::Bundle::parse(&bytes)?;
 ```
 
 After the offer, the package name resolves exactly as the directory form

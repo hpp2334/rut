@@ -20,7 +20,7 @@
 
 use std::path::Path;
 
-use rut_driver::{HostRow, PkgBody};
+use rut_driver::{HostRow, MountedBody};
 use rut_native::{load_path_session, pack_dir};
 use rut_core::types::{TY_BYTES, TY_I64, TY_STR};
 
@@ -45,8 +45,8 @@ fn scratch(tag: &str) -> std::path::PathBuf {
     d
 }
 
-fn rows_of(pkg: &rut_driver::Pkg) -> Vec<HostRow> {
-    let PkgBody::Host { host_funcs, .. } = &pkg.body else { panic!("a host body") };
+fn rows_of(pkg: &rut_driver::Mounted) -> Vec<HostRow> {
+    let MountedBody::Host { host_funcs, .. } = &pkg.body else { panic!("a host body") };
     host_funcs.clone()
 }
 
@@ -184,7 +184,7 @@ fn the_default_root_packs_and_loads_back() {
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(names, vec!["rut.jsonc", "mod.d.rut"], "the root rides its default key");
     assert_eq!(bytes, pack_dir(&dir).unwrap(), "deterministic");
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     assert_eq!(
         rows_of(loaded.pkg("flat_host").unwrap())[0].full_name("flat_host"),
         "flat_host::ping",
@@ -207,7 +207,7 @@ fn the_default_root_packs_and_loads_back() {
     let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(names, vec!["rut.jsonc", "mod.d.rut", rut_driver::mods::ROWS_NAME]);
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let m = loaded.pkg("myhost").unwrap();
     assert_eq!(m.mods.keys().collect::<Vec<_>>(), vec!["net"]);
     assert_eq!(
@@ -245,7 +245,7 @@ fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
         vec!["rut.jsonc", "mod.d.rut", rut_driver::mods::ROWS_NAME],
         "the surface rides at the ONE canonical name, whatever the directory spelled",
     );
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let names: Vec<String> = rows_of(loaded.pkg("http_host").unwrap())
         .iter()
         .map(|r| r.full_name("http_host"))

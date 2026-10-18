@@ -21,7 +21,7 @@ use rut_native::pack_dir_opts;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -33,7 +33,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -188,21 +188,32 @@ fn load_and_run<R: rut_vm::interp::Ret>(
     entry: &str,
     symtab: Option<&[u8]>,
 ) -> R {
-    let loaded = rut_driver::Pkg::from_bundle(bytes).expect("load");
-    let map = symtab.map(|sym| rut_core::strip::SymbolMap::from_bytes(sym).expect("sidecar decode"));
-    if let Some(map) = &map {
+    // the handle lane: decode + verify ONCE, restore on the handle
+    // (before any offer), then offer the SAME archive
+    let mut archive = rut_driver::Bundle::parse(bytes).expect("decode");
+    if let Some(sym) = symtab {
+        let map = rut_core::strip::SymbolMap::from_bytes(sym).expect("sidecar decode");
         // no section may skip: every section's pkg rides this bundle
+        let carried = archive.carried_specs();
         for section in &map.sections {
-            assert!(loaded.pkg(&section.spec).is_some(), "no section may skip: {}", section.spec);
+            assert!(
+                carried.iter().any(|s| s == &section.spec),
+                "no section may skip: {}",
+                section.spec
+            );
         }
+        archive.restore_symbols(&map);
     }
-    let mut chain = rut_driver::RutRun::new()
-        .pkgs(&loaded)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    if let Some(map) = &map {
-        chain = chain.symbols(map);
-    }
-    let g = chain.entrypoint(&loaded.root).compile().expect("compile the walk");
+    let root = archive
+        .walk()
+        .expect("walk")
+        .root;
+    let g = rut_driver::RutRun::new()
+        .pkg(&archive)
+        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .entrypoint(&root)
+        .compile()
+        .expect("compile the walk");
     assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
     let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -268,12 +279,14 @@ fn sidecar_restores_names_and_positions_for_the_trace() {
     let map = rut_core::strip::SymbolMap::from_bytes(&symtab).expect("decode");
     let restored: String = load_and_run(&stripped, "probe", Some(&symtab));
     assert_eq!(restored, full, "restoration is exact, frame for frame");
-    // re-applying is a no-op: every section matches, twice over
+    // re-applying is a no-op: every section matches, twice over (the
+    // restore lives on the handle — applied twice before any offer)
+    let mut archive = rut_driver::Bundle::parse(&stripped).expect("decode");
+    archive.restore_symbols(&map);
+    archive.restore_symbols(&map);
     let g = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Pkg::from_bundle(&stripped).expect("load"))
+        .pkg(&archive)
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
-        .symbols(&map)
-        .symbols(&map)
         .entrypoint("app")
         .compile()
         .expect("compile the walk");
@@ -348,9 +361,9 @@ fn strip_serves_a_generic_owning_closure() {
     );
     // and a consumer of the stripped bundle still materializes the
     // consumer-spelled shape from the templates
-    let mut world = rut_driver::Pkg::from_bundle(&bytes).expect("mount the stripped bundle").pkgs;
+    let mut world = rut_driver::Mounted::from_bundle(&bytes).expect("mount the stripped bundle").pkgs;
     world.push(
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "app2",
             "use pairz::{ Pair };\n\n\
              entry fn go() -> i64 {\n\
@@ -360,8 +373,7 @@ fn strip_serves_a_generic_owning_closure() {
         )
         .manifest(rut_driver::Manifest::lib("app2", &["pairz"])),
     );
-    let c = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let c = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app2")
         .compile()
         .expect("the consumer of the stripped generic bundle compiles");

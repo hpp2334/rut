@@ -22,7 +22,7 @@
 
 use std::path::Path;
 
-use rut_driver::{PkgBody, HostRow};
+use rut_driver::{MountedBody, HostRow};
 use rut_native::{load_path_session, pack_dir};
 use rut_core::types::{TY_BOOL, TY_OPAQUE, TY_STR};
 
@@ -74,8 +74,8 @@ fn tree_world(tag: &str) -> std::path::PathBuf {
     )
 }
 
-fn rows_of(pkg: &rut_driver::Pkg) -> Vec<HostRow> {
-    let PkgBody::Host { host_funcs, .. } = &pkg.body else { panic!("a host body") };
+fn rows_of(pkg: &rut_driver::Mounted) -> Vec<HostRow> {
+    let MountedBody::Host { host_funcs, .. } = &pkg.body else { panic!("a host body") };
     host_funcs.clone()
 }
 
@@ -256,12 +256,14 @@ fn the_registration_contract_speaks_the_path_spelling() {
     pkg.register::<_, (), bool, _>("legacy_ping", |_vm: &mut Vm| true);
     pkg.register::<_, (&str,), i64, _>("net::connect", |_vm: &mut Vm, _url: &str| 1);
     pkg.register::<_, (i64,), i64, _>("net::tls::handshake", |_vm: &mut Vm, c: i64| c);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
-        .host_pkg(pkg.build())
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .pkg(pkg.build())
         .pkg(
             // the app DECLARES its use (the myhost host surface)
-            rut_driver::Pkg::source(
+            rut_driver::Mounted::source(
                 "app",
                 "use myhost::{legacy_ping};\n\nentry fn main() -> nil {\n    let _ = legacy_ping();\n}\n",
             )
@@ -296,7 +298,7 @@ fn flat_host_pkgs_pack_byte_identically() {
     let again = pack_dir(&dir).expect("repack");
     assert_eq!(bytes, again, "deterministic");
     // and it loads back exactly as before: one flat row
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let m = loaded.pkg("flat_host").unwrap();
     assert!(m.mods.is_empty());
     assert_eq!(
@@ -318,7 +320,7 @@ fn a_host_tree_packs_into_the_rows_envelope_and_loads_back() {
         names.contains(&rut_driver::mods::ROWS_NAME),
         "the tree rides the rows envelope: {names:?}"
     );
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let m = loaded.pkg("myhost").unwrap();
     assert_eq!(m.mods.keys().collect::<Vec<_>>(), vec!["net", "net/tls"]);
     assert_eq!(
@@ -358,12 +360,14 @@ fn the_same_leaf_name_in_two_mods_is_legal() {
     let mut pkg = HostPkg::new("duo");
     pkg.register::<_, (&str,), i64, _>("a::probe", |_vm: &mut Vm, s: &str| s.len() as i64);
     pkg.register::<_, (i64,), i64, _>("b::probe", |_vm: &mut Vm, k: i64| k + 1);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
-        .host_pkg(pkg.build())
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .pkg(pkg.build())
         .pkg(
             // the app DECLARES its use (the duo host surface)
-            rut_driver::Pkg::source(
+            rut_driver::Mounted::source(
                 "app",
                 "use duo::a::{ probe };\n\nentry fn main() -> i64 {\n    return probe(\"hey\");\n}\n",
             )
@@ -384,11 +388,13 @@ fn ensure_host_synthesizes_the_path_qualified_surface() {
     // keys the boot join resolves.
     let dir = tree_world("surface");
     let loaded = load_path_session(Path::new(&dir)).expect("loads");
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
             // the app DECLARES its use (the myhost host surface)
-            rut_driver::Pkg::source(
+            rut_driver::Mounted::source(
                 "app",
                 "use myhost::{ legacy_ping };\nuse myhost::net::tls::handshake;\n\nentry fn main() -> bool {\n    return legacy_ping();\n}\n",
             )

@@ -130,7 +130,7 @@ published artifact. Four ways back to names:
 4. **The stripped artifact's private symbol table.** Name resolution
    and position lookup follow the loaded program — so supplying a
    `.rutsym` sidecar at load time (`run --symbols`, or
-   `.symbols(&map)` on the run chain) restores real names
+   `bundle.restore_symbols(&map)` on the decoded archive handle) restores real names
    and line/col before any trace is taken. The sidecar's law — what
    mangles, what stays, the mixed-closure refusal — is [Symbol
    stripping and `.rutsym` sidecars](symbol-stripping.md).

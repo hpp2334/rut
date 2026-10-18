@@ -19,8 +19,8 @@ const DEP: &str = "util";
 
 /// The local dep: a flat source pkg with a pub fn, a private fn, and a
 /// mounted `pub mod sub` — the leaf gate's shapes in one package.
-fn dep_pkg() -> rut_driver::Pkg {
-    let mut p = rut_driver::Pkg::source(
+fn dep_pkg() -> rut_driver::Mounted {
+    let mut p = rut_driver::Mounted::source(
         DEP,
         "pub fn half(x: i32) -> i32 { return x / 2; }\n\
          fn hidden() -> i32 { return 7; }\n\
@@ -45,7 +45,7 @@ fn graph_of(app_src: &str) -> rut_driver::GraphOutput {
     match rut_driver::RutRun::new()
         .pkg(dep_pkg())
         .pkg(
-            rut_driver::Pkg::source("app", app_src)
+            rut_driver::Mounted::source("app", app_src)
                 .manifest(rut_driver::Manifest::lib("app", &[DEP])),
         )
         .entrypoint("app")
@@ -200,10 +200,12 @@ fn a_flat_leaf_naming_a_module_diagnoses_with_the_walk_hint() {
 fn std_graph_of(app_src: &str) -> rut_driver::GraphOutput {
     let tree = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/ink"))
         .expect("the ink walk");
-    match rut_driver::RutRun::new()
-        .pkgs(&tree)
+    match tree
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
-            rut_driver::Pkg::source("app", app_src)
+            rut_driver::Mounted::source("app", app_src)
                 .manifest(rut_driver::Manifest::lib("app", &["ink"])),
         )
         .entrypoint("app")

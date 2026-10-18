@@ -35,8 +35,8 @@ fn mod_file_source(path: &str, vis: Vis, text: &str, file: &str) -> rut_driver::
 
 /// The todolist shape: `use imp::{ TodoList, Task };` + `mod imp;` in
 /// the root, `imp/mod.rut` beside it with `pub` members.
-fn todo_app() -> rut_driver::Pkg {
-    let mut p = rut_driver::Pkg::source(
+fn todo_app() -> rut_driver::Mounted {
+    let mut p = rut_driver::Mounted::source(
         "app",
         r#"use imp::{ TodoList, Task };
 
@@ -84,7 +84,7 @@ impl TodoList {
     p
 }
 
-fn graph_of(pkgs: Vec<rut_driver::Pkg>, root: &str) -> rut_driver::GraphOutput {
+fn graph_of(pkgs: Vec<rut_driver::Mounted>, root: &str) -> rut_driver::GraphOutput {
     let mut run = rut_driver::RutRun::new();
     for p in pkgs {
         run = run.pkg(p);
@@ -145,7 +145,7 @@ fn the_todolist_shape_imports_and_runs() {
 fn the_own_pkg_name_head_imports_from_the_root_module() {
     // a CHILD file imports through the package's own name: the root
     // module's `pub` names come to it
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         r#"mod imp;
 mod sub;
@@ -176,7 +176,7 @@ fn interior_segments_walk_the_own_tree() {
     // `use imp::grid::{ Cell };` — the interior segment walks the
     // child mods from the head's module (edges walk regardless of
     // vis — `mod grid;` is plain — the LEAF visibility-gates)
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         r#"use imp::grid::{ Cell };
 
@@ -204,7 +204,7 @@ entry fn main() -> i64 {
 fn the_pkg_name_head_walks_interior_segments_too() {
     // `use app::sub::{ go };` from the root — the own pkg name names
     // the root module, then `sub` walks
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         r#"use app::sub::{ go };
 
@@ -226,7 +226,7 @@ fn a_private_leaf_is_not_importable() {
     // import is no visibility bypass: a bare (private) member of imp
     // is refused at the use line — the text names the importing file
     // and the declaring file (the physical name the loader recorded)
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use imp::{ Task };\n\
          mod imp;\n\
@@ -262,7 +262,7 @@ fn a_private_leaf_is_not_importable() {
 fn a_private_leaf_spells_the_single_file_mount() {
     // the physical-name law: `imp` mounted as `imp.rut` (not the
     // directory-form guess) — the declaring file is spelled `imp.rut`
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use imp::{ Task };\n\
          mod imp;\n\
@@ -289,7 +289,7 @@ fn a_private_leaf_spells_the_single_file_mount() {
 fn a_missing_leaf_is_the_unknown_import() {
     // a name the walked module never declared reads the walked module
     // the way the use spelled it
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use imp::{ Ghost };\n\
          mod imp;\n\
@@ -309,7 +309,7 @@ fn a_missing_leaf_hint_names_the_module_it_lives_in() {
     // the name exists in the package but in a DIFFERENT module — the
     // hint names it (`TodoList` lives in `imp::grid`, the use spelled
     // `imp::{TodoList}`)
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use imp::{ TodoList };\n\
          mod imp;\n\
@@ -334,7 +334,7 @@ fn a_missing_leaf_hint_names_the_module_it_lives_in() {
 #[test]
 fn a_deep_walk_miss_reads_the_walked_module() {
     // `use imp::grid::{ Tool };` — the walked module spells `::`-joined
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use imp::grid::{ Tool };\n\
          mod imp;\n\
@@ -356,7 +356,7 @@ fn a_deep_walk_miss_reads_the_walked_module() {
 #[test]
 fn a_pub_pkg_leaf_imports_within_the_package() {
     // `pub(pkg)` crosses inside the package — the import included
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         r#"use imp::{ Counter };
 
@@ -395,7 +395,7 @@ fn a_head_naming_both_dep_and_mod_edge_is_ambiguous() {
     // mounts and mod edges are different namespaces: a head that
     // answers as BOTH the declared dep and the own module is the loud
     // ambiguity naming both — never a silent pick
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use util::{ half };\n\
          mod util;\n\
@@ -406,7 +406,7 @@ fn a_head_naming_both_dep_and_mod_edge_is_ambiguous() {
         "util".to_string(),
         mod_source("util", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"),
     );
-    let dep = rut_driver::Pkg::source("util", "pub fn half(x: i32) -> i32 { return x / 2; }\n");
+    let dep = rut_driver::Mounted::source("util", "pub fn half(x: i32) -> i32 { return x / 2; }\n");
     let g = graph_of(vec![dep, app], "app");
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
     assert!(
@@ -433,7 +433,7 @@ fn bindings_do_not_leak_across_files() {
     // the per-file law: the root's `use imp::{ helper }` binds in the
     // ROOT only — a sibling module needs its own `use`, and the miss
     // says where the name is bound and what it was imported from
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         r#"use imp::{ helper };
 
@@ -466,7 +466,7 @@ entry fn main() -> i64 { return sub::go(); }
 fn a_child_module_binds_with_its_own_use() {
     // the per-file law's fix: the child spells its own import and the
     // name binds there
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         r#"mod imp;
 mod sub;
@@ -497,7 +497,7 @@ pub fn go() -> i64 { return helper() + 1; }
 fn a_module_name_is_not_an_import() {
     // modules are namespaces, never values: the leaf gate refuses a
     // module name with the walk fix
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use imp::{ grid };\n\
          mod imp;\n\
@@ -527,7 +527,7 @@ fn a_module_name_is_not_an_import() {
 fn a_true_miss_keeps_todays_text() {
     // a head that is neither a declared dep nor an own lane keeps the
     // resolver's bare NoModule text
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         "use nope::{ x };\n\
          entry fn main() -> i32 { return 0; }\n",
@@ -552,7 +552,7 @@ fn the_own_lanes_bare_names_resolve_everywhere() {
     // the ladder: an own-imported enum (member path + when pattern),
     // module let, fn (call + value), and struct all resolve through
     // the target module
-    let mut app = rut_driver::Pkg::source(
+    let mut app = rut_driver::Mounted::source(
         "app",
         r#"use imp::{ Color, MAX, bump, Boxed };
 
@@ -606,7 +606,7 @@ fn a_host_dep_keeps_the_d_rut_spelling() {
     let host = rut_driver::lower_decl_module(root, &children, "myhost.d.rut")
         .expect("lowers")
         .named("myhost");
-    let app = rut_driver::Pkg::source(
+    let app = rut_driver::Mounted::source(
         "app",
         "use myhost::nope::{ x };\n\
          entry fn main() -> i32 { return 0; }\n",

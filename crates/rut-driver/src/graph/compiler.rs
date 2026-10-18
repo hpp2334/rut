@@ -11,7 +11,7 @@ use rut_parser::{parse, Mode};
 
 use rut_ast::ast::{Ast, ItemKind, Vis};
 
-use crate::session::{PkgBody, Session};
+use crate::session::{MountedBody, Session};
 use crate::compile::compile_program_resolved;
 use crate::Seeds;
 
@@ -158,7 +158,7 @@ impl<'a> GraphCompiler<'a> {
             // scope ledger names them), assign a fresh scope, rebase
             // the packed ids, push. `inline` is a source-shape flag and
             // does not reach here: a compiled module already linked.
-            PkgBody::Compiled(prog) => {
+            MountedBody::Compiled(prog) => {
                 self.body_kind.insert(spec.clone(), 1);
                 // the unit's scope is assigned BEFORE its deps ensure,
                 // same law as the source arm: a dep's carried seed rows
@@ -173,11 +173,11 @@ impl<'a> GraphCompiler<'a> {
                 self.in_flight.remove(&spec);
                 out
             }
-            PkgBody::Host { .. } => {
+            MountedBody::Host { .. } => {
                 self.body_kind.insert(spec.clone(), 2);
                 self.ensure_host(&spec)
             }
-            PkgBody::Source { text, is_decl } => {
+            MountedBody::Source { text, is_decl } => {
                 self.body_kind.insert(spec.clone(), 0);
                 // the unit's scope is assigned BEFORE its deps ensure: a
                 // compiled dep's binary may carry this unit's packed rows
@@ -216,7 +216,7 @@ impl<'a> GraphCompiler<'a> {
     /// type/trait/fn names of the prelude.
     fn ensure_host(&mut self, spec: &str) -> Option<Unit> {
         let module = self.session.resolve(spec).ok()?;
-        let PkgBody::Host { host_funcs, consts, native_types, native_fns, native_impls, .. } =
+        let MountedBody::Host { host_funcs, consts, native_types, native_fns, native_impls, .. } =
             &module.body
         else {
             return None;
@@ -442,7 +442,7 @@ impl<'a> GraphCompiler<'a> {
     fn ensure_source(
         &mut self,
         spec: &str,
-        module: &crate::session::Pkg,
+        module: &crate::session::Mounted,
         src: &str,
         is_decl: bool,
         scope: rut_core::ScopeId,
@@ -712,7 +712,7 @@ pub(crate) fn dep_use_heads(
 /// loader's physical record (`imp.rut` single-file, `imp/mod.rut`
 /// directory-form), the root's body `mod.rut` — the exact file the
 /// user sees, never the directory-form guess.
-fn file_display(module: &crate::session::Pkg, path: &str) -> String {
+fn file_display(module: &crate::session::Mounted, path: &str) -> String {
     match module.mods.get(path) {
         Some(m) => m.display(),
         None if path.is_empty() => "mod.rut".to_string(),
@@ -726,7 +726,7 @@ fn file_display(module: &crate::session::Pkg, path: &str) -> String {
 /// the pkg's mounted module set (each child's parent segment implies
 /// the edge; `mod` vs `pub mod` rides the edge's vis).
 pub(crate) fn mod_inputs_of(
-    module: &crate::session::Pkg,
+    module: &crate::session::Mounted,
     files: Vec<(u32, String)>,
 ) -> rut_lir::check::ModInputs {
     let mut inputs =
@@ -817,7 +817,7 @@ impl GraphCompiler<'_> {
     fn validate_qualified_uses(
         &mut self,
         spec: &str,
-        module: &crate::session::Pkg,
+        module: &crate::session::Mounted,
         ast: &Ast,
         layout: &rut_lir::check::ModInputs,
     ) -> Option<(Vec<String>, Vec<(String, String, String)>)> {
@@ -1061,7 +1061,7 @@ impl GraphCompiler<'_> {
             // lib body's are `mod.rut` — the diagnostics spell the one
             // that exists
             let child_file = match &pkg.body {
-                PkgBody::Host { .. } => crate::decl::DECL_CHILD_FILE,
+                MountedBody::Host { .. } => crate::decl::DECL_CHILD_FILE,
                 _ => "mod.rut",
             };
             let at_file = |at: &str| -> String {
@@ -1163,7 +1163,7 @@ impl GraphCompiler<'_> {
     }
 
     /// The dep's per-module decl rows (parsed once per spec — the
-    /// consumers share it). A `PkgBody::Host` dep collects from its
+    /// consumers share it). A `MountedBody::Host` dep collects from its
     /// root surface + mounted tree (the body carries `root_surface`,
     /// the pkg carries `mods`), so a qualified-use leaf naming a host
     /// row validates against the path-carrying rows.
@@ -1207,7 +1207,7 @@ impl GraphCompiler<'_> {
     fn dep_rows_readable(&self, spec: &str) -> bool {
         self.session
             .resolve(spec)
-            .map(|m| matches!(m.body, crate::session::PkgBody::Source { .. } | crate::session::PkgBody::Host { .. }))
+            .map(|m| matches!(m.body, crate::session::MountedBody::Source { .. } | crate::session::MountedBody::Host { .. }))
             .unwrap_or(false)
     }
 }

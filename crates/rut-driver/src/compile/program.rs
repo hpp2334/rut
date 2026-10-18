@@ -752,7 +752,7 @@ fn compile_program_inner(
         // needed and the use statement itself stays redundant-but-
         // legal; a non-ambient row (the `pub builtin` spellings)
         // binds per file — only in the files whose `use` spelled it
-        // (the per-file law). Pkg mounting (ink/pouch/calc fns,
+        // (the per-file law). Mounted mounting (ink/pouch/calc fns,
         // consts, namespace heads) stays use-gated.
         for (n, kind, ambient) in &surface.native_types {
             if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {

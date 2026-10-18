@@ -17,7 +17,7 @@ use common::dep_dir;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -29,7 +29,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -76,8 +76,8 @@ fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
 /// One world, one in-memory pkg set (no filesystem): the specs'
 /// sources offered by hand. Every pkg links (the `bool` arg is
 /// the retired `inline` flag's seat, kept for the callers' shape).
-fn session_of(modules: &[(&str, &str, bool)]) -> rut_driver::Loaded {
-    let mut pkgs: Vec<rut_driver::Pkg> = Vec::new();
+fn session_of(modules: &[(&str, &str, bool)]) -> rut_driver::Walk {
+    let mut pkgs: Vec<rut_driver::Mounted> = Vec::new();
     // the hand world declares loosely: every pkg names every other
     // (the law bounds uses by declarations, never declarations by
     // uses — this suite's subject is owner-anchored generics)
@@ -85,16 +85,18 @@ fn session_of(modules: &[(&str, &str, bool)]) -> rut_driver::Loaded {
         let heads: Vec<&str> =
             modules.iter().map(|(s, _, _)| *s).filter(|s| *s != *spec).collect();
         pkgs.push(
-            rut_driver::Pkg::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)),
+            rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)),
         );
     }
-    rut_driver::Loaded { pkgs, root: String::new() }
+    rut_driver::Walk { pkgs, root: String::new() }
 }
 
-fn run_entry<R: rut_vm::interp::Ret>(world: &rut_driver::Loaded, root: &str, entry: &str) -> R {
+fn run_entry<R: rut_vm::interp::Ret>(world: &rut_driver::Walk, root: &str, entry: &str) -> R {
     let g = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(world)
+        world
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(root)
             .compile(),
@@ -178,8 +180,10 @@ entry fn go2() -> i64 {
         ("app2", consumer2, false),
     ]);
     let g = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&s)
+        s
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint("app")
             .compile(),
@@ -376,9 +380,9 @@ fn packaged_generic_owner_serves_consumer_requests() {
 
     // a consumer session over the bundle: its request resolves against
     // the ledger — assignment and `is` hold across the package boundary
-    let mut session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let mut session = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     session.pkgs.push(
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "consumer",
             "use pairz::{ Pair };\nuse app::{ make };\n\n\
              entry fn go2() -> i64 {\n\
@@ -401,9 +405,9 @@ fn packaged_generic_owner_serves_consumer_requests() {
     // generic bodies as templates, so the consumer-spelled shape
     // monomorphizes at the link and runs
     let standalone = pack_dir(&pairz).expect("the lib packs alone");
-    let mut lone = rut_driver::Pkg::from_bundle(&standalone).expect("load");
+    let mut lone = rut_driver::Mounted::from_bundle(&standalone).expect("load");
     lone.pkgs.push(
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "late",
             "use pairz::{ Pair };\n\n\
              entry fn go3() -> i64 {\n\
@@ -415,8 +419,10 @@ fn packaged_generic_owner_serves_consumer_requests() {
         .manifest(rut_driver::Manifest::lib("late", &["pairz", "calc"])),
     );
     let g = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&lone)
+        lone
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint("late")
             .compile(),
@@ -500,8 +506,10 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     let dir_loaded = rut_native::load_dir(&app).expect("dir load");
     let from_dir = {
         let g = graph_of(
-            rut_driver::RutRun::new()
-                .pkgs(&dir_loaded)
+            dir_loaded
+                .pkgs
+                .iter()
+                .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
                 .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
                 .entrypoint(&dir_loaded.root)
                 .compile(),
@@ -510,10 +518,12 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
         rut_core::binary::encode(&g.program.expect("linked"))
     };
     let bytes = pack_dir(&app).expect("pack");
-    let session = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let session = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let g = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&session)
+        session
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(&session.root)
             .compile(),

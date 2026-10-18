@@ -147,7 +147,7 @@ fn mount_memory(
 /// One embedded host surface as a pkg: the `.d.rut` text lowers with
 /// its (include_str!-fed) mod tree, under the registration scope the
 /// spec spells.
-fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) -> rut_driver::Pkg {
+fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) -> rut_driver::Mounted {
     let mods = mount_memory(src, children);
     rut_driver::lower_decl_module(src, &mods, origin)
         .expect("the embedded surface is valid")
@@ -160,7 +160,7 @@ fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) 
 /// parsed structural form carries the `deps` rows).
 macro_rules! std_pkg {
     ($name:literal) => {
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             $name,
             include_str!(concat!("../../../rut/", $name, "/mod.rut")),
         )
@@ -263,7 +263,7 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     )
     .manifest(calc_manifest);
     calc.namespace = calc.manifest.namespace.clone();
-    if let rut_driver::PkgBody::Host { consts, .. } = &mut calc.body {
+    if let rut_driver::MountedBody::Host { consts, .. } = &mut calc.body {
         *consts = calc.manifest
             .consts
             .iter()
@@ -325,9 +325,8 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
                 .collect::<Vec<_>>(),
         ),
     };
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: lib_pkgs, root: String::new() })
-        .pkg(rut_driver::Pkg::source("main", src).manifest(main_manifest))
+    let compiled = rut_driver::Walk { pkgs: lib_pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .pkg(rut_driver::Mounted::source("main", src).manifest(main_manifest))
         .entrypoint("main")
         .compile();
     match compiled {
@@ -860,7 +859,7 @@ entry fn main() {
             "tree_host.d.rut",
             &[("net", "pub host async fn probe(k: str) -> i64;\n")],
         );
-        let rut_driver::PkgBody::Host { host_funcs, .. } = &pkg.body else {
+        let rut_driver::MountedBody::Host { host_funcs, .. } = &pkg.body else {
             panic!("a host body");
         };
         assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["net"]);
@@ -893,7 +892,7 @@ entry fn main() {
             "mod.d.rut",
             &[("net", "pub host fn connect(url: str) -> opaque;\n")],
         );
-        let rut_driver::PkgBody::Host { host_funcs, .. } = &pkg.body else {
+        let rut_driver::MountedBody::Host { host_funcs, .. } = &pkg.body else {
             panic!("a host body");
         };
         assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["net"]);

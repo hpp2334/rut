@@ -38,7 +38,7 @@ use rut_native::load_dir_with;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -50,7 +50,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -118,8 +118,10 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
     std::fs::write(app.join("mod.rut"), src).unwrap();
     write_lock(&app, &table);
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
@@ -321,7 +323,7 @@ fn load_compile_run(
     rows: &str,
     table: BTreeMap<String, Vec<u8>>,
     src: &str,
-) -> Result<(Vec<String>, Option<rut_core::binary::Program>, rut_driver::Loaded), String> {
+) -> Result<(Vec<String>, Option<rut_core::binary::Program>, rut_driver::Walk), String> {
     let app = dir.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
@@ -332,8 +334,10 @@ fn load_compile_run(
     std::fs::write(app.join("mod.rut"), src).unwrap();
     write_lock(&app, &table);
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
@@ -406,7 +410,7 @@ fn mixed_dir_and_archive_of_one_pkg_bind_per_row() {
     // the app's path row bound the DIRECTORY (its own row's body); the
     // archive's compiled group rode beside it under its identity
     assert!(
-        matches!(session.pkg("strbuild").unwrap().body, rut_driver::PkgBody::Source { .. }),
+        matches!(session.pkg("strbuild").unwrap().body, rut_driver::MountedBody::Source { .. }),
         "the consumer binds its own row's mount (the dir source)"
     );
     assert!(
@@ -486,8 +490,10 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
     hosts.verify_against(&ctx.flatten());
-    let g = rut_driver::RutRun::new()
-        .pkgs(&session)
+    let g = session
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&session.root)
         .compile()
@@ -513,7 +519,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     // under the pkg's bare name
     let sbh = common::pkg_named(&session, "strbuild_host");
     assert!(rut_driver::bundle::is_identity(&sbh.spec), "the group mounts under its identity: {}", sbh.spec);
-    assert!(matches!(&sbh.body, rut_driver::PkgBody::Host { .. }));
+    assert!(matches!(&sbh.body, rut_driver::MountedBody::Host { .. }));
     let _ = std::fs::remove_dir_all(&base);
 }
 

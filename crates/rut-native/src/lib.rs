@@ -14,7 +14,7 @@
 //! - [`load_dir`] / [`load_dir_with`] — the directory walk with all
 //!   its laws: `[deps]` recursion, the rut.lock pin verified at the
 //!   mount door, the root-only `[dev-deps]` pass, url
-//!   prefetch. The yield is [`rut_driver::Loaded`] — offer its pkgs to
+//!   prefetch. The yield is [`rut_driver::Walk`] — offer its pkgs to
 //!   a run with [`rut_driver::RutRun::pkg`]. [`load_dir_resolved`] is
 //!   the pins-injected flavor (install's validation lane).
 //! - [`url_dep_rows`] — the closure's url dep rows (spec, url): what

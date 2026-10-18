@@ -151,7 +151,7 @@ any fn/class body, statements. Symmetrically, a `.rut` file that spells
 The registered callable's Rust shape **is** the `.d.rut` row. The
 **installer lane** is a `HostPkg` builder per pkg — rows under bare
 names, the scope (the pkg's name) spelled once — handed to the chain
-with `.host_pkg(..)`:
+with `pkg(Offer::Host(..))` — `pkg(hp)` coerces:
 
 ```rust
 // one builder per host pkg; the scope string appears exactly once
@@ -165,7 +165,7 @@ rut_vm::pkg_fn!(logger, "emit", (OpaqueRef, &str, &str) -> (),
 // the offered rows snapshot
 let compiled = rut_driver::RutRun::new()
     /* ..offers.. */
-    .host_pkg(logger.build())
+    .pkg(logger.build())
     .entrypoint("app")
     .compile()?;
 ```
@@ -196,7 +196,7 @@ hosts.register::<_, (&str,), OpaqueRef, _>(
 - `&str` / `&[u8]` params are zero-copy borrows scoped to exactly the
   call ([value boundary](value-boundary.md)).
 - One installer per pkg: a duplicate row name inside a builder panics,
-  a second `.host_pkg(..)` for the same scope panics (at the
+  a second `Offer::Host` for the same scope panics (at the
   `.compile()` install), and a pkg
   cannot spell another pkg's rows — the scope comes solely from
   `HostPkg::new`.
@@ -275,7 +275,7 @@ rut_vm::pkg_async_fn!(http, "net::http_send",
     },
     /* optional abort hook: */ move |_c| { /* best-effort cancel */ },
 );
-// the built pkg rides the chain: RutRun::new()...host_pkg(http.build())
+// the built pkg rides the chain: RutRun::new()...pkg(http.build())
 
 // the raw lane (bare registry, full `scope::path::name` strings) — the
 // escape hatch, same emitter:

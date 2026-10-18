@@ -1,4 +1,4 @@
-//! Pkg-graph compilation — the driver half.
+//! Mounted-graph compilation — the driver half.
 //!
 //! Walks a root module's `use` statements through a [`Session`]. Every
 //! module compiles under its own scope and LINKS: its `Surface` binds
@@ -8,7 +8,7 @@
 //! (owner-anchored generics). No source crosses a boundary — there is
 //! no splice, no second compilation model.
 //!
-//! The dispatch is on the mounted [`PkgBody`]: a source body takes
+//! The dispatch is on the mounted [`MountedBody`]: a source body takes
 //! the compile path, a host body synthesizes its placeholder program,
 //! and a compiled body (a v5 bundle's decoded `.rutc`) is pushed after
 //! a fresh-scope rebase of its packed ids.

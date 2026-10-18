@@ -57,8 +57,8 @@ use std::rc::Rc;
 use crate::bundle::{bundle_key, write_bundle, Manifest, MANIFEST_NAME};
 use crate::graph::compile_units;
 use crate::mods::{rows_json, ROWS_NAME};
-use crate::run::Loaded;
-use crate::session::{PkgBody, Session};
+use crate::run::Walk;
+use crate::session::{MountedBody, Session};
 
 /// The bundle wire version — 11, always, ONE number for both root
 /// kinds. The manifest's `type` routes the layout (a lib root packs
@@ -68,6 +68,20 @@ use crate::session::{PkgBody, Session};
 /// the archive root carries only the root's own files, and the entry
 /// names are canonical (`mod.rutc` / `mod.d.rut` at both levels).
 pub const FORMAT_VERSION: u64 = 11;
+
+/// Assemble a one-member **source** bundle — a rut package whose body
+/// is the text — as a [`Bundle`](crate::Bundle) handle. A pack method
+/// that ONLY assembles: identity + the text, no container bytes, no
+/// CRC, and NEVER a compile (a run compiles the source member when it
+/// is offered — [`crate::Offer::Lib`]). The ephemeral-source door:
+/// per-load apps, playground snippets, REPL — offering fresh source
+/// must not pay the container/pack tax, while `pack_dir` (which
+/// compiles a closure for distribution) stays the lane for *stable*
+/// source being published. The handle is opaque either way — one
+/// offering verb over both member kinds.
+pub fn pack_inline_pkg(name: &str, text: impl Into<String>) -> crate::run::Bundle {
+    crate::run::Bundle::from_source_member(name, text.into())
+}
 
 /// Where a group's files ride from — the emission's read dispatch. The
 /// `Dir` arm carries the DIRECTORY KEY (an opaque string; the FS math
@@ -98,7 +112,7 @@ pub type PackRead = Rc<dyn Fn(&str, &str) -> Result<Vec<u8>, String>>;
 /// the root manifest (bytes + parse), the group-source map, the
 /// archives the url deps opened, and the file reader.
 pub struct PackWorld {
-    pub loaded: Loaded,
+    pub loaded: Walk,
     /// the root's `rut.jsonc`, byte-for-byte (the law)
     pub manifest_bytes: Vec<u8>,
     pub manifest: Manifest,
@@ -125,10 +139,10 @@ pub struct PackOpts {
 /// envelope). A pkg with mounted mod children always answers one of
 /// the two; a compiled body's tree rows spell an empty root (the
 /// binary IS the body — the `""` row is inert for it).
-fn rows_root_text(pkg: &crate::session::Pkg) -> String {
+fn rows_root_text(pkg: &crate::session::Mounted) -> String {
     match &pkg.body {
-        PkgBody::Source { text, .. } => text.clone(),
-        PkgBody::Host { root_surface, .. } => root_surface.clone().unwrap_or_default(),
+        MountedBody::Source { text, .. } => text.clone(),
+        MountedBody::Host { root_surface, .. } => root_surface.clone().unwrap_or_default(),
         _ => String::new(),
     }
 }
@@ -210,7 +224,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         if let PkgSource::Archive { slot, .. } = source {
             if matches!(
                 session.resolve(spec).map(|m| &m.body),
-                Ok(PkgBody::Compiled(_))
+                Ok(MountedBody::Compiled(_))
             ) && !units.linked.contains_key(spec)
             {
                 return Err(PackError::law(format!(
@@ -226,7 +240,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     let root_linked = units.linked.get(&root);
     let root_ok = matches!(
         (&session.resolve(&root).unwrap().body, root_linked),
-        (PkgBody::Source { .. }, Some(&_))
+        (MountedBody::Source { .. }, Some(&_))
     );
     if !root_ok {
         return Err(PackError::law(format!(

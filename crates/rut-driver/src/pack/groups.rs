@@ -7,7 +7,7 @@
 use crate::bundle::{bundle_key, parse_manifest, parse_manifest_compat, read_entry};
 use crate::pack::Archive;
 use crate::pack::{PackRead, PkgSource};
-use crate::session::PkgBody;
+use crate::session::MountedBody;
 
 use std::collections::BTreeMap;
 
@@ -143,8 +143,8 @@ pub(super) fn rides_compiled(
     units: &crate::graph::Units,
 ) -> bool {
     match session.resolve(spec).map(|m| &m.body) {
-        Ok(PkgBody::Source { .. }) => units.linked.contains_key(spec),
-        Ok(PkgBody::Compiled(_)) => true,
+        Ok(MountedBody::Source { .. }) => units.linked.contains_key(spec),
+        Ok(MountedBody::Compiled(_)) => true,
         _ => false,
     }
 }

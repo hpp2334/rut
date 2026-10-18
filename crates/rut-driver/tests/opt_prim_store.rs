@@ -23,7 +23,7 @@ const POUCH_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch");
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -35,7 +35,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -55,12 +55,12 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn world_with(app_src: &str) -> rut_driver::Loaded {
+fn world_with(app_src: &str) -> rut_driver::Walk {
     let mut loaded = rut_native::dir_pkgs(std::path::Path::new(POUCH_DIR)).expect("mount pouch");
     // the root DECLARES its pouch use (the nmapset worlds extend the
     // world and the declaration beside it)
     loaded.pkgs.push(
-        rut_driver::Pkg::source("app_main", app_src)
+        rut_driver::Mounted::source("app_main", app_src)
             .manifest(rut_driver::Manifest::lib("app_main", &["nmapset", "pouch"])),
     );
     loaded
@@ -69,8 +69,10 @@ fn world_with(app_src: &str) -> rut_driver::Loaded {
 /// Compile, verify, and run `main` — the i64 return.
 fn run_main(app_src: &str) -> i64 {
     let out = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&world_with(app_src))
+        world_with(app_src)
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .entrypoint("app_main")
             .compile(),
     );
@@ -95,8 +97,10 @@ fn run_main(app_src: &str) -> i64 {
 /// The linked program's IR dump (lowering evidence).
 fn ir_dump(app_src: &str) -> String {
     let out = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&world_with(app_src))
+        world_with(app_src)
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .entrypoint("app_main")
             .compile(),
     );
@@ -484,8 +488,10 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
         );
     }
     let out = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&world)
+        world
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .entrypoint("app_main")
             .compile(),
     );
@@ -532,8 +538,10 @@ fn prim_store_release_walk_skips_element_slots() {
         }
     "#;
     let out = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&world_with(src))
+        world_with(src)
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .entrypoint("app_main")
             .compile(),
     );

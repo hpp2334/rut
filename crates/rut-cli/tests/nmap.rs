@@ -321,12 +321,11 @@ fn vm_with_nmap() -> Vm {
         .pkgs;
     // the root DECLARES its use (the nmap_host surface's names)
     world.push(
-        rut_driver::Pkg::source("app", SRC)
+        rut_driver::Mounted::source("app", SRC)
             .manifest(rut_driver::Manifest::lib("app", &["nmap_host"])),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();

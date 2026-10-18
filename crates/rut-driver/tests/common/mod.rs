@@ -108,9 +108,9 @@ pub fn dep_dir(names: &[String], pkg: &str) -> String {
 /// identity-keyed group (`name@fp16`); single-instance worlds only.
 #[allow(dead_code)]
 pub fn pkg_named<'a>(
-    loaded: &'a rut_driver::Loaded,
+    loaded: &'a rut_driver::Walk,
     name: &str,
-) -> &'a rut_driver::Pkg {
+) -> &'a rut_driver::Mounted {
     loaded
         .pkgs
         .iter()

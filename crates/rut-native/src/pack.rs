@@ -182,7 +182,7 @@ fn pack_dir_opts_locked(
                 let dm = group_manifest(source, &world.archives);
                 let rides_source = world
                     .pkg_body(spec)
-                    .map(|b| matches!(b, rut_driver::PkgBody::Source { .. }))
+                    .map(|b| matches!(b, rut_driver::MountedBody::Source { .. }))
                     .unwrap_or(false);
                 if rides_source && !dm?.dev_deps.is_empty() {
                     return Err(PackError::law(format!(

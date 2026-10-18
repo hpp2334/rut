@@ -32,7 +32,7 @@ use rut_core::types::{
 use rut_parser::{parse, Mode};
 
 use crate::mods::ModSource;
-use crate::session::{HostRow, Pkg, PkgBody};
+use crate::session::{HostRow, Mounted, MountedBody};
 
 /// The host surface tree's module file — the Decl flavor's spelling
 /// (`NAME/mod.d.rut`), the twin of a lib body tree's `mod.rut`.
@@ -96,7 +96,7 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
     }
 }
 
-/// Lower a `.d.rut` surface into a host-body [`Pkg`]: every
+/// Lower a `.d.rut` surface into a host-body [`Mounted`]: every
 /// `host fn` becomes a bodyless host entry carrying its mod path —
 /// the embedding Rust binds the bodies at run time. `children` is the
 /// MOUNTED tree (mod path → source, the `crate::mods::mount_mod_children`
@@ -106,14 +106,14 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
 /// silent drop of a `mod` declaration in a `.d.rut` is fixed here).
 /// Non-`host` items are surface the compiler consumes elsewhere;
 /// parse failures and non-crossing signatures are load errors. The
-/// mounted tree rides the pkg (`Pkg::mods`) and the root text rides
+/// mounted tree rides the pkg (`Mounted::mods`) and the root text rides
 /// the body (`root_surface`) — the bundle lane and the phase-2 dep
 /// tables read both.
 pub fn lower_decl_module(
     src: &str,
     children: &BTreeMap<String, ModSource>,
     origin: &str,
-) -> Result<Pkg, String> {
+) -> Result<Mounted, String> {
     let (ast, diags) = parse(src, Mode::Decl);
     if !diags.is_empty() {
         let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
@@ -124,8 +124,8 @@ pub fn lower_decl_module(
     // `mod NAME;` names the same mounted child — lower it once
     let mut lowered: BTreeSet<String> = BTreeSet::new();
     lower_module(&ast, "", children, origin, &mut host_funcs, &mut lowered)?;
-    Ok(Pkg {
-        body: PkgBody::Host {
+    Ok(Mounted {
+        body: MountedBody::Host {
             host_funcs,
             consts: vec![],
             native_types: vec![],

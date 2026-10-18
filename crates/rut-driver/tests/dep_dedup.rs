@@ -32,7 +32,7 @@ use common as _;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -44,7 +44,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -64,7 +64,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn load(rel: &str) -> Result<rut_driver::Loaded, String> {
+fn load(rel: &str) -> Result<rut_driver::Walk, String> {
     rut_native::load_dir(Path::new(&format!("{SIBS}/{rel}")))
     .map_err(|e| e.to_string())
 }
@@ -120,7 +120,7 @@ fn write_consumer(
     common::write_lock(&dir, &lock);
 }
 
-fn identity_pkgs<'a>(loaded: &'a rut_driver::Loaded, name: &str) -> Vec<&'a rut_driver::Pkg> {
+fn identity_pkgs<'a>(loaded: &'a rut_driver::Walk, name: &str) -> Vec<&'a rut_driver::Mounted> {
     loaded
         .pkgs
         .iter()
@@ -178,8 +178,10 @@ fn same_name_two_identities_one_program() {
     let utils = identity_pkgs(&loaded, "util");
     assert_eq!(utils.len(), 2, "two identities of one name: {:?}", loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>());
     // and the program runs over BOTH (v1 answers 7, v2 answers 9)
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the diamond");
@@ -256,8 +258,10 @@ fn same_identity_via_two_routes_mounts_once() {
         "one identity mounts once: {:?}",
         loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>()
     );
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile");
@@ -280,9 +284,11 @@ fn same_identity_via_two_routes_mounts_once() {
 }
 
 /// Compile, flatten, verify, and run `main` — the i64 result.
-fn run_main(loaded: rut_driver::Loaded) -> i64 {
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+fn run_main(loaded: rut_driver::Walk) -> i64 {
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -423,13 +429,13 @@ entry fn main() -> i64 {
     // each hand pkg declares the head it names (the nameability law —
     // the declarations bound uses, never the reverse)
     let chain = rut_driver::RutRun::new()
-        .pkg(rut_driver::Pkg::source("cell", cell_src))
+        .pkg(rut_driver::Mounted::source("cell", cell_src))
         .pkg(
-            rut_driver::Pkg::source("wrap", wrap_src)
+            rut_driver::Mounted::source("wrap", wrap_src)
                 .manifest(rut_driver::Manifest::lib("wrap", &["cell"])),
         )
         .pkg(
-            rut_driver::Pkg::source("app", app_src)
+            rut_driver::Mounted::source("app", app_src)
                 .manifest(rut_driver::Manifest::lib("app", &["wrap"])),
         );
     let g = graph_of(chain.entrypoint("app").compile());
@@ -550,18 +556,18 @@ entry fn main() -> i64 {
     // each hand pkg declares the heads it names (the nameability law)
     let g = graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Pkg::source("cell", cell_src))
+            .pkg(rut_driver::Mounted::source("cell", cell_src))
             .pkg(
-                rut_driver::Pkg::source("wrap", wrap_src)
+                rut_driver::Mounted::source("wrap", wrap_src)
                     .manifest(rut_driver::Manifest::lib("wrap", &["cell"])),
             )
-            .pkg(rut_driver::Pkg::source("boxx", box_src))
+            .pkg(rut_driver::Mounted::source("boxx", box_src))
             .pkg(
-                rut_driver::Pkg::source("held", held_src)
+                rut_driver::Mounted::source("held", held_src)
                     .manifest(rut_driver::Manifest::lib("held", &["boxx"])),
             )
             .pkg(
-                rut_driver::Pkg::source("app", app_src)
+                rut_driver::Mounted::source("app", app_src)
                     .manifest(rut_driver::Manifest::lib("app", &["wrap", "held"])),
             )
             .entrypoint("app")

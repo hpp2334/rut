@@ -9,7 +9,7 @@
 //! manifest; the manifest row's `sha256` is retired), read fresh on
 //! every load and verified here at the mount door.
 //!
-//! The walk yields [`rut_driver::Loaded`] — pure pkgs plus the root's
+//! The walk yields [`rut_driver::Walk`] — pure pkgs plus the root's
 //! name. The mount order is the law:
 //! 1. the `[deps]` walk;
 //! 2. the dev pass — the ROOT's `[dev-deps]` mount exactly like
@@ -28,7 +28,7 @@ use rut_driver::bundle::{
     MANIFEST_NAME,
 };
 use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
-use rut_driver::{Loaded, Mode, Pkg, PkgBody, RunError};
+use rut_driver::{Walk, Mode, Mounted, MountedBody, RunError};
 
 use crate::error::LoadError;
 use crate::remote::DepRemote;
@@ -48,7 +48,7 @@ pub use rut_driver::pack::Archive;
 /// Where a walked pkg's files live — the D3 checks and the pack lanes'
 /// group reads dispatch on it: a `Dir` pkg reads from its directory, an
 /// `Archive` pkg from the fetched archive's entries at its prefix.
-/// WALK-LOCAL bookkeeping: it never rides the [`Pkg`] (pure data).
+/// WALK-LOCAL bookkeeping: it never rides the [`Mounted`] (pure data).
 #[derive(Clone, Debug)]
 pub(crate) enum Loc {
     Dir(PathBuf),
@@ -62,7 +62,7 @@ pub(crate) enum Loc {
 /// (slot-ordered).
 #[derive(Default)]
 pub(crate) struct World {
-    pub(crate) pkgs: BTreeMap<String, Pkg>,
+    pub(crate) pkgs: BTreeMap<String, Mounted>,
     pub(crate) locs: BTreeMap<String, Loc>,
     ledger: BTreeMap<ScopeId, String>,
     pub(crate) archives: Vec<Archive>,
@@ -75,7 +75,7 @@ impl World {
 
     /// A mounted pkg's body — the pack lane's group-kind decisions read
     /// it.
-    pub(crate) fn pkg_body(&self, spec: &str) -> Option<&PkgBody> {
+    pub(crate) fn pkg_body(&self, spec: &str) -> Option<&MountedBody> {
         self.pkgs.get(spec).map(|p| &p.body)
     }
 
@@ -104,7 +104,7 @@ impl World {
     /// the same law the run chain's table holds). A key is a bare
     /// package name or a content identity (`name@fp16` — the key a
     /// bundle group mounts under).
-    fn register(&mut self, spec: &str, pkg: Pkg) -> Result<(), LoadError> {
+    fn register(&mut self, spec: &str, pkg: Mounted) -> Result<(), LoadError> {
         if !rut_driver::bundle::valid_mount_key(spec) {
             return Err(LoadError::law(format!(
                 "`{spec}` is not a package name — expected `[a-zA-Z0-9_]+` or `name@<16 hex>`"
@@ -167,9 +167,9 @@ impl World {
     }
 
     /// The yield: drain the pkgs (the world dies, the pkgs travel) —
-    /// [`Loaded`].
-    pub(crate) fn into_loaded(self, root: String) -> Loaded {
-        Loaded { pkgs: self.pkgs.into_values().collect(), root }
+    /// [`Walk`].
+    pub(crate) fn into_loaded(self, root: String) -> Walk {
+        Walk { pkgs: self.pkgs.into_values().collect(), root }
     }
 }
 
@@ -514,7 +514,7 @@ fn lib_pkg(
     root_text: String,
     root_file: &str,
     manifest: &Manifest,
-) -> Result<Pkg, LoadError> {
+) -> Result<Mounted, LoadError> {
     let root_canon = std::fs::canonicalize(root_file)
         .unwrap_or_else(|_| PathBuf::from(root_file))
         .to_string_lossy()
@@ -526,8 +526,8 @@ fn lib_pkg(
     let mods: BTreeMap<String, ModSource> =
         mount_mod_children(&root_text, &root_canon, Mode::Impl, "mod.rut", &mut lookup)
             .map_err(|e| LoadError::law(format!("{dir}: {e}")))?;
-    Ok(Pkg {
-        body: PkgBody::Source { text: root_text, is_decl: false },
+    Ok(Mounted {
+        body: MountedBody::Source { text: root_text, is_decl: false },
         entry: manifest.entry.clone(),
         mods,
         manifest: manifest.clone(),
@@ -535,7 +535,7 @@ fn lib_pkg(
     })
 }
 
-/// Build a directory's entry [`Pkg`] from its manifest:
+/// Build a directory's entry [`Mounted`] from its manifest:
 ///
 /// - a `type = "host"` pkg — a pure declaration surface. The `.d.rut`
 ///   parses in declaration mode and lowers into the module's host fns;
@@ -570,7 +570,7 @@ fn load_entry_module(
     src: &dyn Source,
     dir: &str,
     manifest: &Manifest,
-) -> Result<Pkg, LoadError> {
+) -> Result<Mounted, LoadError> {
     match manifest.pkg_type {
         PkgType::Host => {
             if dir_has_root_module(dir) {
@@ -621,7 +621,7 @@ fn load_entry_module(
             // the consts ride the host body (the manifest is their only
             // spelling)
             let consts = manifest_consts(manifest);
-            if let PkgBody::Host { consts: rows, .. } = &mut m.body {
+            if let MountedBody::Host { consts: rows, .. } = &mut m.body {
                 *rows = consts;
             }
             m.manifest = manifest.clone();
@@ -647,8 +647,8 @@ fn load_entry_module(
                     lib_pkg(dir, root, &root_file.to_string_lossy(), manifest)
                 }
                 None => match surface_only {
-                    Some(surface) if manifest.type_declared => Ok(Pkg {
-                        body: PkgBody::Source { text: surface, is_decl: true },
+                    Some(surface) if manifest.type_declared => Ok(Mounted {
+                        body: MountedBody::Source { text: surface, is_decl: true },
                         entry: manifest.entry.clone(),
                         manifest: manifest.clone(),
                         ..Default::default()
@@ -691,7 +691,7 @@ fn manifest_consts(manifest: &Manifest) -> Vec<(String, rut_core::types::TypeId,
 /// walked pkgs — the two packed forms of the same contract. A loose
 /// `.rut` file is NOT this: it is a single-file module with no
 /// manifest.
-pub fn load_path_session(path: &Path) -> Result<Loaded, RunError> {
+pub fn load_path_session(path: &Path) -> Result<Walk, RunError> {
     if path.is_dir() {
         return load_dir(path);
     }
@@ -710,7 +710,7 @@ pub fn load_path_session(path: &Path) -> Result<Loaded, RunError> {
 pub async fn load_path_session_with(
     path: &Path,
     remote: &dyn DepRemote,
-) -> Result<Loaded, RunError> {
+) -> Result<Walk, RunError> {
     if path.is_dir() {
         return load_dir_with(path, remote).await;
     }
@@ -727,7 +727,7 @@ pub async fn load_path_session_with(
 /// offer them to a run with `RutRun::new().pkg(..)`. Url deps need a
 /// remote: this lane is the loud no-fetcher error, never a network
 /// call.
-pub fn load_dir(dir: &Path) -> Result<Loaded, RunError> {
+pub fn load_dir(dir: &Path) -> Result<Walk, RunError> {
     load_dir_fetched(dir, &BTreeMap::new())
 }
 
@@ -737,7 +737,7 @@ pub fn load_dir(dir: &Path) -> Result<Loaded, RunError> {
 /// realistic lane — a fixture that fetches is a project that
 /// installed) and every url row's pin is verified HERE, at the mount
 /// door, on every load.
-pub fn load_dir_fetched(dir: &Path, map: &BTreeMap<String, Vec<u8>>) -> Result<Loaded, RunError> {
+pub fn load_dir_fetched(dir: &Path, map: &BTreeMap<String, Vec<u8>>) -> Result<Walk, RunError> {
     let src = FsSource::at(dir);
     let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
     load_dir_resolved(dir, map, &lock)
@@ -753,7 +753,7 @@ pub fn load_dir_resolved(
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
     pins: &BTreeMap<String, String>,
-) -> Result<Loaded, RunError> {
+) -> Result<Walk, RunError> {
     let src = FsSource::at(dir);
     let mut world = World::new();
     let root = walk_dir(&mut world, &src, dir.to_string_lossy().as_ref(), map, pins)?;
@@ -766,7 +766,7 @@ pub fn load_dir_resolved(
 /// The lock is read from the root first — it gates the prefetch —
 /// then the walk collects the url rows, awaits `fetch` per url
 /// sequentially, and mounts over the bytes map.
-pub async fn load_dir_with(dir: &Path, remote: &dyn DepRemote) -> Result<Loaded, RunError> {
+pub async fn load_dir_with(dir: &Path, remote: &dyn DepRemote) -> Result<Walk, RunError> {
     let src = FsSource::at(dir);
     let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
     let map = prefetch_urls(&src, dir.to_string_lossy().as_ref(), &lock, remote).await?;
@@ -870,7 +870,7 @@ pub(crate) fn mount_dev_table(
 /// `name` disagrees with its key is an error naming both. `visiting`
 /// guards cycles; `parent` is the spec of the pkg whose table this is
 /// — the first-mount edge every pkg mounted here records
-/// ([`Pkg::mounted_by`]). Every mounted pkg's manifest and directory
+/// ([`Mounted::mounted_by`]). Every mounted pkg's manifest and directory
 /// (or archive location) are recorded — the pack lanes' group reads
 /// dispatch on them.
 fn resolve_table(
@@ -1097,8 +1097,8 @@ fn mount_url_dep(
         .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
     world.register(
         &root_spec,
-        Pkg {
-            body: PkgBody::Compiled(root),
+        Mounted {
+            body: MountedBody::Compiled(root),
             entry: manifest.entry.clone(),
             mods,
             // the archive's rows ride ITS ROOT — the run chain's
@@ -1187,8 +1187,8 @@ fn mount_url_dep(
                         "{url}: `{key}` owns an open generic surface but its binary carries no template bodies — corrupt or doctored, re-pack the directory"
                     )));
                 }
-                Pkg {
-                    body: PkgBody::Compiled(program),
+                Mounted {
+                    body: MountedBody::Compiled(program),
                     entry: dm.entry.clone(),
                     mods: rut_driver::loader::rows_mods(&entries, &format!("{prefix}/"))
                         .map_err(|e| LoadError::law(format!("{url}: {e}")))?,
@@ -1241,7 +1241,7 @@ fn mount_url_dep(
     Ok(())
 }
 
-/// Build a package's entry [`Pkg`] from bundle entries under
+/// Build a package's entry [`Mounted`] from bundle entries under
 /// `prefix` — the in-archive counterpart of [`load_entry_module`]; the
 /// driver's pure container lane owns the law (and the manifest's
 /// namespace/consts rows ride there). This shim just keeps the error
@@ -1251,7 +1251,7 @@ fn bundle_entry_pkg(
     prefix: &str,
     manifest: &Manifest,
     origin: &str,
-) -> Result<Pkg, LoadError> {
+) -> Result<Mounted, LoadError> {
     rut_driver::loader::bundle_entry_pkg(entries, prefix, manifest)
         .map_err(|e| LoadError::law(format!("{origin}: {e}")))
 }
@@ -1263,11 +1263,11 @@ fn bundle_entry_pkg(
 /// Offer one package directory — and, recursively, its `[deps]` — as
 /// walked pkgs: the programmatic counterpart of a manifest's dep walk
 /// (native hosts, tests, plugin loaders). The root is
-/// [`Loaded::root`]; offer every pkg to a run with `RutRun::new().pkg(..)`.
+/// [`Walk::root`]; offer every pkg to a run with `RutRun::new().pkg(..)`.
 ///
 /// This is an OFFER to someone else's program, not "building the pkg
 /// itself": no dev-deps are mounted (pass 2 is root-only).
-pub fn dir_pkgs(dir: &Path) -> Result<Loaded, RunError> {
+pub fn dir_pkgs(dir: &Path) -> Result<Walk, RunError> {
     dir_pkgs_fetched(dir, &BTreeMap::new())
 }
 
@@ -1280,7 +1280,7 @@ pub fn dir_pkgs(dir: &Path) -> Result<Loaded, RunError> {
 pub(crate) fn dir_pkgs_fetched(
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
-) -> Result<Loaded, RunError> {
+) -> Result<Walk, RunError> {
     let src = FsSource::at(dir);
     let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
     dir_pkgs_resolved(dir, map, &lock)
@@ -1293,7 +1293,7 @@ fn dir_pkgs_resolved(
     dir: &Path,
     map: &BTreeMap<String, Vec<u8>>,
     lock: &BTreeMap<String, String>,
-) -> Result<Loaded, RunError> {
+) -> Result<Walk, RunError> {
     let mut world = World::new();
     let name = offer_dir(&mut world, dir, map, lock)?;
     Ok(world.into_loaded(name))
@@ -1302,7 +1302,7 @@ fn dir_pkgs_resolved(
 /// [`dir_pkgs`] with a url-dep remote — reads the root's lock (it
 /// gates the prefetch), collects the url rows, fetches, mounts over
 /// the bytes map.
-pub async fn dir_pkgs_with(dir: &Path, remote: &dyn DepRemote) -> Result<Loaded, RunError> {
+pub async fn dir_pkgs_with(dir: &Path, remote: &dyn DepRemote) -> Result<Walk, RunError> {
     let src = FsSource::at(dir);
     let lock = read_lock(&src, dir.to_string_lossy().as_ref())?;
     let map = prefetch_urls(&src, dir.to_string_lossy().as_ref(), &lock, remote).await?;
@@ -1356,9 +1356,10 @@ pub(crate) fn offer_dir(
 /// never guess. The walk itself is the driver's PURE container
 /// lane (every read is an in-memory entry) — this lane adds only the
 /// file read.
-pub fn load_bundle_session(path: &Path) -> Result<Loaded, RunError> {
+pub fn load_bundle_session(path: &Path) -> Result<Walk, RunError> {
     let bytes = std::fs::read(path).map_err(|e| LoadError::io(path.display(), e))?;
-    rut_driver::loader::bundle_walk_bytes(&bytes)
+    let bundle = rut_driver::Bundle::parse(&bytes)?;
+    bundle.walk()
 }
 
 // ---------------------------------------------------------------------
@@ -1388,7 +1389,7 @@ pub fn tree_dir() -> PathBuf {
 /// package whose `[deps]` pull MORE pkgs into the walk is refused:
 /// offer the whole closure instead (`load_dir` over the same
 /// directory, or `dir_pkgs`), never a silently-truncated world.
-pub fn tree_pkg(name: &str) -> Result<Pkg, RunError> {
+pub fn tree_pkg(name: &str) -> Result<Mounted, RunError> {
     let loaded = dir_pkgs(&tree_dir().join(name))?;
     match loaded.pkgs.len() {
         1 => Ok(loaded.pkgs.into_iter().next().unwrap()),

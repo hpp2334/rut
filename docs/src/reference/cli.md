@@ -16,7 +16,7 @@ checkout, or a plain `cargo build --release`
 ([installation](../quick-start/installation.md)).
 
 ```sh
-rut run [<dir | mod.rutbundle>] [--entry <fn>] [--fuel N] [--symbols <file.rutsym>]
+rut run [<dir | mod.rutbundle>] [--entry <fn>] [--fuel N] [--symbols <file.rutsym>] [--no-cache]
 rut new <dir>
 rut install [<dir>] [--locked]
 rut fmt <file.rut | dir> [--check]
@@ -42,8 +42,8 @@ loose-file shape:
 
 | input | pipeline |
 |---|---|
-| `dir` (a module directory with `rut.jsonc`) | load the whole graph, compile it, run the entry designation (below) ([project structure](project-structure.md)) |
-| `mod.rutbundle` | the packed form of the same contract ([module bundles](bundles.md)) |
+| `dir` (a module directory with `rut.jsonc`) | **cache-first**: the run key is sha256 over the closure's sources, manifests, `rut.lock` pins, and the toolchain version — a hit in `.rut/cache/<key>.rutbundle` mounts the cached archive; a miss is the whole-program compile (the deterministic reference — [the compilation model](compilation-model.md)), whose archive then emits into the cache. `--no-cache` (alias `--repack`) forces the miss path; the fresh archive still refreshes the entry. A host-rooted directory never reaches the cache (it refuses at the door — a host root is a declaration leaf, nothing to run) |
+| `mod.rutbundle` | the packed form of the same contract — decoded directly, no cache lane ([module bundles](bundles.md)) |
 
 Anything else is refused at the door (exit 2): a loose `.rut` file is
 not a runnable unit — give the directory a `rut.jsonc` naming the
@@ -61,7 +61,7 @@ Flags and defaults:
 | heap limit | fixed at 64 MiB |
 | interrupt check | every 1024 ops |
 
-Bodies bound by `run` (each rides the chain as `.host_pkg(..)`):
+Bodies bound by `run` (each rides the chain as `pkg(Offer::Host(..))`):
 
 | chain step | purpose |
 |---|---|

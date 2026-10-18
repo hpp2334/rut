@@ -1,6 +1,6 @@
 //! The package value: its body kinds.
 //!
-//! A `Pkg` is pure data — a named package. The walk (rut-native)
+//! A `Mounted` is pure data — a named package. The walk (rut-native)
 //! yields them; [`crate::run::RutRun`] offers them; the compile-time
 //! mount table (the crate-internal `Session`) holds them. Walker-found
 //! metadata (the pkg's own manifest — dep tables included) is pub data
@@ -16,7 +16,7 @@ use crate::mods::ModSource;
 /// a source body compiles (and may splice), a compiled body pushes as
 /// decoded, a host body synthesizes its placeholder program.
 #[derive(Clone, Debug)]
-pub enum PkgBody {
+pub enum MountedBody {
     /// a `.rut` body — compile it. `is_decl` marks a declaration-mode
     /// pkg (a `.d.rut` surface parsed as its own unit):
     /// nothing to compile or run, but `rut dump` shows the AST.
@@ -44,7 +44,7 @@ pub enum PkgBody {
         /// only through `use`
         native_types: Vec<(String, rut_core::binary::NativeTy, bool)>,
         /// Builtin traits published by name (`core` only), same
-        /// ambient-bit law as [`PkgBody::Host`]'s `native_types`
+        /// ambient-bit law as [`MountedBody::Host`]'s `native_types`
         /// Compiler-lowered builtin function names (`core` only) — no
         /// bodies; rut-lir lowers them. Each row carries its ambient
         /// bit (same law)
@@ -57,7 +57,7 @@ pub enum PkgBody {
         /// the `.d.rut` root surface the rows lowered from — `Some`
         /// for a loaded `type = "host"` pkg (the rows' only carrier;
         /// the dep-side decl tables of phase 2 read the tree off it),
-        /// `None` for hand-built row sets (`core`, `Pkg::host`)
+        /// `None` for hand-built row sets (`core`, `Mounted::host`)
         root_surface: Option<String>,
     },
 }
@@ -128,19 +128,19 @@ impl HostRow {
     }
 }
 
-impl Default for PkgBody {
+impl Default for MountedBody {
     /// An empty source body — the manifest-only pkg (a pkg whose
     /// entries ride on other fields) parses to an empty unit.
-    fn default() -> PkgBody {
-        PkgBody::Source { text: String::new(), is_decl: false }
+    fn default() -> MountedBody {
+        MountedBody::Source { text: String::new(), is_decl: false }
     }
 }
 
 /// One package: the bare name it answers to, its entry files, its body
-/// ([`PkgBody`]), and the walker-found metadata. Pure data — offer it
+/// ([`MountedBody`]), and the walker-found metadata. Pure data — offer it
 /// to a run with [`crate::run::RutRun::pkg`].
 #[derive(Clone, Debug, Default)]
-pub struct Pkg {
+pub struct Mounted {
     /// the exact package name — bare `[a-zA-Z0-9_]+`
     pub spec: String,
     /// The namespace head for qualified member access (`Math.sqrt`) —
@@ -148,7 +148,7 @@ pub struct Pkg {
     pub namespace: Option<String>,
     pub entry: Entry,
     /// the body: `.rut` source, a decoded `.rutc`, or the native rows
-    pub body: PkgBody,
+    pub body: MountedBody,
     /// The mounted bundle's own scope ledger — the pack-time module set
     /// (this root plus its groups), already namespaced into this
     /// session's numbering. The compiled walk's dep list: v21's
@@ -167,7 +167,7 @@ pub struct Pkg {
     /// The pkg's own parsed manifest — the STRUCTURAL form every
     /// producer stamps: the walk's `rut.jsonc` read, a bundle group's
     /// in-archive manifest, a host's in-memory build
-    /// ([`Pkg::manifest`]). Json text is only a loader input; this is
+    /// ([`Mounted::manifest`]). Json text is only a loader input; this is
     /// the one mechanism — the dep tables (`deps`, `dev-deps`) are read
     /// off it, never off pkg fields (the old flat `deps` field folded
     /// in here). For a walked pkg the WHOLE
@@ -182,41 +182,41 @@ pub struct Pkg {
     pub mounted_by: Option<String>,
 }
 
-impl Pkg {
+impl Mounted {
     /// The same pkg under another name — `lower_decl_module`'s surface
     /// with the registration scope spelled at the offer.
-    pub fn named(mut self, spec: &str) -> Pkg {
+    pub fn named(mut self, spec: &str) -> Mounted {
         self.spec = spec.to_string();
         self
     }
 
     /// Attach the parsed structural manifest — the builder-style door
     /// for hosts building worlds in memory
-    /// (`Pkg::source("app", src).manifest(Manifest::lib("app", &["ink"]))`).
+    /// (`Mounted::source("app", src).manifest(Manifest::lib("app", &["ink"]))`).
     /// The walk's producers stamp the same field; a hand offer without
     /// one carries `Manifest::default()`. Parsing json text is never
     /// this method's business — the host calls
     /// [`crate::bundle::parse_manifest`] itself.
-    pub fn manifest(mut self, m: Manifest) -> Pkg {
+    pub fn manifest(mut self, m: Manifest) -> Mounted {
         self.manifest = m;
         self
     }
 
-    /// A source pkg — the ordinary `.rut` body. `Pkg::source("app", src)`.
-    pub fn source(name: &str, text: impl Into<String>) -> Pkg {
-        Pkg {
+    /// A source pkg — the ordinary `.rut` body. `Mounted::source("app", src)`.
+    pub fn source(name: &str, text: impl Into<String>) -> Mounted {
+        Mounted {
             spec: name.to_string(),
-            body: PkgBody::Source { text: text.into(), is_decl: false },
+            body: MountedBody::Source { text: text.into(), is_decl: false },
             ..Default::default()
         }
     }
 
     /// A declaration-mode pkg — a `.d.rut` surface parsed as its own
     /// unit (the surface-only dev state).
-    pub fn decl(name: &str, text: impl Into<String>) -> Pkg {
-        Pkg {
+    pub fn decl(name: &str, text: impl Into<String>) -> Mounted {
+        Mounted {
             spec: name.to_string(),
-            body: PkgBody::Source { text: text.into(), is_decl: true },
+            body: MountedBody::Source { text: text.into(), is_decl: true },
             ..Default::default()
         }
     }
@@ -224,10 +224,10 @@ impl Pkg {
     /// A host-ABI pkg: declared rows, no rut body — the embedding Rust
     /// binds them at run time. Async rows carry `is_async = true` and
     /// expand into their five-row family at the mount.
-    pub fn host(name: &str, rows: Vec<HostRow>) -> Pkg {
-        Pkg {
+    pub fn host(name: &str, rows: Vec<HostRow>) -> Mounted {
+        Mounted {
             spec: name.to_string(),
-            body: PkgBody::Host {
+            body: MountedBody::Host {
                 host_funcs: rows,
                 consts: vec![],
                 native_types: vec![],
@@ -241,19 +241,21 @@ impl Pkg {
 
     /// A decoded `.rutc` program as a pkg's body (a compiled bundle's
     /// payload, already gated).
-    pub fn compiled(name: &str, program: rut_core::binary::Program) -> Pkg {
-        Pkg {
+    pub fn compiled(name: &str, program: rut_core::binary::Program) -> Mounted {
+        Mounted {
             spec: name.to_string(),
-            body: PkgBody::Compiled(program),
+            body: MountedBody::Compiled(program),
             ..Default::default()
         }
     }
 
     /// The pure container parse: a packed `.rutbundle`'s bytes → the
-    /// walked yield ([`crate::run::Loaded`]) — gates, groups, and the
+    /// walked yield ([`crate::run::Walk`]) — gates, groups, and the
     /// scope ledger. No filesystem, no network: the same contract a
-    /// url dep rides.
-    pub fn from_bundle(bytes: &[u8]) -> Result<crate::run::Loaded, crate::run::RunError> {
-        crate::loader::bundle_walk_bytes(bytes)
+    /// url dep rides. The legacy one-shot spelling — decode ONCE and
+    /// reuse the handle instead ([`crate::Bundle::parse`], then offer
+    /// it to any number of runs).
+    pub fn from_bundle(bytes: &[u8]) -> Result<crate::run::Walk, crate::run::RunError> {
+        crate::run::Bundle::parse(bytes)?.walk()
     }
 }

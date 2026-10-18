@@ -133,8 +133,10 @@ fn main() {
     let (ctx, prog) = if path.is_dir() {
         let loaded = rut_native::load_path_session(path)
             .unwrap_or_else(|e| fail(format!("load {}: {e}", path.display())));
-        let compiled = rut_driver::RutRun::new()
-            .pkgs(&loaded)
+        let compiled = loaded
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(&loaded.root)
             .compile()
@@ -174,7 +176,7 @@ fn main() {
         // may `use` any subset (declarations bound uses, never the
         // reverse). A bench harness's root is not the law's gate; the
         // dir-workload lane (rut run / the walked closure) is.
-        let bench = rut_driver::Pkg::source("bench", &src).manifest(rut_driver::Manifest::lib(
+        let bench = rut_driver::Mounted::source("bench", &src).manifest(rut_driver::Manifest::lib(
             "bench",
             &["calc", "ink", "pouch", "nmapset", "json", "strbuild"],
         ));

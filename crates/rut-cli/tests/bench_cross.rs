@@ -61,12 +61,11 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
         .pkgs;
     // the root DECLARES its use (the bench_cross surface's names)
     world.push(
-        rut_driver::Pkg::source("app", SRC)
+        rut_driver::Mounted::source("app", SRC)
             .manifest(rut_driver::Manifest::lib("app", &["bench_cross"])),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();

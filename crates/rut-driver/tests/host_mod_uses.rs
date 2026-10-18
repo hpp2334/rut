@@ -26,7 +26,7 @@ fn mod_source(path: &str, vis: rut_ast::ast::Vis, text: &str) -> rut_driver::Mod
 }
 
 /// The plan's target shape, hand-lowered: root + net + net/tls.
-fn myhost() -> rut_driver::Pkg {
+fn myhost() -> rut_driver::Mounted {
     let root = "pub mod net;\npub host fn legacy_ping() -> bool;\n";
     let mut children = BTreeMap::new();
     children.insert(
@@ -54,14 +54,14 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn compile(host: rut_driver::Pkg, src: &str) -> rut_driver::GraphOutput {
+fn compile(host: rut_driver::Mounted, src: &str) -> rut_driver::GraphOutput {
     let head = host.spec.clone();
     graph_of(
         rut_driver::RutRun::new()
             .pkg(host)
             .pkg(
                 // the app DECLARES its use (the host surface's spec)
-                rut_driver::Pkg::source("app", src)
+                rut_driver::Mounted::source("app", src)
                     .manifest(rut_driver::Manifest::lib("app", &[&head])),
             )
             .entrypoint("app")
@@ -201,10 +201,10 @@ fn a_qualified_host_call_runs_the_registered_body() {
     pkg.register::<_, (i64,), i64, _>("net::tls::handshake", |_vm: &mut Vm, c: i64| c * 2);
     let compiled = rut_driver::RutRun::new()
         .pkg(myhost())
-        .host_pkg(pkg.build())
+        .pkg(pkg.build())
         .pkg(
             // the app DECLARES its use (the myhost host surface)
-            rut_driver::Pkg::source(
+            rut_driver::Mounted::source(
                 "app",
                 "use myhost::net::{ connect };\nuse myhost::net::tls::handshake;\nuse myhost::{ legacy_ping };\n\nentry fn main() -> i64 {\n    let _ = legacy_ping();\n    return handshake(connect(\"abc\"));\n}\n",
             )
@@ -245,12 +245,14 @@ fn an_async_mod_row_binds_through_the_qualified_spelling() {
     )
     .expect("the futures pkg walks");
     let out = graph_of(
-        rut_driver::RutRun::new()
-            .pkgs(&futures)
+        futures
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(host)
             .pkg(
                 // the app DECLARES its uses (futures + the fixture surface)
-                rut_driver::Pkg::source(
+                rut_driver::Mounted::source(
                     "app",
                     "use futures::{ launch_future };\nuse fixture::net::{ probe };\n\nasync fn job() -> nil {\n    let n = await probe(\"k\");\n    let _ = n;\n}\n\nentry fn main() -> nil {\n    launch_future(job());\n}\n",
                 )

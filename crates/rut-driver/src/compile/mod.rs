@@ -21,7 +21,7 @@ use rut_ast::dump as ast_dump;
 use rut_parser::{parse, Mode};
 
 use crate::run::{Compiled, RutRun, RunError};
-pub use crate::session::Pkg;
+pub use crate::session::Mounted;
 use rut_core::binary::encode;
 
 pub struct CompileOutput {
@@ -49,7 +49,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
     }
     let compiled: Result<Compiled, RunError> = RutRun::new()
-        .pkg(Pkg::source(module_name, src))
+        .pkg(Mounted::source(module_name, src))
         .entrypoint(module_name)
         .compile();
     render(compiled, ast_dump, ast_json)

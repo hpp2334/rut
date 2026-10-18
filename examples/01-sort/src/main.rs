@@ -15,7 +15,7 @@ use std::task::{Context, Poll};
 /// this directory; the remote policy is the project-local cache. A
 /// cold start networks on its misses (the CDN, pinned by the
 /// manifest); a warm start is pure cache hits.
-fn load(base: &Path) -> Result<rut_driver::Loaded, rut_driver::RunError> {
+fn load(base: &Path) -> Result<rut_driver::Walk, rut_driver::RunError> {
     let remote = rut_native::HttpRemote::project_local(base);
     block_on(rut_native::load_path_session_with(base, &remote))
 }
@@ -41,9 +41,11 @@ fn main() {
     // auto-rides; no hand offers: the declared rows are the whole
     // world), verify, drive
     let loaded = load(Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
-        .host_pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");

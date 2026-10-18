@@ -22,7 +22,7 @@ const SERVER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/03
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -34,7 +34,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -60,10 +60,10 @@ fn ink_host_loads_from_disk_with_its_name_scope() {
     assert_eq!(loaded.root, "ink_host");
     let m = loaded.pkg("ink_host").expect("ink_host mounted");
     assert!(
-        matches!(m.body, rut_driver::PkgBody::Host { .. }),
+        matches!(m.body, rut_driver::MountedBody::Host { .. }),
         "a host pkg is a host body — no rut source"
     );
-    let rut_driver::PkgBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
+    let rut_driver::MountedBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
         *host_funcs,
         vec![
@@ -78,7 +78,7 @@ fn server_loads_from_disk() {
     let loaded = load_path_session(std::path::Path::new(SERVER_DIR)).expect("server loads");
     assert_eq!(loaded.root, "server");
     let m = loaded.pkg("server").expect("server mounted");
-    let rut_driver::PkgBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
+    let rut_driver::MountedBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
     assert_eq!(
         *host_funcs,
         vec![
@@ -92,11 +92,13 @@ fn server_loads_from_disk() {
 fn a_consumer_compiles_against_a_loaded_host_pkg() {
     let server = load_path_session(std::path::Path::new(SERVER_DIR)).unwrap();
     let compile_app = |src: &str| {
-        rut_driver::RutRun::new()
-            .pkgs(&server)
+        server
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(
                 // the app DECLARES its use (the server host surface)
-                rut_driver::Pkg::source("app", src)
+                rut_driver::Mounted::source("app", src)
                     .manifest(rut_driver::Manifest::lib("app", &["server"])),
             )
             .entrypoint("app")
@@ -175,7 +177,7 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
     assert_eq!(loaded.root, "s");
     assert!(matches!(
         loaded.pkg("s").unwrap().body,
-        rut_driver::PkgBody::Source { is_decl: true, .. }
+        rut_driver::MountedBody::Source { is_decl: true, .. }
     ));
 
     let _ = std::fs::remove_dir_all(&base);
@@ -199,17 +201,19 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
     assert_eq!(loaded.root, "s");
     let m = loaded.pkg("s").unwrap();
     assert!(
-        matches!(&m.body, rut_driver::PkgBody::Source { is_decl: true, .. }),
+        matches!(&m.body, rut_driver::MountedBody::Source { is_decl: true, .. }),
         "the dev state is a decl unit, not a host body: {:?}",
         m.body
     );
     // a consumer's use of it resolve-misses — the loud, correct answer
     // (the pkg resolves; the ITEM misses as the ordinary unknown name)
-    let out = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let out = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
             // the app DECLARES its use (the `s` surface)
-            rut_driver::Pkg::source("app", "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n")
+            rut_driver::Mounted::source("app", "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n")
                 .manifest(rut_driver::Manifest::lib("app", &["s"])),
         )
         .entrypoint("app")
@@ -404,8 +408,8 @@ fn host_pkg_context_partitions_per_pkg_and_expands_async() {
     .expect("ink_host surface")
     .named("ink_host");
     let engine_row = rut_driver::HostRow::root("probe", vec![TY_STR], TY_BOOL, true);
-    let mut engine = rut_driver::Pkg::host("engine", vec![engine_row.clone()]);
-    engine.body = rut_driver::PkgBody::Host {
+    let mut engine = rut_driver::Mounted::host("engine", vec![engine_row.clone()]);
+    engine.body = rut_driver::MountedBody::Host {
         host_funcs: vec![engine_row],
         consts: vec![],
         native_types: vec![],
@@ -480,14 +484,13 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
         ink_host,
         server,
         // the app DECLARES its uses (both host surfaces)
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "app",
             "use ink_host::{ create_logger };\nuse server::{ subscribe };\nentry fn main() -> opaque {\n    let log = create_logger(\"t\");\n    let bus: opaque = opaque(0);\n    subscribe(bus, \"join\", \"on_join\");\n    return log;\n}\n",
         )
         .manifest(rut_driver::Manifest::lib("app", &["ink_host", "server"])),
     ];
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world.clone(), root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();

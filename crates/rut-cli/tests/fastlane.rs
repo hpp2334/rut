@@ -76,12 +76,11 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
         .pkgs;
     // the root DECLARES its use (the fastlane host surface's names)
     world.push(
-        rut_driver::Pkg::source("app", SRC)
+        rut_driver::Mounted::source("app", SRC)
             .manifest(rut_driver::Manifest::lib("app", &["fastlane"])),
     );
     let expected = rut_driver::declared_host_fns(&world);
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();

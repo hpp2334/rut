@@ -46,7 +46,7 @@ mod error;
 mod module;
 
 pub(crate) use error::ResolveError;
-pub use module::{HostRow, Pkg, PkgBody};
+pub use module::{HostRow, Mounted, MountedBody};
 
 use std::collections::BTreeMap;
 
@@ -58,7 +58,7 @@ use crate::bundle::{parse_manifest, valid_mount_key, ManifestError};
 /// the offered pkgs and walks the graph.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Session {
-    modules: BTreeMap<String, Pkg>,
+    modules: BTreeMap<String, Mounted>,
     /// A mounted v7 compiled bundle's pack-time scope ledger (scope →
     /// the spec that owned it when the closure was packed, engine
     /// mounts included). A decoded program's foreign ids spell these
@@ -75,7 +75,7 @@ impl Session {
 
     /// Mount a pkg. Its `spec` is a mount key — a bare package name or
     /// a content identity (`name@fp16`, a `deps/` group's key).
-    pub(crate) fn mount(&mut self, pkg: Pkg) -> Result<(), ManifestError> {
+    pub(crate) fn mount(&mut self, pkg: Mounted) -> Result<(), ManifestError> {
         if !valid_mount_key(&pkg.spec) {
             return Err(ManifestError(format!(
                 "`{}` is not a package name — expected `[a-zA-Z0-9_]+` or `name@<16 hex>`",
@@ -88,7 +88,7 @@ impl Session {
 
     /// Programmatic single-pkg mount (tests/plugins) — no file. First
     /// mount wins is the CALLER's law; this table keeps the last.
-    pub(crate) fn register_module(&mut self, spec: &str, pkg: Pkg) -> Result<(), ManifestError> {
+    pub(crate) fn register_module(&mut self, spec: &str, pkg: Mounted) -> Result<(), ManifestError> {
         let mut pkg = pkg;
         pkg.spec = spec.to_string();
         self.mount(pkg)
@@ -102,7 +102,7 @@ impl Session {
     /// identity spelling that name binds it (the loaded-bundle lane —
     /// a consumer outside the archive names its groups bare); several
     /// are the loud ambiguity (coexistence never guesses).
-    pub(crate) fn resolve(&self, spec: &str) -> Result<&Pkg, ResolveError> {
+    pub(crate) fn resolve(&self, spec: &str) -> Result<&Mounted, ResolveError> {
         if !valid_mount_key(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
@@ -139,7 +139,7 @@ impl Session {
     /// take/replace access to a mounted pkg's body (a stripped
     /// bundle's sidecar restores names + positions in place, before the
     /// graph compiles). Same miss diagnostics as [`Session::resolve`].
-    pub(crate) fn resolve_mut(&mut self, spec: &str) -> Result<&mut Pkg, ResolveError> {
+    pub(crate) fn resolve_mut(&mut self, spec: &str) -> Result<&mut Mounted, ResolveError> {
         if !valid_mount_key(spec) {
             return Err(ResolveError::BadSpec { spec: spec.to_string() });
         }
@@ -164,7 +164,7 @@ impl Session {
         consumer: &str,
         head: &str,
         root: &str,
-    ) -> Result<&Pkg, ResolveError> {
+    ) -> Result<&Mounted, ResolveError> {
         let pkg = self.resolve(head)?;
         if head == "core" || self.declares(consumer, head, root) {
             Ok(pkg)
@@ -220,7 +220,7 @@ impl Session {
     /// own manifest's `deps` table, plus `dev-deps` when
     /// the consumer IS the program root. Read off `pkg.manifest` (the
     /// STRUCTURAL form every producer stamps — the walk's jsonc read, a
-    /// bundle's in-archive manifest, a host's `Pkg::manifest(..)` /
+    /// bundle's in-archive manifest, a host's `Mounted::manifest(..)` /
     /// `parse_manifest(..)`), never jsonc text: a stamped pkg is the
     /// one mechanism, and hosts build worlds where no file exists.
     fn declares(&self, consumer: &str, head: &str, root: &str) -> bool {
@@ -248,7 +248,7 @@ impl Session {
         use rut_core::types::{TY_I32, TY_NIL, TY_OPAQUE};
         let mut ctx = rut_vm::interp::HostPkgContext::default();
         for (spec, m) in &self.modules {
-            let PkgBody::Host { host_funcs, .. } = &m.body else {
+            let MountedBody::Host { host_funcs, .. } = &m.body else {
                 continue; // only host bodies declare host rows
             };
             // the registration scope is the pkg's BARE name (the same
@@ -309,13 +309,13 @@ impl Session {
     }
 
     /// The mounted pkgs, spec order.
-    pub(crate) fn modules(&self) -> impl Iterator<Item = (&String, &Pkg)> {
+    pub(crate) fn modules(&self) -> impl Iterator<Item = (&String, &Mounted)> {
         self.modules.iter()
     }
 
     /// Take every mounted pkg out — the walk collectors' yield
-    /// (`Loaded`): the session dies, the pkgs travel.
-    pub(crate) fn drain_pkgs(&mut self) -> Vec<Pkg> {
+    /// (`Walk`): the session dies, the pkgs travel.
+    pub(crate) fn drain_pkgs(&mut self) -> Vec<Mounted> {
         self.modules.values().cloned().collect()
     }
 
@@ -327,7 +327,7 @@ impl Session {
     pub(crate) fn load_manifest(&mut self, text: &str) -> Result<(), ManifestError> {
         let manifest = parse_manifest(text)?;
         if let Some(name) = &manifest.name {
-            self.mount(Pkg {
+            self.mount(Mounted {
                 spec: name.clone(),
                 entry: manifest.entry.clone(),
                 manifest: manifest.clone(),
@@ -376,8 +376,8 @@ mod tests {
     #[test]
     fn programmatic_mount_sets_spec() {
         let mut s = Session::new();
-        s.register_module("my_map", Pkg::source("my_map", "...")).unwrap();
+        s.register_module("my_map", Mounted::source("my_map", "...")).unwrap();
         let m = s.resolve("my_map").unwrap();
-        assert!(matches!(&m.body, PkgBody::Source { text, .. } if text == "..."));
+        assert!(matches!(&m.body, MountedBody::Source { text, .. } if text == "..."));
     }
 }

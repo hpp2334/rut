@@ -7,6 +7,10 @@ integrations/vscode-extension/bin
 integrations/vscode-extension/dist
 *.vsix
 
+# the project-local caches (url-dep bundles and the run cache live in
+# `.rut/cache/` beside a project root)
+.rut/
+
 # mdbook build output
 docs/book/
 docs/book-zh/

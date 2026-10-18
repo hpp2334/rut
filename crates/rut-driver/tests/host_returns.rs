@@ -23,7 +23,7 @@ pub host fn bytes_give() -> bytes;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -35,7 +35,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -60,7 +60,7 @@ fn the_answer_lanes_spell_in_the_decl_grammar() {
     // `-> ?T` renders through ty_text's `?` shape and maps to its fixed
     // boot `Opt` row; plain `bytes` keeps its own boot id
     let m = lower_decl_module(DECL, &BTreeMap::new(), "rets.d.rut").expect("the answer rows lower");
-    let rut_driver::PkgBody::Host { ref host_funcs, .. } = m.body else {
+    let rut_driver::MountedBody::Host { ref host_funcs, .. } = m.body else {
         panic!("a lowered decl is a host body");
     };
     assert_eq!(
@@ -171,7 +171,7 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
         .pkg(rets)
         // the consumer declares the host surface it names (the
         // nameability law — mounted-but-undeclared is D5)
-        .pkg(rut_driver::Pkg::source("app", src).manifest(rut_driver::Manifest::lib("app", &["rets"])))
+        .pkg(rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib("app", &["rets"])))
         .entrypoint("app")
         .compile()
         .unwrap();

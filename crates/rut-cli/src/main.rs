@@ -16,7 +16,7 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(name = "rut", version, subcommand_required = true, arg_required_else_help = true)]
 enum Cli {
-    /// compile and run a module directory or a packed `.rutbundle`
+    /// compile and run a package directory or a packed archive (`.rutbundle`)
     Run(run::RunArgs),
     /// scaffold a hello-world module directory (the std set as deps)
     New(new::NewArgs),
@@ -24,7 +24,7 @@ enum Cli {
     Install(install::InstallArgs),
     /// the source formatter — canonical house layout, rewrite in place
     Fmt(fmt::FmtArgs),
-    /// pack a module directory into a deterministic `.rutbundle`
+    /// pack a package directory into a deterministic `.rutbundle` archive
     Pack(pack::PackArgs),
     /// pre-warm the bundle cache for offline runs
     Fetch(fetch::FetchArgs),

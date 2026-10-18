@@ -133,7 +133,8 @@ rut_vm::pkg_fn!(pkg, "emit", (Opaque<EventBus>, &str, &str) -> (),
     },
 );
 // the built pkg rides the run chain:
-// RutRun::new().pkgs(&loaded).host_pkg(pkg.build())...compile()
+// loaded.pkgs.iter().fold(RutRun::new(), |r, p| r.pkg(p.clone()))
+//   .pkg(pkg.build())...compile()
 ```
 
 (The comment above this code in the source is worth reading too.) The

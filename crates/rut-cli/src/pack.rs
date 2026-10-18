@@ -6,9 +6,9 @@ use crate::cache;
 /// the `pack` arg surface.
 #[derive(clap::Args)]
 pub(crate) struct PackArgs {
-    /// the module directory to pack
+    /// the package directory to pack
     dir: String,
-    /// write the bundle here (default: beside the directory)
+    /// write the archive here (default: beside the directory)
     #[arg(short = 'o', value_name = "out.rutbundle")]
     out: Option<String>,
     /// strip private symbols into the sibling `.rutsym` sidecar
@@ -16,13 +16,14 @@ pub(crate) struct PackArgs {
     strip: bool,
 }
 
-/// `rut pack <dir> [-o out.rutbundle] [--strip]` — pack a module
-/// directory into a deterministic `.rutbundle`: a **v5 compiled** root
-/// for a lib pkg (linkable pkgs ride as `.rutc` binaries, splice-needed
-/// deps as source), a **v6 decl** root for a `type = "host"` pkg (the
+/// `rut pack <dir> [-o out.rutbundle] [--strip]` — pack a package
+/// directory into a deterministic `.rutbundle` **archive** (the sole
+/// publication unit): a **compiled** root for a lib pkg (the root and
+/// every linkable dep ride as `.rutc` objects, source-binding deps as
+/// source file sets), a **decl** root for a `type = "host"` pkg (the
 /// surface rides as source, single-package). `--strip` writes the
 /// sidecar symbol table at the sibling path `<out-without-ext>.rutsym`
-/// — the PRIVATE half, never an entry inside the bundle (refused on a
+/// — the PRIVATE half, never an entry inside the archive (refused on a
 /// host root: no programs, no sidecar).
 pub(crate) fn pack(args: &PackArgs) {
     let dir = args.dir.as_str();

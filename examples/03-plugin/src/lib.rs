@@ -70,9 +70,11 @@ impl Plugin {
         // Offering `calc` would DECLARE its host fns, and the
         // install-time contract (below) would rightly demand their
         // bodies.
-        let compiled = rut_driver::RutRun::new()
-            .pkgs(&loaded)
-            .host_pkg(install())
+        let compiled = loaded
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+            .pkg(install())
             .entrypoint(&loaded.root)
             .compile()
             .map_err(|e| Trap::new(TrapKind::Invalid, e.to_string()))?;

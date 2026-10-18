@@ -27,7 +27,7 @@ const LIGHT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonlight")
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -39,7 +39,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -61,14 +61,16 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn vm_at(dir: &str) -> Vm {
     let loaded = rut_native::load_dir(Path::new(dir)).expect("mount");
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         // json's writer rides the strbuild pkg — its `strbuild_host` rows
         // are in this closure's declared set, so the bodies install
         // through the same chain
-        .host_pkg(rut_std::nmap::pkg())
-        .host_pkg(rut_std::strbuild::pkg())
+        .pkg(rut_std::nmap::pkg())
+        .pkg(rut_std::strbuild::pkg())
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");

@@ -148,19 +148,24 @@ fn book_blocks_compile_and_run() {
             // the rows snapshot the installs answer to
             let ctx = rut_driver::host_pkg_ctx(&world);
 
-            let compiled = match rut_driver::RutRun::new()
-                .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
-                .pkg(
-                    rut_driver::Pkg::source("main", &body)
-                        .manifest(rut_driver::Manifest::lib("main", &heads)),
-                )
-                .entrypoint("main")
-                .compile()
-            {
-                Ok(c) => c,
-                Err(e) => {
-                    failures.push(format!("{rel}#{n}: {e}"));
-                    continue;
+            let compiled = {
+                let walk = rut_driver::Walk { pkgs: world, root: String::new() };
+                let chain = walk
+                    .pkgs
+                    .iter()
+                    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+                    .pkg(
+                        rut_driver::Mounted::source("main", &body)
+                            .manifest(rut_driver::Manifest::lib("main", &heads)),
+                    )
+                    .entrypoint("main")
+                    .compile();
+                match chain {
+                    Ok(c) => c,
+                    Err(e) => {
+                        failures.push(format!("{rel}#{n}: {e}"));
+                        continue;
+                    }
                 }
             };
             if !compiled.graph.diags.is_empty() {

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use rut_native::pack_dir;
 use rut_driver::{
-    PkgBody,
+    MountedBody,
 };
 
 mod common;
@@ -24,7 +24,7 @@ use common::{dep_dir, pkg_named};
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Pkg::source(spec, src)).entrypoint(spec).compile())
+    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -36,7 +36,7 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
             .pkg(
-                rut_driver::Pkg::source(spec, src)
+                rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
             )
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -130,9 +130,11 @@ fn mixed_world(tag: &str) -> PathBuf {
     root
 }
 
-fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
-    let g = rut_driver::RutRun::new()
-        .pkgs(loaded)
+fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -140,9 +142,11 @@ fn linked_binary(loaded: &rut_driver::Loaded) -> Vec<u8> {
     rut_core::binary::encode(&g.graph.program.expect("linked program"))
 }
 
-fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Loaded, entry: &str) -> R {
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R {
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(&loaded.root)
         .compile()
@@ -173,7 +177,7 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     let from_dir = run_entry::<i64>(dir_loaded, "go");
 
     let bytes = pack_dir(&root.join("app")).expect("pack");
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     assert_eq!(loaded.root, "app");
     assert_eq!(run_entry::<i64>(loaded.clone(), "go"), from_dir, "dir and bundle run identically");
 
@@ -181,15 +185,15 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     // declared-but-unused one a source group
     assert!(matches!(
         loaded.pkg("app").unwrap().body,
-        PkgBody::Compiled(_)
+        MountedBody::Compiled(_)
     ));
     assert!(matches!(
         pkg_named(&loaded, "util").body,
-        PkgBody::Compiled(_)
+        MountedBody::Compiled(_)
     ));
     assert!(matches!(
         pkg_named(&loaded, "boxy").body,
-        PkgBody::Source { .. }
+        MountedBody::Source { .. }
     ));
     let names: Vec<String> =
         rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
@@ -222,9 +226,9 @@ fn a_source_group_splices_into_a_consumer_session() {
     // session, no directory in sight
     let root = mixed_world("splice");
     let bytes = pack_dir(&root.join("app")).expect("pack");
-    let mut loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let mut loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     loaded.pkgs.push(
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "consumer",
             "use boxy::{ Holder };\nuse util::{ twice };\n\n\
              entry fn go2() -> i64 {\n\
@@ -238,8 +242,10 @@ fn a_source_group_splices_into_a_consumer_session() {
     );
     // the CONSUMER is the root here — a source unit over the bundle's
     // mounted groups, compiled and linked exactly like a directory world
-    let g = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let g = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint("consumer")
         .compile()
@@ -303,7 +309,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     // template rows; NO source rides beside it (the riding law is dead)
     assert!(!names.contains(&"mod.rut".to_string()), "{names:?}");
     let run = |b: &[u8]| {
-        let loaded = rut_driver::Pkg::from_bundle(b).expect("load");
+        let loaded = rut_driver::Mounted::from_bundle(b).expect("load");
         run_entry(loaded, "go")
     };
     let got: i64 = run(&bytes);
@@ -334,7 +340,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
          }\n",
     );
     let bytes = pack_dir(&app).expect("an iface-param root publishes compiled");
-    let loaded = rut_driver::Pkg::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let got: i32 = run_entry(loaded, "go");
     assert_eq!(got, 36);
     let _ = std::fs::remove_dir_all(&root);
@@ -366,7 +372,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
             (n, b)
         })
         .collect();
-    let err = rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&stale).unwrap())
+    let err = rut_driver::Mounted::from_bundle(&rut_driver::bundle::write_bundle(&stale).unwrap())
         .unwrap_err()
         .to_string();
     assert!(err.contains(&util_bin), "{err}");
@@ -383,7 +389,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
         .expect("the entry name rides the container");
     let data_at = at + needle.len() + 30; // local header: fixed 30 bytes + name
     corrupt[data_at] ^= 0x01;
-    let err = rut_driver::Pkg::from_bundle(&corrupt).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&corrupt).unwrap_err().to_string();
     assert!(err.contains("CRC"), "{err}");
 
     // a doctored scope ledger: the group's binary carries its own
@@ -408,7 +414,7 @@ fn stale_and_corrupt_group_binaries_are_refused() {
             (n, b)
         })
         .collect();
-    let err = rut_driver::Pkg::from_bundle(&rut_driver::bundle::write_bundle(&doctored).unwrap())
+    let err = rut_driver::Mounted::from_bundle(&rut_driver::bundle::write_bundle(&doctored).unwrap())
         .unwrap_err()
         .to_string();
     assert!(
@@ -477,7 +483,7 @@ fn staged_lane_produces_what_the_reference_lane_would() {
     let reference = rut_driver::RutRun::new()
         .pkg(dir_pkg)
         .pkg(
-            rut_driver::Pkg::source("app", POUCH_APP)
+            rut_driver::Mounted::source("app", POUCH_APP)
                 .manifest(rut_driver::Manifest::lib("app", &["pouch"])),
         )
         .entrypoint("app")
@@ -497,7 +503,7 @@ fn staged_lane_produces_what_the_reference_lane_would() {
     let recompiled = rut_driver::RutRun::new()
         .pkg(rut_native::tree_pkg("pouch").expect("walk rut/pouch"))
         .pkg(
-            rut_driver::Pkg::source("app", POUCH_APP)
+            rut_driver::Mounted::source("app", POUCH_APP)
                 .manifest(rut_driver::Manifest::lib("app", &["pouch"])),
         )
         .entrypoint("app")
@@ -515,16 +521,18 @@ fn staged_lane_produces_what_the_reference_lane_would() {
     // (b) the staged lane: pack the closure to an archive, walk +
     // mount it, compile the consumer against its surface
     let bytes = pack_dir(&pouch).expect("pack the closure");
-    let archive = rut_driver::Pkg::from_bundle(&bytes).expect("decode the archive");
+    let archive = rut_driver::Mounted::from_bundle(&bytes).expect("decode the archive");
     assert_eq!(archive.root, "pouch");
     assert!(matches!(
         archive.pkg("pouch").unwrap().body,
-        PkgBody::Compiled(_)
+        MountedBody::Compiled(_)
     ));
-    let staged = rut_driver::RutRun::new()
-        .pkgs(&archive)
+    let staged = archive
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
-            rut_driver::Pkg::source("app", POUCH_APP)
+            rut_driver::Mounted::source("app", POUCH_APP)
                 .manifest(rut_driver::Manifest::lib("app", &["pouch"])),
         )
         .entrypoint("app")

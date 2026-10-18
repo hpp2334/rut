@@ -17,7 +17,7 @@ use rut_core::ops::{Nat, Op};
 /// The case world: the toolchain libs a case declares by use (`ink`
 /// + `ink_host`, `pouch`) — walked from the tree as real packages —
 /// plus calc.
-fn case_world() -> Vec<rut_driver::Pkg> {
+fn case_world() -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
     for d in ["rut/ink", "rut/pouch"] {
         world.extend(
@@ -152,7 +152,7 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = with_logger_use(src);
     let mut chain = rut_driver::RutRun::new()
         .pkg(
-            rut_driver::Pkg::source(module, &combined)
+            rut_driver::Mounted::source(module, &combined)
                 .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
         );
     for d in ["rut/ink", "rut/pouch"] {
@@ -160,7 +160,7 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
         )
         .expect("mount case libs");
-        chain = chain.pkgs(&pkgs);
+        chain = pkgs.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
     }
     chain
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -1398,7 +1398,7 @@ fn pouch_vec_via_module_loader_runs() {
     // the load-time contract requires mount ↔ bindings to agree
     let mut world = case_world(); // ink (+ink_host), pouch, calc — from the tree
     world.push(
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "app_main",
             r#"
 use pouch::{ Vec };
@@ -1418,8 +1418,7 @@ entry fn main() -> nil {
         .manifest(rut_driver::Manifest::lib("app_main", &["pouch", "ink", "ink_host", "calc"])),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let out = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app_main")
         .compile()
         .expect("compile the walk");
@@ -1455,7 +1454,7 @@ fn std_collection_via_module_loader_runs() {
     // so this exercises the rut-source module loader end to end
     let mut world = case_world(); // pouch + ink (+ink_host), calc — from the tree
     world.push(
-        rut_driver::Pkg::source(
+        rut_driver::Mounted::source(
             "app_main",
             r#"
 use core::{ string_join };
@@ -1476,8 +1475,7 @@ entry fn main() -> nil {
         .manifest(rut_driver::Manifest::lib("app_main", &["pouch", "ink", "ink_host", "calc"])),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let out = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint("app_main")
         .compile()
         .expect("compile the walk");
@@ -2450,11 +2448,10 @@ fn dbg_digest() {
         );
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    let out = rut_driver::RutRun::new()
-        .pkgs(&rut_driver::Loaded { pkgs: world, root: String::new() })
+    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         // the root declares the heads it names (the nameability law —
         // mounted-but-undeclared is D5)
-        .pkg(rut_driver::Pkg::source("digests", &src).manifest(rut_driver::Manifest::lib(
+        .pkg(rut_driver::Mounted::source("digests", &src).manifest(rut_driver::Manifest::lib(
             "digests",
             &["pouch", "json", "calc"],
         )))

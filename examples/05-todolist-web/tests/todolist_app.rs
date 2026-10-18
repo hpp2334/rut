@@ -448,8 +448,10 @@ fn make_fixture() -> WebHost<FakeDom> {
         .expect("the fixture mounts");
     // no web surface, no nmap, no widgets (no crossings declared or
     // used is the fixture's point) — the bare walk, core riding auto
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
+    let compiled = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("the fixture compiles");

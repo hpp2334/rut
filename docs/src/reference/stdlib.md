@@ -162,7 +162,7 @@ the call form spells the construction.
 | `warn(msg)` | 2 |
 | `error(msg)` | 3 |
 
-Embedder side: `.host_pkg(rut_std::logger::pkg(|s| println!("{s}")))`
+Embedder side: `.pkg(rut_std::logger::pkg(|s| println!("{s}")))`
 on the run chain ([embedding](embedding.md)). Offering `ink` pulls
 `ink_host` along (`deps`).
 
@@ -404,7 +404,7 @@ consults the embedder's heap budget BEFORE growing (the geometric
 next-capacity is charged), so the wasm 4 MiB cap governs builder growth
 exactly as it governs engine allocations.
 
-Embedder side: `.host_pkg(rut_std::strbuild::pkg())` on the run chain.
+Embedder side: `.pkg(rut_std::strbuild::pkg())` on the run chain.
 Offering `strbuild` pulls `strbuild_host` along (`deps`); offering
 `json` pulls both (its writer rides the builder).
 

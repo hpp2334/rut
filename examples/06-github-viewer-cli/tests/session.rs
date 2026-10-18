@@ -99,7 +99,7 @@ impl Sinks {
 /// nmapset, json, the http pair) + rgh_host + the async pair — every
 /// one a walked pkg riding its real rut.jsonc manifest. Offer with
 /// `.pkg(..)`, first-pkg-wins.
-fn world_pkgs() -> Vec<rut_driver::Pkg> {
+fn world_pkgs() -> Vec<rut_driver::Mounted> {
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
     let mut pkgs = Vec::new();
     for d in ["pouch", "nmapset", "json", "http_host", "http"] {
@@ -124,10 +124,10 @@ fn world_pkgs() -> Vec<rut_driver::Pkg> {
 /// exactly the manifest's declared rows, so the same text declares for
 /// both mounts. The one head no row can name is absent here by
 /// construction: the brain uses no embedder-registered surface.
-fn brain(src: &str) -> rut_driver::Pkg {
+fn brain(src: &str) -> rut_driver::Mounted {
     let m = rut_driver::parse_manifest(include_str!("../rut.jsonc"))
         .expect("the rgh manifest is valid");
-    rut_driver::Pkg::source("rgh", src).manifest(m)
+    rut_driver::Mounted::source("rgh", src).manifest(m)
 }
 
 /// Compile `src` as the brain over the world: the walked pkgs (each
@@ -141,7 +141,7 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
         chain = chain.pkg(p);
     }
     for hp in extra_hosts {
-        chain = chain.host_pkg(hp);
+        chain = chain.pkg(hp);
     }
     let compiled = chain
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
