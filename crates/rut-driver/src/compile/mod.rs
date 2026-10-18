@@ -12,7 +12,7 @@ pub mod program;
 pub mod seeds;
 
 pub use dump::ir_dump_of;
-pub use program::{compile_program, compile_program_resolved, ProgramOutput};
+pub use program::{compile_program, compile_program_resolved, compile_program_pre, ProgramOutput};
 pub use seeds::{SeedGroup, Seeds};
 
 use rut_lexer::diag::Diag;

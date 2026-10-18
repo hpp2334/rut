@@ -181,6 +181,49 @@ pub fn compile_program_resolved(
     own_uses: &[(String, String, String)],
     dep_decls: &[(String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>)],
 ) -> ProgramOutput {
+    // the CLI's dump lane pays for the AST renders; the graph lane
+    // (every embedded compile) never reads them, and the text+json
+    // render of a real module dwarfs its parse — so the renders are
+    // opt-in and the parse can arrive pre-done (the graph walk already
+    // parsed the unit once for use validation)
+    compile_program_inner(src, None, mode, module_name, scope, uses, allow_uses, seeds, mods, own_uses, dep_decls, true)
+}
+
+/// As [`compile_program_resolved`], but the caller may hand a
+/// pre-parsed module (the graph walk's validation parse) and decline
+/// the AST dump renders (embedded lanes never read them).
+#[allow(clippy::too_many_arguments)]
+pub fn compile_program_pre(
+    ast: (rut_ast::ast::Ast, Vec<Diag>),
+    src: &str,
+    mode: Mode,
+    module_name: &str,
+    scope: rut_core::ScopeId,
+    uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
+    allow_uses: bool,
+    seeds: &Seeds<'_>,
+    mods: &rut_lir::check::ModInputs,
+    own_uses: &[(String, String, String)],
+    dep_decls: &[(String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>)],
+) -> ProgramOutput {
+    compile_program_inner(src, Some(ast), mode, module_name, scope, uses, allow_uses, seeds, mods, own_uses, dep_decls, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compile_program_inner(
+    src: &str,
+    pre: Option<(rut_ast::ast::Ast, Vec<Diag>)>,
+    mode: Mode,
+    module_name: &str,
+    scope: rut_core::ScopeId,
+    uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
+    allow_uses: bool,
+    seeds: &Seeds<'_>,
+    mods: &rut_lir::check::ModInputs,
+    own_uses: &[(String, String, String)],
+    dep_decls: &[(String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>)],
+    want_dumps: bool,
+) -> ProgramOutput {
     let fail = |diags: Vec<Diag>, ast_dump: String, ast_json: String| ProgramOutput {
         diags,
         ast_dump,
@@ -190,10 +233,18 @@ pub fn compile_program_resolved(
         requests: Vec::new(),
         template_failures: Vec::new(),
     };
-    let (mut ast, mut diags) = parse(src, mode);
-    let tree = dump::to_dump_tree(&ast);
-    let ast_dump = dump::render_text(&tree, src);
-    let ast_json = dump::render_json(&tree);
+    let (mut ast, mut diags) = match pre {
+        Some((a, d)) => (a, d),
+        None => parse(src, mode),
+    };
+    let (ast_dump, ast_json) = if want_dumps {
+        let tree = dump::to_dump_tree(&ast);
+        let t = dump::render_text(&tree, src);
+        let j = dump::render_json(&tree);
+        (t, j)
+    } else {
+        (String::new(), String::new())
+    };
     if !diags.is_empty() {
         return fail(diags, ast_dump, ast_json);
     }
@@ -1958,7 +2009,11 @@ pub fn compile_program_resolved(
     for f in funcs.iter_mut() {
         f.pos = f.spans.iter().map(|(_, lo)| line_col(*lo)).collect();
     }
-    let ir_dump = ir_dump_of(&funcs, &ctx.interner);
+    let ir_dump = if want_dumps {
+        ir_dump_of(&funcs, &ctx.interner)
+    } else {
+        String::new()
+    };
     // the program's interner moves out of the Ctx; the surface carries a
     // clone so it stays self-contained when it crosses to a using module
     // (the ids it carries stay valid: interning is append-only, so the
@@ -1966,14 +2021,13 @@ pub fn compile_program_resolved(
     let interner = std::mem::take(&mut ctx.interner);
     surface.names = interner.clone();
     // the instantiation ledger, canonical (sorted) order — the wire and
-    // the pack must be byte-deterministic for the same source
+    // the pack must be byte-deterministic for the same source. The sort
+    // keys are built ONCE per row (decorate-sort): the old comparator
+    // allocated three Strings per comparison, and a real module's
+    // ledger runs thousands of them.
     let name_of = |i: rut_core::IdentId| interner.name(i).to_string();
     let mut ledger_types = std::mem::take(&mut ctx.ledger_types);
-    ledger_types.sort_by(|a, b| {
-        let ka = (name_of(a.owner), name_of(a.decl), a.args.clone());
-        let kb = (name_of(b.owner), name_of(b.decl), b.args.clone());
-        ka.cmp(&kb)
-    });
+    ledger_types.sort_by_cached_key(|a| (name_of(a.owner), name_of(a.decl), a.args.clone()));
     let mut ledger_fns = std::mem::take(&mut ctx.ledger_fns);
     let kind_key = |f: &rut_core::binary::InstFn| -> (String, String, String, bool) {
         match &f.kind {
@@ -1988,11 +2042,7 @@ pub fn compile_program_resolved(
             }
         }
     };
-    ledger_fns.sort_by(|a, b| {
-        let ka = (name_of(a.owner), kind_key(a), a.fid);
-        let kb = (name_of(b.owner), kind_key(b), b.fid);
-        ka.cmp(&kb)
-    });
+    ledger_fns.sort_by_cached_key(|a| (name_of(a.owner), kind_key(a), a.fid));
     let requests = std::mem::take(&mut ctx.inst_requests);
     let program = Program {
         name: module_name.to_string(),

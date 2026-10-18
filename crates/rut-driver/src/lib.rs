@@ -24,7 +24,7 @@ pub use bundle::{parse_manifest, Manifest};
 /// the FS/archive lanes can name the mount core's parameter.
 pub use rut_parser::Mode;
 pub use compile::{
-    compile_module, compile_program, compile_program_resolved, ir_dump_of, CompileOutput,
+    compile_module, compile_program, compile_program_resolved, compile_program_pre, ir_dump_of, CompileOutput,
     ProgramOutput, SeedGroup, Seeds,
 };
 pub use decl::lower_decl_module;

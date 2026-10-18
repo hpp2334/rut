@@ -65,6 +65,10 @@ pub(super) struct GraphCompiler<'a> {
     /// deps' per-module decl rows (phase 3): the use validation's
     /// table, parsed once per spec and shared across consumers
     pub(super) dep_decls: HashMap<String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>>,
+    /// the same collection's LOUD half (mount/coherence problems), per
+    /// spec — rides the dep-rows cache so `ensure_source` and the use
+    /// validation share ONE parse of the pkg
+    pub(super) dep_problems: HashMap<String, Vec<String>>,
     /// the exported generics whose templates could not lower as
     /// instantiation-independent bodies — `(owner, decl, construct)`.
     /// FATAL at pack (the pinned stability law).
@@ -486,11 +490,14 @@ impl<'a> GraphCompiler<'a> {
         // path attached. Here the collection runs for its LOUD half: a
         // declared child with no mounted module, a mounted module
         // nothing declares, a child that fails to parse — each named,
-        // never guessed around.
+        // never guessed around. The rows AND problems ride the shared
+        // dep cache (`dep_mod_table`'s lane): a consumer's earlier use
+        // validation may already have paid the parse.
         if !module.mods.is_empty() {
-            let (_, problems) = crate::mods::collect_module_set(spec, module);
-            for p in problems {
-                self.diags.push(Diag::new(Span::new(0, 0), p));
+            if let Some(problems) = self.dep_mount_problems(spec) {
+                for p in problems {
+                    self.diags.push(Diag::new(Span::new(0, 0), p));
+                }
             }
         }
         // phase 3: the use statements validate against the DEPS' mounted
@@ -558,17 +565,20 @@ impl<'a> GraphCompiler<'a> {
             .filter_map(|h| self.dep_mod_table(h).cloned().map(|t| (h.clone(), t)))
             .collect();
 
-        let out = compile_program_resolved(
-            &combined,
-            if is_decl { Mode::Decl } else { Mode::Impl },
-            spec,
-            scope,
-            &bound,
-            true,
-            &Seeds::none(),
-            &layout,
-            &own_uses,
-            &dep_tables,
+        // the validation parse hands straight to the compile — one
+        // parse per unit, not one per pass over it
+        let out = crate::compile::compile_program_pre(
+                (ast, Vec::new()),
+                &combined,
+                if is_decl { Mode::Decl } else { Mode::Impl },
+                spec,
+                scope,
+                &bound,
+                true,
+                &Seeds::none(),
+                &layout,
+                &own_uses,
+                &dep_tables,
         );
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
@@ -791,7 +801,8 @@ impl<'a> GraphCompiler<'a> {
         let layout = src.layout.clone();
         let own_uses = src.own_uses.clone();
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
-        let out = compile_program_resolved(
+        let out = crate::compile::compile_program_pre(
+            parse(&text, if is_decl { Mode::Decl } else { Mode::Impl }),
             &text,
             if is_decl { Mode::Decl } else { Mode::Impl },
             owner,
@@ -1837,12 +1848,32 @@ impl GraphCompiler<'_> {
     ) -> Option<&std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>> {
         if !self.dep_decls.contains_key(spec) {
             let pkg = self.session.resolve(spec).ok()?;
-            let (set, _) = crate::mods::collect_module_set(spec, pkg);
+            let (set, problems) = crate::mods::collect_module_set(spec, pkg);
             let table: std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>> =
                 set.units.into_iter().map(|u| (u.path, u.decls)).collect();
+            self.dep_problems.insert(spec.to_string(), problems);
             self.dep_decls.insert(spec.to_string(), table);
         }
         self.dep_decls.get(spec)
+    }
+
+    /// The dep collection's loud half for `spec` — the same single
+    /// parse `dep_mod_table` pays for (the table rides the same cache),
+    /// so an ensured unit and its consumers never parse the pkg twice
+    /// for the same rows.
+    fn dep_mount_problems(&mut self, spec: &str) -> Option<Vec<String>> {
+        if !self.dep_decls.contains_key(spec) {
+            // fill both halves in one collection (the quiet-table path
+            // re-derives nothing)
+            let pkg = self.session.resolve(spec).ok()?;
+            let (set, problems) = crate::mods::collect_module_set(spec, pkg);
+            let table: std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>> =
+                set.units.into_iter().map(|u| (u.path, u.decls)).collect();
+            self.dep_problems.insert(spec.to_string(), problems.clone());
+            self.dep_decls.insert(spec.to_string(), table);
+            return Some(problems);
+        }
+        self.dep_problems.get(spec).cloned()
     }
 
     /// Does the dep's decl text ride the pkg (a source body or a host

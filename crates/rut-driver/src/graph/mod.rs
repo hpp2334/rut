@@ -91,6 +91,7 @@ pub(crate) fn compile_units(session: &Session, root_spec: &str) -> Units {
         seeded_keys: HashSet::new(),
         fresh_owners: HashSet::new(),
         dep_decls: HashMap::new(),
+        dep_problems: HashMap::new(),
         root: root_spec.to_string(),
         template_failures: Vec::new(),
         staged_scopes: HashMap::new(),
