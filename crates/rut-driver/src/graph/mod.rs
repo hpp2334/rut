@@ -15,9 +15,17 @@
 //!
 //! Programs are pushed in post-order, so the link order registers every
 //! scope before a dependent references it.
+//!
+//! The post-compile chain is three stages: **instantiate**
+//! ([`instantiate`] — the consumer-side codegen: template
+//! monomorphization, ledger lookups, the repr refolds), **link**
+//! ([`rut_core::link`] — scope resolution, relocation, merge;
+//! arithmetic only), and **verify** (the load gate's final pass,
+//! `rut_vm::verify`, after link).
 
 
 mod compiler;
+mod instantiate;
 mod seeds;
 
 pub(crate) use compiler::{dep_use_heads, mod_inputs_of};
@@ -97,6 +105,9 @@ pub(crate) fn compile_units(session: &Session, root_spec: &str) -> Units {
         staged_scopes: HashMap::new(),
     };
     let ok = c.ensure(root_spec).is_some();
+    // instantiate: resolve every consumer request against its owner —
+    // template monomorphization, ledger lookups, repr refolds — before
+    // the programs reach the link merge
     c.resolve_requests();
     let template_failures = std::mem::take(&mut c.template_failures);
     let (diags, programs, linked) = c.finish();

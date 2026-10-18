@@ -28,7 +28,12 @@
 //!    resolves AND is declared by its consumer (the D5 nameability
 //!    law: mounted-but-undeclared refuses, unmounted keeps NoModule);
 //!    a miss is [`RunError`], carrying the resolver's own diagnostic;
-//! 5. parse → check → LIR → link. Shape/closure failures are
+//! 5. parse → check → LIR → instantiate → link. The graph walk
+//!    instantiates every consumer request against its owner (template
+//!    monomorphization, ledger lookups, repr refolds), then the merge
+//!    links — scope resolution, relocation, arithmetic only. Verify is
+//!    the load gate: the final pass AFTER link (`rut_vm::verify`), run
+//!    by the embedder's load path. Shape/closure failures are
 //!    `Err(RunError)`; compile diagnostics ride INSIDE
 //!    [`Compiled::graph`] exactly as they always did.
 
@@ -396,7 +401,8 @@ impl RutRun {
                 }
             }
         }
-        // 5. parse → check → LIR → link
+        // 5. parse → check → LIR → instantiate → link (verify is the
+        //    load gate's final pass AFTER link)
         let graph = compile_graph(&session, &root);
         Ok(Compiled { graph, hosts })
     }

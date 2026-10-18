@@ -22,6 +22,15 @@
 //!
 //! This pass is pure data — nothing runs — and is the compile/link half;
 //! cyclic uses stay the loader's concern.
+//!
+//! The stage split: this module is the mechanical `link` half — scope
+//! resolution (`rebase`), relocation and merge (arithmetic only, no type
+//! knowledge, no codegen). The semantic work — template
+//! monomorphization, the instantiation-ledger lookups, the
+//! repr-dependent refolds — is the `instantiate` stage's (the driver's
+//! consumer-side codegen, `rut-driver`'s graph lane), and the final
+//! sanity pass after link is the `verify` stage (the load gate,
+//! `rut-vm`'s `verify`).
 
 use crate::binary::{ConstVal, FuncCode, InstFn, InstFnKind, InstTy, Program, IfaceDesc, IfaceMethod};
 use crate::ops::Op;
