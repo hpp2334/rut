@@ -6,9 +6,10 @@
 //! still refreshes. A corrupt entry self-heals: the hit falls through
 //! to the miss and rewrites it.
 
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
 
 fn scratch(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("rut-cli-runcache-{tag}-{}", std::process::id()));
@@ -141,7 +142,8 @@ fn no_cache_forces_the_miss_but_refreshes_the_entry() {
 }
 
 #[test]
-fn a_dir_with_a_path_dep_caches_one_closed_entry() {    let root = scratch("dep");
+fn a_dir_with_a_path_dep_caches_one_closed_entry() {
+    let root = scratch("dep");
     let hello = root.join("hello");
     write(
         &hello,
@@ -180,4 +182,118 @@ fn the_run_help_names_the_cache_law_and_the_debug_door() {
     assert!(text.contains("cache"), "{text}");
     // glossary vocabulary: a packed archive, not house words
     assert!(text.contains("archive") || text.contains(".rutbundle"), "{text}");
+}
+
+// ── the url-dep closure: the key rides the RESOLVED bytes ─────────────
+//
+// A url dep's cache entry is part of the run key, so the entry written
+// after a run must key the POST-fetch state — a key hashed while a url
+// row is still `<uncached>` is dead by construction (the fetch lands
+// during the run and moves the key), and none is ever written beside
+// the resolved one.
+
+/// One-shot HTTP server on 127.0.0.1:0 serving ONE fixed payload at
+/// any path (the url_fetch harness, trimmed to the serving half). The
+/// listener rides the detached accept loop — it lives as long as the
+/// test process.
+fn serve(payload: Vec<u8>) -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind localhost");
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                payload.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&payload);
+            let _ = stream.flush();
+        }
+    });
+    port
+}
+
+#[test]
+fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
+    let util_root = scratch("url-leaf");
+    let util = util_root.join("util");
+    write(
+        &util,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 12, "name": "util"}"#,
+    );
+    write(&util, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    let bytes = rut_native::pack_dir(&util).expect("pack util");
+    let port = serve(bytes.clone());
+    let url = format!("http://127.0.0.1:{port}/util.rutbundle");
+    let pin = rut_driver::sha256_hex(&bytes);
+
+    let root = scratch("url-dep");
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &format!(
+            r#"{{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {{"util": {{"url": "{url}"}}}}}}"#
+        ),
+    );
+    // the pin ledger: the manifest row is unpinned — the lock pins it
+    write(
+        &app,
+        "rut.lock",
+        &rut_driver::render_lock(&rut_driver::LockFile::from_rows(vec![rut_driver::LockRow {
+            pkg: "util".into(),
+            url: url.clone(),
+            sha256: pin.into(),
+        }])),
+    );
+    write(
+        &app,
+        "mod.rut",
+        "use util::{twice};\nentry fn main() {\n    let x = twice(21);\n    return;\n}\n",
+    );
+
+    // run 1 (cold): the fetch lands mid-run — and the cache holds
+    // exactly the url entry + ONE run-cache entry keyed on the resolved
+    // bytes. No dead `<uncached>` entry beside them.
+    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "first run: {err}");
+    let url_entry = app
+        .join(".rut")
+        .join("cache")
+        .join(format!("{}.rutbundle", rut_driver::sha256_hex(url.as_bytes())));
+    assert!(url_entry.is_file(), "the url dep's cache entry lands");
+    let run_entries: Vec<PathBuf> = cache_entries(&app)
+        .into_iter()
+        .filter(|e| *e != url_entry)
+        .collect();
+    assert_eq!(
+        run_entries.len(),
+        1,
+        "one run-cache entry, keyed on the resolved bytes — no dead pre-fetch entry"
+    );
+
+    // run 2: the same closure keys the same resolved bytes — the hit
+    // mounts the cached archive and neither entry is rewritten (a miss
+    // would rewrite through the pack lane)
+    let stamp = std::fs::metadata(&run_entries[0]).unwrap().modified().unwrap();
+    let url_stamp = std::fs::metadata(&url_entry).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "second run: {err}");
+    assert_eq!(
+        std::fs::metadata(&run_entries[0]).unwrap().modified().unwrap(),
+        stamp,
+        "a hit never rewrites the run-cache entry"
+    );
+    assert_eq!(
+        std::fs::metadata(&url_entry).unwrap().modified().unwrap(),
+        url_stamp,
+        "a hit never rewrites the url entry"
+    );
+    let _ = std::fs::remove_dir_all(&util_root);
+    let _ = std::fs::remove_dir_all(&root);
 }

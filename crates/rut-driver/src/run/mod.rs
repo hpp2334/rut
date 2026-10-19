@@ -111,9 +111,12 @@ impl<'a> From<rut_vm::HostPkg> for Offer<'a> {
 }
 
 // the legacy bridge: a walked/mounted pkg offers as pure data (the
-// deprecated variant — this impl is the ONE construction site)
-#[allow(deprecated)]
+// deprecated variant — this impl is the ONE construction site). No
+// impl-level allow here: the construction names a deprecated variant,
+// so the narrowest possible allow rides the conversion itself, and
+// anything else added to this impl warns.
 impl<'a> From<Mounted> for Offer<'a> {
+    #[allow(deprecated)] // the bridge's own construction site — external `.pkg(mounted)` offers ride here
     fn from(pkg: Mounted) -> Offer<'a> {
         Offer::Mounted(pkg)
     }

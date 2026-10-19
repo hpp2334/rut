@@ -55,14 +55,15 @@ pub(crate) fn run(args: &RunArgs) {
     // a package directory: cache-first. A hit mounts the cached
     // archive exactly like a direct `.rutbundle`; a miss is the
     // whole-program compile — the deterministic reference — whose
-    // archive then emits into the cache.
+    // archive then emits into the cache. `None` here covers the
+    // uncachable shapes too: an unkeyable closure (no manifest — the
+    // walk diagnoses) and a `<uncached>` key (never written — cache.rs)
     let cache_entry = if args.no_cache {
         None
     } else {
         match cache::run_cache_path(p) {
-            Ok(cached) if cached.is_file() => Some(cached),
-            Ok(_) => None,
-            Err(_) => None, // unkeyable closure (no manifest) — the walk diagnoses
+            Ok(Some(cached)) if cached.is_file() => Some(cached),
+            _ => None,
         }
     };
     if let Some(cached) = cache_entry {
@@ -72,7 +73,12 @@ pub(crate) fn run(args: &RunArgs) {
                 .map(|a| (b, a))
         }) {
             Ok((_, archive)) => {
-                run_archive_bytes(archive, entry, fuel, &cached.display().to_string());
+                let label = cached.display().to_string();
+                // defense-in-depth: a host archive never lands in the
+                // cache, but the hit lane holds the decoded handle — it
+                // refuses exactly like the direct `.rutbundle` lane
+                door::refuse_host_archive(&archive, &label);
+                run_archive_bytes(archive, entry, fuel, &label);
                 return;
             }
             Err(_) => {
@@ -111,7 +117,10 @@ pub(crate) fn run(args: &RunArgs) {
         &remote,
     )) {
         Ok((bytes, _)) => {
-            if let Ok(cache_path) = cache::run_cache_path(p) {
+            // `None` = the closure cannot be cached honestly (unkeyable,
+            // or a `<uncached>` url key — dead by construction); the
+            // entry is skipped rather than written where no run can hit it
+            if let Ok(Some(cache_path)) = cache::run_cache_path(p) {
                 cache::store_run_cache(&cache_path, &bytes);
             }
         }

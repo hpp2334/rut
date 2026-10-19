@@ -166,11 +166,11 @@ fn rows_root_text(pkg: &crate::session::Mounted) -> String {
 /// serialized symbol table. Deterministic end to end: same input dir
 /// ⇒ byte-identical bundle ⇒ byte-identical symtab.
 pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
-    let _name = w
-        .manifest
-        .name
-        .clone()
-        .ok_or_else(|| PackError::law("the manifest has no `name`".to_string()))?;
+    // the name gate: the entries spell the manifest's name, so a
+    // nameless manifest refuses here (the value itself rides the walk)
+    if w.manifest.name.is_none() {
+        return Err(PackError::law("the manifest has no `name`".to_string()));
+    }
     let root = w.loaded.root.clone();
     // the closure's session: the walked pkgs + the prelude (the ONLY
     // engine mount — `calc` and the rest are the program's own closure)

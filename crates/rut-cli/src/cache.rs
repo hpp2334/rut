@@ -108,7 +108,10 @@ fn run_cache_entry(dir: &std::path::Path, key: &str) -> PathBuf {
 /// Framing: every field rides length-prefixed into one buffer, hashed
 /// once through the driver's `sha256_hex` (public exactly so a call
 /// site keys its cache without a sha2 dependency of its own).
-pub(crate) fn run_cache_key(dir: &std::path::Path) -> Result<String, String> {
+fn run_cache_key(
+    dir: &std::path::Path,
+    resolved: &mut bool,
+) -> Result<String, String> {
     let mut buf: Vec<u8> = Vec::new();
     // the toolchain version: the compiler's behavior is part of the key
     field(&mut buf, b"rut-run-cache-v1");
@@ -122,7 +125,7 @@ pub(crate) fn run_cache_key(dir: &std::path::Path) -> Result<String, String> {
         None => dir.join(".rut").join("cache"),
     };
     let mut seen = std::collections::BTreeSet::new();
-    hash_closure(dir, &cache_root, &mut buf, &mut seen)?;
+    hash_closure(dir, &cache_root, &mut buf, &mut seen, resolved)?;
     Ok(rut_driver::sha256_hex(&buf))
 }
 
@@ -134,11 +137,15 @@ fn field(buf: &mut Vec<u8>, bytes: &[u8]) {
 
 /// Walk one package directory into the key: manifest, lock, the dir's
 /// files, then the path deps' directories, depth-first, cycle-guarded.
+/// A url dep whose resolved bytes are not cached yet clears `resolved`
+/// — the key is honest (it cannot pretend to know the bytes) but no
+/// entry may ride it (see `run_cache_path`).
 fn hash_closure(
     dir: &std::path::Path,
     cache_root: &std::path::Path,
     buf: &mut Vec<u8>,
     seen: &mut std::collections::BTreeSet<PathBuf>,
+    resolved: &mut bool,
 ) -> Result<(), String> {
     let canonical = dir
         .canonicalize()
@@ -191,7 +198,7 @@ fn hash_closure(
             let dep_dir = canonical.join(rel);
             field(buf, b"dep");
             field(buf, name.as_bytes());
-            hash_closure(&dep_dir, cache_root, buf, seen)?;
+            hash_closure(&dep_dir, cache_root, buf, seen, resolved)?;
         }
         if let Some(url) = dep.get("url") {
             field(buf, b"url");
@@ -206,7 +213,10 @@ fn hash_closure(
             ));
             match std::fs::read(&entry) {
                 Ok(bytes) => field(buf, &bytes),
-                Err(_) => field(buf, b"<uncached>"),
+                Err(_) => {
+                    *resolved = false;
+                    field(buf, b"<uncached>");
+                }
             }
         }
     }
@@ -237,14 +247,24 @@ fn collect_files(
     Ok(())
 }
 
-/// The cache-first run lane for a directory: the key, the entry path,
-/// and (on a miss that just ran) the fresh archive to write. The read
-/// is the caller's (`Some` bytes = hit); the write is best-effort and
-/// atomic — a cache failure never fails a run, it only loses the
-/// optimization.
-pub(crate) fn run_cache_path(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
-    let key = run_cache_key(dir)?;
-    Ok(run_cache_entry(dir, &key))
+/// The cache-first run lane for a directory: the entry path for this
+/// closure's key — `Ok(None)` when the closure cannot be cached
+/// honestly. Two shapes refuse: no manifest (unkeyable — the walk
+/// diagnoses with its own message) and a url dep whose resolved bytes
+/// are not in the cache yet — a `<uncached>` key is dead by
+/// construction (the fetch lands during the run and moves the key), so
+/// no entry is ever written under one. Reads tolerate the absence: the
+/// hit lane mounts only a fully-keyed entry, and the temp+rename write
+/// means a reader never sees a partial one.
+pub(crate) fn run_cache_path(
+    dir: &std::path::Path,
+) -> Result<Option<std::path::PathBuf>, String> {
+    let mut resolved = true;
+    let key = run_cache_key(dir, &mut resolved)?;
+    if !resolved {
+        return Ok(None);
+    }
+    Ok(Some(run_cache_entry(dir, &key)))
 }
 
 /// Write a fresh cache entry (temp file + rename, best-effort).
