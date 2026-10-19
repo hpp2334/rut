@@ -1031,3 +1031,314 @@ fn staged_and_reference_lanes_agree_across_the_substitution_matrix() {
         );
     }
 }
+
+// ---- the interface-dispatch matrix (the T2 gates) ----
+//
+// rut mints one interface row per exact type-argument tuple
+// (`mk_iface_inst`), so a generic surface's interface operations ride
+// the PLACEHOLDER row (`Readable<#T>`), while the consumer's fills and
+// dispatches speak the CONCRETE row (`Readable<i32>`). The materializer
+// must re-target the template's `CallI` slots and `IsIface` rows
+// (T2a — i04/i05 below trapped at the placeholder row's slot before
+// the repair) and lay the (payload × iface) fills a fresh compile's
+// check phase would demand at its widens — no check phase runs over a
+// materialization, and interface widening emits NO op (`widen_to_slot`
+// is a no-op: the cell handle flows, dispatch reads the cell's own
+// type), so the body's spoken types are the pairing's only witness
+// (T2b — i04 trapped at a CORRECT slot on an unfilled row before the
+// repair). i01/i02/i03 are the controls: app-side boxing with a
+// visible surface, and the pack-time devirtualization of a
+// box-then-dispatch on a freshly-built value (no CallI rides the
+// template at all).
+
+/// The interface family's shared preamble: a generic interface, the
+/// generic class that satisfies it structurally, and a non-generic
+/// dispatch sink (its `CallI` names the CONCRETE row — the control's
+/// proof that pack-compiled dispatch is slot-correct as packed).
+const IFACE_LIB_PREAMBLE: &str = r#"
+pub interface Readable<T> {
+  fn get(self) -> T;
+  fn tag(self) -> i64;
+}
+
+pub class Holder<T> {
+  v: T;
+}
+
+impl<T> Holder<T> {
+  [constructor] pub fn of(v: T) -> Self {
+    return Self { v: v };
+  }
+  pub fn get(self) -> T {
+    return self.v;
+  }
+  pub fn tag(self) -> i64 {
+    return 7;
+  }
+}
+
+pub fn drive(r: Readable<i32>) -> i32 {
+  return r.get() + 1000;
+}
+"#;
+
+const IFACE_MATRIX: &[MatrixCell] = &[
+    // i01 — the control: the app boxes at a call arg (a VISIBLE
+    // surface — the app's own check demands the fill), the dispatch
+    // rides the DECODED non-generic kit body
+    MatrixCell {
+        tag: "i01-appbox-kitdispatch",
+        lib_tail: "",
+        app: r#"
+use lib::{ Holder, drive };
+
+entry fn main() -> i32 {
+    return drive(Holder<i32>::of(3));
+}
+"#,
+        expect: 1003,
+    },
+    // i02 — the control: boxing and dispatch both in the app body
+    MatrixCell {
+        tag: "i02-appbox-appdispatch",
+        lib_tail: "",
+        app: r#"
+use lib::{ Holder, Readable };
+
+entry fn main() -> i32 {
+    let r: Readable<i32> = Holder<i32>::of(4);
+    return r.get() + 100;
+}
+"#,
+        expect: 104,
+    },
+    // i03 — the control: box + dispatch inside the template — the
+    // pack-time check devirtualizes the freshly-boxed value's call
+    // into a direct call, so no CallI rides the materialized body
+    MatrixCell {
+        tag: "i03-kitbox-devirt",
+        lib_tail: r#"
+pub fn use_it<T>(v: T) -> i64 {
+    let r: Readable<T> = Holder<T>::of(v);
+    return r.tag();
+}
+"#,
+        app: r#"
+use lib::{ use_it };
+
+entry fn main() -> i32 {
+    return use_it<i32>(3) as i32;
+}
+"#,
+        expect: 7,
+    },
+    // i04 — the T2b gate: the boxing rides the MATERIALIZED body (the
+    // kit generic returns the interface; the app only annotates), so
+    // the (Holder<i32> × Readable<i32>) fill is demanded by no check
+    // phase — the materialization itself must lay it. Trapped at a
+    // CORRECT slot on an unfilled row before the repair.
+    MatrixCell {
+        tag: "i04-kitgen-boxfill",
+        lib_tail: r#"
+pub fn make<T>(v: T) -> Readable<T> {
+    return Holder<T>::of(v);
+}
+"#,
+        app: r#"
+use lib::{ make, Readable };
+
+entry fn main() -> i32 {
+    let r: ?Readable<i32> = make<i32>(5);
+    if (r == nil) {
+        return -1;
+    }
+    return r.get() + 100;
+}
+"#,
+        expect: 105,
+    },
+    // i05 — the T2a gate: the dispatch rides the MATERIALIZED body (a
+    // generic interface PARAM — unprovable payload, a true CallI),
+    // baked against the placeholder row at pack. Trapped at the
+    // placeholder row's slot before the repair.
+    MatrixCell {
+        tag: "i05-kitdispatch-on-appbox",
+        lib_tail: r#"
+pub fn consume<T>(r: Readable<T>) -> T {
+    return r.get();
+}
+"#,
+        app: r#"
+use lib::{ Holder, consume };
+
+entry fn main() -> i32 {
+    return consume<i32>(Holder<i32>::of(9));
+}
+"#,
+        expect: 9,
+    },
+    // i06 — two type arguments: the row re-spelling must substitute
+    // every argument slot of the name (`Pair<i32, i64>`), not just the
+    // first
+    MatrixCell {
+        tag: "i06-two-arg-row",
+        lib_tail: r#"
+pub interface Pair<A, B> {
+  fn first(self) -> A;
+  fn second(self) -> B;
+}
+
+pub class PairBox<A, B> {
+  a: A;
+  b: B;
+}
+
+impl<A, B> PairBox<A, B> {
+  [constructor] pub fn of(a: A, b: B) -> Self {
+    return Self { a: a, b: b };
+  }
+  pub fn first(self) -> A {
+    return self.a;
+  }
+  pub fn second(self) -> B {
+    return self.b;
+  }
+}
+
+pub fn pick2<T, U>(p: Pair<T, U>) -> U {
+    return p.second();
+}
+"#,
+        app: r#"
+use lib::{ PairBox, pick2 };
+
+entry fn main() -> i32 {
+    let b: PairBox<i32, i64> = PairBox<i32, i64>::of(3, 9);
+    return pick2<i32, i64>(b) as i32;
+}
+"#,
+        expect: 9,
+    },
+];
+
+/// The interface-dispatch matrix, as a gate: every cell compiles
+/// through BOTH lanes (the reference whole-program lane and the staged
+/// pack → bundle → consume lane) and the lanes agree on the run
+/// result — the same L-eq law as the substitution matrix, armed for
+/// the shape that matrix never covered (an interface dispatch touching
+/// a consumer-instantiated generic).
+#[test]
+fn staged_and_reference_lanes_agree_across_the_interface_dispatch_matrix() {
+    for cell in IFACE_MATRIX {
+        let lib_text = format!("{IFACE_LIB_PREAMBLE}\n{}", cell.lib_tail);
+        // (a) the reference lane: the closure as sources, one graph
+        let reference = rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source("lib", &lib_text))
+            .pkg(
+                rut_driver::Mounted::source("app", cell.app)
+                    .manifest(rut_driver::Manifest::lib("app", &["lib"])),
+            )
+            .entrypoint("app")
+            .compile()
+            .unwrap_or_else(|e| panic!("{}: reference compile: {e:?}", cell.tag));
+        assert!(
+            reference.graph.diags.is_empty(),
+            "{}: reference diags: {:?}",
+            cell.tag,
+            reference.graph.diags
+        );
+        let from_dir = run_compiled::<i32>(reference, "main");
+        assert_eq!(from_dir, cell.expect, "{}: the reference lane's own answer", cell.tag);
+
+        // (b) the staged lane: pack the owner, mount the archive,
+        // serve the consumer's instantiation from the templates
+        let dir = scratch(cell.tag);
+        write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
+        write(&dir, "mod.rut", &lib_text);
+        let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("{}: pack: {e:?}", cell.tag));
+        let _ = std::fs::remove_dir_all(&dir);
+        let archive = rut_driver::Mounted::from_bundle(&bytes)
+            .unwrap_or_else(|e| panic!("{}: load: {e:?}", cell.tag));
+        let staged = archive
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+            .pkg(
+                rut_driver::Mounted::source("app", cell.app)
+                    .manifest(rut_driver::Manifest::lib("app", &["lib"])),
+            )
+            .entrypoint("app")
+            .compile()
+            .unwrap_or_else(|e| panic!("{}: staged compile: {e:?}", cell.tag));
+        assert!(
+            staged.graph.diags.is_empty(),
+            "{}: staged diags: {:?}",
+            cell.tag,
+            staged.graph.diags
+        );
+        assert_eq!(
+            run_compiled::<i32>(staged, "main"),
+            from_dir,
+            "{}: staged == reference (the L-eq law)",
+            cell.tag
+        );
+    }
+}
+
+/// The interface-row find-or-mint is deterministic: minting order is
+/// first-touch through the request-driven materialization cascade, so
+/// the same (bundle, app) pair links to byte-identical merged binaries
+/// across independent sessions — the lane's reproducibility law, with
+/// the T2 shapes in play (minted rows, re-targeted slots, laid fills).
+#[test]
+fn staged_iface_materialization_is_deterministic() {
+    let lib_text = format!(
+        "{IFACE_LIB_PREAMBLE}\n{}",
+        r#"
+pub fn make<T>(v: T) -> Readable<T> {
+    return Holder<T>::of(v);
+}
+
+pub fn consume<T>(r: Readable<T>) -> T {
+    return r.get();
+}
+"#
+    );
+    let app = r#"
+use lib::{ Holder, make, consume, Readable };
+
+entry fn main() -> i32 {
+    let r: ?Readable<i32> = make<i32>(5);
+    if (r == nil) {
+        return -1;
+    }
+    return consume<i32>(Holder<i32>::of(r.get()));
+}
+"#;
+    let dir = scratch("iface-det");
+    write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
+    write(&dir, "mod.rut", &lib_text);
+    let bytes = pack_dir(&dir).expect("pack");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let mut encodings: Vec<Vec<u8>> = Vec::new();
+    for _ in 0..2 {
+        let archive = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+        let staged = archive
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+            .pkg(
+                rut_driver::Mounted::source("app", app)
+                    .manifest(rut_driver::Manifest::lib("app", &["lib"])),
+            )
+            .entrypoint("app")
+            .compile()
+            .expect("staged compile");
+        assert!(staged.graph.diags.is_empty(), "{:?}", staged.graph.diags);
+        encodings.push(rut_core::binary::encode(
+            &staged.graph.program.clone().expect("linked program"),
+        ));
+    }
+    assert_eq!(encodings[0], encodings[1], "two independent staged sessions link byte-identically");
+}

@@ -861,7 +861,7 @@ fn materialize_body(
         }
         _ => None,
     });
-    let (mut body, minted) = {
+    let (mut body, minted, iface_fills) = {
         let ledger_rows = own.inst_fns.clone();
         let mut sub = crate::compile::material::Substitution::new(
             &mut own.types,
@@ -891,7 +891,20 @@ fn materialize_body(
                 sub.force(self_row, row);
             }
         }
-        let mut body = crate::compile::material::materialize_fn(&mut sub, &source, &mut |f| f);
+        // T2a: re-target the template's interface dispatches. The body
+        // bakes the PLACEHOLDER row's slots (`Readable<#T>.get`); the
+        // substituted body must speak the CONCRETE row — the one its
+        // consumer-side fills answer on. Identity for every row the
+        // substitution cannot change (non-generic interfaces,
+        // already-concrete instantiations).
+        let iface_remaps = crate::compile::material::build_iface_remaps(
+            &mut sub,
+            &mut own.ifaces,
+            &mut own.iface_slots,
+            &mut own.vtables,
+            &source,
+        )?;
+        let mut body = crate::compile::material::materialize_fn(&mut sub, &source, &mut |f| f, &iface_remaps);
         // the CONST half of the template-stability law: an op may pin a
         // TYPE ID as a literal (`opaque::downcast<V>`'s want — the
         // emitter bakes `Const(TypeId(#V))`). Every type OPERAND
@@ -933,8 +946,66 @@ fn materialize_body(
                 *k = new_k;
             }
         }
+        // T2b (collect): no check phase runs over a materialization, so
+        // the concrete (payload × iface) fills are demanded from what
+        // the body SPEAKS: interface widening emits NO op (`widen_to_slot`
+        // is a no-op — the cell handle flows and dispatch reads the
+        // cell's own type), so the pairing's only witnesses are the
+        // types themselves. Every concrete class/enum row the body
+        // builds or carries × every iface row it names (regs, params,
+        // ret, CallI/IsIface operands): a satisfiable pair is exactly
+        // the fill a fresh compile's check phase demands at its widen;
+        // an unsatisfiable co-mention is skipped at the lay step below
+        let mut payloads: Vec<rut_core::types::TypeId> = body
+            .params
+            .iter()
+            .chain(body.regs.iter())
+            .copied()
+            .filter(|&t| {
+                matches!(
+                    sub.tt.kind(t),
+                    rut_core::types::TyKind::Data { .. } | rut_core::types::TyKind::Enum { .. }
+                )
+            })
+            .collect();
+        payloads.sort_unstable();
+        payloads.dedup();
+        let mut spoken_rows: Vec<u32> = body
+            .params
+            .iter()
+            .chain(std::iter::once(&body.ret))
+            .chain(body.regs.iter())
+            .filter_map(|&t| match sub.tt.kind(t) {
+                rut_core::types::TyKind::IfaceObj { iface_id } => Some(*iface_id),
+                _ => None,
+            })
+            // the signature/reg rows still spell the PACK ids (the
+            // substitution does not rewrite IfaceObj kinds) — map them
+            // onto the substituted rows; op-derived rows below are
+            // already re-targeted by remap_op
+            .map(|r| iface_remaps.rows.get(&r).copied().unwrap_or(r))
+            .collect();
+        for op in body.code.iter() {
+            match op {
+                Op::CallI { slot, .. } => {
+                    if let Some(&(row, _)) = own.iface_slots.get(*slot as usize) {
+                        spoken_rows.push(row);
+                    }
+                }
+                Op::IsIface { want, .. } => spoken_rows.push(*want),
+                _ => {}
+            }
+        }
+        spoken_rows.sort_unstable();
+        spoken_rows.dedup();
+        let mut iface_fills: Vec<(rut_core::types::TypeId, u32)> = Vec::new();
+        for &p in &payloads {
+            for &r in &spoken_rows {
+                iface_fills.push((p, r));
+            }
+        }
         let minted = std::mem::take(&mut sub.minted_inst_tys);
-        (body, minted)
+        (body, minted, iface_fills)
     };
     // fix the callee operands against the substituted world
     let member_stubs: HashMap<u32, (rut_core::types::TypeId, rut_core::sym::IdentId)> = stubs
@@ -982,9 +1053,95 @@ fn materialize_body(
             _ => {}
         }
     }
+    // T2b (lay): each demanded (payload × iface) pair binds every member
+    // slot here, in the OWNER's numbering: the payload row is the row the
+    // materialized MakeRecord bakes (the row the runtime dispatch reads),
+    // and link re-lays both keys at merge. Only an OWNER-SERVED member
+    // fills — a consumer-local payload's pair was demanded by the
+    // requester's own check at its boundary, and an unsatisfiable
+    // co-mention has no member to bind (skipped, never an error)
+    for (payload, iface_id) in iface_fills {
+        let payload_row = payload; // the packed id the stub resolver speaks
+        let payload = own.types.dense(payload) as usize;
+        let method_names: Vec<rut_core::sym::IdentId> = own.ifaces[iface_id as usize]
+            .methods
+            .iter()
+            .map(|m| m.name)
+            .collect();
+        for (midx, mname) in method_names.into_iter().enumerate() {
+            let member_text = own.interner.name(mname).to_string();
+            if !owner_serves_member(own, payload_row, &member_text) {
+                continue;
+            }
+            let Some(slot) = own
+                .iface_slots
+                .iter()
+                .position(|&(r, m)| r == iface_id && m == midx as u32)
+            else {
+                continue;
+            };
+            if own
+                .vtables
+                .get(payload)
+                .and_then(|row| row.get(slot))
+                .is_some_and(|f| f.is_some())
+            {
+                continue; // a pack-time fill or an earlier demand — idempotent
+            }
+            let fid = resolve_member_stub(
+                own, home, stubs, first_fid, payload_row, mname, owner, &params, &values, memo,
+                requests, depth,
+            )?;
+            if payload >= own.vtables.len() {
+                own.vtables.resize_with(payload + 1, Vec::new);
+            }
+            let total = own.iface_slots.len();
+            let row = &mut own.vtables[payload];
+            if row.len() < total {
+                row.resize(total, None);
+            }
+            row[slot] = Some(fid);
+        }
+    }
     own.inst_types.extend(minted);
     own.funcs[new_fid as usize] = body;
     Ok(new_fid)
+}
+
+/// The T2b fill's member probe: only an OWNER-SERVED member fills —
+/// the surface's own compiled member (a local inherent on the concrete
+/// row) or the generic class's member template. A consumer-local
+/// payload (the mirror-stub shape) was demanded by the requester's own
+/// check at its boundary; an unsatisfiable co-mention has no member to
+/// bind and the pair is skipped.
+fn owner_serves_member(own: &Program, concrete: rut_core::types::TypeId, member: &str) -> bool {
+    // (a) the owner's own compiled member on this very row
+    if own.surface.inherents.iter().any(|ih| {
+        ih.target == concrete
+            && ih
+                .methods
+                .iter()
+                .any(|m| m.local != 0 && own.interner.name(m.name) == member)
+    }) {
+        return true;
+    }
+    // (b) an OWN generic class instantiation: the member template of
+    // the matching arity exists
+    let concrete_text = own.type_name(concrete).to_string();
+    if let Some((base, args_text)) = concrete_text.split_once('<') {
+        let args_text = args_text.strip_suffix('>').unwrap_or(args_text);
+        let arity = split_top_commas(args_text).len();
+        return own.templates.iter().any(|t| {
+            t.param_rows.len() == arity
+                && match &t.kind {
+                    rut_core::binary::TemplateKind::Method { data, name } => {
+                        own.interner.name(*data) == base && own.interner.name(*name) == member
+                    }
+                    rut_core::binary::TemplateKind::Free { .. } => false,
+                }
+        });
+    }
+    false
 }
 
 /// Resolve one bound-member stub: the concrete argument's own surface

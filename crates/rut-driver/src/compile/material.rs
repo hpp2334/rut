@@ -91,7 +91,7 @@ impl<'a> Substitution<'a> {
     /// A row-name TEXT's row: the structural shapes' names are interned
     /// (every minted row spells its own name), so the lookup answers —
     /// a miss names an arg text no row ever carried (doctored template).
-    fn resolve_text(&mut self, text: &str) -> Option<TypeId> {
+    pub(crate) fn resolve_text(&mut self, text: &str) -> Option<TypeId> {
         let (bare, opt) = match text.strip_prefix('?') {
             Some(b) => (b, true),
             None => (text, false),
@@ -161,7 +161,7 @@ impl<'a> Substitution<'a> {
     }
 
     /// Split a name's top-level argument list (`Base<a, b>` / `(a, b)`).
-    fn split_args(text: &str) -> Option<(String, Vec<String>)> {
+    pub(crate) fn split_args(text: &str) -> Option<(String, Vec<String>)> {
         let (base, rest) = text.split_once('<')?;
         let args_text = rest.strip_suffix('>')?;
         if base.starts_with('(') {
@@ -474,13 +474,158 @@ pub(crate) fn split_top_commas(s: &str) -> Vec<String> {
     out
 }
 
+/// The interface-world half of a materialization (T2): a template body
+/// bakes `CallI` slots and `IsIface` row ids against the PACK's iface
+/// rows — and rut mints one row per exact type-argument tuple
+/// (`mk_iface_inst`), so a generic interface param compiles against the
+/// PLACEHOLDER row (`Readable<#T>`) while the consumer's fills and
+/// dispatches speak the CONCRETE row (`Readable<i32>`). These maps
+/// re-target those operands through the substitution: each slot's row
+/// name re-spells with the substituted arguments (identity for every
+/// row the substitution cannot change — non-generic interfaces and
+/// already-concrete instantiations), the re-spelled row is found or
+/// MINTED in the owner's table (method signatures substituted from the
+/// placeholder row's descriptor, slots appended, vtable rows resized),
+/// and the slot maps onto the substituted row's numbering. The owner's
+/// extended table re-lays onto the merged enumeration at link — exactly
+/// as every other fn the materialization appends.
+pub(crate) struct IfaceRemaps {
+    /// pack-local `CallI` slot → owner-local slot
+    pub slots: HashMap<u32, u32>,
+    /// pack-local `IsIface` row id → owner-local row id
+    pub rows: HashMap<u32, u32>,
+}
+
+/// Build [`IfaceRemaps`] for one template body. Collected and resolved
+/// BEFORE `materialize_fn` runs — the row re-spelling needs the
+/// substitution, which `materialize_fn` itself holds.
+pub(crate) fn build_iface_remaps(
+    sub: &mut Substitution,
+    ifaces: &mut Vec<rut_core::binary::IfaceDesc>,
+    iface_slots: &mut Vec<(u32, u32)>,
+    vtables: &mut Vec<Vec<Option<u32>>>,
+    fc: &FuncCode,
+) -> Result<IfaceRemaps, String> {
+    let mut wanted_slots: Vec<u32> = Vec::new();
+    let mut wanted_rows: Vec<u32> = Vec::new();
+    for op in &fc.code {
+        match op {
+            Op::CallI { slot, .. } => wanted_slots.push(*slot),
+            Op::IsIface { want, .. } => wanted_rows.push(*want),
+            _ => {}
+        }
+    }
+    // the SIGNATURE's interface rows ride the demand law too: a ret
+    // typed `Readable<T>` pairs the returned payload with the concrete
+    // row at the return boundary (the T2b fill), and an iface-typed
+    // local/reg names the row the body SPEAKS — want every one so the
+    // map resolves each
+    for t in fc.params.iter().chain(std::iter::once(&fc.ret)).chain(fc.regs.iter()) {
+        if let rut_core::types::TyKind::IfaceObj { iface_id } = sub.tt.kind(*t) {
+            wanted_rows.push(*iface_id);
+        }
+    }
+    wanted_slots.sort_unstable();
+    wanted_slots.dedup();
+    wanted_rows.sort_unstable();
+    wanted_rows.dedup();
+    let mut remaps = IfaceRemaps { slots: HashMap::new(), rows: HashMap::new() };
+    for want in wanted_rows {
+        let row = resolve_iface_row(sub, ifaces, iface_slots, vtables, want)?;
+        remaps.rows.insert(want, row);
+    }
+    for slot in wanted_slots {
+        let Some(&(row, method)) = iface_slots.get(slot as usize) else {
+            return Err(format!(
+                "template body names interface slot {slot} outside its table — \
+                 corrupt or doctored, re-pack the directory"
+            ));
+        };
+        let new_row = resolve_iface_row(sub, ifaces, iface_slots, vtables, row)?;
+        remaps.rows.entry(row).or_insert(new_row);
+        let new_slot = iface_slots
+            .iter()
+            .position(|&(r, m)| r == new_row && m == method)
+            .unwrap_or(slot as usize) as u32;
+        remaps.slots.insert(slot, new_slot);
+    }
+    Ok(remaps)
+}
+
+/// The substituted iface ROW for a pack-local row id: re-spell the row
+/// name's argument list through the substitution. An unchanged spell is
+/// the identity row; a changed spell finds or mints the row under the
+/// same `Base<args>` naming law the compiler's `mk_iface_inst` uses, so
+/// a consumer session's own compile and this materialization land on
+/// ONE row after link's by-name trait dedup.
+fn resolve_iface_row(
+    sub: &mut Substitution,
+    ifaces: &mut Vec<rut_core::binary::IfaceDesc>,
+    iface_slots: &mut Vec<(u32, u32)>,
+    vtables: &mut Vec<Vec<Option<u32>>>,
+    row: u32,
+) -> Result<u32, String> {
+    let Some(desc) = ifaces.get(row as usize) else {
+        return Err(format!(
+            "template body names interface row {row} outside its table — \
+             corrupt or doctored, re-pack the directory"
+        ));
+    };
+    let name_text = sub.interner.name(desc.name).to_string();
+    let Some((base, args)) = Substitution::split_args(&name_text) else {
+        return Ok(row); // a bare interface (no argument list): identity
+    };
+    let mut parts = Vec::with_capacity(args.len());
+    for piece in &args {
+        let Some(r) = sub.resolve_text(piece) else {
+            return Err(format!(
+                "interface row `{name_text}` names argument `{piece}` that is no row — \
+                 corrupt or doctored, re-pack the directory"
+            ));
+        };
+        let concrete = sub.run(r);
+        parts.push(sub.name_of(concrete).to_string());
+    }
+    let new_text = format!("{base}<{}>", parts.join(", "));
+    if new_text == name_text {
+        return Ok(row);
+    }
+    let name_id = sub.interner.intern(&new_text);
+    if let Some(id) = ifaces.iter().position(|d| d.name == name_id) {
+        return Ok(id as u32);
+    }
+    // mint: the descriptor's method signatures substitute with the row
+    // (the same substitution a fresh compile at these arguments spells)
+    let methods: Vec<rut_core::binary::IfaceMethod> = ifaces[row as usize]
+        .methods
+        .iter()
+        .map(|m| rut_core::binary::IfaceMethod {
+            name: m.name,
+            params: m.params.iter().map(|&p| sub.run(p)).collect(),
+            ret: sub.run(m.ret),
+        })
+        .collect();
+    let new_row = ifaces.len() as u32;
+    ifaces.push(rut_core::binary::IfaceDesc { name: name_id, methods });
+    for m in 0..ifaces[new_row as usize].methods.len() as u32 {
+        iface_slots.push((new_row, m));
+    }
+    let total = iface_slots.len();
+    for vt in vtables.iter_mut() {
+        vt.resize(total, None);
+    }
+    Ok(new_row)
+}
+
 /// Materialize one template body: substitute TypeIds, remap callee fids
-/// through `map_fid`, rewrite the repr bytes the substitution changed,
-/// and re-run the repr-keyed folds — the byte-equality law's engine.
+/// through `map_fid`, re-target the interface-slot operands through
+/// `ifc`, rewrite the repr bytes the substitution changed, and re-run
+/// the repr-keyed folds — the byte-equality law's engine.
 pub fn materialize_fn(
     sub: &mut Substitution,
     fc: &FuncCode,
     map_fid: &mut dyn FnMut(u32) -> u32,
+    ifc: &IfaceRemaps,
 ) -> FuncCode {
     let mut out = FuncCode {
         name: fc.name,
@@ -497,14 +642,14 @@ pub fn materialize_fn(
         host_id: fc.host_id,
     };
     for op in &fc.code {
-        out.code.push(remap_op(sub, op, map_fid));
+        out.code.push(remap_op(sub, op, map_fid, ifc));
     }
     rewrite_reprs(sub.tt, &mut out);
     rut_lir::lir::refold_optprim(&mut out, sub.tt);
     out
 }
 
-fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32) -> Op {
+fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32, ifc: &IfaceRemaps) -> Op {
     match op {
         Op::Mov { dst, src } => Op::Mov { dst: *dst, src: *src },
         Op::MovRef { dst, src } => Op::MovRef { dst: *dst, src: *src },
@@ -551,7 +696,16 @@ fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32
         Op::BrTable { idx, table_off, count, default } => Op::BrTable { idx: *idx, table_off: *table_off, count: *count, default: *default },
         Op::Call { func, argv_off, argc, dst } => Op::Call { func: map_fid(*func), argv_off: *argv_off, argc: *argc, dst: *dst },
         Op::CallM { func, argv_off, argc, dst } => Op::CallM { func: map_fid(*func), argv_off: *argv_off, argc: *argc, dst: *dst },
-        Op::CallI { slot, argv_off, argc, dst } => Op::CallI { slot: *slot, argv_off: *argv_off, argc: *argc, dst: *dst },
+        // T2: a template's interface dispatch bakes the PLACEHOLDER
+        // row's slot (`Readable<#T>.get`); the substituted body must
+        // dispatch on the CONCRETE row (`Readable<i32>.get`) — the row
+        // its consumer-side fills answer on
+        Op::CallI { slot, argv_off, argc, dst } => Op::CallI {
+            slot: ifc.slots.get(slot).copied().unwrap_or(*slot),
+            argv_off: *argv_off,
+            argc: *argc,
+            dst: *dst,
+        },
         Op::CallNat { nat, recv, argv_off, argc, dst } => Op::CallNat { nat: *nat, recv: *recv, argv_off: *argv_off, argc: *argc, dst: *dst },
         Op::CallFn { fval, argv_off, argc, dst } => Op::CallFn { fval: *fval, argv_off: *argv_off, argc: *argc, dst: *dst },
         Op::Ret { val } => Op::Ret { val: *val },
@@ -570,7 +724,14 @@ fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32
         Op::EnumNew { dst, ty, member } => Op::EnumNew { dst: *dst, ty: sub.run(*ty), member: *member },
         Op::TidOf { dst, obj } => Op::TidOf { dst: *dst, obj: *obj },
         Op::IsType { dst, obj, want } => Op::IsType { dst: *dst, obj: *obj, want: sub.run(*want) },
-        Op::IsIface { dst, obj, want } => Op::IsIface { dst: *dst, obj: *obj, want: *want },
+        // the same re-target for the interface TEST (`is` matches the
+        // row id, not a slot — a stale row id answers false for a type
+        // that satisfies the substituted row)
+        Op::IsIface { dst, obj, want } => Op::IsIface {
+            dst: *dst,
+            obj: *obj,
+            want: ifc.rows.get(want).copied().unwrap_or(*want),
+        },
         Op::Unbox { dst, box_, ty } => Op::Unbox { dst: *dst, box_: *box_, ty: sub.run(*ty) },
         Op::Box { dst, val, ty } => Op::Box { dst: *dst, val: *val, ty: sub.run(*ty) },
         Op::MakeClosure { dst, func, argv_off, argc } => Op::MakeClosure { dst: *dst, func: map_fid(*func), argv_off: *argv_off, argc: *argc },
