@@ -307,7 +307,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         _ => {
                             self.ctx.err(sp, format!(
-                                "cannot infer the type arguments for `{b}` — write `{b}<..>::{m}(..)` or annotate the binding",
+                                "cannot infer the type arguments for `{b}` — annotate the binding (`let c: {b}<T> = {b}::{m}(..)`)",
                                 b = self.ctx.name(base), m = self.ctx.name(member)
                             ));
                             return Err(());
@@ -345,7 +345,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             Some((ed, eargs)) if ed == dname => eargs,
                             _ => {
                                 self.ctx.err(sp, format!(
-                                    "cannot infer the type arguments for `{b}` — write `{b}<..>::{m}(..)` or annotate the binding",
+                                    "cannot infer the type arguments for `{b}` — annotate the binding (`let c: {b}<T> = {b}::{m}(..)`)",
                                     b = self.ctx.name(base), m = self.ctx.name(member)
                                 ));
                                 return Err(());
@@ -376,7 +376,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             Some((ed, eargs)) if ed == base => eargs,
                             _ => {
                                 self.ctx.err(sp, format!(
-                                    "cannot infer the type arguments for `{b}` — write `{b}<..>::{m}(..)` or annotate the binding",
+                                    "cannot infer the type arguments for `{b}` — annotate the binding (`let c: {b}<T> = {b}::{m}(..)`)",
                                     b = self.ctx.name(base), m = self.ctx.name(member)
                                 ));
                                 return Err(());

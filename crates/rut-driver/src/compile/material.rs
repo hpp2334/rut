@@ -585,10 +585,18 @@ fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32
     }
 }
 
-/// Recompute every repr byte from the SUBSTITUTED types — the template
-/// baked the placeholder rows' Ref reprs; the concrete arguments may
-/// carry prim/optional-prim element stores (the materialized body must
-/// spell exactly what a fresh compile at these types spells).
+/// Recompute every repr byte — and the repr-keyed OPCODE spell — from
+/// the SUBSTITUTED types. The template baked the placeholder rows' Ref
+/// reprs; the concrete arguments may carry prim/fn (immediate-slot)
+/// stores, and the materialized body must spell exactly what a fresh
+/// compile at these types spells. The opcode half covers the one
+/// ref-vs-immediate opcode pair the emitter branches on (`mov_slot`:
+/// `MovRef` iff `types.is_ref(ty)`, else `Mov`): a template `MovRef`
+/// whose moved value substitutes to a non-ref repr is the fresh
+/// compile's `Mov` copy — left as a ref move it retains the prim bits
+/// as a heap handle and aborts (the T1 crash), so the spell remaps.
+/// (The converse never occurs: the template emitter spells `Mov` only
+/// for types the placeholder rows can never be.)
 fn rewrite_reprs(tt: &TypeTable, fc: &mut FuncCode) {
     let reg_ty = |r: u16| -> TypeId { fc.regs.get(r as usize).copied().unwrap_or(rut_core::types::TY_NIL) };
     let arr_elem = |t: TypeId| -> Option<TypeId> {
@@ -598,6 +606,13 @@ fn rewrite_reprs(tt: &TypeTable, fc: &mut FuncCode) {
         }
     };
     for i in 0..fc.code.len() {
+        // the opcode spell: the moved VALUE's substituted type decides
+        // (both regs of an emitter-spelled copy share it)
+        if let Op::MovRef { dst, src } = fc.code[i] {
+            if !tt.is_ref(reg_ty(src)) || !tt.is_ref(reg_ty(dst)) {
+                fc.code[i] = Op::Mov { dst, src };
+            }
+        }
         let repr = {
             match &fc.code[i] {
                 Op::GetF { obj, field, .. } | Op::SetF { obj, field, .. } => {

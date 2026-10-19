@@ -478,7 +478,7 @@ fn generic_class_ctor_rides_the_unification_path() {
          entry fn main() { let b = Box(3); }\n",
     );
     assert!(
-        ds.iter().any(|d| d == "cannot infer the type arguments for `Box` — write `Box<..>::of(..)` or annotate the binding"),
+        ds.iter().any(|d| d == "cannot infer the type arguments for `Box` — annotate the binding (`let c: Box<T> = Box::of(..)`)"),
         "the sugar rides the member call's inference: {ds:?}"
     );
 }

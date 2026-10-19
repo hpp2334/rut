@@ -241,6 +241,11 @@ impl DepRemote for HttpRemote {
     }
 
     /// Atomic tmp+rename store: a reader never sees a partial entry.
+    /// The tmp name is unique per WRITER (pid + call counter) — two
+    /// processes storing the same entry concurrently each own their
+    /// tmp, so one's rename can never steal the other's (a shared
+    /// `<sha>.part` made concurrent primes abort with a spurious
+    /// `cannot finalize: No such file or directory`).
     fn write(&self, url: &str, bytes: &[u8]) -> Result<(), RemoteError> {
         let path = self.path_for(url);
         std::fs::create_dir_all(&self.root).map_err(|e| {
@@ -249,7 +254,9 @@ impl DepRemote for HttpRemote {
                 self.root.display()
             ))
         })?;
-        let tmp = path.with_extension("part");
+        static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tmp = path.with_extension(format!("part.{}-{}", std::process::id(), n));
         std::fs::write(&tmp, bytes)
             .map_err(|e| RemoteError::new(format!("{}: cannot write cache entry: {e}", tmp.display())))?;
         std::fs::rename(&tmp, &path)

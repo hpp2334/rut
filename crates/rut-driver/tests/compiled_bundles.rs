@@ -540,3 +540,494 @@ fn staged_lane_produces_what_the_reference_lane_would() {
         .expect("staged compile");
     assert_eq!(run_compiled::<i32>(staged, "go"), 260, "staged == reference");
 }
+
+// ---- the substitution-shape matrix (the F0 falsifier, as a gate) ----
+
+/// The matrix libs' shared preamble: a small heap class (`Box` — the
+/// class-shaped T) and the probe's minimal one-slot container
+/// (`Cell<T>` — the `?T` pattern). Every shape's lib carries both, so
+/// the only per-cell variable is the shape's own generic — the exact
+/// isolation the F0 probes ran.
+const MATRIX_LIB_PREAMBLE: &str = r#"
+pub class Box {
+    v: i32;
+}
+
+impl Box {
+    pub fn new(v: i32) -> Self {
+        return Self { v: v };
+    }
+    pub fn get(self) -> i32 {
+        return self.v;
+    }
+}
+
+pub class Cell<T> {
+    v: ?T;
+}
+
+impl<T> Cell<T> {
+    pub fn put(v: T) -> Self {
+        return Self { v: v };
+    }
+    pub fn get(self) -> T {
+        return self.v;
+    }
+}
+"#;
+
+/// One substitution shape × one T-kind: the owner's shape generic
+/// (`lib_tail`, appended to the preamble) and the consumer that
+/// exercises it (the SAME source in both lanes), with the answer the
+/// reference lane pins.
+struct MatrixCell {
+    tag: &'static str,
+    lib_tail: &'static str,
+    app: &'static str,
+    expect: i32,
+}
+
+/// The 7 F0 shapes × 3 T-kinds (`i32` — value repr; `Box` — a heap
+/// class; `opaque` — the erased builtin; both ref reprs). S1/S2/S5 are
+/// the cells phase F0 measured DIVERGENT (the T→T ref move in a free
+/// generic fn's body substituted at a value-repr T — the staged lane
+/// retained the prim bits as a heap handle and aborted); the matrix
+/// gates the repair: staged == reference on every cell.
+const MATRIX: &[MatrixCell] = &[
+    // S1 — the free generic identity: a T→T move through the RETURN
+    MatrixCell {
+        tag: "s01-ident-i32",
+        lib_tail: "pub fn ident<T>(v: T) -> T {\n    return v;\n}\n",
+        app: r#"
+use lib::{ ident };
+
+entry fn main() -> i32 {
+    return ident<i32>(3);
+}
+"#,
+        expect: 3,
+    },
+    MatrixCell {
+        tag: "s01-ident-cls",
+        lib_tail: "pub fn ident<T>(v: T) -> T {\n    return v;\n}\n",
+        app: r#"
+use lib::{ ident, Box };
+
+entry fn main() -> i32 {
+    let b = ident<Box>(Box::new(7));
+    return b.get();
+}
+"#,
+        expect: 7,
+    },
+    MatrixCell {
+        tag: "s01-ident-opq",
+        lib_tail: "pub fn ident<T>(v: T) -> T {\n    return v;\n}\n",
+        app: r#"
+use lib::{ ident };
+
+entry fn main() -> i32 {
+    let o = ident<opaque>(opaque(3));
+    let ok = if (opaque::downcast<i32>(o) != nil) { 1 } else { 0 };
+    return ok;
+}
+"#,
+        expect: 1,
+    },
+    // S2 — a T→T move WITHOUT a return (the kept local)
+    MatrixCell {
+        tag: "s02-sink-i32",
+        lib_tail: "pub fn sink<T>(v: T) -> nil {\n    let keep: T = v;\n    return;\n}\n",
+        app: r#"
+use lib::{ sink };
+
+entry fn main() -> i32 {
+    sink<i32>(3);
+    return 1;
+}
+"#,
+        expect: 1,
+    },
+    MatrixCell {
+        tag: "s02-sink-cls",
+        lib_tail: "pub fn sink<T>(v: T) -> nil {\n    let keep: T = v;\n    return;\n}\n",
+        app: r#"
+use lib::{ sink, Box };
+
+entry fn main() -> i32 {
+    sink<Box>(Box::new(7));
+    return 1;
+}
+"#,
+        expect: 1,
+    },
+    MatrixCell {
+        tag: "s02-sink-opq",
+        lib_tail: "pub fn sink<T>(v: T) -> nil {\n    let keep: T = v;\n    return;\n}\n",
+        app: r#"
+use lib::{ sink };
+
+entry fn main() -> i32 {
+    sink<opaque>(opaque(3));
+    return 1;
+}
+"#,
+        expect: 1,
+    },
+    // S3 — a free generic returning a class parameterized on T
+    MatrixCell {
+        tag: "s03-wrap-i32",
+        lib_tail: "pub fn wrap<T>(v: T) -> Cell<T> {\n    let c: Cell<T> = Cell::put(v);\n    return c;\n}\n",
+        app: r#"
+use lib::{ Cell, wrap };
+
+entry fn main() -> i32 {
+    let c: Cell<i32> = wrap<i32>(3);
+    return c.get();
+}
+"#,
+        expect: 3,
+    },
+    MatrixCell {
+        tag: "s03-wrap-cls",
+        lib_tail: "pub fn wrap<T>(v: T) -> Cell<T> {\n    let c: Cell<T> = Cell::put(v);\n    return c;\n}\n",
+        app: r#"
+use lib::{ Cell, wrap, Box };
+
+entry fn main() -> i32 {
+    let c: Cell<Box> = wrap<Box>(Box::new(7));
+    return c.get().get();
+}
+"#,
+        expect: 7,
+    },
+    MatrixCell {
+        tag: "s03-wrap-opq",
+        lib_tail: "pub fn wrap<T>(v: T) -> Cell<T> {\n    let c: Cell<T> = Cell::put(v);\n    return c;\n}\n",
+        app: r#"
+use lib::{ Cell, wrap };
+
+entry fn main() -> i32 {
+    let c: Cell<opaque> = wrap<opaque>(opaque(3));
+    let ok = if (opaque::downcast<i32>(c.get()) != nil) { 1 } else { 0 };
+    return ok;
+}
+"#,
+        expect: 1,
+    },
+    // S4 — a class METHOD returning T by value (the class shape that
+    // rescued the value-T return in F0)
+    MatrixCell {
+        tag: "s04-mget-i32",
+        lib_tail: "",
+        app: r#"
+use lib::{ Cell };
+
+entry fn main() -> i32 {
+    let c = Cell<i32>::put(3);
+    return c.get();
+}
+"#,
+        expect: 3,
+    },
+    MatrixCell {
+        tag: "s04-mget-cls",
+        lib_tail: "",
+        app: r#"
+use lib::{ Cell, Box };
+
+entry fn main() -> i32 {
+    let c = Cell<Box>::put(Box::new(7));
+    return c.get().get();
+}
+"#,
+        expect: 7,
+    },
+    MatrixCell {
+        tag: "s04-mget-opq",
+        lib_tail: "",
+        app: r#"
+use lib::{ Cell };
+
+entry fn main() -> i32 {
+    let c = Cell<opaque>::put(opaque(3));
+    let ok = if (opaque::downcast<i32>(c.get()) != nil) { 1 } else { 0 };
+    return ok;
+}
+"#,
+        expect: 1,
+    },
+    // S5 — composition through two generic frames (inherits S1's move)
+    MatrixCell {
+        tag: "s05-comp-i32",
+        lib_tail: "pub fn ident<T>(v: T) -> T {\n    return v;\n}\n\npub fn twice<T>(v: T) -> T {\n    return ident(ident(v));\n}\n",
+        app: r#"
+use lib::{ twice };
+
+entry fn main() -> i32 {
+    return twice<i32>(3);
+}
+"#,
+        expect: 3,
+    },
+    MatrixCell {
+        tag: "s05-comp-cls",
+        lib_tail: "pub fn ident<T>(v: T) -> T {\n    return v;\n}\n\npub fn twice<T>(v: T) -> T {\n    return ident(ident(v));\n}\n",
+        app: r#"
+use lib::{ twice, Box };
+
+entry fn main() -> i32 {
+    let b = twice<Box>(Box::new(7));
+    return b.get();
+}
+"#,
+        expect: 7,
+    },
+    MatrixCell {
+        tag: "s05-comp-opq",
+        lib_tail: "pub fn ident<T>(v: T) -> T {\n    return v;\n}\n\npub fn twice<T>(v: T) -> T {\n    return ident(ident(v));\n}\n",
+        app: r#"
+use lib::{ twice };
+
+entry fn main() -> i32 {
+    let o = twice<opaque>(opaque(3));
+    let ok = if (opaque::downcast<i32>(o) != nil) { 1 } else { 0 };
+    return ok;
+}
+"#,
+        expect: 1,
+    },
+    // S6 — store into a [?T]-backed container, read back through it
+    MatrixCell {
+        tag: "s06-stash-i32",
+        lib_tail: r#"
+pub class Slot<T> {
+    buf: [?T];
+    n: i32;
+}
+
+impl<T> Slot<T> {
+    pub fn empty() -> Self {
+        return Self { buf: [nil; 4], n: 0 };
+    }
+    pub fn put(mut self, v: T) -> nil {
+        self.buf[self.n] = v;
+        self.n += 1;
+    }
+    pub fn count(self) -> i32 {
+        return self.n;
+    }
+    pub fn last(self) -> T {
+        return self.buf[self.n - 1];
+    }
+}
+
+pub fn stash<T>(v: T) -> Slot<T> {
+    let mut s: Slot<T> = Slot::empty();
+    s.put(v);
+    s.put(v);
+    return s;
+}
+"#,
+        app: r#"
+use lib::{ Slot, stash };
+
+entry fn main() -> i32 {
+    let s: Slot<i32> = stash<i32>(3);
+    return s.count() * 10 + s.last();
+}
+"#,
+        expect: 23,
+    },
+    MatrixCell {
+        tag: "s06-stash-cls",
+        lib_tail: r#"
+pub class Slot<T> {
+    buf: [?T];
+    n: i32;
+}
+
+impl<T> Slot<T> {
+    pub fn empty() -> Self {
+        return Self { buf: [nil; 4], n: 0 };
+    }
+    pub fn put(mut self, v: T) -> nil {
+        self.buf[self.n] = v;
+        self.n += 1;
+    }
+    pub fn count(self) -> i32 {
+        return self.n;
+    }
+    pub fn last(self) -> T {
+        return self.buf[self.n - 1];
+    }
+}
+
+pub fn stash<T>(v: T) -> Slot<T> {
+    let mut s: Slot<T> = Slot::empty();
+    s.put(v);
+    s.put(v);
+    return s;
+}
+"#,
+        app: r#"
+use lib::{ Slot, stash, Box };
+
+entry fn main() -> i32 {
+    let s: Slot<Box> = stash<Box>(Box::new(7));
+    return s.count() * 10 + s.last().get();
+}
+"#,
+        expect: 27,
+    },
+    MatrixCell {
+        tag: "s06-stash-opq",
+        lib_tail: r#"
+pub class Slot<T> {
+    buf: [?T];
+    n: i32;
+}
+
+impl<T> Slot<T> {
+    pub fn empty() -> Self {
+        return Self { buf: [nil; 4], n: 0 };
+    }
+    pub fn put(mut self, v: T) -> nil {
+        self.buf[self.n] = v;
+        self.n += 1;
+    }
+    pub fn count(self) -> i32 {
+        return self.n;
+    }
+    pub fn last(self) -> T {
+        return self.buf[self.n - 1];
+    }
+}
+
+pub fn stash<T>(v: T) -> Slot<T> {
+    let mut s: Slot<T> = Slot::empty();
+    s.put(v);
+    s.put(v);
+    return s;
+}
+"#,
+        app: r#"
+use lib::{ Slot, stash };
+
+entry fn main() -> i32 {
+    let s: Slot<opaque> = stash<opaque>(opaque(3));
+    let ok = if (opaque::downcast<i32>(s.last()) != nil) { 1 } else { 0 };
+    return s.count() * 10 + ok;
+}
+"#,
+        expect: 21,
+    },
+    // S7 — T arriving NESTED (a Cell<T> argument), returned by value
+    MatrixCell {
+        tag: "s07-head-i32",
+        lib_tail: "pub fn head<T>(xs: Cell<T>) -> T {\n    return xs.get();\n}\n",
+        app: r#"
+use lib::{ Cell, head };
+
+entry fn main() -> i32 {
+    let c = Cell<i32>::put(3);
+    return head<i32>(c);
+}
+"#,
+        expect: 3,
+    },
+    MatrixCell {
+        tag: "s07-head-cls",
+        lib_tail: "pub fn head<T>(xs: Cell<T>) -> T {\n    return xs.get();\n}\n",
+        app: r#"
+use lib::{ Cell, head, Box };
+
+entry fn main() -> i32 {
+    let c = Cell<Box>::put(Box::new(7));
+    return head<Box>(c).get();
+}
+"#,
+        expect: 7,
+    },
+    MatrixCell {
+        tag: "s07-head-opq",
+        lib_tail: "pub fn head<T>(xs: Cell<T>) -> T {\n    return xs.get();\n}\n",
+        app: r#"
+use lib::{ Cell, head };
+
+entry fn main() -> i32 {
+    let c = Cell<opaque>::put(opaque(3));
+    let ok = if (opaque::downcast<i32>(head<opaque>(c)) != nil) { 1 } else { 0 };
+    return ok;
+}
+"#,
+        expect: 1,
+    },
+];
+
+/// The matrix, as a gate: every F0 shape × T-kind cell compiles
+/// through BOTH lanes — (a) the reference whole-program lane (the
+/// closure as sources, one graph) and (b) the staged lane (the owner
+/// packed to an archive, mounted, the consumer compiled against its
+/// surface, instantiating from the templates) — and the lanes agree on
+/// the run result. The three cells F0 measured divergent (S1/S2/S5 at
+/// T=i32: the template's T→T `MovRef` survived substitution and
+/// retained the prim bits as a heap handle) are the ones this law was
+/// written for; the other eighteen keep it honest.
+#[test]
+fn staged_and_reference_lanes_agree_across_the_substitution_matrix() {
+    for cell in MATRIX {
+        let lib_text = format!("{}\n{}", MATRIX_LIB_PREAMBLE, cell.lib_tail);
+        // (a) the reference lane: the closure as sources, one graph
+        let reference = rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source("lib", &lib_text))
+            .pkg(
+                rut_driver::Mounted::source("app", cell.app)
+                    .manifest(rut_driver::Manifest::lib("app", &["lib"])),
+            )
+            .entrypoint("app")
+            .compile()
+            .unwrap_or_else(|e| panic!("{}: reference compile: {e:?}", cell.tag));
+        assert!(
+            reference.graph.diags.is_empty(),
+            "{}: reference diags: {:?}",
+            cell.tag,
+            reference.graph.diags
+        );
+        let from_dir = run_compiled::<i32>(reference, "main");
+        assert_eq!(from_dir, cell.expect, "{}: the reference lane's own answer", cell.tag);
+
+        // (b) the staged lane: pack the owner, mount the archive, serve
+        // the consumer's instantiation from the templates
+        let dir = scratch(cell.tag);
+        write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
+        write(&dir, "mod.rut", &lib_text);
+        let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("{}: pack: {e:?}", cell.tag));
+        let _ = std::fs::remove_dir_all(&dir);
+        let archive = rut_driver::Mounted::from_bundle(&bytes)
+            .unwrap_or_else(|e| panic!("{}: load: {e:?}", cell.tag));
+        let staged = archive
+            .pkgs
+            .iter()
+            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+            .pkg(
+                rut_driver::Mounted::source("app", cell.app)
+                    .manifest(rut_driver::Manifest::lib("app", &["lib"])),
+            )
+            .entrypoint("app")
+            .compile()
+            .unwrap_or_else(|e| panic!("{}: staged compile: {e:?}", cell.tag));
+        assert!(
+            staged.graph.diags.is_empty(),
+            "{}: staged diags: {:?}",
+            cell.tag,
+            staged.graph.diags
+        );
+        assert_eq!(
+            run_compiled::<i32>(staged, "main"),
+            from_dir,
+            "{}: staged == reference (the L-eq law)",
+            cell.tag
+        );
+    }
+}
