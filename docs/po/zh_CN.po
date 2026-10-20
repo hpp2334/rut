@@ -1030,13 +1030,10 @@ msgstr "**`f\"hello, {name}!\"`** 是格式化字面量：`{expr}` 插值任意�
 #: src/quick-start/first-program.md:90
 msgid "`entry fn main()` is the entry the CLI calls."
 msgstr "`entry fn main()` 是 CLI 调用的入口。"
-
-
 #: src/quick-start/first-program.md:92
-msgid ""
-"Typing the directory by hand is the lesson — the manifest IS the program's door, and now you have written one. For the next directory, the CLI scaffolds it in one step: `rut new <dir>` writes exactly those three files — the manifest with the derived name (and, unlike the walkthrough above, the whole swappable std set as url deps), the matching `rut.lock` (the std set's pins), and the same `mod.rut` — and `rut run <dir>` runs it ([the rut CLI](../reference/cli.md)):"
-msgstr ""
-"亲手敲出目录是本课的意义——清单就是程序的门，而你刚亲手写了一扇。到了下一个目录，CLI 一步就能搭好脚手架：`rut new <dir>` 写出的正是那三个文件——带派生包名的清单（并且与上面的演练不同，整个可换 std 集合作为 url 依赖）、配套的 `rut.lock`（std 集合的固定值）和同一个 `mod.rut`——然后 `rut run <dir>` 运行它（[rut CLI](../reference/cli.md)）："
+msgid "Typing the directory by hand is the lesson — the manifest IS the program's door, and now you have written one. For the next directory, the CLI scaffolds it in one step: `rut new <dir>` writes exactly those three files — the manifest with the derived name (and, unlike the walkthrough above, the whole swappable std set as url deps), the matching `rut.lock` (the std set's pins), and the same `mod.rut`. `rut install <dir>` warms the cache once (run never downloads — [the rut CLI](../reference/cli.md)), then `rut run <dir>` runs it:"
+msgstr "亲手敲出目录是本课的意义——清单就是程序的门，而你刚亲手写了一扇。到了下一个目录，CLI 一步就能搭好脚手架：`rut new <dir>` 写出的正是那三个文件——带派生包名的清单（并且与上面的演练不同，整个可换 std 集合作为 url 依赖）、配套的 `rut.lock`（std 集合的固定值）和同一个 `mod.rut`。`rut install <dir>` 把缓存预热一次（run 绝不下载——[rut CLI](../reference/cli.md)），然后 `rut run <dir>` 运行它："
+
 
 
 #: src/quick-start/first-program.md:101
@@ -18962,13 +18959,10 @@ msgstr ""
 msgid ""
 "The embedder owns exactly three things: the fs policy (\\[`Source`\\]), the remote policy (\\[`DepRemote`\\]), and its own runtime. The `_with` lanes take `&dyn DepRemote` and nothing else: the remote matters only when the dep walk actually reaches a url row. Url-free projects and `.rutbundle`s are closed — they load with no remote named at all."
 msgstr ""
-
-
 #: src/reference/embedding.md:254
-msgid ""
-"The standard remote is **`rut_native::HttpRemote`** — cache-first: a hit NEVER touches the network, a miss GETs (redirects on, loud status errors, a size cap) on the remote's own private worker thread and writes the cache back atomically. Cache layout law: `<root>/<sha256(url)>.rutbundle`. The futures come back READY, so any executor works — including the std-only noop-waker `block_on` poll loop the examples spell."
-msgstr ""
-"标准远端是 **`rut_native::HttpRemote`** —— 缓存优先：命中绝不碰网络，未命中在远端自己的私有 worker 线程上 GET（开重定向、响亮的状态码错误、大小上限）并原子地写回缓存。缓存布局法则：`<root>/<sha256(url)>.rutbundle`。future 以 READY 形态返回，任何执行器都能用 —— 包括示例拼写的纯 std noop-waker `block_on` 轮询循环。"
+msgid "The standard remote is **`rut_native::HttpRemote`** — cache-first, and **cache-only by default**: a hit NEVER touches the network, and a miss is the loud offline error (prime the cache with `rut install`, `rut fetch`, or an embedder's `DepRemote::write`). Networking is the EXPLICIT `online_local` / `online` choice: a miss GETs (redirects on, loud status errors, a size cap, hard timeouts — 10 s to connect, 60 s for the whole request) on the remote's own private worker thread and writes the cache back atomically. Cache layout law: `<root>/<sha256(url)>.rutbundle`. The futures come back READY, so any executor works — including the std-only noop-waker `block_on` poll loop the examples spell."
+msgstr "标准远端是 **`rut_native::HttpRemote`** —— 缓存优先，且**默认只用缓存**：命中绝不碰网络，未命中是大声的离线错误（先用 `rut install`、`rut fetch` 或嵌入方的 `DepRemote::write` 把缓存预热）。联网是显式的 `online_local` / `online` 选择：未命中时在远端自己的私有 worker 线程上 GET（开重定向、响亮的状态码错误、大小上限、硬超时——连接 10 秒、整个请求 60 秒）并原子地写回缓存。缓存布局法则：`<root>/<sha256(url)>.rutbundle`。future 以 READY 形态返回，任何执行器都能用 —— 包括示例拼写的纯 std noop-waker `block_on` 轮询循环。"
+
 
 
 #: src/reference/embedding.md:262 src/reference/templates.md:17
@@ -18981,33 +18975,19 @@ msgstr "行为"
 #: src/reference/embedding.md:264
 msgid "`HttpRemote::project_local(project)`"
 msgstr ""
-
-
 #: src/reference/embedding.md:264
-msgid ""
-"`<project>/.rut/cache` — hermetic, project-local; networks on a miss (the `http` feature, default on)"
-msgstr "`<project>/.rut/cache`——工程本地、封闭；未命中时联网（`http` feature，默认开启）"
+msgid "`<project>/.rut/cache` — hermetic, project-local; **cache-only** — a miss never networks (the default)"
+msgstr "`<project>/.rut/cache`——工程本地、封闭；**只用缓存**——未命中绝不联网（默认）"
+
 
 
 #: src/reference/embedding.md:265
 msgid "`HttpRemote::at(root)`"
 msgstr ""
-
-
 #: src/reference/embedding.md:265
-msgid "an explicit cache root, wire on"
-msgstr "显式缓存根，联网开启"
+msgid "an explicit cache root, cache-only"
+msgstr "显式缓存根，只用缓存"
 
-
-#: src/reference/embedding.md:266
-msgid "`HttpRemote::offline(root)`"
-msgstr ""
-
-
-#: src/reference/embedding.md:266
-msgid ""
-"**cache-only** — a miss never networks; the guaranteed-offline lane (CI gates, wasm-adjacent hosts)"
-msgstr "**只用缓存**——未命中绝不联网；保证离线的车道（CI 门、wasm 毗邻的宿主）"
 
 
 #: src/reference/embedding.md:267
@@ -19018,13 +18998,10 @@ msgstr ""
 #: src/reference/embedding.md:267
 msgid "the concrete entry path / delete a poisoned entry"
 msgstr "具体的条目路径 / 删除一条被污染的缓存条目"
-
-
 #: src/reference/embedding.md:269
-msgid ""
-"**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts): prime an `offline` remote, then load over it. The committed std artifacts play the wire — `DepRemote::write` is the stand-in for the GET:"
-msgstr ""
-"**保证离线的加载**（测试、CI、wasm 毗邻的宿主）：先预热一台 `offline` 远程，再在它之上加载。已提交的 std 工件扮演线路——`DepRemote::write` 是 GET 的替身："
+msgid "**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts, and — by default — every load): prime a cache-only remote, then load over it. The committed std artifacts play the wire — `DepRemote::write` is the stand-in for the GET:"
+msgstr "**保证离线的加载**（测试、CI、wasm 毗邻的宿主——以及默认之下的每一次加载）：先预热一台只用缓存的远程，再在它之上加载。已提交的 std 工件扮演线路——`DepRemote::write` 是 GET 的替身："
+
 
 
 #: src/reference/embedding.md:275
@@ -19149,13 +19126,10 @@ msgstr ""
 #: src/reference/embedding.md:360
 msgid "`HttpRemote`"
 msgstr ""
-
-
 #: src/reference/embedding.md:360
-msgid ""
-"the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss GETs on a private worker thread and writes back atomically; `project_local` / `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete"
-msgstr ""
-"标准远程：缓存优先（`<root>/<sha256(url)>.rutbundle`），未命中在私有工作线程上 GET 并原子写回；`project_local` / `at` 联网开启，`offline` 只用缓存，`path_for`/`evict` 是具体路径"
+msgid "the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), **cache-only by default** (`project_local` / `at` — a miss is the loud offline error), the wire only on `online_local` / `online` (a miss GETs under hard timeouts and writes back atomically); `path_for`/`evict` are concrete"
+msgstr "标准远程：缓存优先（`<root>/<sha256(url)>.rutbundle`），**默认只用缓存**（`project_local` / `at`——未命中是大声的离线错误），联网只在 `online_local` / `online` 上（未命中在硬超时下 GET 并原子写回）；`path_for`/`evict` 是具体路径"
+
 
 
 #: src/reference/embedding.md:361
@@ -27852,13 +27826,10 @@ msgid ""
 "**The lock is the pin lane.** A url the lock has no row for refuses at the mount door, naming the fix: ``dep `pouch` (https://…) is not pinned — rut.lock has no row for it: run `rut install` ``; fetched bytes that break the lock's pin refuse too — ``dep `pouch` — sha256 pin mismatch for <url>: rut.lock pins <sha>, the fetched bytes hash to <sha>``. Reproducibility is the pair's law: **same manifest + same `rut.lock` ⇒ identical resolved world** — the lock pins are what make packs reproducible, and `--locked` verifies the pair before anything runs."
 msgstr ""
 "**锁就是固定值车道。**锁中没有行的 url 在挂载门拒绝，并点名修法：``dep `pouch` (https://…) is not pinned — rut.lock has no row for it: run `rut install` ``；取回的字节打破锁的固定值同样拒绝——``dep `pouch` — sha256 pin mismatch for <url>: rut.lock pins <sha>, the fetched bytes hash to <sha>``。可复现性是这一对文件的法则：**同一清单 + 同一 `rut.lock` ⇒ 完全相同的解析世界**——锁的固定值是打包可复现的凭据，而 `--locked` 在任何东西运行之前复核这一对。"
-
-
 #: src/reference/dependency-kinds.md:105
-msgid ""
-"The CLI lane: `rut run`/`rut pack` fetch through the cache-first standard remote (`<project>/.rut/cache`, `$RUT_CACHE_DIR` overrides; a hit never touches the network), and a pin refusal evicts the poisoned cache entry so the next run heals. `rut install <dir>` resolves + fetches + writes the lock (`--locked` verifies without writing — the CI lane), and `rut fetch <dir>` re-warms the cache without running anything ([The rut CLI](cli.md))."
-msgstr ""
-"CLI 车道：`rut run`/`rut pack` 经缓存优先的标准远程取回（`<project>/.rut/cache`，`$RUT_CACHE_DIR` 可覆盖；命中则绝不触碰网络），固定值拒绝会驱逐被污染的缓存条目，让下一次运行自愈。`rut install <dir>` 解析 + 取回 + 写锁（`--locked` 只校验、绝不写入——CI 车道），`rut fetch <dir>` 只再预热缓存、不运行任何东西（[rut CLI](cli.md)）。"
+msgid "The CLI lane: **the install-first law** — `rut run`/`rut pack` never download. They ride the cache-only standard remote (`<project>/.rut/cache`, `$RUT_CACHE_DIR` overrides; a hit never touches the network), a missing dep is one aggregated refusal naming `rut install`, and a pin refusal evicts the poisoned cache entry so the next `install` heals. `rut install <dir>` resolves + fetches + writes the lock (`--locked` verifies without writing — the CI lane), and `rut fetch <dir>` re-warms the cache without running anything ([The rut CLI](cli.md))."
+msgstr "CLI 车道：**先安装法则**——`rut run`/`rut pack` 绝不下载。它们骑只用缓存的标准远程（`<project>/.rut/cache`，`$RUT_CACHE_DIR` 可覆盖；命中则绝不触碰网络），缺失的依赖是一次点明 `rut install` 的聚合拒绝，固定值拒绝会驱逐被污染的缓存条目，让下一次 `install` 自愈。`rut install <dir>` 解析 + 取回 + 写锁（`--locked` 只校验、绝不写入——CI 车道），`rut fetch <dir>` 只再预热缓存、不运行任何东西（[rut CLI](cli.md)）。"
+
 
 
 #: src/reference/dependency-kinds.md:113
@@ -28337,13 +28308,10 @@ msgstr "`.d.rut` 输入会被拒绝：声明文件是表面，不是可运行的
 msgid ""
 "# scaffold a hello-world module directory\n"
 msgstr ""
-
-
 #: src/reference/cli.md:89
-msgid ""
-"Scaffolds a hello-world module directory in **three files**: the manifest with the full swappable std set as **unpinned** url deps, the matching `rut.lock` (the std set's pins), and the root module — the same bytes as [your first rut program](../quick-start/first-program.md). The directory is runnable as-is: `rut run hello` prints `hello, rut!`."
-msgstr ""
-"用**三个文件**搭出一个 hello-world 模块目录：清单以**未固定**的 url 依赖写明完整可换 std 集合、配套的 `rut.lock`（std 集合的固定值）、以及根模块——与[你的第一个 rut 程序](../quick-start/first-program.md)逐字节相同。目录开箱即跑：`rut run hello` 打印 `hello, rut!`。"
+msgid "Scaffolds a hello-world module directory in **three files**: the manifest with the full swappable std set as **unpinned** url deps, the matching `rut.lock` (the std set's pins), and the root module — the same bytes as [your first rut program](../quick-start/first-program.md). `rut install hello` warms the cache once (nine bundles), then `rut run hello` prints `hello, rut!`."
+msgstr "用**三个文件**搭出一个 hello-world 模块目录：清单以**未固定**的 url 依赖写明完整可换 std 集合、配套的 `rut.lock`（std 集合的固定值）、以及根模块——与[你的第一个 rut 程序](../quick-start/first-program.md)逐字节相同。`rut install hello` 把缓存预热一次（九个捆绑包），然后 `rut run hello` 打印 `hello, rut!`。"
+
 
 
 #: src/reference/cli.md:95
@@ -28398,13 +28366,10 @@ msgstr ""
 #: src/reference/cli.md:103
 msgid "first run"
 msgstr "首次运行"
-
-
 #: src/reference/cli.md:103
-msgid ""
-"fetches the std set (9 bundles) into `<dir>/.rut/cache`; `rut install <dir>` or `rut fetch <dir>` pre-warms without running"
-msgstr ""
-"把 std 集合（9 个捆绑包）取回 `<dir>/.rut/cache`；`rut install <dir>` 或 `rut fetch <dir>` 可不运行而预热"
+msgid "**refuses**: `rut run`/`rut pack` never download — `rut install <dir>` fetches the std set (9 bundles) into `<dir>/.rut/cache` (with progress), `rut fetch <dir>` pre-warms the same way; then every run is cache-only"
+msgstr "**拒绝**：`rut run`/`rut pack` 绝不下载——`rut install <dir>` 把 std 集合（9 个捆绑包）取回 `<dir>/.rut/cache`（带进度输出），`rut fetch <dir>` 以同样方式预热；此后每次运行都只用缓存"
+
 
 
 #: src/reference/cli.md:105
@@ -28722,9 +28687,17 @@ msgstr ""
 
 #: src/reference/cli.md:297
 msgid ""
-"Walks a module **directory** with the url-dep remote and discards the result — every `deps` url is fetched (or found in the cache) and the graph is then loaded and thrown away, so a later offline `run` hits only the cache. The load is the same law every load obeys: the walk root's `rut.lock` must pin every collected url row, so `rut fetch` is the _re_\\-warm lane — [`install`](#install) is the lane that writes the lock a fetch (and every run) travels with. A `.rutbundle` argument is refused (exit 2): bundles are closed — there is nothing to fetch. The cache and the eviction law are the same lane `run`/`pack` use:"
-msgstr ""
-"带着 url 依赖远程遍历一个模块**目录**并丢弃结果——每条 `deps` url 都被取回（或在缓存中找到），然后加载整张图再扔掉，之后的离线 `run` 就只命中缓存。这次加载遵守一切加载共守的法则：遍历根的 `rut.lock` 必须固定收集到的每条 url 行，所以 `rut fetch` 是_再_预热车道——[`install`](#install) 才是写锁的车道，取回（以及每次运行）都带着锁走。`.rutbundle` 参数被拒绝（退出码 2）：捆绑包是闭合的——没有可取回之物。缓存与驱逐法则与 `run`/`pack` 所用是同一条车道："
+"Walks a module **directory** with the wire-armed remote and discards the "
+"result — every `deps` url is fetched (or found in the cache) and the graph "
+"is then loaded and thrown away, so a later offline `run` hits only the "
+"cache. The load is the same law every load obeys: the walk root's `rut.lock` "
+"must pin every collected url row, so `rut fetch` is the _re_\\-warm lane — "
+"[`install`](#install) is the lane that writes the lock a fetch (and every "
+"run) travels with. A `.rutbundle` argument is refused (exit 2): bundles are "
+"closed — there is nothing to fetch. The cache, the download policy, and the "
+"eviction law are `install`'s — the online lanes; `run`/`pack` ride the same "
+"cache with the wire off:"
+msgstr "带着带网络线路的远程遍历一个模块**目录**并丢弃结果——每条 `deps` url 都被取回（或在缓存中找到），然后加载整张图再扔掉，之后的离线 `run` 就只命中缓存。这次加载遵守一切加载共守的法则：遍历根的 `rut.lock` 必须固定收集到的每条 url 行，所以 `rut fetch` 是_再_预热车道——[`install`](#install) 才是写锁的车道，取回（以及每次运行）都带着锁走。`.rutbundle` 参数被拒绝（退出码 2）：捆绑包是闭合的——没有可取回之物。缓存、下载策略与驱逐法则是 `install` 的——联网车道；`run`/`pack` 骑同一个缓存但线路关闭："
 
 
 #: src/reference/cli.md:309
@@ -28747,29 +28720,19 @@ msgstr "缓存优先"
 #: src/reference/cli.md:310
 msgid "a hit never touches the network — offline reloads are the point"
 msgstr "命中则绝不触碰网络 — 离线重载正是目的"
-
-
 #: src/reference/cli.md:311
-msgid "miss"
-msgstr "未命中"
+msgid "GET (redirects on) under hard timeouts (10 s connect, 60 s whole-request — a stalled host fails loudly, never hangs), non-2xx is a loud error, a size cap refuses without buffering, the write is atomic (tmp + rename)"
+msgstr "GET（跟随重定向），带硬超时（连接 10 秒、整个请求 60 秒——卡住的宿主响亮失败，绝不悬挂），非 2xx 是响亮的错误，大小上限不缓冲即拒绝，写入是原子的（tmp + rename）"
 
-
-#: src/reference/cli.md:311
-msgid ""
-"GET (redirects on), non-2xx is a loud error, a size cap refuses without buffering, the write is atomic (tmp + rename)"
-msgstr "GET（跟随重定向），非 2xx 是响亮的错误，大小上限不缓冲即拒绝，写入是原子的（tmp + rename）"
 
 
 #: src/reference/cli.md:312
 msgid "poisoned entry"
 msgstr "被污染的条目"
-
-
 #: src/reference/cli.md:312
-msgid ""
-"the pin is the loader's law at the mount door — the pin's source is the root's `rut.lock`; when the door refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next run re-fetches and heals"
-msgstr ""
-"固定值是加载器在挂载门的法则——固定值的源头是根的 `rut.lock`；门拒绝时，CLI 把 url 映射回它的缓存路径、删除该条目并以退出码 2 结束——下次运行重新取回、自愈"
+msgid "the pin is the loader's law at the mount door — the pin's source is the root's `rut.lock`; when the door refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next `install` (or `fetch`) re-fetches and heals"
+msgstr "固定值是加载器在挂载门的法则——固定值的源头是根的 `rut.lock`；门拒绝时，CLI 把 url 映射回它的缓存路径、删除该条目并以退出码 2 结束——下一次 `install`（或 `fetch`）重新取回、自愈"
+
 
 
 #: src/reference/cli.md:314
@@ -28874,13 +28837,10 @@ msgstr ""
 #: src/reference/cli.md:333
 msgid "`2`"
 msgstr "`2`"
-
-
 #: src/reference/cli.md:333
-msgid ""
-"usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned cache entry is evicted); `install`/`fetch` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`mod.rut`/`rut.lock`, or an illegal package name"
-msgstr ""
-"用法错误（缺参数）；输入文件不可读；对 `.d.rut` 运行 `run`；对既非模块目录也非 `.rutbundle` 的输入运行 `run`；`fmt` 在目录下找不到 `.rut` 文件；某条 url 依赖遍历根的 `rut.lock` 未固定、或其取回字节打破锁的固定值（被污染的缓存条目被驱逐）；对 `.rutbundle` 运行 `install`/`fetch`；`install --locked` 漂移，包括缺锁拒绝；`install` 的目录整图未能按算出的固定值挂载；`new` 落在已存在的 `rut.jsonc`/`mod.rut`/`rut.lock` 上，或非法包名"
+msgid "usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; a url dep missing from the bundle cache (the install-first refusal — `run`/`pack` never download); `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned cache entry is evicted); `install`/`fetch` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`mod.rut`/`rut.lock`, or an illegal package name"
+msgstr "用法错误（缺参数）；输入文件不可读；对 `.d.rut` 运行 `run`；对既非模块目录也非 `.rutbundle` 的输入运行 `run`；某条 url 依赖不在捆绑包缓存里（先安装法则的拒绝——`run`/`pack` 绝不下载）；`fmt` 在目录下找不到 `.rut` 文件；某条 url 依赖遍历根的 `rut.lock` 未固定、或其取回字节打破锁的固定值（被污染的缓存条目被驱逐）；对 `.rutbundle` 运行 `install`/`fetch`；`install --locked` 漂移，包括缺锁拒绝；`install` 的目录整图未能按算出的固定值挂载；`new` 落在已有的 `rut.jsonc`/`mod.rut`/`rut.lock` 上，或非法的包名"
+
 
 
 #: src/reference/cli.md:335
@@ -29089,5 +29049,36 @@ msgstr "内部词汇"
 #: src/reference/glossary.md:58
 msgid ""
 "Engine internals — seeds, reseeding, the graph walk, dev tables — may appear in source comments and trace output. They are not part of the model, and the book avoids them."
-msgstr "引擎内部词汇——seeds、reseed、graph walk、dev 表——可能出现在源码注释与追踪输出里。它们不是模型的一部分，本书回避它们。"
+msgstr "引擎内部词汇——seeds、reseed、graph walk、dev 表——可能出现在源码注释与追踪输出里。它们不是模型的一部分，本书回避它们。"msgid "# fetch the std set into hello/.rut/cache (with progress)\n"
+msgstr "# 把 std 集合取回 hello/.rut/cache（带进度输出）"
 
+msgid "// cache-only — prime first, or use online_local\n"
+msgstr "// 只用缓存——先预热，或改用 online_local"
+
+msgid ""
+"project-local **with the wire armed** — a miss GETs (under hard timeouts); "
+"the explicit opt-in for installers and plugin loaders"
+msgstr "工程本地、**带网络线路**——未命中时 GET（带硬超时）；安装器与插件加载器的显式选择"
+
+msgid ""
+"an explicit cache root with the wire armed — the only flavor that networks"
+msgstr "带网络线路的显式缓存根——唯一会联网的形态"
+
+msgid ""
+"The **install-first law**: `run` and `pack` never download. Before the walk, "
+"every url dep the closure declares must already sit in the cache — a missing "
+"set is one aggregated refusal (exit 2) naming each dep and the fix: `run: N "
+"url deps not in the bundle cache — run `rut install` first`. "
+"[`install`](#install) and [`fetch`](#fetch) are the only downloading lanes; "
+"everything after the gate — the walk, the mount door's pin check, the "
+"compile, the drive — is cache-only and hermetic."
+msgstr "**先安装法则**：`run` 与 `pack` 绝不下载。遍历之前，闭包声明的每条 url 依赖必须已经在缓存里——缺失的集合是一次聚合拒绝（退出码 2），点名每个依赖与修法：`run: N url deps not in the bundle cache — run `rut install` first`。[`install`](#install) 与 [`fetch`](#fetch) 是仅有的下载车道；门之后的每一步——遍历、挂载门的固定值检查、编译、驱动——都只用缓存、完全封闭。"
+
+msgid "miss (install/fetch)"
+msgstr "未命中（install/fetch）"
+
+msgid "miss (run/pack)"
+msgstr "未命中（run/pack）"
+
+msgid "the loud install-first refusal — run and pack never download"
+msgstr "响亮的先安装法则拒绝——run 与 pack 绝不下载"

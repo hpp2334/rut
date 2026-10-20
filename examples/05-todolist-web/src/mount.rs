@@ -256,11 +256,11 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std-v11 plays the wire: the pinned artifacts prime ONE offline
-/// cache per process (`DepRemote::write` is the stand-in for the GET —
-/// the ONCE-gated priming is the 03-plugin precedent), and every
-/// manifest-lane walk rides an `HttpRemote::offline` over it — a miss
-/// NEVER touches the network, so the gate cannot network by
+/// dist/std-v11 plays the wire: the pinned artifacts prime ONE
+/// cache-only cache per process (`DepRemote::write` is the stand-in
+/// for the GET — the ONCE-gated priming is the 03-plugin precedent),
+/// and every manifest-lane walk rides an `HttpRemote::at` over it — a
+/// miss NEVER touches the network, so the gate cannot network by
 /// construction. The pin's bytes are the committed bytes
 /// (`pack-std --check` green); the CDN is only the human lane. The
 /// cache root lives in the tmp dir: a throwaway, not the project-local
@@ -268,7 +268,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
 #[cfg(not(target_arch = "wasm32"))]
 fn std_remote() -> rut_native::HttpRemote {
     static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-    rut_native::HttpRemote::offline(ROOT.get_or_init(|| {
+    rut_native::HttpRemote::at(ROOT.get_or_init(|| {
         let root = std::env::temp_dir()
             .join(format!("rut-05-todolist-web-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -293,7 +293,7 @@ fn std_remote() -> rut_native::HttpRemote {
                 }
             }
         }
-        let warmer = rut_native::HttpRemote::offline(&root);
+        let warmer = rut_native::HttpRemote::at(&root);
         for url in &urls {
             let artifact = url.rsplit('/').next().unwrap_or_default();
             let bytes = std::fs::read(dist.join(artifact)).unwrap_or_else(|e| {

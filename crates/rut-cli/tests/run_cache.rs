@@ -256,9 +256,14 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
         "use util::{twice};\nentry fn main() {\n    let x = twice(21);\n    return;\n}\n",
     );
 
-    // run 1 (cold): the fetch lands mid-run — and the cache holds
-    // exactly the url entry + ONE run-cache entry keyed on the resolved
-    // bytes. No dead `<uncached>` entry beside them.
+    // install first: run never downloads — the install warms the url
+    // entry (and leaves the identical lock as-is)
+    let (code, err) = rut_run(&["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install: {err}");
+
+    // run 1 (warm): the cache holds exactly the url entry + ONE
+    // run-cache entry keyed on the resolved bytes. No dead
+    // `<uncached>` entry beside them.
     let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
     let url_entry = app

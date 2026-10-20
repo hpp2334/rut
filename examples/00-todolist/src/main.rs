@@ -17,7 +17,7 @@ use std::task::{Context, Poll};
 /// only thing an embedder names, and only when the manifest declares
 /// url rows (this one does).
 fn load(base: &Path) -> Result<rut_driver::Walk, rut_driver::RunError> {
-    let remote = rut_native::HttpRemote::project_local(base);
+    let remote = rut_native::HttpRemote::online_local(base);
     block_on(rut_native::load_path_session_with(base, &remote))
 }
 

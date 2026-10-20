@@ -1,13 +1,19 @@
 //! The remote-deps policy: how url bytes arrive and how they are
 //! cached. [`DepRemote`] is the trait — all bytes-level, no paths
 //! cross it; [`HttpRemote`] is the standard implementation —
-//! cache-first (a hit NEVER touches the network), a miss GETs on a
-//! private worker thread and writes the cache back atomically.
+//! cache-first (a hit NEVER touches the network). THE DEFAULT IS
+//! CACHE-ONLY: a miss errors loudly — the `rut install` / `rut fetch`
+//! door (or an embedder's [`DepRemote::write`] priming) fills the
+//! cache; run/pack-style loads never download. Networking is the
+//! EXPLICIT [`HttpRemote::online`]/[`HttpRemote::online_local`]
+//! choice: a miss GETs on a private worker thread and writes the
+//! cache back atomically, under hard timeouts (10 s connect, 60 s
+//! whole-request) — a stalled host fails loudly, never hangs.
 //!
 //! Layout law: `<root>/<sha256(url)>.rutbundle` — the filename never
 //! carries the url's syntax, only its identity. The `http` feature
-//! (default on) arms the wire; without it a miss errors loudly and
-//! `offline()` remains the cache-only lane.
+//! (default on) arms the wire for the online remotes; without it even
+//! they error loudly on a miss.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -61,9 +67,11 @@ pub trait DepRemote {
     }
 }
 
-/// The standard remote: cache-first, wire-on-miss. `project_local` /
-/// `at` network on a miss (with the `http` feature); `offline` never
-/// does — the guaranteed-offline lane (CI gates, wasm-adjacent hosts).
+/// The standard remote: cache-first, and CACHE-ONLY by default —
+/// `project_local` / `at` never network (a miss is the loud offline
+/// error; prime the cache with `rut install`, `rut fetch`, or an
+/// embedder's `DepRemote::write`). `online_local` / `online` are the
+/// explicit wire-on flavors: a miss GETs, under hard timeouts.
 pub struct HttpRemote {
     root: PathBuf,
     /// `true` — a miss may GET; `false` — cache-only.
@@ -74,37 +82,62 @@ pub struct HttpRemote {
 
 impl HttpRemote {
     /// The project-local cache: `<project>/.rut/cache` — hermetic, no
-    /// global state. Wire on: a cold start GETs its misses (the
-    /// `http` feature) and caches them here; a warm start is pure
-    /// cache hits.
+    /// global state. CACHE-ONLY: a miss never networks — run
+    /// `rut install` first (the CLI's law: run/pack never download).
     pub fn project_local(project: &std::path::Path) -> Self {
         Self::at(project.join(".rut").join("cache"))
     }
 
-    /// An explicit cache root, wire on.
+    /// An explicit cache root, CACHE-ONLY: a miss is the loud offline
+    /// error, never a GET. The default remote.
     pub fn at(root: impl Into<PathBuf>) -> Self {
-        HttpRemote {
-            root: root.into(),
-            wire: true,
-            #[cfg(feature = "http")]
-            client: reqwest::Client::builder()
-                .build()
-                .expect("http client"),
-        }
-    }
-
-    /// The cache-only flavor — a miss NEVER touches the network, it
-    /// errors loudly. The CI/wasm lane: prime the cache with
-    /// [`DepRemote::write`] (the wire stand-in) and load.
-    pub fn offline(root: impl Into<PathBuf>) -> Self {
         HttpRemote {
             root: root.into(),
             wire: false,
             #[cfg(feature = "http")]
-            client: reqwest::Client::builder()
-                .build()
-                .expect("http client"),
+            client: Self::plain_client(),
         }
+    }
+
+    /// The project-local cache with the wire armed — the explicit
+    /// opt-in for apps whose job is fetching (installers, plugin
+    /// loaders). A miss GETs (under hard timeouts) and caches.
+    pub fn online_local(project: &std::path::Path) -> Self {
+        Self::online(project.join(".rut").join("cache"))
+    }
+
+    /// An explicit cache root with the wire armed — a miss GETs on a
+    /// private worker thread (redirects on, loud status errors, the
+    /// size cap) under hard timeouts and writes the cache back
+    /// atomically. The ONLY flavor that networks.
+    pub fn online(root: impl Into<PathBuf>) -> Self {
+        HttpRemote {
+            root: root.into(),
+            wire: true,
+            #[cfg(feature = "http")]
+            client: Self::wired_client(),
+        }
+    }
+
+    /// The plain HTTP client — a cache-only remote never uses it (the
+    /// field exists because one struct serves both flavors).
+    #[cfg(feature = "http")]
+    fn plain_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .build()
+            .expect("http client")
+    }
+
+    /// The wire client: hard timeouts so a stalled host fails loudly —
+    /// 10 s to connect, 60 s for the whole request — never a silent
+    /// hang (the run lane's old disease, kept out of the wire lanes).
+    #[cfg(feature = "http")]
+    fn wired_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .expect("http client")
     }
 
     /// The cache path for a url: `<root>/<sha256(url)>.rutbundle` —
@@ -140,7 +173,7 @@ impl HttpRemote {
         if self.wire {
             Err(RemoteError::new(format!(
                 "{url} is not in the bundle cache and this build does not network — \
-                 run `rut fetch <dir>` or build with `http`"
+                 run `rut install <dir>` (or build with `http`)"
             )))
         } else {
             self.get_offline(url)
@@ -214,8 +247,9 @@ impl HttpRemote {
     /// remote never networks.
     fn get_offline(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
         Err(RemoteError::new(format!(
-            "{url} is not in the bundle cache and this remote is offline \
-             (cache-only) — prime the cache (`DepRemote::write`, or `rut fetch <dir>`)"
+            "{url} is not in the bundle cache and this remote is cache-only — \
+             run `rut install` first (or `rut fetch <dir>` to pre-warm; an \
+             embedder primes via `DepRemote::write`)"
         )))
     }
 }

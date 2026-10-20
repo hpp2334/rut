@@ -116,8 +116,8 @@ pub(crate) fn new(args: &NewArgs) {
         }
     }
     println!("created {dir} — rut.jsonc + rut.lock + mod.rut (the std set as deps, pinned by the lock, the ink hello)");
-    println!("run it: rut run {dir}");
-    println!("first run fetches the std set (9 bundles) into {dir}/.rut/cache — rut fetch {dir} pre-warms; after a dep edit, rut install {dir} re-pins rut.lock");
+    println!("install first: rut install {dir} — fetches the 9 std bundles into {dir}/.rut/cache (run and pack never download)");
+    println!("then run it: rut run {dir} — after a dep edit, rut install re-pins rut.lock; rut fetch {dir} pre-warms the same set");
 }
 
 /// The scaffolded manifest: the derived name, the std set as UNPINNED

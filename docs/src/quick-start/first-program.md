@@ -94,11 +94,13 @@ program's door, and now you have written one. For the next directory,
 the CLI scaffolds it in one step: `rut new <dir>` writes exactly those
 three files — the manifest with the derived name (and, unlike the
 walkthrough above, the whole swappable std set as url deps), the
-matching `rut.lock` (the std set's pins), and the same `mod.rut` — and
-`rut run <dir>` runs it ([the rut CLI](../reference/cli.md)):
+matching `rut.lock` (the std set's pins), and the same `mod.rut`.
+`rut install <dir>` warms the cache once (run never downloads —
+[the rut CLI](../reference/cli.md)), then `rut run <dir>` runs it:
 
 ```sh
-rut new hello    # hello/rut.jsonc (the std set) + hello/rut.lock + hello/mod.rut
+rut new hello      # hello/rut.jsonc (the std set) + hello/rut.lock + hello/mod.rut
+rut install hello  # fetch the std set into hello/.rut/cache (with progress)
 rut run hello
 ```
 

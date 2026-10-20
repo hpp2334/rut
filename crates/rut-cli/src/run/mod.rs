@@ -87,9 +87,16 @@ pub(crate) fn run(args: &RunArgs) {
             }
         }
     }
-    // the miss path — today's run: walk the closure (url deps ride the
-    // cache-first fetcher), offer every pkg, compile through the chain
-    let loaded = match cache::load_with_cache(p) {
+    // the miss path — today's run: the install-first gate (run never
+    // networks — a missing url dep is one aggregated refusal), then
+    // the walk (url deps ride the cache-first fetcher — offline here:
+    // every dep is already cached), compile through the chain
+    let remote = cache::offline_remote_for(p);
+    if let Err(e) = cache::ensure_deps_cached(p, "run", &remote) {
+        eprintln!("{e}");
+        std::process::exit(2);
+    }
+    let loaded = match cache::load_offline(p) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
@@ -109,8 +116,10 @@ pub(crate) fn run(args: &RunArgs) {
     // the run succeeded: emit the archive via the pack lane and write
     // the cache entry (also under --no-cache — the entry mirrors what
     // the reference engine just produced). Best-effort; a host-rooted
-    // dir never gets here (the door refused above).
-    let remote = cache::remote_for(p);
+    // dir never gets here (the door refused above). The pack rides the
+    // cache-only remote — the closure was just loaded offline, so
+    // every url dep is cached and the wire never fires.
+    let remote = cache::offline_remote_for(p);
     match cache::block_on(rut_native::pack_dir_opts_with(
         p,
         &rut_driver::PackOpts::default(),

@@ -52,7 +52,7 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 /// closure).
 fn load_rgh() -> Result<(rut_driver::Walk, rut_driver::Walk), String> {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let remote = rut_native::HttpRemote::project_local(base);
+    let remote = rut_native::HttpRemote::online_local(base);
     let loaded = block_on(rut_native::load_path_session_with(base, &remote))
         .map_err(|e| e.to_string())?;
     // the example's own CLI-I/O pkg (nothing fetches — the embedder

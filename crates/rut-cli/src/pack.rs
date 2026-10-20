@@ -1,5 +1,6 @@
 //! the `pack` subcommand: a deterministic `.rutbundle` (+ the optional
-//! sidecar symbol table), riding the cache-first remote.
+//! sidecar symbol table), riding the cache-only remote — pack never
+//! downloads (the install-first law: `rut install` fills the cache).
 
 use crate::cache;
 
@@ -30,7 +31,11 @@ pub(crate) fn pack(args: &PackArgs) {
     let out = args.out.as_deref();
     let strip = args.strip;
     let p = std::path::Path::new(dir);
-    let remote = cache::remote_for(p);
+    let remote = cache::offline_remote_for(p);
+    if let Err(e) = cache::ensure_deps_cached(p, "pack", &remote) {
+        eprintln!("{e}");
+        std::process::exit(2);
+    }
     let (bytes, symtab) = match cache::block_on(rut_native::pack_dir_opts_with(
         p,
         &rut_driver::PackOpts { strip },

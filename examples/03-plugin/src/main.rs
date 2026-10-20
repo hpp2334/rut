@@ -61,7 +61,7 @@ fn main() {
     // output, so the packed form stays closed (loading it never
     // fetches).
     let bytes = {
-        let remote = rut_native::HttpRemote::project_local(dir);
+        let remote = rut_native::HttpRemote::online_local(dir);
         let opts = rut_driver::PackOpts::default();
         // the remote's fetch futures come back READY: one noop-waker
         // poll settles the pack lane's prefetch

@@ -20,7 +20,7 @@ fn warm(base: &Path) -> rut_native::HttpRemote {
     let root = std::env::temp_dir()
         .join(format!("rut-00-todolist-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let remote = rut_native::HttpRemote::offline(&root);
+    let remote = rut_native::HttpRemote::at(&root);
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
     let manifest =
         rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");

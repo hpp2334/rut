@@ -47,7 +47,7 @@ nightly pin, a runnable smoke test) is
 //    dev pass.
 let loaded = block_on(rut_native::load_dir_with(
     std::path::Path::new("plugins/server"),
-    &rut_native::HttpRemote::project_local(project_dir),
+    &rut_native::HttpRemote::project_local(project_dir), // cache-only — prime first, or use online_local
 ))?;
 
 // 2. The chain (rut-driver): offer the walk's yield, hand over the
@@ -251,9 +251,13 @@ lanes take `&dyn DepRemote` and nothing else: the remote matters only
 when the dep walk actually reaches a url row. Url-free projects and
 `.rutbundle`s are closed — they load with no remote named at all.
 
-The standard remote is **`rut_native::HttpRemote`** — cache-first: a
-hit NEVER touches the network, a miss GETs (redirects on, loud status
-errors, a size cap) on the remote's own private worker thread and
+The standard remote is **`rut_native::HttpRemote`** — cache-first, and
+**cache-only by default**: a hit NEVER touches the network, and a miss
+is the loud offline error (prime the cache with `rut install`, `rut
+fetch`, or an embedder's `DepRemote::write`). Networking is the
+EXPLICIT `online_local` / `online` choice: a miss GETs (redirects on,
+loud status errors, a size cap, hard timeouts — 10 s to connect, 60 s
+for the whole request) on the remote's own private worker thread and
 writes the cache back atomically. Cache layout law:
 `<root>/<sha256(url)>.rutbundle`. The futures come back READY, so any
 executor works — including the std-only noop-waker `block_on` poll
@@ -261,17 +265,19 @@ loop the examples spell.
 
 | constructor | behavior |
 |---|---|
-| `HttpRemote::project_local(project)` | `<project>/.rut/cache` — hermetic, project-local; networks on a miss (the `http` feature, default on) |
-| `HttpRemote::at(root)` | an explicit cache root, wire on |
-| `HttpRemote::offline(root)` | **cache-only** — a miss never networks; the guaranteed-offline lane (CI gates, wasm-adjacent hosts) |
+| `HttpRemote::project_local(project)` | `<project>/.rut/cache` — hermetic, project-local; **cache-only** — a miss never networks (the default) |
+| `HttpRemote::at(root)` | an explicit cache root, cache-only |
+| `HttpRemote::online_local(project)` | project-local **with the wire armed** — a miss GETs (under hard timeouts); the explicit opt-in for installers and plugin loaders |
+| `HttpRemote::online(root)` | an explicit cache root with the wire armed — the only flavor that networks |
 | `path_for(url)` / `evict(url)` | the concrete entry path / delete a poisoned entry |
 
-**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts): prime an
-`offline` remote, then load over it. The committed std artifacts play
-the wire — `DepRemote::write` is the stand-in for the GET:
+**Guaranteed-offline loads** (tests, CI, wasm-adjacent hosts, and — by
+default — every load): prime a cache-only remote, then load over it.
+The committed std artifacts play the wire — `DepRemote::write` is the
+stand-in for the GET:
 
 ```rust
-let remote = rut_native::HttpRemote::offline(&cache_root);
+let remote = rut_native::HttpRemote::at(&cache_root);
 for (url, bytes) in vendored_rows {                  // parsed from rut.jsonc
     rut_native::DepRemote::write(&remote, &url, &bytes)?;  // prime the cache
 }
@@ -357,7 +363,7 @@ contain those names.
 | `Source` | the one filesystem door, STRING keys: `read(key)`, `resolve(from, spec)`, `root()` — the key math is the impl's; a `Path` crosses nothing |
 | `FsSource::at(dir)` | the real filesystem with the root baked in |
 | `DepRemote` | the url-dep contract: `fetch(&self, url) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>` (required), `lookup`, `write` — the call site owns HOW bytes arrive (transport, cache, offline policy). Dyn-compatible (hand-rolled boxing, no async-trait), deliberately **not** `+ Send`: a browser `fetch` bridge is `!Send`, and sync impls (cache hits, fixtures) are first-class |
-| `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), a miss GETs on a private worker thread and writes back atomically; `project_local` / `at` wire on, `offline` is cache-only, `path_for`/`evict` are concrete |
+| `HttpRemote` | the standard remote: cache-first (`<root>/<sha256(url)>.rutbundle`), **cache-only by default** (`project_local` / `at` — a miss is the loud offline error), the wire only on `online_local` / `online` (a miss GETs under hard timeouts and writes back atomically); `path_for`/`evict` are concrete |
 | `load_dir(dir)` / `load_dir_with(dir, &remote)` / `load_dir_fetched(dir, &map)` | the walk and its fetched lanes — the yield is `rut_driver::Walk` ([the walk vs the offer](#the-walk-vs-the-offer)) |
 | `load_path_session(path)` / `load_path_session_with(path, &remote)` | dispatch on the shape: directory walk or closed `.rutbundle` |
 | `load_bundle_session(path)` | load a packed `.rutbundle` from disk — the pure container lane plus the file read |

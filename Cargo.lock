@@ -1160,7 +1160,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rut-ast"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-core",
  "rut-lexer",
@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "rut-bench-probe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-core",
  "rut-driver",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "rut-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "rut-ast",
@@ -1197,11 +1197,11 @@ dependencies = [
 
 [[package]]
 name = "rut-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "rut-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-ast",
  "rut-core",
@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "rut-fmt"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-ast",
  "rut-core",
@@ -1233,11 +1233,11 @@ dependencies = [
 
 [[package]]
 name = "rut-lexer"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "rut-lir"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-ast",
  "rut-core",
@@ -1249,7 +1249,7 @@ dependencies = [
 
 [[package]]
 name = "rut-lsp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ls-types",
  "rut-ast",
@@ -1267,7 +1267,7 @@ dependencies = [
 
 [[package]]
 name = "rut-lsp-wasm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ls-types",
  "rut-ast",
@@ -1279,7 +1279,7 @@ dependencies = [
 
 [[package]]
 name = "rut-native"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "reqwest",
  "rut-core",
@@ -1290,7 +1290,7 @@ dependencies = [
 
 [[package]]
 name = "rut-parser"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-ast",
  "rut-core",
@@ -1299,7 +1299,7 @@ dependencies = [
 
 [[package]]
 name = "rut-semantic"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-ast",
  "rut-lexer",
@@ -1308,7 +1308,7 @@ dependencies = [
 
 [[package]]
 name = "rut-std"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hashbrown 0.14.5",
  "reqwest",
@@ -1322,7 +1322,7 @@ dependencies = [
 
 [[package]]
 name = "rut-vm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-core",
  "rut-vm-threaded",
@@ -1330,14 +1330,14 @@ dependencies = [
 
 [[package]]
 name = "rut-vm-threaded"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-core",
 ]
 
 [[package]]
 name = "rut-wasm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rut-ast",
  "rut-core",

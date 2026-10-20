@@ -278,6 +278,16 @@ fn scaffolded_project_runs_against_a_local_server() {
         .unwrap();
     }
 
+    // the install-first law: run never downloads — install warms the
+    // cache from the local server (and confirms the lock is fresh)
+    let out = rut_cmd(&root.join("cache"), &["install", dir.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "the scaffold install must succeed: {}\nstdout: {}",
+        String::from_utf8_lossy(&out.stderr),
+        String::from_utf8_lossy(&out.stdout)
+    );
+
     // the ink-only hello runs clean against the FULL manifest — unused
     // deps are legal (host pkgs merge inert unless the program mounts
     // their pkg), so no

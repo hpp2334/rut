@@ -2,13 +2,15 @@
 //! localhost TcpListener (offline: no external network), the real
 //! cache policy, the real eviction law:
 //!
-//! fetch → run (cache miss ⇒ GET) → run offline (server silent ⇒
-//! cache hit) → poisoned cache entry ⇒ pin refusal, eviction, exit 2 →
-//! re-serve ⇒ healed. Plus `rut fetch` as the CI warm-up.
+//! run cold (cache miss ⇒ REFUSAL, no GET) → install (the GET) →
+//! run ⇒ cache hit → run offline (server silent ⇒ still a cache hit)
+//! → poisoned cache entry ⇒ pin refusal, eviction, exit 2 → install
+//! re-fetches ⇒ healed. Plus `rut fetch` as the CI warm-up.
 //!
 //! The pin law itself is the loader's (mount door, every load — see
 //! rut-driver's url_deps tests); what this file proves is the CLI's
-//! HOW: the cache-first fetcher and the healing loop around it.
+//! HOW: the install-first gate (run/pack never download) and the
+//! healing loop around the two downloading lanes.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -127,7 +129,7 @@ fn leaf_bundle(tag: &str) -> Vec<u8> {
 }
 
 #[test]
-fn fetch_cache_offline_pin_refusal_and_eviction() {
+fn install_first_run_refusal_pin_refusal_and_eviction() {
     let bytes = leaf_bundle("leaf");
     let server = TestServer::serve(bytes.clone());
     let url = server.url("util.rutbundle");
@@ -136,13 +138,20 @@ fn fetch_cache_offline_pin_refusal_and_eviction() {
     let app = root.join("app");
     let cache = root.join("cache");
 
-    // 1. fetch → run: cache miss ⇒ GET ⇒ cached ⇒ the program runs
+    // 1. cold run: a missing url dep is a hard refusal BEFORE any GET
+    // — run never downloads; the refusal names the fix and the dep
+    server.set_up(false);
     let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
-    assert_eq!(code, 0, "first run must succeed: {err}");
-    assert!(err.is_empty(), "{err}");
+    assert_eq!(code, 2, "a cold run must refuse: {err}");
+    assert!(err.contains("run `rut install` first"), "{err}");
+    assert!(err.contains("util"), "{err}");
 
-    // 2. offline reload: the server goes silent; the cache answers —
-    // a hit NEVER touches the network
+    // 2. install: the downloading lane — the GET lands, the cache
+    // fills, and the run passes with the server already silent (a hit
+    // NEVER touches the network)
+    server.set_up(true);
+    let (code, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install must download and pin: {err}");
     server.set_up(false);
     let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "offline run must hit the cache: {err}");
@@ -164,11 +173,52 @@ fn fetch_cache_offline_pin_refusal_and_eviction() {
     assert!(err.contains("rut.lock pins"), "{err}");
     assert!(!entry.exists(), "the poisoned entry must be evicted");
 
-    // 4. healed: serve again — the entry re-fetches and the run passes
+    // 4. healed: serve again — `rut install` re-fetches (run never
+    // does), and the run passes offline
     server.set_up(true);
+    let (code, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install heals the cache: {err}");
+    server.set_up(false);
     let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
-    assert_eq!(code, 0, "the cache heals on the next run: {err}");
+    assert_eq!(code, 0, "the healed cache answers offline: {err}");
     assert!(entry.is_file(), "re-fetched");
+}
+
+#[test]
+fn cold_run_names_every_missing_dep_at_once() {
+    // two url deps, neither cached — ONE aggregated refusal lists both
+    // (not a first-miss mid-walk), and the server's silence proves run
+    // never even tried to GET
+    let bytes = leaf_bundle("agg leaf");
+    let server = TestServer::serve(bytes);
+    let url_a = server.url("a.rutbundle");
+    let url_b = server.url("b.rutbundle");
+    let pin = rut_driver::sha256_hex(b"same bytes, two names");
+    let root = scratch("agg consumer");
+    let app = root.join("app");
+    write(
+        &app,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"a": {{"url": "{url_a}"}}, "b": {{"url": "{url_b}"}}}}"#),
+        ),
+    );
+    let lock = rut_driver::LockFile::from_rows(vec![
+        rut_driver::LockRow { pkg: "a".into(), url: url_a.clone(), sha256: pin.clone() },
+        rut_driver::LockRow { pkg: "b".into(), url: url_b, sha256: pin },
+    ]);
+    write(&app, "rut.lock", &rut_driver::render_lock(&lock));
+    write(&app, "mod.rut", "entry fn main() -> nil { return; }\n");
+
+    server.set_up(false);
+    let (code, err) = rut(&root.join("cache"), &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("2 url deps not in the bundle cache"), "{err}");
+    assert!(err.contains("run `rut install` first"), "{err}");
+    assert!(err.contains("a — "), "{err}");
+    assert!(err.contains("b — "), "{err}");
 }
 
 #[test]

@@ -25,12 +25,12 @@ pub(crate) fn fetch_cmd(args: &FetchArgs) {
     }
     // the progress loop: per-dep stderr lines, the misses downloaded —
     // so the load below rides cache hits only
-    let remote = cache::remote_for(p);
+    let remote = cache::online_remote_for(p);
     if let Err(e) = install::progress_loop("fetch", p, &remote) {
         eprintln!("fetch: {e}");
         std::process::exit(2);
     }
-    match cache::load_with_cache(p) {
+    match cache::load_offline(p) {
         Ok(loaded) => println!("fetch: {dir} — all url deps are cached (root `{}`)", loaded.root),
         Err(e) => {
             eprintln!("{e}");

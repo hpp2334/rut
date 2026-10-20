@@ -12,11 +12,12 @@ use std::path::Path;
 use std::task::{Context, Poll};
 
 /// The embedder's ENTIRE load half — the Loader door. The project is
-/// this directory; the remote policy is the project-local cache. A
-/// cold start networks on its misses (the CDN, pinned by the
-/// manifest); a warm start is pure cache hits.
+/// this directory; the remote policy is the project-local cache WITH
+/// the wire armed (`online_local` — the explicit opt-in: a loader may
+/// fetch). A cold start networks on its misses (the CDN, pinned by
+/// the manifest); a warm start is pure cache hits.
 fn load(base: &Path) -> Result<rut_driver::Walk, rut_driver::RunError> {
-    let remote = rut_native::HttpRemote::project_local(base);
+    let remote = rut_native::HttpRemote::online_local(base);
     block_on(rut_native::load_path_session_with(base, &remote))
 }
 

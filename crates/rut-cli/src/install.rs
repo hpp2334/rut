@@ -119,7 +119,7 @@ pub(crate) fn install(args: &InstallArgs) {
 /// An empty closure still writes an empty-deps lock: the record that
 /// the closure resolved to nothing.
 fn install_plain(p: &Path) {
-    let remote = cache::remote_for(p);
+    let remote = cache::online_remote_for(p);
     let got = match progress_loop("install", p, &remote) {
         Ok(g) => g,
         Err(e) => {
@@ -226,7 +226,7 @@ fn install_locked(p: &Path) {
             std::process::exit(2);
         }
     };
-    let remote = cache::remote_for(p);
+    let remote = cache::online_remote_for(p);
     let got = match progress_loop("install", p, &remote) {
         Ok(g) => g,
         Err(e) => {

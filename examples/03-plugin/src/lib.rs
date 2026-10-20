@@ -49,7 +49,7 @@ impl Plugin {
     /// is frozen from then on.
     pub fn load(path: &std::path::Path, limits: &Limits) -> Result<Plugin, Trap> {
         let loaded = {
-            let remote = rut_native::HttpRemote::project_local(path);
+            let remote = rut_native::HttpRemote::online_local(path);
             // the std-only driver for the walk's future: the remote's
             // fetch futures come back READY, so one noop-waker poll
             // settles them

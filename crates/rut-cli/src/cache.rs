@@ -5,15 +5,60 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::task::{Context, Poll};
 
+use rut_native::DepRemote;
+
 /// The remote for a project: `RUT_CACHE_DIR` overrides the root (the
 /// CLI-side override — the walk never reads env), otherwise the
-/// project-local cache (`<project>/.rut/cache`). Cache-first either
-/// way: a hit never touches the network.
-pub(crate) fn remote_for(project: &std::path::Path) -> rut_native::HttpRemote {
+/// project-local cache (`<project>/.rut/cache`). CACHE-ONLY: a hit
+/// never touches the network and a miss REFUSES — `rut run`/`rut
+/// pack` never download (the install-first law).
+pub(crate) fn offline_remote_for(project: &std::path::Path) -> rut_native::HttpRemote {
     match std::env::var_os("RUT_CACHE_DIR") {
         Some(dir) => rut_native::HttpRemote::at(PathBuf::from(dir)),
         None => rut_native::HttpRemote::project_local(project),
     }
+}
+
+/// The online twin — the wire armed — for the two lanes whose JOB is
+/// downloading: `install` and `fetch`. Same root resolution.
+pub(crate) fn online_remote_for(project: &std::path::Path) -> rut_native::HttpRemote {
+    match std::env::var_os("RUT_CACHE_DIR") {
+        Some(dir) => rut_native::HttpRemote::online(PathBuf::from(dir)),
+        None => rut_native::HttpRemote::online_local(project),
+    }
+}
+
+/// The install-first gate: every url dep of the closure must already
+/// sit in the cache — run/pack never download. `Ok(())` when the
+/// closure is fully cached (or has no url deps, or carries no
+/// manifest — that one is the walk's diagnostic, not ours). A missing
+/// set is ONE aggregated refusal naming the fix, not a first-miss
+/// mid-walk.
+pub(crate) fn ensure_deps_cached(
+    project: &std::path::Path,
+    cmd: &str,
+    remote: &rut_native::HttpRemote,
+) -> Result<(), String> {
+    let rows = match rut_native::url_dep_rows(project) {
+        Ok(rows) => rows,
+        Err(_) => return Ok(()), // no manifest / bad manifest — the walk diagnoses
+    };
+    let missing: Vec<&(String, String)> = rows
+        .iter()
+        .filter(|(_, url)| remote.lookup(url).is_none())
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    let mut msg = format!(
+        "{cmd}: {} url dep{} not in the bundle cache — run `rut install` first:",
+        missing.len(),
+        if missing.len() == 1 { "" } else { "s" },
+    );
+    for (spec, url) in &missing {
+        msg.push_str(&format!("\n  - {spec} — {url}"));
+    }
+    Err(msg)
 }
 
 /// The block_on seam for the `_with` lanes: the fetch futures come
@@ -42,7 +87,7 @@ pub(crate) fn evict_poisoned_cache(project: &std::path::Path, err: &str) {
     let Some(url) = rest.split(": ").next() else {
         return;
     };
-    let remote = remote_for(project);
+    let remote = offline_remote_for(project);
     let path = remote.path_for(url);
     if remote.evict(url) {
         eprintln!(
@@ -53,9 +98,11 @@ pub(crate) fn evict_poisoned_cache(project: &std::path::Path, err: &str) {
 }
 
 /// The fetched load lane for `run`/`fetch`: a module dir or a
-/// `.rutbundle`, with url deps served by the cache-first remote.
-pub(crate) fn load_with_cache(path: &std::path::Path) -> Result<rut_driver::Walk, String> {
-    let remote = remote_for(path);
+/// `.rutbundle`, with url deps served by the CACHE-ONLY remote — every
+/// dep is already cached (run/fetch never download; the gate ran, or
+/// the progress loop just primed).
+pub(crate) fn load_offline(path: &std::path::Path) -> Result<rut_driver::Walk, String> {
+    let remote = offline_remote_for(path);
     block_on(rut_native::load_path_session_with(path, &remote)).map_err(|e| e.to_string())
 }
 

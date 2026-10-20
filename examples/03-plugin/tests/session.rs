@@ -22,7 +22,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let cache = std::env::temp_dir().join(format!("rut-03-plugin-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&cache);
-    let remote = rut_native::HttpRemote::offline(&cache);
+    let remote = rut_native::HttpRemote::at(&cache);
     let manifest_text =
         std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.json: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
@@ -80,7 +80,7 @@ fn prime_project_cache() {
             std::fs::read_to_string(d.join("rut.jsonc")).expect("read the plugin manifest");
         let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse manifest");
         let dist = d.join("../../../dist/std-v11");
-        let remote = rut_native::HttpRemote::offline(d.join(".rut").join("cache"));
+        let remote = rut_native::HttpRemote::at(d.join(".rut").join("cache"));
         for desc in manifest.deps.values() {
             let Some(url) = desc.get("url") else { continue };
             let artifact = url.rsplit('/').next().unwrap_or_default();

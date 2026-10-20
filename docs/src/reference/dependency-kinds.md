@@ -102,13 +102,15 @@ directory:
   same `rut.lock` ⇒ identical resolved world** — the lock pins are
   what make packs reproducible, and `--locked` verifies the pair
   before anything runs.
-- The CLI lane: `rut run`/`rut pack` fetch through the cache-first
-  standard remote (`<project>/.rut/cache`, `$RUT_CACHE_DIR` overrides;
-  a hit never touches the network), and a pin refusal evicts the
-  poisoned cache entry so the next run heals. `rut install <dir>`
-  resolves + fetches + writes the lock (`--locked` verifies without
-  writing — the CI lane), and `rut fetch <dir>` re-warms the cache
-  without running anything ([The rut CLI](cli.md)).
+- The CLI lane: **the install-first law** — `rut run`/`rut pack` never
+  download. They ride the cache-only standard remote
+  (`<project>/.rut/cache`, `$RUT_CACHE_DIR` overrides; a hit never
+  touches the network), a missing dep is one aggregated refusal naming
+  `rut install`, and a pin refusal evicts the poisoned cache entry so
+  the next `install` heals. `rut install <dir>` resolves + fetches +
+  writes the lock (`--locked` verifies without writing — the CI lane),
+  and `rut fetch <dir>` re-warms the cache without running anything
+  ([The rut CLI](cli.md)).
 
 ### The std tree on jsDelivr
 
