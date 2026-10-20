@@ -1,7 +1,7 @@
 //! The `rut new` lane through the binary: the scaffold's three files
 //! (manifest + lock + root module), the refusals (clobber, illegal
 //! name), the born-formatted template, the pins against the committed
-//! `dist/std-v11` snapshot, and the offline end-to-end — the
+//! `dist/std-v12` snapshot, and the offline end-to-end — the
 //! full-deps manifest mounts clean and the ink-only hello runs.
 //!
 //! The templates are real files (`../template/`), so every byte law
@@ -207,14 +207,14 @@ fn template_is_fmt_clean() {
 }
 
 #[test]
-fn pins_match_the_frozen_std_v9_snapshot() {
+fn pins_match_the_frozen_std_snapshot() {
     let (_root, dir) = scaffold("pins", "hello");
     // the scaffolded lock is the carrier — parse ITS rows and hold
     // each pin against the committed artifact; no table duplication
     let lock_text = std::fs::read_to_string(dir.join("rut.lock")).unwrap();
     let lock = rut_driver::parse_lock(&lock_text).expect("the scaffolded rut.lock parses");
     assert_eq!(lock.deps().len(), 9, "the lock pins exactly the nine");
-    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v11");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v12");
     for row in lock.deps() {
         assert!(
             row.url.ends_with(&format!("/dist/std/{}.rutbundle", row.pkg)),
@@ -223,7 +223,7 @@ fn pins_match_the_frozen_std_v9_snapshot() {
             row.url
         );
         let bytes = std::fs::read(frozen.join(format!("{}.rutbundle", row.pkg)))
-            .unwrap_or_else(|e| panic!("the frozen dist/std-v11/{}.rutbundle: {e}", row.pkg));
+            .unwrap_or_else(|e| panic!("the frozen dist/std-v12/{}.rutbundle: {e}", row.pkg));
         assert_eq!(
             row.sha256,
             rut_driver::sha256_hex(&bytes),
@@ -295,7 +295,7 @@ fn scaffolded_project_runs_against_a_local_server() {
     // the wire: the whole frozen snapshot — the nine the manifest
     // names, plus the host surfaces they can pull (bundles are closed,
     // but the server answers whatever the graph asks)
-    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v11");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v12");
     let mut payloads = BTreeMap::new();
     for e in std::fs::read_dir(&frozen).unwrap() {
         let e = e.unwrap();
@@ -318,7 +318,7 @@ fn scaffolded_project_runs_against_a_local_server() {
         std::fs::write(
             &path,
             text.replace(
-                "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/",
+                "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/",
                 &format!("http://127.0.0.1:{}/", server.port),
             ),
         )

@@ -108,7 +108,7 @@ Behavior:
 | package name | derived from the target's basename — bare `[a-zA-Z0-9_]+`, non-empty (the manifest's law). An illegal name is refused, never sanitized (exit 2) |
 | clobber refusal | a target already holding a `rut.jsonc`, a `mod.rut`, or a `rut.lock` is refused (exit 2, naming the file) — other pre-existing files are fine |
 | parents | created as needed — `rut new a/b/hello` works |
-| files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v11` tag; `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `mod.rut` — the ink hello |
+| files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v12` tag; `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `mod.rut` — the ink hello |
 | first run | **refuses**: `rut run`/`rut pack` never download — `rut install <dir>` fetches the std set (9 bundles) into `<dir>/.rut/cache` (with progress), `rut fetch <dir>` pre-warms the same way; then every run is cache-only |
 
 The three created files, for `rut new hello` — all verbatim:
@@ -120,7 +120,7 @@ The three created files, for `rut new hello` — all verbatim:
   // module the loader mounts.
   //
   // THE STD SET: all nine swappable std libs, each a COMMITTED
-  // compiled bundle (dist/std, jsDelivr-served at the std-v11 tag).
+  // compiled bundle (dist/std, jsDelivr-served at the std-v12 tag).
   // The pins live in `rut.lock` beside this file (machine-generated:
   // the scaffold wrote them; `rut install` re-pins after a dep edit —
   // the sha256 key is retired from manifest rows). Unused deps are
@@ -129,15 +129,15 @@ The three created files, for `rut new hello` — all verbatim:
   // hello (ink only) runs clean with the full set declared.
   "name": "hello",
   "deps": {
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/ink.rutbundle" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle" },
-    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/flow.rutbundle" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/nmapset.rutbundle" },
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/json.rutbundle" },
-    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/strbuild.rutbundle" },
-    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/calc.rutbundle" },
-    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/futures.rutbundle" },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/http.rutbundle" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" },
+    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/flow.rutbundle" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/nmapset.rutbundle" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/json.rutbundle" },
+    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/strbuild.rutbundle" },
+    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/calc.rutbundle" },
+    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/futures.rutbundle" },
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/http.rutbundle" }
   }
 }
 
@@ -148,15 +148,15 @@ The three created files, for `rut new hello` — all verbatim:
   "format": "rutlock",
   "format_version": 1,
   "deps": [
-    { "pkg": "calc",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/calc.rutbundle",     "sha256": "0ded688375f71dc4241096faf4ac07bd5154f765705145908589d911fef918d0" },
-    { "pkg": "flow",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/flow.rutbundle",     "sha256": "48493535461a15bbe7bcdea881e221cce62354ee92651c527533241853a3c730" },
-    { "pkg": "futures",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/futures.rutbundle",  "sha256": "a3b44897107b3a04aa605ad94f674dedd254755f0310448feb8d1c5102cfa89b" },
-    { "pkg": "http",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/http.rutbundle",     "sha256": "3494e2554e369119fa460213c00b3384ab6318892d09cc236cdea359c5388677" },
-    { "pkg": "ink",      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/ink.rutbundle",      "sha256": "7e9e7f58582ae0a3cd5b4ae76a16b7051c0c79f9479edc34a3ab8261ee250205" },
-    { "pkg": "json",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/json.rutbundle",     "sha256": "811e6f5b98ebb2816ea21782e42441183a1c5d262850567164540cc3d7801467" },
-    { "pkg": "nmapset",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/nmapset.rutbundle",  "sha256": "8b9b62ef68994115db7a8e75bf410fd4ab3a6c0213733b71df1001b4db83a7b1" },
-    { "pkg": "pouch",    "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle",    "sha256": "249aba803d8a70f05952041f667b5897f4733257f00d5d7b73c6032f4ba70373" },
-    { "pkg": "strbuild", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/strbuild.rutbundle", "sha256": "1c152f28ff2d55b9dbd9868c2abe15c7116840d6a4cc8bcd4f2cdf520f848dfd" }
+    { "pkg": "calc",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/calc.rutbundle",     "sha256": "2d208210ab703ab5f2d9e6a0f8f4fb9e3aa5ea3b615d79db40ef58de306cb5f1" },
+    { "pkg": "flow",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/flow.rutbundle",     "sha256": "87f68787d1d1c41a33dd78ee6702b295d4b7a8e2aecd25b4b3a14a630ec83699" },
+    { "pkg": "futures",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/futures.rutbundle",  "sha256": "5d949a0714d199e3b7bee2f4b380a66dc84e9326e0144772f9bec357616e2ddd" },
+    { "pkg": "http",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/http.rutbundle",     "sha256": "c85f3449e5097a0119302f1da1c43487ce0c36ea81515e00515a0c04f21d50bd" },
+    { "pkg": "ink",      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle",      "sha256": "832c202636c3b8108d7540018374618c7cf79131ee4c1f595bd741314b2c8137" },
+    { "pkg": "json",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/json.rutbundle",     "sha256": "ede048a81b8319f0f064bc87dcd2c9c5ded74abb928a91c0dd10e6de0f80ea82" },
+    { "pkg": "nmapset",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/nmapset.rutbundle",  "sha256": "10b8cbbca24f301495eef7dddda208a997f1698d1172bd5cc41891cd0ead3b21" },
+    { "pkg": "pouch",    "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle",    "sha256": "63ddd765287243ef45f23105471ff3eae5c5a0ac1d521a3d22636745fd5e72d8" },
+    { "pkg": "strbuild", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/strbuild.rutbundle", "sha256": "e47c5b3d4805e0d38407ab260384356dc8ffc76bc10e9554095f50a5d2184df4" }
   ]
 }
 
@@ -203,7 +203,7 @@ resolved to nothing.
 The streams: progress on **stderr**, summaries on **stdout** —
 
 ```text
-install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/ink.rutbundle
+install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle
 install: ink — downloaded (4193 bytes)
 install: 1 url deps resolved — 1 downloaded, 0 cache hits (4193 bytes total)
 rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)

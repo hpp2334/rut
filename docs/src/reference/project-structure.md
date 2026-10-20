@@ -40,8 +40,8 @@ the resolution laws, and where everything lives in the toolchain tree.
 
   "deps": {
     "greet": { "path": "../greet" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/ink.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" }
   }
 }
 ```

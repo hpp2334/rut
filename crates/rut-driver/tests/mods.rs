@@ -487,7 +487,7 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
     // recipe — no compat lane crosses a wire number. The published
     // bytes are committed at `dist/std-v8/` so the gate never
     // networks; `dist/std` (the working envelope) is the freshness
-    // gate's business and `dist/std-v11/` the pin envelope.
+    // gate's business and `dist/std-v12/` the pin envelope.
     //
     // The COMPAT LANE itself survives one level down: handed the
     // artifact's manifest TEXT directly, `parse_manifest_compat` still

@@ -107,7 +107,7 @@ greet/
   "deps": {
     // the toolchain's pouch package, from jsDelivr — the pin lives in
     // the app's rut.lock (one lock per walk root)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" }
   }
 }
 ```
@@ -163,7 +163,7 @@ to *your* `rut.jsonc` `deps`):
     "greet": { "path": "../pkg" },
     // the toolchain's ink package, from jsDelivr — the pin lives in
     // this app's rut.lock
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/ink.rutbundle" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" }
   }
 }
 ```

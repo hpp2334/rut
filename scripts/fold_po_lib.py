@@ -135,6 +135,28 @@ MECH = [
      '0ded688375f71dc4241096faf4ac07bd5154f765705145908589d911fef918d0'),
     (re.compile(r'\bc27400b68f9bb6ce4634f3b59fdcbdb76b974c0d86abfe57cf1aadc8b6c9bb6e\b'),
      '1c152f28ff2d55b9dbd9868c2abe15c7116840d6a4cc8bcd4f2cdf520f848dfd'),
+    # the std-v12 publish (the declaration-entry repack): the pin rows
+    # ride the new tag, every envelope sha moves with the new bytes
+    # (the whole 16-artifact set repacked)
+    (re.compile(r'\bstd-v11\b'), 'std-v12'),
+    (re.compile(r'\b0ded688375f71dc4241096faf4ac07bd5154f765705145908589d911fef918d0\b'),
+     '2d208210ab703ab5f2d9e6a0f8f4fb9e3aa5ea3b615d79db40ef58de306cb5f1'),
+    (re.compile(r'\b48493535461a15bbe7bcdea881e221cce62354ee92651c527533241853a3c730\b'),
+     '87f68787d1d1c41a33dd78ee6702b295d4b7a8e2aecd25b4b3a14a630ec83699'),
+    (re.compile(r'\ba3b44897107b3a04aa605ad94f674dedd254755f0310448feb8d1c5102cfa89b\b'),
+     '5d949a0714d199e3b7bee2f4b380a66dc84e9326e0144772f9bec357616e2ddd'),
+    (re.compile(r'\b3494e2554e369119fa460213c00b3384ab6318892d09cc236cdea359c5388677\b'),
+     'c85f3449e5097a0119302f1da1c43487ce0c36ea81515e00515a0c04f21d50bd'),
+    (re.compile(r'\b7e9e7f58582ae0a3cd5b4ae76a16b7051c0c79f9479edc34a3ab8261ee250205\b'),
+     '832c202636c3b8108d7540018374618c7cf79131ee4c1f595bd741314b2c8137'),
+    (re.compile(r'\b811e6f5b98ebb2816ea21782e42441183a1c5d262850567164540cc3d7801467\b'),
+     'ede048a81b8319f0f064bc87dcd2c9c5ded74abb928a91c0dd10e6de0f80ea82'),
+    (re.compile(r'\b8b9b62ef68994115db7a8e75bf410fd4ab3a6c0213733b71df1001b4db83a7b1\b'),
+     '10b8cbbca24f301495eef7dddda208a997f1698d1172bd5cc41891cd0ead3b21'),
+    (re.compile(r'\b249aba803d8a70f05952041f667b5897f4733257f00d5d7b73c6032f4ba70373\b'),
+     '63ddd765287243ef45f23105471ff3eae5c5a0ac1d521a3d22636745fd5e72d8'),
+    (re.compile(r'\b1c152f28ff2d55b9dbd9868c2abe15c7116840d6a4cc8bcd4f2cdf520f848dfd\b'),
+     'e47c5b3d4805e0d38407ab260384356dc8ffc76bc10e9554095f50a5d2184df4'),
     # the main convention retires: `entry fn main` is the same decl's
     # spelling now (drop `pub`, add `entry`)
     (re.compile(r'\bpub fn main\b'), 'entry fn main'),

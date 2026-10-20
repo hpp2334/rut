@@ -5,7 +5,7 @@
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is walked by
 //! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
-//! dist/std-v11 plays the wire — the PINNED artifacts, so no gate
+//! dist/std-v12 plays the wire — the PINNED artifacts, so no gate
 //! networks). The four passes run FOR
 //! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
 //! walks a test probe the same way.
@@ -66,13 +66,13 @@ pub const WEB_D_RUT: &str = include_str!("../web/web.d.rut");
 // v22's templates serve the consumer's shapes, so the bundle twin is
 // EXACT, and both lanes compiling the same mounted programs is what
 // mount_lane's byte pin means.
-// the PINNED envelope (`dist/std-v11`) — the same bytes the offline
+// the PINNED envelope (`dist/std-v12`) — the same bytes the offline
 // cache primes below, so the mirror's hand offers and the manifest
 // lane's walk ride ONE wire. dist/std is the working envelope; the
-// committed pins name the std-v11 bytes.
-const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v11/nmap_host.rutbundle");
-const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v11/pouch.rutbundle");
-const NMAPSET_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v11/nmapset.rutbundle");
+// committed pins name the std-v12 bytes.
+const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v12/nmap_host.rutbundle");
+const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v12/pouch.rutbundle");
+const NMAPSET_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v12/nmapset.rutbundle");
 
 // the module trees, verbatim: root + every mounted child — the
 // mirror's whole job is an independent embedder spelling what the
@@ -256,7 +256,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std-v11 plays the wire: the pinned artifacts prime ONE
+/// dist/std-v12 plays the wire: the pinned artifacts prime ONE
 /// cache-only cache per process (`DepRemote::write` is the stand-in
 /// for the GET — the ONCE-gated priming is the 03-plugin precedent),
 /// and every manifest-lane walk rides an `HttpRemote::at` over it — a
@@ -277,7 +277,7 @@ fn std_remote() -> rut_native::HttpRemote {
         // (harness/softfail are dep-free) — walked for url rows exactly
         // like the loader's own prefetch walks
         let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dist = base.join("../../dist/std-v11");
+        let dist = base.join("../../dist/std-v12");
         let mut urls = std::collections::BTreeSet::new();
         for rel in [
             "rut/biz/rut.jsonc",

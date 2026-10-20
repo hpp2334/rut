@@ -4,7 +4,7 @@
   // module the loader mounts.
   //
   // THE STD SET: all nine swappable std libs, each a COMMITTED
-  // compiled bundle (dist/std, jsDelivr-served at the std-v11 tag).
+  // compiled bundle (dist/std, jsDelivr-served at the std-v12 tag).
   // The pins live in `rut.lock` beside this file (machine-generated:
   // the scaffold wrote them; `rut install` re-pins after a dep edit —
   // the sha256 key is retired from manifest rows). Unused deps are
@@ -13,14 +13,14 @@
   // hello (ink only) runs clean with the full set declared.
   "name": "__NAME__",
   "deps": {
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/ink.rutbundle" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/pouch.rutbundle" },
-    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/flow.rutbundle" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/nmapset.rutbundle" },
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/json.rutbundle" },
-    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/strbuild.rutbundle" },
-    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/calc.rutbundle" },
-    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/futures.rutbundle" },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v11/dist/std/http.rutbundle" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" },
+    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/flow.rutbundle" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/nmapset.rutbundle" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/json.rutbundle" },
+    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/strbuild.rutbundle" },
+    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/calc.rutbundle" },
+    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/futures.rutbundle" },
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/http.rutbundle" }
   }
 }

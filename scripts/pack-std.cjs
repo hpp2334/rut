@@ -35,10 +35,10 @@
  *
  * Options:
  *   --tag-name <t>   the jsDelivr tag the urls spell (env
- *                    RUT_STD_TAG). `--check` defaults it to std-v11
+ *                    RUT_STD_TAG). `--check` defaults it to std-v12
  *                    (the pins' committed envelope — the locks name
  *                    those bytes until a publish re-pins); `--tag`
- *                    defaults it to std-v12 (the NEXT tag — publish
+ *                    defaults it to std-v13 (the NEXT tag — publish
  *                    advances, never re-points).
  *   -h, --help
  *
@@ -49,9 +49,9 @@
  * THE PIN BOUNDARY: dist/std is the WORKING envelope — repacked
  * whenever the pack shape moves (the wire-12 declaration-entry lane
  * did), byte-checked by --check's freshness half. The example
- * projects' rut.lock rows ride the committed `dist/std-v11/` bytes —
+ * projects' rut.lock rows ride the committed `dist/std-v12/` bytes —
  * the offline gates' wire — and --check's pin half asserts every row
- * against THEM, not against dist/std. `dist/std-v12/` is the CUT
+ * against THEM, not against dist/std. `dist/std-v13/` is the CUT
  * envelope for the next publish (byte-identical to dist/std; the tag
  * lane a consumer re-pins to). The reader's old lane loads v11
  * forever; migration is a re-pin, not a break.
@@ -67,11 +67,11 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const RUT = path.join(ROOT, "rut");
 const DIST = path.join(ROOT, "dist", "std");
-const PINNED = path.join(ROOT, "dist", "std-v11");
-const CUT = path.join(ROOT, "dist", "std-v12");
+const PINNED = path.join(ROOT, "dist", "std-v12");
+const CUT = path.join(ROOT, "dist", "std-v13");
 // the pins' tag (the locks' url rows) and the NEXT publish tag
-const DEFAULT_TAG = "std-v11";
-const NEXT_TAG = "std-v12";
+const DEFAULT_TAG = "std-v12";
+const NEXT_TAG = "std-v13";
 const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
 
 // ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ const tag = takeValue("--tag-name")
 if (argv.length) die(`unknown arguments: ${argv.join(" ")}`);
 if (takeFlag("--pins")) {
   die(
-    "--pins is retired: the example manifests' rows ride the committed dist/std-v11 envelope — " +
+    "--pins is retired: the example manifests' rows ride the committed dist/std-v12 envelope — " +
       "repack updates dist/std; re-pointing a tag is a publish act, not a repack"
   );
 }
@@ -167,15 +167,15 @@ const PKGS = [
 
 // The example roots' rut.lock files — the frozen pins (--check verifies
 // them; nothing rewrites them). Each lock's rows are url-keyed, sha256
-// per row; the PINNED snapshot (`dist/std-v11/`) must carry an artifact
+// per row; the PINNED snapshot (`dist/std-v12/`) must carry an artifact
 // per distinct url key — the bytes each row's sha256 commits to.
 //
 // THE BOUNDARY (the publish act): the rows are FROZEN between
 // publishes. dist/std repacks whenever the pack shape moves — the pins
 // do NOT move until a publish act cuts the next envelope
 // (`dist/std-vNN` + tag) and every referencer re-points. The pins name
-// the std-v11 bytes, which load through the reader's primary lane (the
-// strict format_version-11 gate). The manifest sha256 key is retired —
+// the std-v12 bytes, which load through the reader's primary lane (the
+// strict format_version-12 gate). The manifest sha256 key is retired —
 // the lock is THE pin law. --pins is gone: no tool rewrites these rows
 // anymore; a publish regenerates them with `rut install` against the
 // new envelope.
@@ -227,7 +227,7 @@ Publish the committed dist/std/ artifacts to jsDelivr (the gh lane
 serves repo files at a ref — the artifacts are already committed; this
 tag IS the publish). Tags are IMMUTABLE in practice: publish advances
 std-vNN, never rewrites. The cut envelope for this publish is
-dist/std-v12/ (byte-identical to dist/std/ — the tag names THESE
+dist/std-v13/ (byte-identical to dist/std/ — the tag names THESE
 bytes); after publishing, re-pin consumers with \`rut install\` against
 the new tag's urls:
 
@@ -281,7 +281,7 @@ if (doCheck) {
   }
   fs.rmSync(tmp, { recursive: true, force: true });
 
-  // the CUT envelope (dist/std-v12/): byte-identical to dist/std while
+  // the CUT envelope (dist/std-v13/): byte-identical to dist/std while
   // the cut stands — the tag names these bytes, so a drift between the
   // working envelope and the cut one is publish poison.
   for (const { dir } of PKGS) {
@@ -289,19 +289,19 @@ if (doCheck) {
     const cut = path.join(CUT, `${name}.rutbundle`);
     const working = path.join(DIST, `${name}.rutbundle`);
     if (!fs.existsSync(cut)) {
-      console.error(`  ${red("missing")}: dist/std-v12/${name}.rutbundle (the cut envelope is committed)`);
+      console.error(`  ${red("missing")}: dist/std-v13/${name}.rutbundle (the cut envelope is committed)`);
       drift++;
       continue;
     }
     if (!fs.readFileSync(cut).equals(fs.readFileSync(working))) {
-      console.error(`  ${red("drift")}: dist/std-v12/${name}.rutbundle (the cut envelope moved from dist/std — re-cut it: cp dist/std/*.rutbundle dist/std-v12/)`);
+      console.error(`  ${red("drift")}: dist/std-v13/${name}.rutbundle (the cut envelope moved from dist/std — re-cut it: cp dist/std/*.rutbundle dist/std-v13/)`);
       drift++;
     }
   }
 
   // the example pins: every rut.lock row spells a
   // /dist/std/<key>.rutbundle url and its sha256 equals the hash of the
-  // committed envelope bytes (dist/std-v11/) — the bytes the row commits
+  // committed envelope bytes (dist/std-v12/) — the bytes the row commits
   // to. dist/std (the working envelope) is NOT the pins' reference: the
   // rename moved the pack shape, the pins did not move, and the
   // reader's compat lane loads the old envelope.
@@ -339,10 +339,10 @@ if (doCheck) {
       }
       const pin = pinOf(key);
       if (!pin) {
-        console.error(`  ${red("pin")}: dist/std-v11/${key}.rutbundle is missing — the committed envelope bytes must be committed`);
+        console.error(`  ${red("pin")}: dist/std-v12/${key}.rutbundle is missing — the committed envelope bytes must be committed`);
         drift++;
       } else if (row.sha256 !== pin) {
-        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` sha256 does not match dist/std-v11/${key}.rutbundle (the committed envelope bytes)`);
+        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` sha256 does not match dist/std-v12/${key}.rutbundle (the committed envelope bytes)`);
         drift++;
       }
     }
@@ -352,13 +352,13 @@ if (doCheck) {
     console.error("");
     die(`${drift} drift row(s) — fix with: node scripts/pack-std.cjs`);
   }
-  info(green(`all ${PKGS.length} artifacts byte-fresh, every example pin matches the committed std-v11 bytes`));
+  info(green(`all ${PKGS.length} artifacts byte-fresh, every example pin matches the committed std-v12 bytes`));
   process.exit(0);
 }
 
 // default: pack the committed working-envelope artifacts (dist/std).
 // The pins never move (see --pins above): dist/std is the freshness
-// gate's half; dist/std-v11 is the pins' half.
+// gate's half; dist/std-v12 is the pins' half.
 packAll(DIST);
 const hashes = {};
 for (const { dir } of PKGS) {
@@ -366,4 +366,4 @@ for (const { dir } of PKGS) {
   hashes[name] = sha256(fs.readFileSync(path.join(DIST, `${name}.rutbundle`)));
   console.error(`  ${green("packed")}: dist/std/${name}.rutbundle (sha256 ${hashes[name].slice(0, 16)}…)`);
 }
-info(green(`packed ${PKGS.length} artifacts → dist/std/ (the example pins ride dist/std-v11/)`));
+info(green(`packed ${PKGS.length} artifacts → dist/std/ (the example pins ride dist/std-v12/)`));
