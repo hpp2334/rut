@@ -778,7 +778,9 @@ impl CellVal {
         }
     }
 }
-/// SAFETY: `s` must hold a live cell pointer.
+/// # Safety
+///
+/// `s` must hold a live cell pointer.
 pub unsafe fn cell<'a>(s: Slot) -> &'a CellVal {
     unsafe { &*s.r }
 }

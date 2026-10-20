@@ -210,6 +210,25 @@ pub struct ThreadState<W> {
     pub fuel_used: u64,
 }
 
+/// A machine the threaded dispatch engine can run.
+///
+/// # Safety (op handlers)
+///
+/// Every `unsafe fn op_*` method is called by the dispatch engine with the
+/// contract below; implementations must uphold it, callers (the two
+/// dispatch backends) must guarantee it:
+///
+/// - `op` is the op the handler was selected for — the engine picks the
+///   handler through the tag→handler table, so the `Op` variant always
+///   matches the method (implementations keep the runtime `unreachable_op!`
+///   check as the clean-panic backstop).
+/// - `regs` points to the current frame's register file, long enough for
+///   every register index embedded in `op` (the verifier guarantees
+///   register indices stay in range).
+/// - `pc` is the index of `op` in the current frame's code.
+///
+/// The method may read `*op` freely and must not do anything through
+/// `regs` beyond reading/writing the registers `op` names.
 pub trait Machine {
     type Out;
     type Err;
@@ -234,7 +253,12 @@ pub trait Machine {
         unimplemented!("frame_ptrs: not threaded by this Machine")
     }
 
-    fn op_mov(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_mov(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -243,7 +267,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_mov: not threaded by this Machine")
     }
-    fn op_constraw(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_constraw(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -252,7 +281,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_constraw: not threaded by this Machine")
     }
-    fn op_not(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_not(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -261,7 +295,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_not: not threaded by this Machine")
     }
-    fn op_addi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_addi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -270,7 +309,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_addi: not threaded by this Machine")
     }
-    fn op_subi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_subi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -279,7 +323,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_subi: not threaded by this Machine")
     }
-    fn op_waddi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_waddi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -288,7 +337,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_waddi: not threaded by this Machine")
     }
-    fn op_wsubi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_wsubi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -297,7 +351,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_wsubi: not threaded by this Machine")
     }
-    fn op_wmuli(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_wmuli(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -306,7 +365,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_wmuli: not threaded by this Machine")
     }
-    fn op_lti(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_lti(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -315,7 +379,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_lti: not threaded by this Machine")
     }
-    fn op_addf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_addf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -324,7 +393,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_addf: not threaded by this Machine")
     }
-    fn op_subf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_subf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -333,7 +407,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_subf: not threaded by this Machine")
     }
-    fn op_mulf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_mulf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -342,7 +421,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_mulf: not threaded by this Machine")
     }
-    fn op_br(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_br(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -351,7 +435,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_br: not threaded by this Machine")
     }
-    fn op_jmp(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_jmp(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -360,7 +449,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_jmp: not threaded by this Machine")
     }
-    fn op_loophead(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_loophead(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -369,7 +463,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_loophead: not threaded by this Machine")
     }
-    fn op_arr_get(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_arr_get(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -378,7 +477,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_arr_get: not threaded by this Machine")
     }
-    fn op_arr_set(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_arr_set(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -387,7 +491,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_arr_set: not threaded by this Machine")
     }
-    fn op_arr_get_f(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_arr_get_f(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -396,7 +505,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_arr_get_f: not threaded by this Machine")
     }
-    fn op_arr_set_f(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_arr_set_f(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -405,7 +519,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_arr_set_f: not threaded by this Machine")
     }
-    fn op_getf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_getf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -414,7 +533,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_getf: not threaded by this Machine")
     }
-    fn op_setf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_setf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -423,7 +547,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_setf: not threaded by this Machine")
     }
-    fn op_call(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_call(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -432,7 +561,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_call: not threaded by this Machine")
     }
-    fn op_call_m(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_call_m(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -441,7 +575,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_call_m: not threaded by this Machine")
     }
-    fn op_call_i(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_call_i(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -450,7 +589,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_call_i: not threaded by this Machine")
     }
-    fn op_call_fn(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_call_fn(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -459,7 +603,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_call_fn: not threaded by this Machine")
     }
-    fn op_call_nat(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_call_nat(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -468,7 +617,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_call_nat: not threaded by this Machine")
     }
-    fn op_ret(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_ret(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -477,7 +631,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!("op_ret: not threaded by this Machine")
     }
-    fn op_muli(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_muli(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -486,7 +645,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_divi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_divi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -495,7 +659,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_modi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_modi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -504,7 +673,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_andi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_andi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -513,7 +687,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_ori(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_ori(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -522,7 +701,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_xori(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_xori(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -531,7 +715,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_shli(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_shli(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -540,7 +729,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_shri(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_shri(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -549,7 +743,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_wrapshli(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_wrapshli(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -558,7 +757,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_eqi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_eqi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -567,7 +771,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_nei(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_nei(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -576,7 +785,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_gti(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_gti(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -585,7 +799,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_lei(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_lei(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -594,7 +813,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_gei(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_gei(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -603,7 +827,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_negi(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_negi(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -612,7 +841,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_divf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_divf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -621,7 +855,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_modf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_modf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -630,7 +869,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_negf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_negf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -639,7 +883,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_eqf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_eqf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -648,7 +897,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_nef(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_nef(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -657,7 +911,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_ltf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_ltf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -666,7 +925,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_gtf(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_gtf(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -675,7 +939,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_lef(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_lef(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -684,7 +953,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_gef(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_gef(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -693,7 +967,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_movref(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_movref(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -702,7 +981,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_const(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_const(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -711,7 +995,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_strcmp(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_strcmp(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -720,7 +1009,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_arraycmp(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_arraycmp(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -729,7 +1023,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_refeq(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_refeq(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -738,7 +1037,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_brtable(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_brtable(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -747,7 +1051,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_newcell(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_newcell(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -756,7 +1065,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_makerecord(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_makerecord(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -765,7 +1079,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_own(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_own(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -774,7 +1093,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_arrnew(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_arrnew(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -783,7 +1107,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_arrlit(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_arrlit(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -792,7 +1121,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_enumnew(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_enumnew(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -801,7 +1135,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_optsome(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_optsome(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -810,7 +1149,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_optnone(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_optnone(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -819,7 +1163,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_resok(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_resok(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -828,7 +1177,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_reserr(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_reserr(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -837,7 +1191,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_sumis(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_sumis(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -846,7 +1205,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_unwrap(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_unwrap(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -855,7 +1219,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_unwrapor(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_unwrapor(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -864,7 +1233,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_expect(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_expect(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -873,7 +1247,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_tidof(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_tidof(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -882,7 +1261,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_istype(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_istype(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -891,7 +1275,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_istrait(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_istrait(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -900,7 +1289,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_unbox(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_unbox(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -909,7 +1303,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_box(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_box(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -918,7 +1317,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_makeclosure(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_makeclosure(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -927,7 +1331,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_panic(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_panic(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -936,7 +1345,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_conv(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_conv(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,
@@ -945,7 +1359,12 @@ pub trait Machine {
         let _ = (op, regs, pc);
         unimplemented!()
     }
-    fn op_strcodeat(
+    /// # Safety
+    ///
+    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
+    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
+    /// register-file contract.
+    unsafe fn op_strcodeat(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,

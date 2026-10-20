@@ -107,7 +107,9 @@ impl Slot {
             r: std::ptr::null(),
         }
     }
-    /// SAFETY: caller guarantees the slot is a ref slot (verifier-checked).
+    /// # Safety
+    ///
+    /// The caller guarantees the slot is a ref slot (verifier-checked).
     pub unsafe fn get_ref(&self) -> Option<*const CellVal> {
         let r = unsafe { self.r };
         if r.is_null() {

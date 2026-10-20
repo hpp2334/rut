@@ -38,7 +38,7 @@ impl Machine for Counter {
     fn sync_fuel(&mut self, _fuel: i64, _used: u64) {} // root-`Ret` writeback
     fn park(&mut self, _pc: u32, _used: u64) {}
 
-    fn op_mov(&mut self, _op: &Op, regs: *mut i64, pc: u32) -> Result<Flow<i64>, ()> {
+    unsafe fn op_mov(&mut self, _op: &Op, regs: *mut i64, pc: u32) -> Result<Flow<i64>, ()> {
         self.acc += 1;
         unsafe { *regs.add(0) = self.acc };
         if self.acc >= N {

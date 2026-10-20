@@ -390,7 +390,10 @@ impl<T: 'static> Opaque<T> {
         vm: &mut crate::interp::Vm,
         f: impl FnOnce(&mut crate::interp::Vm, &mut T) -> R,
     ) -> Result<R, Trap> {
-        let (payload, borrows) = self.boxed_mut();
+        // SAFETY: `with_mut` is the only caller and checks the borrow
+        // guard right below before any use — the contract `boxed_mut`
+        // documents.
+        let (payload, borrows) = unsafe { self.boxed_mut() };
         if borrows.get() != 0 {
             return Err(Trap::new(
                 TrapKind::Invalid,
@@ -425,11 +428,15 @@ impl<T: 'static> Opaque<T> {
     }
 
     /// The exclusive variant: reaches the payload mutably through the
-    /// entry pointer. Sound under the guard `with_mut` holds — no other
-    /// borrow of the entry is live, and rut-side ops never touch host
+    /// entry pointer.
+    ///
+    /// # Safety
+    ///
+    /// The caller must hold the guard `with_mut` enforces — no other
+    /// borrow of the entry may be live, and rut-side ops never touch host
     /// payloads — the same argument the previous raw-payload design
     /// made; the view's own handle pins the rc for the borrow's scope.
-    fn boxed_mut(&self) -> (&mut dyn Any, &Cell<u32>) {
+    unsafe fn boxed_mut(&self) -> (&mut dyn Any, &Cell<u32>) {
         let cell = unsafe { &mut *self.handle.entry_ptr() };
         let OpaqueEntry::Host(host) = &mut cell.e else {
             unreachable!("Opaque<T> is always a Host entry");

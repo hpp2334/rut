@@ -251,81 +251,86 @@ impl ExprFrame {
         }
     }
 
-    /// the operator loop: shift binary/assign/`is` operators with
+    /// the operator step: shift one binary/assign/`is` operator with
     /// precedence-driven reduction, or finish by reducing everything
+    ///
+    /// A single pass per call — every path below returns, so the caller
+    /// (`step`) drives us back for the next operator.
     fn oploop(&mut self, p: &mut Parser) -> Step {
-        loop {
-            let (op, bp, level) = match p.tok() {
-                Tok::PipePipe => (BinOp::Or, 3u8, 3u8),
-                Tok::AmpAmp => (BinOp::And, 4, 4),
-                Tok::EqEq => (BinOp::Eq, 5, 5),
-                Tok::NotEq => (BinOp::Ne, 5, 5),
-                Tok::Lt => (BinOp::Lt, 6, 6),
-                Tok::Gt => (BinOp::Gt, 6, 6),
-                Tok::LtEq => (BinOp::Le, 6, 6),
-                Tok::GtEq => (BinOp::Ge, 6, 6),
-                Tok::Pipe => (BinOp::BitOr, 7, 7),
-                Tok::Caret => (BinOp::BitXor, 7, 7),
-                Tok::Amp => (BinOp::BitAnd, 8, 8),
-                Tok::Shl => (BinOp::Shl, 9, 9),
-                Tok::Shr => (BinOp::Shr, 9, 9),
-                Tok::Plus => (BinOp::Add, 10, 10),
-                Tok::Minus => (BinOp::Sub, 10, 10),
-                Tok::Star => (BinOp::Mul, 11, 11),
-                Tok::Slash => (BinOp::Div, 11, 11),
-                Tok::Percent => (BinOp::Mod, 11, 11),
-                Tok::Eq => return self.shift_assign(p, None),
-                Tok::PlusEq => return self.shift_assign(p, Some(BinOp::Add)),
-                Tok::MinusEq => return self.shift_assign(p, Some(BinOp::Sub)),
-                Tok::StarEq => return self.shift_assign(p, Some(BinOp::Mul)),
-                Tok::SlashEq => return self.shift_assign(p, Some(BinOp::Div)),
-                Tok::PercentEq => return self.shift_assign(p, Some(BinOp::Mod)),
-                Tok::AmpEq => return self.shift_assign(p, Some(BinOp::BitAnd)),
-                Tok::PipeEq => return self.shift_assign(p, Some(BinOp::BitOr)),
-                Tok::CaretEq => return self.shift_assign(p, Some(BinOp::BitXor)),
-                Tok::ShlEq => return self.shift_assign(p, Some(BinOp::Shl)),
-                Tok::ShrEq => return self.shift_assign(p, Some(BinOp::Shr)),
-                _ if p.at_kw("is") => {
-                    // `is` takes a TYPE as its right-hand side (naming
-                    // position) — non-associative at level 6
-                    if self.last_level == 6 {
-                        break;
-                    }
-                    p.bump(); // the `is` keyword
-                    self.reduce_while(p, 6);
-                    self.last_level = 6;
-                    self.stage = ExprStage::IsTy;
-                    return Step::Push(Frame::Type(TypeFrame::new(p)));
+        let (op, bp, level) = match p.tok() {
+            Tok::PipePipe => (BinOp::Or, 3u8, 3u8),
+            Tok::AmpAmp => (BinOp::And, 4, 4),
+            Tok::EqEq => (BinOp::Eq, 5, 5),
+            Tok::NotEq => (BinOp::Ne, 5, 5),
+            Tok::Lt => (BinOp::Lt, 6, 6),
+            Tok::Gt => (BinOp::Gt, 6, 6),
+            Tok::LtEq => (BinOp::Le, 6, 6),
+            Tok::GtEq => (BinOp::Ge, 6, 6),
+            Tok::Pipe => (BinOp::BitOr, 7, 7),
+            Tok::Caret => (BinOp::BitXor, 7, 7),
+            Tok::Amp => (BinOp::BitAnd, 8, 8),
+            Tok::Shl => (BinOp::Shl, 9, 9),
+            Tok::Shr => (BinOp::Shr, 9, 9),
+            Tok::Plus => (BinOp::Add, 10, 10),
+            Tok::Minus => (BinOp::Sub, 10, 10),
+            Tok::Star => (BinOp::Mul, 11, 11),
+            Tok::Slash => (BinOp::Div, 11, 11),
+            Tok::Percent => (BinOp::Mod, 11, 11),
+            Tok::Eq => return self.shift_assign(p, None),
+            Tok::PlusEq => return self.shift_assign(p, Some(BinOp::Add)),
+            Tok::MinusEq => return self.shift_assign(p, Some(BinOp::Sub)),
+            Tok::StarEq => return self.shift_assign(p, Some(BinOp::Mul)),
+            Tok::SlashEq => return self.shift_assign(p, Some(BinOp::Div)),
+            Tok::PercentEq => return self.shift_assign(p, Some(BinOp::Mod)),
+            Tok::AmpEq => return self.shift_assign(p, Some(BinOp::BitAnd)),
+            Tok::PipeEq => return self.shift_assign(p, Some(BinOp::BitOr)),
+            Tok::CaretEq => return self.shift_assign(p, Some(BinOp::BitXor)),
+            Tok::ShlEq => return self.shift_assign(p, Some(BinOp::Shl)),
+            Tok::ShrEq => return self.shift_assign(p, Some(BinOp::Shr)),
+            _ if p.at_kw("is") => {
+                // `is` takes a TYPE as its right-hand side (naming
+                // position) — non-associative at level 6
+                if self.last_level == 6 {
+                    return self.finish_op(p);
                 }
-                _ if p.at_kw("as") && peek_is_numeric_prim(p) => {
-                    // `expr as T` — the numeric cast:
-                    // truncating like C/Rust. Left-associative at level 12,
-                    // tighter than `*` (Rust placement), so `a * b as u32`
-                    // casts `b` and `x as u32 as u64` chains. The RHS is a
-                    // naming position type restricted to the numeric
-                    // primitives — anything else leaves `as` unmatched
-                    // (the caller's expect diagnoses it).
-                    p.bump(); // the `as` keyword
-                    self.reduce_while(p, 12);
-                    self.stage = ExprStage::AsTy;
-                    return Step::Push(Frame::Type(TypeFrame::new(p)));
-                }
-                _ => break,
-            };
-            // non-associativity scope: one relational per
-            // context — a second level-6 op is left for the caller's
-            // expect, exactly as v1's parse_rel did
-            if level == 6 && self.last_level == 6 {
-                break;
+                p.bump(); // the `is` keyword
+                self.reduce_while(p, 6);
+                self.last_level = 6;
+                self.stage = ExprStage::IsTy;
+                return Step::Push(Frame::Type(TypeFrame::new(p)));
             }
-            p.bump(); // the operator token
-            self.reduce_while(p, bp);
-            self.ops.push(OpEntry { op, bp });
-            if level <= 6 {
-                self.last_level = level;
+            _ if p.at_kw("as") && peek_is_numeric_prim(p) => {
+                // `expr as T` — the numeric cast:
+                // truncating like C/Rust. Left-associative at level 12,
+                // tighter than `*` (Rust placement), so `a * b as u32`
+                // casts `b` and `x as u32 as u64` chains. The RHS is a
+                // naming position type restricted to the numeric
+                // primitives — anything else leaves `as` unmatched
+                // (the caller's expect diagnoses it).
+                p.bump(); // the `as` keyword
+                self.reduce_while(p, 12);
+                self.stage = ExprStage::AsTy;
+                return Step::Push(Frame::Type(TypeFrame::new(p)));
             }
-            return self.fetch_operand(p);
+            _ => return self.finish_op(p),
+        };
+        // non-associativity scope: one relational per
+        // context — a second level-6 op is left for the caller's
+        // expect, exactly as v1's parse_rel did
+        if level == 6 && self.last_level == 6 {
+            return self.finish_op(p);
         }
+        p.bump(); // the operator token
+        self.reduce_while(p, bp);
+        self.ops.push(OpEntry { op, bp });
+        if level <= 6 {
+            self.last_level = level;
+        }
+        self.fetch_operand(p)
+    }
+
+    /// reduce the pending operator stack and hand the finished expression up
+    fn finish_op(&mut self, p: &mut Parser) -> Step {
         while !self.ops.is_empty() {
             self.reduce_one(p);
         }

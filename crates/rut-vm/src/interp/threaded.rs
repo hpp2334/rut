@@ -30,7 +30,7 @@ macro_rules! unreachable_op {
 
 macro_rules! int_arith {
     ($name:ident, $variant:ident, $OP:expr, $WRAP:expr) => {
-        fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+        unsafe fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
             let Op::$variant { prim, dst, a, b } = op else {
                 unreachable_op!(concat!(stringify!($name), ": unexpected op"))
             };
@@ -45,7 +45,7 @@ macro_rules! int_arith {
 
 macro_rules! float_arith {
     ($name:ident, $variant:ident, $FOP:expr) => {
-        fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+        unsafe fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
             let Op::$variant { prim, dst, a, b } = op else {
                 unreachable_op!(concat!(stringify!($name), ": unexpected op"))
             };
@@ -60,7 +60,7 @@ macro_rules! float_arith {
 
 macro_rules! bitop {
     ($name:ident, $variant:ident, $OP:expr) => {
-        fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+        unsafe fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
             let Op::$variant { prim, dst, a, b } = op else {
                 unreachable_op!(concat!(stringify!($name), ": unexpected op"))
             };
@@ -75,7 +75,7 @@ macro_rules! bitop {
 
 macro_rules! cmpi {
     ($name:ident, $variant:ident, $OP:expr) => {
-        fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+        unsafe fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
             let Op::$variant { prim, dst, a, b } = op else {
                 unreachable_op!(concat!(stringify!($name), ": unexpected op"))
             };
@@ -90,7 +90,7 @@ macro_rules! cmpi {
 
 macro_rules! cmpf {
     ($name:ident, $variant:ident, $OP:expr) => {
-        fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+        unsafe fn $name(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
             let Op::$variant { dst, a, b } = op else {
                 unreachable_op!(concat!(stringify!($name), ": unexpected op"))
             };
@@ -176,7 +176,7 @@ impl Machine for Vm {
         )
     }
 
-    fn op_mov(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_mov(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Mov { dst, src } = op else {
             unreachable_op!("op_mov: unexpected op")
         };
@@ -184,7 +184,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_constraw(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_constraw(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::ConstRaw { dst, bits } = op else {
             unreachable_op!("op_constraw: unexpected op")
         };
@@ -192,7 +197,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_not(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_not(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Not { dst, a } = op else {
             unreachable_op!("op_not: unexpected op")
         };
@@ -207,7 +212,7 @@ impl Machine for Vm {
     int_arith!(op_wsubi, WSubI, { IOP_SUB }, true);
     int_arith!(op_wmuli, WMulI, { IOP_MUL }, true);
 
-    fn op_lti(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_lti(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::LtI { prim, dst, a, b } = op else {
             unreachable_op!("op_lti: unexpected op")
         };
@@ -239,7 +244,7 @@ impl Machine for Vm {
     cmpi!(op_lei, LeI, { COP_LE });
     cmpi!(op_gei, GeI, { COP_GE });
 
-    fn op_negi(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_negi(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::NegI { prim, dst, a } = op else {
             unreachable_op!("op_negi: unexpected op")
         };
@@ -252,7 +257,7 @@ impl Machine for Vm {
     float_arith!(op_divf, DivF, { FOP_DIV });
     float_arith!(op_modf, ModF, { FOP_MOD });
 
-    fn op_negf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_negf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::NegF { prim, dst, a } = op else {
             unreachable_op!("op_negf: unexpected op")
         };
@@ -269,7 +274,7 @@ impl Machine for Vm {
     cmpf!(op_lef, LeF, { COP_LE });
     cmpf!(op_gef, GeF, { COP_GE });
 
-    fn op_br(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_br(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Br {
             cond,
             then_t,
@@ -283,20 +288,30 @@ impl Machine for Vm {
         Ok(Flow::Next(target))
     }
 
-    fn op_jmp(&mut self, op: &Op, _regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_jmp(&mut self, op: &Op, _regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Jmp { target } = op else {
             unreachable_op!("op_jmp: unexpected op")
         };
         Ok(Flow::Next(*target))
     }
 
-    fn op_loophead(&mut self, _op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_loophead(
+        &mut self,
+        _op: &Op,
+        _regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         Ok(Flow::Next(pc + 1))
     }
 
     // ---- array / field ops (no frame change) ----
 
-    fn op_arr_get(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_arr_get(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::ArrGet {
             dst,
             arr,
@@ -335,7 +350,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_arr_set(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_arr_set(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::ArrSet {
             arr,
             idx,
@@ -366,7 +386,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_arr_get_f(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_arr_get_f(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::ArrGetF {
             dst,
             obj,
@@ -425,7 +450,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_arr_set_f(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_arr_set_f(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::ArrSetF {
             obj,
             field,
@@ -474,7 +504,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_getf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_getf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::GetF {
             dst,
             obj,
@@ -531,7 +561,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_setf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_setf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::SetF {
             obj,
             field,
@@ -568,7 +598,7 @@ impl Machine for Vm {
 
     // ---- calls / ret (frame change => Redispatch) ----
 
-    fn op_call(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_call(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Call {
             func,
             argv_off,
@@ -597,7 +627,12 @@ impl Machine for Vm {
         }
     }
 
-    fn op_call_m(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_call_m(
+        &mut self,
+        op: &Op,
+        _regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::CallM {
             func,
             argv_off,
@@ -614,7 +649,12 @@ impl Machine for Vm {
         Ok(Flow::Redispatch)
     }
 
-    fn op_call_i(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_call_i(
+        &mut self,
+        op: &Op,
+        _regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::CallI {
             slot,
             argv_off,
@@ -629,7 +669,12 @@ impl Machine for Vm {
         Ok(Flow::Redispatch)
     }
 
-    fn op_call_fn(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_call_fn(
+        &mut self,
+        op: &Op,
+        _regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::CallFn {
             fval,
             argv_off,
@@ -644,7 +689,12 @@ impl Machine for Vm {
         Ok(Flow::Redispatch)
     }
 
-    fn op_call_nat(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_call_nat(
+        &mut self,
+        op: &Op,
+        _regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::CallNat {
             nat,
             recv,
@@ -663,7 +713,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_ret(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_ret(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Ret { val } = op else {
             unreachable_op!("op_ret: unexpected op")
         };
@@ -681,7 +731,7 @@ impl Machine for Vm {
     // dispatched without the bail round-trip. They read `self.cur_regs`,
     // which aliases the `regs` pointer, so the shared heap helpers apply. ----
 
-    fn op_movref(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_movref(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::MovRef { dst, src } = op else {
             unreachable_op!("op_movref: unexpected op")
         };
@@ -693,7 +743,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_const(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_const(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Const { dst, k } = op else {
             unreachable_op!("op_const: unexpected op")
         };
@@ -710,7 +760,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_strcmp(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_strcmp(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::StrCmp { eq, dst, a, b } = op else {
             unreachable_op!("op_strcmp: unexpected op")
         };
@@ -720,7 +770,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_arraycmp(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_arraycmp(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::ArrayCmp { eq, dst, a, b } = op else {
             unreachable_op!("op_arraycmp: unexpected op")
         };
@@ -730,7 +785,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_refeq(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_refeq(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::RefEq { eq, dst, a, b } = op else {
             unreachable_op!("op_refeq: unexpected op")
         };
@@ -741,7 +796,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_brtable(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_brtable(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        _pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::BrTable {
             idx,
             table_off,
@@ -764,7 +824,12 @@ impl Machine for Vm {
         Ok(Flow::Next(table.get(m).copied().unwrap_or(*default)))
     }
 
-    fn op_newcell(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_newcell(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::NewCell { dst, ty } = op else {
             unreachable_op!("op_newcell: unexpected op")
         };
@@ -779,7 +844,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_makerecord(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_makerecord(
+        &mut self,
+        op: &Op,
+        _regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::MakeRecord {
             dst,
             ty,
@@ -793,7 +863,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_own(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_own(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Own { dst, src, ty } = op else {
             unreachable_op!("op_own: unexpected op")
         };
@@ -808,7 +878,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_arrnew(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_arrnew(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::ArrNew { dst, ty, len, repr } = op else {
             unreachable_op!("op_arrnew: unexpected op")
         };
@@ -827,7 +897,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_arrlit(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_arrlit(
+        &mut self,
+        op: &Op,
+        _regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::ArrLit {
             dst,
             ty,
@@ -841,7 +916,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_enumnew(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_enumnew(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::EnumNew { dst, ty, member } = op else {
             unreachable_op!("op_enumnew: unexpected op")
         };
@@ -853,7 +933,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_tidof(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_tidof(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::TidOf { dst, obj } = op else {
             unreachable_op!("op_tidof: unexpected op")
         };
@@ -863,7 +943,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_istype(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_istype(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::IsType { dst, obj, want } = op else {
             unreachable_op!("op_istype: unexpected op")
         };
@@ -874,7 +954,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_istrait(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_istrait(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::IsIface { dst, obj, want } = op else {
             unreachable_op!("op_istrait: unexpected op")
         };
@@ -902,7 +987,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_unbox(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_unbox(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Unbox { dst, box_, ty } = op else {
             unreachable_op!("op_unbox: unexpected op")
         };
@@ -931,7 +1016,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_box(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_box(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Box { dst, val, ty } = op else {
             unreachable_op!("op_box: unexpected op")
         };
@@ -946,7 +1031,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_makeclosure(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_makeclosure(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::MakeClosure {
             dst,
             func,
@@ -978,7 +1068,7 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_panic(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_panic(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Panic { msg } = op else {
             unreachable_op!("op_panic: unexpected op")
         };
@@ -988,7 +1078,7 @@ impl Machine for Vm {
         Err(Trap::new(TrapKind::Panic, m))
     }
 
-    fn op_conv(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_conv(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
         let Op::Conv { dst, src, from, to } = op else {
             unreachable_op!("op_conv: unexpected op")
         };
@@ -997,7 +1087,12 @@ impl Machine for Vm {
         Ok(Flow::Next(pc + 1))
     }
 
-    fn op_strcodeat(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
+    unsafe fn op_strcodeat(
+        &mut self,
+        op: &Op,
+        regs: *mut Slot,
+        pc: u32,
+    ) -> Result<Flow<Value>, Trap> {
         let Op::StrCodeAt { dst, s, idx } = op else {
             unreachable_op!("op_strcodeat: unexpected op")
         };
