@@ -2,9 +2,9 @@
 //! generic instantiation by unification, the
 //! vtable-always rule for trait members, trait-typed receivers, and field reads.
 
+use super::*;
 use crate::check::TcResult;
 use rut_core::sym;
-use super::*;
 
 // ============ part 3: calls & members ============
 
@@ -49,7 +49,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         return self.finish_call_fn(freg, args, expected, sp);
                     }
                     _ => {
-                        self.ctx.err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
+                        self.ctx
+                            .err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
                         return Err(());
                     }
                 }
@@ -68,7 +69,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.finish_call_fn(freg, args, expected, sp)
             }
             _ => {
-                self.ctx.err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
+                self.ctx
+                    .err(sp, format!("`{}` is not callable", self.ctx.type_name(ft)));
                 Err(())
             }
         }
@@ -91,22 +93,45 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // trailing captures are not callable args
         let declared = ptys.len();
         if args.len() != declared {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), declared));
+            self.ctx.err(
+                sp,
+                format!("call arity: {} args for {} params", args.len(), declared),
+            );
             return Err(());
         }
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens_val(*a, t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(a.id()),
+                    format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(ptys[i])
+                    ),
+                );
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ret == TY_NIL { None } else { Some(self.new_reg(ret)) };
-        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::CallFn { fval: freg, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        let dst = if ret == TY_NIL {
+            None
+        } else {
+            Some(self.new_reg(ret))
+        };
+        {
+            let (argv_off, argc) = self.pool_args(&(aregs));
+            self.emit(
+                Op::CallFn {
+                    fval: freg,
+                    argv_off,
+                    argc,
+                    dst: opt_reg(dst),
+                },
+                sp.lo,
+            );
+        }
         Ok(ret)
     }
 
@@ -122,9 +147,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // head names a child mod of the current module or of an
             // ancestor. `None` falls to the static-call form
             // (`Type::member(..)`) — the type/enum/namespace lane.
-            if let Some(r) =
-                self.compile_qualified_call(&segs[..1], segs[1].name, &segs[1].generics, &args, expected, sp)
-            {
+            if let Some(r) = self.compile_qualified_call(
+                &segs[..1],
+                segs[1].name,
+                &segs[1].generics,
+                &args,
+                expected,
+                sp,
+            ) {
                 return r;
             }
             let base = segs[0].name;
@@ -141,7 +171,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some(home) = self.ctx.type_home(base) {
                 if home != self.ctx.cur_mod {
                     let q = home.replace('/', "::");
-                    let prefix = if q.is_empty() { String::new() } else { format!("{q}::") };
+                    let prefix = if q.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{q}::")
+                    };
                     self.ctx.err(
                         sp,
                         format!(
@@ -163,14 +197,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // instantiation, so the parameter names its substituted
             // concrete type here; the trait impl on THAT type answers.
             if segs[0].generics.is_empty() {
-                if let Some(&concrete) = self.subst.iter().find(|(n, _)| *n == base).map(|(_, t)| t) {
+                if let Some(&concrete) = self.subst.iter().find(|(n, _)| *n == base).map(|(_, t)| t)
+                {
                     let ifaces = self.iface_bounds.get(&base).cloned();
-                    return self.compile_bound_param_static_call(concrete, ifaces, member, args, expected, sp);
+                    return self.compile_bound_param_static_call(
+                        concrete, ifaces, member, args, expected, sp,
+                    );
                 }
             }
             let base_generics = segs[0].generics.clone();
             let member_generics = segs[1].generics.clone();
-            return self.compile_static_call(base, base_generics, member, member_generics, args, expected, sp);
+            return self.compile_static_call(
+                base,
+                base_generics,
+                member,
+                member_generics,
+                args,
+                expected,
+                sp,
+            );
         }
         if segs.len() >= 3 {
             // `pkg::a::Type::member(..)` — the unified mod walk, then the
@@ -241,12 +286,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     _ => true,
                 };
                 if !sealed {
-                    self.ctx.err(sp, "`opaque` rejects interface objects —they are never boxed");
+                    self.ctx.err(
+                        sp,
+                        "`opaque` rejects interface objects —they are never boxed",
+                    );
                     return Err(());
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_OPAQUE);
-                self.emit(Op::Box { dst, val: src, ty: t }, sp.lo);
+                self.emit(
+                    Op::Box {
+                        dst,
+                        val: src,
+                        ty: t,
+                    },
+                    sp.lo,
+                );
                 return Ok(TY_OPAQUE);
             }
             sym::UNOPAQUE => {
@@ -270,7 +325,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 };
                 if args.len() != 1 {
-                    self.ctx.err(sp, "unopaque<T>(b) takes one explicit type argument and one `opaque` value");
+                    self.ctx.err(
+                        sp,
+                        "unopaque<T>(b) takes one explicit type argument and one `opaque` value",
+                    );
                     return Err(());
                 }
                 let want = self.resolve_type_now(want_node);
@@ -297,7 +355,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let o = self.last_reg;
                 let dst = self.new_reg(want);
-                self.emit(Op::Unbox { dst, box_: o, ty: want }, sp.lo);
+                self.emit(
+                    Op::Unbox {
+                        dst,
+                        box_: o,
+                        ty: want,
+                    },
+                    sp.lo,
+                );
                 return Ok(want);
             }
             sym::PANIC if core_fn => {
@@ -322,14 +387,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
                 let dst = self.new_reg(TY_STACK_TRACE);
-                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::CaptureTrace, recv: NOREG, argv_off, argc, dst }, sp.lo); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::CaptureTrace,
+                            recv: NOREG,
+                            argv_off,
+                            argc,
+                            dst,
+                        },
+                        sp.lo,
+                    );
+                }
                 return Ok(TY_STACK_TRACE);
             }
             sym::STRING_JOIN if core_fn => {
                 // join every element of an `Array<str>` in one pass: the
                 // native sizes once and allocates once.
                 if args.len() != 1 {
-                    self.ctx.err(sp, "string_join(parts) takes one `Array<str>`");
+                    self.ctx
+                        .err(sp, "string_join(parts) takes one `Array<str>`");
                     return Err(());
                 }
                 let hint = Some(self.ctx.mk_array(TY_STR));
@@ -337,19 +415,43 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match self.ctx.types.kind(at) {
                     TyKind::Array { elem } if *elem == TY_STR => {}
                     _ => {
-                        self.ctx.err(sp, format!("string_join expects `Array<str>` —found `{}`", self.ctx.type_name(at)));
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "string_join expects `Array<str>` —found `{}`",
+                                self.ctx.type_name(at)
+                            ),
+                        );
                         return Err(());
                     }
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
-                { let (argv_off, argc) = self.pool_args(&(vec![src])); self.emit(Op::CallNat { nat: Nat::StrJoin, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![src]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::StrJoin,
+                            recv: NOREG,
+                            argv_off,
+                            argc,
+                            dst: dst,
+                        },
+                        sp.lo,
+                    );
+                }
                 return Ok(TY_STR);
             }
             sym::TYPE_ID => {
                 // compile-time constant —never executed
                 if generics.len() != 1 || !args.is_empty() {
-                    self.ctx.err(sp, format!("{}<T>() takes one explicit type argument", self.ctx.name(name)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "{}<T>() takes one explicit type argument",
+                            self.ctx.name(name)
+                        ),
+                    );
                     return Err(());
                 }
                 let t = self.resolve_type_now(generics[0]);
@@ -369,7 +471,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.check_formattable(t, self.ctx.ast.span(args[0].id()))?;
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
-                { let (argv_off, argc) = self.pool_args(&(vec![src])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![src]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::Str,
+                            recv: NOREG,
+                            argv_off,
+                            argc,
+                            dst: dst,
+                        },
+                        sp.lo,
+                    );
+                }
                 return Ok(TY_STR);
             }
             _ => {}
@@ -407,18 +521,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // exporter's scope-qualified id. The per-file key IS the gate
         // (the per-file binding law): the name resolves only in the
         // file whose `use` bound it.
-        if let Some(ef) = self.ctx.extern_fn(name).cloned() {            // the host future lane (phase 4): an async host fn's call
+        if let Some(ef) = self.ctx.extern_fn(name).cloned() {
+            // the host future lane (phase 4): an async host fn's call
             // mints the cold engine-woven frame over `__start`'s state
             // cell — the weave owns the call site
             if ef.is_async {
                 if ef.host.is_some() {
-                    return crate::lir::asyncfn::compile_host_async_call(self, name, &ef, &args, expected, sp);
+                    return crate::lir::asyncfn::compile_host_async_call(
+                        self, name, &ef, &args, expected, sp,
+                    );
                 }
                 // the crossed rut-owned export (plan10 phase 3): an
                 // ordinary Call into the exporter's start wrapper — the
                 // wrapper IS the weave's call shape, the driven half
                 // stays the exporter's woven body
-                return crate::lir::asyncfn::compile_crossed_async_call(self, name, &ef, &args, expected, sp);
+                return crate::lir::asyncfn::compile_crossed_async_call(
+                    self, name, &ef, &args, expected, sp,
+                );
             }
             // the engine-backed sleep future: minting rides
             // the first `__sleep` call — the host set's `sleep` wrapper
@@ -456,9 +575,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, what);
                     return Err(());
                 }
-                let resolved: Vec<TypeId> = generics.iter().map(|g| self.resolve_type_now(*g)).collect();
+                let resolved: Vec<TypeId> =
+                    generics.iter().map(|g| self.resolve_type_now(*g)).collect();
                 if row_name == "__select2" {
-                    crate::lir::asyncfn::ensure_select_future(self.ctx, resolved[0], resolved[1], sp)?;
+                    crate::lir::asyncfn::ensure_select_future(
+                        self.ctx,
+                        resolved[0],
+                        resolved[1],
+                        sp,
+                    )?;
                 } else if row_name == "__select_all" {
                     crate::lir::asyncfn::ensure_select_all_future(self.ctx, resolved[0], sp)?;
                 } else {
@@ -466,26 +591,59 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             if !generics.is_empty() && !row_takes_type_args {
-                self.ctx.err(sp, format!("`{}` is a used fn and takes no type arguments", self.ctx.name(name)));
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}` is a used fn and takes no type arguments",
+                        self.ctx.name(name)
+                    ),
+                );
                 return Err(());
             }
             if args.len() != ef.params.len() {
-                self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ef.params.len()));
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "call arity: {} args for {} params",
+                        args.len(),
+                        ef.params.len()
+                    ),
+                );
                 return Err(());
             }
             let mut aregs = Vec::new();
             for (i, a) in args.iter().enumerate() {
                 let t = self.compile_expr(*a, Some(ef.params[i]))?;
                 if !self.widens_val(*a, t, ef.params[i]) {
-                    self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                        "argument {} is `{}`, `{}` expected",
-                        i + 1, self.ctx.type_name(t), self.ctx.type_name(ef.params[i])
-                    ));
+                    self.ctx.err(
+                        self.ctx.ast.span(a.id()),
+                        format!(
+                            "argument {} is `{}`, `{}` expected",
+                            i + 1,
+                            self.ctx.type_name(t),
+                            self.ctx.type_name(ef.params[i])
+                        ),
+                    );
                 }
                 aregs.push(self.last_reg);
             }
-            let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
-            { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+            let dst = if ef.ret == TY_NIL {
+                None
+            } else {
+                Some(self.new_reg(ef.ret))
+            };
+            {
+                let (argv_off, argc) = self.pool_args(&(aregs));
+                self.emit(
+                    Op::Call {
+                        func: ef.func,
+                        argv_off,
+                        argc,
+                        dst: opt_reg(dst),
+                    },
+                    sp.lo,
+                );
+            }
             return Ok(ef.ret);
         }
         // a used GENERIC fn (the linkable-classes phase): the body
@@ -735,7 +893,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if ctx.vis_crosses(&from, &m, vis) {
                 None
             } else {
-                Some(format!("`{m}::{}` — {}", ctx.name(name), ctx.vis_hint(name, &from, &m, vis)))
+                Some(format!(
+                    "`{m}::{}` — {}",
+                    ctx.name(name),
+                    ctx.vis_hint(name, &from, &m, vis)
+                ))
             }
         };
         if let Some(fnode) = self.ctx.fn_in(&m, name) {
@@ -786,11 +948,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(sp, msg);
                 return Some(Err(()));
             }
-            self.ctx.err(sp, format!(
-                "`{}` is an enum — construct a member: `{}.Member`",
-                self.ctx.name(name),
-                self.ctx.name(name)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` is an enum — construct a member: `{}.Member`",
+                    self.ctx.name(name),
+                    self.ctx.name(name)
+                ),
+            );
             return Some(Err(()));
         }
         // a module let is a constant, not a callable
@@ -803,13 +968,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             self.ctx.err(
                 sp,
-                format!("`{}` is a constant — it takes no arguments", self.ctx.name(name)),
+                format!(
+                    "`{}` is a constant — it takes no arguments",
+                    self.ctx.name(name)
+                ),
             );
             return Some(Err(()));
         }
         None
     }
-
 
     /// Implicit widening — exact > interface-typed when the concrete
     /// type SATISFIES the interface structurally (the member-set check
@@ -850,12 +1017,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Err(detail) => {
                     let tname = self.ctx.iface_base_name(iface_id);
-                    self.ctx.err(rut_lexer::span::Span::new(self.span, self.span), format!(
-                        "`{}` does not satisfy `{}`: {}",
-                        self.ctx.type_name(from),
-                        tname,
-                        detail
-                    ));
+                    self.ctx.err(
+                        rut_lexer::span::Span::new(self.span, self.span),
+                        format!(
+                            "`{}` does not satisfy `{}`: {}",
+                            self.ctx.type_name(from),
+                            tname,
+                            detail
+                        ),
+                    );
                     return false;
                 }
             }
@@ -881,7 +1051,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// merge of boxes, an untracked arrival) proves nothing: the honest
     /// structural refusal. `node` names the value expression; the bare
     /// path carries its binding's origins.
-    pub(crate) fn widens_val(&mut self, node: NodeHandle<AnyExpr>, from: TypeId, to: TypeId) -> bool {
+    pub(crate) fn widens_val(
+        &mut self,
+        node: NodeHandle<AnyExpr>,
+        from: TypeId,
+        to: TypeId,
+    ) -> bool {
         if from == to {
             return true;
         }
@@ -969,7 +1144,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ctx.same_instantiation(a, b)
     }
 
-    pub(crate) fn check_recv_mut(&mut self, recv: NodeHandle<AnyExpr>, sp: rut_lexer::span::Span, what: &str) -> bool {
+    pub(crate) fn check_recv_mut(
+        &mut self,
+        recv: NodeHandle<AnyExpr>,
+        sp: rut_lexer::span::Span,
+        what: &str,
+    ) -> bool {
         match self.ctx.ast.expr(recv).clone() {
             ExprKind::Path { segs } if segs.len() == 1 => {
                 if let Some(l) = self.lookup(segs[0].name) {
@@ -1001,5 +1181,4 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => true,
         }
     }
-
 }

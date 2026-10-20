@@ -32,8 +32,8 @@ use std::sync::OnceLock;
 /// Size classes (bytes, multiples of 8). Above `SMALL_MAX` a block gets
 /// its own allocation instead of a class.
 const CLASSES: [usize; 24] = [
-    16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 640, 768, 896,
-    1024, 1280, 1536, 1792, 2048,
+    16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 640, 768, 896, 1024,
+    1280, 1536, 1792, 2048,
 ];
 const SMALL_MAX: usize = *CLASSES.last().unwrap();
 
@@ -92,7 +92,10 @@ impl Blocks {
     }
 
     fn class_of(req: usize) -> usize {
-        CLASSES.iter().position(|&c| c >= req).expect("caller checks SMALL_MAX")
+        CLASSES
+            .iter()
+            .position(|&c| c >= req)
+            .expect("caller checks SMALL_MAX")
     }
 
     /// A payload block with at least `len` usable bytes. The caller

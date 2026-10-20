@@ -67,17 +67,77 @@ pub struct StdFile {
 /// same shape a directory dep's mount indexes with.
 pub fn indexes() -> Vec<DefIndex> {
     [
-        (CORE_LABEL, CORE, rut_parser::Mode::Decl, "rut/core/core.d.rut", &[] as &[StdFile]),
-        ("calc", CALC, rut_parser::Mode::Decl, "rut/calc/calc.d.rut", &[]),
-        ("nmap_host", NMAP_HOST, rut_parser::Mode::Decl, "rut/nmap_host/nmap.d.rut", &[]),
-        ("ink_host", INK_HOST, rut_parser::Mode::Decl, "rut/ink_host/ink_host.d.rut", &[]),
-        ("bench_cross", BENCH_CROSS, rut_parser::Mode::Decl, "rut/bench-cross/bench_cross.d.rut", &[]),
-        ("strbuild_host", STRBUILD_HOST, rut_parser::Mode::Decl, "rut/strbuild_host/strbuild_host.d.rut", &[]),
-        ("pouch", POUCH, rut_parser::Mode::Impl, "rut/pouch/mod.rut", &[]),
-        ("nmapset", NMAPSET, rut_parser::Mode::Impl, "rut/nmapset/mod.rut", &[]),
-        ("json", JSON, rut_parser::Mode::Impl, "rut/json/mod.rut", &[]),
+        (
+            CORE_LABEL,
+            CORE,
+            rut_parser::Mode::Decl,
+            "rut/core/core.d.rut",
+            &[] as &[StdFile],
+        ),
+        (
+            "calc",
+            CALC,
+            rut_parser::Mode::Decl,
+            "rut/calc/calc.d.rut",
+            &[],
+        ),
+        (
+            "nmap_host",
+            NMAP_HOST,
+            rut_parser::Mode::Decl,
+            "rut/nmap_host/nmap.d.rut",
+            &[],
+        ),
+        (
+            "ink_host",
+            INK_HOST,
+            rut_parser::Mode::Decl,
+            "rut/ink_host/ink_host.d.rut",
+            &[],
+        ),
+        (
+            "bench_cross",
+            BENCH_CROSS,
+            rut_parser::Mode::Decl,
+            "rut/bench-cross/bench_cross.d.rut",
+            &[],
+        ),
+        (
+            "strbuild_host",
+            STRBUILD_HOST,
+            rut_parser::Mode::Decl,
+            "rut/strbuild_host/strbuild_host.d.rut",
+            &[],
+        ),
+        (
+            "pouch",
+            POUCH,
+            rut_parser::Mode::Impl,
+            "rut/pouch/mod.rut",
+            &[],
+        ),
+        (
+            "nmapset",
+            NMAPSET,
+            rut_parser::Mode::Impl,
+            "rut/nmapset/mod.rut",
+            &[],
+        ),
+        (
+            "json",
+            JSON,
+            rut_parser::Mode::Impl,
+            "rut/json/mod.rut",
+            &[],
+        ),
         ("ink", INK, rut_parser::Mode::Impl, "rut/ink/mod.rut", &[]),
-        ("strbuild", STRBUILD, rut_parser::Mode::Impl, "rut/strbuild/mod.rut", &[]),
+        (
+            "strbuild",
+            STRBUILD,
+            rut_parser::Mode::Impl,
+            "rut/strbuild/mod.rut",
+            &[],
+        ),
         // the host-surface mod tree: root + each child Decl file
         (
             "myhost",
@@ -85,7 +145,11 @@ pub fn indexes() -> Vec<DefIndex> {
             rut_parser::Mode::Decl,
             "rut/myhost/myhost.d.rut",
             &[
-                StdFile { mod_path: "net", src: MYHOST_NET, src_path: "rut/myhost/net/mod.d.rut" },
+                StdFile {
+                    mod_path: "net",
+                    src: MYHOST_NET,
+                    src_path: "rut/myhost/net/mod.d.rut",
+                },
                 StdFile {
                     mod_path: "net/tls",
                     src: MYHOST_NET_TLS,
@@ -101,7 +165,13 @@ pub fn indexes() -> Vec<DefIndex> {
         out.push(std_index(origin, src, mode, src_path, None));
         // each child Decl file, its mod path stamped
         for f in children {
-            out.push(std_index(origin, f.src, rut_parser::Mode::Decl, f.src_path, Some(f.mod_path)));
+            out.push(std_index(
+                origin,
+                f.src,
+                rut_parser::Mode::Decl,
+                f.src_path,
+                Some(f.mod_path),
+            ));
         }
         out
     })
@@ -167,10 +237,30 @@ mod tests {
         origins.dedup();
         assert_eq!(origins.len(), 12, "origins: {origins:?}");
         for i in &idxs {
-            assert!(!i.types.is_empty() || !i.fns.is_empty(), "{}: empty index", i.origin);
+            assert!(
+                !i.types.is_empty() || !i.fns.is_empty(),
+                "{}: empty index",
+                i.origin
+            );
         }
-        for want in ["core", "calc", "nmap_host", "ink_host", "bench_cross", "strbuild_host", "pouch", "nmapset", "json", "ink", "strbuild", "myhost"] {
-            assert!(origins.contains(&want.to_string()), "missing pkg `{want}`: {origins:?}");
+        for want in [
+            "core",
+            "calc",
+            "nmap_host",
+            "ink_host",
+            "bench_cross",
+            "strbuild_host",
+            "pouch",
+            "nmapset",
+            "json",
+            "ink",
+            "strbuild",
+            "myhost",
+        ] {
+            assert!(
+                origins.contains(&want.to_string()),
+                "missing pkg `{want}`: {origins:?}"
+            );
         }
     }
 
@@ -181,11 +271,19 @@ mod tests {
         // path stamped — the walk reads the (module, mod_path) pair
         let idxs = indexes();
         let mine: Vec<&DefIndex> = idxs.iter().filter(|i| i.origin == "myhost").collect();
-        assert_eq!(mine.len(), 3, "{:?}", mine.iter().map(|i| &i.mod_path).collect::<Vec<_>>());
+        assert_eq!(
+            mine.len(),
+            3,
+            "{:?}",
+            mine.iter().map(|i| &i.mod_path).collect::<Vec<_>>()
+        );
         assert_eq!(mine[0].mod_path, None, "the root file answers the root");
         assert_eq!(mine[0].src_path.as_deref(), Some("rut/myhost/myhost.d.rut"));
         assert_eq!(mine[1].mod_path.as_deref(), Some("net"));
-        assert_eq!(mine[1].src_path.as_deref(), Some("rut/myhost/net/mod.d.rut"));
+        assert_eq!(
+            mine[1].src_path.as_deref(),
+            Some("rut/myhost/net/mod.d.rut")
+        );
         assert_eq!(mine[2].mod_path.as_deref(), Some("net/tls"));
         // the root carries the `pub mod net;` edge and its flat row;
         // the children carry their own rows
@@ -247,7 +345,11 @@ mod tests {
         let h = crate::hover::hover(&chain, &toks, &ast, &crate::mods::DocMods::default(), leaf)
             .expect("the leaf hovers");
         assert!(h.markdown.contains("connect"), "{}", h.markdown);
-        assert!(h.markdown.contains("myhost"), "the hover names the exporting pkg: {}", h.markdown);
+        assert!(
+            h.markdown.contains("myhost"),
+            "the hover names the exporting pkg: {}",
+            h.markdown
+        );
     }
 
     #[test]
@@ -256,7 +358,12 @@ mod tests {
         // as `module` — the use-path completion reads it like any dep's
         let idxs = indexes();
         for i in &idxs {
-            assert_eq!(i.module.as_deref(), Some(i.origin.as_str()), "{}: unnamed", i.origin);
+            assert_eq!(
+                i.module.as_deref(),
+                Some(i.origin.as_str()),
+                "{}: unnamed",
+                i.origin
+            );
         }
     }
 
@@ -276,8 +383,18 @@ mod tests {
         for want in ["new", "with_cap", "append", "append_code", "len", "build"] {
             assert!(fns.contains(&want), "StringBuilder lacks `{want}`: {fns:?}");
         }
-        for absent in ["clear", "reserve", "capacity", "append_char", "finish", "push"] {
-            assert!(!fns.contains(&absent), "StringBuilder must NOT carry `{absent}`: {fns:?}");
+        for absent in [
+            "clear",
+            "reserve",
+            "capacity",
+            "append_char",
+            "finish",
+            "push",
+        ] {
+            assert!(
+                !fns.contains(&absent),
+                "StringBuilder must NOT carry `{absent}`: {fns:?}"
+            );
         }
     }
 
@@ -290,23 +407,25 @@ mod tests {
         // surface offers the class pair and NO `type` rows: the three
         // `pub type HashMap<K, ..>` index rows left with the row decls.)
         let idxs = indexes();
-        let has = |name: &str| {
-            idxs.iter()
-                .any(|i| i.types.iter().any(|t| t.name == name))
-        };
+        let has = |name: &str| idxs.iter().any(|i| i.types.iter().any(|t| t.name == name));
         for want in ["HashMap", "HashSet"] {
             assert!(has(want), "std surface lacks `{want}`");
         }
         for absent in ["PrimMapI64", "PrimMapU64", "PrimMapF64"] {
             assert!(
-                !idxs.iter().any(|i| i.types.iter().any(|t| t.name == absent)),
+                !idxs
+                    .iter()
+                    .any(|i| i.types.iter().any(|t| t.name == absent)),
                 "std surface still offers `{absent}` — the prim lane names left the public surface"
             );
         }
         // the row decls' negative pin: nmapset's index carries NO
         // alias-form entries at all (the three `pub type HashMap<K, ..>`
         // rows were its only aliases — repealed with the row form)
-        let nmapset = idxs.iter().find(|i| i.origin == "nmapset").expect("nmapset in the std surface");
+        let nmapset = idxs
+            .iter()
+            .find(|i| i.origin == "nmapset")
+            .expect("nmapset in the std surface");
         let alias_rows: Vec<&str> = nmapset
             .types
             .iter()
@@ -329,7 +448,9 @@ mod tests {
         // the round-1 lane's negative pin: the opaque-keyed crossing is
         // GONE from the surface (the P4 cull)
         assert!(
-            !idxs.iter().any(|i| i.fns.iter().any(|f| f.name == "map_entry")),
+            !idxs
+                .iter()
+                .any(|i| i.fns.iter().any(|f| f.name == "map_entry")),
             "std surface still offers nmap_host's map_entry — the probing core's lanes are deleted"
         );
     }

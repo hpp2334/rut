@@ -107,24 +107,59 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .iter()
                 .map(|m| {
                     let text = ast.name(*m);
-                    sym(text, SymKind::EnumMember, find_name(toks, span, text, false), vec![])
+                    sym(
+                        text,
+                        SymKind::EnumMember,
+                        find_name(toks, span, text, false),
+                        vec![],
+                    )
                 })
                 .collect();
-            Some(sym(ast.name(*name), SymKind::Enum, find_name(toks, span, ast.name(*name), false), children))
+            Some(sym(
+                ast.name(*name),
+                SymKind::Enum,
+                find_name(toks, span, ast.name(*name), false),
+                children,
+            ))
         }
-        ItemKind::Struct { name, fields, methods, .. }
-        | ItemKind::Class { name, fields, methods, .. } => {
+        ItemKind::Struct {
+            name,
+            fields,
+            methods,
+            ..
+        }
+        | ItemKind::Class {
+            name,
+            fields,
+            methods,
+            ..
+        } => {
             let children = member_symbols(toks, ast, fields, methods);
-            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
+            Some(sym(
+                ast.name(*name),
+                SymKind::Class,
+                find_name(toks, span, ast.name(*name), false),
+                children,
+            ))
         }
         ItemKind::Interface { name, methods, .. } => {
             let children = methods
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
                 .collect();
-            Some(sym(ast.name(*name), SymKind::Interface, find_name(toks, span, ast.name(*name), false), children))
+            Some(sym(
+                ast.name(*name),
+                SymKind::Interface,
+                find_name(toks, span, ast.name(*name), false),
+                children,
+            ))
         }
-        ItemKind::Impl { generics, target, methods, .. } => {
+        ItemKind::Impl {
+            generics,
+            target,
+            methods,
+            ..
+        } => {
             let children = methods
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
@@ -132,7 +167,11 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             let gen_head = if generics.is_empty() {
                 String::new()
             } else {
-                let gs = generics.iter().map(|&g| ast.name(g).to_string()).collect::<Vec<_>>().join(", ");
+                let gs = generics
+                    .iter()
+                    .map(|&g| ast.name(g).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("<{}>", gs)
             };
             let name = format!("impl{} {}", gen_head, ty_text(ast, *target));
@@ -145,12 +184,28 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
             vec![],
         )),
         ItemKind::BuiltinTy { name, members, .. } => {
-            let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
-            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
+            let children = members
+                .iter()
+                .map(|m| method_symbol(toks, ast, *m))
+                .collect();
+            Some(sym(
+                ast.name(*name),
+                SymKind::Class,
+                find_name(toks, span, ast.name(*name), false),
+                children,
+            ))
         }
         ItemKind::BuiltinPrimitive { name, members, .. } => {
-            let children = members.iter().map(|m| method_symbol(toks, ast, *m)).collect();
-            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
+            let children = members
+                .iter()
+                .map(|m| method_symbol(toks, ast, *m))
+                .collect();
+            Some(sym(
+                ast.name(*name),
+                SymKind::Class,
+                find_name(toks, span, ast.name(*name), false),
+                children,
+            ))
         }
         ItemKind::BuiltinImpl { prim, methods, .. } => {
             // core's `builtin impl i32 { .. }` — a method group on a
@@ -159,11 +214,21 @@ fn item_symbol(toks: &[Token], ast: &Ast, h: NodeHandle<AnyItem>) -> Option<RawS
                 .iter()
                 .map(|m| method_symbol(toks, ast, *m))
                 .collect();
-            Some(sym(ast.name(*prim), SymKind::Class, find_name(toks, span, ast.name(*prim), false), children))
+            Some(sym(
+                ast.name(*prim),
+                SymKind::Class,
+                find_name(toks, span, ast.name(*prim), false),
+                children,
+            ))
         }
         ItemKind::SurfaceStruct { name, fields, .. } => {
             let children = member_symbols(toks, ast, fields, &[]);
-            Some(sym(ast.name(*name), SymKind::Class, find_name(toks, span, ast.name(*name), false), children))
+            Some(sym(
+                ast.name(*name),
+                SymKind::Class,
+                find_name(toks, span, ast.name(*name), false),
+                children,
+            ))
         }
         // `use` symbols render above (the pkg-shaped entry); modules
         // carry no outline entry
@@ -220,12 +285,10 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         TypeKind::TyArray { elem } => format!("[{}]", ty_text(ast, *elem)),
         TypeKind::TyTuple { .. } => "(..)".to_string(),
         TypeKind::TyConst(_) => "const".to_string(),
-        TypeKind::TyUnion { elems } => {
-            elems
-                .iter()
-                .map(|&e| ty_text(ast, e))
-                .collect::<Vec<_>>()
-                .join(" | ")
-        }
+        TypeKind::TyUnion { elems } => elems
+            .iter()
+            .map(|&e| ty_text(ast, e))
+            .collect::<Vec<_>>()
+            .join(" | "),
     }
 }

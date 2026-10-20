@@ -84,9 +84,7 @@ pub(crate) fn loc_at(doc_uri: &str, i: &DefIndex, span: Span) -> DefLocation {
     let uri = if i.origin == doc_uri {
         doc_uri.to_string()
     } else {
-        i.src_path
-            .clone()
-            .unwrap_or_else(|| origin_uri(&i.origin))
+        i.src_path.clone().unwrap_or_else(|| origin_uri(&i.origin))
     };
     DefLocation {
         uri,
@@ -100,8 +98,14 @@ pub(crate) fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
     let (l1, c1) = index.position(src, span.lo);
     let (l2, c2) = index.position(src, span.hi);
     Range {
-        start: ls_types::Position { line: l1, character: c1 },
-        end: ls_types::Position { line: l2, character: c2 },
+        start: ls_types::Position {
+            line: l1,
+            character: c1,
+        },
+        end: ls_types::Position {
+            line: l2,
+            character: c2,
+        },
     }
 }
 
@@ -156,8 +160,11 @@ fn chain_for<'a>(
 ) -> Vec<&'a DefIndex> {
     match imported.get(name) {
         Some(pkg) => {
-            let filtered: Vec<&DefIndex> =
-                idxs.iter().copied().filter(|i| matches_pkg(i, pkg)).collect();
+            let filtered: Vec<&DefIndex> = idxs
+                .iter()
+                .copied()
+                .filter(|i| matches_pkg(i, pkg))
+                .collect();
             if filtered.is_empty() {
                 idxs.to_vec()
             } else {
@@ -184,8 +191,11 @@ fn chain_for<'a>(
 /// embed's indexes are the only ones carrying `src_path` (the true
 /// `rut/...` repo path), which marks them here.
 fn prefer_bodies<'a, T: Copy>(hits: &[(&'a DefIndex, T)]) -> Vec<(&'a DefIndex, T)> {
-    let mounted: Vec<(&DefIndex, T)> =
-        hits.iter().copied().filter(|(i, _)| i.src_path.is_none()).collect();
+    let mounted: Vec<(&DefIndex, T)> = hits
+        .iter()
+        .copied()
+        .filter(|(i, _)| i.src_path.is_none())
+        .collect();
     let pool: &[(&DefIndex, T)] = if mounted.is_empty() { hits } else { &mounted };
     let bodies: Vec<(&DefIndex, T)> = pool
         .iter()
@@ -220,8 +230,12 @@ fn member_span(m: &MemberSrc) -> Option<Span> {
 /// Empty when nothing resolves (keywords, unknown names, primitives
 /// with no surface decl).
 pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let Some(t) = lookup::tok_at(ctx.toks, pos) else { return Vec::new() };
-    let Tok::Ident(name) = &t.tok else { return Vec::new() };
+    let Some(t) = lookup::tok_at(ctx.toks, pos) else {
+        return Vec::new();
+    };
+    let Tok::Ident(name) = &t.tok else {
+        return Vec::new();
+    };
     if crate::semantic::is_keyword(name) {
         return Vec::new();
     }
@@ -263,7 +277,10 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     // declaring ident (a param's, or a let the decl_site spans missed):
     // go-to-def on a decl → itself. Params sit before their scope body,
     // so the scope-containment resolve can't see them
-    if binds.iter().any(|b| b.name == *name && b.decl_ident_span == t.span) {
+    if binds
+        .iter()
+        .any(|b| b.name == *name && b.decl_ident_span == t.span)
+    {
         return vec![DefLocation {
             uri: ctx.doc_uri.to_string(),
             range: range_of(&ctx.doc().lines, &ctx.doc().src, t.span),
@@ -344,8 +361,12 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 /// declared types, binding types, module lets), then jump to that
 /// type's declaration. The same layers, one step further.
 pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
-    let Some(t) = lookup::tok_at(ctx.toks, pos) else { return Vec::new() };
-    let Tok::Ident(name) = &t.tok else { return Vec::new() };
+    let Some(t) = lookup::tok_at(ctx.toks, pos) else {
+        return Vec::new();
+    };
+    let Tok::Ident(name) = &t.tok else {
+        return Vec::new();
+    };
     if crate::semantic::is_keyword(name) {
         return Vec::new();
     }
@@ -445,12 +466,19 @@ fn use_graph_targets<'a>(
                 .filter(|i| matches_pkg(i, pkg) && crate::mods::mod_path_of(i) == p)
                 .collect();
             if scoped.is_empty() {
-                idxs.iter().copied().filter(|i| matches_pkg(i, pkg)).collect()
+                idxs.iter()
+                    .copied()
+                    .filter(|i| matches_pkg(i, pkg))
+                    .collect()
             } else {
                 scoped
             }
         }
-        None => idxs.iter().copied().filter(|i| matches_pkg(i, pkg)).collect(),
+        None => idxs
+            .iter()
+            .copied()
+            .filter(|i| matches_pkg(i, pkg))
+            .collect(),
     };
     let mut out: Vec<(&DefIndex, Span)> = Vec::new();
     for i in in_scope {
@@ -553,7 +581,9 @@ fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation
                         &start,
                         &u.path[1..=k],
                     ) {
-                        Some(p) => own_edge_target(ctx, &p).map(|l| vec![l]).unwrap_or_default(),
+                        Some(p) => own_edge_target(ctx, &p)
+                            .map(|l| vec![l])
+                            .unwrap_or_default(),
                         None => Vec::new(),
                     }
                 });
@@ -566,9 +596,14 @@ fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation
                 );
             }
             let walked = crate::mods::walk_use_mods(ctx.idxs, pkg, &u.path[1..=k])?;
-            let parent = crate::mods::find_mod(ctx.idxs, Some(pkg), crate::mods::parent_of(&walked))?;
+            let parent =
+                crate::mods::find_mod(ctx.idxs, Some(pkg), crate::mods::parent_of(&walked))?;
             let edge = parent.mods.iter().find(|m| m.name == u.path[k])?;
-            return Some(vec![loc_at(ctx.doc_uri, parent, edge.name_span.unwrap_or(edge.span))]);
+            return Some(vec![loc_at(
+                ctx.doc_uri,
+                parent,
+                edge.name_span.unwrap_or(edge.span),
+            )]);
         }
     }
     None
@@ -600,7 +635,9 @@ fn own_scope<'a>(ctx: &'a Ctx<'a>, walked: &str) -> Option<&'a DefIndex> {
 /// declaring type / module-let / free-fn spans (the use-graph's
 /// collector, scoped to the one module)
 fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
-    let Some(i) = own_scope(ctx, walked) else { return Vec::new() };
+    let Some(i) = own_scope(ctx, walked) else {
+        return Vec::new();
+    };
     let mut hits: Vec<(&DefIndex, Span)> = Vec::new();
     if let Some(t) = i.ty(name) {
         hits.push((i, ty_span(t)));
@@ -611,7 +648,9 @@ fn own_leaf_targets(ctx: &Ctx, walked: &str, name: &str) -> Vec<DefLocation> {
     for f in i.fns.iter().filter(|f| f.name == name && f.owner.is_none()) {
         hits.push((i, fn_span(f)));
     }
-    hits.into_iter().map(|(i, sp)| loc_at(ctx.doc_uri, i, sp)).collect()
+    hits.into_iter()
+        .map(|(i, sp)| loc_at(ctx.doc_uri, i, sp))
+        .collect()
 }
 
 /// the own-lane interior segment: the walked path's mounting `mod
@@ -622,7 +661,11 @@ fn own_edge_target(ctx: &Ctx, walked: &str) -> Option<DefLocation> {
     let name = walked.rsplit('/').next()?;
     let parent = own_scope(ctx, parent_path)?;
     let edge = parent.mods.iter().find(|m| m.name == name)?;
-    Some(loc_at(ctx.doc_uri, parent, edge.name_span.unwrap_or(edge.span)))
+    Some(loc_at(
+        ctx.doc_uri,
+        parent,
+        edge.name_span.unwrap_or(edge.span),
+    ))
 }
 
 /// the `mod NAME;` edge click — the hovered ident IS one of the doc's
@@ -689,7 +732,12 @@ mod tests {
         let (ast, _) = parse(&src, Mode::Impl);
         let mut index = crate::hover::index(&src, &ast, &toks);
         index.origin = uri.to_string();
-        Doc { src, toks, ast, index }
+        Doc {
+            src,
+            toks,
+            ast,
+            index,
+        }
     }
 
     fn doc(src: &str) -> Doc {
@@ -706,7 +754,13 @@ mod tests {
         query: impl Fn(&Ctx) -> Vec<DefLocation>,
     ) -> Vec<DefLocation> {
         let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
-        let ctx = Ctx { doc_uri: &d.index.origin, toks: &d.toks, ast: &d.ast, idxs: &idxs, doc_mods: dm };
+        let ctx = Ctx {
+            doc_uri: &d.index.origin,
+            toks: &d.toks,
+            ast: &d.ast,
+            idxs: &idxs,
+            doc_mods: dm,
+        };
         query(&ctx)
     }
 
@@ -940,7 +994,10 @@ mod tests {
         assert_eq!(hits[0].uri, WIDGET_URI);
         let ix = LineIndex::new(&normalize(WIDGET_DOC));
         let want = at(&normalize(WIDGET_DOC), "class Widget", 1) + 6;
-        assert_eq!(span_of(&normalize(WIDGET_DOC), &ix, &hits[0]), (want, want + 6));
+        assert_eq!(
+            span_of(&normalize(WIDGET_DOC), &ix, &hits[0]),
+            (want, want + 6)
+        );
         // and a usage site resolves through the same edge
         let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
@@ -955,7 +1012,11 @@ mod tests {
         foreign.origin = "file:///ws/other/lib.rut".to_string();
         let extra = [widget_index(), foreign];
         let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
-        assert_eq!(hits.len(), 1, "ambiguity from the OTHER pkg must not leak: {hits:?}");
+        assert_eq!(
+            hits.len(),
+            1,
+            "ambiguity from the OTHER pkg must not leak: {hits:?}"
+        );
         assert_eq!(hits[0].uri, WIDGET_URI);
     }
 
@@ -1119,7 +1180,10 @@ mod tests {
 
     /// the doc context for the app root
     fn root_dm() -> DocMods {
-        DocMods { mod_path: Some(String::new()), pkg: Some("app".to_string()) }
+        DocMods {
+            mod_path: Some(String::new()),
+            pkg: Some("app".to_string()),
+        }
     }
 
     #[test]
@@ -1166,7 +1230,10 @@ mod tests {
             None,
             &[],
         );
-        let dm = DocMods { mod_path: Some("helpers".into()), pkg: Some("app".into()) };
+        let dm = DocMods {
+            mod_path: Some("helpers".into()),
+            pkg: Some("app".into()),
+        };
         let extra = [deep];
         let hits = def_as(&d, at(&d.src, "mod deep;", 1) + 4, &extra, &dm);
         assert_eq!(hits.len(), 1, "{hits:?}");
@@ -1307,7 +1374,10 @@ mod tests {
         idx.src_path = Some("somewhere/else/lib.rut".to_string());
         idx.module = Some("pouch".to_string());
         assert!(matches_pkg(&idx, "pouch"));
-        assert!(!matches_pkg(&idx, "gadgets"), "the path stem must NOT match once the module is named");
+        assert!(
+            !matches_pkg(&idx, "gadgets"),
+            "the path stem must NOT match once the module is named"
+        );
         assert!(!matches_pkg(&idx, "else"));
     }
 
@@ -1323,9 +1393,18 @@ mod tests {
         idx.origin = "file:///ws/gadgets/lib.rut".to_string();
         assert!(matches_pkg(&idx, "gadgets"), "the file stem still resolves");
         idx.src_path = Some("rut/pouch/mod.rut".to_string());
-        assert!(matches_pkg(&idx, "pouch"), "the path segment still resolves");
-        assert!(!matches_pkg(&idx, "pouch.rut"), "the segment law strips `.rut` before comparing");
-        assert!(!matches_pkg(&idx, "gadgets"), "src_path replaces origin as the hay");
+        assert!(
+            matches_pkg(&idx, "pouch"),
+            "the path segment still resolves"
+        );
+        assert!(
+            !matches_pkg(&idx, "pouch.rut"),
+            "the segment law strips `.rut` before comparing"
+        );
+        assert!(
+            !matches_pkg(&idx, "gadgets"),
+            "src_path replaces origin as the hay"
+        );
         // the std surface's exact-origin lane
         idx.origin = "core".to_string();
         idx.src_path = None;
@@ -1422,7 +1501,10 @@ mod tests {
         assert!(def(&d, 0, &[]).is_empty()); // `fn` keyword
         let src2 = "entry fn main() -> nil {\n    let x = i32::max(1);\n}\n";
         let d2 = doc(src2);
-        assert!(def(&d2, at(&d2.src, "i32::max", 1), &[]).is_empty(), "i32 has no decl to jump to");
+        assert!(
+            def(&d2, at(&d2.src, "i32::max", 1), &[]).is_empty(),
+            "i32 has no decl to jump to"
+        );
         let src3 = "entry fn main() -> nil {\n    let x = mystery();\n}\n";
         let d3 = doc(src3);
         assert!(def(&d3, at(&d3.src, "mystery", 1), &[]).is_empty());

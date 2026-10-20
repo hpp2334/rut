@@ -207,7 +207,9 @@ impl Store {
                     let mut chunks = self.chunks.borrow_mut();
                     let mut bump = self.bump.get();
                     if bump >= STORE_CHUNK {
-                        chunks.push(Box::new([const { mem::MaybeUninit::uninit() }; STORE_CHUNK]));
+                        chunks.push(Box::new(
+                            [const { mem::MaybeUninit::uninit() }; STORE_CHUNK],
+                        ));
                         bump = 0;
                     }
                     let idx = chunks.len() - 1;
@@ -259,7 +261,11 @@ impl Store {
         let mut freed = 0u64;
         let mut refund = 0u64;
         for (ci, chunk) in chunks.iter().enumerate() {
-            let total = if ci + 1 == chunks.len() { self.bump.get() } else { STORE_CHUNK };
+            let total = if ci + 1 == chunks.len() {
+                self.bump.get()
+            } else {
+                STORE_CHUNK
+            };
             let base = chunk.as_ptr() as *mut EntryCell;
             for i in 0..total {
                 let p = unsafe { base.add(i) };
@@ -270,7 +276,10 @@ impl Store {
                 refund += unsafe { (*p).bytes } as u64;
                 let taken = mem::replace(
                     unsafe { &mut (*p).e },
-                    OpaqueEntry::Rut(RutOpaque { slot: Slot::null(), val_ty: 0 }),
+                    OpaqueEntry::Rut(RutOpaque {
+                        slot: Slot::null(),
+                        val_ty: 0,
+                    }),
                 );
                 drop(taken);
             }
@@ -317,7 +326,10 @@ impl<T: 'static> Opaque<T> {
     pub fn alloc(vm: &mut crate::interp::Vm, val: T) -> Result<Opaque<T>, Trap> {
         let slot = vm.heap.alloc_host_box(val, None)?;
         let handle = vm.heap.opaque_handle_take(unsafe { slot.r });
-        Ok(Opaque { handle, _marker: PhantomData })
+        Ok(Opaque {
+            handle,
+            _marker: PhantomData,
+        })
     }
 
     /// Same check over a bare handle. The payload's own `Any` vtable
@@ -335,10 +347,17 @@ impl<T: 'static> Opaque<T> {
         if !host.payload.is::<T>() {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                format!("host box holds `{}`, not `{}`", host.type_name, std::any::type_name::<T>()),
+                format!(
+                    "host box holds `{}`, not `{}`",
+                    host.type_name,
+                    std::any::type_name::<T>()
+                ),
             ));
         }
-        Ok(Opaque { handle: h.clone(), _marker: PhantomData })
+        Ok(Opaque {
+            handle: h.clone(),
+            _marker: PhantomData,
+        })
     }
 
     /// Shared borrow for the closure's duration. Nested `with`s stack;
@@ -379,9 +398,12 @@ impl<T: 'static> Opaque<T> {
             ));
         }
         borrows.set(BORROW_MUT);
-        let out = f(vm, payload
-            .downcast_mut::<T>()
-            .expect("Opaque<T> holds a T — checked at from_handle/alloc"));
+        let out = f(
+            vm,
+            payload
+                .downcast_mut::<T>()
+                .expect("Opaque<T> holds a T — checked at from_handle/alloc"),
+        );
         borrows.set(0);
         Ok(out)
     }
@@ -418,7 +440,10 @@ impl<T: 'static> Opaque<T> {
 
 impl<T: 'static> Clone for Opaque<T> {
     fn clone(&self) -> Self {
-        Opaque { handle: self.handle.clone(), _marker: PhantomData }
+        Opaque {
+            handle: self.handle.clone(),
+            _marker: PhantomData,
+        }
     }
 }
 
@@ -433,9 +458,14 @@ impl<T: HostPayload> Opaque<T> {
                 .expect("finalize thunk runs on its own payload")
                 .finalize(heap);
         }
-        let slot = vm.heap.alloc_host_box(val, Some(finalize_thunk::<T> as fn(&mut dyn Any, &Heap)))?;
+        let slot = vm
+            .heap
+            .alloc_host_box(val, Some(finalize_thunk::<T> as fn(&mut dyn Any, &Heap)))?;
         let handle = vm.heap.opaque_handle_take(unsafe { slot.r });
-        Ok(Opaque { handle, _marker: PhantomData })
+        Ok(Opaque {
+            handle,
+            _marker: PhantomData,
+        })
     }
 }
 
@@ -470,7 +500,10 @@ mod tests {
     impl Drop for Counted {
         fn drop(&mut self) {
             // the ORDER law: finalize ran first
-            assert!(self.fin.get(), "finalize must run before the Box's own Drop");
+            assert!(
+                self.fin.get(),
+                "finalize must run before the Box's own Drop"
+            );
             self.dropped.set(true);
         }
     }
@@ -480,9 +513,18 @@ mod tests {
         let mut vm = bare_vm();
         let fin = Rc::new(Cell::new(false));
         let dropped = Rc::new(Cell::new(false));
-        let b = Opaque::alloc_hosted(&mut vm, Counted { fin: fin.clone(), dropped: dropped.clone() })
-            .expect("alloc_hosted");
-        assert!(!fin.get() && !dropped.get(), "nothing runs while the box lives");
+        let b = Opaque::alloc_hosted(
+            &mut vm,
+            Counted {
+                fin: fin.clone(),
+                dropped: dropped.clone(),
+            },
+        )
+        .expect("alloc_hosted");
+        assert!(
+            !fin.get() && !dropped.get(),
+            "nothing runs while the box lives"
+        );
         drop(b);
         assert!(fin.get(), "the finalize hook ran at entry death");
         assert!(dropped.get(), "the payload's Drop ran with it");
@@ -502,7 +544,10 @@ mod tests {
         let d = dropped.clone();
         let b = Opaque::alloc(&mut vm, NoHook(d)).expect("alloc");
         drop(b);
-        assert!(dropped.get(), "plain alloc: the Box's own Drop is the destructor");
+        assert!(
+            dropped.get(),
+            "plain alloc: the Box's own Drop is the destructor"
+        );
         assert_eq!(vm.heap.arena_store().live(), 0);
     }
 
@@ -523,13 +568,21 @@ mod tests {
         let mut vm = bare_vm();
         let host = Opaque::alloc(&mut vm, 7i64).expect("alloc");
         // a wrong T: the checked error naming what it holds and what was asked
-        let err = Opaque::<u64>::from_handle(host.handle()).err().expect("wrong T rejected");
-        assert!(err.msg.contains("i64") && err.msg.contains("u64"), "{}", err.msg);
+        let err = Opaque::<u64>::from_handle(host.handle())
+            .err()
+            .expect("wrong T rejected");
+        assert!(
+            err.msg.contains("i64") && err.msg.contains("u64"),
+            "{}",
+            err.msg
+        );
         // a rut-value entry answering a Host decode: the recovery text
         let s = vm.heap.alloc_str("k".into()).unwrap();
         let rut = vm.heap.alloc_opaque(s, rut_core::types::TY_STR).unwrap();
         let h = vm.heap.opaque_handle_take(unsafe { rut.r });
-        let err = Opaque::<u64>::from_handle(&h).err().expect("rut box rejected");
+        let err = Opaque::<u64>::from_handle(&h)
+            .err()
+            .expect("rut box rejected");
         assert!(
             err.msg.contains("rut value") && err.msg.contains("downcast"),
             "{}",
@@ -546,11 +599,15 @@ mod tests {
             // nested shared borrow: excluded while &mut is out
             assert!(b.with(|_| {}).is_err(), "shared under mut must trap");
             let again = b.with_mut(vm, |_, _| {});
-            assert!(again.unwrap_err().msg.contains("borrowed by an outer host call"));
+            assert!(again
+                .unwrap_err()
+                .msg
+                .contains("borrowed by an outer host call"));
         })
         .expect("the exclusive borrow runs");
         assert_eq!(b.with(|v| *v).unwrap(), 42, "the mutation stands");
-        b.with(|_| {}).expect("the guard clears when the closure returns");
+        b.with(|_| {})
+            .expect("the guard clears when the closure returns");
     }
 
     #[test]

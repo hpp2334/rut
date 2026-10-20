@@ -103,7 +103,8 @@ fn dom_event_round_trips_through_its_door() {
 fn input_values_are_event_carried() {
     let mut host = make_host();
     let input: OpaqueRef = host.call("probe_get", ("new-todo",)).unwrap();
-    host.call::<_, ()>("probe_set_input_value", (input.clone(), "milk")).unwrap();
+    host.call::<_, ()>("probe_set_input_value", (input.clone(), "milk"))
+        .unwrap();
     let log: OpaqueRef = host.call("probe_get", ("log",)).unwrap();
     // every event on an input element carries its current value —
     // "input" rows, keydown rows, all of them
@@ -113,13 +114,19 @@ fn input_values_are_event_carried() {
     assert_eq!(log_rows(&mut host, &log), vec!["dom 2 milk", "dom 3 milk"]);
     // a non-input element's rows carry no detail
     host.fire_listener(1).unwrap(); // the add-btn click
-    assert_eq!(log_rows(&mut host, &log), vec!["dom 2 milk", "dom 3 milk", "dom 1 "]);
+    assert_eq!(
+        log_rows(&mut host, &log),
+        vec!["dom 2 milk", "dom 3 milk", "dom 1 "]
+    );
 }
 
 #[test]
 fn tim_after_round_trips_as_ev_timer() {
     let mut host = make_host();
-    assert_eq!(host.with_dom(|d| d.pending_timers()), vec![(400, "boot".to_string())]);
+    assert_eq!(
+        host.with_dom(|d| d.pending_timers()),
+        vec![(400, "boot".to_string())]
+    );
     let log: OpaqueRef = host.call("probe_get", ("log",)).unwrap();
     host.advance(399).unwrap(); // not yet
     assert!(log_rows(&mut host, &log).is_empty());
@@ -138,7 +145,10 @@ fn timers_fire_in_deadline_then_sequence_order() {
     host.advance(50).unwrap();
     assert_eq!(log_rows(&mut host, &log), vec!["timer a", "timer c"]);
     host.advance(100).unwrap();
-    assert_eq!(log_rows(&mut host, &log), vec!["timer a", "timer c", "timer b"]);
+    assert_eq!(
+        log_rows(&mut host, &log),
+        vec!["timer a", "timer c", "timer b"]
+    );
 }
 
 // ---- the trap matrix (survey §4.3) ----
@@ -146,23 +156,38 @@ fn timers_fire_in_deadline_then_sequence_order() {
 #[test]
 fn trap_unknown_id_is_loud() {
     let mut host = make_host();
-    let err = host.call::<_, OpaqueRef>("probe_get", ("nope",)).unwrap_err();
-    assert!(err.msg.contains("web::ui_get: no element '#nope'"), "{}", err.msg);
+    let err = host
+        .call::<_, OpaqueRef>("probe_get", ("nope",))
+        .unwrap_err();
+    assert!(
+        err.msg.contains("web::ui_get: no element '#nope'"),
+        "{}",
+        err.msg
+    );
 }
 
 #[test]
 fn trap_kind_mismatch_names_both_sides() {
     let mut host = make_host();
     let log: OpaqueRef = host.call("probe_get", ("log",)).unwrap(); // a `ul`
-    let err = host.call::<_, ()>("probe_set_input_value", (log, "x")).unwrap_err();
-    assert!(err.msg.contains("web::ui_set_input_value: boundary: got `ul` where `HtmlInputElement` binds"), "{}", err.msg);
+    let err = host
+        .call::<_, ()>("probe_set_input_value", (log, "x"))
+        .unwrap_err();
+    assert!(
+        err.msg
+            .contains("web::ui_set_input_value: boundary: got `ul` where `HtmlInputElement` binds"),
+        "{}",
+        err.msg
+    );
 }
 
 #[test]
 fn trap_foreign_opaque_is_not_an_element_handle() {
     let mut host = make_host();
     let junk: OpaqueRef = host.call("probe_box_int", ()).unwrap();
-    let err = host.call::<_, ()>("probe_set_text", (junk, "x")).unwrap_err();
+    let err = host
+        .call::<_, ()>("probe_set_text", (junk, "x"))
+        .unwrap_err();
     assert!(err.msg.contains("web::ui_set_text:"), "{}", err.msg);
     assert!(err.msg.contains("not a host payload"), "{}", err.msg);
 }
@@ -170,11 +195,23 @@ fn trap_foreign_opaque_is_not_an_element_handle() {
 #[test]
 fn trap_dom_exceptions_are_carried() {
     let mut host = make_host();
-    let err = host.call::<_, OpaqueRef>("probe_create", ("bad tag",)).unwrap_err();
-    assert!(err.msg.contains("web::ui_create: InvalidCharacterError"), "{}", err.msg);
+    let err = host
+        .call::<_, OpaqueRef>("probe_create", ("bad tag",))
+        .unwrap_err();
+    assert!(
+        err.msg.contains("web::ui_create: InvalidCharacterError"),
+        "{}",
+        err.msg
+    );
     let app: OpaqueRef = host.call("probe_get", ("app",)).unwrap();
-    let err = host.call::<_, ()>("probe_attr", (app, "bad name", "v")).unwrap_err();
-    assert!(err.msg.contains("web::ui_attr: InvalidCharacterError"), "{}", err.msg);
+    let err = host
+        .call::<_, ()>("probe_attr", (app, "bad name", "v"))
+        .unwrap_err();
+    assert!(
+        err.msg.contains("web::ui_attr: InvalidCharacterError"),
+        "{}",
+        err.msg
+    );
 }
 
 #[test]
@@ -182,12 +219,21 @@ fn trap_append_hierarchy_carries_the_exception() {
     let mut host = make_host();
     let outer: OpaqueRef = host.call("probe_create", ("div",)).unwrap();
     let inner: OpaqueRef = host.call("probe_create", ("div",)).unwrap();
-    host.call::<_, ()>("probe_append", (outer.clone(), inner.clone())).unwrap();
+    host.call::<_, ()>("probe_append", (outer.clone(), inner.clone()))
+        .unwrap();
     // the ancestor into its own descendant
-    let err = host.call::<_, ()>("probe_append", (inner.clone(), outer.clone())).unwrap_err();
-    assert!(err.msg.contains("web::ui_append: HierarchyRequestError"), "{}", err.msg);
+    let err = host
+        .call::<_, ()>("probe_append", (inner.clone(), outer.clone()))
+        .unwrap_err();
+    assert!(
+        err.msg.contains("web::ui_append: HierarchyRequestError"),
+        "{}",
+        err.msg
+    );
     // itself
-    let err = host.call::<_, ()>("probe_append", (outer.clone(), outer)).unwrap_err();
+    let err = host
+        .call::<_, ()>("probe_append", (outer.clone(), outer))
+        .unwrap_err();
     assert!(err.msg.contains("HierarchyRequestError"), "{}", err.msg);
 }
 

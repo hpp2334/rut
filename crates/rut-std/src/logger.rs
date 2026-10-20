@@ -12,8 +12,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use rut_vm::interp::{HostPkg, Vm};
-use rut_vm::Trap;
 use rut_vm::OpaqueRef;
+use rut_vm::Trap;
 
 /// Build `ink_host`'s pkg, routing messages to `sink`. The bindings
 /// are TYPED: the derived signatures match
@@ -26,10 +26,9 @@ where
     let mut pkg = HostPkg::new("ink_host");
     let sink = Rc::new(RefCell::new(sink));
     let sink2 = sink.clone();
-    pkg.register::<_, (&str,), OpaqueRef, _>(
-        "create_logger",
-        |vm: &mut Vm, name: &str| vm.alloc_opaque_str(name.to_string()),
-    );
+    pkg.register::<_, (&str,), OpaqueRef, _>("create_logger", |vm: &mut Vm, name: &str| {
+        vm.alloc_opaque_str(name.to_string())
+    });
     pkg.register::<_, (OpaqueRef, i32, &str), (), _>(
         "logger_log",
         move |_vm: &mut Vm, _logger: OpaqueRef, _level: i32, msg: &str| -> Result<(), Trap> {

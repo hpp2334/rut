@@ -79,7 +79,10 @@ impl TestServer {
 
     /// the CDN moved: `name` now serves different bytes
     fn re_serve(&self, name: &str, bytes: Vec<u8>) {
-        self.payloads.lock().unwrap().insert(name.to_string(), bytes);
+        self.payloads
+            .lock()
+            .unwrap()
+            .insert(name.to_string(), bytes);
     }
 }
 
@@ -99,7 +102,9 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, deps: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "deps": {{{deps}}}}}"#)
+    format!(
+        r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "deps": {{{deps}}}}}"#
+    )
 }
 
 /// `rut <args>` with this lane's cache dir, env-cleaned (no XDG/HOME
@@ -178,7 +183,11 @@ fn cache_entry(cache: &Path, url: &str) -> PathBuf {
 
 #[test]
 fn install_writes_a_deterministic_lock() {
-    let bytes = leaf_bundle("det leaf", "util", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    let bytes = leaf_bundle(
+        "det leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     let mut payloads = BTreeMap::new();
     payloads.insert("util.rutbundle".to_string(), bytes.clone());
     let server = TestServer::serve(payloads);
@@ -201,7 +210,10 @@ fn install_writes_a_deterministic_lock() {
     // law, through the wire) and the summary says so
     let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "re-install must succeed: {err}");
-    assert!(out.contains("rut.lock unchanged (1 rows, no drift)"), "{out}");
+    assert!(
+        out.contains("rut.lock unchanged (1 rows, no drift)"),
+        "{out}"
+    );
     let second = std::fs::read_to_string(&lock).unwrap();
     assert_eq!(first, second, "the lock is byte-deterministic on re-run");
 
@@ -219,7 +231,11 @@ fn install_writes_a_deterministic_lock() {
 /// root — same lane, same lock, `.` is the only spelling difference.
 #[test]
 fn install_defaults_to_the_working_directory() {
-    let bytes = leaf_bundle("cwd leaf", "util", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    let bytes = leaf_bundle(
+        "cwd leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     let mut payloads = BTreeMap::new();
     payloads.insert("util.rutbundle".to_string(), bytes);
     let server = TestServer::serve(payloads);
@@ -244,7 +260,11 @@ fn install_defaults_to_the_working_directory() {
 
 #[test]
 fn locked_passes_when_fresh() {
-    let bytes = leaf_bundle("fresh leaf", "util", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    let bytes = leaf_bundle(
+        "fresh leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     let mut payloads = BTreeMap::new();
     payloads.insert("util.rutbundle".to_string(), bytes);
     let server = TestServer::serve(payloads);
@@ -258,7 +278,9 @@ fn locked_passes_when_fresh() {
     let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap(), "--locked"]);
     assert_eq!(code, 0, "--locked must pass on a fresh lock: {err}");
     assert!(
-        out.contains("install: 1 url deps verified against rut.lock — 0 downloaded, 1 cache hits, 0 drift"),
+        out.contains(
+            "install: 1 url deps verified against rut.lock — 0 downloaded, 1 cache hits, 0 drift"
+        ),
         "the verified summary, strictly: {out}"
     );
 }
@@ -267,7 +289,11 @@ fn locked_passes_when_fresh() {
 
 #[test]
 fn locked_without_a_lock_names_the_fix() {
-    let bytes = leaf_bundle("nolock leaf", "util", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    let bytes = leaf_bundle(
+        "nolock leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     let mut payloads = BTreeMap::new();
     payloads.insert("util.rutbundle".to_string(), bytes);
     let server = TestServer::serve(payloads);
@@ -294,9 +320,21 @@ fn locked_without_a_lock_names_the_fix() {
 
 #[test]
 fn locked_refuses_manifest_set_drift() {
-    let util_bytes = leaf_bundle("set leaf util", "util", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
-    let extra_bytes = leaf_bundle("set leaf extra", "extra", "pub fn thrice(v: i64) -> i64 {\n    return v * 3;\n}\n");
-    let more_bytes = leaf_bundle("set leaf more", "more", "pub fn quad(v: i64) -> i64 {\n    return v * 4;\n}\n");
+    let util_bytes = leaf_bundle(
+        "set leaf util",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
+    let extra_bytes = leaf_bundle(
+        "set leaf extra",
+        "extra",
+        "pub fn thrice(v: i64) -> i64 {\n    return v * 3;\n}\n",
+    );
+    let more_bytes = leaf_bundle(
+        "set leaf more",
+        "more",
+        "pub fn quad(v: i64) -> i64 {\n    return v * 4;\n}\n",
+    );
     let mut payloads = BTreeMap::new();
     payloads.insert("util.rutbundle".to_string(), util_bytes);
     payloads.insert("extra.rutbundle".to_string(), extra_bytes);
@@ -308,7 +346,11 @@ fn locked_refuses_manifest_set_drift() {
 
     let root = consumer_world(
         "set consumer",
-        &format!("{}, {}", one_dep(&util_url), format!(r#""extra": {{"url": "{extra_url}"}}"#)),
+        &format!(
+            "{}, {}",
+            one_dep(&util_url),
+            format!(r#""extra": {{"url": "{extra_url}"}}"#)
+        ),
     );
     let app = root.join("app");
     let cache = root.join("cache");
@@ -365,7 +407,11 @@ fn locked_refuses_manifest_set_drift() {
 
 #[test]
 fn locked_refuses_content_drift_and_never_touches_the_lock() {
-    let bytes = leaf_bundle("drift leaf a", "util", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    let bytes = leaf_bundle(
+        "drift leaf a",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     let mut payloads = BTreeMap::new();
     payloads.insert("util.rutbundle".to_string(), bytes.clone());
     let server = TestServer::serve(payloads);
@@ -378,7 +424,9 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
     assert_eq!(code, 0, "install first: {err}");
     let lock = std::fs::read_to_string(app.join("rut.lock")).unwrap();
     // the lock holds the pin install computed from the FIRST bytes
-    let stale_pin = rut_driver::parse_lock(&lock).unwrap().deps()[0].sha256.clone();
+    let stale_pin = rut_driver::parse_lock(&lock).unwrap().deps()[0]
+        .sha256
+        .clone();
     assert_eq!(stale_pin, rut_driver::sha256_hex(&bytes));
 
     // the CDN re-serves different bytes: swap the payload AND clear the
@@ -401,7 +449,10 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
     // the `~` row names the url and BOTH hashes: the lock's pin, then
     // what the re-served bytes hash to
     assert!(err.contains(&format!("~ {url}")), "{err}");
-    assert!(err.contains(&format!("pins {stale_pin}")), "the lock's pin: {err}");
+    assert!(
+        err.contains(&format!("pins {stale_pin}")),
+        "the lock's pin: {err}"
+    );
     assert!(
         err.contains(&format!("the fetched bytes hash to {fresh_pin}")),
         "the served bytes' hash: {err}"
@@ -450,7 +501,10 @@ fn progress_on_stderr_summaries_on_stdout() {
     // ride STDOUT (asserted strictly — the stdout lane is the stable one)
     let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains(&format!("install: util — downloading {url}")), "{err}");
+    assert!(
+        err.contains(&format!("install: util — downloading {url}")),
+        "{err}"
+    );
     assert!(err.contains("install: util — downloaded ("), "{err}");
     assert!(
         out.contains(&format!(
@@ -468,7 +522,10 @@ fn progress_on_stderr_summaries_on_stdout() {
     let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "{err}");
     assert!(err.contains("install: util — cache hit ("), "{err}");
-    assert!(!err.contains("downloading"), "a hit never touches the wire: {err}");
+    assert!(
+        !err.contains("downloading"),
+        "a hit never touches the wire: {err}"
+    );
     assert!(
         out.contains(&format!(
             "install: 1 url deps resolved — 0 downloaded, 1 cache hits ({total} bytes total)"

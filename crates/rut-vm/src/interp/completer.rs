@@ -59,7 +59,9 @@ pub struct Completer<T> {
 
 impl<T> Clone for Completer<T> {
     fn clone(&self) -> Self {
-        Completer { inner: self.inner.clone() }
+        Completer {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -450,5 +452,3 @@ macro_rules! __register_async_start {
         );
     };
 }
-
-

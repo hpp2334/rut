@@ -54,7 +54,6 @@ pub(crate) enum MemberSrc {
 }
 
 impl<'a> Ctx<'a> {
-
     // ---- the satisfaction checker ----
 
     /// Does `concrete` satisfy interface `iface_id` — every member
@@ -63,7 +62,11 @@ impl<'a> Ctx<'a> {
     /// itable fill (a boxing site does; an admission check does not)
     /// is the caller's business. `Err` names the first missing or
     /// mismatched member (the Go-shape diagnostic).
-    pub(crate) fn check_satisfies(&mut self, concrete: TypeId, iface_id: u32) -> Result<(), String> {
+    pub(crate) fn check_satisfies(
+        &mut self,
+        concrete: TypeId,
+        iface_id: u32,
+    ) -> Result<(), String> {
         let tname = self.iface_base_name(iface_id);
         // the member-visibility law: satisfaction is checked where the
         // members are VISIBLE. A requester-carried type row (an
@@ -111,15 +114,25 @@ impl<'a> Ctx<'a> {
                 return SurfaceKind::Visible;
             }
         }
-        if self.datas.iter().any(|(_, d)| self.types.dense(d.ty) == self.types.dense(concrete))
-            || self.enums.iter().any(|(_, e)| self.types.dense(e.ty) == self.types.dense(concrete))
+        if self
+            .datas
+            .iter()
+            .any(|(_, d)| self.types.dense(d.ty) == self.types.dense(concrete))
+            || self
+                .enums
+                .iter()
+                .any(|(_, e)| self.types.dense(e.ty) == self.types.dense(concrete))
         {
             return SurfaceKind::Visible;
         }
         if self.extern_inherents.iter().any(|ih| ih.target == concrete) {
             return SurfaceKind::Visible;
         }
-        if self.extern_generics.iter().any(|(_, g)| g.template == concrete) {
+        if self
+            .extern_generics
+            .iter()
+            .any(|(_, g)| g.template == concrete)
+        {
             return SurfaceKind::Visible;
         }
         // a head-local instantiation whose LOCAL mint carries the members:
@@ -182,7 +195,12 @@ impl<'a> Ctx<'a> {
     /// generic interface's per-argument-list row).
     fn iface_member_reqs(&mut self, iface_id: u32) -> Vec<MemberReq> {
         // the DECL row (non-generic local interface): the AST is here
-        if let Some((_, info)) = self.iface_decls.iter().find(|(_, i)| i.id == iface_id).cloned() {
+        if let Some((_, info)) = self
+            .iface_decls
+            .iter()
+            .find(|(_, i)| i.id == iface_id)
+            .cloned()
+        {
             let obj = self.mk_iface_obj(iface_id);
             let methods = match self.ast.item(rut_ast::ast::NodeHandle::new(info.node)) {
                 ItemKind::Interface { methods, .. } => methods.clone(),
@@ -202,13 +220,20 @@ impl<'a> Ctx<'a> {
                         _ => ptys.push(TY_I32),
                     }
                 }
-                let ret = md.ret.map(|r| self.resolve_sig_ty(r, &[], Some(obj))).unwrap_or(TY_NIL);
+                let ret = md
+                    .ret
+                    .map(|r| self.resolve_sig_ty(r, &[], Some(obj)))
+                    .unwrap_or(TY_NIL);
                 out.push(MemberReq {
                     name: md.name,
-                    self_form: md.params.first().map(|p| match self.ast.param(*p) {
-                        MemberKind::SelfParam(sd) => Some(sd.is_mut),
-                        _ => None,
-                    }).flatten(),
+                    self_form: md
+                        .params
+                        .first()
+                        .map(|p| match self.ast.param(*p) {
+                            MemberKind::SelfParam(sd) => Some(sd.is_mut),
+                            _ => None,
+                        })
+                        .flatten(),
                     is_async: Some(md.is_async),
                     ptys,
                     ret,
@@ -219,61 +244,116 @@ impl<'a> Ctx<'a> {
         // the descriptor row (extern, or a generic interface's minted
         // instantiation — its signatures are already substituted)
         let desc = self.iface_by_id(iface_id).clone();
-        desc.methods.iter().map(|m| MemberReq {
-            name: m.name,
-            self_form: None,
-            is_async: None,
-            ptys: m.params.clone(),
-            ret: m.ret,
-        }).collect()
+        desc.methods
+            .iter()
+            .map(|m| MemberReq {
+                name: m.name,
+                self_form: None,
+                is_async: None,
+                ptys: m.params.clone(),
+                ret: m.ret,
+            })
+            .collect()
     }
 
     /// The concrete type's own inherent member named `name` — the
     /// declaring decl's methods (a generic instantiation reads its
     /// class's decl under the instantiation substitution) or a used
     /// class's surface rows.
-    pub(crate) fn find_inherent_member(&self, concrete: TypeId, name: IdentId) -> Option<MemberSrc> {
+    pub(crate) fn find_inherent_member(
+        &self,
+        concrete: TypeId,
+        name: IdentId,
+    ) -> Option<MemberSrc> {
         // the class substitution (a generic instantiation) and its decl
         let inst = self.inst_data.get(&concrete).cloned();
         if let Some((dname, cargs)) = &inst {
             if let Some(d) = self.find_data(*dname) {
                 if let Some((_, node)) = d.methods.iter().find(|(n, _)| *n == name) {
-                    let env = d.generics.iter().cloned().zip(cargs.iter().cloned()).collect();
-                    return Some(MemberSrc::Local { node: *node, env, data: *dname });
+                    let env = d
+                        .generics
+                        .iter()
+                        .cloned()
+                        .zip(cargs.iter().cloned())
+                        .collect();
+                    return Some(MemberSrc::Local {
+                        node: *node,
+                        env,
+                        data: *dname,
+                    });
                 }
                 return None;
             }
             // a used generic class: the surface rows carry the
             // placeholder-spelled signatures
             if let Some(g) = self.extern_generics.get(dname) {
-                if let Some(ih) = self.extern_inherents.iter().find(|ih| ih.target == g.template) {
+                if let Some(ih) = self
+                    .extern_inherents
+                    .iter()
+                    .find(|ih| ih.target == g.template)
+                {
                     if let Some(row) = ih.methods.iter().find(|m| m.name == name) {
-                        let subst = g.params.iter().cloned().zip(cargs.iter().cloned()).collect();
-                        return Some(MemberSrc::Extern { row: row.clone(), subst, data: *dname });
+                        let subst = g
+                            .params
+                            .iter()
+                            .cloned()
+                            .zip(cargs.iter().cloned())
+                            .collect();
+                        return Some(MemberSrc::Extern {
+                            row: row.clone(),
+                            subst,
+                            data: *dname,
+                        });
                     }
                 }
                 return None;
             }
         }
-        if let Some((dname, d)) = self.datas.iter().find(|(_, d)| self.types.dense(d.ty) == self.types.dense(concrete)).cloned() {
+        if let Some((dname, d)) = self
+            .datas
+            .iter()
+            .find(|(_, d)| self.types.dense(d.ty) == self.types.dense(concrete))
+            .cloned()
+        {
             if let Some((_, node)) = d.methods.iter().find(|(n, _)| *n == name) {
-                return Some(MemberSrc::Local { node: *node, env: vec![], data: dname });
+                return Some(MemberSrc::Local {
+                    node: *node,
+                    env: vec![],
+                    data: dname,
+                });
             }
             return None;
         }
-        if let Some((ename, e)) = self.enums.iter().find(|(_, e)| self.types.dense(e.ty) == self.types.dense(concrete)).cloned() {
+        if let Some((ename, e)) = self
+            .enums
+            .iter()
+            .find(|(_, e)| self.types.dense(e.ty) == self.types.dense(concrete))
+            .cloned()
+        {
             if let Some((_, node)) = e.methods.iter().find(|(n, _)| *n == name) {
-                return Some(MemberSrc::Local { node: *node, env: vec![], data: ename });
+                return Some(MemberSrc::Local {
+                    node: *node,
+                    env: vec![],
+                    data: ename,
+                });
             }
             return None;
         }
         // a used plain class: its carried rows are the surface. The
         // mirror's ledger key spells the TYPE's name (the owner's own
         // row claims under it) — never a placeholder
-        if let Some(ih) = self.extern_inherents.iter().find(|ih| ih.target == concrete) {
+        if let Some(ih) = self
+            .extern_inherents
+            .iter()
+            .find(|ih| ih.target == concrete)
+        {
             if let Some(row) = ih.methods.iter().find(|m| m.name == name) {
                 let data = self.types.type_at(ih.target).name;
-                return Some(MemberSrc::Extern { row: row.clone(), subst: vec![], data });
+                return Some(MemberSrc::Extern {
+                    row: row.clone(),
+                    subst: vec![],
+                    data,
+                });
             }
         }
         None
@@ -284,7 +364,13 @@ impl<'a> Ctx<'a> {
     /// at any structural depth) accepts the concrete spelling at the
     /// leaf; everything else matches structurally. Receiver form and
     /// asyncness compare only when both sides spell them (local AST).
-    fn member_sig_matches(&mut self, concrete: TypeId, got: &MemberSrc, req: &MemberReq, iface_id: u32) -> bool {
+    fn member_sig_matches(
+        &mut self,
+        concrete: TypeId,
+        got: &MemberSrc,
+        req: &MemberReq,
+        iface_id: u32,
+    ) -> bool {
         let (self_form, is_async, got_ptys, got_ret) = match got {
             MemberSrc::Local { node, env, .. } => {
                 let md = self.ast.method_decl(*node);
@@ -299,17 +385,28 @@ impl<'a> Ctx<'a> {
                         _ => ptys.push(TY_I32),
                     }
                 }
-                let ret = md.ret.map(|r| self.resolve_sig_ty(r, env, Some(concrete))).unwrap_or(TY_NIL);
-                let sf = md.params.first().map(|p| match self.ast.param(*p) {
-                    MemberKind::SelfParam(sd) => Some(sd.is_mut),
-                    _ => None,
-                }).flatten();
+                let ret = md
+                    .ret
+                    .map(|r| self.resolve_sig_ty(r, env, Some(concrete)))
+                    .unwrap_or(TY_NIL);
+                let sf = md
+                    .params
+                    .first()
+                    .map(|p| match self.ast.param(*p) {
+                        MemberKind::SelfParam(sd) => Some(sd.is_mut),
+                        _ => None,
+                    })
+                    .flatten();
                 (sf, Some(md.is_async), ptys, ret)
             }
             MemberSrc::Extern { row, subst, .. } => {
                 // placeholder-spelled rows substitute per instantiation;
                 // a plain class's rows are concrete
-                let ptys: Vec<TypeId> = row.params.iter().map(|&t| self.subst_placeholder(t, subst)).collect();
+                let ptys: Vec<TypeId> = row
+                    .params
+                    .iter()
+                    .map(|&t| self.subst_placeholder(t, subst))
+                    .collect();
                 (None, None, ptys, self.subst_placeholder(row.ret, subst))
             }
         };
@@ -338,12 +435,22 @@ impl<'a> Ctx<'a> {
     /// class instantiation's substitution (a plain class's rows pass
     /// through — placeholders never occur).
     fn subst_placeholder(&mut self, t: TypeId, subst: &[(IdentId, TypeId)]) -> TypeId {
-        let name = self.types.types.get(self.types.dense(t) as usize).map(|d| d.name);
+        let name = self
+            .types
+            .types
+            .get(self.types.dense(t) as usize)
+            .map(|d| d.name);
         let Some(name) = name else { return t };
         let text = self.interner.name(name).to_string();
-        let Some(param) = text.strip_prefix('#').map(|p| p.to_string()) else { return t };
+        let Some(param) = text.strip_prefix('#').map(|p| p.to_string()) else {
+            return t;
+        };
         let pid = self.intern(&param);
-        subst.iter().find(|(n, _)| *n == pid).map(|(_, ty)| *ty).unwrap_or(t)
+        subst
+            .iter()
+            .find(|(n, _)| *n == pid)
+            .map(|(_, ty)| *ty)
+            .unwrap_or(t)
     }
 
     /// The descriptor-derived sig type vs the member's concrete sig
@@ -362,13 +469,18 @@ impl<'a> Ctx<'a> {
             return true;
         }
         match (self.types.kind(a).clone(), self.types.kind(b).clone()) {
-            (TyKind::Opt { elem: ae }, TyKind::Opt { elem: be }) => self.sig_leaf_matches(ae, be, iface_id),
-            (TyKind::Array { elem: ae }, TyKind::Array { elem: be }) => self.sig_leaf_matches(ae, be, iface_id),
+            (TyKind::Opt { elem: ae }, TyKind::Opt { elem: be }) => {
+                self.sig_leaf_matches(ae, be, iface_id)
+            }
+            (TyKind::Array { elem: ae }, TyKind::Array { elem: be }) => {
+                self.sig_leaf_matches(ae, be, iface_id)
+            }
             (TyKind::Data { fields: fa }, TyKind::Data { fields: fb }) => {
                 fa.len() == fb.len()
-                    && fa.iter().zip(fb.iter()).all(|(x, y)| {
-                        x.ty == y.ty || self.sig_leaf_matches(x.ty, y.ty, iface_id)
-                    })
+                    && fa
+                        .iter()
+                        .zip(fb.iter())
+                        .all(|(x, y)| x.ty == y.ty || self.sig_leaf_matches(x.ty, y.ty, iface_id))
             }
             _ => false,
         }
@@ -383,7 +495,9 @@ impl<'a> Ctx<'a> {
     /// anchor): recorded per carried row name at the seed attach.
     pub(crate) fn carried_home(&self, concrete: TypeId) -> Option<String> {
         let name = self.types.type_at(concrete).name;
-        self.carried_names.get(&self.interner.name(name).to_string()).cloned()
+        self.carried_names
+            .get(&self.interner.name(name).to_string())
+            .cloned()
     }
 
     /// The interface row's BASE name text: the row itself for a
@@ -431,7 +545,8 @@ impl<'a> Ctx<'a> {
                 out
             }
             TypeKind::TyPath { segs, .. }
-                if segs.len() == 1 && segs[0].generics.is_empty()
+                if segs.len() == 1
+                    && segs[0].generics.is_empty()
                     && self.find_alias(segs[0].name).is_some() =>
             {
                 let name = segs[0].name;
@@ -477,10 +592,9 @@ impl<'a> Ctx<'a> {
     pub(crate) fn bound_is_union(&self, node: NodeHandle<AnyTy>) -> bool {
         match self.ast.ty(node) {
             TypeKind::TyUnion { .. } => true,
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
-                self.find_alias(segs[0].name)
-                    .map_or(false, |a| matches!(a.resolved, Some(AliasTarget::Union)))
-            }
+            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => self
+                .find_alias(segs[0].name)
+                .map_or(false, |a| matches!(a.resolved, Some(AliasTarget::Union))),
             _ => false,
         }
     }
@@ -494,8 +608,16 @@ impl<'a> Ctx<'a> {
     pub(crate) fn member_has_method(&self, ty: TypeId, name: IdentId) -> bool {
         match self.types.kind(ty) {
             TyKind::Str => {
-                matches!(name, sym::LEN | sym::SLICE | sym::CODE | sym::ENCODE
-                    | sym::CODE_AT | sym::SCAN | sym::STARTS_WITH)
+                matches!(
+                    name,
+                    sym::LEN
+                        | sym::SLICE
+                        | sym::CODE
+                        | sym::ENCODE
+                        | sym::CODE_AT
+                        | sym::SCAN
+                        | sym::STARTS_WITH
+                )
             }
             TyKind::Bytes => {
                 matches!(name, sym::LEN | sym::DECODE | sym::CLONE)
@@ -511,7 +633,10 @@ impl<'a> Ctx<'a> {
                     None => self
                         .datas
                         .iter()
-                        .find(|(_, d)| matches!(self.types.kind(d.ty), TyKind::Data { .. }) && self.types.dense(d.ty) == self.types.dense(ty))
+                        .find(|(_, d)| {
+                            matches!(self.types.kind(d.ty), TyKind::Data { .. })
+                                && self.types.dense(d.ty) == self.types.dense(ty)
+                        })
                         .map_or(false, |(_, d)| d.methods.iter().any(|(n, _)| *n == name)),
                 };
                 inherent || self.has_extern_method(ty, name)
@@ -581,10 +706,7 @@ impl<'a> Ctx<'a> {
                         let tname = self.iface_base_name(*tid);
                         let ty = self.type_name(concrete).to_string();
                         let detail = why.unwrap_or_else(|| "no satisfying member set".to_string());
-                        format!(
-                            "`{ty}` does not satisfy `{iface}`: {detail}",
-                            iface = tname,
-                        )
+                        format!("`{ty}` does not satisfy `{iface}`: {detail}", iface = tname,)
                     }
                     _ => format!(
                         "`{}` does not satisfy `{}` requires `{}` — no matching type in the bound",
@@ -598,4 +720,3 @@ impl<'a> Ctx<'a> {
         }
     }
 }
-

@@ -53,8 +53,8 @@ fn block_on<F: Future>(fut: F) -> F::Output {
 fn load_rgh() -> Result<(rut_driver::Walk, rut_driver::Walk), String> {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let remote = rut_native::HttpRemote::online_local(base);
-    let loaded = block_on(rut_native::load_path_session_with(base, &remote))
-        .map_err(|e| e.to_string())?;
+    let loaded =
+        block_on(rut_native::load_path_session_with(base, &remote)).map_err(|e| e.to_string())?;
     // the example's own CLI-I/O pkg (nothing fetches — the embedder
     // binds the bodies)
     let rgh_host = rut_native::dir_pkgs(&base.join("rgh_host")).map_err(|e| e.to_string())?;
@@ -81,14 +81,19 @@ fn main() {
         }
     };
     let root = loaded.root.clone();
-    let async_pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
+    let async_pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
 
     let src =
         std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("mod.rut"))
             .expect("read mod.rut");
-    let mut chain = loaded.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
+    let mut chain = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
     // the async pair (the launcher set `boot` drives)
     for p in async_pkgs {
         chain = chain.pkg(p);
@@ -112,7 +117,10 @@ fn main() {
         }
     };
     if !compiled.graph.diags.is_empty() {
-        eprint!("{}", rut_lexer::diag::render_diags(&src, &compiled.graph.diags));
+        eprint!(
+            "{}",
+            rut_lexer::diag::render_diags(&src, &compiled.graph.diags)
+        );
         std::process::exit(1);
     }
     let Some(ref prog) = compiled.graph.program else {
@@ -147,46 +155,46 @@ fn main() {
     let mut compiled2 = compiled;
     let hosts = &mut compiled2.hosts;
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
-        |_vm: &mut Vm, s: &str| -> Result<(), Trap> {
-            let mut o = std::io::stdout().lock();
-            let _ = o.write_all(s.as_bytes());
-            let _ = o.write_all(b"\n");
-            let _ = o.flush();
-            Ok(())
-        });
+    |_vm: &mut Vm, s: &str| -> Result<(), Trap> {
+        let mut o = std::io::stdout().lock();
+        let _ = o.write_all(s.as_bytes());
+        let _ = o.write_all(b"\n");
+        let _ = o.flush();
+        Ok(())
+    });
     rut_vm::register!(hosts, "rgh_host::eprint", (&str,) -> (),
-        |_vm: &mut Vm, s: &str| -> Result<(), Trap> {
-            let mut o = std::io::stderr().lock();
-            let _ = o.write_all(s.as_bytes());
-            let _ = o.write_all(b"\n");
-            let _ = o.flush();
-            Ok(())
-        });
+    |_vm: &mut Vm, s: &str| -> Result<(), Trap> {
+        let mut o = std::io::stderr().lock();
+        let _ = o.write_all(s.as_bytes());
+        let _ = o.write_all(b"\n");
+        let _ = o.flush();
+        Ok(())
+    });
     rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
-        |_vm: &mut Vm, path: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            match std::fs::write(path, &data) {
-                Ok(()) => Ok(None), // the flat nil — written
-                Err(e) => Ok(Some(e.to_string())), // the io error's text
-            }
-        });
+    |_vm: &mut Vm, path: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        match std::fs::write(path, &data) {
+            Ok(()) => Ok(None), // the flat nil — written
+            Err(e) => Ok(Some(e.to_string())), // the io error's text
+        }
+    });
     rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
-        |_vm: &mut Vm, path: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            use std::io::Write as _;
-            let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(path) {
-                Ok(f) => f,
-                Err(e) => return Ok(Some(e.to_string())),
-            };
-            match f.write_all(&data).and_then(|_| f.flush()) {
-                Ok(()) => Ok(None),
-                Err(e) => Ok(Some(e.to_string())),
-            }
-        });
+    |_vm: &mut Vm, path: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        use std::io::Write as _;
+        let mut f = match std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            Ok(f) => f,
+            Err(e) => return Ok(Some(e.to_string())),
+        };
+        match f.write_all(&data).and_then(|_| f.flush()) {
+            Ok(()) => Ok(None),
+            Err(e) => Ok(Some(e.to_string())),
+        }
+    });
     rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
-        |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
-            // the brain's one-way door: the pump dies here with the
-            // code it carried
-            std::process::exit(code);
-        });
+    |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+        // the brain's one-way door: the pump dies here with the
+        // code it carried
+        std::process::exit(code);
+    });
     // the decl ↔ the bodies, loudly: every mounted pkg's
     // host rows must have a binding with the declared signature
     compiled2.hosts.verify_against(&expected);

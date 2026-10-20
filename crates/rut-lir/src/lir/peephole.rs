@@ -62,7 +62,11 @@ pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode, tt: &rut_core::types:
     let regs = fc.regs.clone();
     let is_prim_copy = |dst: u16| -> bool {
         matches!(
-            tt.kind(regs.get(dst as usize).copied().unwrap_or(rut_core::types::TY_NIL)),
+            tt.kind(
+                regs.get(dst as usize)
+                    .copied()
+                    .unwrap_or(rut_core::types::TY_NIL)
+            ),
             rut_core::types::TyKind::Prim(_)
         )
     };
@@ -145,8 +149,14 @@ fn copy_fold_once(
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms {
                     mark(&mut is_target, *t, n);
                 }
@@ -190,7 +200,11 @@ fn copy_fold_once(
             if is_target[k]
                 || matches!(
                     code[k],
-                    Op::Jmp { .. } | Op::Br { .. } | Op::BrTable { .. } | Op::Ret { .. } | Op::LoopHead
+                    Op::Jmp { .. }
+                        | Op::Br { .. }
+                        | Op::BrTable { .. }
+                        | Op::Ret { .. }
+                        | Op::LoopHead
                 )
             {
                 safe = false;
@@ -249,8 +263,14 @@ fn copy_fold_once(
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 let mut new_arms: Vec<u32> = arms.to_vec();
                 for t in new_arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
@@ -286,7 +306,11 @@ fn copy_fold_once(
 /// `OP` and read only by the `mov` becomes `OP y, ...` with the `mov`
 /// deleted. This is the assignment shape the tree-walking emitter produces
 /// for `x = <op>(...)` (the op writes a temp, then a copy lands it in `x`).
-fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn forward_once(
+    code: Vec<Op>,
+    spans: Vec<(u32, u32)>,
+    pools: &mut Pools,
+) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
         return (code, spans, false);
@@ -310,8 +334,14 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms {
                     mark(&mut is_target, *t, n);
                 }
@@ -356,7 +386,11 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
             if is_target[k]
                 || matches!(
                     code[k],
-                    Op::Jmp { .. } | Op::Br { .. } | Op::BrTable { .. } | Op::Ret { .. } | Op::LoopHead
+                    Op::Jmp { .. }
+                        | Op::Br { .. }
+                        | Op::BrTable { .. }
+                        | Op::Ret { .. }
+                        | Op::LoopHead
                 )
             {
                 safe = false;
@@ -367,10 +401,16 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
             continue;
         }
         // `y` must not be read or written between the producer and the copy
-        if reads.get(&y).is_some_and(|rs| rs.iter().any(|&r| r > pc && r < use_pc)) {
+        if reads
+            .get(&y)
+            .is_some_and(|rs| rs.iter().any(|&r| r > pc && r < use_pc))
+        {
             continue;
         }
-        if writes.get(&y).is_some_and(|ws| ws.iter().any(|&w| w > pc && w < use_pc)) {
+        if writes
+            .get(&y)
+            .is_some_and(|ws| ws.iter().any(|&w| w > pc && w < use_pc))
+        {
             continue;
         }
         // only one copy per producer
@@ -415,8 +455,14 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
@@ -441,7 +487,11 @@ fn forward_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Ve
 /// borrowed, not retained/released per element — this is the `Vec<T>` class's
 /// index path (`Slice<T>`), so a pouch sequence costs one
 /// op per element, not a field read plus an RC pair.
-fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn fuse_once(
+    code: Vec<Op>,
+    spans: Vec<(u32, u32)>,
+    pools: &mut Pools,
+) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n < 2 {
         return (code, spans, false);
@@ -465,8 +515,14 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms {
                     mark(&mut is_target, *t, n);
                 }
@@ -481,23 +537,52 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
         if is_target[pc] || is_target[pc + 1] {
             continue;
         }
-        let Op::GetF { dst: f, obj, field, repr } = code[pc] else { continue };
+        let Op::GetF {
+            dst: f,
+            obj,
+            field,
+            repr,
+        } = code[pc]
+        else {
+            continue;
+        };
         if !repr.is_ref() {
             continue;
         }
         if writes.get(&f).map_or(true, |w| w.len() != 1 || w[0] != pc) {
             continue;
         }
-        if reads.get(&f).map_or(true, |r| r.len() != 1 || r[0] != pc + 1) {
+        if reads
+            .get(&f)
+            .map_or(true, |r| r.len() != 1 || r[0] != pc + 1)
+        {
             continue;
         }
         let fused = match &code[pc + 1] {
-            Op::ArrGet { dst, arr, idx, repr: er } if *arr == f => {
-                Some(Op::ArrGetF { dst: *dst, obj, field, idx: *idx, repr: *er })
-            }
-            Op::ArrSet { arr, idx, val, repr: er } if *arr == f => {
-                Some(Op::ArrSetF { obj, field, idx: *idx, val: *val, repr: *er })
-            }
+            Op::ArrGet {
+                dst,
+                arr,
+                idx,
+                repr: er,
+            } if *arr == f => Some(Op::ArrGetF {
+                dst: *dst,
+                obj,
+                field,
+                idx: *idx,
+                repr: *er,
+            }),
+            Op::ArrSet {
+                arr,
+                idx,
+                val,
+                repr: er,
+            } if *arr == f => Some(Op::ArrSetF {
+                obj,
+                field,
+                idx: *idx,
+                val: *val,
+                repr: *er,
+            }),
             _ => None,
         };
         if let Some(op) = fused {
@@ -533,8 +618,14 @@ fn fuse_once(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
@@ -599,8 +690,14 @@ fn opt_prim_once(
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms {
                     mark(&mut is_target, *t, n);
                 }
@@ -621,16 +718,37 @@ fn opt_prim_once(
             if writes.get(&d).map_or(true, |w| w.len() != 1 || w[0] != pc) {
                 continue;
             }
-            if reads.get(&d).map_or(true, |r| r.len() != 1 || r[0] != pc + 1) {
+            if reads
+                .get(&d)
+                .map_or(true, |r| r.len() != 1 || r[0] != pc + 1)
+            {
                 continue;
             }
             let folded = match &code[pc + 1] {
-                Op::ArrSet { arr, idx, val, repr: Repr::OptPrim(p) } if *val == d => {
-                    Some(Op::ArrSet { arr: *arr, idx: *idx, val: s, repr: Repr::OptPrimRaw(*p) })
-                }
-                Op::ArrSetF { obj, field, idx, val, repr: Repr::OptPrim(p) } if *val == d => {
-                    Some(Op::ArrSetF { obj: *obj, field: *field, idx: *idx, val: s, repr: Repr::OptPrimRaw(*p) })
-                }
+                Op::ArrSet {
+                    arr,
+                    idx,
+                    val,
+                    repr: Repr::OptPrim(p),
+                } if *val == d => Some(Op::ArrSet {
+                    arr: *arr,
+                    idx: *idx,
+                    val: s,
+                    repr: Repr::OptPrimRaw(*p),
+                }),
+                Op::ArrSetF {
+                    obj,
+                    field,
+                    idx,
+                    val,
+                    repr: Repr::OptPrim(p),
+                } if *val == d => Some(Op::ArrSetF {
+                    obj: *obj,
+                    field: *field,
+                    idx: *idx,
+                    val: s,
+                    repr: Repr::OptPrimRaw(*p),
+                }),
                 _ => None,
             };
             if let Some(op) = folded {
@@ -641,26 +759,44 @@ fn opt_prim_once(
         }
         // 2. deref fold: optprim element read + adjacent field-0 payload read
         let (t, p) = match &code[pc] {
-            Op::ArrGet { dst: t, repr: Repr::OptPrim(p), .. } => (*t, *p),
-            Op::ArrGetF { dst: t, repr: Repr::OptPrim(p), .. } => (*t, *p),
+            Op::ArrGet {
+                dst: t,
+                repr: Repr::OptPrim(p),
+                ..
+            } => (*t, *p),
+            Op::ArrGetF {
+                dst: t,
+                repr: Repr::OptPrim(p),
+                ..
+            } => (*t, *p),
             _ => continue,
         };
         if writes.get(&t).map_or(true, |w| w.len() != 1 || w[0] != pc) {
             continue;
         }
-        if reads.get(&t).map_or(true, |r| r.len() != 1 || r[0] != pc + 1) {
+        if reads
+            .get(&t)
+            .map_or(true, |r| r.len() != 1 || r[0] != pc + 1)
+        {
             continue;
         }
         // the consumer must be the payload read (field 0, at the payload's
         // own prim repr) — the auto-deref shape
         let ok = match &code[pc + 1] {
-            Op::GetF { dst: _, obj, field: 0, repr: Repr::Prim(q) } => *obj == t && *q == p,
+            Op::GetF {
+                dst: _,
+                obj,
+                field: 0,
+                repr: Repr::Prim(q),
+            } => *obj == t && *q == p,
             _ => false,
         };
         if !ok {
             continue;
         }
-        let Op::GetF { dst: u, .. } = code[pc + 1] else { unreachable!() };
+        let Op::GetF { dst: u, .. } = code[pc + 1] else {
+            unreachable!()
+        };
         // the producer becomes the load form, pointing at the deref's dst:
         // the raw payload comes straight out of the store, a nil tag still
         // traps NilDeref, and the fresh opt value is never minted
@@ -705,8 +841,14 @@ fn opt_prim_once(
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
@@ -732,7 +874,11 @@ fn opt_prim_once(
     (new_code, new_spans, new_pos, true)
 }
 
-fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
+fn one_round(
+    code: Vec<Op>,
+    spans: Vec<(u32, u32)>,
+    pools: &mut Pools,
+) -> (Vec<Op>, Vec<(u32, u32)>, bool) {
     let n = code.len();
     if n == 0 {
         return (code, spans, false);
@@ -760,8 +906,14 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms {
                     mark(&mut is_target, *t, n);
                 }
@@ -807,7 +959,11 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
             if is_target[k]
                 || matches!(
                     code[k],
-                    Op::Jmp { .. } | Op::Br { .. } | Op::BrTable { .. } | Op::Ret { .. } | Op::LoopHead
+                    Op::Jmp { .. }
+                        | Op::Br { .. }
+                        | Op::BrTable { .. }
+                        | Op::Ret { .. }
+                        | Op::LoopHead
                 )
             {
                 safe = false;
@@ -874,8 +1030,14 @@ fn one_round(code: Vec<Op>, spans: Vec<(u32, u32)>, pools: &mut Pools) -> (Vec<O
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
@@ -983,7 +1145,11 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
     let mut u = Vec::new();
     // pooled operand lists first (the span covers every list-carrying op)
     if let Some((off, argc)) = op.argv_span() {
-        u.extend(argv[off as usize..off as usize + argc as usize].iter().copied());
+        u.extend(
+            argv[off as usize..off as usize + argc as usize]
+                .iter()
+                .copied(),
+        );
     }
     match op {
         Op::Mov { dst, src } | Op::MovRef { dst, src } => {
@@ -1005,8 +1171,11 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*recv);
         }
-        Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
-        | Op::ArrNew { dst, .. } | Op::EnumNew { dst, .. } => d.push(*dst),
+        Op::Const { dst, .. }
+        | Op::ConstRaw { dst, .. }
+        | Op::NewCell { dst, .. }
+        | Op::ArrNew { dst, .. }
+        | Op::EnumNew { dst, .. } => d.push(*dst),
         Op::ArrLit { dst, .. } | Op::MakeRecord { dst, .. } => d.push(*dst),
         Op::StrCmp { dst, a, b, .. }
         | Op::ArrayCmp { dst, a, b, .. }
@@ -1046,14 +1215,16 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             u.push(*a);
             u.push(*b);
         }
-        Op::Not { dst, a } | Op::NegF { dst, a, .. }
-        | Op::NegI { dst, a, .. } => {
+        Op::Not { dst, a } | Op::NegF { dst, a, .. } | Op::NegI { dst, a, .. } => {
             d.push(*dst);
             u.push(*a);
         }
         Op::Br { cond, .. } => u.push(*cond),
         Op::BrTable { idx, .. } => u.push(*idx),
-        Op::Call { dst, .. } | Op::CallM { dst, .. } | Op::CallI { dst, .. } | Op::CallFn { dst, .. } => {
+        Op::Call { dst, .. }
+        | Op::CallM { dst, .. }
+        | Op::CallI { dst, .. }
+        | Op::CallFn { dst, .. } => {
             if *dst != NOREG {
                 d.push(*dst);
             }

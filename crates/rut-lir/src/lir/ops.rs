@@ -2,13 +2,12 @@
 //! &op family) and assignment: the mut-binding law,
 //! compound forms, field/index targets.
 
+use super::*;
 use crate::check::TcResult;
 use rut_core::ops::*;
 use rut_core::types::*;
-use super::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     // ---- operators (equal widths; traps by default) ----
 
     pub(crate) fn compile_binary(
@@ -33,7 +32,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // payload before the null-test sees the nullable (`if (b == nil)`,
         // the store's lane probes) — the operands type by the shapes at
         // hand, the pointer-vs-pointee law below decides.
-        let seed = if matches!(op, Eq | Ne) { None } else { expected };
+        let seed = if matches!(op, Eq | Ne) {
+            None
+        } else {
+            expected
+        };
         let lt = self.compile_expr(lhs, seed)?;
         let lhs_reg = self.last_reg;
         // arithmetic/ordinal: a scalar-pointee pointer on the left reads
@@ -55,7 +58,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // hint, typing as `?T` for the identity null-slot compare.
         let rhs_hint = match (op, self.ctx.types.kind(lt).clone()) {
             (Eq | Ne, TyKind::Opt { elem }) => {
-                if matches!(self.ctx.ast.expr(rhs), ExprKind::Lit(Lit::Nil)) { Some(lt) } else { Some(elem) }
+                if matches!(self.ctx.ast.expr(rhs), ExprKind::Lit(Lit::Nil)) {
+                    Some(lt)
+                } else {
+                    Some(elem)
+                }
             }
             _ => Some(lt),
         };
@@ -74,10 +81,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         if lt != rt_ {
-            self.ctx.err(sp, format!(
-                "operands must have equal width: `{}` vs `{}` —convert first",
-                self.ctx.type_name(lt), self.ctx.type_name(rt_)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "operands must have equal width: `{}` vs `{}` —convert first",
+                    self.ctx.type_name(lt),
+                    self.ctx.type_name(rt_)
+                ),
+            );
             return Err(());
         }
         let ty = lt;
@@ -95,21 +106,55 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.emit(cmpop(cop, p, dst, lhs_reg, rhs_reg), sp.lo);
                     }
                     TyKind::Str => {
-                        self.emit(Op::StrCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                        self.emit(
+                            Op::StrCmp {
+                                eq,
+                                dst,
+                                a: lhs_reg,
+                                b: rhs_reg,
+                            },
+                            sp.lo,
+                        );
                     }
                     TyKind::Bytes => {
-                        self.emit(Op::ArrayCmp { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                        self.emit(
+                            Op::ArrayCmp {
+                                eq,
+                                dst,
+                                a: lhs_reg,
+                                b: rhs_reg,
+                            },
+                            sp.lo,
+                        );
                     }
                     _ => {
-                        self.emit(Op::RefEq { eq, dst, a: lhs_reg, b: rhs_reg }, sp.lo);
+                        self.emit(
+                            Op::RefEq {
+                                eq,
+                                dst,
+                                a: lhs_reg,
+                                b: rhs_reg,
+                            },
+                            sp.lo,
+                        );
                     }
                 }
                 Ok(TY_BOOL)
             }
             Lt | Gt | Le | Ge => {
-                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
+                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) {
+                    Some(*p)
+                } else {
+                    None
+                };
                 let Some(prim) = prim else {
-                    self.ctx.err(sp, format!("ordering comparisons need numbers —`{}` has none", self.ctx.type_name(ty)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "ordering comparisons need numbers —`{}` has none",
+                            self.ctx.type_name(ty)
+                        ),
+                    );
                     return Err(());
                 };
                 let cmp = match op {
@@ -123,9 +168,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(TY_BOOL)
             }
             Add | Sub | Mul | Div | Mod => {
-                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
+                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) {
+                    Some(*p)
+                } else {
+                    None
+                };
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
-                    self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.type_name(ty)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "arithmetic needs numbers —found `{}`",
+                            self.ctx.type_name(ty)
+                        ),
+                    );
                     return Err(());
                 };
                 let aop = match op {
@@ -140,9 +195,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Ok(ty)
             }
             BitAnd | BitOr | BitXor | Shl | Shr => {
-                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
+                let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) {
+                    Some(*p)
+                } else {
+                    None
+                };
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
-                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.type_name(ty)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "bit operations need integers —found `{}`",
+                            self.ctx.type_name(ty)
+                        ),
+                    );
                     return Err(());
                 };
                 let bop = match op {
@@ -160,10 +225,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    pub(crate) fn compile_shortcircuit(&mut self, op: rut_ast::ast::BinOp, lhs: NodeHandle<AnyExpr>, rhs: NodeHandle<AnyExpr>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_shortcircuit(
+        &mut self,
+        op: rut_ast::ast::BinOp,
+        lhs: NodeHandle<AnyExpr>,
+        rhs: NodeHandle<AnyExpr>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
         let lt = self.compile_expr(lhs, Some(TY_BOOL))?;
         if lt != TY_BOOL {
-            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.type_name(lt)));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`&&`/`||` need `bool` operands, found `{}`",
+                    self.ctx.type_name(lt)
+                ),
+            );
         }
         let lreg = self.last_reg;
         let dst = self.new_reg(TY_BOOL);
@@ -180,15 +257,39 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.bind(l_short);
         let short_reg = self.new_reg(TY_BOOL);
         let is_and = op == rut_ast::ast::BinOp::And;
-        self.emit(Op::ConstRaw { dst: short_reg, bits: (!is_and) as u64 }, sp.lo);
-        self.emit(Op::Mov { dst, src: short_reg }, sp.lo);
+        self.emit(
+            Op::ConstRaw {
+                dst: short_reg,
+                bits: (!is_and) as u64,
+            },
+            sp.lo,
+        );
+        self.emit(
+            Op::Mov {
+                dst,
+                src: short_reg,
+            },
+            sp.lo,
+        );
         self.jmp(l_end);
         self.bind(l_rhs);
         let rt_ = self.compile_expr(rhs, Some(TY_BOOL))?;
         if rt_ != TY_BOOL {
-            self.ctx.err(sp, format!("`&&`/`||` need `bool` operands, found `{}`", self.ctx.type_name(rt_)));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`&&`/`||` need `bool` operands, found `{}`",
+                    self.ctx.type_name(rt_)
+                ),
+            );
         }
-        self.emit(Op::Mov { dst, src: self.last_reg }, sp.lo);
+        self.emit(
+            Op::Mov {
+                dst,
+                src: self.last_reg,
+            },
+            sp.lo,
+        );
         self.bind(l_end);
         // the value lives in `dst`; move it out so last_reg holds it
         let out = self.new_reg(TY_BOOL);
@@ -237,7 +338,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // shared cell's value first (the capture law's
                         // accessor); an ordinary one chains off its
                         // register raw, as before
-                        let mut cur = if l.cell.is_some() { self.read_local(&l, sp.lo) } else { l.reg };
+                        let mut cur = if l.cell.is_some() {
+                            self.read_local(&l, sp.lo)
+                        } else {
+                            l.reg
+                        };
                         let mut cur_ty = l.ty;
                         if matches!(self.ctx.types.kind(cur_ty).clone(), TyKind::Opt { .. }) {
                             let (t, d) = self.deref_for_use(cur_ty, cur, sp.lo);
@@ -251,12 +356,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 cur = d;
                                 cur_ty = t;
                             }
-                            let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone() else {
+                            let TyKind::Data { fields } = self.ctx.types.kind(cur_ty).clone()
+                            else {
                                 self.ctx.err(sp, "field assignment through a non-record");
                                 return Err(());
                             };
                             let Some(fidx) = fields.iter().position(|f| f.name == seg.name) else {
-                                self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(cur_ty), self.ctx.name(seg.name)));
+                                self.ctx.err(
+                                    sp,
+                                    format!(
+                                        "`{}` has no field `{}`",
+                                        self.ctx.type_name(cur_ty),
+                                        self.ctx.name(seg.name)
+                                    ),
+                                );
                                 return Err(());
                             };
                             // the visibility law rides each GetF hop too
@@ -266,7 +379,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             }
                             let fty = fields[fidx].ty;
                             let dst = self.new_reg(fty);
-                            self.emit(Op::GetF { dst, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                            self.emit(
+                                Op::GetF {
+                                    dst,
+                                    obj: cur,
+                                    field: fidx as u32,
+                                    repr: self.ctx.types.repr_of(fty),
+                                },
+                                sp.lo,
+                            );
                             cur = dst;
                             cur_ty = fty;
                         }
@@ -276,7 +397,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             return Err(());
                         };
                         let Some(fidx) = fields.iter().position(|f| f.name == last.name) else {
-                            self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(cur_ty), self.ctx.name(last.name)));
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "`{}` has no field `{}`",
+                                    self.ctx.type_name(cur_ty),
+                                    self.ctx.name(last.name)
+                                ),
+                            );
                             return Err(());
                         };
                         // the final SetF target takes the dial: the WRITE
@@ -293,11 +421,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 if !self.same_ty(t, fty) {
                                     self.ctx.err(sp, "field assignment type mismatch");
                                 }
-                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                                self.emit(
+                                    Op::SetF {
+                                        obj: cur,
+                                        field: fidx as u32,
+                                        val: self.last_reg,
+                                        repr: self.ctx.types.repr_of(fty),
+                                    },
+                                    sp.lo,
+                                );
                             }
                             Some(bin) => {
                                 let cur_v = self.new_reg(fty);
-                                self.emit(Op::GetF { dst: cur_v, obj: cur, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                                self.emit(
+                                    Op::GetF {
+                                        dst: cur_v,
+                                        obj: cur,
+                                        field: fidx as u32,
+                                        repr: self.ctx.types.repr_of(fty),
+                                    },
+                                    sp.lo,
+                                );
                                 // a `?T` field computes at T: the
                                 // accumulator derefs, the result re-boxes
                                 let (cty, cur_v) = self.deref_for_use(fty, cur_v, sp.lo);
@@ -309,7 +453,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                 let res = self.new_reg(cty);
                                 self.emit_compound(bin, cty, cur_v, val_reg, res, sp)?;
                                 let res = self.coerce_to(cty, fty, res, sp.lo);
-                                self.emit(Op::SetF { obj: cur, field: fidx as u32, val: res, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                                self.emit(
+                                    Op::SetF {
+                                        obj: cur,
+                                        field: fidx as u32,
+                                        val: res,
+                                        repr: self.ctx.types.repr_of(fty),
+                                    },
+                                    sp.lo,
+                                );
                             }
                         }
                         return Ok(());
@@ -324,7 +476,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if self.ctx.poisoned(name) {
                         return Err(()); // the failed `let` is already diagnosed
                     }
-                    self.ctx.err(sp, format!("unknown name `{}`", self.ctx.name(name)));
+                    self.ctx
+                        .err(sp, format!("unknown name `{}`", self.ctx.name(name)));
                     return Err(());
                 };
                 if !l.is_mut {
@@ -337,10 +490,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.loop_header_fix(&l)
                         ));
                     } else {
-                        self.ctx.err(sp, format!(
+                        self.ctx.err(
+                            sp,
+                            format!(
                             "assignment to `{}` requires a `let mut` binding (the mut-binding law)",
                             self.ctx.name(name)
-                        ));
+                        ),
+                        );
                     }
                     return Err(());
                 }
@@ -351,17 +507,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // see `compile_fstr_into`. A promoted binding skips
                         // the in-place form: the concat must land in the
                         // cell, not in the register that holds the cell.
-                        if l.cell.is_none() && l.ty == TY_STR && self.try_accumulate_fstr(value, name, l.reg, sp)? {
+                        if l.cell.is_none()
+                            && l.ty == TY_STR
+                            && self.try_accumulate_fstr(value, name, l.reg, sp)?
+                        {
                             return Ok(());
                         }
                         let t = self.compile_expr(value, Some(l.ty))?;
                         // implicit widening at the assignment:
                         // a concrete value coerces to a trait-typed binding
                         if !self.widens_val(value, t, l.ty) {
-                            self.ctx.err(sp, format!(
-                                "assignment type mismatch: `{}` vs `{}`",
-                                self.ctx.type_name(l.ty), self.ctx.type_name(t)
-                            ));
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "assignment type mismatch: `{}` vs `{}`",
+                                    self.ctx.type_name(l.ty),
+                                    self.ctx.type_name(t)
+                                ),
+                            );
                         }
                         // concrete → slot widening boxes scalars (the slot
                         // ABI): the binding always holds a cell
@@ -396,10 +559,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let cur = self.read_local(&l, sp.lo);
                         let t = self.compile_expr(value, Some(l.ty))?;
                         if t != l.ty {
-                            self.ctx.err(sp, format!(
-                                "assignment type mismatch: `{}` vs `{}`",
-                                self.ctx.type_name(l.ty), self.ctx.type_name(t)
-                            ));
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "assignment type mismatch: `{}` vs `{}`",
+                                    self.ctx.type_name(l.ty),
+                                    self.ctx.type_name(t)
+                                ),
+                            );
                         }
                         let val_reg = self.last_reg;
                         let res = self.new_reg(l.ty);
@@ -411,7 +578,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
                 Ok(())
-            }            ExprKind::Field { recv, name } => {
+            }
+            ExprKind::Field { recv, name } => {
                 if !self.check_recv_mut(recv, sp, "field assignment") {
                     return Err(());
                 }
@@ -421,11 +589,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // so does `arr[i].f = ..` when the elements are `?T`
                 let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() else {
-                    self.ctx.err(sp, "field assignment needs a struct/class receiver");
+                    self.ctx
+                        .err(sp, "field assignment needs a struct/class receiver");
                     return Err(());
                 };
                 let Some(fidx) = fields.iter().position(|f| f.name == name) else {
-                    self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}` has no field `{}`",
+                            self.ctx.type_name(rt),
+                            self.ctx.name(name)
+                        ),
+                    );
                     return Err(());
                 };
                 // the member-visibility law: the postfix write takes the
@@ -441,11 +617,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if !self.same_ty(t, fty) {
                             self.ctx.err(sp, "field assignment type mismatch");
                         }
-                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: self.last_reg, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                        self.emit(
+                            Op::SetF {
+                                obj: rreg,
+                                field: fidx as u32,
+                                val: self.last_reg,
+                                repr: self.ctx.types.repr_of(fty),
+                            },
+                            sp.lo,
+                        );
                     }
                     Some(bin) => {
                         let cur = self.new_reg(fty);
-                        self.emit(Op::GetF { dst: cur, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                        self.emit(
+                            Op::GetF {
+                                dst: cur,
+                                obj: rreg,
+                                field: fidx as u32,
+                                repr: self.ctx.types.repr_of(fty),
+                            },
+                            sp.lo,
+                        );
                         // a `?T` field computes at T: the
                         // accumulator derefs, the result re-boxes
                         let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
@@ -457,7 +649,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let res = self.new_reg(cty);
                         self.emit_compound(bin, cty, cur, val_reg, res, sp)?;
                         let res = self.coerce_to(cty, fty, res, sp.lo);
-                        self.emit(Op::SetF { obj: rreg, field: fidx as u32, val: res, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                        self.emit(
+                            Op::SetF {
+                                obj: rreg,
+                                field: fidx as u32,
+                                val: res,
+                                repr: self.ctx.types.repr_of(fty),
+                            },
+                            sp.lo,
+                        );
                     }
                 }
                 Ok(())
@@ -471,7 +671,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `xs[i] = ..` through a pointer auto-derefs
                 let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
                 let Some(info) = self.slice_info(rt) else {
-                    self.ctx.err(sp, "index assignment needs a sequence (Vec or Array)");
+                    self.ctx
+                        .err(sp, "index assignment needs a sequence (Vec or Array)");
                     return Err(());
                 };
                 let elem = info.elem;
@@ -524,11 +725,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
         use rut_ast::ast::BinOp::*;
-        let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) { Some(*p) } else { None };
+        let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) {
+            Some(*p)
+        } else {
+            None
+        };
         match bin {
             Add | Sub | Mul | Div | Mod => {
                 let Some(prim) = prim.filter(|p| p.is_int() || p.is_float()) else {
-                    self.ctx.err(sp, format!("arithmetic needs numbers —found `{}`", self.ctx.type_name(ty)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "arithmetic needs numbers —found `{}`",
+                            self.ctx.type_name(ty)
+                        ),
+                    );
                     return Err(());
                 };
                 let aop = match bin {
@@ -542,7 +753,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             BitAnd | BitOr | BitXor | Shl | Shr => {
                 let Some(prim) = prim.filter(|p| p.is_int()) else {
-                    self.ctx.err(sp, format!("bit operations need integers —found `{}`", self.ctx.type_name(ty)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "bit operations need integers —found `{}`",
+                            self.ctx.type_name(ty)
+                        ),
+                    );
                     return Err(());
                 };
                 let bop = match bin {
@@ -555,14 +772,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(bitop(bop, prim, dst, a, b), sp.lo);
             }
             And | Or | Eq | Ne | Lt | Gt | Le | Ge => {
-                self.ctx.err(sp, "this operator has no compound-assignment form");
+                self.ctx
+                    .err(sp, "this operator has no compound-assignment form");
                 return Err(());
             }
         }
         Ok(())
     }
 
-    pub(crate) fn check_formattable(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> TcResult<()> {
+    pub(crate) fn check_formattable(
+        &mut self,
+        ty: TypeId,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<()> {
         // Table: ints, floats, bool, char, string, enum
         match self.ctx.types.kind(ty) {
             TyKind::Prim(_) | TyKind::Str | TyKind::Enum { .. } => Ok(()),
@@ -575,5 +797,4 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
     }
-
 }

@@ -3,7 +3,6 @@
 use super::*;
 
 impl<'a> Ctx<'a> {
-
     /// Bind a used function before body compilation. `site` is the
     /// importing file's mod path (`""` = the root) — the per-file
     /// binding law: the row resolves only in files whose own `use`
@@ -35,8 +34,16 @@ impl<'a> Ctx<'a> {
             }
         };
         let params = params.iter().map(|t| remap(*t)).collect();
-        self.extern_fns
-            .insert((site.to_string(), name), ExternFn { func, params, ret, is_async, host });
+        self.extern_fns.insert(
+            (site.to_string(), name),
+            ExternFn {
+                func,
+                params,
+                ret,
+                is_async,
+                host,
+            },
+        );
     }
 
     /// Bind a `builtin impl` numeric method of a primitive (core only):
@@ -49,7 +56,10 @@ impl<'a> Ctx<'a> {
         prim: TypeId,
         intrinsic: rut_core::ops::Intrinsic,
     ) {
-        self.builtin_impls.entry(name).or_default().push((prim, intrinsic));
+        self.builtin_impls
+            .entry(name)
+            .or_default()
+            .push((prim, intrinsic));
     }
 
     /// The lowering of `name` on a receiver of primitive type `recv`, if
@@ -74,7 +84,8 @@ impl<'a> Ctx<'a> {
 
     /// Bind a used constant (native modules: `calc::PI`) in `site`.
     pub fn add_extern_const(&mut self, site: &str, name: IdentId, ty: TypeId, bits: u64) {
-        self.extern_consts.insert((site.to_string(), name), (ty, bits));
+        self.extern_consts
+            .insert((site.to_string(), name), (ty, bits));
     }
 
     /// The used constant bound in the CURRENT file (ambient fallback
@@ -89,7 +100,14 @@ impl<'a> Ctx<'a> {
 
     /// Bind a used type name to the exporter's scope-qualified id, in
     /// `site` (the per-file binding law).
-    pub fn add_extern_type(&mut self, site: &str, name: IdentId, ty: TypeId, is_class: bool, newtype: bool) {
+    pub fn add_extern_type(
+        &mut self,
+        site: &str,
+        name: IdentId,
+        ty: TypeId,
+        is_class: bool,
+        newtype: bool,
+    ) {
         self.extern_types.insert((site.to_string(), name), ty);
         if is_class {
             self.extern_classes.insert(ty);
@@ -133,7 +151,13 @@ impl<'a> Ctx<'a> {
         }
         self.extern_generics.insert(
             name,
-            ExternGeneric { owner, params, template, is_class, newtype },
+            ExternGeneric {
+                owner,
+                params,
+                template,
+                is_class,
+                newtype,
+            },
         );
     }
 
@@ -142,8 +166,14 @@ impl<'a> Ctx<'a> {
     /// compiler's own; the binding gates the NAME. `site` is the
     /// importing file — or [`AMBIENT_SITE`] for the prelude's ambient
     /// rows (they bind in every unit).
-    pub fn add_extern_native_type(&mut self, site: &str, name: IdentId, kind: rut_core::binary::NativeTy) {
-        self.extern_native_types.insert((site.to_string(), name), kind);
+    pub fn add_extern_native_type(
+        &mut self,
+        site: &str,
+        name: IdentId,
+        kind: rut_core::binary::NativeTy,
+    ) {
+        self.extern_native_types
+            .insert((site.to_string(), name), kind);
     }
 
     /// The core builtin container bound in the CURRENT file — the
@@ -152,7 +182,10 @@ impl<'a> Ctx<'a> {
     pub fn extern_native_type(&self, name: IdentId) -> Option<rut_core::binary::NativeTy> {
         self.extern_native_types
             .get(&(self.cur_mod.clone(), name))
-            .or_else(|| self.extern_native_types.get(&(AMBIENT_SITE.to_string(), name)))
+            .or_else(|| {
+                self.extern_native_types
+                    .get(&(AMBIENT_SITE.to_string(), name))
+            })
             .copied()
     }
 
@@ -185,9 +218,18 @@ impl<'a> Ctx<'a> {
             });
         }
         let id = self.ifaces.len() as u32;
-        self.ifaces.push(IfaceDesc { name: tname, methods });
+        self.ifaces.push(IfaceDesc {
+            name: tname,
+            methods,
+        });
         if let Some(n) = name {
-            self.extern_iface_decls.insert(n, ExternIface { id, generics: desc.generics });
+            self.extern_iface_decls.insert(
+                n,
+                ExternIface {
+                    id,
+                    generics: desc.generics,
+                },
+            );
         }
         id
     }
@@ -212,7 +254,9 @@ impl<'a> Ctx<'a> {
             })
             .collect();
         for (i, text) in names.iter().enumerate() {
-            let Some(ty) = self.types.id_for_pub_checked(i as u32) else { continue };
+            let Some(ty) = self.types.id_for_pub_checked(i as u32) else {
+                continue;
+            };
             if self.inst_data.contains_key(&ty) {
                 continue;
             }
@@ -287,7 +331,13 @@ impl<'a> Ctx<'a> {
     /// Bind a used enum (the linkable-classes phase) in `site`: the
     /// member paths (`EncodeErrorKind.Depth`) resolve through this
     /// registry; the descriptor row itself rides the carried type block.
-    pub fn add_extern_enum(&mut self, site: &str, name: IdentId, ty: TypeId, members: Vec<(IdentId, i64)>) {
+    pub fn add_extern_enum(
+        &mut self,
+        site: &str,
+        name: IdentId,
+        ty: TypeId,
+        members: Vec<(IdentId, i64)>,
+    ) {
         self.extern_enums
             .insert((site.to_string(), name), (ty, members));
     }
@@ -303,9 +353,7 @@ impl<'a> Ctx<'a> {
     /// (the `#<param>` row the surface build spelled)?
     pub fn template_leaf(&self, t: TypeId, params: &[IdentId]) -> bool {
         let text = self.interner.name(self.types.type_at(t).name).to_string();
-        params
-            .iter()
-            .any(|p| format!("#{}", self.name(*p)) == text)
+        params.iter().any(|p| format!("#{}", self.name(*p)) == text)
     }
 
     /// The element of a `Future<E>` handle: the kind carries it
@@ -367,7 +415,10 @@ impl<'a> Ctx<'a> {
                             .collect::<Vec<_>>()
                             .join(", ")
                     ));
-                    self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } })
+                    self.types.intern(RutType {
+                        name,
+                        kind: TyKind::Data { fields: fs },
+                    })
                 })
             }
             _ => None,
@@ -423,7 +474,11 @@ impl<'a> Ctx<'a> {
     /// `[constructor]` byte on a row fills the designation registry —
     /// the consumer's `Name(..)` fallback reads it (the marker crossed
     /// the surface; the exporter's own gate proved the class law).
-    pub fn add_extern_inherent(&mut self, target: TypeId, methods: Vec<rut_core::binary::SurfaceMethod>) {
+    pub fn add_extern_inherent(
+        &mut self,
+        target: TypeId,
+        methods: Vec<rut_core::binary::SurfaceMethod>,
+    ) {
         if methods.is_empty() {
             return;
         }
@@ -433,7 +488,8 @@ impl<'a> Ctx<'a> {
                 self.class_ctors.insert(cname, m.name);
             }
         }
-        self.extern_inherents.push(ExternInherent { target, methods });
+        self.extern_inherents
+            .push(ExternInherent { target, methods });
     }
 
     /// Bind a used module's exported generic fn (the linkable-classes
@@ -448,15 +504,25 @@ impl<'a> Ctx<'a> {
         args: Vec<TypeId>,
         ret: TypeId,
     ) {
-        self.extern_generic_fns
-            .insert((site.to_string(), name), ExternGenericFn { owner, params, args, ret });
+        self.extern_generic_fns.insert(
+            (site.to_string(), name),
+            ExternGenericFn {
+                owner,
+                params,
+                args,
+                ret,
+            },
+        );
     }
 
     /// The used generic fn bound in the CURRENT file (the per-file law).
     pub fn extern_generic_fn(&self, name: IdentId) -> Option<&ExternGenericFn> {
         self.extern_generic_fns
             .get(&(self.cur_mod.clone(), name))
-            .or_else(|| self.extern_generic_fns.get(&(AMBIENT_SITE.to_string(), name)))
+            .or_else(|| {
+                self.extern_generic_fns
+                    .get(&(AMBIENT_SITE.to_string(), name))
+            })
     }
 
     /// The used class whose inherent surface answers `name` on
@@ -480,14 +546,20 @@ impl<'a> Ctx<'a> {
                 None => (None, vec![]),
             };
             let hit = ih.target == rt
-                || dname.and_then(|d| self.extern_generics.get(&d))
+                || dname
+                    .and_then(|d| self.extern_generics.get(&d))
                     .map_or(false, |g| g.template == ih.target);
             if !hit {
                 continue;
             }
             if let Some(midx) = ih.methods.iter().position(|m| m.name == name) {
                 let subst = match dname.and_then(|d| self.extern_generics.get(&d)) {
-                    Some(g) => g.params.iter().cloned().zip(cargs.iter().cloned()).collect(),
+                    Some(g) => g
+                        .params
+                        .iter()
+                        .cloned()
+                        .zip(cargs.iter().cloned())
+                        .collect(),
                     None => vec![],
                 };
                 return Some((i, midx, subst));
@@ -545,8 +617,11 @@ impl<'a> Ctx<'a> {
     /// The ambient prelude rows answer everywhere; the `pub builtin`
     /// spellings only where the `use` was written.
     pub fn is_extern_native_fn(&self, name: IdentId) -> bool {
-        self.extern_native_fns.contains(&(self.cur_mod.clone(), name))
-            || self.extern_native_fns.contains(&(AMBIENT_SITE.to_string(), name))
+        self.extern_native_fns
+            .contains(&(self.cur_mod.clone(), name))
+            || self
+                .extern_native_fns
+                .contains(&(AMBIENT_SITE.to_string(), name))
     }
 
     /// Bind a namespace head (`use calc::{Math}`) in `site`.
@@ -556,7 +631,8 @@ impl<'a> Ctx<'a> {
 
     /// Is `name` a namespace head bound in the CURRENT file?
     pub fn is_extern_namespace(&self, name: IdentId) -> bool {
-        self.extern_namespaces.contains(&(self.cur_mod.clone(), name))
+        self.extern_namespaces
+            .contains(&(self.cur_mod.clone(), name))
     }
 
     /// Does the CURRENT file's bindings arm the newtype call
@@ -564,6 +640,4 @@ impl<'a> Ctx<'a> {
     pub fn is_extern_newtype(&self, name: IdentId) -> bool {
         self.extern_newtypes.contains(&(self.cur_mod.clone(), name))
     }
-
-
 }

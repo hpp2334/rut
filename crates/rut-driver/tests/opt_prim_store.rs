@@ -13,17 +13,18 @@
 
 use std::rc::Rc;
 
-
 const POUCH_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch");
-
-
-
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -49,7 +50,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -79,7 +83,11 @@ fn run_main(app_src: &str) -> i64 {
     assert!(
         out.diags.is_empty(),
         "{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        out.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = out.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
@@ -88,7 +96,12 @@ fn run_main(app_src: &str) -> i64 {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
         .expect("vm")
         .call::<_, i64>("main", ())
         .expect("run")
@@ -261,7 +274,10 @@ fn u64_high_bit_payloads_round_trip() {
         }
     "#,
     );
-    assert_eq!(checksum, 111, "u64 2^63..2^64-1 payloads must round-trip exactly");
+    assert_eq!(
+        checksum, 111,
+        "u64 2^63..2^64-1 payloads must round-trip exactly"
+    );
 }
 
 /// f64 and the narrow ints (i32/i16) round-trip through their payload
@@ -342,7 +358,10 @@ fn iteration_order_unchanged() {
         let v = if i % 3 == 0 { 7 } else { i };
         expect = expect.wrapping_mul(31).wrapping_add(v);
     }
-    assert_eq!(checksum, expect, "iteration must visit elements in index order, nils included");
+    assert_eq!(
+        checksum, expect,
+        "iteration must visit elements in index order, nils included"
+    );
 }
 
 /// The growable path: `Vec<i64>`'s `buf: [?i64]` rides the same raw store —
@@ -379,7 +398,10 @@ fn vec_backing_rides_the_prim_store() {
         }
     "#,
     );
-    assert_eq!(checksum, 333, "Vec<i64> over the raw backing must push/grow/replace/iterate exactly");
+    assert_eq!(
+        checksum, 333,
+        "Vec<i64> over the raw backing must push/grow/replace/iterate exactly"
+    );
 }
 
 /// A fresh read answers VALUE semantics: reading a slot, storing a new
@@ -416,7 +438,10 @@ fn reads_are_values_not_handles() {
         }
     "#,
     );
-    assert_eq!(checksum, 444, "a `[?prim]` read mints a fresh value — a later store must not rewrite it");
+    assert_eq!(
+        checksum, 444,
+        "a `[?prim]` read mints a fresh value — a later store must not rewrite it"
+    );
 }
 
 // ---- the raw sidecar under nmapset + the heap-accounting law ----------
@@ -498,7 +523,11 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     assert!(
         out.diags.is_empty(),
         "{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        out.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = out.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
@@ -510,7 +539,12 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten());
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .expect("vm");
     let v: i64 = vm.call("main", ()).expect("run");
     assert_eq!(v, 555, "primitive V round-trips through the raw sidecar");
@@ -552,7 +586,12 @@ fn prim_store_release_walk_skips_element_slots() {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
         .expect("vm");
     let v: i64 = vm.call("main", ()).expect("run");
     assert_eq!(v, (0i64..100000).sum::<i64>());
@@ -636,7 +675,15 @@ fn version_gate_rejects_stale_artifacts() {
         rut_parser::Mode::Impl,
         "gate",
     );
-    assert!(out.diags.is_empty(), "{}", out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    assert!(
+        out.diags.is_empty(),
+        "{}",
+        out.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     let bytes = out.binary.expect("encoded module");
     assert!(decode(&bytes).is_ok(), "current artifacts decode");
 

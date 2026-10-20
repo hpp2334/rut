@@ -14,7 +14,15 @@ fn positional_decl_desugars_to_one_inner_field() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Class { vis: _, name, generics, requires, newtype, fields, methods } = ast.item(items[0])
+    let ItemKind::Class {
+        vis: _,
+        name,
+        generics,
+        requires,
+        newtype,
+        fields,
+        methods,
+    } = ast.item(items[0])
     else {
         panic!("expected a class");
     };
@@ -49,7 +57,13 @@ fn generic_newtype_head_parses() {
         let (ast, diags) = parse(src, Mode::Impl);
         assert!(diags.is_empty(), "{src}: expected a clean parse: {diags:?}");
         let items = ast.module_items(ast.root);
-        let ItemKind::Class { newtype, generics, fields, .. } = ast.item(items[0]) else {
+        let ItemKind::Class {
+            newtype,
+            generics,
+            fields,
+            ..
+        } = ast.item(items[0])
+        else {
             panic!("{src}: expected a class");
         };
         assert!(*newtype, "{src}");
@@ -66,7 +80,13 @@ fn bounded_generic_newtype_head_parses() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Class { generics, requires, newtype, .. } = ast.item(items[0]) else {
+    let ItemKind::Class {
+        generics,
+        requires,
+        newtype,
+        ..
+    } = ast.item(items[0])
+    else {
         panic!("expected a class");
     };
     assert!(*newtype);
@@ -100,7 +120,10 @@ fn wrapped_type_may_be_any_type_term() {
         let (ast, diags) = parse(src, Mode::Impl);
         assert!(diags.is_empty(), "{src}: {diags:?}");
         let items = ast.module_items(ast.root);
-        let ItemKind::Class { newtype, fields, .. } = ast.item(items[0]) else {
+        let ItemKind::Class {
+            newtype, fields, ..
+        } = ast.item(items[0])
+        else {
             panic!("{src}: expected a class");
         };
         assert!(*newtype && fields.len() == 1, "{src}");
@@ -111,7 +134,9 @@ fn wrapped_type_may_be_any_type_term() {
 fn empty_parens_diagnose() {
     let (ast, diags) = parse("class Foo();\n", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("wraps exactly one type")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("wraps exactly one type")),
         "the empty positional form names the fix: {diags:?}"
     );
     let _ = ast;
@@ -133,5 +158,8 @@ fn structs_have_no_positional_form() {
     // the decl shape is a CLASS surface; a struct head with parens is
     // the ordinary missing-body diagnostic
     let (_, diags) = parse("struct Foo(i32);\n", Mode::Impl);
-    assert!(!diags.is_empty(), "a tuple struct is not grammar: {diags:?}");
+    assert!(
+        !diags.is_empty(),
+        "a tuple struct is not grammar: {diags:?}"
+    );
 }

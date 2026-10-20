@@ -24,11 +24,10 @@ use std::path::{Path, PathBuf};
 use rut_core::id::ScopeId;
 
 use rut_driver::bundle::{
-    parse_manifest, parse_manifest_compat, read_entry, Manifest, PkgType,
-    MANIFEST_NAME,
+    parse_manifest, parse_manifest_compat, read_entry, Manifest, PkgType, MANIFEST_NAME,
 };
 use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
-use rut_driver::{Walk, Mode, Mounted, MountedBody, RunError};
+use rut_driver::{Mode, Mounted, MountedBody, RunError, Walk};
 
 use crate::error::LoadError;
 use crate::remote::DepRemote;
@@ -121,7 +120,12 @@ impl World {
     /// numbering space is exhausted). Boot owns 0 and passes through
     /// every map.
     fn ledger_next_base(&self) -> Option<ScopeId> {
-        let max = self.ledger.keys().copied().max().unwrap_or(rut_core::id::BOOT_SCOPE);
+        let max = self
+            .ledger
+            .keys()
+            .copied()
+            .max()
+            .unwrap_or(rut_core::id::BOOT_SCOPE);
         let next = max.checked_add(1)?;
         if next as u32 > rut_core::id::MAX_SCOPE {
             None
@@ -142,9 +146,9 @@ impl World {
         &self,
         scopes: &[(ScopeId, String)],
     ) -> Result<impl Fn(ScopeId) -> ScopeId, LoadError> {
-        let base = self
-            .ledger_next_base()
-            .ok_or_else(|| LoadError::law("the bundle scope numbering space is exhausted".to_string()))?;
+        let base = self.ledger_next_base().ok_or_else(|| {
+            LoadError::law("the bundle scope numbering space is exhausted".to_string())
+        })?;
         for &(s, _) in scopes {
             if s != rut_core::id::BOOT_SCOPE && base as u32 + s as u32 > rut_core::id::MAX_SCOPE {
                 return Err(LoadError::law(format!(
@@ -169,7 +173,10 @@ impl World {
     /// The yield: drain the pkgs (the world dies, the pkgs travel) —
     /// [`Walk`].
     pub(crate) fn into_loaded(self, root: String) -> Walk {
-        Walk { pkgs: self.pkgs.into_values().collect(), root }
+        Walk {
+            pkgs: self.pkgs.into_values().collect(),
+            root,
+        }
     }
 }
 
@@ -271,7 +278,10 @@ fn collect_url_deps_walk(
     for table in [&manifest.deps, &manifest.dev_deps] {
         for (spec, desc) in table {
             if let Some(url) = desc.get("url") {
-                out.push(UrlDep { spec: spec.clone(), url: url.clone() });
+                out.push(UrlDep {
+                    spec: spec.clone(),
+                    url: url.clone(),
+                });
             } else if let Some(rel) = desc.get("path") {
                 let dep_dir = src.resolve(dir, rel).map_err(LoadError::law)?;
                 collect_url_deps_walk(src, &dep_dir, visiting, out)?;
@@ -311,10 +321,8 @@ pub(crate) fn read_lock(
         Ok(bytes) => bytes,
         Err(_) => return Ok(BTreeMap::new()), // no lock file ⇒ no pins
     };
-    let text = String::from_utf8(bytes)
-        .map_err(|_| LoadError::law(format!("{key}: not UTF-8")))?;
-    let lock =
-        rut_driver::parse_lock(&text).map_err(|e| LoadError::law(format!("{key}: {e}")))?;
+    let text = String::from_utf8(bytes).map_err(|_| LoadError::law(format!("{key}: not UTF-8")))?;
+    let lock = rut_driver::parse_lock(&text).map_err(|e| LoadError::law(format!("{key}: {e}")))?;
     Ok(lock
         .deps()
         .iter()
@@ -464,7 +472,10 @@ pub(crate) fn dir_child_lookup(
     child_file: &str,
 ) -> Result<ChildLookup, String> {
     let base = match files.get(parent) {
-        Some(f) => f.parent().map(Path::to_path_buf).unwrap_or_else(|| dir.to_path_buf()),
+        Some(f) => f
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| dir.to_path_buf()),
         None if parent.is_empty() => dir.to_path_buf(),
         None => dir.join(parent),
     };
@@ -496,7 +507,11 @@ pub(crate) fn dir_child_lookup(
                 format!("{parent}/{name}")
             };
             files.insert(child_path, probe.0.clone());
-            Ok(ChildLookup::Found { text, canon, file: probe.1 })
+            Ok(ChildLookup::Found {
+                text,
+                canon,
+                file: probe.1,
+            })
         }
         // a file that exists but cannot be read is the loud read
         // error, never a silent fallback
@@ -527,7 +542,10 @@ fn lib_pkg(
         mount_mod_children(&root_text, &root_canon, Mode::Impl, "mod.rut", &mut lookup)
             .map_err(|e| LoadError::law(format!("{dir}: {e}")))?;
     Ok(Mounted {
-        body: MountedBody::Source { text: root_text, is_decl: false },
+        body: MountedBody::Source {
+            text: root_text,
+            is_decl: false,
+        },
         entry: manifest.entry.clone(),
         mods,
         manifest: manifest.clone(),
@@ -648,7 +666,10 @@ fn load_entry_module(
                 }
                 None => match surface_only {
                     Some(surface) if manifest.type_declared => Ok(Mounted {
-                        body: MountedBody::Source { text: surface, is_decl: true },
+                        body: MountedBody::Source {
+                            text: surface,
+                            is_decl: true,
+                        },
                         entry: manifest.entry.clone(),
                         manifest: manifest.clone(),
                         ..Default::default()
@@ -707,10 +728,7 @@ pub fn load_path_session(path: &Path) -> Result<Walk, RunError> {
 /// [`load_path_session`] with a url-dep remote. A `.rutbundle` path
 /// never fetches — bundles are closed; only a directory's `[deps]` can
 /// name urls.
-pub async fn load_path_session_with(
-    path: &Path,
-    remote: &dyn DepRemote,
-) -> Result<Walk, RunError> {
+pub async fn load_path_session_with(path: &Path, remote: &dyn DepRemote) -> Result<Walk, RunError> {
     if path.is_dir() {
         return load_dir_with(path, remote).await;
     }
@@ -784,28 +802,42 @@ pub(crate) fn walk_dir(
     lock: &BTreeMap<String, String>,
 ) -> Result<String, LoadError> {
     let manifest = read_manifest(src, dir)?;
-    let root = manifest
-        .name
-        .clone()
-        .ok_or_else(|| LoadError::law(format!(
-            "{}{MANIFEST_NAME} has no `name`",
-            dir_key_dir(dir),
-        )))?;
+    let root = manifest.name.clone().ok_or_else(|| {
+        LoadError::law(format!("{}{MANIFEST_NAME} has no `name`", dir_key_dir(dir),))
+    })?;
     let root_module = load_entry_module(src, dir, &manifest)?;
     world.register(&root, root_module)?;
     // the root's dir rides the world, so the pack lanes can answer for
     // the root's own files
-    world.locs.insert(root.clone(), Loc::Dir(PathBuf::from(dir)));
+    world
+        .locs
+        .insert(root.clone(), Loc::Dir(PathBuf::from(dir)));
     let mut visiting = vec![canonical(dir)?];
     let mut fetched = Fetched {
         map,
         lock,
         visiting_urls: Default::default(),
     };
-    resolve_table(world, src, dir, &root, &manifest.deps, &mut visiting, &mut fetched)?;
+    resolve_table(
+        world,
+        src,
+        dir,
+        &root,
+        &manifest.deps,
+        &mut visiting,
+        &mut fetched,
+    )?;
     // the dev pass — the ROOT's dev table mounts exactly like `[deps]`;
     // a dep's dev table is never walked (pass 2 is root-only)
-    resolve_table(world, src, dir, &root, &manifest.dev_deps, &mut visiting, &mut fetched)?;
+    resolve_table(
+        world,
+        src,
+        dir,
+        &root,
+        &manifest.dev_deps,
+        &mut visiting,
+        &mut fetched,
+    )?;
     Ok(root)
 }
 
@@ -856,7 +888,15 @@ pub(crate) fn mount_dev_table(
         lock,
         visiting_urls: Default::default(),
     };
-    resolve_table(world, src, dir, parent, &manifest.dev_deps, &mut visiting, &mut fetched)
+    resolve_table(
+        world,
+        src,
+        dir,
+        parent,
+        &manifest.dev_deps,
+        &mut visiting,
+        &mut fetched,
+    )
 }
 
 /// Walk one descriptor table — the `[deps]` walk (pass 1; pass 2 feeds
@@ -887,10 +927,7 @@ fn resolve_table(
             continue; // already mounted — the embedder's (or an earlier) mount wins
         }
         if let Some(url) = desc.get("url") {
-            let bytes = fetched
-                .map
-                .get(url)
-                .ok_or_else(|| no_fetcher(spec, url))?;
+            let bytes = fetched.map.get(url).ok_or_else(|| no_fetcher(spec, url))?;
             if !fetched.visiting_urls.insert(url.clone()) {
                 return Err(LoadError::law(format!(
                     "cyclic use: `{spec}` ({url}) is already being loaded"
@@ -923,7 +960,9 @@ fn resolve_table(
         // data — the uses diagnostic's "pulled by" clause reads it)
         dep_pkg.mounted_by = Some(parent.to_string());
         world.register(spec, dep_pkg)?;
-        world.locs.insert(spec.clone(), Loc::Dir(PathBuf::from(&dep_dir)));
+        world
+            .locs
+            .insert(spec.clone(), Loc::Dir(PathBuf::from(&dep_dir)));
         visiting.push(dep_canon);
         // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
         // consumer's world never contains another pkg's dev table
@@ -991,17 +1030,30 @@ fn mount_url_dep(
     // gate 1 — the container
     let bundle = match rut_driver::bundle::Bundle::parse(bytes) {
         Ok(b) => b,
-        Err(e) => return Err(LoadError::Bundle { origin: url.to_string(), message: e.to_string() }),
+        Err(e) => {
+            return Err(LoadError::Bundle {
+                origin: url.to_string(),
+                message: e.to_string(),
+            })
+        }
     };
     // gate 2 — the layout: manifest, exact version, every group decoded
     let layout = match rut_driver::bundle::Layout::parse(&bundle) {
         Ok(l) => l,
-        Err(e) => return Err(LoadError::Bundle { origin: url.to_string(), message: e }),
+        Err(e) => {
+            return Err(LoadError::Bundle {
+                origin: url.to_string(),
+                message: e,
+            })
+        }
     };
     let (manifest, root, scopes, groups) = match layout {
-        rut_driver::bundle::Layout::Compiled { manifest, root, scopes, groups } => {
-            (manifest, root, scopes, groups)
-        }
+        rut_driver::bundle::Layout::Compiled {
+            manifest,
+            root,
+            scopes,
+            groups,
+        } => (manifest, root, scopes, groups),
         rut_driver::bundle::Layout::Decl { manifest, .. } => {
             // the decl root: a host pkg — the surface mounts as the
             // pkg's host rows (the group lane); single-package, no
@@ -1026,10 +1078,17 @@ fn mount_url_dep(
             pkg.mounted_by = Some(parent.to_string());
             world.register(&root_spec, pkg)?;
             let slot = world.archives.len();
-            world
-                .locs
-                .insert(root_spec, Loc::Archive { slot, prefix: String::new() });
-            world.archives.push(Archive { origin: url.to_string(), entries });
+            world.locs.insert(
+                root_spec,
+                Loc::Archive {
+                    slot,
+                    prefix: String::new(),
+                },
+            );
+            world.archives.push(Archive {
+                origin: url.to_string(),
+                entries,
+            });
             return Ok(());
         }
     };
@@ -1122,8 +1181,12 @@ fn mount_url_dep(
     let mut prefixes: BTreeMap<String, String> = BTreeMap::new();
     prefixes.insert(root_spec.clone(), String::new());
     for (prefix, kind) in &groups {
-        let dep_toml = read_entry(&entries, &format!("{prefix}/rut.jsonc"))
-            .map_err(|e| LoadError::Bundle { origin: url.to_string(), message: e })?;
+        let dep_toml = read_entry(&entries, &format!("{prefix}/rut.jsonc")).map_err(|e| {
+            LoadError::Bundle {
+                origin: url.to_string(),
+                message: e,
+            }
+        })?;
         // the group manifest rides the compat lane: a repacked
         // archive's group manifests ride byte-for-byte from any era
         let dm = parse_manifest_compat(&dep_toml)
@@ -1147,7 +1210,7 @@ fn mount_url_dep(
                 // shift by the same map, so the law (the row must be
                 // the scope the binary itself carries) is unchanged, and
                 // the stored binary is the namespaced one
-                                let mut program = rut_core::link::rebase(program.clone(), &remap);
+                let mut program = rut_core::link::rebase(program.clone(), &remap);
                 // the module rides under its MOUNT KEY and its owner
                 // rows rebind to the identities (see the loader's
                 // container walk)
@@ -1211,16 +1274,19 @@ fn mount_url_dep(
     // where this archive's mounted pkgs' files live (the packer's
     // rode-along copies — the world holds the location)
     for (spec, prefix) in &prefixes {
-        world
-            .locs
-            .entry(spec.clone())
-            .or_insert(Loc::Archive { slot, prefix: prefix.clone() });
+        world.locs.entry(spec.clone()).or_insert(Loc::Archive {
+            slot,
+            prefix: prefix.clone(),
+        });
     }
     // the archive's rows ride ITS ROOT — the close-of-world replays the
     // archive from them (grouping the members, shifting the numbering);
     // group members stay row-free, so the graph's compiled-mount arm
     // sees exactly the pack-time shape
-    world.archives.push(Archive { origin: url.to_string(), entries });
+    world.archives.push(Archive {
+        origin: url.to_string(),
+        entries,
+    });
     // gate 7 — the closure check, against the COMBINED world: a
     // bundle's dep rides in-archive; if it is neither here nor mounted
     // earlier, the bundle is incomplete (a url row inside it is inert
@@ -1320,10 +1386,12 @@ pub(crate) fn offer_dir(
     let src = FsSource::at(dir);
     let dir_key = dir.to_string_lossy().into_owned();
     let manifest = read_manifest(&src, &dir_key)?;
-    let name = manifest
-        .name
-        .clone()
-        .ok_or_else(|| LoadError::law(format!("{}{MANIFEST_NAME} has no `name`", dir_key_dir(&dir_key))))?;
+    let name = manifest.name.clone().ok_or_else(|| {
+        LoadError::law(format!(
+            "{}{MANIFEST_NAME} has no `name`",
+            dir_key_dir(&dir_key)
+        ))
+    })?;
     if world.pkgs.contains_key(&name) {
         return Ok(name); // the embedder's mount outranks the directory
     }
@@ -1336,7 +1404,15 @@ pub(crate) fn offer_dir(
         lock,
         visiting_urls: Default::default(),
     };
-    resolve_deps(world, &src, &dir_key, &name, &manifest, &mut visiting, &mut fetched)?;
+    resolve_deps(
+        world,
+        &src,
+        &dir_key,
+        &name,
+        &manifest,
+        &mut visiting,
+        &mut fetched,
+    )?;
     Ok(name)
 }
 

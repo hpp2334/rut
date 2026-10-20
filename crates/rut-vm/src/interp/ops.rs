@@ -56,7 +56,13 @@ impl Vm {
     /// `ArrGet` — the fast path calls this directly, so it must stay small
     /// and inlinable.
     #[inline(always)]
-    pub(super) fn op_arr_get(&mut self, dst: Reg, arr: Reg, idx: Reg, repr: Repr) -> Result<(), Trap> {
+    pub(super) fn op_arr_get(
+        &mut self,
+        dst: Reg,
+        arr: Reg,
+        idx: Reg,
+        repr: Repr,
+    ) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
         // the primitive-optional store: decode the raw
@@ -103,7 +109,13 @@ impl Vm {
 
     /// `ArrSet` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
-    pub(super) fn op_arr_set(&mut self, arr: Reg, idx: Reg, val: Reg, repr: Repr) -> Result<(), Trap> {
+    pub(super) fn op_arr_set(
+        &mut self,
+        arr: Reg,
+        idx: Reg,
+        val: Reg,
+        repr: Repr,
+    ) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let cell = cell_of(self.cur_regs[arr as usize]);
         let v = self.cur_regs[val as usize];
@@ -129,7 +141,14 @@ impl Vm {
     /// `ArrGetF` — fused `obj.field[idx]`; the field handle is borrowed, not
     /// retained (the owner record keeps the array alive).
     #[inline(always)]
-    pub(super) fn op_arr_get_f(&mut self, dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr) -> Result<(), Trap> {
+    pub(super) fn op_arr_get_f(
+        &mut self,
+        dst: Reg,
+        obj: Reg,
+        field: u32,
+        idx: Reg,
+        repr: Repr,
+    ) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let obj_cell = cell_of(self.cur_regs[obj as usize]);
         // the primitive-optional store: resolve the backing (the record's
@@ -161,7 +180,12 @@ impl Vm {
             // a window obj: an ELEMENT read through the window —
             // parent[off + i], bounds vs the window
             CellData::ArrView { .. } => seq_get(obj_cell, i)?,
-            _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
+            _ => {
+                return Err(Trap::new(
+                    TrapKind::Invalid,
+                    "field-array get on non-record",
+                ))
+            }
         };
         let old = self.cur_regs[dst as usize];
         self.cur_regs[dst as usize] = v;
@@ -174,7 +198,14 @@ impl Vm {
 
     /// `ArrSetF` — fused `obj.field[idx] = val`; field borrowed.
     #[inline(always)]
-    pub(super) fn op_arr_set_f(&mut self, obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr) -> Result<(), Trap> {
+    pub(super) fn op_arr_set_f(
+        &mut self,
+        obj: Reg,
+        field: u32,
+        idx: Reg,
+        val: Reg,
+        repr: Repr,
+    ) -> Result<(), Trap> {
         let i = unsafe { self.cur_regs[idx as usize].i };
         let v = self.cur_regs[val as usize];
         let obj_cell = cell_of(self.cur_regs[obj as usize]);
@@ -196,7 +227,12 @@ impl Vm {
                     .ok_or_else(|| Trap::new(TrapKind::Invalid, "field index out of range"))?;
                 seq_set(cell_of(arr), i, v)?
             }
-            _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
+            _ => {
+                return Err(Trap::new(
+                    TrapKind::Invalid,
+                    "field-array set on non-record",
+                ))
+            }
         };
         if repr.is_ref() {
             self.heap.retain(v);
@@ -207,7 +243,13 @@ impl Vm {
 
     /// `GetF` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
-    pub(super) fn op_getf(&mut self, dst: Reg, obj: Reg, field: u32, repr: Repr) -> Result<(), Trap> {
+    pub(super) fn op_getf(
+        &mut self,
+        dst: Reg,
+        obj: Reg,
+        field: u32,
+        repr: Repr,
+    ) -> Result<(), Trap> {
         let raw = self.nil_checked(self.cur_regs[obj as usize])?;
         // the downcast ALIAS handoff (refval-round2): the `?T`
         // result IS the opaque box, so the nullable deref (field 0) reads
@@ -257,7 +299,13 @@ impl Vm {
 
     /// `SetF` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
-    pub(super) fn op_setf(&mut self, obj: Reg, field: u32, val: Reg, repr: Repr) -> Result<(), Trap> {
+    pub(super) fn op_setf(
+        &mut self,
+        obj: Reg,
+        field: u32,
+        val: Reg,
+        repr: Repr,
+    ) -> Result<(), Trap> {
         let raw = self.nil_checked(self.cur_regs[obj as usize])?;
         // a store slot is never a record (defensive, the same trap the
         // old box cells hit) — check the tag BEFORE any cell deref
@@ -399,7 +447,13 @@ impl Vm {
 
     /// `MakeRecord` — fused record literal (one alloc, all fields written).
     #[inline(always)]
-    pub(super) fn op_make_record(&mut self, dst: Reg, ty: TypeId, argv_off: u32, argc: u16) -> Result<(), Trap> {
+    pub(super) fn op_make_record(
+        &mut self,
+        dst: Reg,
+        ty: TypeId,
+        argv_off: u32,
+        argc: u16,
+    ) -> Result<(), Trap> {
         let prog = Rc::clone(&self.prog);
         let vals = self.cur_argv(&prog, argv_off, argc);
         let c = self.heap.alloc_record_zeroed(ty, vals.len())?;
@@ -440,7 +494,13 @@ impl Vm {
     /// `CallI` — shared by `step` and the `run_loop` fast path; the
     /// receiver is `argv[0]`.
     #[inline(always)]
-    pub(super) fn op_call_i(&mut self, slot: u32, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+    pub(super) fn op_call_i(
+        &mut self,
+        slot: u32,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    ) -> Result<(), Trap> {
         let prog = Rc::clone(&self.prog);
         let args = self.cur_argv(&prog, argv_off, argc);
         let recv = args[0];
@@ -484,7 +544,13 @@ impl Vm {
     /// `CallFn` — shared by `step` and the `run_loop` fast path. Reads the
     /// captures by reference (no per-call `Vec` clone).
     #[inline(always)]
-    pub(super) fn op_call_fn(&mut self, fval: Reg, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+    pub(super) fn op_call_fn(
+        &mut self,
+        fval: Reg,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    ) -> Result<(), Trap> {
         let prog = Rc::clone(&self.prog);
         let args = self.cur_argv(&prog, argv_off, argc);
         let cell = cell_of(self.cur_regs[fval as usize]);
@@ -518,7 +584,13 @@ impl Vm {
 
     /// `ArrLit` — shared by `step` and the `run_loop` fast path.
     #[inline(always)]
-    pub(super) fn op_arr_lit(&mut self, dst: Reg, ty: TypeId, argv_off: u32, argc: u16) -> Result<(), Trap> {
+    pub(super) fn op_arr_lit(
+        &mut self,
+        dst: Reg,
+        ty: TypeId,
+        argv_off: u32,
+        argc: u16,
+    ) -> Result<(), Trap> {
         let prog = Rc::clone(&self.prog);
         let elems = self.cur_argv(&prog, argv_off, argc);
         let elem = match self.prog.types.kind(ty) {

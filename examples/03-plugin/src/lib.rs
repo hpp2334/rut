@@ -34,7 +34,7 @@ struct EventBus {
 pub struct Plugin {
     vm: Vm,
     bus: Opaque<EventBus>,
-    state: OpaqueRef, // rut's `Moderator`, opaque to us
+    state: OpaqueRef,               // rut's `Moderator`, opaque to us
     table: HashMap<String, String>, // subscription snapshot from `init`
 }
 
@@ -81,7 +81,13 @@ impl Plugin {
         if !compiled.graph.diags.is_empty() {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"),
+                compiled
+                    .graph
+                    .diags
+                    .iter()
+                    .map(|d| d.msg.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
             ));
         }
         rut_vm::verify::verify(compiled.graph.program.as_ref().expect("checked above"))
@@ -98,11 +104,21 @@ impl Plugin {
         // the handshake: bus in, state out
         let bus = Opaque::alloc(
             &mut vm,
-            EventBus { subscriptions: HashMap::new(), lines: Vec::new(), emits: 0, renders: 0 },
+            EventBus {
+                subscriptions: HashMap::new(),
+                lines: Vec::new(),
+                emits: 0,
+                renders: 0,
+            },
         )?;
         let state: OpaqueRef = vm.call("init", (bus.handle().clone(),))?;
         let table = bus.with(|b| b.subscriptions.clone())?;
-        Ok(Plugin { vm, bus, state, table })
+        Ok(Plugin {
+            vm,
+            bus,
+            state,
+            table,
+        })
     }
 
     /// Dispatch one event to its subscribed rut handler. Unknown topics
@@ -120,10 +136,7 @@ impl Plugin {
     }
     fn dispatch1<A: CallArg>(&mut self, topic: &str, arg: A) -> Result<(), Trap> {
         match self.table.get(topic).cloned() {
-            Some(handler) => {
-                self.vm
-                    .call::<_, ()>(&handler, (self.state.clone(), arg))
-            }
+            Some(handler) => self.vm.call::<_, ()>(&handler, (self.state.clone(), arg)),
             None => {
                 println!("[server] no handler for `{topic}` — dropped");
                 Ok(())
@@ -178,13 +191,17 @@ impl Plugin {
 
     /// Everything the plugin emitted, in order.
     pub fn transcript(&self) -> Vec<String> {
-        self.bus.with(|b| b.lines.clone()).expect("bus free after calls return")
+        self.bus
+            .with(|b| b.lines.clone())
+            .expect("bus free after calls return")
     }
 
     /// `(emits, nested renders)` — equal counts prove every line crossed
     /// the re-entrant call.
     pub fn stats(&self) -> (u64, u64) {
-        self.bus.with(|b| (b.emits, b.renders)).expect("bus free after calls return")
+        self.bus
+            .with(|b| (b.emits, b.renders))
+            .expect("bus free after calls return")
     }
 }
 

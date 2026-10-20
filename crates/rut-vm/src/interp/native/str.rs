@@ -4,7 +4,13 @@
 use super::*;
 
 impl Vm {
-    pub(super) fn call_str_nat(&mut self, nat: Nat, recv: Option<Reg>, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn call_str_nat(
+        &mut self,
+        nat: Nat,
+        recv: Option<Reg>,
+        args: &[Reg],
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         match nat {
             Nat::Str => {
                 let v = self.reg(args[0]);
@@ -69,8 +75,10 @@ impl Vm {
                     {
                         // one growth decision for ALL parts, then cheap
                         // appends — the amortized O(1) accumulator path
-                        let total: usize =
-                            args[1..].iter().map(|a| cell_of(self.reg(*a)).as_bytes().len()).sum();
+                        let total: usize = args[1..]
+                            .iter()
+                            .map(|a| cell_of(self.reg(*a)).as_bytes().len())
+                            .sum();
                         self.heap.reserve_append(target, total)?;
                         for a in &args[1..] {
                             let extra = cell_of(self.reg(*a)).as_bytes();
@@ -80,7 +88,10 @@ impl Vm {
                     }
                 }
                 // size once — the parts' byte lengths are all known
-                let total: usize = args.iter().map(|a| cell_of(self.reg(*a)).as_bytes().len()).sum();
+                let total: usize = args
+                    .iter()
+                    .map(|a| cell_of(self.reg(*a)).as_bytes().len())
+                    .sum();
                 let mut out = Vec::with_capacity(total);
                 for a in args {
                     out.extend_from_slice(cell_of(self.reg(*a)).as_bytes());
@@ -122,14 +133,23 @@ impl Vm {
                 // for the whole native call
                 let tcell = cell_of(self.reg(args[1]));
                 let (tblock, tlen) = match &tcell.data {
-                    CellData::Array { items, .. } if matches!(items.borrow().kind, crate::heap::ArrKind::U8) => {
+                    CellData::Array { items, .. }
+                        if matches!(items.borrow().kind, crate::heap::ArrKind::U8) =>
+                    {
                         let d = items.borrow();
                         (d.block, d.len as usize)
                     }
-                    _ => return Err(Trap::new(TrapKind::Invalid, "scan: class table must be `[u8]`")),
+                    _ => {
+                        return Err(Trap::new(
+                            TrapKind::Invalid,
+                            "scan: class table must be `[u8]`",
+                        ))
+                    }
                 };
                 let class_of = |cp: usize| -> u8 {
-                    if tlen == 0 { return 0; }
+                    if tlen == 0 {
+                        return 0;
+                    }
                     unsafe { *tblock.add(cp.min(tlen - 1)) }
                 };
                 let mut res: i64 = (clen) << 8; // end of input: (len, 0)
@@ -180,7 +200,10 @@ impl Vm {
                 }
                 let hcell = cell_of(self.reg(args[1]));
                 if !matches!(&hcell.data, CellData::Str(_) | CellData::StrView { .. }) {
-                    return Err(Trap::new(TrapKind::Invalid, "starts_with: head must be a string"));
+                    return Err(Trap::new(
+                        TrapKind::Invalid,
+                        "starts_with: head must be a string",
+                    ));
                 }
                 let head = hcell.as_str();
                 let text = scell.as_str();
@@ -190,7 +213,10 @@ impl Vm {
                     let st = from as usize;
                     st + h.len() <= b.len() && &b[st..st + h.len()] == h
                 } else {
-                    text.chars().skip(from as usize).take(head.chars().count()).eq(head.chars())
+                    text.chars()
+                        .skip(from as usize)
+                        .take(head.chars().count())
+                        .eq(head.chars())
                 };
                 if let Some(d) = dst {
                     self.cur_regs[d as usize] = Slot::bool(ok);
@@ -235,8 +261,14 @@ impl Vm {
                 } else {
                     let text = cell.as_str();
                     (
-                        text.char_indices().nth(from as usize).map(|(k, _)| k).unwrap_or(text.len()),
-                        text.char_indices().nth(to as usize).map(|(k, _)| k).unwrap_or(text.len()),
+                        text.char_indices()
+                            .nth(from as usize)
+                            .map(|(k, _)| k)
+                            .unwrap_or(text.len()),
+                        text.char_indices()
+                            .nth(to as usize)
+                            .map(|(k, _)| k)
+                            .unwrap_or(text.len()),
                     )
                 };
                 let c = self.heap.alloc_str_view(
@@ -288,7 +320,11 @@ impl Vm {
         match self.prog.types.kind(ty) {
             TyKind::Prim(PrimTy::F32) => Ok(format!("{}", unsafe { v.f } as f32)),
             TyKind::Prim(PrimTy::F64) => Ok(format!("{}", unsafe { v.f })),
-            TyKind::Prim(PrimTy::Bool) => Ok(if v.as_bool() { "true".into() } else { "false".into() }),
+            TyKind::Prim(PrimTy::Bool) => Ok(if v.as_bool() {
+                "true".into()
+            } else {
+                "false".into()
+            }),
             TyKind::Prim(p) => Ok(match p {
                 // unsigned widths must format unsigned — the slot is an i64,
                 // so a u64 with bit 63 set would otherwise print negative

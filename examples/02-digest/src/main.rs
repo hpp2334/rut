@@ -96,8 +96,6 @@ fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
     vm.call("sdbm", (data.to_vec(),)).unwrap()
 }
 
-
-
 /// The embedder's ENTIRE load half — the Loader door. The project is
 /// this directory; the remote policy is the project-local cache WITH
 /// the wire armed (`online_local` — the explicit opt-in: a loader may
@@ -129,7 +127,8 @@ fn main() {
     // into the toolchain tree), the walk mounts exactly the declared
     // closure — then the chain (the core prelude auto-rides; no hand
     // offers), verify, drive
-    let loaded = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
+    let loaded =
+        load(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
     let compiled = loaded
         .pkgs
         .iter()
@@ -160,7 +159,11 @@ fn main() {
     // ---- hex + base64 read-back -------------------------------------
     let msg = b"rut!";
     println!("hex({msg:?}) = {}", rut_hex_enc(&mut vm, msg));
-    for (data, url) in [(b"foobar" as &[u8], false), (b"foobar" as &[u8], true), (b"ru" as &[u8], false)] {
+    for (data, url) in [
+        (b"foobar" as &[u8], false),
+        (b"foobar" as &[u8], true),
+        (b"ru" as &[u8], false),
+    ] {
         let rut = rut_b64_enc(&mut vm, data, url);
         let want = if url {
             base64::engine::general_purpose::URL_SAFE.encode(data)
@@ -191,7 +194,12 @@ fn main() {
             let (got, _err): (Vec<u8>, String) = vm.call("digest", (algo, data.clone())).unwrap();
             let ok = hex(&got) == want;
             all_ok &= ok;
-            println!("  {algo:<7} {label:<13} fuel {:>7}  {}  {}", vm.fuel_used - before, hex(&got), verdict(ok));
+            println!(
+                "  {algo:<7} {label:<13} fuel {:>7}  {}  {}",
+                vm.fuel_used - before,
+                hex(&got),
+                verdict(ok)
+            );
         }
     }
 
@@ -199,27 +207,47 @@ fn main() {
     let doc: rut_vm::OpaqueRef = vm.call("sample_doc", ()).unwrap();
     let json_text: String = vm.call("json_enc", (doc,)).unwrap();
     println!("sample_doc -> {json_text}");
-    println!("serde_json parses it: {}", verdict(serde_json::from_str::<serde_json::Value>(&json_text).is_ok()));
+    println!(
+        "serde_json parses it: {}",
+        verdict(serde_json::from_str::<serde_json::Value>(&json_text).is_ok())
+    );
     let data = json_text.as_bytes();
     println!("hash keys over that JSON text:");
     let rows: Vec<(&str, u64, u64)> = vec![
-        ("crc32", u64::from(rut_crc32(&mut vm, data)), crc32fast::hash(data) as u64),
-        ("fnv1a32", u64::from(rut_fnv1a32(&mut vm, data)), fnv1a32(data) as u64),
+        (
+            "crc32",
+            u64::from(rut_crc32(&mut vm, data)),
+            crc32fast::hash(data) as u64,
+        ),
+        (
+            "fnv1a32",
+            u64::from(rut_fnv1a32(&mut vm, data)),
+            fnv1a32(data) as u64,
+        ),
         ("fnv1a64", rut_fnv1a64(&mut vm, data), fnv1a64(data)),
         ("djb2", rut_djb2(&mut vm, data), djb2(data)),
         ("sdbm", rut_sdbm(&mut vm, data), sdbm(data)),
     ];
-    let wide = rows.iter().any(|(n, _, _)| *n != "crc32" && *n != "fnv1a32");
+    let wide = rows
+        .iter()
+        .any(|(n, _, _)| *n != "crc32" && *n != "fnv1a32");
     for (name, got, want) in rows {
         all_ok &= got == want;
-        let fmt = |x: u64| if wide && name != "crc32" && name != "fnv1a32" { format!("{x:016x}") } else { format!("{x:08x}") };
+        let fmt = |x: u64| {
+            if wide && name != "crc32" && name != "fnv1a32" {
+                format!("{x:016x}")
+            } else {
+                format!("{x:08x}")
+            }
+        };
         println!("  {name:<7} {}  {}", fmt(got), verdict(got == want));
     }
 
     // ---- JSON round-trip --------------------------------------------
     let tricky = r#"{"a":[1,2.5,-3e2],"s":"quote \" back \\ nl \n end","n":null,"t":true,"f":false,"o":{"x":[]}}"#;
     let (rt, _err): (String, String) = vm.call("json_roundtrip", (tricky,)).unwrap();
-    let equal = serde_json::from_str::<serde_json::Value>(&rt).unwrap() == serde_json::from_str::<serde_json::Value>(tricky).unwrap();
+    let equal = serde_json::from_str::<serde_json::Value>(&rt).unwrap()
+        == serde_json::from_str::<serde_json::Value>(tricky).unwrap();
     all_ok &= equal;
     println!("json_roundtrip(tricky) = {rt}");
     println!("  semantically equal to serde_json: {}", verdict(equal));
@@ -233,17 +261,28 @@ fn main() {
     // failure leg is (None, why), the success leg (Some(doc), "") — the
     // nil-flattened decode, pinned by this demo
     let (o, err): (Option<rut_vm::OpaqueRef>, String) = vm.call("json_dec", ("{,}",)).unwrap();
-    assert!(o.is_none() && !err.is_empty(), "a failed json_dec is (nil, why)");
+    assert!(
+        o.is_none() && !err.is_empty(),
+        "a failed json_dec is (nil, why)"
+    );
     println!("json_dec(\"{{,}}\") = {err:?}");
-    let (o, err): (Option<rut_vm::OpaqueRef>, String) = vm.call("json_dec", (r#"{"a":1}"#,)).unwrap();
-    assert!(o.is_some() && err.is_empty(), "a good json_dec is (Some, \"\") — exactly-one-non-nil");
+    let (o, err): (Option<rut_vm::OpaqueRef>, String) =
+        vm.call("json_dec", (r#"{"a":1}"#,)).unwrap();
+    assert!(
+        o.is_some() && err.is_empty(),
+        "a good json_dec is (Some, \"\") — exactly-one-non-nil"
+    );
     println!("json_dec(\"{{\\\"a\\\":1}}\") = ok ({})", err.is_empty());
 
     println!("fuel used: {} of {:?}", vm.fuel_used, Some(50_000_000u64));
 }
 
 fn verdict(ok: bool) -> &'static str {
-    if ok { "OK" } else { "MISMATCH" }
+    if ok {
+        "OK"
+    } else {
+        "MISMATCH"
+    }
 }
 
 /// deterministic LCG bytes — the same generator `fill` uses in 01-sort

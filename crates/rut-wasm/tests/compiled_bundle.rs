@@ -42,7 +42,10 @@ fn compiled_bundle_mounts_from_bytes_and_runs() {
     // the root and its dep mounted as compiled bodies — decoded
     // programs, not sources. The dep group mounts under its content
     // identity, so the lookup goes by the bare name half
-    assert!(matches!(loaded.pkg("app").unwrap().body, rut_driver::MountedBody::Compiled(_)));
+    assert!(matches!(
+        loaded.pkg("app").unwrap().body,
+        rut_driver::MountedBody::Compiled(_)
+    ));
     let lib = loaded
         .pkgs
         .iter()
@@ -67,7 +70,12 @@ fn compiled_bundle_mounts_from_bytes_and_runs() {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     assert_eq!(vm.call::<_, i64>("main", ()).expect("run"), 4);
 }

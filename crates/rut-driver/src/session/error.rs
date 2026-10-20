@@ -9,7 +9,9 @@ use thiserror::Error;
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum ResolveError {
     /// not `[a-zA-Z0-9_]+`
-    #[error("malformed package name `{spec}` — package names are bare `[a-zA-Z0-9_]+` identifiers")]
+    #[error(
+        "malformed package name `{spec}` — package names are bare `[a-zA-Z0-9_]+` identifiers"
+    )]
     BadSpec { spec: String },
     /// no module with that exact name is mounted
     #[error("cannot resolve `{spec}` — no module with that name is mounted; declare it in your `rut.jsonc` `deps`")]
@@ -23,7 +25,11 @@ pub enum ResolveError {
          a bare use head is ambiguous under coexistence — mount one of them under its bare name \
          or bind through the bundle's scope ledger"
     )]
-    Ambiguous { spec: String, n: usize, list: String },
+    Ambiguous {
+        spec: String,
+        n: usize,
+        list: String,
+    },
     /// D5: the name IS mounted — the closure pulled it in — but the
     /// CONSUMER does not declare it. Nameability is declaration-scoped:
     /// a pkg may `use` exactly the heads its own manifest names (`deps`
@@ -70,4 +76,3 @@ impl ResolveError {
         }
     }
 }
-

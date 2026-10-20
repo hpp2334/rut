@@ -2,8 +2,8 @@
 //! prints back in its positional spelling — never as the desugared
 //! braced body — reparses clean, and is idempotent.
 
-use rut_parser::Mode;
 use rut_fmt::format;
+use rut_parser::Mode;
 
 fn fmt(src: &str) -> String {
     let out = format(src, Mode::Impl, &rut_fmt::Style::default()).expect("formats");
@@ -17,7 +17,10 @@ fn positional_decl_prints_back_positional() {
         out.contains("class JsonI64(i64);"),
         "the positional spelling survives: {out:?}"
     );
-    assert!(!out.contains("{ inner"), "never the desugared body: {out:?}");
+    assert!(
+        !out.contains("{ inner"),
+        "never the desugared body: {out:?}"
+    );
 }
 
 #[test]

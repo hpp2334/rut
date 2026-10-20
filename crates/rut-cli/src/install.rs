@@ -75,8 +75,7 @@ pub(crate) fn progress_loop(
             }
             None => {
                 eprintln!("{cmd}: {spec} — downloading {url}");
-                let bytes =
-                    cache::block_on(remote.fetch(url)).map_err(|e| e.to_string())?;
+                let bytes = cache::block_on(remote.fetch(url)).map_err(|e| e.to_string())?;
                 eprintln!("{cmd}: {spec} — downloaded ({} bytes)", bytes.len());
                 out.downloaded += 1;
                 bytes
@@ -156,15 +155,27 @@ fn install_plain(p: &Path) {
         .and_then(|t| rut_driver::parse_lock(&t).ok())
         .map(|l| l.deps().to_vec())
         .unwrap_or_default();
-    let old_shas: BTreeMap<&str, &str> =
-        old.iter().map(|r| (r.url.as_str(), r.sha256.as_str())).collect();
+    let old_shas: BTreeMap<&str, &str> = old
+        .iter()
+        .map(|r| (r.url.as_str(), r.sha256.as_str()))
+        .collect();
     let new_urls: BTreeSet<&str> = rows.iter().map(|r| r.url.as_str()).collect();
-    let added = rows.iter().filter(|r| !old_shas.contains_key(r.url.as_str())).count();
+    let added = rows
+        .iter()
+        .filter(|r| !old_shas.contains_key(r.url.as_str()))
+        .count();
     let changed = rows
         .iter()
-        .filter(|r| old_shas.get(r.url.as_str()).is_some_and(|sha| *sha != r.sha256))
+        .filter(|r| {
+            old_shas
+                .get(r.url.as_str())
+                .is_some_and(|sha| *sha != r.sha256)
+        })
         .count();
-    let dropped = old.iter().filter(|r| !new_urls.contains(r.url.as_str())).count();
+    let dropped = old
+        .iter()
+        .filter(|r| !new_urls.contains(r.url.as_str()))
+        .count();
     if !old.is_empty() && added + changed + dropped == 0 {
         println!("rut.lock unchanged ({} rows, no drift)", rows.len());
         return;
@@ -215,7 +226,10 @@ fn install_locked(p: &Path) {
             return;
         }
         Err(_) => {
-            eprintln!("install: no rut.lock in {} — run `rut install` first", p.display());
+            eprintln!(
+                "install: no rut.lock in {} — run `rut install` first",
+                p.display()
+            );
             std::process::exit(2);
         }
     };

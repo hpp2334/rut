@@ -74,11 +74,18 @@ fn pack_a_host_dir_and_run_refuses_it() {
 fn pack_strip_refuses_on_a_host_root() {
     let root = host_world("clistrip");
     let out = Command::new(rut())
-        .args(["pack", root.join("logger_host").to_str().unwrap(), "--strip"])
+        .args([
+            "pack",
+            root.join("logger_host").to_str().unwrap(),
+            "--strip",
+        ])
         .output()
         .expect("run rut pack --strip");
     assert!(!out.status.success(), "--strip has nothing to strip");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("no symbols to strip"), "{stderr}");
-    assert!(!root.join("logger_host.rutsym").exists(), "no sidecar is written");
+    assert!(
+        !root.join("logger_host.rutsym").exists(),
+        "no sidecar is written"
+    );
 }

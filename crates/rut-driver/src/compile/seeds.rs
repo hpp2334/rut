@@ -39,4 +39,3 @@ impl<'a> Seeds<'a> {
         Seeds { groups: &[] }
     }
 }
-

@@ -12,15 +12,15 @@ pub mod program;
 pub mod seeds;
 
 pub use dump::ir_dump_of;
-pub use program::{compile_program, compile_program_resolved, compile_program_pre, ProgramOutput};
+pub use program::{compile_program, compile_program_pre, compile_program_resolved, ProgramOutput};
 pub use seeds::{SeedGroup, Seeds};
 
+use rut_ast::dump as ast_dump;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
-use rut_ast::dump as ast_dump;
 use rut_parser::{parse, Mode};
 
-use crate::run::{Compiled, RutRun, RunError};
+use crate::run::{Compiled, RunError, RutRun};
 pub use crate::session::Mounted;
 use rut_core::binary::encode;
 
@@ -46,7 +46,13 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     let ast_dump = ast_dump::render_text(&tree, src);
     let ast_json = ast_dump::render_json(&tree);
     if !diags.is_empty() {
-        return CompileOutput { diags, ast_dump, ast_json, ir_dump: String::new(), binary: None };
+        return CompileOutput {
+            diags,
+            ast_dump,
+            ast_json,
+            ir_dump: String::new(),
+            binary: None,
+        };
     }
     let compiled: Result<Compiled, RunError> = RutRun::new()
         .pkg(Mounted::source(module_name, src))
@@ -58,7 +64,11 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
 /// The chain product → the demo envelope: compile diags ride the
 /// graph; shape/closure refusals come back as one span-0 diagnostic
 /// (the envelope has no other channel).
-fn render(compiled: Result<Compiled, RunError>, ast_dump: String, ast_json: String) -> CompileOutput {
+fn render(
+    compiled: Result<Compiled, RunError>,
+    ast_dump: String,
+    ast_json: String,
+) -> CompileOutput {
     match compiled {
         Ok(c) => {
             let ir_dump = c
@@ -68,7 +78,13 @@ fn render(compiled: Result<Compiled, RunError>, ast_dump: String, ast_json: Stri
                 .map(|p| ir_dump_of(&p.funcs, &p.interner))
                 .unwrap_or_default();
             let binary = c.graph.program.map(|p| encode(&p));
-            CompileOutput { diags: c.graph.diags, ast_dump, ast_json, ir_dump, binary }
+            CompileOutput {
+                diags: c.graph.diags,
+                ast_dump,
+                ast_json,
+                ir_dump,
+                binary,
+            }
         }
         Err(e) => CompileOutput {
             diags: vec![Diag::new(Span::new(0, 0), e.msg)],

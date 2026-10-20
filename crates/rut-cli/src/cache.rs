@@ -144,7 +144,10 @@ pub(crate) fn load_offline(path: &std::path::Path) -> Result<rut_driver::Walk, S
 fn run_cache_entry(dir: &std::path::Path, key: &str) -> PathBuf {
     match std::env::var_os("RUT_CACHE_DIR") {
         Some(root) => PathBuf::from(root).join(format!("{key}.rutbundle")),
-        None => dir.join(".rut").join("cache").join(format!("{key}.rutbundle")),
+        None => dir
+            .join(".rut")
+            .join("cache")
+            .join(format!("{key}.rutbundle")),
     }
 }
 
@@ -155,10 +158,7 @@ fn run_cache_entry(dir: &std::path::Path, key: &str) -> PathBuf {
 /// Framing: every field rides length-prefixed into one buffer, hashed
 /// once through the driver's `sha256_hex` (public exactly so a call
 /// site keys its cache without a sha2 dependency of its own).
-fn run_cache_key(
-    dir: &std::path::Path,
-    resolved: &mut bool,
-) -> Result<String, String> {
+fn run_cache_key(dir: &std::path::Path, resolved: &mut bool) -> Result<String, String> {
     let mut buf: Vec<u8> = Vec::new();
     // the toolchain version: the compiler's behavior is part of the key
     field(&mut buf, b"rut-run-cache-v1");
@@ -203,8 +203,8 @@ fn hash_closure(
     let label = canonical.to_string_lossy();
     // the manifest — the closure's grammar and the dep table's source
     let manifest_path = canonical.join("rut.jsonc");
-    let manifest_bytes = std::fs::read(&manifest_path)
-        .map_err(|e| format!("{}: {e}", manifest_path.display()))?;
+    let manifest_bytes =
+        std::fs::read(&manifest_path).map_err(|e| format!("{}: {e}", manifest_path.display()))?;
     field(buf, b"dir");
     field(buf, label.as_bytes());
     field(buf, b"manifest");
@@ -272,10 +272,7 @@ fn hash_closure(
 
 /// Every file under `dir`, recursively; dot entries (`.rut/`, `.git`)
 /// are the cache and tooling's own — not the closure.
-fn collect_files(
-    dir: &std::path::Path,
-    out: &mut Vec<PathBuf>,
-) -> Result<(), String> {
+fn collect_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -303,9 +300,7 @@ fn collect_files(
 /// no entry is ever written under one. Reads tolerate the absence: the
 /// hit lane mounts only a fully-keyed entry, and the temp+rename write
 /// means a reader never sees a partial one.
-pub(crate) fn run_cache_path(
-    dir: &std::path::Path,
-) -> Result<Option<std::path::PathBuf>, String> {
+pub(crate) fn run_cache_path(dir: &std::path::Path) -> Result<Option<std::path::PathBuf>, String> {
     let mut resolved = true;
     let key = run_cache_key(dir, &mut resolved)?;
     if !resolved {
@@ -322,7 +317,10 @@ pub(crate) fn store_run_cache(entry: &std::path::Path, bytes: &[u8]) {
     }
     let tmp = parent.join(format!(
         ".{}.tmp",
-        entry.file_name().and_then(|n| n.to_str()).unwrap_or("entry")
+        entry
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("entry")
     ));
     if std::fs::write(&tmp, bytes).is_ok() && std::fs::rename(&tmp, entry).is_err() {
         let _ = std::fs::remove_file(&tmp);

@@ -22,9 +22,9 @@
 
 use std::path::Path;
 
-use rut_driver::{MountedBody, HostRow};
-use rut_native::{load_path_session, pack_dir};
 use rut_core::types::{TY_BOOL, TY_OPAQUE, TY_STR};
+use rut_driver::{HostRow, MountedBody};
+use rut_native::{load_path_session, pack_dir};
 
 const MYHOST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/myhost");
 
@@ -69,13 +69,18 @@ fn tree_world(tag: &str) -> std::path::PathBuf {
                 "net/mod.d.rut",
                 "pub mod tls;\npub host fn connect(url: str) -> opaque;\n",
             ),
-            ("net/tls/mod.d.rut", "pub host fn handshake(c: opaque) -> opaque;\n"),
+            (
+                "net/tls/mod.d.rut",
+                "pub host fn handshake(c: opaque) -> opaque;\n",
+            ),
         ],
     )
 }
 
 fn rows_of(pkg: &rut_driver::Mounted) -> Vec<HostRow> {
-    let MountedBody::Host { host_funcs, .. } = &pkg.body else { panic!("a host body") };
+    let MountedBody::Host { host_funcs, .. } = &pkg.body else {
+        panic!("a host body")
+    };
     host_funcs.clone()
 }
 
@@ -95,9 +100,27 @@ fn the_target_shape_loads_with_path_carrying_rows() {
     assert_eq!(
         rows_of(m),
         vec![
-            HostRow { path: String::new(), name: "legacy_ping".into(), params: vec![], ret: TY_BOOL, is_async: false },
-            HostRow { path: "net".into(), name: "connect".into(), params: vec![TY_STR], ret: TY_OPAQUE, is_async: false },
-            HostRow { path: "net/tls".into(), name: "handshake".into(), params: vec![TY_OPAQUE], ret: TY_OPAQUE, is_async: false },
+            HostRow {
+                path: String::new(),
+                name: "legacy_ping".into(),
+                params: vec![],
+                ret: TY_BOOL,
+                is_async: false
+            },
+            HostRow {
+                path: "net".into(),
+                name: "connect".into(),
+                params: vec![TY_STR],
+                ret: TY_OPAQUE,
+                is_async: false
+            },
+            HostRow {
+                path: "net/tls".into(),
+                name: "handshake".into(),
+                params: vec![TY_OPAQUE],
+                ret: TY_OPAQUE,
+                is_async: false
+            },
         ],
     );
     // the registration strings: flat at the root, path-qualified under
@@ -117,7 +140,10 @@ fn a_declared_child_without_its_file_is_the_loud_error() {
         &scratch("missing"),
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
-            ("myhost.d.rut", "pub mod net;\npub host fn legacy_ping() -> bool;\n"),
+            (
+                "myhost.d.rut",
+                "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            ),
         ],
     );
     let err = load_path_session(&dir).unwrap_err().to_string();
@@ -130,8 +156,14 @@ fn a_declared_child_without_its_file_is_the_loud_error() {
         &scratch("missing-nested"),
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
-            ("myhost.d.rut", "pub mod net;\npub host fn legacy_ping() -> bool;\n"),
-            ("net/mod.d.rut", "pub mod tls;\npub host fn connect(url: str) -> opaque;\n"),
+            (
+                "myhost.d.rut",
+                "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            ),
+            (
+                "net/mod.d.rut",
+                "pub mod tls;\npub host fn connect(url: str) -> opaque;\n",
+            ),
         ],
     );
     let err = load_path_session(&dir).unwrap_err().to_string();
@@ -141,12 +173,9 @@ fn a_declared_child_without_its_file_is_the_loud_error() {
     // with the declarations errors the same way (the loader's mount is
     // not the only loud door — a hand-off is named, never guessed)
     let children = std::collections::BTreeMap::new();
-    let err = rut_driver::lower_decl_module(
-        "pub mod net;\npub host fn f();\n",
-        &children,
-        "root.d.rut",
-    )
-    .unwrap_err();
+    let err =
+        rut_driver::lower_decl_module("pub mod net;\npub host fn f();\n", &children, "root.d.rut")
+            .unwrap_err();
     assert!(err.contains("`mod net;` in root.d.rut"), "{err}");
     assert!(err.contains("no `net` module is mounted"), "{err}");
 }
@@ -160,7 +189,10 @@ fn a_child_that_does_not_parse_is_loud_too() {
         &scratch("broken-child"),
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
-            ("myhost.d.rut", "pub mod net;\npub host fn legacy_ping() -> bool;\n"),
+            (
+                "myhost.d.rut",
+                "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            ),
             ("net/mod.d.rut", "pub host fn broken( {{\n"),
         ],
     );
@@ -188,8 +220,15 @@ fn first_mount_wins_and_flat_rows_stay_in_declaration_order() {
     let m = loaded.pkg("myhost").unwrap();
     assert_eq!(m.mods.keys().collect::<Vec<_>>(), vec!["net"], "one mount");
     assert_eq!(
-        rows_of(m).iter().map(|r| r.full_name("myhost")).collect::<Vec<_>>(),
-        vec!["myhost::legacy_ping", "myhost::second", "myhost::net::connect"],
+        rows_of(m)
+            .iter()
+            .map(|r| r.full_name("myhost"))
+            .collect::<Vec<_>>(),
+        vec![
+            "myhost::legacy_ping",
+            "myhost::second",
+            "myhost::net::connect"
+        ],
         "root rows first (declaration order), then the tree's"
     );
 }
@@ -206,10 +245,7 @@ fn an_async_row_family_expands_path_qualified() {
                 "fixture.d.rut",
                 "pub mod net;\npub host fn sync_row(x: str) -> nil;\n",
             ),
-            (
-                "net/mod.d.rut",
-                "pub host async fn probe(k: str) -> i64;\n",
-            ),
+            ("net/mod.d.rut", "pub host async fn probe(k: str) -> i64;\n"),
         ],
     );
     let loaded = load_path_session(&dir).expect("loads");
@@ -218,9 +254,15 @@ fn an_async_row_family_expands_path_qualified() {
     // the root row stays bare; the tree row's family is path-qualified
     assert!(rows.contains_key("sync_row"));
     for suffix in ["", "__start", "__yield", "__take", "__cancel"] {
-        assert!(rows.contains_key(&format!("net::probe{suffix}")), "net::probe{suffix}");
+        assert!(
+            rows.contains_key(&format!("net::probe{suffix}")),
+            "net::probe{suffix}"
+        );
     }
-    assert!(!rows.contains_key("probe__start"), "the family never lands on the bare name");
+    assert!(
+        !rows.contains_key("probe__start"),
+        "the family never lands on the bare name"
+    );
     let flat = rut_driver::declared_host_fns(&loaded.pkgs);
     for suffix in ["", "__start", "__yield", "__take", "__cancel"] {
         assert!(flat.contains_key(&format!("fixture::net::probe{suffix}")));
@@ -234,8 +276,8 @@ fn the_registration_contract_speaks_the_path_spelling() {
     // spelling, the mount table's keys are the same rows — the install
     // joins them row for row (a missing one would panic here), and a
     // consumer's FLAT use of a root row still binds (flat compatibility)
-    use rut_vm::HostPkg;
     use rut_vm::interp::Vm;
+    use rut_vm::HostPkg;
     let dir = make_pkg(
         &scratch("register"),
         &[
@@ -248,7 +290,10 @@ fn the_registration_contract_speaks_the_path_spelling() {
                 "net/mod.d.rut",
                 "pub mod tls;\npub host fn connect(url: str) -> i64;\n",
             ),
-            ("net/tls/mod.d.rut", "pub host fn handshake(c: i64) -> i64;\n"),
+            (
+                "net/tls/mod.d.rut",
+                "pub host fn handshake(c: i64) -> i64;\n",
+            ),
         ],
     );
     let loaded = load_path_session(&dir).expect("loads");
@@ -272,7 +317,11 @@ fn the_registration_contract_speaks_the_path_spelling() {
         .entrypoint("app")
         .compile()
         .expect("the installer joins the path-qualified rows");
-    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
 }
 
 #[test]
@@ -303,7 +352,13 @@ fn flat_host_pkgs_pack_byte_identically() {
     assert!(m.mods.is_empty());
     assert_eq!(
         rows_of(m),
-        vec![HostRow { path: String::new(), name: "ping".into(), params: vec![], ret: TY_BOOL, is_async: false }],
+        vec![HostRow {
+            path: String::new(),
+            name: "ping".into(),
+            params: vec![],
+            ret: TY_BOOL,
+            is_async: false
+        }],
     );
 }
 
@@ -324,13 +379,27 @@ fn a_host_tree_packs_into_the_rows_envelope_and_loads_back() {
     );
     let entry = bundle.read("mod.d.rut").unwrap();
     assert!(entry.contains("mod net {"), "the inline form: {entry}");
-    assert!(entry.contains("mod tls {"), "the nesting splices recursively: {entry}");
+    assert!(
+        entry.contains("mod tls {"),
+        "the nesting splices recursively: {entry}"
+    );
     let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let m = loaded.pkg("myhost").unwrap();
-    assert!(m.mods.is_empty(), "the tree lives in the grammar: {:?}", m.mods.keys().collect::<Vec<_>>());
+    assert!(
+        m.mods.is_empty(),
+        "the tree lives in the grammar: {:?}",
+        m.mods.keys().collect::<Vec<_>>()
+    );
     assert_eq!(
-        rows_of(m).iter().map(|r| r.full_name("myhost")).collect::<Vec<_>>(),
-        vec!["myhost::legacy_ping", "myhost::net::connect", "myhost::net::tls::handshake"],
+        rows_of(m)
+            .iter()
+            .map(|r| r.full_name("myhost"))
+            .collect::<Vec<_>>(),
+        vec![
+            "myhost::legacy_ping",
+            "myhost::net::connect",
+            "myhost::net::tls::handshake"
+        ],
     );
     // and the pack is deterministic
     assert_eq!(bytes, pack_dir(&dir).unwrap(), "deterministic");
@@ -360,8 +429,8 @@ fn the_same_leaf_name_in_two_mods_is_legal() {
     assert_eq!(rows[0].params, vec![TY_STR]);
     assert_eq!(rows[1].params, vec![rut_core::types::TY_I64]);
     // and the embedder registers BOTH through the pkg scope
-    use rut_vm::HostPkg;
     use rut_vm::interp::Vm;
+    use rut_vm::HostPkg;
     let mut pkg = HostPkg::new("duo");
     pkg.register::<_, (&str,), i64, _>("a::probe", |_vm: &mut Vm, s: &str| s.len() as i64);
     pkg.register::<_, (i64,), i64, _>("b::probe", |_vm: &mut Vm, k: i64| k + 1);
@@ -381,7 +450,11 @@ fn the_same_leaf_name_in_two_mods_is_legal() {
         .entrypoint("app")
         .compile()
         .expect("both leaves install");
-    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
 }
 
 #[test]
@@ -408,14 +481,21 @@ fn ensure_host_synthesizes_the_path_qualified_surface() {
         .entrypoint("app")
         .compile()
         .expect("compiles");
-    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
     let prog = rut_core::link::flatten(compiled.graph.program.expect("linked"));
     let mut host_rows: Vec<(String, String)> = prog
         .funcs
         .iter()
         .filter_map(|f| {
             let host = f.host_id?;
-            Some((prog.interner.name(f.name).to_string(), prog.interner.name(host).to_string()))
+            Some((
+                prog.interner.name(f.name).to_string(),
+                prog.interner.name(host).to_string(),
+            ))
         })
         .collect();
     host_rows.sort();
@@ -423,8 +503,14 @@ fn ensure_host_synthesizes_the_path_qualified_surface() {
         host_rows,
         vec![
             ("legacy_ping".to_string(), "myhost::legacy_ping".to_string()),
-            ("net::connect".to_string(), "myhost::net::connect".to_string()),
-            ("net::tls::handshake".to_string(), "myhost::net::tls::handshake".to_string()),
+            (
+                "net::connect".to_string(),
+                "myhost::net::connect".to_string()
+            ),
+            (
+                "net::tls::handshake".to_string(),
+                "myhost::net::tls::handshake".to_string()
+            ),
         ],
         "func name = the mod-path spelling (`net::connect`; root rows bare), \
          host id = the registration spelling (`myhost::net::connect`)"
@@ -439,8 +525,14 @@ fn the_host_tree_mount_refuses_a_body_beside_the_manifest() {
         &scratch("body"),
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
-            ("myhost.d.rut", "pub mod net;\npub host fn legacy_ping() -> bool;\n"),
-            ("net/mod.d.rut", "pub host fn connect(url: str) -> opaque;\n"),
+            (
+                "myhost.d.rut",
+                "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            ),
+            (
+                "net/mod.d.rut",
+                "pub host fn connect(url: str) -> opaque;\n",
+            ),
             ("mod.rut", "entry fn main() {}\n"),
         ],
     );
@@ -457,7 +549,10 @@ fn the_lib_surface_law_still_refuses_root_host_rows() {
     let dir = make_pkg(
         &scratch("lib-law"),
         &[
-            ("rut.jsonc", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
+            (
+                "rut.jsonc",
+                r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
+            ),
             ("s.d.rut", "pub host fn ping() -> bool;\n"),
         ],
     );

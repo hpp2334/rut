@@ -9,15 +9,26 @@ use rut_vm::interp::Vm;
 
 /// one diagnostic, its message
 fn one_diag(src: &str) -> String {
-    let d = match rut_driver::RutRun::new().pkg(rut_driver::Mounted::source("app", src)).entrypoint("app").compile() {
+    let d = match rut_driver::RutRun::new()
+        .pkg(rut_driver::Mounted::source("app", src))
+        .entrypoint("app")
+        .compile()
+    {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     };
     let msgs: Vec<String> = d.diags.iter().map(|d| d.msg.clone()).collect();
-    assert_eq!(msgs.len(), 1, "expected exactly one diagnostic, got {msgs:?}");
+    assert_eq!(
+        msgs.len(),
+        1,
+        "expected exactly one diagnostic, got {msgs:?}"
+    );
     msgs[0].clone()
 }
 

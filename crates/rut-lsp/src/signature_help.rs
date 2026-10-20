@@ -52,7 +52,9 @@ pub struct Ctx<'a> {
 pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
     let (open_i, commas) = enclosing_call(ctx.toks, pos)?;
     let head = ctx.toks.get(open_i.checked_sub(1)?)?;
-    let Tok::Ident(name) = &head.tok else { return None };
+    let Tok::Ident(name) = &head.tok else {
+        return None;
+    };
     if crate::semantic::is_keyword(name) {
         return None;
     }
@@ -84,7 +86,11 @@ pub fn signature_help(ctx: &Ctx, pos: u32) -> Option<SignatureHelp> {
         let hits: Vec<&FnDef> = ctx
             .idxs
             .iter()
-            .flat_map(|i| i.fns.iter().filter(|f| f.name == name.as_str() && f.owner.is_none()))
+            .flat_map(|i| {
+                i.fns
+                    .iter()
+                    .filter(|f| f.name == name.as_str() && f.owner.is_none())
+            })
             .collect();
         match hits.as_slice() {
             [one] => (*one, one.params.clone()),
@@ -247,7 +253,10 @@ fn signature_parts(src: &str, params: &[String], is_method: bool) -> Option<(Str
     // names come from the AST, the pieces from the verbatim slice; if
     // they disagree the parse is degenerate and the honest answer is none
     for (name, piece) in params.iter().zip(&pieces) {
-        if !piece.split(|c: char| !c.is_alphanumeric() && c != '_').any(|w| w == name) {
+        if !piece
+            .split(|c: char| !c.is_alphanumeric() && c != '_')
+            .any(|w| w == name)
+        {
             return None;
         }
     }
@@ -289,12 +298,21 @@ mod tests {
         let (ast, _) = parse(&src, Mode::Impl);
         let mut index = crate::hover::index(&src, &ast, &toks);
         index.origin = DOC.to_string();
-        Doc { src, toks, ast, index }
+        Doc {
+            src,
+            toks,
+            ast,
+            index,
+        }
     }
 
     fn help(d: &Doc, pos: u32, extra: &[DefIndex]) -> Option<SignatureHelp> {
         let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
-        let ctx = Ctx { toks: &d.toks, ast: &d.ast, idxs: &idxs };
+        let ctx = Ctx {
+            toks: &d.toks,
+            ast: &d.ast,
+            idxs: &idxs,
+        };
         signature_help(&ctx, pos)
     }
 
@@ -318,10 +336,14 @@ mod tests {
             h.active_parameter,
             sig.parameters
                 .as_ref()
-                .map(|ps| ps.iter().map(|p| match &p.label {
-                    ParameterLabel::Simple(s) => s.clone(),
-                    _ => panic!("label offsets not produced"),
-                }).collect())
+                .map(|ps| {
+                    ps.iter()
+                        .map(|p| match &p.label {
+                            ParameterLabel::Simple(s) => s.clone(),
+                            _ => panic!("label offsets not produced"),
+                        })
+                        .collect()
+                })
                 .unwrap_or_default(),
         )
     }
@@ -361,7 +383,8 @@ mod tests {
     fn zero_param_call_shows_the_signature_without_an_active_slot() {
         let src = "fn mk() -> i32 {\n    return 1;\n}\nfn main() -> i32 {\n    let v = mk();\n    return v;\n}\n";
         let d = doc(&src);
-        let (label, slot, pieces) = slot_of(&help(&d, at(&d.src, "mk(", 1) + 2, &[]).expect("help"));
+        let (label, slot, pieces) =
+            slot_of(&help(&d, at(&d.src, "mk(", 1) + 2, &[]).expect("help"));
         assert_eq!(label, "fn mk() -> i32");
         assert_eq!(slot, None);
         assert!(pieces.is_empty());
@@ -384,7 +407,8 @@ mod tests {
         .join("\n");
         let d = doc(&src);
         // inside the inner call: inner's signature, first slot
-        let (label, slot, _) = slot_of(&help(&d, at(&d.src, "inner(1)", 1) + 6, &[]).expect("help"));
+        let (label, slot, _) =
+            slot_of(&help(&d, at(&d.src, "inner(1)", 1) + 6, &[]).expect("help"));
         assert_eq!(label, "fn inner(a: i32) -> i32");
         assert_eq!(slot, Some(0));
         // after the inner call (on the outer's second arg): outer's

@@ -52,8 +52,14 @@ pub struct EntrySource {
 /// faces never hash URLs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DepSource {
-    Path { dir: String },
-    Url { url: String, sha256: Option<String>, cache_path: String },
+    Path {
+        dir: String,
+    },
+    Url {
+        url: String,
+        sha256: Option<String>,
+        cache_path: String,
+    },
 }
 
 /// One dep row (`deps` / `dev-deps`).
@@ -96,7 +102,10 @@ pub struct DepTable {
 /// The cache path for a url dep — `.rut/cache/<sha256(url)>.rutbundle`,
 /// relative to the workspace root both faces share with the CLI.
 pub fn cache_path(url: &str) -> String {
-    let hex: String = Sha256::digest(url.as_bytes()).iter().map(|b| format!("{b:02x}")).collect();
+    let hex: String = Sha256::digest(url.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     format!(".rut/cache/{hex}.rutbundle")
 }
 
@@ -144,9 +153,7 @@ pub fn dep_table(manifest_text: &str) -> Result<DepTable, String> {
 /// nested path-dep url rows included). Malformed text is the error —
 /// the caller (the server walk) surfaces it as a hint, never silent
 /// pins.
-pub fn lock_pins(
-    lock_text: &str,
-) -> Result<std::collections::BTreeMap<String, String>, String> {
+pub fn lock_pins(lock_text: &str) -> Result<std::collections::BTreeMap<String, String>, String> {
     let lock = rut_driver::parse_lock(lock_text).map_err(|e| e.to_string())?;
     Ok(lock
         .deps()
@@ -164,11 +171,7 @@ pub fn dep_table_pinned(
     pins: &std::collections::BTreeMap<String, String>,
 ) -> Result<DepTable, String> {
     let mut t = dep_table(manifest_text)?;
-    for row in t
-        .deps
-        .iter_mut()
-        .chain(t.dev_deps.iter_mut())
-    {
+    for row in t.deps.iter_mut().chain(t.dev_deps.iter_mut()) {
         if let DepSource::Url { url, sha256, .. } = &mut row.source {
             *sha256 = pins.get(url).cloned();
         }
@@ -188,10 +191,16 @@ pub fn dep_table_compat(manifest_text: &str) -> Result<DepTable, String> {
     if m.legacy_entry.lib.is_some() || !m.legacy_entry.libs.is_empty() {
         t.entries.retain(|e| e.mode != Mode::Impl);
         if let Some(lib) = &m.legacy_entry.lib {
-            t.entries.push(EntrySource { path: bundle_key(lib)?, mode: Mode::Impl });
+            t.entries.push(EntrySource {
+                path: bundle_key(lib)?,
+                mode: Mode::Impl,
+            });
         }
         for lib in &m.legacy_entry.libs {
-            t.entries.push(EntrySource { path: bundle_key(lib)?, mode: Mode::Impl });
+            t.entries.push(EntrySource {
+                path: bundle_key(lib)?,
+                mode: Mode::Impl,
+            });
         }
     }
     Ok(t)
@@ -205,7 +214,10 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     // manifest IS the root (the loader's default-root discovery
     // mirrored) — an unreadable row simply indexes nothing.
     match &m.entry.type_path {
-        Some(ty) => entries.push(EntrySource { path: bundle_key(ty)?, mode: Mode::Decl }),
+        Some(ty) => entries.push(EntrySource {
+            path: bundle_key(ty)?,
+            mode: Mode::Decl,
+        }),
         None if m.pkg_type == rut_driver::bundle::PkgType::Host => {
             entries.push(EntrySource {
                 path: rut_driver::decl::DECL_CHILD_FILE.to_string(),
@@ -220,11 +232,18 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     // mod.rut probed by the callers, and an unreadable row simply
     // indexes nothing (what exists is what mounts).
     if m.pkg_type == rut_driver::bundle::PkgType::Lib {
-        entries.push(EntrySource { path: "mod.rut".to_string(), mode: Mode::Impl });
+        entries.push(EntrySource {
+            path: "mod.rut".to_string(),
+            mode: Mode::Impl,
+        });
     }
-    let rows = |table: &std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>| {
-        table.iter().map(|(name, desc)| dep_row(name, desc)).collect()
-    };
+    let rows =
+        |table: &std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>| {
+            table
+                .iter()
+                .map(|(name, desc)| dep_row(name, desc))
+                .collect()
+        };
     Ok(DepTable {
         name: m.name,
         entries,
@@ -269,7 +288,13 @@ pub struct BundleIndex {
 fn bundle_rows(
     entries: &[(String, Vec<u8>)],
     host: bool,
-) -> Result<Option<(String, std::collections::BTreeMap<String, rut_driver::ModSource>)>, String> {
+) -> Result<
+    Option<(
+        String,
+        std::collections::BTreeMap<String, rut_driver::ModSource>,
+    )>,
+    String,
+> {
     let text = match read_entry(entries, rut_driver::mods::ROWS_NAME) {
         Ok(t) => t,
         Err(_) => return Ok(None),
@@ -317,7 +342,10 @@ fn entry_child_lookup(
         }
         // the single-file entry alone: not a module here — bundles are
         // directory-form (the loud misses name the dir-form fix)
-        if entries.iter().any(|(k, _)| k.starts_with(&format!("{base}{name}/"))) {
+        if entries
+            .iter()
+            .any(|(k, _)| k.starts_with(&format!("{base}{name}/")))
+        {
             return Ok(rut_driver::ChildLookup::NoModRut);
         }
         Ok(rut_driver::ChildLookup::Missing)
@@ -359,7 +387,11 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let mut decl_pushed = false;
     if let Some(e) = table.entries.iter().find(|e| e.mode == Mode::Decl) {
         if let Ok(src) = read_entry(&entries, &e.path) {
-            files.push(BundleFile { path: e.path.clone(), src, mode: e.mode });
+            files.push(BundleFile {
+                path: e.path.clone(),
+                src,
+                mode: e.mode,
+            });
             decl_pushed = true;
         }
     }
@@ -379,68 +411,81 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     // (the entry.type surface) — only its children join here, each a
     // Decl file at `<mod path>/mod.d.rut`; a lib tree's root re-rides
     // as `mod.rut` beside its Impl children.
-    let tree: Option<(Option<BundleFile>, Vec<BundleFile>)> = match bundle_rows(&entries, table.host)? {
-        Some((root_text, mods)) => {
-            let (child_file, mode) = if table.host {
-                (rut_driver::decl::DECL_CHILD_FILE, Mode::Decl)
-            } else {
-                ("mod.rut", Mode::Impl)
-            };
-            let children = mods
-                .into_iter()
-                .map(|(path, m)| BundleFile {
-                    path: format!("{path}/{child_file}"),
-                    src: m.text,
-                    mode,
-                })
-                .collect();
-            if table.host {
-                Some((None, children))
-            } else {
-                Some((
-                    Some(BundleFile { path: "mod.rut".to_string(), src: root_text, mode: Mode::Impl }),
-                    children,
-                ))
-            }
-        }
-        None if table.host => None, // a host surface carries no lib body
-        None => {
-            // the source lane: root = the `mod.rut` entry (the
-            // post-repeal convention), or the OLD envelope's legacy
-            // lib — dep_table_compat mapped it onto the Impl entries
-            let root = match table.entries.iter().find(|e| e.mode == Mode::Impl) {
-                Some(e) => match read_entry(&entries, &e.path) {
-                    Ok(src) => Some(BundleFile { path: e.path.clone(), src, mode: e.mode }),
-                    Err(_) => None,
-                },
-                None => match read_entry(&entries, "mod.rut") {
-                    Ok(src) => Some(BundleFile { path: "mod.rut".to_string(), src, mode: Mode::Impl }),
-                    Err(_) => None,
-                },
-            };
-            match root {
-                Some(root) => {
-                    let mounted = rut_driver::mount_mod_children(
-                        &root.src,
-                        &format!("\u{0}{module}"),
-                        Mode::Impl,
-                        "mod.rut",
-                        &mut entry_child_lookup(&entries),
-                    )?;
-                    let children = mounted
-                        .into_iter()
-                        .map(|(path, m)| BundleFile {
-                            path: format!("{path}/mod.rut"),
-                            src: m.text,
+    let tree: Option<(Option<BundleFile>, Vec<BundleFile>)> =
+        match bundle_rows(&entries, table.host)? {
+            Some((root_text, mods)) => {
+                let (child_file, mode) = if table.host {
+                    (rut_driver::decl::DECL_CHILD_FILE, Mode::Decl)
+                } else {
+                    ("mod.rut", Mode::Impl)
+                };
+                let children = mods
+                    .into_iter()
+                    .map(|(path, m)| BundleFile {
+                        path: format!("{path}/{child_file}"),
+                        src: m.text,
+                        mode,
+                    })
+                    .collect();
+                if table.host {
+                    Some((None, children))
+                } else {
+                    Some((
+                        Some(BundleFile {
+                            path: "mod.rut".to_string(),
+                            src: root_text,
                             mode: Mode::Impl,
-                        })
-                        .collect();
-                    Some((Some(root), children))
+                        }),
+                        children,
+                    ))
                 }
-                None => None,
             }
-        }
-    };
+            None if table.host => None, // a host surface carries no lib body
+            None => {
+                // the source lane: root = the `mod.rut` entry (the
+                // post-repeal convention), or the OLD envelope's legacy
+                // lib — dep_table_compat mapped it onto the Impl entries
+                let root = match table.entries.iter().find(|e| e.mode == Mode::Impl) {
+                    Some(e) => match read_entry(&entries, &e.path) {
+                        Ok(src) => Some(BundleFile {
+                            path: e.path.clone(),
+                            src,
+                            mode: e.mode,
+                        }),
+                        Err(_) => None,
+                    },
+                    None => match read_entry(&entries, "mod.rut") {
+                        Ok(src) => Some(BundleFile {
+                            path: "mod.rut".to_string(),
+                            src,
+                            mode: Mode::Impl,
+                        }),
+                        Err(_) => None,
+                    },
+                };
+                match root {
+                    Some(root) => {
+                        let mounted = rut_driver::mount_mod_children(
+                            &root.src,
+                            &format!("\u{0}{module}"),
+                            Mode::Impl,
+                            "mod.rut",
+                            &mut entry_child_lookup(&entries),
+                        )?;
+                        let children = mounted
+                            .into_iter()
+                            .map(|(path, m)| BundleFile {
+                                path: format!("{path}/mod.rut"),
+                                src: m.text,
+                                mode: Mode::Impl,
+                            })
+                            .collect();
+                        Some((Some(root), children))
+                    }
+                    None => None,
+                }
+            }
+        };
     if let Some((root, children)) = tree {
         if let Some(root) = root {
             files.push(root);
@@ -481,7 +526,11 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
                 continue;
             }
             if let Ok(src) = read_entry(&entries, &e.path) {
-                files.push(BundleFile { path: e.path.clone(), src, mode: e.mode });
+                files.push(BundleFile {
+                    path: e.path.clone(),
+                    src,
+                    mode: e.mode,
+                });
             }
         }
     } else {
@@ -492,11 +541,20 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
                 continue;
             }
             if let Ok(src) = read_entry(&entries, &e.path) {
-                files.push(BundleFile { path: e.path.clone(), src, mode: e.mode });
+                files.push(BundleFile {
+                    path: e.path.clone(),
+                    src,
+                    mode: e.mode,
+                });
             }
         }
     }
-    Ok(BundleIndex { module, namespace: table.namespace, consts: table.consts, files })
+    Ok(BundleIndex {
+        module,
+        namespace: table.namespace,
+        consts: table.consts,
+        files,
+    })
 }
 
 /// The compiled bundle's DECLARATION FACE (v22 — the delivery law's
@@ -596,20 +654,33 @@ fn decl_face(prog: &rut_core::binary::Program) -> String {
         if f.host.is_some() {
             continue;
         }
-        let ps: Vec<String> = f.params.iter().enumerate().map(|(i, &p)| format!("_{}: {}", i, ty(p))).collect();
+        let ps: Vec<String> = f
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, &p)| format!("_{}: {}", i, ty(p)))
+            .collect();
         let ret = if f.ret == TY_NIL {
             String::new()
         } else {
             format!(" -> {}", ty(f.ret))
         };
         let kw = if f.is_async { "pub async fn" } else { "pub fn" };
-        out.push_str(&format!("\n{kw} {}({}){ret} {{ }}\n", name(f.name), ps.join(", ")));
+        out.push_str(&format!(
+            "\n{kw} {}({}){ret} {{ }}\n",
+            name(f.name),
+            ps.join(", ")
+        ));
     }
     // the interfaces, as comments — the surface carries a generics
     // COUNT, not parameter names, so a faithful trait re-spelling is
     // impossible here; the names still document the surface
     for i in &s.ifaces {
-        let ms: Vec<String> = i.methods.iter().map(|m| prog.interner.name(m.name).to_string()).collect();
+        let ms: Vec<String> = i
+            .methods
+            .iter()
+            .map(|m| prog.interner.name(m.name).to_string())
+            .collect();
         out.push_str(&format!(
             "// trait {}<{} generic params>: {}\n",
             prog.interner.name(i.name),
@@ -787,7 +858,12 @@ fn collect_inline_modules(
     out: &mut Vec<(String, Vec<rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>>)>,
 ) {
     for &it in items {
-        let rut_ast::ast::ItemKind::ModInline { name, items: nested, .. } = ast.item(it) else {
+        let rut_ast::ast::ItemKind::ModInline {
+            name,
+            items: nested,
+            ..
+        } = ast.item(it)
+        else {
             continue;
         };
         let name = ast.name(*name).to_string();
@@ -892,7 +968,8 @@ mod tests {
   }
 }"#;
 
-    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle";
+    const POUCH_URL: &str =
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle";
     const POUCH_PIN: &str = "63ddd765287243ef45f23105471ff3eae5c5a0ac1d521a3d22636745fd5e72d8";
 
     #[test]
@@ -904,25 +981,48 @@ mod tests {
         // the body rides the mod.rut convention (the entry keys are repealed)
         assert_eq!(
             t.entries,
-            vec![EntrySource { path: "mod.rut".into(), mode: Mode::Impl }]
+            vec![EntrySource {
+                path: "mod.rut".into(),
+                mode: Mode::Impl
+            }]
         );
         // deps: the path row …
-        let server = t.deps.iter().find(|r| r.name == "server").expect("server row");
-        assert_eq!(server.source, DepSource::Path { dir: "../server".into() });
+        let server = t
+            .deps
+            .iter()
+            .find(|r| r.name == "server")
+            .expect("server row");
+        assert_eq!(
+            server.source,
+            DepSource::Path {
+                dir: "../server".into()
+            }
+        );
         assert!(!server.optional);
         assert!(server.lib.is_none());
         // … and the url row: UNPINNED at parse (sha256 retired from the
         // grammar), the cache path computed here
-        let pouch = t.deps.iter().find(|r| r.name == "pouch").expect("pouch row");
+        let pouch = t
+            .deps
+            .iter()
+            .find(|r| r.name == "pouch")
+            .expect("pouch row");
         match &pouch.source {
-            DepSource::Url { url, sha256, cache_path } => {
+            DepSource::Url {
+                url,
+                sha256,
+                cache_path,
+            } => {
                 assert_eq!(url, POUCH_URL);
                 assert_eq!(sha256, &None, "the manifest is never the pin's source");
                 assert_eq!(
                     cache_path,
                     &format!(".rut/cache/{}.rutbundle", {
                         use sha2::{Digest, Sha256};
-                        let hex: String = Sha256::digest(url.as_bytes()).iter().map(|b| format!("{b:02x}")).collect();
+                        let hex: String = Sha256::digest(url.as_bytes())
+                            .iter()
+                            .map(|b| format!("{b:02x}"))
+                            .collect();
                         hex
                     })
                 );
@@ -938,11 +1038,19 @@ mod tests {
         // rows (the manifest's own grammar cannot); a url the lock does
         // not name stays None — the walk's install-recipe refusal
         let pins = lock_pins(&rut_driver::render_lock(&rut_driver::LockFile::from_rows(
-            vec![rut_driver::LockRow { pkg: "pouch".into(), url: POUCH_URL.into(), sha256: POUCH_PIN.into() }],
+            vec![rut_driver::LockRow {
+                pkg: "pouch".into(),
+                url: POUCH_URL.into(),
+                sha256: POUCH_PIN.into(),
+            }],
         )))
         .expect("the lock parses");
         let t = dep_table_pinned(PLUGIN_SHAPE, &pins).expect("parses");
-        let pouch = t.deps.iter().find(|r| r.name == "pouch").expect("pouch row");
+        let pouch = t
+            .deps
+            .iter()
+            .find(|r| r.name == "pouch")
+            .expect("pouch row");
         assert_eq!(
             pouch.source,
             DepSource::Url {
@@ -954,7 +1062,11 @@ mod tests {
         );
         // a url the lock has no row for: None — never a guessed pin
         let t = dep_table_pinned(PLUGIN_SHAPE, &std::collections::BTreeMap::new()).expect("parses");
-        let pouch = t.deps.iter().find(|r| r.name == "pouch").expect("pouch row");
+        let pouch = t
+            .deps
+            .iter()
+            .find(|r| r.name == "pouch")
+            .expect("pouch row");
         assert!(
             matches!(&pouch.source, DepSource::Url { sha256: None, .. }),
             "no lock row ⇒ unpinned: {:?}",
@@ -974,13 +1086,28 @@ mod tests {
         let t = dep_table(CALC_MANIFEST).expect("the real calc manifest parses");
         assert_eq!(t.name.as_deref(), Some("calc"));
         // the host surface: decl mode, no body
-        assert_eq!(t.entries, vec![EntrySource { path: "calc.d.rut".into(), mode: Mode::Decl }]);
+        assert_eq!(
+            t.entries,
+            vec![EntrySource {
+                path: "calc.d.rut".into(),
+                mode: Mode::Decl
+            }]
+        );
         assert_eq!(t.namespace.as_deref(), Some("Math"));
-        let pi = t.consts.iter().find(|(n, _)| n == "PI").expect("PI in consts");
+        let pi = t
+            .consts
+            .iter()
+            .find(|(n, _)| n == "PI")
+            .expect("PI in consts");
         assert_eq!(pi.1, 3.141592653589793);
         // the non-finite spelling rides as the f64 it names
-        let inf = t.consts.iter().find(|(n, _)| n == "INFINITY").expect("INFINITY in consts");
-        assert!(inf.1.is_infinite() && inf.1.is_sign_positive());    }
+        let inf = t
+            .consts
+            .iter()
+            .find(|(n, _)| n == "INFINITY")
+            .expect("INFINITY in consts");
+        assert!(inf.1.is_infinite() && inf.1.is_sign_positive());
+    }
 
     #[test]
     fn dev_descriptor_rows_ride() {
@@ -991,10 +1118,19 @@ mod tests {
 }"#,
         )
         .expect("dev tables parse");
-        let nmapset = t.dev_deps.iter().find(|r| r.name == "nmapset").expect("dev row");
+        let nmapset = t
+            .dev_deps
+            .iter()
+            .find(|r| r.name == "nmapset")
+            .expect("dev row");
         assert!(!nmapset.optional);
         assert!(nmapset.lib.is_none());
-        assert_eq!(nmapset.source, DepSource::Path { dir: "../nmapset".into() });
+        assert_eq!(
+            nmapset.source,
+            DepSource::Path {
+                dir: "../nmapset".into()
+            }
+        );
     }
 
     #[test]
@@ -1023,14 +1159,44 @@ mod tests {
         assert_eq!(b.module, "pouch");
         assert_eq!(b.namespace, None);
         assert!(b.consts.is_empty());
-        assert_eq!(b.files.len(), 1, "files: {:?}", b.files.iter().map(|f| &f.path));
-        assert_eq!(b.files[0].path, "mod.d.rut", "{:?}", b.files.iter().map(|f| &f.path));
+        assert_eq!(
+            b.files.len(),
+            1,
+            "files: {:?}",
+            b.files.iter().map(|f| &f.path)
+        );
+        assert_eq!(
+            b.files[0].path,
+            "mod.d.rut",
+            "{:?}",
+            b.files.iter().map(|f| &f.path)
+        );
         assert_eq!(b.files[0].mode, Mode::Decl);
-        assert!(b.files[0].src.contains("GENERATED by rut pack"), "the entry: {}", b.files[0].src);
-        assert!(b.files[0].src.contains("pub class Vec<T>"), "the entry: {}", b.files[0].src);
-        assert!(b.files[0].src.contains("pub fn new() -> Self;"), "the entry: {}", b.files[0].src);
-        assert!(b.files[0].src.contains("pub fn push(mut self,"), "the entry: {}", b.files[0].src);
-        assert!(b.files[0].src.contains("pub fn freeze_bytes"), "the entry: {}", b.files[0].src);
+        assert!(
+            b.files[0].src.contains("GENERATED by rut pack"),
+            "the entry: {}",
+            b.files[0].src
+        );
+        assert!(
+            b.files[0].src.contains("pub class Vec<T>"),
+            "the entry: {}",
+            b.files[0].src
+        );
+        assert!(
+            b.files[0].src.contains("pub fn new() -> Self;"),
+            "the entry: {}",
+            b.files[0].src
+        );
+        assert!(
+            b.files[0].src.contains("pub fn push(mut self,"),
+            "the entry: {}",
+            b.files[0].src
+        );
+        assert!(
+            b.files[0].src.contains("pub fn freeze_bytes"),
+            "the entry: {}",
+            b.files[0].src
+        );
     }
 
     #[test]
@@ -1045,23 +1211,42 @@ mod tests {
         let f = &b.files[0];
         assert_eq!(f.path, "mod.d.rut");
         assert_eq!(f.mode, Mode::Decl);
-        let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", &f.src, b.namespace.as_deref(), &b.consts);
+        let idxs = index_dep_decl_group(
+            &b.module,
+            "bundle:pouch/mod.d.rut",
+            "",
+            &f.src,
+            b.namespace.as_deref(),
+            &b.consts,
+        );
         assert_eq!(idxs.len(), 1, "a flat entry: one module");
         let idx = &idxs[0].1;
         assert_eq!(idx.mode, Some(Mode::Decl));
         // the hover facts: the class row with its fields …
         let vec = idx.ty("Vec").expect("the class indexes");
         assert_eq!(vec.form, TyForm::Class);
-        assert!(vec.fields.iter().any(|m| m.name == "buf"), "{:?}", vec.fields.iter().map(|m| &m.name));
+        assert!(
+            vec.fields.iter().any(|m| m.name == "buf"),
+            "{:?}",
+            vec.fields.iter().map(|m| &m.name)
+        );
         assert!(vec.fields.iter().any(|m| m.name == "len"));
         // … and its member signatures — the completion surface
         let names: Vec<&str> = vec.methods.iter().map(|m| m.name.as_str()).collect();
         assert!(names.contains(&"new"), "{names:?}");
         assert!(names.contains(&"push"), "{names:?}");
         let push = vec.methods.iter().find(|m| m.name == "push").expect("push");
-        assert!(push.src.contains("pub fn push(mut self"), "the verbatim signature: {}", push.src);
+        assert!(
+            push.src.contains("pub fn push(mut self"),
+            "the verbatim signature: {}",
+            push.src
+        );
         // the free fn indexes as a module-level fn with its signature
-        let freeze = idx.fns.iter().find(|f| f.name == "freeze_bytes").expect("freeze_bytes");
+        let freeze = idx
+            .fns
+            .iter()
+            .find(|f| f.name == "freeze_bytes")
+            .expect("freeze_bytes");
         assert!(freeze.src.starts_with("fn freeze_bytes"), "{}", freeze.src);
         assert!(freeze.owner.is_none());
     }
@@ -1106,7 +1291,14 @@ pub host fn legacy_ping() -> bool;
 pub host fn sqrt(x: f64) -> f64;
 ";
         let consts = vec![("PI".to_string(), 3.141592653589793f64)];
-        let idx = index_dep("calc", "file:///deps/calc.d.rut", src, Mode::Decl, Some("Math"), &consts);
+        let idx = index_dep(
+            "calc",
+            "file:///deps/calc.d.rut",
+            src,
+            Mode::Decl,
+            Some("Math"),
+            &consts,
+        );
         // the explicit name rides the index …
         assert_eq!(idx.module.as_deref(), Some("calc"));
         assert_eq!(idx.origin, "file:///deps/calc.d.rut");
@@ -1114,24 +1306,42 @@ pub host fn sqrt(x: f64) -> f64;
         // body-over-decl preference reads it) …
         assert_eq!(idx.mode, Some(Mode::Decl));
         // … the surface indexes …
-        assert!(idx.fns.iter().any(|f| f.name == "sqrt" && f.owner.is_none()));
+        assert!(idx
+            .fns
+            .iter()
+            .any(|f| f.name == "sqrt" && f.owner.is_none()));
         // … the namespace head mints as a type row carrying the fns as
         // methods and the consts as fields — the Math::sqrt/Math::PI shape
         let math = idx.ty("Math").expect("the namespace head mints");
         assert_eq!(math.form, TyForm::Namespace);
         assert!(math.is_pub);
         assert!(math.methods.iter().any(|m| m.name == "sqrt"));
-        let pi = math.fields.iter().find(|m| m.name == "PI").expect("PI as a field");
+        let pi = math
+            .fields
+            .iter()
+            .find(|m| m.name == "PI")
+            .expect("PI as a field");
         assert_eq!(pi.ty.as_deref(), Some("f64"));
         // … and the consts mint module-scope lets (the bare-`PI` form)
-        let pi = idx.lets.iter().find(|l| l.name == "PI").expect("PI as a module let");
+        let pi = idx
+            .lets
+            .iter()
+            .find(|l| l.name == "PI")
+            .expect("PI as a module let");
         assert_eq!(pi.ty.as_deref(), Some("f64"));
         assert!(pi.src.starts_with("let PI = 3.141592653589793"));
     }
 
     #[test]
     fn index_dep_without_namespace_mints_nothing() {
-        let idx = index_dep("pouch", "file:///deps/pouch.rut", "class Vec<T> {\n}\n", Mode::Impl, None, &[]);
+        let idx = index_dep(
+            "pouch",
+            "file:///deps/pouch.rut",
+            "class Vec<T> {\n}\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
         assert_eq!(idx.module.as_deref(), Some("pouch"));
         assert!(idx.ty("Math").is_none());
         assert!(idx.lets.is_empty());
@@ -1151,7 +1361,15 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(idx.module.as_deref(), Some("gadgets"));
         assert_eq!(idx.mod_path.as_deref(), Some("layout"));
         // the recorded mod edges ride the parsed rows too
-        let root = index_dep_mod("gadgets", "file:///deps/gadgets/mod.rut", "", "pub mod layout;\n", Mode::Impl, None, &[]);
+        let root = index_dep_mod(
+            "gadgets",
+            "file:///deps/gadgets/mod.rut",
+            "",
+            "pub mod layout;\n",
+            Mode::Impl,
+            None,
+            &[],
+        );
         assert_eq!(root.mod_path.as_deref(), Some(""));
         assert_eq!(root.mods.len(), 1);
         assert_eq!(root.mods[0].name, "layout");
@@ -1181,7 +1399,10 @@ pub host fn sqrt(x: f64) -> f64;
                 },
             ),
         ]);
-        let rows = rut_driver::mods::rows_json("pub mod layout;\npub fn tag() -> i32 { return 1; }\n", &mods);
+        let rows = rut_driver::mods::rows_json(
+            "pub mod layout;\npub fn tag() -> i32 { return 1; }\n",
+            &mods,
+        );
         rut_driver::bundle::write_bundle(&[
             (MANIFEST_NAME.into(), br#"{ "name": "kit" }"#.to_vec()),
             (rut_driver::mods::ROWS_NAME.into(), rows.into_bytes()),
@@ -1197,7 +1418,10 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(b.namespace, None);
         // the root + each child, path-keyed
         let paths: Vec<&str> = b.files.iter().map(|f| f.path.as_str()).collect();
-        assert_eq!(paths, vec!["mod.rut", "layout/mod.rut", "layout/grid/mod.rut"]);
+        assert_eq!(
+            paths,
+            vec!["mod.rut", "layout/mod.rut", "layout/grid/mod.rut"]
+        );
         assert!(b.files[0].src.contains("pub mod layout;"));
         assert!(b.files[1].src.contains("struct Column"));
         assert!(b.files[2].src.contains("struct Cell"));
@@ -1211,7 +1435,10 @@ pub host fn sqrt(x: f64) -> f64;
         let bytes = rut_driver::bundle::write_bundle(&[
             (MANIFEST_NAME.into(), br#"{ "name": "kit" }"#.to_vec()),
             ("mod.rut".into(), b"pub mod layout;\n".to_vec()),
-            ("layout/mod.rut".into(), b"pub fn span() -> i32 { return 1; }\n".to_vec()),
+            (
+                "layout/mod.rut".into(),
+                b"pub fn span() -> i32 { return 1; }\n".to_vec(),
+            ),
         ])
         .unwrap();
         let b = bundle_sources(&bytes).expect("the source-lane bundle unpacks");
@@ -1223,16 +1450,32 @@ pub host fn sqrt(x: f64) -> f64;
     #[test]
     fn bundle_file_mod_paths_spell_the_tree() {
         assert_eq!(bundle_file_mod_path("mod.rut").as_deref(), Some(""));
-        assert_eq!(bundle_file_mod_path("layout/mod.rut").as_deref(), Some("layout"));
-        assert_eq!(bundle_file_mod_path("layout/grid/mod.rut").as_deref(), Some("layout/grid"));
+        assert_eq!(
+            bundle_file_mod_path("layout/mod.rut").as_deref(),
+            Some("layout")
+        );
+        assert_eq!(
+            bundle_file_mod_path("layout/grid/mod.rut").as_deref(),
+            Some("layout/grid")
+        );
         // the host tree's Decl children spell the same mod paths, and
         // the bare `mod.d.rut` IS the host root — `Some("")`, the twin
         // of the lib root's spelling
         assert_eq!(bundle_file_mod_path("mod.d.rut").as_deref(), Some(""));
-        assert_eq!(bundle_file_mod_path("net/mod.d.rut").as_deref(), Some("net"));
-        assert_eq!(bundle_file_mod_path("net/tls/mod.d.rut").as_deref(), Some("net/tls"));
+        assert_eq!(
+            bundle_file_mod_path("net/mod.d.rut").as_deref(),
+            Some("net")
+        );
+        assert_eq!(
+            bundle_file_mod_path("net/tls/mod.d.rut").as_deref(),
+            Some("net/tls")
+        );
         assert_eq!(bundle_file_mod_path("pouch.rut"), None);
-        assert_eq!(bundle_file_mod_path("myhost.d.rut"), None, "a surface root is a flat file");
+        assert_eq!(
+            bundle_file_mod_path("myhost.d.rut"),
+            None,
+            "a surface root is a flat file"
+        );
     }
 
     #[test]
@@ -1244,16 +1487,20 @@ pub host fn sqrt(x: f64) -> f64;
         assert!(t.host);
         assert_eq!(
             t.entries,
-            vec![EntrySource { path: "mod.d.rut".into(), mode: Mode::Decl }]
+            vec![EntrySource {
+                path: "mod.d.rut".into(),
+                mode: Mode::Decl
+            }]
         );
         // a spelled surface still wins
-        let t = dep_table(
-            r#"{ "name": "h", "type": "host", "entry": { "type": "./h.d.rut" } }"#,
-        )
-        .expect("parses");
+        let t = dep_table(r#"{ "name": "h", "type": "host", "entry": { "type": "./h.d.rut" } }"#)
+            .expect("parses");
         assert_eq!(
             t.entries,
-            vec![EntrySource { path: "h.d.rut".into(), mode: Mode::Decl }]
+            vec![EntrySource {
+                path: "h.d.rut".into(),
+                mode: Mode::Decl
+            }]
         );
     }
 
@@ -1282,13 +1529,20 @@ pub host fn sqrt(x: f64) -> f64;
                 },
             ),
         ]);
-        let rows = rut_driver::mods::rows_json("pub mod net;\npub host fn legacy_ping() -> bool;\n", &mods);
+        let rows = rut_driver::mods::rows_json(
+            "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            &mods,
+        );
         rut_driver::bundle::write_bundle(&[
             (
                 MANIFEST_NAME.into(),
-                br#"{ "name": "myhost", "type": "host", "entry": { "type": "./myhost.d.rut" } }"#.to_vec(),
+                br#"{ "name": "myhost", "type": "host", "entry": { "type": "./myhost.d.rut" } }"#
+                    .to_vec(),
             ),
-            ("myhost.d.rut".into(), b"pub mod net;\npub host fn legacy_ping() -> bool;\n".to_vec()),
+            (
+                "myhost.d.rut".into(),
+                b"pub mod net;\npub host fn legacy_ping() -> bool;\n".to_vec(),
+            ),
             (rut_driver::mods::ROWS_NAME.into(), rows.into_bytes()),
         ])
         .unwrap()
@@ -1324,7 +1578,10 @@ pub host fn sqrt(x: f64) -> f64;
         assert!(t.host, "type = host marks the table");
         assert_eq!(
             t.entries,
-            vec![EntrySource { path: "myhost.d.rut".into(), mode: Mode::Decl }],
+            vec![EntrySource {
+                path: "myhost.d.rut".into(),
+                mode: Mode::Decl
+            }],
             "the surface indexes in Decl mode; no lib body row"
         );
         let surface_only =

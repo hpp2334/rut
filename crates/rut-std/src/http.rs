@@ -71,8 +71,8 @@ use std::io::Read as _;
 use std::sync::{Arc, Mutex};
 
 use rut_core::types::{TypeId, TY_OPAQUE};
-use rut_vm::interp::{HostPkg, Vm};
 use rut_vm::interp::Ret;
+use rut_vm::interp::{HostPkg, Vm};
 use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind};
 
 // ----------------------------------------------------- the payload ----
@@ -139,7 +139,11 @@ impl HostPayload for HttpResponse {}
 
 impl HttpResponse {
     fn failed(msg: String) -> HttpResponse {
-        HttpResponse { status: 0, err: Some(msg), read: Arc::new(Mutex::new(Inner::dead())) }
+        HttpResponse {
+            status: 0,
+            err: Some(msg),
+            read: Arc::new(Mutex::new(Inner::dead())),
+        }
     }
 }
 
@@ -426,9 +430,17 @@ enum Due {
         comp: CompleterOf<HttpResponse>,
         src: Shared,
     },
-    Chunk { src: Shared, chunk: Vec<u8> },
-    Terminal { src: Shared },
-    Fail { src: Shared, msg: String },
+    Chunk {
+        src: Shared,
+        chunk: Vec<u8>,
+    },
+    Terminal {
+        src: Shared,
+    },
+    Fail {
+        src: Shared,
+        msg: String,
+    },
 }
 
 #[derive(Default)]
@@ -486,7 +498,14 @@ impl HttpFixture {
         let src: Shared = Arc::new(Mutex::new(Inner::fresh()));
         let mut dues = self.0.dues.borrow_mut();
         let send_reply = reply.clone();
-        dues.push((0, Due::Send { reply: send_reply, comp: comp.clone(), src: Arc::clone(&src) }));
+        dues.push((
+            0,
+            Due::Send {
+                reply: send_reply,
+                comp: comp.clone(),
+                src: Arc::clone(&src),
+            },
+        ));
         if let Ok(r) = &reply {
             let mut t = 0u64;
             for (i, chunk) in r.chunks.iter().enumerate() {
@@ -494,14 +513,29 @@ impl HttpFixture {
                     break; // the wire died before this chunk
                 }
                 t += 1;
-                dues.push((t, Due::Chunk { src: Arc::clone(&src), chunk: chunk.clone() }));
+                dues.push((
+                    t,
+                    Due::Chunk {
+                        src: Arc::clone(&src),
+                        chunk: chunk.clone(),
+                    },
+                ));
             }
             t += 1;
             match r.fail_after {
-                Some(after) if after <= r.chunks.len() => {
-                    dues.push((t, Due::Fail { src: Arc::clone(&src), msg: r.fail_msg.clone() }))
-                }
-                _ => dues.push((t, Due::Terminal { src: Arc::clone(&src) })),
+                Some(after) if after <= r.chunks.len() => dues.push((
+                    t,
+                    Due::Fail {
+                        src: Arc::clone(&src),
+                        msg: r.fail_msg.clone(),
+                    },
+                )),
+                _ => dues.push((
+                    t,
+                    Due::Terminal {
+                        src: Arc::clone(&src),
+                    },
+                )),
             }
         }
         comp
@@ -623,7 +657,11 @@ fn send_once(
     let status = resp.status().as_u16();
     let src: Shared = Arc::new(Mutex::new(Inner::fresh()));
     // HEADERS — the send resolves here; the body stays unread
-    w.complete(HttpResponse { status, err: None, read: Arc::clone(&src) });
+    w.complete(HttpResponse {
+        status,
+        err: None,
+        read: Arc::clone(&src),
+    });
     // the pump: this thread keeps reading the wire into the chunk
     // source. A fixed 16 KiB buffer — bounded memory end to end, and
     // each read lands as one stream chunk.
@@ -721,7 +759,9 @@ entry fn boot_stream(url: str) -> nil {
     fn boot(
         fixture: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
     ) -> (Vm, Rc<std::cell::RefCell<Vec<String>>>, HttpFixture) {
-        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        let mut world = rut_native::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+        )
         .expect("the async pair walks")
         .pkgs;
         for d in ["ink_host", "http_host", "http"] {
@@ -740,17 +780,26 @@ entry fn boot_stream(url: str) -> nil {
                     &["http", "http_host", "futures", "async_host", "ink_host"],
                 )),
         );
-        let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }
-            .pkgs
-            .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .entrypoint("app")
-            .compile()
-            .unwrap();
+        let compiled = rut_driver::Walk {
+            pkgs: world.clone(),
+            root: String::new(),
+        }
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
         assert!(
             compiled.graph.diags.is_empty(),
             "{}",
-            compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+            compiled
+                .graph
+                .diags
+                .iter()
+                .map(|d| d.msg.clone())
+                .collect::<Vec<_>>()
+                .join("\n")
         );
         let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
@@ -763,7 +812,10 @@ entry fn boot_stream(url: str) -> nil {
         let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(
+            &ctx,
+            crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+        );
         hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
@@ -772,8 +824,13 @@ entry fn boot_stream(url: str) -> nil {
         let (http_pkg, fx) = pkg_with(fixture);
         hosts.install_host_pkg(&ctx, http_pkg);
         hosts.verify_against(&ctx.flatten()); // the decl ↔ the bodies
-        let vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-        .unwrap();
+        let vm = rut_vm::interp::Vm::builder()
+            .program(Rc::new(prog))
+            .limits(limits)
+            .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(hosts)
+            .build()
+            .unwrap();
         (vm, sink, fx)
     }
 
@@ -798,7 +855,10 @@ entry fn boot_stream(url: str) -> nil {
                 None => vm.set_now(vm.now_ms() + 1),
             }
         }
-        panic!("the driving loop stalled: {} task(s) pending", vm.pending_tasks());
+        panic!(
+            "the driving loop stalled: {} task(s) pending",
+            vm.pending_tasks()
+        );
     }
 
     #[test]
@@ -806,9 +866,10 @@ entry fn boot_stream(url: str) -> nil {
         let seen = Rc::new(std::cell::RefCell::new(String::new()));
         let seen2 = seen.clone();
         let (mut vm, sink, fx) = boot(move |method, url, _h, body| {
-            seen2
-                .borrow_mut()
-                .push_str(&format!("{method} {url} body={}\n", String::from_utf8_lossy(body)));
+            seen2.borrow_mut().push_str(&format!(
+                "{method} {url} body={}\n",
+                String::from_utf8_lossy(body)
+            ));
             if url == "fixture://ok" {
                 Ok(FixtureReply::ok(200, b"hello rut"))
             } else {
@@ -831,14 +892,17 @@ entry fn boot_stream(url: str) -> nil {
 
     #[test]
     fn transport_failure_reserves_status_zero_and_degrades() {
-        let (mut vm, sink, fx) = boot(|_m, url, _h, _b| {
-            Err(format!("boom: {url} failed"))
-        });
+        let (mut vm, sink, fx) = boot(|_m, url, _h, _b| Err(format!("boom: {url} failed")));
         vm.call::<_, ()>("boot", ("fixture://bad",)).unwrap();
         run_loop(&mut vm, &fx, 100);
         assert_eq!(
             *sink.borrow(),
-            vec!["status=0", "err=boom: fixture://bad failed", "read-err=nil", "body=0"],
+            vec![
+                "status=0",
+                "err=boom: fixture://bad failed",
+                "read-err=nil",
+                "body=0"
+            ],
             "status 0 + the err text; the body lane degrades to empty"
         );
     }
@@ -863,7 +927,8 @@ entry fn boot_stream(url: str) -> nil {
                 vec![b"ab".to_vec(), b"cde".to_vec(), b"f".to_vec()],
             ))
         });
-        vm.call::<_, ()>("boot_stream", ("fixture://chunks",)).unwrap();
+        vm.call::<_, ()>("boot_stream", ("fixture://chunks",))
+            .unwrap();
         run_loop(&mut vm, &fx, 100);
         assert_eq!(
             *sink.borrow(),
@@ -912,7 +977,9 @@ entry fn boot(url: str) -> nil {
 }
 "#;
         // splice the probe source over the default one and re-boot by hand
-        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        let mut world = rut_native::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+        )
         .expect("the async pair walks")
         .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
@@ -932,28 +999,43 @@ entry fn boot(url: str) -> nil {
                     &["http", "http_host", "futures", "async_host", "ink_host"],
                 )),
         );
-        let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }
-            .pkgs
-            .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .entrypoint("app")
-            .compile()
-            .unwrap();
-        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let compiled = rut_driver::Walk {
+            pkgs: world.clone(),
+            root: String::new(),
+        }
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+        assert!(
+            compiled.graph.diags.is_empty(),
+            "{:?}",
+            compiled.graph.diags
+        );
         let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
         let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(
+            &ctx,
+            crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+        );
         hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
         hosts.install_host_pkg(&ctx, crate::strbuild::pkg());
         let (http_pkg, fx) = pkg_with(|_m, _u, _h, _b| {
-            Ok(FixtureReply::failing(200, vec![b"xy".to_vec(), b"zw".to_vec()], 1, "eof in chunk"))
+            Ok(FixtureReply::failing(
+                200,
+                vec![b"xy".to_vec(), b"zw".to_vec()],
+                1,
+                "eof in chunk",
+            ))
         });
         hosts.install_host_pkg(&ctx, http_pkg);
         hosts.verify_against(&ctx.flatten());
@@ -962,8 +1044,13 @@ entry fn boot(url: str) -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-        .unwrap();
+        let mut vm = rut_vm::interp::Vm::builder()
+            .program(Rc::new(prog))
+            .limits(limits)
+            .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(hosts)
+            .build()
+            .unwrap();
         vm.call::<_, ()>("boot", ("fixture://short",)).unwrap();
         run_loop(&mut vm, &fx, 100);
         assert_eq!(
@@ -1026,7 +1113,9 @@ entry fn boot(url: str) -> nil {
     launch_future(probe2(log, url));
 }
 "#;
-        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        let mut world = rut_native::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+        )
         .expect("the async pair walks")
         .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
@@ -1046,28 +1135,41 @@ entry fn boot(url: str) -> nil {
                     &["http", "http_host", "futures", "async_host", "ink_host"],
                 )),
         );
-        let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }
-            .pkgs
-            .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .entrypoint("app")
-            .compile()
-            .unwrap();
-        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let compiled = rut_driver::Walk {
+            pkgs: world.clone(),
+            root: String::new(),
+        }
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+        assert!(
+            compiled.graph.diags.is_empty(),
+            "{:?}",
+            compiled.graph.diags
+        );
         let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
         let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(
+            &ctx,
+            crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+        );
         hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
         // the bodies bind alongside the async set
         hosts.install_host_pkg(&ctx, crate::strbuild::pkg());
         let (http_pkg, fx) = pkg_with(|_m, _u, _h, _b| {
-            Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
+            Ok(FixtureReply::chunked(
+                200,
+                vec![b"ab".to_vec(), b"cd".to_vec()],
+            ))
         });
         hosts.install_host_pkg(&ctx, http_pkg);
         hosts.verify_against(&ctx.flatten());
@@ -1076,8 +1178,13 @@ entry fn boot(url: str) -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-        .unwrap();
+        let mut vm = rut_vm::interp::Vm::builder()
+            .program(Rc::new(prog))
+            .limits(limits)
+            .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(hosts)
+            .build()
+            .unwrap();
         vm.call::<_, ()>("boot", ("fixture://oneshot",)).unwrap();
         run_loop(&mut vm, &fx, 200);
         // the two launched futures interleave — the LAWS are
@@ -1127,7 +1234,9 @@ entry fn boot() -> nil {
     launch_future(probe(log));
 }
 "#;
-        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        let mut world = rut_native::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+        )
         .expect("the async pair walks")
         .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
@@ -1147,21 +1256,31 @@ entry fn boot() -> nil {
                     &["http", "http_host", "futures", "async_host", "ink_host"],
                 )),
         );
-        let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }
-            .pkgs
-            .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .entrypoint("app")
-            .compile()
-            .unwrap();
-        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let compiled = rut_driver::Walk {
+            pkgs: world.clone(),
+            root: String::new(),
+        }
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+        assert!(
+            compiled.graph.diags.is_empty(),
+            "{:?}",
+            compiled.graph.diags
+        );
         let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
         let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(
+            &ctx,
+            crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+        );
         hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
@@ -1183,8 +1302,13 @@ entry fn boot() -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-        .unwrap();
+        let mut vm = rut_vm::interp::Vm::builder()
+            .program(Rc::new(prog))
+            .limits(limits)
+            .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(hosts)
+            .build()
+            .unwrap();
         vm.call::<_, ()>("boot", ()).unwrap();
         run_loop(&mut vm, &fx, 400);
         assert_eq!(*sink.borrow(), vec!["all-sent"]);
@@ -1211,9 +1335,14 @@ entry fn boot() -> nil {
         // and the registration strings are path-qualified
         let m = world.pkg("http_host").expect("http_host mounted");
         assert_eq!(m.mods.keys().collect::<Vec<_>>(), vec!["net", "stream"]);
-        let MountedBody::Host { host_funcs, .. } = &m.body else { panic!("a host body") };
+        let MountedBody::Host { host_funcs, .. } = &m.body else {
+            panic!("a host body")
+        };
         assert_eq!(
-            host_funcs.iter().map(|r| r.full_name("http_host")).collect::<Vec<_>>(),
+            host_funcs
+                .iter()
+                .map(|r| r.full_name("http_host"))
+                .collect::<Vec<_>>(),
             vec![
                 "http_host::net::http_send",
                 "http_host::net::http_status",
@@ -1231,7 +1360,7 @@ entry fn boot() -> nil {
         let (http_pkg, _fx) = pkg_with(|_m, _u, _h, _b| Ok(FixtureReply::ok(200, b"")));
         hosts.install_host_pkg(&ctx, http_pkg);
         hosts.verify_against(&ctx.flatten()); // panics on drift
-        // the reqwest lane installs the SAME rows — no network at install time
+                                              // the reqwest lane installs the SAME rows — no network at install time
         let mut hosts = rut_vm::interp::HostRegistry::new();
         hosts.install_host_pkg(&ctx, pkg());
         hosts.verify_against(&ctx.flatten());
@@ -1249,13 +1378,16 @@ entry fn boot() -> nil {
             let (mut sock, _) = listener.accept().expect("accept");
             let mut buf = [0u8; 4096];
             let _ = sock.read(&mut buf); // the request head (small)
-            sock.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nabc").unwrap();
+            sock.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nabc")
+                .unwrap();
             sock.write_all(b"def").unwrap(); // the rest after the headers
             sock.flush().unwrap();
         });
         let url = format!("http://{addr}/stream");
         // reuse the standard boot with the REAL lane bolted on
-        let mut world = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+        let mut world = rut_native::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+        )
         .expect("the async pair walks")
         .pkgs;
         let tree = std::path::Path::new(PKG_DIR);
@@ -1306,21 +1438,31 @@ entry fn boot_stream(url: str) -> nil {
                     &["http", "http_host", "futures", "async_host", "ink_host"],
                 )),
         );
-        let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }
-            .pkgs
-            .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .entrypoint("app")
-            .compile()
-            .unwrap();
-        assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+        let compiled = rut_driver::Walk {
+            pkgs: world.clone(),
+            root: String::new(),
+        }
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .entrypoint("app")
+        .compile()
+        .unwrap();
+        assert!(
+            compiled.graph.diags.is_empty(),
+            "{:?}",
+            compiled.graph.diags
+        );
         let prog = compiled.graph.program.expect("compile");
         rut_vm::verify::verify(&prog).unwrap();
         let sink = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
         let ctx = rut_driver::host_pkg_ctx(&world);
         let mut hosts = rut_vm::interp::HostRegistry::new();
         let sink2 = sink.clone();
-        hosts.install_host_pkg(&ctx, crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+        hosts.install_host_pkg(
+            &ctx,
+            crate::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+        );
         hosts.install_host_pkg(&ctx, crate::async_host::pkg());
         // the http face's responses build through the strbuild pkg's
         // StringBuilder — its `strbuild_host` rows are declared here, so
@@ -1333,8 +1475,13 @@ entry fn boot_stream(url: str) -> nil {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         };
-        let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-        .unwrap();
+        let mut vm = rut_vm::interp::Vm::builder()
+            .program(Rc::new(prog))
+            .limits(limits)
+            .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(hosts)
+            .build()
+            .unwrap();
         vm.call::<_, ()>("boot_stream", (url,)).unwrap();
         // wall-clock pump: the worker thread settles the completers
         for _ in 0..2000 {

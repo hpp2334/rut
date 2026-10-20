@@ -55,14 +55,23 @@ pub(crate) fn pack(args: &PackArgs) {
         eprintln!("pack: cannot write {}: {e}", out.display());
         std::process::exit(1);
     }
-    print!("packed {} -> {} ({} bytes)", p.display(), out.display(), bytes.len());
+    print!(
+        "packed {} -> {} ({} bytes)",
+        p.display(),
+        out.display(),
+        bytes.len()
+    );
     if let Some(sym) = symtab {
         let sym_path = out.with_extension("rutsym");
         if let Err(e) = std::fs::write(&sym_path, &sym) {
             eprintln!("pack: cannot write {}: {e}", sym_path.display());
             std::process::exit(1);
         }
-        print!(" + symbol table {} ({} bytes, keep PRIVATE)", sym_path.display(), sym.len());
+        print!(
+            " + symbol table {} ({} bytes, keep PRIVATE)",
+            sym_path.display(),
+            sym.len()
+        );
     }
     println!();
 }

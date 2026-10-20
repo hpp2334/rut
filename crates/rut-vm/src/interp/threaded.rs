@@ -137,7 +137,10 @@ impl Machine for Vm {
             tags: self.op_tags[self.cur_func as usize].as_ptr(),
             regs: self.cur_regs.as_mut_ptr(),
             pc: self.cur_pc,
-            fuel: self.fuel.map(|f| f.min(i64::MAX as u64) as i64).unwrap_or(-1),
+            fuel: self
+                .fuel
+                .map(|f| f.min(i64::MAX as u64) as i64)
+                .unwrap_or(-1),
             fuel_used: self.fuel_used,
         }
     }
@@ -174,7 +177,9 @@ impl Machine for Vm {
     }
 
     fn op_mov(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Mov { dst, src } = op else { unreachable_op!("op_mov: unexpected op") };
+        let Op::Mov { dst, src } = op else {
+            unreachable_op!("op_mov: unexpected op")
+        };
         unsafe { *regs.add(*dst as usize) = *regs.add(*src as usize) };
         Ok(Flow::Next(pc + 1))
     }
@@ -188,7 +193,9 @@ impl Machine for Vm {
     }
 
     fn op_not(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Not { dst, a } = op else { unreachable_op!("op_not: unexpected op") };
+        let Op::Not { dst, a } = op else {
+            unreachable_op!("op_not: unexpected op")
+        };
         let v = unsafe { !(*regs.add(*a as usize)).as_bool() };
         unsafe { *regs.add(*dst as usize) = Slot::bool(v) };
         Ok(Flow::Next(pc + 1))
@@ -201,7 +208,9 @@ impl Machine for Vm {
     int_arith!(op_wmuli, WMulI, { IOP_MUL }, true);
 
     fn op_lti(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::LtI { prim, dst, a, b } = op else { unreachable_op!("op_lti: unexpected op") };
+        let Op::LtI { prim, dst, a, b } = op else {
+            unreachable_op!("op_lti: unexpected op")
+        };
         let x = unsafe { *regs.add(*a as usize) };
         let y = unsafe { *regs.add(*b as usize) };
         let v = self.cmp_int::<{ COP_LT }>(*prim, x, y);
@@ -261,7 +270,12 @@ impl Machine for Vm {
     cmpf!(op_gef, GeF, { COP_GE });
 
     fn op_br(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Br { cond, then_t, else_t } = op else {
+        let Op::Br {
+            cond,
+            then_t,
+            else_t,
+        } = op
+        else {
             unreachable_op!("op_br: unexpected op")
         };
         let c = unsafe { (*regs.add(*cond as usize)).as_bool() };
@@ -270,7 +284,9 @@ impl Machine for Vm {
     }
 
     fn op_jmp(&mut self, op: &Op, _regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Jmp { target } = op else { unreachable_op!("op_jmp: unexpected op") };
+        let Op::Jmp { target } = op else {
+            unreachable_op!("op_jmp: unexpected op")
+        };
         Ok(Flow::Next(*target))
     }
 
@@ -281,7 +297,13 @@ impl Machine for Vm {
     // ---- array / field ops (no frame change) ----
 
     fn op_arr_get(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::ArrGet { dst, arr, idx, repr } = op else {
+        let Op::ArrGet {
+            dst,
+            arr,
+            idx,
+            repr,
+        } = op
+        else {
             unreachable_op!("op_arr_get: unexpected op")
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
@@ -314,7 +336,13 @@ impl Machine for Vm {
     }
 
     fn op_arr_set(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::ArrSet { arr, idx, val, repr } = op else {
+        let Op::ArrSet {
+            arr,
+            idx,
+            val,
+            repr,
+        } = op
+        else {
             unreachable_op!("op_arr_set: unexpected op")
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
@@ -339,7 +367,14 @@ impl Machine for Vm {
     }
 
     fn op_arr_get_f(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::ArrGetF { dst, obj, field, idx, repr } = op else {
+        let Op::ArrGetF {
+            dst,
+            obj,
+            field,
+            idx,
+            repr,
+        } = op
+        else {
             unreachable_op!("op_arr_get_f: unexpected op")
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
@@ -374,7 +409,12 @@ impl Machine for Vm {
             // a window obj: an ELEMENT read through the window —
             // parent[off + i], bounds vs the window
             CellData::ArrView { .. } => seq_get(obj_cell, i)?,
-            _ => return Err(Trap::new(TrapKind::Invalid, "field-array get on non-record")),
+            _ => {
+                return Err(Trap::new(
+                    TrapKind::Invalid,
+                    "field-array get on non-record",
+                ))
+            }
         };
         let old = unsafe { *regs.add(*dst as usize) };
         unsafe { *regs.add(*dst as usize) = v };
@@ -386,7 +426,14 @@ impl Machine for Vm {
     }
 
     fn op_arr_set_f(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::ArrSetF { obj, field, idx, val, repr } = op else {
+        let Op::ArrSetF {
+            obj,
+            field,
+            idx,
+            val,
+            repr,
+        } = op
+        else {
             unreachable_op!("op_arr_set_f: unexpected op")
         };
         let i = unsafe { (*regs.add(*idx as usize)).i };
@@ -413,7 +460,12 @@ impl Machine for Vm {
             // a window obj: an ELEMENT write through the window —
             // parent[off + i], bounds vs the window
             CellData::ArrView { .. } => seq_set(obj_cell, i, v)?,
-            _ => return Err(Trap::new(TrapKind::Invalid, "field-array set on non-record")),
+            _ => {
+                return Err(Trap::new(
+                    TrapKind::Invalid,
+                    "field-array set on non-record",
+                ))
+            }
         };
         if repr.is_ref() {
             self.heap.retain(v);
@@ -423,7 +475,13 @@ impl Machine for Vm {
     }
 
     fn op_getf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::GetF { dst, obj, field, repr } = op else {
+        let Op::GetF {
+            dst,
+            obj,
+            field,
+            repr,
+        } = op
+        else {
             unreachable_op!("op_getf: unexpected op")
         };
         let s = unsafe { *regs.add(*obj as usize) };
@@ -474,7 +532,13 @@ impl Machine for Vm {
     }
 
     fn op_setf(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::SetF { obj, field, val, repr } = op else {
+        let Op::SetF {
+            obj,
+            field,
+            val,
+            repr,
+        } = op
+        else {
             unreachable_op!("op_setf: unexpected op")
         };
         let raw = unsafe { *regs.add(*obj as usize) };
@@ -505,7 +569,13 @@ impl Machine for Vm {
     // ---- calls / ret (frame change => Redispatch) ----
 
     fn op_call(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Call { func, argv_off, argc, dst } = op else {
+        let Op::Call {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } = op
+        else {
             unreachable_op!("op_call: unexpected op")
         };
         if self.prog.funcs[*func as usize].host_id.is_some() {
@@ -528,7 +598,13 @@ impl Machine for Vm {
     }
 
     fn op_call_m(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallM { func, argv_off, argc, dst } = op else {
+        let Op::CallM {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } = op
+        else {
             unreachable_op!("op_call_m: unexpected op")
         };
         self.cur_pc = pc + 1;
@@ -539,7 +615,13 @@ impl Machine for Vm {
     }
 
     fn op_call_i(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallI { slot, argv_off, argc, dst } = op else {
+        let Op::CallI {
+            slot,
+            argv_off,
+            argc,
+            dst,
+        } = op
+        else {
             unreachable_op!("op_call_i: unexpected op")
         };
         self.cur_pc = pc + 1;
@@ -548,7 +630,13 @@ impl Machine for Vm {
     }
 
     fn op_call_fn(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallFn { fval, argv_off, argc, dst } = op else {
+        let Op::CallFn {
+            fval,
+            argv_off,
+            argc,
+            dst,
+        } = op
+        else {
             unreachable_op!("op_call_fn: unexpected op")
         };
         self.cur_pc = pc + 1;
@@ -557,7 +645,14 @@ impl Machine for Vm {
     }
 
     fn op_call_nat(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::CallNat { nat, recv, argv_off, argc, dst } = op else {
+        let Op::CallNat {
+            nat,
+            recv,
+            argv_off,
+            argc,
+            dst,
+        } = op
+        else {
             unreachable_op!("op_call_nat: unexpected op")
         };
         // pin the cursor to this op: the capture native reads cur_pc as
@@ -569,7 +664,9 @@ impl Machine for Vm {
     }
 
     fn op_ret(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Ret { val } = op else { unreachable_op!("op_ret: unexpected op") };
+        let Op::Ret { val } = op else {
+            unreachable_op!("op_ret: unexpected op")
+        };
         let v = val
             .map(|r| unsafe { *regs.add(r as usize) })
             .unwrap_or(Slot::int(0));
@@ -585,7 +682,9 @@ impl Machine for Vm {
     // which aliases the `regs` pointer, so the shared heap helpers apply. ----
 
     fn op_movref(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::MovRef { dst, src } = op else { unreachable_op!("op_movref: unexpected op") };
+        let Op::MovRef { dst, src } = op else {
+            unreachable_op!("op_movref: unexpected op")
+        };
         let v = unsafe { *regs.add(*src as usize) };
         self.heap.retain(v);
         let old = self.cur_regs[*dst as usize];
@@ -595,7 +694,9 @@ impl Machine for Vm {
     }
 
     fn op_const(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Const { dst, k } = op else { unreachable_op!("op_const: unexpected op") };
+        let Op::Const { dst, k } = op else {
+            unreachable_op!("op_const: unexpected op")
+        };
         let s = self.const_slots[*k as usize];
         let is_ref = matches!(self.prog.consts[*k as usize], ConstVal::Str(_));
         if is_ref {
@@ -610,7 +711,9 @@ impl Machine for Vm {
     }
 
     fn op_strcmp(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::StrCmp { eq, dst, a, b } = op else { unreachable_op!("op_strcmp: unexpected op") };
+        let Op::StrCmp { eq, dst, a, b } = op else {
+            unreachable_op!("op_strcmp: unexpected op")
+        };
         let sa = cell_of(unsafe { *regs.add(*a as usize) }).as_bytes();
         let sb = cell_of(unsafe { *regs.add(*b as usize) }).as_bytes();
         unsafe { *regs.add(*dst as usize) = Slot::bool((sa == sb) == *eq) };
@@ -628,17 +731,24 @@ impl Machine for Vm {
     }
 
     fn op_refeq(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::RefEq { eq, dst, a, b } = op else { unreachable_op!("op_refeq: unexpected op") };
-        let v = Slot::same_ref(
-            unsafe { *regs.add(*a as usize) },
-            unsafe { *regs.add(*b as usize) },
-        ) == *eq;
+        let Op::RefEq { eq, dst, a, b } = op else {
+            unreachable_op!("op_refeq: unexpected op")
+        };
+        let v = Slot::same_ref(unsafe { *regs.add(*a as usize) }, unsafe {
+            *regs.add(*b as usize)
+        }) == *eq;
         unsafe { *regs.add(*dst as usize) = Slot::bool(v) };
         Ok(Flow::Next(pc + 1))
     }
 
     fn op_brtable(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::BrTable { idx, table_off, count, default } = op else {
+        let Op::BrTable {
+            idx,
+            table_off,
+            count,
+            default,
+        } = op
+        else {
             unreachable_op!("op_brtable: unexpected op")
         };
         let prog = Rc::clone(&self.prog);
@@ -655,7 +765,9 @@ impl Machine for Vm {
     }
 
     fn op_newcell(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::NewCell { dst, ty } = op else { unreachable_op!("op_newcell: unexpected op") };
+        let Op::NewCell { dst, ty } = op else {
+            unreachable_op!("op_newcell: unexpected op")
+        };
         let n = match self.prog.types.kind(*ty) {
             TyKind::Data { fields } => fields.len(),
             _ => 0,
@@ -668,7 +780,13 @@ impl Machine for Vm {
     }
 
     fn op_makerecord(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::MakeRecord { dst, ty, argv_off, argc } = op else {
+        let Op::MakeRecord {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } = op
+        else {
             unreachable_op!("op_makerecord: unexpected op")
         };
         self.op_make_record(*dst, *ty, *argv_off, *argc)?;
@@ -676,7 +794,9 @@ impl Machine for Vm {
     }
 
     fn op_own(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Own { dst, src, ty } = op else { unreachable_op!("op_own: unexpected op") };
+        let Op::Own { dst, src, ty } = op else {
+            unreachable_op!("op_own: unexpected op")
+        };
         let v = self
             .heap
             .own(unsafe { *regs.add(*src as usize) }, *ty, &self.prog.types)?;
@@ -698,9 +818,9 @@ impl Machine for Vm {
             _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-array")),
         };
         let n = unsafe { (*regs.add(*len as usize)).i }.max(0) as usize;
-        let c = self
-            .heap
-            .alloc_array_filled(elem, n, default_slot_repr(*repr), &self.prog.types)?;
+        let c =
+            self.heap
+                .alloc_array_filled(elem, n, default_slot_repr(*repr), &self.prog.types)?;
         let old = unsafe { *regs.add(*dst as usize) };
         unsafe { *regs.add(*dst as usize) = c };
         self.heap.release(old);
@@ -708,7 +828,13 @@ impl Machine for Vm {
     }
 
     fn op_arrlit(&mut self, op: &Op, _regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::ArrLit { dst, ty, argv_off, argc } = op else {
+        let Op::ArrLit {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } = op
+        else {
             unreachable_op!("op_arrlit: unexpected op")
         };
         self.op_arr_lit(*dst, *ty, *argv_off, *argc)?;
@@ -728,7 +854,9 @@ impl Machine for Vm {
     }
 
     fn op_tidof(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::TidOf { dst, obj } = op else { unreachable_op!("op_tidof: unexpected op") };
+        let Op::TidOf { dst, obj } = op else {
+            unreachable_op!("op_tidof: unexpected op")
+        };
         // host payload boxes report the sentinel — see the step.rs TidOf
         let ty = self.tid_ty(unsafe { *regs.add(*obj as usize) });
         unsafe { *regs.add(*dst as usize) = Slot::int(ty as i64) };
@@ -775,7 +903,9 @@ impl Machine for Vm {
     }
 
     fn op_unbox(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Unbox { dst, box_, ty } = op else { unreachable_op!("op_unbox: unexpected op") };
+        let Op::Unbox { dst, box_, ty } = op else {
+            unreachable_op!("op_unbox: unexpected op")
+        };
         let b = unsafe { *regs.add(*box_ as usize) };
         let rut = crate::heap::store::store_entry(b).and_then(|e| match &e.e {
             crate::heap::store::OpaqueEntry::Rut(r) => Some((r.slot, r.val_ty)),
@@ -802,7 +932,9 @@ impl Machine for Vm {
     }
 
     fn op_box(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Box { dst, val, ty } = op else { unreachable_op!("op_box: unexpected op") };
+        let Op::Box { dst, val, ty } = op else {
+            unreachable_op!("op_box: unexpected op")
+        };
         let v = unsafe { *regs.add(*val as usize) };
         if self.is_ref(*ty) {
             self.heap.retain(v);
@@ -815,7 +947,13 @@ impl Machine for Vm {
     }
 
     fn op_makeclosure(&mut self, op: &Op, regs: *mut Slot, pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::MakeClosure { dst, func, argv_off, argc } = op else {
+        let Op::MakeClosure {
+            dst,
+            func,
+            argv_off,
+            argc,
+        } = op
+        else {
             unreachable_op!("op_makeclosure: unexpected op")
         };
         let prog = Rc::clone(&self.prog);
@@ -841,8 +979,12 @@ impl Machine for Vm {
     }
 
     fn op_panic(&mut self, op: &Op, regs: *mut Slot, _pc: u32) -> Result<Flow<Value>, Trap> {
-        let Op::Panic { msg } = op else { unreachable_op!("op_panic: unexpected op") };
-        let m = cell_of(unsafe { *regs.add(*msg as usize) }).as_str().to_string();
+        let Op::Panic { msg } = op else {
+            unreachable_op!("op_panic: unexpected op")
+        };
+        let m = cell_of(unsafe { *regs.add(*msg as usize) })
+            .as_str()
+            .to_string();
         Err(Trap::new(TrapKind::Panic, m))
     }
 

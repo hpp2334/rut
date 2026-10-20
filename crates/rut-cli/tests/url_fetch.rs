@@ -91,7 +91,10 @@ fn rut(cache: &Path, args: &[&str]) -> (i32, String) {
         .args(args)
         .output()
         .expect("run the rut binary");
-    (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stderr).into_owned())
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
 }
 
 /// The consumer world: `util` served by url, pinned by the `rut.lock`
@@ -104,7 +107,11 @@ fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
     let lock = rut_driver::LockFile::from_rows(vec![rut_driver::LockRow {
         pkg: "util".into(),
@@ -124,7 +131,11 @@ fn leaf_bundle(tag: &str) -> Vec<u8> {
     let root = scratch(tag);
     let util = root.join("util");
     write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
-    write(&util, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    write(
+        &util,
+        "mod.rut",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     rut_native::pack_dir(&util).expect("pack util")
 }
 
@@ -206,8 +217,16 @@ fn cold_run_names_every_missing_dep_at_once() {
         ),
     );
     let lock = rut_driver::LockFile::from_rows(vec![
-        rut_driver::LockRow { pkg: "a".into(), url: url_a.clone(), sha256: pin.clone() },
-        rut_driver::LockRow { pkg: "b".into(), url: url_b, sha256: pin },
+        rut_driver::LockRow {
+            pkg: "a".into(),
+            url: url_a.clone(),
+            sha256: pin.clone(),
+        },
+        rut_driver::LockRow {
+            pkg: "b".into(),
+            url: url_b,
+            sha256: pin,
+        },
     ]);
     write(&app, "rut.lock", &rut_driver::render_lock(&lock));
     write(&app, "mod.rut", "entry fn main() -> nil { return; }\n");

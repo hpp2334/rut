@@ -11,14 +11,16 @@
 use rut_core::binary::Surface;
 use rut_parser::Mode;
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -44,7 +46,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -57,7 +62,10 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
+        &[
+            (2, Surface::core(), "core".to_string()),
+            (3, collection, "collection".to_string()),
+        ],
     )
 }
 
@@ -75,8 +83,13 @@ fn make_vm_with_fuel(src: &str, fuel: u64) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm")
+    rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm")
 }
 
 /// Compile, flatten, verify, and run a single-module `main` returning i32.
@@ -121,11 +134,18 @@ fn compile_std(src: &str) -> rut_core::binary::Program {
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         // the root declares the tree pkg it names (the nameability law
         // — mounted-but-undeclared is D5)
-        .pkg(rut_driver::Mounted::source("test", src).manifest(rut_driver::Manifest::lib("test", &["pouch"])))
+        .pkg(
+            rut_driver::Mounted::source("test", src)
+                .manifest(rut_driver::Manifest::lib("test", &["pouch"])),
+        )
         .entrypoint("test")
         .compile()
         .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("binary");
     let bytes = rut_core::binary::encode(&prog);
     rut_core::binary::decode(&bytes).expect("decode")
@@ -139,8 +159,13 @@ fn run_std(src: &str) -> i32 {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
@@ -152,8 +177,13 @@ fn run_std_trap(src: &str) -> rut_vm::Trap {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     match vm.call::<_, i32>("main", ()) {
         Ok(_) => panic!("expected a trap:\n{src}"),
         Err(t) => t,
@@ -302,7 +332,11 @@ entry fn main() -> i32 {
 ";
     let t = run_main_trap(huge);
     assert_eq!(t.kind, rut_vm::TrapKind::IndexOutOfBounds);
-    assert_eq!(t.msg, "array index 2147483647 out of bounds (len 3)", "{}", t.msg);
+    assert_eq!(
+        t.msg, "array index 2147483647 out of bounds (len 3)",
+        "{}",
+        t.msg
+    );
 }
 
 // ---- windows: the ArrView arms are unchanged ----

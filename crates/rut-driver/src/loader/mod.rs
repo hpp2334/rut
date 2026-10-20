@@ -11,14 +11,12 @@ use std::collections::BTreeMap;
 use rut_core::id::ScopeId;
 
 use crate::bundle::{
-    fp16_of, bundle_key, parse_identity, parse_manifest_compat, read_entry, GroupKind,
-    Layout, Manifest, PkgType, DEPS_DIR,
+    bundle_key, fp16_of, parse_identity, parse_manifest_compat, read_entry, GroupKind, Layout,
+    Manifest, PkgType, DEPS_DIR,
 };
 use crate::decl::DECL_CHILD_FILE;
-use crate::mods::{
-    mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME,
-};
-use crate::run::{Walk, RunError};
+use crate::mods::{mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME};
+use crate::run::{RunError, Walk};
 use crate::session::{Mounted, MountedBody};
 use crate::Mode;
 
@@ -47,7 +45,11 @@ fn namescope_ledger(
     recorded: &BTreeMap<ScopeId, String>,
     scopes: &[(ScopeId, String)],
 ) -> Result<impl Fn(ScopeId) -> ScopeId, String> {
-    let max = recorded.keys().copied().max().unwrap_or(rut_core::id::BOOT_SCOPE);
+    let max = recorded
+        .keys()
+        .copied()
+        .max()
+        .unwrap_or(rut_core::id::BOOT_SCOPE);
     let base = max
         .checked_add(1)
         .filter(|next| *next as u32 <= rut_core::id::MAX_SCOPE)
@@ -167,7 +169,8 @@ pub fn rebind_identity_owners(
     }
     let mut ids: BTreeMap<String, rut_core::sym::IdentId> = BTreeMap::new();
     for (_, ident) in &swaps {
-        ids.entry(ident.clone()).or_insert_with(|| prog.interner.intern(ident));
+        ids.entry(ident.clone())
+            .or_insert_with(|| prog.interner.intern(ident));
     }
     for row in &mut prog.inst_fns {
         let text = prog.interner.name(row.owner).to_string();
@@ -192,7 +195,12 @@ pub(crate) fn walk_decoded(
     let err = |msg: String| RunError::law(format!("{origin}: {msg}"));
     let mut pkgs: BTreeMap<String, Mounted> = BTreeMap::new();
     let (manifest, root, scopes, groups) = match layout {
-        Layout::Compiled { manifest, root, scopes, groups } => (manifest, root, scopes, groups),
+        Layout::Compiled {
+            manifest,
+            root,
+            scopes,
+            groups,
+        } => (manifest, root, scopes, groups),
         Layout::Decl { manifest, .. } => {
             // the decl root: a host pkg — the surface mounts as the
             // pkg's host rows through `bundle_entry_pkg` (the lane a
@@ -206,7 +214,10 @@ pub(crate) fn walk_decoded(
                 .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
             pkg.spec = root_spec.clone();
             pkgs.insert(root_spec.clone(), pkg);
-            return Ok(Walk { pkgs: pkgs.into_values().collect(), root: root_spec });
+            return Ok(Walk {
+                pkgs: pkgs.into_values().collect(),
+                root: root_spec,
+            });
         }
     };
     let root_spec = manifest
@@ -243,8 +254,7 @@ pub(crate) fn walk_decoded(
     // pack-time owners bare — rebind to the identities (the root's own
     // module name stays bare: that IS its mount key)
     let mut root = root;
-    rebind_identity_owners(&mut root, &rebind, false, &ambiguous, origin)
-        .map_err(err)?;
+    rebind_identity_owners(&mut root, &rebind, false, &ambiguous, origin).map_err(err)?;
     // the root: a compiled module (the packer refuses any other root).
     // The mount seam's anti-doctoring law (v22): a generic-owning unit
     // must carry its template bodies INSIDE the binary — a generic
@@ -303,7 +313,7 @@ pub(crate) fn walk_decoded(
                 // (the row must be the scope the binary itself
                 // carries) is unchanged, and the stored binary is the
                 // namespaced one
-                                let mut program = rut_core::link::rebase(program.clone(), &remap);
+                let mut program = rut_core::link::rebase(program.clone(), &remap);
                 // the module rides under its MOUNT KEY and its owner
                 // rows rebind to the identities (the linker merges by
                 // module name and anchors instantiations on owner
@@ -366,13 +376,19 @@ pub(crate) fn walk_decoded(
     // BARE name: a group mounts under its identity, and the manifest's
     // deps keys stay bare (source-facing grammar)
     for spec in manifest.deps.keys() {
-        if !pkgs.keys().any(|k| crate::bundle::mount_name(k) == spec.as_str()) {
+        if !pkgs
+            .keys()
+            .any(|k| crate::bundle::mount_name(k) == spec.as_str())
+        {
             return Err(err(format!(
                 "the bundle is missing its `{spec}` dependency group"
             )));
         }
     }
-    Ok(Walk { pkgs: pkgs.into_values().collect(), root: root_spec })
+    Ok(Walk {
+        pkgs: pkgs.into_values().collect(),
+        root: root_spec,
+    })
 }
 
 /// The packed-container walk: a packed `.rutbundle`'s bytes → the
@@ -435,7 +451,9 @@ pub fn rows_mods(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
 ) -> Result<BTreeMap<String, ModSource>, String> {
-    Ok(rows_body(entries, prefix)?.map(|(_, mods)| mods).unwrap_or_default())
+    Ok(rows_body(entries, prefix)?
+        .map(|(_, mods)| mods)
+        .unwrap_or_default())
 }
 
 /// The archive-entries child lookup for the mod mount — the same case
@@ -464,7 +482,11 @@ fn entry_child_lookup<'a>(
             return Ok(ChildLookup::Ambiguous);
         }
         if has_dir {
-            return Ok(ChildLookup::Found { text: read_entry(entries, &key)?, canon: key, file: "mod.rut".to_string() });
+            return Ok(ChildLookup::Found {
+                text: read_entry(entries, &key)?,
+                canon: key,
+                file: "mod.rut".to_string(),
+            });
         }
         // the single-file entry alone: not a module here — bundles are
         // directory-form (the loud misses name the dir-form fix)
@@ -505,7 +527,10 @@ pub fn bundle_entry_pkg(
     // regardless of the entry keys the manifest spells
     if let Some((root, mods)) = rows_body(entries, prefix)? {
         return Ok(Mounted {
-            body: MountedBody::Source { text: root, is_decl: false },
+            body: MountedBody::Source {
+                text: root,
+                is_decl: false,
+            },
             entry: manifest.entry.clone(),
             mods,
             manifest: manifest.clone(),
@@ -534,7 +559,10 @@ pub fn bundle_entry_pkg(
                 ));
             }
             None => Mounted {
-                body: MountedBody::Source { text: src, is_decl: true },
+                body: MountedBody::Source {
+                    text: src,
+                    is_decl: true,
+                },
                 entry: manifest.entry.clone(),
                 manifest: manifest.clone(),
                 ..Default::default()
@@ -572,7 +600,11 @@ fn host_entry_pkg(
         m
     };
     if let Some((root, children)) = decl_rows_body(entries, prefix)? {
-        let rel = manifest.entry.type_path.as_deref().unwrap_or(DECL_CHILD_FILE);
+        let rel = manifest
+            .entry
+            .type_path
+            .as_deref()
+            .unwrap_or(DECL_CHILD_FILE);
         let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
         let m = crate::decl::lower_decl_module(&root, &children, &origin)?;
         return Ok(fold(m));
@@ -658,9 +690,18 @@ fn plain_source_pkg(
     src: String,
 ) -> Result<Mounted, String> {
     let mut lookup = entry_child_lookup(entries, prefix);
-    let mods = mount_mod_children(&src, &format!("\u{0}{prefix}"), Mode::Impl, "mod.rut", &mut lookup)?;
+    let mods = mount_mod_children(
+        &src,
+        &format!("\u{0}{prefix}"),
+        Mode::Impl,
+        "mod.rut",
+        &mut lookup,
+    )?;
     Ok(Mounted {
-        body: MountedBody::Source { text: src, is_decl: false },
+        body: MountedBody::Source {
+            text: src,
+            is_decl: false,
+        },
         entry: manifest.entry.clone(),
         mods,
         manifest: manifest.clone(),

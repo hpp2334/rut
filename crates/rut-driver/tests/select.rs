@@ -8,17 +8,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-
 use rut_vm::interp::{HostRegistry, Limits, Vm};
-
-
-
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -44,7 +45,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -53,14 +57,20 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut loaded = rut_native::dir_pkgs(&root.join("rut/ink")).expect("mount ink");
-    loaded.pkgs.extend(rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+    loaded.pkgs.extend(
+        rut_native::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+        )
         .expect("the async pair walks")
-        .pkgs);
+        .pkgs,
+    );
     // the root DECLARES its uses structurally (the async pair + the
     // ink world it logs through)
     loaded.pkgs.push(
-        rut_driver::Mounted::source("app", src)
-            .manifest(rut_driver::Manifest::lib("app", &["futures", "ink", "ink_host"])),
+        rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib(
+            "app",
+            &["futures", "ink", "ink_host"],
+        )),
     );
     let expected = rut_driver::declared_host_fns(&loaded.pkgs);
     let compiled = loaded
@@ -70,7 +80,11 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
         .entrypoint("app")
         .compile()
         .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
@@ -78,7 +92,10 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let sink2 = sink.clone();
     let ctx = rut_driver::host_pkg_ctx(&loaded.pkgs);
     let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     hosts.verify_against(&expected);
     let limits = Limits {
@@ -86,7 +103,12 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    let vm = Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .expect("vm");
     (vm, sink)
 }
@@ -105,7 +127,10 @@ fn run_loop(vm: &mut Vm, cap: usize) {
             }
         }
     }
-    panic!("the driving loop stalled: {} task(s) pending", vm.pending_tasks());
+    panic!(
+        "the driving loop stalled: {} task(s) pending",
+        vm.pending_tasks()
+    );
 }
 
 // ---- select2 ----
@@ -233,8 +258,14 @@ entry fn main() -> nil {
     let lines = sink.borrow().clone();
     assert!(lines.contains(&"gone 7".to_string()), "lines: {lines:?}");
     assert!(lines.contains(&"won".to_string()), "lines: {lines:?}");
-    assert!(lines.contains(&"raced done".to_string()), "lines: {lines:?}");
-    assert!(!lines.contains(&"loser finished".to_string()), "lines: {lines:?}");
+    assert!(
+        lines.contains(&"raced done".to_string()),
+        "lines: {lines:?}"
+    );
+    assert!(
+        !lines.contains(&"loser finished".to_string()),
+        "lines: {lines:?}"
+    );
 }
 
 // ---- select_all ----
@@ -280,9 +311,18 @@ entry fn main() -> nil {
     // tuple; the two losers' drop paths fire. The cancel order relative
     // to the woken continuation is queue timing, not a law.
     let lines = sink.borrow().clone();
-    assert!(lines.contains(&"winner 1:b".to_string()), "lines: {lines:?}");
-    assert!(lines.contains(&"cancelled a".to_string()), "lines: {lines:?}");
-    assert!(lines.contains(&"cancelled c".to_string()), "lines: {lines:?}");
+    assert!(
+        lines.contains(&"winner 1:b".to_string()),
+        "lines: {lines:?}"
+    );
+    assert!(
+        lines.contains(&"cancelled a".to_string()),
+        "lines: {lines:?}"
+    );
+    assert!(
+        lines.contains(&"cancelled c".to_string()),
+        "lines: {lines:?}"
+    );
 }
 
 // ---- the completer ----
@@ -319,7 +359,10 @@ entry fn main() -> nil {
     let (mut vm, sink) = setup(src);
     vm.call::<_, ()>("main", ()).expect("main");
     run_loop(&mut vm, 100);
-    assert_eq!(*sink.borrow(), vec!["resolve true then false", "got settled"]);
+    assert_eq!(
+        *sink.borrow(),
+        vec!["resolve true then false", "got settled"]
+    );
 }
 
 #[test]

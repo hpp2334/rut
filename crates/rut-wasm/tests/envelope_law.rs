@@ -21,8 +21,7 @@ fn compile_envelope(src: &str, man: Option<&str>) -> String {
         // ptr — the static heap's offsets carry no alignment promise,
         // so the length reads unaligned (the JS glue's DataView reads
         // it the same way)
-        let len =
-            u32::from_le_bytes(std::ptr::read_unaligned(res_ptr as *const [u8; 4])) as usize;
+        let len = u32::from_le_bytes(std::ptr::read_unaligned(res_ptr as *const [u8; 4])) as usize;
         let bytes = std::slice::from_raw_parts(res_ptr.add(4), len);
         String::from_utf8_lossy(bytes).to_string()
     }
@@ -98,6 +97,8 @@ fn a_manifest_lane_use_inside_the_set_compiles() {
     // never loosens beyond what the page spelled
     assert!(compiles_clean(
         INK_CALC_SRC,
-        Some(r#"{"name": "main", "deps": {"ink": {"path": "../ink"}, "calc": {"path": "../calc"}}}"#),
+        Some(
+            r#"{"name": "main", "deps": {"ink": {"path": "../ink"}, "calc": {"path": "../calc"}}}"#
+        ),
     ));
 }

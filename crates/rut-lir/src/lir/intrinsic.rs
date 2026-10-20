@@ -107,18 +107,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => {
                 self.ctx.err(
                     sp,
-                    format!("{who} needs an integer receiver — found `{}`", self.ctx.type_name(recv_ty)),
+                    format!(
+                        "{who} needs an integer receiver — found `{}`",
+                        self.ctx.type_name(recv_ty)
+                    ),
                 );
                 return Err(());
             }
         };
         let t2 = self.compile_expr(rhs, Some(recv_ty))?;
         if t2 != recv_ty {
-            self.ctx.err(sp, format!(
-                "{who} operands must have the same type (`{}` vs `{}`)",
-                self.ctx.type_name(recv_ty),
-                self.ctx.type_name(t2)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "{who} operands must have the same type (`{}` vs `{}`)",
+                    self.ctx.type_name(recv_ty),
+                    self.ctx.type_name(t2)
+                ),
+            );
             return Err(());
         }
         Ok((recv_ty, prim, recv_reg, self.last_reg))
@@ -141,26 +147,54 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let Some(ef) = self.ctx.extern_fn(member).cloned() else {
             let head = self.ctx.name(ns).to_string();
             let name = self.ctx.name(member).to_string();
-            self.ctx.err(sp, format!("`{head}::{name}` is not a namespace member"));
+            self.ctx
+                .err(sp, format!("`{head}::{name}` is not a namespace member"));
             return Err(());
         };
         if args.len() != ef.params.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ef.params.len()));
+            self.ctx.err(
+                sp,
+                format!(
+                    "call arity: {} args for {} params",
+                    args.len(),
+                    ef.params.len()
+                ),
+            );
             return Err(());
         }
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ef.params[i]))?;
             if !self.widens(t, ef.params[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ef.params[i])
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(a.id()),
+                    format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(ef.params[i])
+                    ),
+                );
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ef.ret == TY_NIL { None } else { Some(self.new_reg(ef.ret)) };
-        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: ef.func, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        let dst = if ef.ret == TY_NIL {
+            None
+        } else {
+            Some(self.new_reg(ef.ret))
+        };
+        {
+            let (argv_off, argc) = self.pool_args(&(aregs));
+            self.emit(
+                Op::Call {
+                    func: ef.func,
+                    argv_off,
+                    argc,
+                    dst: opt_reg(dst),
+                },
+                sp.lo,
+            );
+        }
         Ok(ef.ret)
     }
 
@@ -168,7 +202,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// A fresh register holding the raw scalar `v` of an integer primitive.
     fn int_const(&mut self, ty: TypeId, prim: PrimTy, v: i128, sp: u32) -> u16 {
-        let bits = if prim.is_unsigned() { v as u64 } else { (v as i64) as u64 };
+        let bits = if prim.is_unsigned() {
+            v as u64
+        } else {
+            (v as i64) as u64
+        };
         let r = self.new_reg(ty);
         self.emit(Op::ConstRaw { dst: r, bits }, sp);
         r
@@ -210,11 +248,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // overflow iff the addends share a sign with each other but
                 // not with the result: ((a ^ r) & (b ^ r)) < 0
                 let x1 = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: x1, a, b: r }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: x1,
+                        a,
+                        b: r,
+                    },
+                    sp,
+                );
                 let x2 = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: x2, a: b, b: r }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: x2,
+                        a: b,
+                        b: r,
+                    },
+                    sp,
+                );
                 let x3 = self.new_reg(ty);
-                self.emit(Op::AndI { prim, dst: x3, a: x1, b: x2 }, sp);
+                self.emit(
+                    Op::AndI {
+                        prim,
+                        dst: x3,
+                        a: x1,
+                        b: x2,
+                    },
+                    sp,
+                );
                 let zero = self.int_const(ty, prim, 0, sp);
                 self.cmp(CmpOp::Lt, prim, x3, zero, sp)
             }
@@ -222,11 +284,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ArithOp::Sub => {
                 // ((a ^ b) & (a ^ r)) < 0
                 let x1 = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: x1, a, b }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: x1,
+                        a,
+                        b,
+                    },
+                    sp,
+                );
                 let x2 = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: x2, a, b: r }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: x2,
+                        a,
+                        b: r,
+                    },
+                    sp,
+                );
                 let x3 = self.new_reg(ty);
-                self.emit(Op::AndI { prim, dst: x3, a: x1, b: x2 }, sp);
+                self.emit(
+                    Op::AndI {
+                        prim,
+                        dst: x3,
+                        a: x1,
+                        b: x2,
+                    },
+                    sp,
+                );
                 let zero = self.int_const(ty, prim, 0, sp);
                 self.cmp(CmpOp::Lt, prim, x3, zero, sp)
             }
@@ -269,7 +355,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let (imin, _) = int_bounds(prim);
             let minv = self.int_const(ty, prim, imin, sp);
             let is_min = self.cmp(CmpOp::Eq, prim, b, minv, sp);
-            self.emit(Op::Mov { dst: ovf, src: is_min }, sp);
+            self.emit(
+                Op::Mov {
+                    dst: ovf,
+                    src: is_min,
+                },
+                sp,
+            );
             self.jmp(l_end);
 
             self.bind(l_calc);
@@ -283,7 +375,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// The saturated value on overflow: `MAX`/`MIN` chosen branchlessly.
-    fn saturating_clamp(&mut self, op: ArithOp, prim: PrimTy, ty: TypeId, a: u16, b: u16, sp: u32) -> u16 {
+    fn saturating_clamp(
+        &mut self,
+        op: ArithOp,
+        prim: PrimTy,
+        ty: TypeId,
+        a: u16,
+        b: u16,
+        sp: u32,
+    ) -> u16 {
         let (imin, imax) = int_bounds(prim);
         match op {
             ArithOp::Add if prim.is_unsigned() => self.int_const(ty, prim, imax, sp),
@@ -292,7 +392,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let maxr = self.int_const(ty, prim, imax, sp);
                 let mask = self.sign_mask(ty, prim, a, sp);
                 let r = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: r, a: maxr, b: mask }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: r,
+                        a: maxr,
+                        b: mask,
+                    },
+                    sp,
+                );
                 r
             }
             ArithOp::Sub if prim.is_unsigned() => self.int_const(ty, prim, 0, sp),
@@ -302,7 +410,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let minr = self.int_const(ty, prim, imin, sp);
                 let mask = self.sign_mask(ty, prim, b, sp);
                 let r = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: r, a: minr, b: mask }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: r,
+                        a: minr,
+                        b: mask,
+                    },
+                    sp,
+                );
                 r
             }
             ArithOp::Mul if prim.is_unsigned() => self.int_const(ty, prim, imax, sp),
@@ -313,9 +429,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let ma = self.sign_mask(ty, prim, a, sp);
                 let mb = self.sign_mask(ty, prim, b, sp);
                 let s = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: s, a: ma, b: mb }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: s,
+                        a: ma,
+                        b: mb,
+                    },
+                    sp,
+                );
                 let r = self.new_reg(ty);
-                self.emit(Op::XorI { prim, dst: r, a: maxr, b: s }, sp);
+                self.emit(
+                    Op::XorI {
+                        prim,
+                        dst: r,
+                        a: maxr,
+                        b: s,
+                    },
+                    sp,
+                );
                 r
             }
             _ => unreachable!("saturating_clamp: bad arith op"),
@@ -377,7 +509,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ok = self.cmp(CmpOp::Eq, PrimTy::Bool, ovf, no, sp.lo);
         let tty = self.ctx.mk_tuple(vec![ty, TY_BOOL]);
         let dst = self.new_reg(tty);
-        { let (argv_off, argc) = self.pool_args(&(vec![r, ok])); self.emit(Op::MakeRecord { dst: dst, ty: tty, argv_off, argc }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&(vec![r, ok]));
+            self.emit(
+                Op::MakeRecord {
+                    dst: dst,
+                    ty: tty,
+                    argv_off,
+                    argc,
+                },
+                sp.lo,
+            );
+        }
         self.last_reg = dst;
         Ok(tty)
     }

@@ -3,12 +3,12 @@
 //! and closures (by-value captures with the v1 capture
 //! scan).
 
+use super::*;
 use crate::check::TcResult;
 use rut_ast::ast::{ExprKind, Lit};
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
 use rut_core::types::*;
-use super::*;
 
 /// A `[v; n]` fill whose value is a compile-time all-zero literal —
 /// `nil`, `0` (any int suffix), `0.0`, `false`. The array block arrives
@@ -28,7 +28,12 @@ fn is_zero_fill(e: &ExprKind) -> bool {
 impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- f-strings: the concat desugaring ----
 
-    pub(crate) fn compile_fstr(&mut self, parts: Vec<FPartAst>, _expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_fstr(
+        &mut self,
+        parts: Vec<FPartAst>,
+        _expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
         let part_regs = self.compile_fstr_parts(&parts, sp)?;
         // An f-string with a single part needs no concatenation — the part
         // already is the result (`f"{x}"` is `x` after the `Str` above).
@@ -37,7 +42,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(TY_STR);
         }
         let dst = self.new_reg(TY_STR);
-        { let (argv_off, argc) = self.pool_args(&(part_regs)); self.emit(Op::CallNat { nat: Nat::Concat, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&(part_regs));
+            self.emit(
+                Op::CallNat {
+                    nat: Nat::Concat,
+                    recv: NOREG,
+                    argv_off,
+                    argc,
+                    dst: dst,
+                },
+                sp.lo,
+            );
+        }
         Ok(TY_STR)
     }
 
@@ -59,7 +76,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<TypeId> {
         let mut part_regs = vec![acc];
         part_regs.extend(self.compile_fstr_parts(&parts[skip..], sp)?);
-        { let (argv_off, argc) = self.pool_args(&(part_regs)); self.emit(Op::CallNat { nat: Nat::Concat, recv: NOREG, argv_off, argc, dst: acc }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&(part_regs));
+            self.emit(
+                Op::CallNat {
+                    nat: Nat::Concat,
+                    recv: NOREG,
+                    argv_off,
+                    argc,
+                    dst: acc,
+                },
+                sp.lo,
+            );
+        }
         Ok(TY_STR)
     }
 
@@ -81,7 +110,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if parts.len() < 2 {
             return Ok(false);
         }
-        let FPartAst::Hole(e0) = &parts[0] else { return Ok(false) };
+        let FPartAst::Hole(e0) = &parts[0] else {
+            return Ok(false);
+        };
         let ExprKind::Path { segs } = self.ctx.ast.expr(*e0).clone() else {
             return Ok(false);
         };
@@ -104,14 +135,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Compile f-string parts into registers: a literal becomes a `str`
     /// constant, a hole its value (converted through `Nat::Str` unless it is
     /// already a `str`).
-    fn compile_fstr_parts(&mut self, parts: &[FPartAst], sp: rut_lexer::span::Span) -> TcResult<Vec<u16>> {
+    fn compile_fstr_parts(
+        &mut self,
+        parts: &[FPartAst],
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<Vec<u16>> {
         let mut part_regs: Vec<u16> = Vec::new();
         for p in parts {
             match p {
                 FPartAst::Lit(s) => {
                     let k = self.konst(ConstVal::Str(s.clone()));
                     let reg = self.new_reg(TY_STR);
-                    self.emit(Op::Const { dst: reg, k: k as u32 }, sp.lo);
+                    self.emit(
+                        Op::Const {
+                            dst: reg,
+                            k: k as u32,
+                        },
+                        sp.lo,
+                    );
                     part_regs.push(reg);
                 }
                 FPartAst::Hole(e) => {
@@ -122,7 +163,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if let TyKind::Opt { elem } = self.ctx.types.kind(t).clone() {
                         let src = self.last_reg;
                         let d = self.new_reg(elem);
-                        self.emit(Op::GetF { dst: d, obj: src, field: 0, repr: self.ctx.types.repr_of(elem) }, lo);
+                        self.emit(
+                            Op::GetF {
+                                dst: d,
+                                obj: src,
+                                field: 0,
+                                repr: self.ctx.types.repr_of(elem),
+                            },
+                            lo,
+                        );
                         t = elem;
                     }
                     self.check_formattable(t, self.ctx.ast.span(e.id()))?;
@@ -133,7 +182,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         part_regs.push(src);
                     } else {
                         let sreg = self.new_reg(TY_STR);
-                        { let (argv_off, argc) = self.pool_args(&(vec![src])); self.emit(Op::CallNat { nat: Nat::Str, recv: NOREG, argv_off, argc, dst: sreg }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![src]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::Str,
+                                    recv: NOREG,
+                                    argv_off,
+                                    argc,
+                                    dst: sreg,
+                                },
+                                sp.lo,
+                            );
+                        }
                         part_regs.push(sreg);
                     }
                 }
@@ -164,10 +225,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         if args.len() != 1 {
-            self.ctx.err(sp, format!(
-                "`{}`(..) takes exactly one wrapped value",
-                self.ctx.name(name)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}`(..) takes exactly one wrapped value",
+                    self.ctx.name(name)
+                ),
+            );
             return Err(());
         }
         // the wrapped type, as the decl spells it — the synthesized
@@ -175,7 +239,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let field_node = match self.ctx.ast.item(d.node) {
             ItemKind::Class { fields, .. } if fields.len() == 1 => fields[0],
             _ => {
-                self.ctx.err(sp, format!("`{}` is not a newtype class", self.ctx.name(name)));
+                self.ctx.err(
+                    sp,
+                    format!("`{}` is not a newtype class", self.ctx.name(name)),
+                );
                 return Err(());
             }
         };
@@ -186,10 +253,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let fty = self.ctx.resolve_type(fd.ty, &[]);
             let t = self.compile_expr(args[0], Some(fty))?;
             if !self.widens(t, fty) {
-                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                    "the wrapped value is `{}`, `{}` expected",
-                    self.ctx.type_name(t), self.ctx.type_name(fty)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(args[0].id()),
+                    format!(
+                        "the wrapped value is `{}`, `{}` expected",
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(fty)
+                    ),
+                );
             }
             self.widen_to_slot(t, fty, sp.lo);
             let val = self.last_reg;
@@ -200,13 +271,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // wrapped argument determines (the free-fn unification rule)
         let (inst, fty, arg_ty) = if !generics.is_empty() {
             if generics.len() != d.generics.len() {
-                self.ctx.err(sp, format!(
-                    "`{}`<..> takes {} type argument(s), {} given — spell ALL binders or none",
-                    self.ctx.name(name), d.generics.len(), generics.len()
-                ));
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}`<..> takes {} type argument(s), {} given — spell ALL binders or none",
+                        self.ctx.name(name),
+                        d.generics.len(),
+                        generics.len()
+                    ),
+                );
                 return Err(());
             }
-            let inst_args: Vec<TypeId> = generics.iter().map(|g| self.resolve_type_now(*g)).collect();
+            let inst_args: Vec<TypeId> =
+                generics.iter().map(|g| self.resolve_type_now(*g)).collect();
             let inst = self.ctx.mk_data_inst(name, inst_args.clone(), sp);
             let env: Vec<(IdentId, TypeId)> = d
                 .generics
@@ -232,11 +309,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(args[0], Some(hint))?;
             let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
             if !self.unify_template_field(hint, t, &d.generics, &mut subst) {
-                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                    "the wrapped value is `{}`, the wrapped type of `{}` expected",
-                    self.ctx.type_name(t),
-                    self.ctx.name(name)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(args[0].id()),
+                    format!(
+                        "the wrapped value is `{}`, the wrapped type of `{}` expected",
+                        self.ctx.type_name(t),
+                        self.ctx.name(name)
+                    ),
+                );
                 return Err(());
             }
             let undetermined = d
@@ -293,11 +373,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             (inst, fty, t)
         };
         if !self.widens(arg_ty, fty) {
-            self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                "the wrapped value is `{}`, `{}` expected",
-                self.ctx.type_name(arg_ty),
-                self.ctx.type_name(fty)
-            ));
+            self.ctx.err(
+                self.ctx.ast.span(args[0].id()),
+                format!(
+                    "the wrapped value is `{}`, `{}` expected",
+                    self.ctx.type_name(arg_ty),
+                    self.ctx.type_name(fty)
+                ),
+            );
         }
         // the slot widen runs AFTER the substitution completed — a
         // placeholder-hinted lambda argument crosses at its real ABI here
@@ -322,10 +405,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         if args.len() != 1 {
-            self.ctx.err(sp, format!(
-                "`{}`(..) takes exactly one wrapped value",
-                self.ctx.name(name)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}`(..) takes exactly one wrapped value",
+                    self.ctx.name(name)
+                ),
+            );
             return Err(());
         }
         // the generic form first: the template answers (a generic class
@@ -335,7 +421,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let template_field = match self.ctx.types.kind(g.template) {
                 TyKind::Data { fields } if fields.len() == 1 => fields[0].ty,
                 _ => {
-                    self.ctx.err(sp, format!("`{}` is not a newtype class", self.ctx.name(name)));
+                    self.ctx.err(
+                        sp,
+                        format!("`{}` is not a newtype class", self.ctx.name(name)),
+                    );
                     return Err(());
                 }
             };
@@ -344,16 +433,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // substituted field row
             if !generics.is_empty() {
                 if generics.len() != g.params.len() {
-                    self.ctx.err(sp, format!(
+                    self.ctx.err(
+                        sp,
+                        format!(
                         "`{}`<..> takes {} type argument(s), {} given — spell ALL binders or none",
                         self.ctx.name(name),
                         g.params.len(),
                         generics.len()
-                    ));
+                    ),
+                    );
                     return Err(());
                 }
-                let inst_args: Vec<TypeId> =
-                    generics.iter().map(|gn| self.resolve_type_now(*gn)).collect();
+                let inst_args: Vec<TypeId> = generics
+                    .iter()
+                    .map(|gn| self.resolve_type_now(*gn))
+                    .collect();
                 let inst = self.ctx.mk_data_inst(name, inst_args.clone(), sp);
                 let mut env: std::collections::HashMap<String, TypeId> =
                     std::collections::HashMap::new();
@@ -363,10 +457,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let fty = self.ctx.subst_template_ty(template_field, &env);
                 let t = self.compile_expr(args[0], Some(fty))?;
                 if !self.widens(t, fty) {
-                    self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                        "the wrapped value is `{}`, `{}` expected",
-                        self.ctx.type_name(t), self.ctx.type_name(fty)
-                    ));
+                    self.ctx.err(
+                        self.ctx.ast.span(args[0].id()),
+                        format!(
+                            "the wrapped value is `{}`, `{}` expected",
+                            self.ctx.type_name(t),
+                            self.ctx.type_name(fty)
+                        ),
+                    );
                 }
                 self.widen_to_slot(t, fty, sp.lo);
                 let val = self.last_reg;
@@ -379,11 +477,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(args[0], None)?;
             let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
             if !self.unify_template_field(template_field, t, &g.params, &mut subst) {
-                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                    "the wrapped value is `{}`, the wrapped type of `{}` expected",
-                    self.ctx.type_name(t),
-                    self.ctx.name(name)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(args[0].id()),
+                    format!(
+                        "the wrapped value is `{}`, the wrapped type of `{}` expected",
+                        self.ctx.type_name(t),
+                        self.ctx.name(name)
+                    ),
+                );
                 return Err(());
             }
             let undetermined = g
@@ -425,16 +526,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 })
                 .collect();
             let inst = self.ctx.mk_data_inst(name, inst_args.clone(), sp);
-            let mut env: std::collections::HashMap<String, TypeId> = std::collections::HashMap::new();
+            let mut env: std::collections::HashMap<String, TypeId> =
+                std::collections::HashMap::new();
             for (p, &a) in g.params.iter().zip(inst_args.iter()) {
                 env.insert(format!("#{}", self.ctx.name(*p)), a);
             }
             let fty = self.ctx.subst_template_ty(template_field, &env);
             if !self.widens(t, fty) {
-                self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                    "the wrapped value is `{}`, `{}` expected",
-                    self.ctx.type_name(t), self.ctx.type_name(fty)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(args[0].id()),
+                    format!(
+                        "the wrapped value is `{}`, `{}` expected",
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(fty)
+                    ),
+                );
             }
             self.widen_to_slot(t, fty, sp.lo);
             let val = self.last_reg;
@@ -447,15 +553,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             _ => None,
         });
         let Some((ty, fty)) = ty.zip(fty) else {
-            self.ctx.err(sp, format!("`{}` is not a newtype class", self.ctx.name(name)));
+            self.ctx.err(
+                sp,
+                format!("`{}` is not a newtype class", self.ctx.name(name)),
+            );
             return Err(());
         };
         let t = self.compile_expr(args[0], Some(fty))?;
         if !self.widens(t, fty) {
-            self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                "the wrapped value is `{}`, `{}` expected",
-                self.ctx.type_name(t), self.ctx.type_name(fty)
-            ));
+            self.ctx.err(
+                self.ctx.ast.span(args[0].id()),
+                format!(
+                    "the wrapped value is `{}`, `{}` expected",
+                    self.ctx.type_name(t),
+                    self.ctx.type_name(fty)
+                ),
+            );
         }
         self.widen_to_slot(t, fty, sp.lo);
         let val = self.last_reg;
@@ -467,7 +580,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// chains is a later optimization lane, never a surface law.
     fn mint_newtype(&mut self, ty: TypeId, val: u16, sp: rut_lexer::span::Span) -> TypeId {
         let dst = self.new_reg(ty);
-        { let (argv_off, argc) = self.pool_args(&[val]); self.emit(Op::MakeRecord { dst, ty, argv_off, argc }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&[val]);
+            self.emit(
+                Op::MakeRecord {
+                    dst,
+                    ty,
+                    argv_off,
+                    argc,
+                },
+                sp.lo,
+            );
+        }
         ty
     }
 
@@ -507,7 +631,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        match (self.ctx.types.kind(field).clone(), self.ctx.types.kind(arg).clone()) {
+        match (
+            self.ctx.types.kind(field).clone(),
+            self.ctx.types.kind(arg).clone(),
+        ) {
             (TyKind::Array { elem: a }, TyKind::Array { elem: b }) => {
                 self.unify_template_field(a, b, params, subst)
             }
@@ -520,8 +647,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // when neither row is in `inst_data` (a template's stamped
             // fields — the local construction's hint)
             (TyKind::Data { fields: fa }, TyKind::Data { fields: fb })
-                if fa.len() == fb.len()
-                    && self.same_head_text(field, arg) =>
+                if fa.len() == fb.len() && self.same_head_text(field, arg) =>
             {
                 fa.iter().zip(fb.iter()).all(|(x, y)| {
                     x.name == y.name && self.unify_template_field(x.ty, y.ty, params, subst)
@@ -535,13 +661,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Two same-head instantiations whose parameters survive only in
     /// the ROW NAMES: `HashSet<#T>` against `HashSet<str>` binds
     /// `T := str` off the spelled argument texts.
-    fn unify_name_args(&mut self, field: TypeId, arg: TypeId, params: &[IdentId], subst: &mut Vec<(IdentId, TypeId)>) -> bool {
-        let ftext = self.ctx.interner.name(self.ctx.types.type_at(field).name).to_string();
-        let atext = self.ctx.interner.name(self.ctx.types.type_at(arg).name).to_string();
-        let Some((fh, fargs)) = ftext.split_once('<') else { return false };
-        let Some((ah, aargs)) = atext.split_once('<') else { return false };
-        let Some(fargs) = fargs.strip_suffix('>') else { return false };
-        let Some(aargs) = aargs.strip_suffix('>') else { return false };
+    fn unify_name_args(
+        &mut self,
+        field: TypeId,
+        arg: TypeId,
+        params: &[IdentId],
+        subst: &mut Vec<(IdentId, TypeId)>,
+    ) -> bool {
+        let ftext = self
+            .ctx
+            .interner
+            .name(self.ctx.types.type_at(field).name)
+            .to_string();
+        let atext = self
+            .ctx
+            .interner
+            .name(self.ctx.types.type_at(arg).name)
+            .to_string();
+        let Some((fh, fargs)) = ftext.split_once('<') else {
+            return false;
+        };
+        let Some((ah, aargs)) = atext.split_once('<') else {
+            return false;
+        };
+        let Some(fargs) = fargs.strip_suffix('>') else {
+            return false;
+        };
+        let Some(aargs) = aargs.strip_suffix('>') else {
+            return false;
+        };
         if fh != ah {
             return false;
         }
@@ -557,11 +705,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 continue;
             };
-            let Some(id) = self.ctx.lookup_name(stripped) else { return false };
+            let Some(id) = self.ctx.lookup_name(stripped) else {
+                return false;
+            };
             if !params.contains(&id) {
                 return false;
             }
-            let Some(ty) = self.ctx.interner.lookup(a).and_then(|iid| self.ctx.types.dense_id_of_name(iid)) else {
+            let Some(ty) = self
+                .ctx
+                .interner
+                .lookup(a)
+                .and_then(|iid| self.ctx.types.dense_id_of_name(iid))
+            else {
                 return false;
             };
             if let Some(e) = subst.iter_mut().find(|(n, _)| *n == id) {
@@ -578,8 +733,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Do two rows spell the same generic head (`Vec<..>` — the base
     /// name text, before the type arguments)?
     fn same_head_text(&self, a: TypeId, b: TypeId) -> bool {
-        let ta = self.ctx.interner.name(self.ctx.types.type_at(a).name).to_string();
-        let tb = self.ctx.interner.name(self.ctx.types.type_at(b).name).to_string();
+        let ta = self
+            .ctx
+            .interner
+            .name(self.ctx.types.type_at(a).name)
+            .to_string();
+        let tb = self
+            .ctx
+            .interner
+            .name(self.ctx.types.type_at(b).name)
+            .to_string();
         let base = |t: &str| t.split('<').next().unwrap_or(t).to_string();
         base(&ta) == base(&tb)
     }
@@ -587,8 +750,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `field` and `arg` are instantiations of the SAME generic class:
     /// unify their arguments element-wise. `false` when either side is
     /// not an instantiation or the heads differ.
-    fn unify_inst_pair(&mut self, field: TypeId, arg: TypeId, params: &[IdentId], subst: &mut Vec<(IdentId, TypeId)>) -> bool {
-        let (Some((fd, fargs)), Some((ad, aargs))) = (self.ctx.inst_data.get(&field).cloned(), self.ctx.inst_data.get(&arg).cloned()) else {
+    fn unify_inst_pair(
+        &mut self,
+        field: TypeId,
+        arg: TypeId,
+        params: &[IdentId],
+        subst: &mut Vec<(IdentId, TypeId)>,
+    ) -> bool {
+        let (Some((fd, fargs)), Some((ad, aargs))) = (
+            self.ctx.inst_data.get(&field).cloned(),
+            self.ctx.inst_data.get(&arg).cloned(),
+        ) else {
             return false;
         };
         if fd != ad || fargs.len() != aargs.len() {
@@ -602,7 +774,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         true
     }
 
-    pub(crate) fn compile_struct(&mut self, ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_struct(
+        &mut self,
+        ty: NodeHandle<AnyTy>,
+        fields: Vec<(IdentId, NodeHandle<AnyExpr>)>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
         // `Self` binds inside class bodies. A generic head
         // spelled WITHOUT its arguments (`M { .. }` where `M` is generic)
         // takes them from the expected instantiation — the literal types
@@ -613,10 +791,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .ctx
                     .find_data(segs[0].name)
                     .map(|d| d.generics.len())
-                    .or_else(|| self.ctx.extern_generics.get(&segs[0].name).map(|g| g.params.len()));
+                    .or_else(|| {
+                        self.ctx
+                            .extern_generics
+                            .get(&segs[0].name)
+                            .map(|g| g.params.len())
+                    });
                 match (arity, expected) {
-                    (Some(n), Some(e)) if n > 0
-                        && self.ctx.inst_data.get(&e).map(|(d, _)| *d) == Some(segs[0].name) =>
+                    (Some(n), Some(e))
+                        if n > 0
+                            && self.ctx.inst_data.get(&e).map(|(d, _)| *d)
+                                == Some(segs[0].name) =>
                     {
                         e
                     }
@@ -628,7 +813,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // resolve the record: a local generic instantiation, a local record,
         // or a used one
         let inst = self.ctx.inst_data.get(&sty).cloned();
-        let local = self.ctx.datas.iter().find(|(_, d)| d.ty == sty).map(|(n, d)| (*n, d.clone()));
+        let local = self
+            .ctx
+            .datas
+            .iter()
+            .find(|(_, d)| d.ty == sty)
+            .map(|(n, d)| (*n, d.clone()));
         let (dname, kind, field_list, class_subst): (
             IdentId,
             crate::check::DataKind,
@@ -637,10 +827,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         ) = if let Some((dname, cargs)) = inst.clone() {
             match self.ctx.find_data(dname).cloned() {
                 Some(d) => {
-                    let class_subst: Vec<(IdentId, TypeId)> =
-                        d.generics.iter().cloned().zip(cargs.iter().cloned()).collect();
+                    let class_subst: Vec<(IdentId, TypeId)> = d
+                        .generics
+                        .iter()
+                        .cloned()
+                        .zip(cargs.iter().cloned())
+                        .collect();
                     let field_nodes = match self.ctx.ast.item(d.node) {
-                        ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+                        ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => {
+                            fields.clone()
+                        }
                         _ => Vec::new(),
                     };
                     let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
@@ -665,7 +861,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // instantiation, no declaring body in sight
                 None => {
                     let TyKind::Data { fields: desc } = self.ctx.types.kind(sty) else {
-                        self.ctx.err(sp, format!("`{}` is not a record of this module", self.ctx.type_name(sty)));
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "`{}` is not a record of this module",
+                                self.ctx.type_name(sty)
+                            ),
+                        );
                         return Err(());
                     };
                     let desc = desc.clone();
@@ -698,9 +900,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut set: Vec<bool> = vec![false; field_list.len()];
         for (fname, v) in &fields {
             let Some(fidx) = field_list.iter().position(|(n, _, _)| n == fname) else {
-                self.ctx.err(self.ctx.ast.span(v.id()), format!(
-                    "`{}` has no field `{}`", self.ctx.name(dname), self.ctx.name(*fname)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(v.id()),
+                    format!(
+                        "`{}` has no field `{}`",
+                        self.ctx.name(dname),
+                        self.ctx.name(*fname)
+                    ),
+                );
                 return Err(());
             };
             // the member-visibility law: NAMING a field in a literal is
@@ -711,19 +918,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
             if set[fidx] {
-                self.ctx.err(self.ctx.ast.span(v.id()), format!(
-                    "duplicate field `{}` in the `{}` literal",
-                    self.ctx.name(*fname), self.ctx.name(dname)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(v.id()),
+                    format!(
+                        "duplicate field `{}` in the `{}` literal",
+                        self.ctx.name(*fname),
+                        self.ctx.name(dname)
+                    ),
+                );
                 return Err(());
             }
             let fty = field_list[fidx].1;
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
-                self.ctx.err(self.ctx.ast.span(v.id()), format!(
-                    "field `{}` is `{}`, found `{}`",
-                    self.ctx.name(*fname), self.ctx.type_name(fty), self.ctx.type_name(t)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(v.id()),
+                    format!(
+                        "field `{}` is `{}`, found `{}`",
+                        self.ctx.name(*fname),
+                        self.ctx.type_name(fty),
+                        self.ctx.type_name(t)
+                    ),
+                );
             }
             val_regs[fidx] = Some(self.last_reg);
             set[fidx] = true;
@@ -735,10 +951,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // the every-field-covered law: an omitted
                         // field is legal only when the field declares
                         // an initializer — no silent zero-fill
-                        self.ctx.err(sp, format!(
+                        self.ctx.err(
+                            sp,
+                            format!(
                             "missing field `{}` in the `{}` literal (the every-field-covered law)",
                             self.ctx.name(*fname), self.ctx.name(dname)
-                        ));
+                        ),
+                        );
                         return Err(());
                     }
                     Some(init) => {
@@ -757,7 +976,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.self_ty = saved_self;
                         let t = t?;
                         if t != *fty {
-                            self.ctx.err(self.ctx.ast.span(init.id()), "field initializer type mismatch");
+                            self.ctx.err(
+                                self.ctx.ast.span(init.id()),
+                                "field initializer type mismatch",
+                            );
                         }
                         val_regs[fidx] = Some(self.last_reg);
                     }
@@ -769,7 +991,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .map(|r| r.expect("checked: every field is initialized"))
             .collect();
         let dst = self.new_reg(sty);
-        { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: dst, ty: sty, argv_off, argc }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&(vals));
+            self.emit(
+                Op::MakeRecord {
+                    dst: dst,
+                    ty: sty,
+                    argv_off,
+                    argc,
+                },
+                sp.lo,
+            );
+        }
         Ok(sty)
     }
 
@@ -795,7 +1028,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let TyKind::Data { fields: desc } = self.ctx.types.kind(sty).clone() else {
-            self.ctx.err(sp, format!("`{}` is not a struct/class of this module", self.ctx.type_name(sty)));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` is not a struct/class of this module",
+                    self.ctx.type_name(sty)
+                ),
+            );
             return Err(());
         };
         if self.ctx.extern_classes.contains(&sty) {
@@ -809,18 +1048,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut val_regs: Vec<Option<u16>> = vec![None; n];
         for (fname, v) in &fields {
             let Some(fidx) = desc.iter().position(|f| f.name == *fname) else {
-                self.ctx.err(self.ctx.ast.span(v.id()), format!(
-                    "`{}` has no field `{}`", self.ctx.type_name(sty), self.ctx.name(*fname)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(v.id()),
+                    format!(
+                        "`{}` has no field `{}`",
+                        self.ctx.type_name(sty),
+                        self.ctx.name(*fname)
+                    ),
+                );
                 return Err(());
             };
             let fty = desc[fidx].ty;
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
-                self.ctx.err(self.ctx.ast.span(v.id()), format!(
-                    "field `{}` is `{}`, found `{}`",
-                    self.ctx.name(*fname), self.ctx.type_name(fty), self.ctx.type_name(t)
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(v.id()),
+                    format!(
+                        "field `{}` is `{}`, found `{}`",
+                        self.ctx.name(*fname),
+                        self.ctx.type_name(fty),
+                        self.ctx.type_name(t)
+                    ),
+                );
             }
             val_regs[fidx] = Some(self.last_reg);
         }
@@ -838,11 +1087,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let vals: Vec<u16> = val_regs.into_iter().map(|r| r.unwrap()).collect();
         let dst = self.new_reg(sty);
-        { let (argv_off, argc) = self.pool_args(&(vals)); self.emit(Op::MakeRecord { dst: dst, ty: sty, argv_off, argc }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&(vals));
+            self.emit(
+                Op::MakeRecord {
+                    dst: dst,
+                    ty: sty,
+                    argv_off,
+                    argc,
+                },
+                sp.lo,
+            );
+        }
         Ok(sty)
     }
 
-    pub(crate) fn compile_array_lit(&mut self, elems: Vec<NodeHandle<AnyExpr>>, expected: Option<TypeId>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_array_lit(
+        &mut self,
+        elems: Vec<NodeHandle<AnyExpr>>,
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
         // `[e1, .., en] : [T]`; T from expected or the
         // first element; uncontextualized int elements default to i32
         let elem_hint = match expected.map(|e| self.ctx.types.kind(e).clone()) {
@@ -864,7 +1129,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if self.widens(u, t) {
                     ety = Some(t);
                 } else if !self.widens(t, u) {
-                    self.ctx.err(self.ctx.ast.span(e.id()), "array literal elements must agree on one type");
+                    self.ctx.err(
+                        self.ctx.ast.span(e.id()),
+                        "array literal elements must agree on one type",
+                    );
                 }
             }
             eregs.push(self.last_reg);
@@ -872,7 +1140,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let elem = ety.unwrap_or(TY_I32);
         let aty = self.ctx.mk_array(elem);
         let dst = self.new_reg(aty);
-        { let (argv_off, argc) = self.pool_args(&(eregs)); self.emit(Op::ArrLit { dst: dst, ty: aty, argv_off, argc }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&(eregs));
+            self.emit(
+                Op::ArrLit {
+                    dst: dst,
+                    ty: aty,
+                    argv_off,
+                    argc,
+                },
+                sp.lo,
+            );
+        }
         Ok(aty)
     }
 
@@ -901,12 +1180,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let val = self.last_reg;
         let ct = self.compile_expr(count, Some(TY_I32))?;
         if ct != TY_I32 {
-            self.ctx.err(sp, format!("the repeat count must be `i32`, found `{}`", self.ctx.type_name(ct)));
+            self.ctx.err(
+                sp,
+                format!(
+                    "the repeat count must be `i32`, found `{}`",
+                    self.ctx.type_name(ct)
+                ),
+            );
         }
         let len = self.last_reg;
         let aty = self.ctx.mk_array(elem);
         let dst = self.new_reg(aty);
-        self.emit(Op::ArrNew { dst, ty: aty, len, repr: rut_core::types::arr_elem_repr(&self.ctx.types, elem) }, sp.lo);
+        self.emit(
+            Op::ArrNew {
+                dst,
+                ty: aty,
+                len,
+                repr: rut_core::types::arr_elem_repr(&self.ctx.types, elem),
+            },
+            sp.lo,
+        );
         // a `nil` fill IS the zero-fill — ArrNew alone is the memset. Any
         // all-zero literal is too (0, 0u64, 0u8, false, 0.0): the block
         // arrives zeroed, so the fill loop would rewrite zero with zero
@@ -918,7 +1211,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let zero = self.new_reg(TY_I32);
         self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
         let idx = self.new_reg(TY_I32);
-        self.emit(Op::Mov { dst: idx, src: zero }, sp.lo);
+        self.emit(
+            Op::Mov {
+                dst: idx,
+                src: zero,
+            },
+            sp.lo,
+        );
         let one = self.new_reg(TY_I32);
         self.emit(Op::ConstRaw { dst: one, bits: 1 }, sp.lo);
         let l_head = self.new_label();
@@ -931,10 +1230,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.br(more, l_body, l_end);
         self.bind(l_body);
         let repr = rut_core::types::arr_elem_repr(&self.ctx.types, elem);
-        self.emit(Op::ArrSet { arr: dst, idx, val, repr }, sp.lo);
+        self.emit(
+            Op::ArrSet {
+                arr: dst,
+                idx,
+                val,
+                repr,
+            },
+            sp.lo,
+        );
         let next = self.new_reg(TY_I32);
         self.emit(arith(ArithOp::Add, PrimTy::I32, next, idx, one), sp.lo);
-        self.emit(Op::Mov { dst: idx, src: next }, sp.lo);
+        self.emit(
+            Op::Mov {
+                dst: idx,
+                src: next,
+            },
+            sp.lo,
+        );
         self.jmp(l_head);
         self.bind(l_end);
         self.last_reg = dst;
@@ -965,12 +1278,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     if let Some(&t) = eptys.get(i) {
                         t
                     } else {
-                        self.ctx.err(self.ctx.ast.span(p.id()), "lambda parameter needs a type annotation (or an expected fn type)");
+                        self.ctx.err(
+                            self.ctx.ast.span(p.id()),
+                            "lambda parameter needs a type annotation (or an expected fn type)",
+                        );
                         TY_I32
                     }
                 }
                 _ => {
-                    self.ctx.err(self.ctx.ast.span(p.id()), "lambdas take no `self`");
+                    self.ctx
+                        .err(self.ctx.ast.span(p.id()), "lambdas take no `self`");
                     TY_I32
                 }
             };
@@ -1000,7 +1317,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // parameter carries the cell handle, reads and
                     // writes route through it, both frames stay linked
                     // for the binding's whole scope
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell, origins: l.origins.clone() });
+                    caps.push(Capture {
+                        name: n,
+                        ty: l.ty,
+                        is_mut: l.is_mut,
+                        cell: l.cell,
+                        origins: l.origins.clone(),
+                    });
                     cap_regs.push(l.reg);
                 } else {
                     // the immediate-slot copy: primitives/nil/fn copy
@@ -1008,13 +1331,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // (the capture inherits the binding's mutability so
                     // writes through a captured `let mut` stay legal)
                     let cap_reg = self.read_local(&l, sp.lo);
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None, origins: l.origins.clone() });
+                    caps.push(Capture {
+                        name: n,
+                        ty: l.ty,
+                        is_mut: l.is_mut,
+                        cell: None,
+                        origins: l.origins.clone(),
+                    });
                     cap_regs.push(cap_reg);
                 }
             }
         }
         // register the synthetic fn: params = declared ++ captures
-                let node_id = self.ctx.ast.span(body.id()).lo; // not unique per node —use body NodeId instead
+        let node_id = self.ctx.ast.span(body.id()).lo; // not unique per node —use body NodeId instead
         let _ = node_id;
         // the Lambda node id: find it by body —the caller passes parts; the
         // lambda node is the PARENT of body. Store captures keyed by the
@@ -1036,20 +1365,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             iface_origins: vec![],
         };
         let fid = self.ctx.ensure_inst(inst);
-        self.ctx.lambda_sigs.insert(fid, (ptys.clone(), ret_ty, self.subst.clone()));
+        self.ctx
+            .lambda_sigs
+            .insert(fid, (ptys.clone(), ret_ty, self.subst.clone()));
         self.ctx.lambda_info.insert(fid, caps.clone());
         // the surface fn type spells the DECLARED params only — the
         // capture tail is ABI, never type-checked against
         let fty = self.ctx.mk_fn_ty(ptys.clone(), ret_ty);
         let dst = self.new_reg(fty);
-        { let (argv_off, argc) = self.pool_args(&cap_regs); self.emit(Op::MakeClosure { dst: dst, func: fid, argv_off, argc }, sp.lo,); }
+        {
+            let (argv_off, argc) = self.pool_args(&cap_regs);
+            self.emit(
+                Op::MakeClosure {
+                    dst: dst,
+                    func: fid,
+                    argv_off,
+                    argc,
+                },
+                sp.lo,
+            );
+        }
         Ok(fty)
     }
 
     /// collect every single-segment path name under `node` (capture scan).
     /// Generic walk over the arena by `NodeId` — it must cross statement and
     /// expression categories freely; type subtrees carry no value names.
-    pub(crate) fn scan_names(&mut self, node: NodeId, out: &mut Vec<IdentId>) {        if out.len() > 4096 {
+    pub(crate) fn scan_names(&mut self, node: NodeId, out: &mut Vec<IdentId>) {
+        if out.len() > 4096 {
             return;
         }
         let kids = |n: NodeId, out: &mut Vec<IdentId>, s: &mut Self| s.scan_names(n, out);
@@ -1075,7 +1418,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 kids(iter.id(), out, self);
                 kids(body.id(), out, self);
             }
-            Kind::Stmt(StmtKind::ForC { init, cond, update, body, .. }) => {
+            Kind::Stmt(StmtKind::ForC {
+                init,
+                cond,
+                update,
+                body,
+                ..
+            }) => {
                 kids(init.id(), out, self);
                 kids(cond.id(), out, self);
                 kids(update.id(), out, self);
@@ -1151,7 +1500,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 kids(value.id(), out, self);
             }
             Kind::Expr(ExprKind::Lambda { body: b, .. }) => kids(b.id(), out, self),
-            Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => kids(expr.id(), out, self),
+            Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => {
+                kids(expr.id(), out, self)
+            }
             Kind::Expr(ExprKind::Is { expr, .. }) => kids(expr.id(), out, self),
             Kind::Expr(ExprKind::Cast { expr, .. }) => kids(expr.id(), out, self),
             Kind::Expr(ExprKind::FStr { parts }) => {
@@ -1245,7 +1596,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         match self.ctx.ast.kind(node).clone() {
             Kind::Item(_) | Kind::Member(_) | Kind::Pat(_) | Kind::Type(_) => {}
-            Kind::Stmt(StmtKind::LetStmt { init, .. }) => walk(init.id(), inside, self, assigned, captured),
+            Kind::Stmt(StmtKind::LetStmt { init, .. }) => {
+                walk(init.id(), inside, self, assigned, captured)
+            }
             Kind::Stmt(StmtKind::If { cond, then, els }) => {
                 walk(cond.id(), inside, self, assigned, captured);
                 walk(then.id(), inside, self, assigned, captured);
@@ -1260,7 +1613,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 walk(cond.id(), inside, self, assigned, captured);
                 walk(body.id(), inside, self, assigned, captured);
             }
-            Kind::Stmt(StmtKind::ForOf { var, is_mut: _, iter, body }) => {
+            Kind::Stmt(StmtKind::ForOf {
+                var,
+                is_mut: _,
+                iter,
+                body,
+            }) => {
                 // the loop var is ONE variable reassigned per iteration
                 // (the sugar law) — the element store counts as an
                 // assignment in BOTH frames
@@ -1268,7 +1626,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 walk(iter.id(), inside, self, assigned, captured);
                 walk(body.id(), true, self, assigned, captured);
             }
-            Kind::Stmt(StmtKind::ForC { init, cond, update, body, .. }) => {
+            Kind::Stmt(StmtKind::ForC {
+                init,
+                cond,
+                update,
+                body,
+                ..
+            }) => {
                 walk(init.id(), inside, self, assigned, captured);
                 walk(cond.id(), inside, self, assigned, captured);
                 walk(update.id(), inside, self, assigned, captured);
@@ -1308,7 +1672,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // values at the site); the lambda's own law is the stricter
             // `true` arm and does not apply — the block frame is minted,
             // never deferred
-            Kind::Expr(ExprKind::AsyncBlock { body }) => walk(body.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::AsyncBlock { body }) => {
+                walk(body.id(), inside, self, assigned, captured)
+            }
             Kind::Expr(ExprKind::Path { segs }) => {
                 if inside && !segs.is_empty() {
                     captured.insert(segs[0].name);
@@ -1327,12 +1693,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     walk(a.id(), inside, self, assigned, captured);
                 }
             }
-            Kind::Expr(ExprKind::Field { recv, .. }) => walk(recv.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::Field { recv, .. }) => {
+                walk(recv.id(), inside, self, assigned, captured)
+            }
             Kind::Expr(ExprKind::Index { recv, idx }) => {
                 walk(recv.id(), inside, self, assigned, captured);
                 walk(idx.id(), inside, self, assigned, captured);
             }
-            Kind::Expr(ExprKind::Unary { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::Unary { expr, .. }) => {
+                walk(expr.id(), inside, self, assigned, captured)
+            }
             Kind::Expr(ExprKind::Binary { lhs, rhs, .. }) => {
                 walk(lhs.id(), inside, self, assigned, captured);
                 walk(rhs.id(), inside, self, assigned, captured);
@@ -1351,12 +1721,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 walk(target.id(), inside, self, assigned, captured);
                 walk(value.id(), inside, self, assigned, captured);
             }
-            Kind::Expr(ExprKind::Lambda { body: b, .. }) => walk(b.id(), true, self, assigned, captured),
+            Kind::Expr(ExprKind::Lambda { body: b, .. }) => {
+                walk(b.id(), true, self, assigned, captured)
+            }
             Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => {
                 walk(expr.id(), inside, self, assigned, captured)
             }
-            Kind::Expr(ExprKind::Is { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),
-            Kind::Expr(ExprKind::Cast { expr, .. }) => walk(expr.id(), inside, self, assigned, captured),
+            Kind::Expr(ExprKind::Is { expr, .. }) => {
+                walk(expr.id(), inside, self, assigned, captured)
+            }
+            Kind::Expr(ExprKind::Cast { expr, .. }) => {
+                walk(expr.id(), inside, self, assigned, captured)
+            }
             Kind::Expr(ExprKind::FStr { parts }) => {
                 for p in parts {
                     if let FPartAst::Hole(e) = p {

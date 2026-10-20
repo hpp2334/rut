@@ -18,7 +18,9 @@ fn corpus() -> Vec<std::path::PathBuf> {
     ];
     let mut stack = roots.to_vec();
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for e in entries.flatten() {
             let p = e.path();
             if p.is_dir() {
@@ -43,7 +45,11 @@ fn mode_of(f: &std::path::Path) -> Mode {
 #[test]
 fn corpus_formats_reparse_clean_and_are_idempotent() {
     let files = corpus();
-    assert!(files.len() >= 50, "expected the full corpus, found {}", files.len());
+    assert!(
+        files.len() >= 50,
+        "expected the full corpus, found {}",
+        files.len()
+    );
     let mut failures = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
@@ -51,7 +57,11 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
         // the parser's own gate first — the formatter's input law
         let (_, diags) = parse(&src, mode);
         if !diags.is_empty() {
-            failures.push(format!("{}: does not parse at base ({} diags)", f.display(), diags.len()));
+            failures.push(format!(
+                "{}: does not parse at base ({} diags)",
+                f.display(),
+                diags.len()
+            ));
             continue;
         }
         let out = match rut_fmt::format(&src, mode, &rut_fmt::Style::default()) {
@@ -86,10 +96,18 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
             }
         };
         if out2 != out {
-            failures.push(format!("{}: NOT idempotent (fmt(fmt(x)) != fmt(x))", f.display()));
+            failures.push(format!(
+                "{}: NOT idempotent (fmt(fmt(x)) != fmt(x))",
+                f.display()
+            ));
         }
     }
-    assert!(failures.is_empty(), "formatter corpus failures ({}):\n{}", failures.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "formatter corpus failures ({}):\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
 
 /// blank the `[lo, hi)` spans out of a rendered dump — the formatted
@@ -169,8 +187,9 @@ fn norm_one_lit(text: &str) -> String {
         return format!("{}{}", body.replace("\\'", "'"), tail);
     }
     // a KNOWN numeric suffix at the end only (hex digits carry u/i/f!)
-    const SUFS: [&str; 10] =
-        ["u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "f32", "f64"];
+    const SUFS: [&str; 10] = [
+        "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "f32", "f64",
+    ];
     let mut digits = body;
     let mut sfx = "";
     for cand in SUFS {
@@ -181,7 +200,14 @@ fn norm_one_lit(text: &str) -> String {
         }
     }
     // radix ints FIRST (hex digits legitimately contain e/f)
-    for (p, r) in [("0x", 16u32), ("0X", 16), ("0o", 8), ("0O", 8), ("0b", 2), ("0B", 2)] {
+    for (p, r) in [
+        ("0x", 16u32),
+        ("0X", 16),
+        ("0o", 8),
+        ("0O", 8),
+        ("0b", 2),
+        ("0B", 2),
+    ] {
         if let Some(d) = digits.strip_prefix(p) {
             if let Ok(v) = u64::from_str_radix(d, r) {
                 return format!("{}{}{}", v, sfx, tail);
@@ -218,12 +244,18 @@ fn corpus_dump_trees_match_through_format() {
         let src = std::fs::read_to_string(f).unwrap();
         let mode = mode_of(f);
         let (a1, _) = parse(&src, mode);
-        let want = norm_lits(&span_free(&rut_ast::dump::render_text(&rut_ast::dump::to_dump_tree(&a1), &src)));
+        let want = norm_lits(&span_free(&rut_ast::dump::render_text(
+            &rut_ast::dump::to_dump_tree(&a1),
+            &src,
+        )));
         let Ok(out) = rut_fmt::format(&src, mode, &rut_fmt::Style::default()) else {
             continue; // covered by the other test's message
         };
         let (a2, _) = parse(&out, mode);
-        let got = norm_lits(&span_free(&rut_ast::dump::render_text(&rut_ast::dump::to_dump_tree(&a2), &out)));
+        let got = norm_lits(&span_free(&rut_ast::dump::render_text(
+            &rut_ast::dump::to_dump_tree(&a2),
+            &out,
+        )));
         if got != want {
             // find the first differing line for a readable failure
             let w: Vec<&str> = want.lines().collect();
@@ -240,7 +272,12 @@ fn corpus_dump_trees_match_through_format() {
             failures.push(format!("{}: dump trees differ: {}", f.display(), first));
         }
     }
-    assert!(failures.is_empty(), "round-trip failures ({}):\n{}", failures.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "round-trip failures ({}):\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
 
 /// the structural-interfaces fork: an `interface` and its satisfying
@@ -269,12 +306,25 @@ impl Circle {
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "the fixture must parse clean: {diags:?}");
     let out = rut_fmt::format(src, Mode::Impl, &rut_fmt::Style::default()).expect("fmt accepts it");
-    assert!(out.contains("pub interface Shape {"), "vis prefix as spelled: {out}");
+    assert!(
+        out.contains("pub interface Shape {"),
+        "vis prefix as spelled: {out}"
+    );
     assert!(out.contains("interface Wrap<T> {"), "generics print: {out}");
-    assert!(out.contains("impl Circle {"), "inherent impl prints without a for-clause: {out}");
-    assert!(!out.contains(" for "), "no impl-for spelling anywhere: {out}");
+    assert!(
+        out.contains("impl Circle {"),
+        "inherent impl prints without a for-clause: {out}"
+    );
+    assert!(
+        !out.contains(" for "),
+        "no impl-for spelling anywhere: {out}"
+    );
     let (_, diags2) = parse(&out, Mode::Impl);
-    assert!(diags2.is_empty(), "the formatted text must reparse clean: {diags2:?}");
-    let out2 = rut_fmt::format(&out, Mode::Impl, &rut_fmt::Style::default()).expect("fmt(fmt) accepts it");
+    assert!(
+        diags2.is_empty(),
+        "the formatted text must reparse clean: {diags2:?}"
+    );
+    let out2 =
+        rut_fmt::format(&out, Mode::Impl, &rut_fmt::Style::default()).expect("fmt(fmt) accepts it");
     assert_eq!(out2, out, "formatting must be idempotent");
 }

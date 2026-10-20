@@ -2,9 +2,9 @@
 //! vtable construction (trait members never devirtualize),
 //! exports, and module-let emission.
 
+use super::*;
 use crate::lir::FnCompiler;
 use rut_core::binary::FuncCode;
-use super::*;
 
 impl<'a> Ctx<'a> {
     // ---- monomorphization driver (generic calls enter the
@@ -56,7 +56,11 @@ impl<'a> Ctx<'a> {
                 let owner = self.intern(&origin);
                 self.ledger_fns.push(rut_core::binary::InstFn {
                     owner,
-                    kind: rut_core::binary::InstFnKind::Free { name: n, subst, origins },
+                    kind: rut_core::binary::InstFnKind::Free {
+                        name: n,
+                        subst,
+                        origins,
+                    },
                     fid,
                 });
             }
@@ -71,7 +75,12 @@ impl<'a> Ctx<'a> {
                 let owner = self.intern(&owner);
                 self.ledger_fns.push(rut_core::binary::InstFn {
                     owner,
-                    kind: rut_core::binary::InstFnKind::Method { data, name, subst, origins },
+                    kind: rut_core::binary::InstFnKind::Method {
+                        data,
+                        name,
+                        subst,
+                        origins,
+                    },
                     fid,
                 });
             }
@@ -84,7 +93,7 @@ impl<'a> Ctx<'a> {
                 });
             }
         }
-        
+
         self.queue.push(inst);
         fid
     }
@@ -111,9 +120,12 @@ impl<'a> Ctx<'a> {
                 if let Some(g) = self.extern_generics.get(&data).cloned() {
                     let owner = g.owner.clone();
                     self.request_inst_method(owner, data, args, name);
-                } else if self.extern_inherents.iter().any(|ih| {
-                    self.types.type_at(ih.target).name == data
-                }) || self.extern_origins.contains_key(&data) {
+                } else if self
+                    .extern_inherents
+                    .iter()
+                    .any(|ih| self.types.type_at(ih.target).name == data)
+                    || self.extern_origins.contains_key(&data)
+                {
                     // a plain class's GENERIC method: the row's bound
                     // name names the declaring package, and the body
                     // rides the same owner-side machinery
@@ -161,7 +173,10 @@ impl<'a> Ctx<'a> {
         while let Some(inst) = self.queue.pop() {
             guard += 1;
             if guard > 100_000 {
-                self.err(self.ast.span(self.ast.root.id()), "monomorphization queue exploded (>100k instantiations)");
+                self.err(
+                    self.ast.span(self.ast.root.id()),
+                    "monomorphization queue exploded (>100k instantiations)",
+                );
                 return Err(());
             }
             if self.diags.len() > 64 {
@@ -225,7 +240,10 @@ impl<'a> Ctx<'a> {
                 };
                 let inst = match member {
                     crate::check::impls::MemberSrc::Local { env, data, .. } => Inst {
-                        key: FnKey::Method { data, name: tm.name },
+                        key: FnKey::Method {
+                            data,
+                            name: tm.name,
+                        },
                         subst: env,
                         iface_origins: vec![],
                     },
@@ -239,7 +257,10 @@ impl<'a> Ctx<'a> {
                         // live in another module with an EMPTY slot,
                         // and the first dispatch trapped.
                         let inst = Inst {
-                            key: FnKey::Method { data, name: tm.name },
+                            key: FnKey::Method {
+                                data,
+                                name: tm.name,
+                            },
                             subst,
                             iface_origins: vec![],
                         };
@@ -299,7 +320,10 @@ impl<'a> Ctx<'a> {
                     continue;
                 }
                 let key = Inst {
-                    key: FnKey::Method { data: dname, name: *n },
+                    key: FnKey::Method {
+                        data: dname,
+                        name: *n,
+                    },
                     subst: vec![],
                     iface_origins: vec![],
                 };
@@ -332,7 +356,8 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn compile_module_lets(&mut self) {
-        let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> = self.lets.clone();
+        let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> =
+            self.lets.clone();
         for (_, ty, init, _) in entries {
             let sp = self.ast.span(init.id());
             match self.ast.expr(init) {
@@ -340,7 +365,9 @@ impl<'a> Ctx<'a> {
                     let _ = (v, sfx);
                     // typed by annotation or default i32; store raw
                 }
-                ExprKind::Lit(Lit::Float(_, _)) | ExprKind::Lit(Lit::Str(_)) | ExprKind::Lit(Lit::Bool(_)) => {}
+                ExprKind::Lit(Lit::Float(_, _))
+                | ExprKind::Lit(Lit::Str(_))
+                | ExprKind::Lit(Lit::Bool(_)) => {}
                 _ => {
                     self.err(
                         sp,
@@ -352,4 +379,3 @@ impl<'a> Ctx<'a> {
         }
     }
 }
-

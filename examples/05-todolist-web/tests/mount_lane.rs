@@ -29,8 +29,7 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     // fetch.
     let mut manifest_names: BTreeSet<String> =
         manifest.pkgs.iter().map(|p| p.spec.clone()).collect();
-    let mut mirror_names: BTreeSet<String> =
-        mirror.iter().map(|p| p.spec.clone()).collect();
+    let mut mirror_names: BTreeSet<String> = mirror.iter().map(|p| p.spec.clone()).collect();
     // the `web` surface rides NEITHER lane's walk — both offer it by
     // hand (the embedder half); the mirror's app source crosses the ABI
     manifest_names.insert("web".to_string());
@@ -54,8 +53,9 @@ fn the_manifest_lane_and_the_mirror_lane_agree() {
     // compile the same closure from the same module tree — identical
     // programs is what "the manifest is the truth, the mirror is its
     // mirror" means when it is TRUE.
-    let from_manifest = mount::verified(&mount::compile_walk(&manifest).expect("the manifest lane compiles"))
-        .expect("the manifest lane's binary verifies");
+    let from_manifest =
+        mount::verified(&mount::compile_walk(&manifest).expect("the manifest lane compiles"))
+            .expect("the manifest lane's binary verifies");
     let from_mirror = mount::verified(
         &mount::compile_app(mount::mirror_run().expect("the mirror mounts"))
             .expect("the mirror lane compiles"),

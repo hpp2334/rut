@@ -24,7 +24,10 @@ fn first_for(src: &str) -> (Ast, NodeHandle<AnyStmt>) {
     };
     let s = ast.block(body)[0];
     assert!(
-        matches!(ast.kind(s.id()), Kind::Stmt(StmtKind::ForOf { .. } | StmtKind::ForC { .. })),
+        matches!(
+            ast.kind(s.id()),
+            Kind::Stmt(StmtKind::ForOf { .. } | StmtKind::ForC { .. })
+        ),
         "expected a for statement"
     );
     (ast, s)
@@ -34,7 +37,13 @@ fn first_for(src: &str) -> (Ast, NodeHandle<AnyStmt>) {
 fn for_of_takes_mut() {
     let src = "fn f(xs: Vec<i32>) -> nil { for (let mut t of xs) { } }";
     let (ast, s) = first_for(src);
-    let Kind::Stmt(StmtKind::ForOf { var, is_mut, iter, body }) = ast.kind(s.id()) else {
+    let Kind::Stmt(StmtKind::ForOf {
+        var,
+        is_mut,
+        iter,
+        body,
+    }) = ast.kind(s.id())
+    else {
         panic!("expected a for-of");
     };
     assert!(is_mut, "`mut` must set the flag");
@@ -45,7 +54,10 @@ fn for_of_takes_mut() {
     // the span covers the whole statement (statement spans end at the
     // next token, so the fn's own `}` rides along)
     let sp = ast.span(s.id());
-    assert_eq!(&src[sp.lo as usize..sp.hi as usize], "for (let mut t of xs) { } }");
+    assert_eq!(
+        &src[sp.lo as usize..sp.hi as usize],
+        "for (let mut t of xs) { } }"
+    );
 }
 
 #[test]
@@ -63,7 +75,15 @@ fn for_of_without_mut_is_unchanged() {
 fn for_c_takes_mut() {
     let src = "fn f(n: i32) -> nil { for (let mut i = 0; i < n; i += 1) { } }";
     let (ast, s) = first_for(src);
-    let Kind::Stmt(StmtKind::ForC { var, is_mut, init, cond, update, body }) = ast.kind(s.id()) else {
+    let Kind::Stmt(StmtKind::ForC {
+        var,
+        is_mut,
+        init,
+        cond,
+        update,
+        body,
+    }) = ast.kind(s.id())
+    else {
         panic!("expected a for-c");
     };
     assert!(is_mut, "`mut` must set the flag");
@@ -96,7 +116,10 @@ fn dump_shows_the_mut_flag_only_when_spelled() {
     let (ast, _) = first_for(with);
     let json = render_json(&to_dump_tree(&ast));
     assert!(json.contains("\"ForOf\""), "{json}");
-    assert!(json.contains("\"mut\""), "the dump must carry the flag: {json}");
+    assert!(
+        json.contains("\"mut\""),
+        "the dump must carry the flag: {json}"
+    );
 
     let without = "fn f(xs: Vec<i32>) -> nil { for (let t of xs) { } }";
     let (ast, _) = first_for(without);

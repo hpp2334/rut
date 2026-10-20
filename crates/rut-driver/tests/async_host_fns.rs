@@ -7,8 +7,8 @@
 // cancel arm (the cx `cancelled()` data path) with late results
 // discarded, and the direct row marshal (`__start`/`__yield`/`__take`).
 
-use std::collections::BTreeMap;
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use rut_driver::lower_decl_module;
@@ -39,14 +39,16 @@ struct Fixture {
     cancels: Cell<usize>,
 }
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -72,7 +74,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -164,22 +169,36 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let fixture = lower_decl_module(FIXTURE_DECL, &BTreeMap::new(), "fixture.d.rut")
         .expect("the fixture surface is valid")
         .named("fixture");
-    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
+    let mut pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
     pkgs.push(ink_host);
     pkgs.push(fixture);
     // the root DECLARES its uses structurally (the async pair, the
     // lowered ink_host + fixture surfaces)
     pkgs.push(
-        rut_driver::Mounted::source("app", src)
-            .manifest(rut_driver::Manifest::lib("app", &["fixture", "futures", "ink_host"])),
+        rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib(
+            "app",
+            &["fixture", "futures", "ink_host"],
+        )),
     );
-    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let compiled = rut_driver::Walk {
+        pkgs: pkgs.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
@@ -187,7 +206,10 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let sink2 = sink.clone();
     let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     let fx = Rc::new(Fixture::default());
     let fx2 = fx.clone();
@@ -209,7 +231,13 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build().expect("vm");
+    let vm = Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     (vm, sink, fx)
 }
 
@@ -238,7 +266,10 @@ fn run_loop(vm: &mut Vm, fx: &Fixture, cap: usize) {
             None => vm.set_now(vm.now_ms() + 1),
         }
     }
-    panic!("the driving loop stalled: {} task(s) pending", vm.pending_tasks());
+    panic!(
+        "the driving loop stalled: {} task(s) pending",
+        vm.pending_tasks()
+    );
 }
 
 // ---- await ordering ----
@@ -321,7 +352,11 @@ entry fn main() -> nil {
     let (mut vm, _sink, fx) = setup(src);
     vm.call::<_, ()>("main", ()).expect("main");
     run_loop(&mut vm, &fx, 100);
-    assert_eq!(vm.now_ms(), 15, "the launched frame drove to its completion");
+    assert_eq!(
+        vm.now_ms(),
+        15,
+        "the launched frame drove to its completion"
+    );
     assert_eq!(vm.pending_tasks(), 0, "the retired frame left the poll set");
 }
 
@@ -362,7 +397,11 @@ entry fn main() -> nil {
         }
     }
     let t = trapped.expect("the failed completer traps the loop");
-    assert!(t.msg.contains("kaboom:x"), "the fail message rides the trap: {}", t.msg);
+    assert!(
+        t.msg.contains("kaboom:x"),
+        "the fail message rides the trap: {}",
+        t.msg
+    );
     assert!(
         !sink.borrow().iter().any(|l| l == "unreachable"),
         "the await never resumes past a failure"
@@ -423,12 +462,20 @@ entry fn main() -> nil {
     );
     // the task is gone; the host frame is the poll set's business —
     // cancel it through the cx data path and the arm fires
-    let frame = vm.first_host_pending().expect("the hung future is reachable");
+    let frame = vm
+        .first_host_pending()
+        .expect("the hung future is reachable");
     assert!(vm.cancel(frame), "a parked host future cancels");
-    vm.run_ready().expect("the cancel spin drives the launched frame");
+    vm.run_ready()
+        .expect("the cancel spin drives the launched frame");
     assert_eq!(fx.cancel_count(), 1, "the abort closure fired exactly once");
-    vm.run_ready().expect("the next spin retires the poll set's entry");
-    assert_eq!(vm.pending_tasks(), 0, "the cancelled host frame left the set");
+    vm.run_ready()
+        .expect("the next spin retires the poll set's entry");
+    assert_eq!(
+        vm.pending_tasks(),
+        0,
+        "the cancelled host frame left the set"
+    );
     // the late result: the worker completes after the cancel — the
     // disclosed best-effort law says it is discarded, never trapped
     fx.settle_hung("late");
@@ -505,7 +552,14 @@ entry fn main() -> nil {
     run_loop(&mut vm, &fx, 100);
     assert_eq!(
         *sink.borrow(),
-        vec!["job:start", "outer:start", "inner:start", "inner:got", "outer:done:n", "job:done:n"],
+        vec![
+            "job:start",
+            "outer:start",
+            "inner:start",
+            "inner:got",
+            "outer:done:n",
+            "job:done:n"
+        ],
         "the answer crossed the user frame's answer lane, then the outer's"
     );
 }
@@ -547,7 +601,10 @@ entry fn main() -> nil {
     // ...and a take before the settle is the misuse trap
     let early = vm.call_host_row("fixture::probe__take", &[Value::Opaque(cell.clone())]);
     assert!(
-        early.err().map(|t| t.msg.contains("still pending")).unwrap_or(false),
+        early
+            .err()
+            .map(|t| t.msg.contains("still pending"))
+            .unwrap_or(false),
         "a pending take traps"
     );
     // settle through the fixture's due lane (deadline 0)
@@ -563,7 +620,11 @@ entry fn main() -> nil {
     let ans = vm
         .call_host_row("fixture::probe__take", &[Value::Opaque(cell.clone())])
         .expect("take");
-    assert_eq!(ans, Value::Str("done:k".into()), "the answer crossed through the phase-1 return lane");
+    assert_eq!(
+        ans,
+        Value::Str("done:k".into()),
+        "the answer crossed through the phase-1 return lane"
+    );
     // the decl row itself never runs — the weave mints the future
     let err = vm
         .call_host_row("fixture::probe", &[Value::Str("k".into())])
@@ -610,9 +671,11 @@ entry fn main() -> nil {
     launch_future(job(log, "t"));
 }
 "#;
-    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
+    let mut pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
     pkgs.push(ink_host);
     pkgs.push(fixture);
     // the root declares its heads (the Q2-4a sweep's law — the uses
@@ -624,11 +687,21 @@ entry fn main() -> nil {
             &["ink_host", "futures", "async_host", "fixture"],
         )),
     );
-    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let compiled = rut_driver::Walk {
+        pkgs: pkgs.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
@@ -636,7 +709,10 @@ entry fn main() -> nil {
     let sink2 = sink.clone();
     let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     let fx = Rc::new(Fixture::default());
     let fx2 = fx.clone();
@@ -649,22 +725,28 @@ entry fn main() -> nil {
     rut_vm::register_async!(hosts, "fixture::hang", (String,) -> String,
         move |u: String| -> Completer<String> { fx4.hang_start(u) });
     rut_vm::register_async!(hosts, "fixture::wall", (String,) -> String,
-        move |u: String| -> Completer<String> {
-            let c = Completer::new();
-            let w = c.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(30));
-                w.complete(format!("walled:{u}"));
-            });
-            c
+    move |u: String| -> Completer<String> {
+        let c = Completer::new();
+        let w = c.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            w.complete(format!("walled:{u}"));
         });
+        c
+    });
     hosts.verify_against(&ctx.flatten());
     let limits = Limits {
         fuel: Some(4_000_000),
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build().expect("vm");
+    let mut vm = Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     vm.call::<_, ()>("main", ()).expect("main");
     // wall-clock polling: the embedder loop spins; the worker thread
     // settles the completer from another thread

@@ -247,7 +247,6 @@ pub enum NativeTy {
     RunContext,
 }
 
-
 /// One exported GENERIC function (`pub fn decodeJson<T>(..)`): the
 /// usable name, its generic parameters in order, and the
 /// placeholder-spelled signature (params/ret carry the `#<param>`
@@ -371,11 +370,7 @@ pub struct Surface {
 /// phase-2 sweep retires the call sites. `assert` is likewise no
 /// longer declared — it is plain rut code over `panic` now, and the
 /// bare spelling is an ordinary unknown name.)
-pub const CORE_FNS: &[IdentId] = &[
-    sym::PANIC,
-    sym::STRING_JOIN,
-    sym::CAPTURE_STACKTRACE,
-];
+pub const CORE_FNS: &[IdentId] = &[sym::PANIC, sym::STRING_JOIN, sym::CAPTURE_STACKTRACE];
 
 impl Surface {
     /// The core prelude surface: the builtin containers,
@@ -428,7 +423,11 @@ impl Surface {
             native_fns: CORE_FNS.iter().map(|&n| (n, true)).collect(),
             // core's one const: `use core::{NAN}` — the unwritable float
             // (f64 bits materialized with `ConstRaw`)
-            consts: vec![SurfaceConst { name: sym::NAN, ty: crate::types::TY_F64, bits: f64::NAN.to_bits() }],
+            consts: vec![SurfaceConst {
+                name: sym::NAN,
+                ty: crate::types::TY_F64,
+                bits: f64::NAN.to_bits(),
+            }],
             native_impls,
             ..Default::default()
         }
@@ -473,7 +472,12 @@ pub fn pub_core_map(interner: &mut Interner) -> std::collections::HashMap<IdentI
         .map(|(n, _, a)| (*n, *a))
         .chain(core.native_fns.iter().map(|(n, a)| (*n, *a)));
     rows.filter(|(_, ambient)| !ambient)
-        .map(|(n, _)| (interner.intern(core.names.name(n)), sym::text(n).unwrap_or("")))
+        .map(|(n, _)| {
+            (
+                interner.intern(core.names.name(n)),
+                sym::text(n).unwrap_or(""),
+            )
+        })
         .collect()
 }
 
@@ -934,13 +938,22 @@ pub fn encode(prog: &Program) -> Vec<u8> {
         e.u32(r.owner.0);
         e.u32(r.fid);
         match &r.kind {
-            InstFnKind::Free { name, subst, origins } => {
+            InstFnKind::Free {
+                name,
+                subst,
+                origins,
+            } => {
                 e.u8(0);
                 e.u32(name.0);
                 e.tys(subst);
                 e.tys(origins);
             }
-            InstFnKind::Method { data, name, subst, origins } => {
+            InstFnKind::Method {
+                data,
+                name,
+                subst,
+                origins,
+            } => {
                 e.u8(1);
                 e.u32(data.0);
                 e.u32(name.0);
@@ -1179,9 +1192,17 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
         TyKind::Prim(p) => {
             e.u8(1);
             e.u8(match p {
-                PrimTy::U8 => 0, PrimTy::U16 => 1, PrimTy::U32 => 2, PrimTy::U64 => 3,
-                PrimTy::I8 => 4, PrimTy::I16 => 5, PrimTy::I32 => 6, PrimTy::I64 => 7,
-                PrimTy::F32 => 8, PrimTy::F64 => 9, PrimTy::Bool => 10,
+                PrimTy::U8 => 0,
+                PrimTy::U16 => 1,
+                PrimTy::U32 => 2,
+                PrimTy::U64 => 3,
+                PrimTy::I8 => 4,
+                PrimTy::I16 => 5,
+                PrimTy::I32 => 6,
+                PrimTy::I64 => 7,
+                PrimTy::F32 => 8,
+                PrimTy::F64 => 9,
+                PrimTy::Bool => 10,
             });
         }
         TyKind::Str => e.u8(2),
@@ -1276,9 +1297,16 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             let mname = interned(&mut d)?;
             let params = d.tys()?;
             let ret = d.u32()?;
-            methods.push(IfaceMethod { name: mname, params, ret });
+            methods.push(IfaceMethod {
+                name: mname,
+                params,
+                ret,
+            });
         }
-        ifaces.push(IfaceDesc { name: tname, methods });
+        ifaces.push(IfaceDesc {
+            name: tname,
+            methods,
+        });
     }
     let nslots = d.u32()? as usize;
     let mut iface_slots = Vec::with_capacity(nslots);
@@ -1341,7 +1369,16 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         for oi in 0..ncode {
             match decode_op(&mut d) {
                 Ok(op) => code.push(op),
-                Err(e) => return Err(format!("func #{}/{} op {}/{}: {}", funcs.len(), nfuncs, oi, ncode, e)),
+                Err(e) => {
+                    return Err(format!(
+                        "func #{}/{} op {}/{}: {}",
+                        funcs.len(),
+                        nfuncs,
+                        oi,
+                        ncode,
+                        e
+                    ))
+                }
             }
         }
         let nspans = d.u32()? as usize;
@@ -1358,8 +1395,25 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             let col = d.u32()?;
             pos.push((line, col));
         }
-        let host_id = if d.u8()? != 0 { Some(IdentId(d.u32()?)) } else { None };
-        funcs.push(FuncCode { name: fname, params, ret, is_method, n_captures, regs, argv, labels, code, spans, pos, host_id });
+        let host_id = if d.u8()? != 0 {
+            Some(IdentId(d.u32()?))
+        } else {
+            None
+        };
+        funcs.push(FuncCode {
+            name: fname,
+            params,
+            ret,
+            is_method,
+            n_captures,
+            regs,
+            argv,
+            labels,
+            code,
+            spans,
+            pos,
+            host_id,
+        });
     }
     let nexp = d.u32()? as usize;
     let mut exports = Vec::with_capacity(nexp);
@@ -1379,7 +1433,12 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
         let decl = interned(&mut d)?;
         let args = d.tys()?;
         let ty = d.u32()?;
-        inst_types.push(InstTy { owner, decl, args, ty });
+        inst_types.push(InstTy {
+            owner,
+            decl,
+            args,
+            ty,
+        });
     }
     let nfnkey = d.u32()? as usize;
     let mut inst_fns = Vec::with_capacity(nfnkey);
@@ -1394,14 +1453,23 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
                 let name = interned(&mut d)?;
                 let subst = d.tys()?;
                 let origins = d.tys()?;
-                InstFnKind::Free { name, subst, origins }
+                InstFnKind::Free {
+                    name,
+                    subst,
+                    origins,
+                }
             }
             1 => {
                 let data = interned(&mut d)?;
                 let name = interned(&mut d)?;
                 let subst = d.tys()?;
                 let origins = d.tys()?;
-                InstFnKind::Method { data, name, subst, origins }
+                InstFnKind::Method {
+                    data,
+                    name,
+                    subst,
+                    origins,
+                }
             }
             // tag 2 is RETIRED (v21: the `ImplMethod` impl-registration
             // rows died with `impl I for T` — satisfaction is structural,
@@ -1494,17 +1562,23 @@ fn decode_templates(
                 if dense < ntypes as u64 {
                     Ok(())
                 } else {
-                    Err(format!("bad template type id {t} (outside scope {scope}'s block)"))
+                    Err(format!(
+                        "bad template type id {t} (outside scope {scope}'s block)"
+                    ))
                 }
             }
-            None => Err(format!("bad template type id {t} (no carried block for scope {scope})")),
+            None => Err(format!(
+                "bad template type id {t} (no carried block for scope {scope})"
+            )),
         }
     };
     let n = d.u32()? as usize;
     let mut rows = Vec::with_capacity(n);
     for _ in 0..n {
         let kind = match d.u8()? {
-            0 => TemplateKind::Free { name: name(IdentId(d.u32()?))? },
+            0 => TemplateKind::Free {
+                name: name(IdentId(d.u32()?))?,
+            },
             1 => {
                 let data = name(IdentId(d.u32()?))?;
                 let name = name(IdentId(d.u32()?))?;
@@ -1527,7 +1601,12 @@ fn decode_templates(
                 "bad template row (fid {fid} outside the template window [{first}, {funcs_len}))"
             ));
         }
-        rows.push(TemplateRow { kind, param_rows, bounds, fid });
+        rows.push(TemplateRow {
+            kind,
+            param_rows,
+            bounds,
+            fid,
+        });
     }
     let nstubs = d.u32()? as usize;
     let mut stubs = Vec::with_capacity(nstubs);
@@ -1541,7 +1620,11 @@ fn decode_templates(
         let param = d.u32()?;
         ty(param)?;
         let member = name(IdentId(d.u32()?))?;
-        stubs.push(TemplateStub { fid: sfid, param, member });
+        stubs.push(TemplateStub {
+            fid: sfid,
+            param,
+            member,
+        });
     }
     Ok((first, end, rows, stubs))
 }
@@ -1569,7 +1652,10 @@ fn decode_surface(
         }
         Ok(id)
     };
-    let mut s = Surface { names: interner.clone(), ..Default::default() };
+    let mut s = Surface {
+        names: interner.clone(),
+        ..Default::default()
+    };
     // the namespace head, if the module has a namespace form
     s.namespace = if d.u8()? != 0 { Some(name(d)?) } else { None };
     // funcs
@@ -1582,7 +1668,14 @@ fn decode_surface(
         let local = d.u32()?;
         let is_async = d.u8()? != 0;
         let host = if d.u8()? != 0 { Some(name(d)?) } else { None };
-        s.funcs.push(SurfaceFn { name: fname, params, ret, local, is_async, host });
+        s.funcs.push(SurfaceFn {
+            name: fname,
+            params,
+            ret,
+            local,
+            is_async,
+            host,
+        });
     }
     // consts
     let n = d.u32()? as usize;
@@ -1591,7 +1684,11 @@ fn decode_surface(
         let cname = name(d)?;
         let ty = d.u32()?;
         let bits = d.u64()?;
-        s.consts.push(SurfaceConst { name: cname, ty, bits });
+        s.consts.push(SurfaceConst {
+            name: cname,
+            ty,
+            bits,
+        });
     }
     // the carried type descriptors — the program type table's encoding
     let n = d.u32()? as usize;
@@ -1624,7 +1721,15 @@ fn decode_surface(
             params.push(name(d)?);
         }
         let scope = if d.u8()? != 0 { Some(d.u16()?) } else { None };
-        s.type_exports.push(SurfaceType { name: tname, local, is_class, is_generic, newtype, params, scope });
+        s.type_exports.push(SurfaceType {
+            name: tname,
+            local,
+            is_class,
+            is_generic,
+            newtype,
+            params,
+            scope,
+        });
     }
     // exported generic fns
     let n = d.u32()? as usize;
@@ -1641,7 +1746,12 @@ fn decode_surface(
             args.push(d.u32()?);
         }
         let ret = d.u32()?;
-        s.fn_generics.push(SurfaceGenericFn { name: gname, params, args, ret });
+        s.fn_generics.push(SurfaceGenericFn {
+            name: gname,
+            params,
+            args,
+            ret,
+        });
     }
     // trait decls
     let n = d.u32()? as usize;
@@ -1656,9 +1766,18 @@ fn decode_surface(
             let mname = name(d)?;
             let params = d.tys()?;
             let ret = d.u32()?;
-            methods.push(IfaceMethod { name: mname, params, ret });
+            methods.push(IfaceMethod {
+                name: mname,
+                params,
+                ret,
+            });
         }
-        s.ifaces.push(SurfaceIface { local, name: tname, generics, methods });
+        s.ifaces.push(SurfaceIface {
+            local,
+            name: tname,
+            generics,
+            methods,
+        });
     }
     // inherent impls (class methods): one row per class with methods —
     // v16 reserved the table (zero rows) so this population rides the
@@ -1684,7 +1803,15 @@ fn decode_surface(
             for _ in 0..(d.u32()? as usize) {
                 generics.push(name(d)?);
             }
-            methods.push(SurfaceMethod { name: mname, params, ret, local, has_self, generics, marker });
+            methods.push(SurfaceMethod {
+                name: mname,
+                params,
+                ret,
+                local,
+                has_self,
+                generics,
+                marker,
+            });
         }
         s.inherents.push(SurfaceInherent { target, methods });
     }
@@ -1747,14 +1874,23 @@ fn decode_surface(
 /// exporter's packed `(scope, local)` spellings — boot ids are shared,
 /// everything else must land inside a carried scope block; fn refs and
 /// trait locals are the exporter's module-local ids.
-fn validate_surface(s: &Surface, boot: usize, funcs_len: usize, traits_len: usize) -> Result<(), String> {
+fn validate_surface(
+    s: &Surface,
+    boot: usize,
+    funcs_len: usize,
+    traits_len: usize,
+) -> Result<(), String> {
     let types_len = s.types.len();
     for &(scope, off) in &s.scope_blocks {
         if scope == crate::id::BOOT_SCOPE {
-            return Err(format!("bad scope block (scope {scope} is the shared boot table)"));
+            return Err(format!(
+                "bad scope block (scope {scope} is the shared boot table)"
+            ));
         }
         if off as usize > types_len {
-            return Err(format!("bad scope block (scope {scope}, offset {off} outside the carried types)"));
+            return Err(format!(
+                "bad scope block (scope {scope}, offset {off} outside the carried types)"
+            ));
         }
     }
     let ty = |t: TypeId| -> Result<(), String> {
@@ -1771,10 +1907,14 @@ fn validate_surface(s: &Surface, boot: usize, funcs_len: usize, traits_len: usiz
                 if dense < types_len as u64 {
                     Ok(())
                 } else {
-                    Err(format!("bad surface type id {t} (outside scope {scope}'s block)"))
+                    Err(format!(
+                        "bad surface type id {t} (outside scope {scope}'s block)"
+                    ))
                 }
             }
-            None => Err(format!("bad surface type id {t} (no carried block for scope {scope})")),
+            None => Err(format!(
+                "bad surface type id {t} (no carried block for scope {scope})"
+            )),
         }
     };
     for f in &s.funcs {
@@ -1784,7 +1924,10 @@ fn validate_surface(s: &Surface, boot: usize, funcs_len: usize, traits_len: usiz
         ty(f.ret)?;
         if f.local as usize >= funcs_len {
             let fname = s.names.name(f.name);
-            return Err(format!("bad surface fn `{fname}` (local {} outside the func table)", f.local));
+            return Err(format!(
+                "bad surface fn `{fname}` (local {} outside the func table)",
+                f.local
+            ));
         }
     }
     for c in &s.consts {
@@ -1793,7 +1936,10 @@ fn validate_surface(s: &Surface, boot: usize, funcs_len: usize, traits_len: usiz
     for t in &s.ifaces {
         if t.local as usize >= traits_len {
             let tname = s.names.name(t.name);
-            return Err(format!("bad surface interface `{tname}` (local {} outside the iface table)", t.local));
+            return Err(format!(
+                "bad surface interface `{tname}` (local {} outside the iface table)",
+                t.local
+            ));
         }
         for m in &t.methods {
             for &p in &m.params {
@@ -1812,9 +1958,17 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
     Ok(match d.u8()? {
         0 => TyKind::Nil,
         1 => TyKind::Prim(match d.u8()? {
-            0 => PrimTy::U8, 1 => PrimTy::U16, 2 => PrimTy::U32, 3 => PrimTy::U64,
-            4 => PrimTy::I8, 5 => PrimTy::I16, 6 => PrimTy::I32, 7 => PrimTy::I64,
-            8 => PrimTy::F32, 9 => PrimTy::F64, 10 => PrimTy::Bool,
+            0 => PrimTy::U8,
+            1 => PrimTy::U16,
+            2 => PrimTy::U32,
+            3 => PrimTy::U64,
+            4 => PrimTy::I8,
+            5 => PrimTy::I16,
+            6 => PrimTy::I32,
+            7 => PrimTy::I64,
+            8 => PrimTy::F32,
+            9 => PrimTy::F64,
+            10 => PrimTy::Bool,
             // 11 is RETIRED (the char prim) — a stale artifact fails loudly
             t => return Err(format!("bad prim tag {t}")),
         }),
@@ -1861,83 +2015,568 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
 
 fn encode_op(e: &mut Enc, op: &Op) {
     match op {
-        Op::Mov { dst, src } => { e.u8(0); e.u16(*dst); e.u16(*src); }
-        Op::MovRef { dst, src } => { e.u8(1); e.u16(*dst); e.u16(*src); }
-        Op::Const { dst, k } => { e.u8(2); e.u16(*dst); e.u32(*k); }
-        Op::ConstRaw { dst, bits } => { e.u8(3); e.u16(*dst); e.u64(*bits); }
-        Op::Not { dst, a } => { e.u8(8); e.u16(*dst); e.u16(*a); }
-        Op::AddF { prim, dst, a, b } => { e.u8(50); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::SubF { prim, dst, a, b } => { e.u8(51); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::MulF { prim, dst, a, b } => { e.u8(52); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::DivF { prim, dst, a, b } => { e.u8(53); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::ModF { prim, dst, a, b } => { e.u8(54); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::NegF { prim, dst, a } => { e.u8(55); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
-        Op::EqF { dst, a, b } => { e.u8(56); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::NeF { dst, a, b } => { e.u8(57); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::LtF { dst, a, b } => { e.u8(58); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::GtF { dst, a, b } => { e.u8(59); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::LeF { dst, a, b } => { e.u8(60); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::GeF { dst, a, b } => { e.u8(61); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::AddI { prim, dst, a, b } => { e.u8(62); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::SubI { prim, dst, a, b } => { e.u8(63); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::MulI { prim, dst, a, b } => { e.u8(64); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::DivI { prim, dst, a, b } => { e.u8(65); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::ModI { prim, dst, a, b } => { e.u8(66); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::WAddI { prim, dst, a, b } => { e.u8(67); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::WSubI { prim, dst, a, b } => { e.u8(68); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::WMulI { prim, dst, a, b } => { e.u8(69); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::AndI { prim, dst, a, b } => { e.u8(72); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::OrI { prim, dst, a, b } => { e.u8(73); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::XorI { prim, dst, a, b } => { e.u8(74); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::ShlI { prim, dst, a, b } => { e.u8(75); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::ShrI { prim, dst, a, b } => { e.u8(76); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::WrapShlI { prim, dst, a, b } => { e.u8(77); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::EqI { prim, dst, a, b } => { e.u8(78); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::NeI { prim, dst, a, b } => { e.u8(79); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::LtI { prim, dst, a, b } => { e.u8(80); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::GtI { prim, dst, a, b } => { e.u8(81); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::LeI { prim, dst, a, b } => { e.u8(82); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::GeI { prim, dst, a, b } => { e.u8(83); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::NegI { prim, dst, a } => { e.u8(84); e.u8(prim.to_u8()); e.u16(*dst); e.u16(*a); }
-        Op::StrCmp { eq, dst, a, b } => { e.u8(10); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::RefEq { eq, dst, a, b } => { e.u8(11); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::Jmp { target } => { e.u8(12); e.u32(*target); }
-        Op::Br { cond, then_t, else_t } => { e.u8(13); e.u16(*cond); e.u32(*then_t); e.u32(*else_t); }
-        Op::BrTable { idx, table_off, count, default } => {
-            e.u8(14); e.u16(*idx); e.u32(*table_off); e.u16(*count); e.u32(*default);
+        Op::Mov { dst, src } => {
+            e.u8(0);
+            e.u16(*dst);
+            e.u16(*src);
         }
-        Op::Call { func, argv_off, argc, dst } => { e.u8(15); e.u32(*func); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
-        Op::CallM { func, argv_off, argc, dst } => { e.u8(16); e.u32(*func); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
-        Op::CallI { slot, argv_off, argc, dst } => { e.u8(17); e.u32(*slot); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
-        Op::CallNat { nat, recv, argv_off, argc, dst } => { e.u8(18); e.u8(*nat as u8); e.u16(*recv); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
-        Op::CallFn { fval, argv_off, argc, dst } => { e.u8(19); e.u16(*fval); e.u32(*argv_off); e.u16(*argc); e.u16(*dst); }
-        Op::Ret { val } => { e.u8(20); e.u8opt(val); }
-        Op::NewCell { dst, ty } => { e.u8(21); e.u16(*dst); e.u32(*ty); }
-        Op::MakeRecord { dst, ty, argv_off, argc } => { e.u8(49); e.u16(*dst); e.u32(*ty); e.u32(*argv_off); e.u16(*argc); }
-        Op::GetF { dst, obj, field, repr } => { e.u8(22); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u8(repr.to_u8()); }
-        Op::SetF { obj, field, val, repr } => { e.u8(23); e.u16(*obj); e.u32(*field); e.u16(*val); e.u8(repr.to_u8()); }
-        Op::Own { dst, src, ty } => { e.u8(24); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::MakeOpt { dst, src, ty } => { e.u8(89); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::WeakNew { dst, src, ty } => { e.u8(92); e.u16(*dst); e.u16(*src); e.u32(*ty); }
-        Op::WeakUpgrade { recv, dst, ty } => { e.u8(93); e.u16(*recv); e.u16(*dst); e.u32(*ty); }
-        Op::ArrNew { dst, ty, len, repr } => { e.u8(25); e.u16(*dst); e.u32(*ty); e.u16(*len); e.u8(repr.to_u8()); }
-        Op::ArrLit { dst, ty, argv_off, argc } => { e.u8(26); e.u16(*dst); e.u32(*ty); e.u32(*argv_off); e.u16(*argc); }
-        Op::ArrGet { dst, arr, idx, repr } => { e.u8(27); e.u16(*dst); e.u16(*arr); e.u16(*idx); e.u8(repr.to_u8()); }
-        Op::ArrSet { arr, idx, val, repr } => { e.u8(28); e.u16(*arr); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
-        Op::EnumNew { dst, ty, member } => { e.u8(29); e.u16(*dst); e.u32(*ty); e.u32(*member); }
-        Op::TidOf { dst, obj } => { e.u8(38); e.u16(*dst); e.u16(*obj); }
-        Op::IsType { dst, obj, want } => { e.u8(39); e.u16(*dst); e.u16(*obj); e.u32(*want); }
-        Op::IsIface { dst, obj, want } => { e.u8(40); e.u16(*dst); e.u16(*obj); e.u32(*want); }
-        Op::Unbox { dst, box_, ty } => { e.u8(41); e.u16(*dst); e.u16(*box_); e.u32(*ty); }
-        Op::Box { dst, val, ty } => { e.u8(42); e.u16(*dst); e.u16(*val); e.u32(*ty); }
-        Op::MakeClosure { dst, func, argv_off, argc } => { e.u8(43); e.u16(*dst); e.u32(*func); e.u32(*argv_off); e.u16(*argc); }
-        Op::Panic { msg } => { e.u8(44); e.u16(*msg); }
+        Op::MovRef { dst, src } => {
+            e.u8(1);
+            e.u16(*dst);
+            e.u16(*src);
+        }
+        Op::Const { dst, k } => {
+            e.u8(2);
+            e.u16(*dst);
+            e.u32(*k);
+        }
+        Op::ConstRaw { dst, bits } => {
+            e.u8(3);
+            e.u16(*dst);
+            e.u64(*bits);
+        }
+        Op::Not { dst, a } => {
+            e.u8(8);
+            e.u16(*dst);
+            e.u16(*a);
+        }
+        Op::AddF { prim, dst, a, b } => {
+            e.u8(50);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::SubF { prim, dst, a, b } => {
+            e.u8(51);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::MulF { prim, dst, a, b } => {
+            e.u8(52);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::DivF { prim, dst, a, b } => {
+            e.u8(53);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::ModF { prim, dst, a, b } => {
+            e.u8(54);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::NegF { prim, dst, a } => {
+            e.u8(55);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+        }
+        Op::EqF { dst, a, b } => {
+            e.u8(56);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::NeF { dst, a, b } => {
+            e.u8(57);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::LtF { dst, a, b } => {
+            e.u8(58);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::GtF { dst, a, b } => {
+            e.u8(59);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::LeF { dst, a, b } => {
+            e.u8(60);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::GeF { dst, a, b } => {
+            e.u8(61);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::AddI { prim, dst, a, b } => {
+            e.u8(62);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::SubI { prim, dst, a, b } => {
+            e.u8(63);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::MulI { prim, dst, a, b } => {
+            e.u8(64);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::DivI { prim, dst, a, b } => {
+            e.u8(65);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::ModI { prim, dst, a, b } => {
+            e.u8(66);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::WAddI { prim, dst, a, b } => {
+            e.u8(67);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::WSubI { prim, dst, a, b } => {
+            e.u8(68);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::WMulI { prim, dst, a, b } => {
+            e.u8(69);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::AndI { prim, dst, a, b } => {
+            e.u8(72);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::OrI { prim, dst, a, b } => {
+            e.u8(73);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::XorI { prim, dst, a, b } => {
+            e.u8(74);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::ShlI { prim, dst, a, b } => {
+            e.u8(75);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::ShrI { prim, dst, a, b } => {
+            e.u8(76);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::WrapShlI { prim, dst, a, b } => {
+            e.u8(77);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::EqI { prim, dst, a, b } => {
+            e.u8(78);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::NeI { prim, dst, a, b } => {
+            e.u8(79);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::LtI { prim, dst, a, b } => {
+            e.u8(80);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::GtI { prim, dst, a, b } => {
+            e.u8(81);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::LeI { prim, dst, a, b } => {
+            e.u8(82);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::GeI { prim, dst, a, b } => {
+            e.u8(83);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::NegI { prim, dst, a } => {
+            e.u8(84);
+            e.u8(prim.to_u8());
+            e.u16(*dst);
+            e.u16(*a);
+        }
+        Op::StrCmp { eq, dst, a, b } => {
+            e.u8(10);
+            e.u8(*eq as u8);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::RefEq { eq, dst, a, b } => {
+            e.u8(11);
+            e.u8(*eq as u8);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::Jmp { target } => {
+            e.u8(12);
+            e.u32(*target);
+        }
+        Op::Br {
+            cond,
+            then_t,
+            else_t,
+        } => {
+            e.u8(13);
+            e.u16(*cond);
+            e.u32(*then_t);
+            e.u32(*else_t);
+        }
+        Op::BrTable {
+            idx,
+            table_off,
+            count,
+            default,
+        } => {
+            e.u8(14);
+            e.u16(*idx);
+            e.u32(*table_off);
+            e.u16(*count);
+            e.u32(*default);
+        }
+        Op::Call {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } => {
+            e.u8(15);
+            e.u32(*func);
+            e.u32(*argv_off);
+            e.u16(*argc);
+            e.u16(*dst);
+        }
+        Op::CallM {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } => {
+            e.u8(16);
+            e.u32(*func);
+            e.u32(*argv_off);
+            e.u16(*argc);
+            e.u16(*dst);
+        }
+        Op::CallI {
+            slot,
+            argv_off,
+            argc,
+            dst,
+        } => {
+            e.u8(17);
+            e.u32(*slot);
+            e.u32(*argv_off);
+            e.u16(*argc);
+            e.u16(*dst);
+        }
+        Op::CallNat {
+            nat,
+            recv,
+            argv_off,
+            argc,
+            dst,
+        } => {
+            e.u8(18);
+            e.u8(*nat as u8);
+            e.u16(*recv);
+            e.u32(*argv_off);
+            e.u16(*argc);
+            e.u16(*dst);
+        }
+        Op::CallFn {
+            fval,
+            argv_off,
+            argc,
+            dst,
+        } => {
+            e.u8(19);
+            e.u16(*fval);
+            e.u32(*argv_off);
+            e.u16(*argc);
+            e.u16(*dst);
+        }
+        Op::Ret { val } => {
+            e.u8(20);
+            e.u8opt(val);
+        }
+        Op::NewCell { dst, ty } => {
+            e.u8(21);
+            e.u16(*dst);
+            e.u32(*ty);
+        }
+        Op::MakeRecord {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } => {
+            e.u8(49);
+            e.u16(*dst);
+            e.u32(*ty);
+            e.u32(*argv_off);
+            e.u16(*argc);
+        }
+        Op::GetF {
+            dst,
+            obj,
+            field,
+            repr,
+        } => {
+            e.u8(22);
+            e.u16(*dst);
+            e.u16(*obj);
+            e.u32(*field);
+            e.u8(repr.to_u8());
+        }
+        Op::SetF {
+            obj,
+            field,
+            val,
+            repr,
+        } => {
+            e.u8(23);
+            e.u16(*obj);
+            e.u32(*field);
+            e.u16(*val);
+            e.u8(repr.to_u8());
+        }
+        Op::Own { dst, src, ty } => {
+            e.u8(24);
+            e.u16(*dst);
+            e.u16(*src);
+            e.u32(*ty);
+        }
+        Op::MakeOpt { dst, src, ty } => {
+            e.u8(89);
+            e.u16(*dst);
+            e.u16(*src);
+            e.u32(*ty);
+        }
+        Op::WeakNew { dst, src, ty } => {
+            e.u8(92);
+            e.u16(*dst);
+            e.u16(*src);
+            e.u32(*ty);
+        }
+        Op::WeakUpgrade { recv, dst, ty } => {
+            e.u8(93);
+            e.u16(*recv);
+            e.u16(*dst);
+            e.u32(*ty);
+        }
+        Op::ArrNew { dst, ty, len, repr } => {
+            e.u8(25);
+            e.u16(*dst);
+            e.u32(*ty);
+            e.u16(*len);
+            e.u8(repr.to_u8());
+        }
+        Op::ArrLit {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } => {
+            e.u8(26);
+            e.u16(*dst);
+            e.u32(*ty);
+            e.u32(*argv_off);
+            e.u16(*argc);
+        }
+        Op::ArrGet {
+            dst,
+            arr,
+            idx,
+            repr,
+        } => {
+            e.u8(27);
+            e.u16(*dst);
+            e.u16(*arr);
+            e.u16(*idx);
+            e.u8(repr.to_u8());
+        }
+        Op::ArrSet {
+            arr,
+            idx,
+            val,
+            repr,
+        } => {
+            e.u8(28);
+            e.u16(*arr);
+            e.u16(*idx);
+            e.u16(*val);
+            e.u8(repr.to_u8());
+        }
+        Op::EnumNew { dst, ty, member } => {
+            e.u8(29);
+            e.u16(*dst);
+            e.u32(*ty);
+            e.u32(*member);
+        }
+        Op::TidOf { dst, obj } => {
+            e.u8(38);
+            e.u16(*dst);
+            e.u16(*obj);
+        }
+        Op::IsType { dst, obj, want } => {
+            e.u8(39);
+            e.u16(*dst);
+            e.u16(*obj);
+            e.u32(*want);
+        }
+        Op::IsIface { dst, obj, want } => {
+            e.u8(40);
+            e.u16(*dst);
+            e.u16(*obj);
+            e.u32(*want);
+        }
+        Op::Unbox { dst, box_, ty } => {
+            e.u8(41);
+            e.u16(*dst);
+            e.u16(*box_);
+            e.u32(*ty);
+        }
+        Op::Box { dst, val, ty } => {
+            e.u8(42);
+            e.u16(*dst);
+            e.u16(*val);
+            e.u32(*ty);
+        }
+        Op::MakeClosure {
+            dst,
+            func,
+            argv_off,
+            argc,
+        } => {
+            e.u8(43);
+            e.u16(*dst);
+            e.u32(*func);
+            e.u32(*argv_off);
+            e.u16(*argc);
+        }
+        Op::Panic { msg } => {
+            e.u8(44);
+            e.u16(*msg);
+        }
         Op::LoopHead => e.u8(46),
-        Op::Conv { dst, src, from, to } => { e.u8(47); e.u16(*dst); e.u16(*src); e.u8(from.to_u8()); e.u8(to.to_u8()); }
-        Op::StrCodeAt { dst, s, idx } => { e.u8(91); e.u16(*dst); e.u16(*s); e.u16(*idx); }
-        Op::ArrayCmp { eq, dst, a, b } => { e.u8(85); e.u8(*eq as u8); e.u16(*dst); e.u16(*a); e.u16(*b); }
-        Op::ArrGetF { dst, obj, field, idx, repr } => { e.u8(87); e.u16(*dst); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u8(repr.to_u8()); }
-        Op::ArrSetF { obj, field, idx, val, repr } => { e.u8(88); e.u16(*obj); e.u32(*field); e.u16(*idx); e.u16(*val); e.u8(repr.to_u8()); }
+        Op::Conv { dst, src, from, to } => {
+            e.u8(47);
+            e.u16(*dst);
+            e.u16(*src);
+            e.u8(from.to_u8());
+            e.u8(to.to_u8());
+        }
+        Op::StrCodeAt { dst, s, idx } => {
+            e.u8(91);
+            e.u16(*dst);
+            e.u16(*s);
+            e.u16(*idx);
+        }
+        Op::ArrayCmp { eq, dst, a, b } => {
+            e.u8(85);
+            e.u8(*eq as u8);
+            e.u16(*dst);
+            e.u16(*a);
+            e.u16(*b);
+        }
+        Op::ArrGetF {
+            dst,
+            obj,
+            field,
+            idx,
+            repr,
+        } => {
+            e.u8(87);
+            e.u16(*dst);
+            e.u16(*obj);
+            e.u32(*field);
+            e.u16(*idx);
+            e.u8(repr.to_u8());
+        }
+        Op::ArrSetF {
+            obj,
+            field,
+            idx,
+            val,
+            repr,
+        } => {
+            e.u8(88);
+            e.u16(*obj);
+            e.u32(*field);
+            e.u16(*idx);
+            e.u16(*val);
+            e.u8(repr.to_u8());
+        }
         Op::Pad { .. } => unreachable!("diagnostic-only variant"),
     }
 }
@@ -2042,12 +2681,22 @@ fn repr(b: u8) -> Result<Repr, String> {
 
 fn nat(b: u8) -> Result<Nat, String> {
     Ok(match b {
-        0 => Nat::Str, 1 => Nat::Concat, 2 => Nat::StrLen,
-        3 => Nat::ArrLen, 4 => Nat::StrJoin, 5 => Nat::StrSlice,
-        6 => Nat::ArrSlice, 7 => Nat::BytesClone,
-        8 => Nat::CaptureTrace, 9 => Nat::TraceLen, 10 => Nat::TraceName,
-        11 => Nat::TraceLine, 12 => Nat::TraceCol, 13 => Nat::TraceRender,
-        14 => Nat::StrScan, 15 => Nat::StrStartsWith,
+        0 => Nat::Str,
+        1 => Nat::Concat,
+        2 => Nat::StrLen,
+        3 => Nat::ArrLen,
+        4 => Nat::StrJoin,
+        5 => Nat::StrSlice,
+        6 => Nat::ArrSlice,
+        7 => Nat::BytesClone,
+        8 => Nat::CaptureTrace,
+        9 => Nat::TraceLen,
+        10 => Nat::TraceName,
+        11 => Nat::TraceLine,
+        12 => Nat::TraceCol,
+        13 => Nat::TraceRender,
+        14 => Nat::StrScan,
+        15 => Nat::StrStartsWith,
         // 16..=20 were the `Nat::StrBuf*` builder rows — withdrawn with
         // the builder's engine surface; every later tag shifted down
         16 => Nat::StrFromCode,
@@ -2128,7 +2777,11 @@ impl<'a> Dec<'a> {
     }
     fn take(&mut self, n: usize) -> Result<&'a [u8], String> {
         if self.pos + n > self.b.len() {
-            return Err(format!("truncated module binary (take {n} at pos {} of {})", self.pos, self.b.len()));
+            return Err(format!(
+                "truncated module binary (take {n} at pos {} of {})",
+                self.pos,
+                self.b.len()
+            ));
         }
         let s = &self.b[self.pos..self.pos + n];
         self.pos += n;
@@ -2151,7 +2804,9 @@ impl<'a> Dec<'a> {
     }
     fn u64(&mut self) -> Result<u64, String> {
         let b = self.take(8)?;
-        Ok(u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))
+        Ok(u64::from_le_bytes([
+            b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+        ]))
     }
     fn i64(&mut self) -> Result<i64, String> {
         Ok(self.u64()? as i64)
@@ -2189,7 +2844,11 @@ impl<'a> Dec<'a> {
         Ok(v)
     }
     fn u8opt(&mut self) -> Result<Option<u16>, String> {
-        Ok(if self.u8()? != 0 { Some(self.u16()?) } else { None })
+        Ok(if self.u8()? != 0 {
+            Some(self.u16()?)
+        } else {
+            None
+        })
     }
 }
 
@@ -2211,8 +2870,14 @@ mod tests {
             name: point,
             kind: TyKind::Data {
                 fields: vec![
-                    FieldInfo { name: x, ty: TY_I32 },
-                    FieldInfo { name: vid, ty: TY_STR },
+                    FieldInfo {
+                        name: x,
+                        ty: TY_I32,
+                    },
+                    FieldInfo {
+                        name: vid,
+                        ty: TY_STR,
+                    },
                 ],
             },
         });
@@ -2323,7 +2988,11 @@ mod tests {
             local: 0,
             name: shape,
             generics: 0,
-            methods: vec![IfaceMethod { name: area, params: vec![TY_I32], ret: TY_NIL }],
+            methods: vec![IfaceMethod {
+                name: area,
+                params: vec![TY_I32],
+                ret: TY_NIL,
+            }],
         });
         // native rows (core's builtin surface), ambient bits both ways
         p.surface.native_types = vec![
@@ -2367,7 +3036,10 @@ mod tests {
             generics: 0,
             methods: vec![],
         });
-        assert!(decode(&encode(&p)).is_err(), "iface local outside the iface table");
+        assert!(
+            decode(&encode(&p)).is_err(),
+            "iface local outside the iface table"
+        );
     }
 
     fn boot_len() -> u32 {

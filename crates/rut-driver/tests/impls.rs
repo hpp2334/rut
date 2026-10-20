@@ -9,12 +9,16 @@
 
 use rut_parser::Mode;
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -40,7 +44,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -55,16 +62,15 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
+        &[
+            (2, rut_core::binary::Surface::core(), "core".to_string()),
+            (3, collection, "collection".to_string()),
+        ],
     )
 }
 
 fn diags_of(src: &str) -> Vec<String> {
-    compile(src)
-        .diags
-        .iter()
-        .map(|d| d.msg.clone())
-        .collect()
+    compile(src).diags.iter().map(|d| d.msg.clone()).collect()
 }
 
 // The old nominal laws — `impl I for T` coverage/extra-member checks,
@@ -136,7 +142,8 @@ fn satisfaction_fails_names_the_missing_member() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`S` does not satisfy `I`: no member `m`")),
+        ds.iter()
+            .any(|d| d.contains("`S` does not satisfy `I`: no member `m`")),
         "structural satisfaction must diagnose at the boundary: {ds:?}"
     );
 }
@@ -156,8 +163,8 @@ fn receiver_form_must_match_the_interface() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`S` does not satisfy `I`")
-            && d.contains("signature differs")),
+        ds.iter()
+            .any(|d| d.contains("`S` does not satisfy `I`") && d.contains("signature differs")),
         "receiver form mismatch must diagnose: {ds:?}"
     );
 }
@@ -198,7 +205,10 @@ fn static_dispatch_when_the_origin_is_single() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
-    assert!(!ir.contains("calli"), "single origin must bind statically:\n{ir}");
+    assert!(
+        !ir.contains("calli"),
+        "single origin must bind statically:\n{ir}"
+    );
 }
 
 #[test]
@@ -223,7 +233,10 @@ fn vtable_dispatch_when_origins_merge() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
-    assert!(ir.contains("calli"), "merged origins must go through the vtable:\n{ir}");
+    assert!(
+        ir.contains("calli"),
+        "merged origins must go through the vtable:\n{ir}"
+    );
 }
 
 #[test]
@@ -238,9 +251,10 @@ fn for_of_without_an_impl_names_the_missing_contract() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`for (let .. of ..)` needs a sequence")
-            && d.contains("`Count` is not one")
-            && d.contains("marks no `[iterable]` member")),
+        ds.iter()
+            .any(|d| d.contains("`for (let .. of ..)` needs a sequence")
+                && d.contains("`Count` is not one")
+                && d.contains("marks no `[iterable]` member")),
         "missing iterable member must diagnose: {ds:?}"
     );
 }
@@ -253,18 +267,14 @@ fn impl_target_must_be_a_local_type() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum of this module")),
+        ds.iter()
+            .any(|d| d.contains("impl target must be a struct, class, or enum of this module")),
         "foreign target must diagnose: {ds:?}"
     );
     // ...and a USED class refuses the block outright: its members live
     // where the type was declared (the structural fork's placement law)
-    let dep = rut_driver::compile_program(
-        "pub struct Used { v: i32 }\n",
-        Mode::Impl,
-        "dep",
-        1,
-        &[],
-    );
+    let dep =
+        rut_driver::compile_program("pub struct Used { v: i32 }\n", Mode::Impl, "dep", 1, &[]);
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep program");
     let ds: Vec<String> = rut_driver::compile_program(
@@ -281,7 +291,8 @@ fn impl_target_must_be_a_local_type() {
     .map(|d| d.msg.clone())
     .collect();
     assert!(
-        ds.iter().any(|d| d.contains("inherent impls live in the type's module")),
+        ds.iter()
+            .any(|d| d.contains("inherent impls live in the type's module")),
         "a used type takes no consumer impl blocks: {ds:?}"
     );
 }
@@ -350,7 +361,8 @@ fn builtin_composites_take_no_impl_blocks() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum")),
+        ds.iter()
+            .any(|d| d.contains("impl target must be a struct, class, or enum")),
         "a builtin composite takes no impl block: {ds:?}"
     );
     // and the concrete builtin class
@@ -361,8 +373,9 @@ fn builtin_composites_take_no_impl_blocks() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("a builtin class takes no impl blocks")
-            && d.contains("closed contract")),
+        ds.iter()
+            .any(|d| d.contains("a builtin class takes no impl blocks")
+                && d.contains("closed contract")),
         "a builtin class takes no impl block: {ds:?}"
     );
 }
@@ -384,8 +397,13 @@ fn run_main(src: &str) -> i32 {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
@@ -398,16 +416,21 @@ fn prim_capability_rides_a_wrapper_and_dispatches_statically() {
     // the wrapper satisfies; `let w: Num = WI(5)` widens at the spelled
     // constructor, and the single-origin call binds statically —
     // the wrapped scalar rides inside the ref-repr wrapper
-    let src = &format!("{WI}\
+    let src = &format!(
+        "{WI}\
                 entry fn main() -> i32 {{\n\
                     let w: Num = WI(5);\n\
                     return w.m();\n\
-                }}\n");
+                }}\n"
+    );
     assert_eq!(run_main(src), 105);
     let out = compile(src);
     let p = out.program.expect("program");
     let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
-    assert!(!ir.contains("calli"), "single origin must bind statically:\n{ir}");
+    assert!(
+        !ir.contains("calli"),
+        "single origin must bind statically:\n{ir}"
+    );
 }
 
 #[test]
@@ -419,8 +442,8 @@ fn primitive_takes_no_impl_blocks() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("a primitive takes no impl blocks")
-            && d.contains("wrapper")),
+        ds.iter()
+            .any(|d| d.contains("a primitive takes no impl blocks") && d.contains("wrapper")),
         "inherent impl on a prim must diagnose: {ds:?}"
     );
 }
@@ -469,7 +492,10 @@ fn merged_origins_wrapper_and_struct_emit_calli() {
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
     let ir = rut_driver::ir_dump_of(&p.funcs, &p.interner);
-    assert!(ir.contains("calli"), "merged origins must go through the vtable:\n{ir}");
+    assert!(
+        ir.contains("calli"),
+        "merged origins must go through the vtable:\n{ir}"
+    );
 }
 
 #[test]
@@ -549,7 +575,11 @@ fn class_vtable_fill_survives_the_link() {
         .find(|&i| linked.type_name(i) == "WI")
         .expect("WI in the global table") as usize;
     let fill = linked.vtables[wi_ty][slot as usize];
-    assert!(fill.is_some(), "WI's vtable row must carry the dep's member: {:?}", linked.vtables[wi_ty]);
+    assert!(
+        fill.is_some(),
+        "WI's vtable row must carry the dep's member: {:?}",
+        linked.vtables[wi_ty]
+    );
     let fname = linked.name_of(linked.funcs[fill.unwrap() as usize].name);
     assert!(fname.contains("m"), "the fill names the member: {fname}");
 
@@ -560,8 +590,13 @@ fn class_vtable_fill_survives_the_link() {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(linked)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(linked))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 105);
 }
 
@@ -622,7 +657,11 @@ pub fn fresh() -> Counter { return Counter::new(); }\n";
 #[test]
 fn pub_struct_methods_cross_private_ones_stay_home() {
     let dep = rut_driver::compile_program(VIS_DEP, Mode::Impl, "counter", 1, &[]);
-    assert!(dep.diags.is_empty(), "the plain fn is fine same-module: {:?}", dep.diags);
+    assert!(
+        dep.diags.is_empty(),
+        "the plain fn is fine same-module: {:?}",
+        dep.diags
+    );
     let dep = dep.program.expect("dep");
     let surface = dep.surface.clone();
 
@@ -640,8 +679,13 @@ fn pub_struct_methods_cross_private_ones_stay_home() {
         2,
         &[(1, surface.clone(), "counter".to_string())],
     );
-    assert!(pub_only.diags.is_empty(), "pub methods cross: {:?}", pub_only.diags);
-    let out = rut_core::link::link(vec![dep.clone(), pub_only.program.expect("app")]).expect("link");
+    assert!(
+        pub_only.diags.is_empty(),
+        "pub methods cross: {:?}",
+        pub_only.diags
+    );
+    let out =
+        rut_core::link::link(vec![dep.clone(), pub_only.program.expect("app")]).expect("link");
     assert_eq!(run_main_src(out), 0, "the linked pub-method call runs");
 
     let private = rut_driver::compile_program(
@@ -657,7 +701,8 @@ fn pub_struct_methods_cross_private_ones_stay_home() {
     );
     let ds: Vec<String> = private.diags.iter().map(|d| d.msg.clone()).collect();
     assert!(
-        ds.iter().any(|d| d.contains("`Counter` has no method `secret`")),
+        ds.iter()
+            .any(|d| d.contains("`Counter` has no method `secret`")),
         "a private method is a no-method error at the consumer: {ds:?}"
     );
 }
@@ -665,8 +710,13 @@ fn pub_struct_methods_cross_private_ones_stay_home() {
 fn run_main_src(p: rut_core::binary::Program) -> i32 {
     let prog = rut_core::link::flatten(p);
     rut_vm::verify::verify(&prog).expect("verify");
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(rut_vm::interp::Limits::default()).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(rut_vm::interp::Limits::default())
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
@@ -747,7 +797,8 @@ fn enum_target_rejects_generic_arguments_and_foreign_names() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`Light` takes no generic arguments")),
+        ds.iter()
+            .any(|d| d.contains("`Light` takes no generic arguments")),
         "an enum target is concrete: {ds:?}"
     );
 }
@@ -765,8 +816,8 @@ fn disposal_stays_data_only_for_enums() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("cannot carry `[disposal]`")
-            && d.contains("immortal singletons")),
+        ds.iter()
+            .any(|d| d.contains("cannot carry `[disposal]`") && d.contains("immortal singletons")),
         "the engine disposes record cells only: {ds:?}"
     );
     // the capture law: the emit closure copies scalars, so the loop
@@ -822,9 +873,18 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
         2,
         &[(1, surface.clone(), "dial".to_string())],
     );
-    assert!(pub_only.diags.is_empty(), "pub enum methods cross: {:?}", pub_only.diags);
-    let out = rut_core::link::link(vec![dep.clone(), pub_only.program.expect("app")]).expect("link");
-    assert_eq!(run_main_src(out), 2, "the static chains through the flipped self method");
+    assert!(
+        pub_only.diags.is_empty(),
+        "pub enum methods cross: {:?}",
+        pub_only.diags
+    );
+    let out =
+        rut_core::link::link(vec![dep.clone(), pub_only.program.expect("app")]).expect("link");
+    assert_eq!(
+        run_main_src(out),
+        2,
+        "the static chains through the flipped self method"
+    );
 
     let private = rut_driver::compile_program(
         "use dial::{Dial};\n\
@@ -838,7 +898,8 @@ fn enum_pub_methods_cross_private_ones_stay_home() {
     );
     let ds: Vec<String> = private.diags.iter().map(|d| d.msg.clone()).collect();
     assert!(
-        ds.iter().any(|d| d.contains("no method `hidden`") || d.contains("unknown name `Dial::hidden`")),
+        ds.iter()
+            .any(|d| d.contains("no method `hidden`") || d.contains("unknown name `Dial::hidden`")),
         "a private enum method is invisible at the consumer: {ds:?}"
     );
 }

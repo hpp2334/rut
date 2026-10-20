@@ -68,7 +68,10 @@ pub fn format_or_passthrough(src: &str, mode: Mode, style: &Style) -> String {
         // still needs a String this keeps the file untouched
         panic!(
             "rut-fmt: refused to format: {}",
-            ds.iter().map(|d| d.msg.as_str()).collect::<Vec<_>>().join(" | ")
+            ds.iter()
+                .map(|d| d.msg.as_str())
+                .collect::<Vec<_>>()
+                .join(" | ")
         )
     })
 }

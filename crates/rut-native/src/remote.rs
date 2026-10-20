@@ -45,10 +45,7 @@ const MAX_FETCH_BYTES: usize = 256 * 1024 * 1024;
 pub trait DepRemote {
     /// Bytes for one url row — cache hit, network, memory; the
     /// policy's choice. The ONE required method.
-    fn fetch(
-        &self,
-        url: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>;
+    fn fetch(&self, url: &str) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>>;
 
     /// Cache hit-check (sync — a hit must not await). Default: none.
     fn lookup(&self, url: &str) -> Option<Vec<u8>> {
@@ -123,9 +120,7 @@ impl HttpRemote {
     /// field exists because one struct serves both flavors).
     #[cfg(feature = "http")]
     fn plain_client() -> reqwest::Client {
-        reqwest::Client::builder()
-            .build()
-            .expect("http client")
+        reqwest::Client::builder().build().expect("http client")
     }
 
     /// The wire client: hard timeouts so a stalled host fails loudly —
@@ -255,10 +250,7 @@ impl HttpRemote {
 }
 
 impl DepRemote for HttpRemote {
-    fn fetch(
-        &self,
-        url: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>> {
+    fn fetch(&self, url: &str) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>> {
         // hit ⇒ never touch the network (offline reloads are the point);
         // the sync lookup settles first, so a hit is a READY future
         if let Some(bytes) = DepRemote::lookup(self, url) {
@@ -291,10 +283,15 @@ impl DepRemote for HttpRemote {
         static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let tmp = path.with_extension(format!("part.{}-{}", std::process::id(), n));
-        std::fs::write(&tmp, bytes)
-            .map_err(|e| RemoteError::new(format!("{}: cannot write cache entry: {e}", tmp.display())))?;
-        std::fs::rename(&tmp, &path)
-            .map_err(|e| RemoteError::new(format!("{}: cannot finalize cache entry: {e}", tmp.display())))?;
+        std::fs::write(&tmp, bytes).map_err(|e| {
+            RemoteError::new(format!("{}: cannot write cache entry: {e}", tmp.display()))
+        })?;
+        std::fs::rename(&tmp, &path).map_err(|e| {
+            RemoteError::new(format!(
+                "{}: cannot finalize cache entry: {e}",
+                tmp.display()
+            ))
+        })?;
         Ok(())
     }
 }

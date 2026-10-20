@@ -13,15 +13,16 @@
 //! - the per-type rows ride the binary: a compiled module decodes with
 //!   its disposal row, and the func id survives encode → decode.
 
-
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -47,7 +48,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -71,7 +75,11 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
         .entrypoint("app_main")
         .compile()
         .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
@@ -80,9 +88,12 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
-        sink.borrow_mut().push(msg.to_string());
-    }));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |msg| {
+            sink.borrow_mut().push(msg.to_string());
+        }),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten());
     let limits = rut_vm::interp::Limits {
@@ -90,8 +101,13 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run");
     let out_lines = lines.borrow().clone();
     (vm, out_lines)
@@ -163,7 +179,11 @@ entry fn main() -> i32 {{
 "#
     );
     let (_, lines) = run_logged(&src);
-    assert_eq!(lines, vec!["gone 1".to_string()], "the dispose runs through the drain");
+    assert_eq!(
+        lines,
+        vec!["gone 1".to_string()],
+        "the dispose runs through the drain"
+    );
 }
 
 #[test]
@@ -190,8 +210,14 @@ entry fn main() -> i32 { let a = A { n: 9 }; return 0; }
     let (ty, fid) = rows[0];
     // the marked member: the inst name ends in the (free) member name
     let fname = prog.interner.name(prog.funcs[fid as usize].name);
-    assert!(fname.ends_with("release"), "the marked member's inst: {fname}");
-    assert!(ty >= rut_core::types::TypeTable::boot().types.len(), "a user type, not a boot id");
+    assert!(
+        fname.ends_with("release"),
+        "the marked member's inst: {fname}"
+    );
+    assert!(
+        ty >= rut_core::types::TypeTable::boot().types.len(),
+        "a user type, not a boot id"
+    );
     // the linked program keeps the row and the VM releases cleanly
     let flat = rut_core::link::flatten(prog);
     assert!(flat.disposal_impls.iter().filter(|f| f.is_some()).count() >= 1);
@@ -244,9 +270,13 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     let v: i32 = vm.call("main", ()).expect("run");
     assert_eq!(v, 9);
 }
-

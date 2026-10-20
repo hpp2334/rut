@@ -54,12 +54,12 @@ impl Widget {
 fn member_pub_mod_self_are_gone() {
     // the paren spellings are repealed — one diag naming the fix, and
     // the member still parses (the default) so the tail stays sane
-    let (_, diags) = parse(
-        "class C { pub(mod) n: i32; pub(self) m: i32; }",
-        Mode::Impl,
-    );
+    let (_, diags) = parse("class C { pub(mod) n: i32; pub(self) m: i32; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`pub(mod)`/`pub(self)` are gone") && d.msg.contains("bare private is the default")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`pub(mod)`/`pub(self)` are gone")
+                && d.msg.contains("bare private is the default")),
         "the repealed spellings must name the fix: {diags:?}"
     );
 }
@@ -99,7 +99,9 @@ fn struct_rejects_member_pub() {
     // struct members are always public — no visibility dial
     let (_, diags) = parse("struct P { pub x: i32; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("structs have no field visibility")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("structs have no field visibility")),
         "member pub must be diagnosed in a struct: {diags:?}"
     );
 }
@@ -109,7 +111,9 @@ fn private_is_a_dropped_word() {
     // dropped keywords hard-error naming the replacement
     let (_, diags) = parse("class C { private n: i32; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("members are private by default")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("members are private by default")),
         "`private` must name its replacement: {diags:?}"
     );
 }
@@ -120,7 +124,9 @@ fn pub_scope_rejects_unknown_scope() {
     // diagnostic still fires first (methods live in impls)
     let (_, diags) = parse("class C { pub(crate) fn m(self) -> nil { } }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
         "unknown scope must be diagnosed: {diags:?}"
     );
 }
@@ -130,7 +136,9 @@ fn body_methods_are_a_hard_error() {
     // type bodies are fields-only — a `fn` member diagnoses
     let (_, diags) = parse("class C { fn m(self) -> nil { } }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("methods live in `impl` blocks")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("methods live in `impl` blocks")),
         "body methods must diagnose: {diags:?}"
     );
 }
@@ -197,7 +205,10 @@ fn interface_vis_parses_into_the_item() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Interface { vis, name, methods, .. } = ast.item(items[0]) else {
+    let ItemKind::Interface {
+        vis, name, methods, ..
+    } = ast.item(items[0])
+    else {
         panic!("expected an interface");
     };
     assert_eq!(*vis, Vis::Pub);
@@ -210,7 +221,9 @@ fn interface_member_pub_is_diagnosed() {
     // the interface's visibility rules govern — members take no `pub`
     let (_, diags) = parse("interface Show { pub fn show(self) -> str; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("interface members carry no `pub`")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("interface members carry no `pub`")),
         "member `pub` must diagnose: {diags:?}"
     );
 }
@@ -220,7 +233,9 @@ fn interface_member_marker_is_diagnosed() {
     // `[marker]` is an inherent-impl spelling — never an interface's
     let (_, diags) = parse("interface I { [iterable] fn it(self) -> i32; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("marks an inherent impl member")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("marks an inherent impl member")),
         "an interface-body marker must diagnose: {diags:?}"
     );
 }
@@ -230,7 +245,10 @@ fn interface_non_fn_member_is_diagnosed() {
     // interfaces declare method signatures — nothing else
     let (_, diags) = parse("interface I { x: i32; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("interfaces declare method signatures") && d.msg.contains("expected `fn`")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("interfaces declare method signatures")
+                && d.msg.contains("expected `fn`")),
         "a non-fn member must diagnose: {diags:?}"
     );
 }

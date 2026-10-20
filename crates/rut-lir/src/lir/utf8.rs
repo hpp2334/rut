@@ -16,12 +16,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     fn imm_i32(&mut self, v: i64, sp: u32) -> u16 {
         let d = self.new_reg(TY_I32);
-        self.emit(Op::ConstRaw { dst: d, bits: v as u64 }, sp);
+        self.emit(
+            Op::ConstRaw {
+                dst: d,
+                bits: v as u64,
+            },
+            sp,
+        );
         d
     }
     fn imm_u32(&mut self, v: u32, sp: u32) -> u16 {
         let d = self.new_reg(TY_U32);
-        self.emit(Op::ConstRaw { dst: d, bits: v as u64 }, sp);
+        self.emit(
+            Op::ConstRaw {
+                dst: d,
+                bits: v as u64,
+            },
+            sp,
+        );
         d
     }
     fn u32_cmp(&mut self, op: CmpOp, a: u16, b: u16, sp: u32) -> u16 {
@@ -82,11 +94,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
     fn arr_get_u8(&mut self, arr: u16, idx: u16, sp: u32) -> u16 {
         let d = self.new_reg(TY_U8);
-        self.emit(Op::ArrGet { dst: d, arr, idx, repr: Repr::Prim(PrimTy::U8) }, sp);
+        self.emit(
+            Op::ArrGet {
+                dst: d,
+                arr,
+                idx,
+                repr: Repr::Prim(PrimTy::U8),
+            },
+            sp,
+        );
         d
     }
     fn arr_set_u8(&mut self, arr: u16, idx: u16, val: u16, sp: u32) {
-        self.emit(Op::ArrSet { arr, idx, val, repr: Repr::Prim(PrimTy::U8) }, sp);
+        self.emit(
+            Op::ArrSet {
+                arr,
+                idx,
+                val,
+                repr: Repr::Prim(PrimTy::U8),
+            },
+            sp,
+        );
     }
     fn str_code_at(&mut self, s: u16, idx: u16, sp: u32) -> u16 {
         let d = self.new_reg(TY_U32);
@@ -95,7 +123,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
     fn to_u32(&mut self, src: u16, from: PrimTy, sp: u32) -> u16 {
         let d = self.new_reg(TY_U32);
-        self.emit(Op::Conv { dst: d, src, from, to: PrimTy::U32 }, sp);
+        self.emit(
+            Op::Conv {
+                dst: d,
+                src,
+                from,
+                to: PrimTy::U32,
+            },
+            sp,
+        );
         d
     }
     /// Write `val` at `w`, then advance `w` by one.
@@ -110,7 +146,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// length, `ArrNew` the `bytes`, pass 2 writes the octets.
     pub(crate) fn emit_string_encode(&mut self, src: u16, sp: u32) -> u16 {
         let n = self.new_reg(TY_I32);
-        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrLen, recv: src, argv_off, argc, dst: n }, sp); }
+        {
+            let (argv_off, argc) = self.pool_args(&(vec![]));
+            self.emit(
+                Op::CallNat {
+                    nat: Nat::StrLen,
+                    recv: src,
+                    argv_off,
+                    argc,
+                    dst: n,
+                },
+                sp,
+            );
+        }
 
         // ---- pass 1: total byte length ----
         let total = self.imm_i32(0, sp);
@@ -133,7 +181,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.bind(l_end);
 
         let out = self.new_reg(TY_BYTES);
-        self.emit(Op::ArrNew { dst: out, ty: TY_BYTES, len: total, repr: Repr::Prim(PrimTy::U8) }, sp);
+        self.emit(
+            Op::ArrNew {
+                dst: out,
+                ty: TY_BYTES,
+                len: total,
+                repr: Repr::Prim(PrimTy::U8),
+            },
+            sp,
+        );
 
         // ---- pass 2: write ----
         let i2 = self.imm_i32(0, sp);
@@ -261,9 +317,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn emit_bytes_decode(&mut self, src: u16, sp: u32) -> u16 {
         let out = self.new_reg(TY_STR);
         let k = self.konst(ConstVal::Str(String::new()));
-        self.emit(Op::Const { dst: out, k: k as u32 }, sp);
+        self.emit(
+            Op::Const {
+                dst: out,
+                k: k as u32,
+            },
+            sp,
+        );
         let n = self.new_reg(TY_I32);
-        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: src, argv_off, argc, dst: n }, sp); }
+        {
+            let (argv_off, argc) = self.pool_args(&(vec![]));
+            self.emit(
+                Op::CallNat {
+                    nat: Nat::ArrLen,
+                    recv: src,
+                    argv_off,
+                    argc,
+                    dst: n,
+                },
+                sp,
+            );
+        }
         let i = self.imm_i32(0, sp);
 
         let l_head = self.new_label();
@@ -281,8 +355,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the 1-codepoint str mints straight from the u32 (the char
         // exorcism: no Conv{U32→Char}, no char register)
         let cs = self.new_reg(TY_STR);
-        { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: cs }, sp); }
-        { let (argv_off, argc) = self.pool_args(&(vec![out, cs])); self.emit(Op::CallNat { nat: Nat::Concat, recv: NOREG, argv_off, argc, dst: out }, sp); }
+        {
+            let (argv_off, argc) = self.pool_args(&(vec![cp]));
+            self.emit(
+                Op::CallNat {
+                    nat: Nat::StrFromCode,
+                    recv: NOREG,
+                    argv_off,
+                    argc,
+                    dst: cs,
+                },
+                sp,
+            );
+        }
+        {
+            let (argv_off, argc) = self.pool_args(&(vec![out, cs]));
+            self.emit(
+                Op::CallNat {
+                    nat: Nat::Concat,
+                    recv: NOREG,
+                    argv_off,
+                    argc,
+                    dst: out,
+                },
+                sp,
+            );
+        }
 
         self.emit(arith(ArithOp::Add, PrimTy::I32, i, i, adv), sp);
         self.jmp(l_head);

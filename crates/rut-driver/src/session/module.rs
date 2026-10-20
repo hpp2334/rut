@@ -132,7 +132,10 @@ impl Default for MountedBody {
     /// An empty source body — the manifest-only pkg (a pkg whose
     /// entries ride on other fields) parses to an empty unit.
     fn default() -> MountedBody {
-        MountedBody::Source { text: String::new(), is_decl: false }
+        MountedBody::Source {
+            text: String::new(),
+            is_decl: false,
+        }
     }
 }
 
@@ -206,7 +209,10 @@ impl Mounted {
     pub fn source(name: &str, text: impl Into<String>) -> Mounted {
         Mounted {
             spec: name.to_string(),
-            body: MountedBody::Source { text: text.into(), is_decl: false },
+            body: MountedBody::Source {
+                text: text.into(),
+                is_decl: false,
+            },
             ..Default::default()
         }
     }
@@ -216,7 +222,10 @@ impl Mounted {
     pub fn decl(name: &str, text: impl Into<String>) -> Mounted {
         Mounted {
             spec: name.to_string(),
-            body: MountedBody::Source { text: text.into(), is_decl: true },
+            body: MountedBody::Source {
+                text: text.into(),
+                is_decl: true,
+            },
             ..Default::default()
         }
     }

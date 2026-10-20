@@ -28,7 +28,9 @@ pub(crate) fn expr_ty(
         ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => Some("str".to_string()),
         ExprKind::Lit(Lit::Bool(_)) => Some("bool".to_string()),
         ExprKind::Lit(Lit::Int(_, sfx)) => Some(sfx.map(int_suffix).unwrap_or("i32").to_string()),
-        ExprKind::Lit(Lit::Float(_, sfx)) => Some(sfx.map(float_suffix).unwrap_or("f32").to_string()),
+        ExprKind::Lit(Lit::Float(_, sfx)) => {
+            Some(sfx.map(float_suffix).unwrap_or("f32").to_string())
+        }
         ExprKind::FStr { .. } => Some("str".to_string()),
         ExprKind::Path { segs } => path_ty(ast, binds, idxs, pos, segs),
         ExprKind::Call { callee, .. } => call_ty(idxs, ast, *callee),
@@ -50,7 +52,10 @@ pub(crate) fn expr_ty(
         ExprKind::Index { recv, .. } => expr_ty(ast, binds, idxs, *recv).and_then(|t| elem_ty(&t)),
         ExprKind::Struct { ty, .. } => Some(ty_src(ast, *ty)),
         ExprKind::Tuple { elems } => {
-            let parts: Option<Vec<String>> = elems.iter().map(|&e| expr_ty(ast, binds, idxs, e)).collect();
+            let parts: Option<Vec<String>> = elems
+                .iter()
+                .map(|&e| expr_ty(ast, binds, idxs, e))
+                .collect();
             parts.map(|p| format!("({})", p.join(", ")))
         }
         ExprKind::ArrayLit { elems } => elems
@@ -63,9 +68,14 @@ pub(crate) fn expr_ty(
         ExprKind::Cast { ty, .. } => Some(ty_src(ast, *ty)),
         ExprKind::Is { .. } => Some("bool".to_string()),
         ExprKind::Binary { op, lhs, rhs } => match op {
-            BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge | BinOp::And | BinOp::Or => {
-                Some("bool".to_string())
-            }
+            BinOp::Eq
+            | BinOp::Ne
+            | BinOp::Lt
+            | BinOp::Gt
+            | BinOp::Le
+            | BinOp::Ge
+            | BinOp::And
+            | BinOp::Or => Some("bool".to_string()),
             // same-type arithmetic; the left operand decides
             _ => expr_ty(ast, binds, idxs, *lhs).or_else(|| expr_ty(ast, binds, idxs, *rhs)),
         },
@@ -144,10 +154,7 @@ fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: NodeHandle<AnyExpr>) -> Option
             // never wrong text. The free-fn match keeps precedence.
             if is_cap(name) {
                 if let Some((_, ty)) = find_ty(idxs, name) {
-                    if matches!(
-                        ty.form,
-                        TyForm::Class | TyForm::Struct | TyForm::HostStruct
-                    ) {
+                    if matches!(ty.form, TyForm::Class | TyForm::Struct | TyForm::HostStruct) {
                         return Some(name.to_string());
                     }
                 }
@@ -225,5 +232,8 @@ fn float_suffix(sfx: rut_lexer::token::FloatSuffix) -> &'static str {
 }
 
 pub(crate) fn is_cap(s: &str) -> bool {
-    s.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false)
+    s.chars()
+        .next()
+        .map(|c| c.is_ascii_uppercase())
+        .unwrap_or(false)
 }

@@ -61,9 +61,7 @@ impl DepRemote for Table {
     fn fetch(
         &self,
         url: &str,
-    ) -> std::pin::Pin<
-        Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>,
-    > {
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>, RemoteError>> + '_>> {
         let r = match self.0.get(url) {
             Some(bytes) => Ok(bytes.clone()),
             None => Err(RemoteError::new(format!("no fixture bytes for {url}"))),
@@ -107,10 +105,7 @@ pub fn dep_dir(names: &[String], pkg: &str) -> String {
 /// The walked pkg whose mount key spells `name` — a bare root or an
 /// identity-keyed group (`name@fp16`); single-instance worlds only.
 #[allow(dead_code)]
-pub fn pkg_named<'a>(
-    loaded: &'a rut_driver::Walk,
-    name: &str,
-) -> &'a rut_driver::Mounted {
+pub fn pkg_named<'a>(loaded: &'a rut_driver::Walk, name: &str) -> &'a rut_driver::Mounted {
     loaded
         .pkgs
         .iter()
@@ -118,7 +113,11 @@ pub fn pkg_named<'a>(
         .unwrap_or_else(|| {
             panic!(
                 "no pkg named `{name}` (mounted: {:?})",
-                loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>()
+                loaded
+                    .pkgs
+                    .iter()
+                    .map(|p| p.spec.clone())
+                    .collect::<Vec<_>>()
             )
         })
 }

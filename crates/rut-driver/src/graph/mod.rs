@@ -23,21 +23,20 @@
 //! arithmetic only), and **verify** (the load gate's final pass,
 //! `rut_vm::verify`, after link).
 
-
 mod compiler;
 mod instantiate;
 mod seeds;
 
 pub(crate) use compiler::{dep_use_heads, mod_inputs_of};
 
-use compiler::{GraphCompiler};
+use compiler::GraphCompiler;
 use seeds::build_seed_groups;
 
 use std::collections::{HashMap, HashSet};
 
+use rut_core::binary::Program;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
-use rut_core::binary::Program;
 
 use crate::session::Session;
 
@@ -52,14 +51,23 @@ pub struct GraphOutput {
 pub(crate) fn compile_graph(session: &Session, root_spec: &str) -> GraphOutput {
     let units = compile_units(session, root_spec);
     if !units.ok {
-        return GraphOutput { diags: units.diags, program: None };
+        return GraphOutput {
+            diags: units.diags,
+            program: None,
+        };
     }
     match rut_core::link::link(units.programs) {
-        Ok(p) => GraphOutput { diags: units.diags, program: Some(p) },
+        Ok(p) => GraphOutput {
+            diags: units.diags,
+            program: Some(p),
+        },
         Err(e) => {
             let mut diags = units.diags;
             diags.push(Diag::new(Span::new(0, 0), format!("link: {e}")));
-            GraphOutput { diags, program: None }
+            GraphOutput {
+                diags,
+                program: None,
+            }
         }
     }
 }
@@ -111,6 +119,11 @@ pub(crate) fn compile_units(session: &Session, root_spec: &str) -> Units {
     c.resolve_requests();
     let template_failures = std::mem::take(&mut c.template_failures);
     let (diags, programs, linked) = c.finish();
-    Units { diags, programs, linked, ok, template_failures }
+    Units {
+        diags,
+        programs,
+        linked,
+        ok,
+        template_failures,
+    }
 }
-

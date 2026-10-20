@@ -22,8 +22,6 @@
 use rut_driver::GraphOutput;
 use rut_parser::Mode;
 
-
-
 /// An interface pkg — LINKED into its users (its names bind as used
 /// decls carrying the exporter's spec).
 const IFACE: &str = "pub interface Mark { fn mark(self) -> i32; }\n";
@@ -50,12 +48,16 @@ impl IntBox {
 }
 ";
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -81,7 +83,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -94,17 +99,26 @@ fn graph(modules: &[(&str, &str)]) -> GraphOutput {
     // uses — a suite-wide loose table is this helper's deliberate
     // shape; the negative closure shapes mount nothing)
     for (spec, src) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
-        chain = chain
-            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
+        chain = chain.pkg(
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     let (root, _) = modules.last().expect("root module");
     graph_of(chain.entrypoint(root).compile())
 }
 
 fn diags_of(g: &GraphOutput) -> String {
-    g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+    g.diags
+        .iter()
+        .map(|d| d.msg.clone())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // ---- the legal shapes ------------------------------------------------
@@ -116,7 +130,9 @@ fn consumer_proves_a_foreign_interface_on_its_own_type() {
     // check at the interface-typed call runs the member-set match
     let g = graph(&[
         ("fmt", IFACE),
-        ("app", "\
+        (
+            "app",
+            "\
 use fmt::{Mark};
 pub fn prove(x: Mark) -> i32 { return x.mark(); }
 struct Thing { n: i32 }
@@ -127,7 +143,8 @@ entry fn main() -> i32 {
     let t = Thing { n: 7 };
     return prove(t);
 }
-"),
+",
+        ),
     ]);
     assert!(g.diags.is_empty(), "{}", diags_of(&g));
     assert!(g.program.is_some());
@@ -160,7 +177,9 @@ fn a_consumer_wraps_a_foreign_type_to_prove_the_interface() {
     let g = graph(&[
         ("mark", IFACE),
         ("box", BOX),
-        ("app", "\
+        (
+            "app",
+            "\
 use mark::{Mark};
 use box::{IntBox};
 class MarkedBox(IntBox);
@@ -171,7 +190,8 @@ entry fn main() -> i32 {
     let m: MarkedBox = MarkedBox(IntBox::new(7));
     return m.mark();
 }
-"),
+",
+        ),
     ]);
     assert!(g.diags.is_empty(), "{}", diags_of(&g));
     assert!(g.program.is_some());
@@ -189,13 +209,16 @@ fn inherent_impl_on_a_used_class_is_refused() {
     // on the consumer's OWN types (or a wrapper over the foreign value).
     let g = graph(&[
         ("box", BOX),
-        ("app", "\
+        (
+            "app",
+            "\
 use box::{Box};
 impl<T> Box<T> {
     pub fn probe_hi(self) -> i64 { return 7; }
 }
 entry fn main() -> i32 { return 0; }
-"),
+",
+        ),
     ]);
     assert!(g.program.is_none(), "the inherent orphan must refuse");
     let ds = diags_of(&g);
@@ -212,21 +235,21 @@ fn impl_for_is_unparseable() {
     // parser, naming the one inherent form
     let g = graph(&[
         ("mark", IFACE),
-        ("app", "\
+        (
+            "app",
+            "\
 use mark::{Mark};
 struct Thing { n: i32 }
 impl Mark for Thing {
     fn mark(self) -> i32 { return self.n; }
 }
 entry fn main() -> i32 { return 0; }
-"),
+",
+        ),
     ]);
     assert!(g.program.is_none(), "the trait-impl spelling must refuse");
     let ds = diags_of(&g);
-    assert!(
-        ds.contains("expected {, found `for`"),
-        "{ds}"
-    );
+    assert!(ds.contains("expected {, found `for`"), "{ds}");
 }
 
 #[test]
@@ -234,19 +257,19 @@ fn primitive_head_takes_no_impl_blocks() {
     // the builtin clause, restated: a primitive is in NO pkg and takes
     // NO impl blocks — the wrapper manufacture is the sanctioned door
     // (the diagnostic names it)
-    let g = graph(&[
-        ("app", "\
+    let g = graph(&[(
+        "app",
+        "\
 impl str {
     pub fn mark(self) -> i32 { return 1; }
 }
 entry fn main() -> i32 { return 0; }
-"),
-    ]);
+",
+    )]);
     assert!(g.program.is_none(), "the prim impl must refuse");
     let ds = diags_of(&g);
     assert!(
-        ds.contains("a primitive takes no impl blocks")
-            && ds.contains("wrapper"),
+        ds.contains("a primitive takes no impl blocks") && ds.contains("wrapper"),
         "{ds}"
     );
 }
@@ -268,7 +291,9 @@ entry fn main() -> i32 {{ return 0; }}
         );
         let g = graph(&[("app", src.as_str())]);
         assert!(
-            g.diags.iter().any(|d| d.msg.contains("impl target must be a struct, class, or enum of this module")),
+            g.diags.iter().any(|d| d
+                .msg
+                .contains("impl target must be a struct, class, or enum of this module")),
             "{head}: {}",
             diags_of(&g)
         );
@@ -286,7 +311,11 @@ fn consumer_proves_jsonserialize_on_its_own_type() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut world = Vec::new();
     for dir in ["rut/pouch", "rut/nmapset", "rut/json"] {
-        world.extend(rut_native::dir_pkgs(&root.join(dir)).expect("mount tree pkg").pkgs);
+        world.extend(
+            rut_native::dir_pkgs(&root.join(dir))
+                .expect("mount tree pkg")
+                .pkgs,
+        );
     }
     let mut chain = rut_driver::RutRun::new();
     for p in &world {

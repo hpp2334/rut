@@ -3,7 +3,6 @@
 //! string-keyed reader (the FS math is rut-native's); archive reads
 //! index the walked archives' entries.
 
-
 use crate::bundle::{bundle_key, parse_manifest, parse_manifest_compat, read_entry};
 use crate::pack::Archive;
 use crate::pack::{PackRead, PkgSource};
@@ -191,4 +190,3 @@ pub(super) fn is_placeholder(name: &str) -> bool {
         && !name.starts_with(HOST_FRAME_PREFIX)
         && !name.starts_with(CKPT_PREFIX)
 }
-

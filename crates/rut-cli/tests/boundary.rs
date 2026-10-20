@@ -47,7 +47,10 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
         Ok(c) => c,
         Err(e) => rut_driver::Compiled {
             graph: rut_driver::GraphOutput {
-                diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+                diags: vec![rut_lexer::diag::Diag::new(
+                    rut_lexer::span::Span::new(0, 0),
+                    e.msg,
+                )],
                 program: None,
             },
             hosts: rut_vm::interp::HostRegistry::new(),
@@ -109,8 +112,14 @@ fn typed_prims_and_tuples() {
     assert_eq!(vm.call::<_, f64>("half", ()).unwrap(), 1.5);
     assert_eq!(vm.call::<_, bool>("flag", ()).unwrap(), true);
     assert_eq!(vm.call::<_, ()>("nothing", ()).unwrap(), ());
-    assert_eq!(vm.call::<_, (i32, bool)>("pair", (7i32,)).unwrap(), (7, true));
-    assert_eq!(vm.call::<_, (i32, bool)>("pair", (-1i32,)).unwrap(), (0, false));
+    assert_eq!(
+        vm.call::<_, (i32, bool)>("pair", (7i32,)).unwrap(),
+        (7, true)
+    );
+    assert_eq!(
+        vm.call::<_, (i32, bool)>("pair", (-1i32,)).unwrap(),
+        (0, false)
+    );
     let (a, b, c) = vm.call::<_, (i64, f64, String)>("triple", ()).unwrap();
     assert_eq!((a, b, c.as_str()), (1, 2.5, "three"));
 }
@@ -142,7 +151,11 @@ fn typed_wrong_shape_is_a_named_trap() {
     // rut says `str`, the embedder asked for i64 — the trap names both
     let err = vm.call::<_, i64>("greet", ()).unwrap_err();
     assert!(err.msg.contains("boundary:"), "{}", err.msg);
-    assert!(err.msg.contains("`str`") && err.msg.contains("`i64`"), "{}", err.msg);
+    assert!(
+        err.msg.contains("`str`") && err.msg.contains("`i64`"),
+        "{}",
+        err.msg
+    );
     // arity: the raw call's check still guards the typed wrapper
     let err = vm.call::<_, (i32, bool)>("pair", ()).unwrap_err();
     assert!(err.msg.contains("args"), "{}", err.msg);
@@ -206,7 +219,10 @@ fn a_non_crossable_nullable_still_rejects() {
     let src = "class Bag { f: fn(i64) -> i64; }\nentry fn bad() -> (?Bag, str) { return (nil, \"x\"); }\n";
     let out = compile(src, "m");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("only primitives")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("only primitives")),
         "expected the crossing diagnostic, got {:?}",
         out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
@@ -224,9 +240,11 @@ entry fn ident(o: opaque) -> opaque { return o; }
     let mut vm = entry_vm(src);
     let boxed = rut_vm::Opaque::alloc(&mut vm, vec!["a".to_string(), "b".to_string()])
         .expect("alloc host box");
-    let back: rut_vm::Opaque<Vec<String>> =
-        vm.call("ident", (boxed,)).expect("typed crossing");
-    assert_eq!(back.with(|v| v.clone()).unwrap(), vec!["a".to_string(), "b".to_string()]);
+    let back: rut_vm::Opaque<Vec<String>> = vm.call("ident", (boxed,)).expect("typed crossing");
+    assert_eq!(
+        back.with(|v| v.clone()).unwrap(),
+        vec!["a".to_string(), "b".to_string()]
+    );
     // the payload type token is checked, never UB
     let wrong: Result<rut_vm::Opaque<u64>, _> = vm.call("ident", (back,));
     assert!(wrong.is_err(), "a `Vec<String>` box must not read as `u64`");

@@ -4,14 +4,14 @@
 //! fight; the module owns the surface snapshot, the seed attach, and
 //! the debug dumps.
 
-use rut_lir::check::{Ctx, FnKey, Inst, AMBIENT_SITE};
-use rut_lexer::diag::Diag;
 use rut_ast::dump;
-use rut_parser::{parse, Mode};
 use rut_core::binary::Program;
 use rut_core::ops::Op;
 use rut_core::types::{Repr, TyKind, TypeId, TY_I32, TY_NIL};
-use rut_core::{IdentId, sym};
+use rut_core::{sym, IdentId};
+use rut_lexer::diag::Diag;
+use rut_lir::check::{Ctx, FnKey, Inst, AMBIENT_SITE};
+use rut_parser::{parse, Mode};
 
 use super::dump::ir_dump_of;
 use super::seeds::Seeds;
@@ -79,12 +79,8 @@ fn respell_surface_ty(
 ) -> TypeId {
     let s = rut_core::id::scope_of(t);
     if s == own_scope {
-        let dense = types
-            .scope_base
-            .get(s as usize)
-            .copied()
-            .unwrap_or(0)
-            + rut_core::id::local_of(t);
+        let dense =
+            types.scope_base.get(s as usize).copied().unwrap_or(0) + rut_core::id::local_of(t);
         if let Some(row) = types.types.get(dense as usize) {
             // the engine-minted cx record is THIS unit's row: a carried
             // surface's RunContext re-spells to it by name, so the
@@ -179,14 +175,30 @@ pub fn compile_program_resolved(
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
     own_uses: &[(String, String, String)],
-    dep_decls: &[(String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>)],
+    dep_decls: &[(
+        String,
+        std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>,
+    )],
 ) -> ProgramOutput {
     // the CLI's dump lane pays for the AST renders; the graph lane
     // (every embedded compile) never reads them, and the text+json
     // render of a real module dwarfs its parse — so the renders are
     // opt-in and the parse can arrive pre-done (the graph walk already
     // parsed the unit once for use validation)
-    compile_program_inner(src, None, mode, module_name, scope, uses, allow_uses, seeds, mods, own_uses, dep_decls, true)
+    compile_program_inner(
+        src,
+        None,
+        mode,
+        module_name,
+        scope,
+        uses,
+        allow_uses,
+        seeds,
+        mods,
+        own_uses,
+        dep_decls,
+        true,
+    )
 }
 
 /// As [`compile_program_resolved`], but the caller may hand a
@@ -204,9 +216,25 @@ pub fn compile_program_pre(
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
     own_uses: &[(String, String, String)],
-    dep_decls: &[(String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>)],
+    dep_decls: &[(
+        String,
+        std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>,
+    )],
 ) -> ProgramOutput {
-    compile_program_inner(src, Some(ast), mode, module_name, scope, uses, allow_uses, seeds, mods, own_uses, dep_decls, false)
+    compile_program_inner(
+        src,
+        Some(ast),
+        mode,
+        module_name,
+        scope,
+        uses,
+        allow_uses,
+        seeds,
+        mods,
+        own_uses,
+        dep_decls,
+        false,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -221,7 +249,10 @@ fn compile_program_inner(
     seeds: &Seeds<'_>,
     mods: &rut_lir::check::ModInputs,
     own_uses: &[(String, String, String)],
-    dep_decls: &[(String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>)],
+    dep_decls: &[(
+        String,
+        std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>,
+    )],
     want_dumps: bool,
 ) -> ProgramOutput {
     let fail = |diags: Vec<Diag>, ast_dump: String, ast_json: String| ProgramOutput {
@@ -384,9 +415,7 @@ fn compile_program_inner(
             use_bindings
                 .iter()
                 .filter(|b| {
-                    b.head == head
-                        && b.leaf == id
-                        && !own_claims.contains(&(b.file.clone(), id))
+                    b.head == head && b.leaf == id && !own_claims.contains(&(b.file.clone(), id))
                 })
                 .map(|b| (b.file.clone(), b.leaf))
                 .collect()
@@ -464,12 +493,13 @@ fn compile_program_inner(
             // declaration name: it rides for the trait map's remap and
             // registers nameless (no use-gate, no dispatch registry)
             let is_inst_desc = text.contains('<');
-            let used_name = ast
-                .interner
-                .lookup(text)
-                .filter(|id| ctx.used.contains(id));
+            let used_name = ast.interner.lookup(text).filter(|id| ctx.used.contains(id));
             let carried_ref = iface_refs.contains(&t.local);
-            if !carried_ref && !is_inst_desc && used_name.is_none() && !impl_trait_texts.contains(text) {
+            if !carried_ref
+                && !is_inst_desc
+                && used_name.is_none()
+                && !impl_trait_texts.contains(text)
+            {
                 continue;
             }
             let reg_name = if is_inst_desc || (carried_ref && used_name.is_none()) {
@@ -504,7 +534,12 @@ fn compile_program_inner(
     // the table before any own type is interned — TypeTable::use_block;
     // names re-intern from the exporter's interner)
     for (_, surface, tmap, _, _) in &trait_maps {
-        ctx.use_types(surface.types.clone(), &surface.names, &surface.scope_blocks, tmap);
+        ctx.use_types(
+            surface.types.clone(),
+            &surface.names,
+            &surface.scope_blocks,
+            tmap,
+        );
     }
     // the seeds' requester rows join AFTER the roots (see the seed
     // half below the drain): the owner's own block must intern at the
@@ -578,8 +613,7 @@ fn compile_program_inner(
                     f.params.clone(),
                     ret2,
                     f.is_async,
-                    f.host
-                        .map(|h| surface.names.name(h).to_string()),
+                    f.host.map(|h| surface.names.name(h).to_string()),
                 );
             }
         }
@@ -624,7 +658,9 @@ fn compile_program_inner(
         let is_prelude = !surface.native_types.is_empty();
         for c in &surface.consts {
             let text = surface.names.name(c.name);
-            let Some(id) = ast.interner.lookup(text) else { continue };
+            let Some(id) = ast.interner.lookup(text) else {
+                continue;
+            };
             let mut sites: Vec<(String, rut_core::IdentId)> =
                 binding_sites(head, text).into_iter().collect();
             if !is_prelude {
@@ -731,18 +767,15 @@ fn compile_program_inner(
                             .collect(),
                     })
                     .collect();
-                let target2 = respell_surface_ty(
-                    &ctx.types, ih.target, own_scope, dep_scope, cx_name, cx_ty,
-                );
+                let target2 =
+                    respell_surface_ty(&ctx.types, ih.target, own_scope, dep_scope, cx_name, cx_ty);
                 ctx.add_extern_inherent(target2, methods);
                 // the class's declaring pkg anchors the mirror requests
                 // (`MutCtx::set<A, R>` — a PLAIN class's generic method —
                 // names its owner through this row; `owner_of_data`
                 // reads it)
-                ctx.decl_owner.insert(
-                    ctx.types.type_at(target2).name,
-                    origin.clone(),
-                );
+                ctx.decl_owner
+                    .insert(ctx.types.type_at(target2).name, origin.clone());
             }
         }
         // core's native surface: builtin containers, ifaces, and
@@ -838,7 +871,10 @@ fn compile_program_inner(
                 .find(|(h, _)| h == &b.head)
                 .and_then(|(_, t)| t.get(&module))
                 .and_then(|rows| rows.iter().find(|d| d.name == leaf_text));
-            bad.push(Diag::new(b.span, unbound_use_msg(&leaf_text, &b.head, &module, drow)));
+            bad.push(Diag::new(
+                b.span,
+                unbound_use_msg(&leaf_text, &b.head, &module, drow),
+            ));
         }
         if !bad.is_empty() {
             diags.append(&mut bad);
@@ -874,12 +910,24 @@ fn compile_program_inner(
         if ctx.find_free_fn(name) {
             // an async fn is not host-callable (its woven body takes the
             // (frame, cx) pair): it compiles at its call sites
-            if ctx.ast.fn_decl(ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n).unwrap())
+            if ctx
+                .ast
+                .fn_decl(
+                    ctx.fn_nodes
+                        .iter()
+                        .find(|(n, _)| *n == name)
+                        .map(|(_, n)| *n)
+                        .unwrap(),
+                )
                 .is_async
             {
                 continue;
             }
-            roots.push(Inst { key: FnKey::Free(name), subst: vec![], iface_origins: vec![] });
+            roots.push(Inst {
+                key: FnKey::Free(name),
+                subst: vec![],
+                iface_origins: vec![],
+            });
         }
     }
     // library surface: every non-generic `pub fn` is usable, so its body
@@ -902,7 +950,11 @@ fn compile_program_inner(
         // an uncalled export must cross exactly like a called one.
         // GENERIC async fns skipped above stay uncrossed (the weave
         // refuses generics; the use line speaks the gap).
-        roots.push(Inst { key: FnKey::Free(name), subst: vec![], iface_origins: vec![] });
+        roots.push(Inst {
+            key: FnKey::Free(name),
+            subst: vec![],
+            iface_origins: vec![],
+        });
     }
     // library surface, class half (the linkable-classes phase): every
     // non-generic data's pub methods are callable from a
@@ -923,7 +975,10 @@ fn compile_program_inner(
                 continue;
             }
             roots.push(Inst {
-                key: FnKey::Method { data: dname, name: *mname },
+                key: FnKey::Method {
+                    data: dname,
+                    name: *mname,
+                },
                 subst: vec![],
                 iface_origins: vec![],
             });
@@ -939,7 +994,10 @@ fn compile_program_inner(
                 continue;
             }
             roots.push(Inst {
-                key: FnKey::Method { data: ename, name: *mname },
+                key: FnKey::Method {
+                    data: ename,
+                    name: *mname,
+                },
                 subst: vec![],
                 iface_origins: vec![],
             });
@@ -950,7 +1008,8 @@ fn compile_program_inner(
             diags.append(&mut ctx.diags);
             return fail(diags, ast_dump, ast_json);
         }
-    }    if !ctx.diags.is_empty() {
+    }
+    if !ctx.diags.is_empty() {
         diags.append(&mut ctx.diags.clone());
         return fail(diags, ast_dump, ast_json);
     }
@@ -981,7 +1040,11 @@ fn compile_program_inner(
     // `entry fn`s do).
     let mut exports: Vec<(IdentId, u32)> = Vec::new();
     for n in ctx.entries.clone() {
-        if let Some(&f) = ctx.inst_map.get(&Inst { key: FnKey::Free(n), subst: vec![], iface_origins: vec![] }) {
+        if let Some(&f) = ctx.inst_map.get(&Inst {
+            key: FnKey::Free(n),
+            subst: vec![],
+            iface_origins: vec![],
+        }) {
             exports.push((n, f));
         }
     }
@@ -989,7 +1052,11 @@ fn compile_program_inner(
     let mut surface = rut_core::binary::Surface::default();
     let pub_exports = ctx.exports.clone();
     for (name, _) in &pub_exports {
-        if let Some(&fid) = ctx.inst_map.get(&Inst { key: FnKey::Free(*name), subst: vec![], iface_origins: vec![] }) {
+        if let Some(&fid) = ctx.inst_map.get(&Inst {
+            key: FnKey::Free(*name),
+            subst: vec![],
+            iface_origins: vec![],
+        }) {
             if let Some(f) = ctx.funcs.get(fid as usize) {
                 // the async rows carry the REAL `is_async` (plan10
                 // phase 3): the woven body's ABI is the (frame, cx)
@@ -998,7 +1065,11 @@ fn compile_program_inner(
                 // (the host-row convention) — and `local` names the
                 // start wrapper the importer's call aims at. A sync row
                 // keeps reading the compiled FuncCode verbatim.
-                let node = ctx.fn_nodes.iter().find(|(n, _)| n == name).map(|(_, n)| *n);
+                let node = ctx
+                    .fn_nodes
+                    .iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, n)| *n);
                 let is_async = node.map(|n| ctx.ast.fn_decl(n).is_async).unwrap_or(false);
                 let (params, ret, local) = if is_async {
                     let n = node.expect("an async export has its decl node");
@@ -1008,7 +1079,10 @@ fn compile_program_inner(
                     let mut ps = Vec::new();
                     for p in &fd.params {
                         match ctx.ast.param(*p) {
-                            rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                            rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
+                                ty: Some(t),
+                                ..
+                            }) => {
                                 ps.push(ctx.resolve_type(*t, &[]));
                             }
                             _ => ps.push(TY_I32),
@@ -1084,16 +1158,15 @@ fn compile_program_inner(
             // placeholder env layered on the class's (the class env for
             // the receiver's `Self`, the method env for its parameters)
             let mut menv = env.clone();
-            menv.extend(
-                md.generics
-                    .iter()
-                    .map(|&p| (p, ctx.param_placeholder(p))),
-            );
+            menv.extend(md.generics.iter().map(|&p| (p, ctx.param_placeholder(p))));
             let self_ty = self_ph.unwrap_or(d.ty);
             let mut params = Vec::new();
             for p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
                 match ctx.ast.param(*p) {
-                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
+                        ty: Some(t),
+                        ..
+                    }) => {
                         params.push(ctx.resolve_sig_ty(*t, &menv, Some(self_ty)));
                     }
                     _ => params.push(TY_I32),
@@ -1112,7 +1185,10 @@ fn compile_program_inner(
             } else {
                 ctx.inst_map
                     .get(&Inst {
-                        key: FnKey::Method { data: dname, name: *mname },
+                        key: FnKey::Method {
+                            data: dname,
+                            name: *mname,
+                        },
                         subst: vec![],
                         iface_origins: vec![],
                     })
@@ -1129,7 +1205,11 @@ fn compile_program_inner(
                 // consumer's for-of reads it): the checker validated the
                 // closed set at collect
                 marker: marker_code(md.marker),
-                generics: if method_generic { md.generics.clone() } else { vec![] },
+                generics: if method_generic {
+                    md.generics.clone()
+                } else {
+                    vec![]
+                },
             });
         }
         if methods.is_empty() {
@@ -1166,7 +1246,10 @@ fn compile_program_inner(
             let mut params = Vec::new();
             for p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
                 match ctx.ast.param(*p) {
-                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
+                        ty: Some(t),
+                        ..
+                    }) => {
                         params.push(ctx.resolve_sig_ty(*t, &[], Some(self_ty)));
                     }
                     _ => params.push(TY_I32),
@@ -1179,7 +1262,10 @@ fn compile_program_inner(
             let local = ctx
                 .inst_map
                 .get(&Inst {
-                    key: FnKey::Method { data: ename, name: *mname },
+                    key: FnKey::Method {
+                        data: ename,
+                        name: *mname,
+                    },
                     subst: vec![],
                     iface_origins: vec![],
                 })
@@ -1233,19 +1319,24 @@ fn compile_program_inner(
             .params
             .iter()
             .map(|p| match ctx.ast.param(*p) {
-                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
-                    ctx.resolve_sig_ty(*t, &env, None)
-                }
+                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
+                    ty: Some(t), ..
+                }) => ctx.resolve_sig_ty(*t, &env, None),
                 _ => TY_I32,
             })
             .collect();
-        let ret = fd.ret.map(|r| ctx.resolve_sig_ty(r, &env, None)).unwrap_or(TY_NIL);
-        surface.fn_generics.push(rut_core::binary::SurfaceGenericFn {
-            name,
-            params: fd.generics.clone(),
-            args,
-            ret,
-        });
+        let ret = fd
+            .ret
+            .map(|r| ctx.resolve_sig_ty(r, &env, None))
+            .unwrap_or(TY_NIL);
+        surface
+            .fn_generics
+            .push(rut_core::binary::SurfaceGenericFn {
+                name,
+                params: fd.generics.clone(),
+                args,
+                ret,
+            });
         ctx.cur_mod = saved_mod;
     }
 
@@ -1268,8 +1359,7 @@ fn compile_program_inner(
             // the trait's signatures resolve in ITS module (phase 3)
             let saved_mod = ctx.cur_mod.clone();
             ctx.cur_mod = ctx.mod_of(inode).to_string();
-            let ph_args: Vec<TypeId> =
-                generics.iter().map(|&g| ctx.param_placeholder(g)).collect();
+            let ph_args: Vec<TypeId> = generics.iter().map(|&g| ctx.param_placeholder(g)).collect();
             let ph_id = ctx.mk_iface_inst(name, ph_args);
             ctx.cur_mod = saved_mod;
             generic_trait_rows.push((name, ph_id, generics.len()));
@@ -1311,18 +1401,16 @@ fn compile_program_inner(
                 // re-exporting them here would double-declare the local
                 // and the two registrations would split the consumer's
                 // identity for one interface
-                if ctx
-                    .iface_decls
-                    .iter()
-                    .any(|(_, info)| info.id == iface_id)
-                {
+                if ctx.iface_decls.iter().any(|(_, info)| info.id == iface_id) {
                     continue;
                 }
                 inst_traits.push(iface_id);
             }
         }
         for tid in inst_traits {
-            let Some(row) = ctx.ifaces.get(tid as usize) else { continue };
+            let Some(row) = ctx.ifaces.get(tid as usize) else {
+                continue;
+            };
             if surface.ifaces.iter().any(|t| t.local == tid) {
                 continue;
             }
@@ -1352,7 +1440,9 @@ fn compile_program_inner(
             }
             let base = ctx.types.scope_base[s as usize];
             if base >= ctx.types.boot_len {
-                surface.scope_blocks.push((s as rut_core::ScopeId, base - ctx.types.boot_len));
+                surface
+                    .scope_blocks
+                    .push((s as rut_core::ScopeId, base - ctx.types.boot_len));
             }
         }
         // the unit's OWN block closes the list — `own_scope` reads it
@@ -1474,8 +1564,10 @@ fn compile_program_inner(
     // rows re-intern through ITS OWN interner first; identical texts
     // converge onto one ident here, so equal keys dedup safely.
     {
-        let mut merged: std::collections::BTreeMap<(rut_core::ScopeId, u32), rut_core::types::RutType> =
-            std::collections::BTreeMap::new();
+        let mut merged: std::collections::BTreeMap<
+            (rut_core::ScopeId, u32),
+            rut_core::types::RutType,
+        > = std::collections::BTreeMap::new();
         for group in seeds.groups {
             for ((s, l), row) in ctx.stage_seed_rows(group.rows.clone(), group.names) {
                 merged.entry((s, l)).or_insert(row);
@@ -1531,11 +1623,14 @@ fn compile_program_inner(
         // (types the owner sees as bare rows, never impls) and each
         // carried row's HOME spec (the mirror ledger's owner anchor)
         let seed_end = ctx.types.types.len() as u32;
-        ctx.carried_dense.push((seed_start as u32, seed_end - seed_start as u32));
+        ctx.carried_dense
+            .push((seed_start as u32, seed_end - seed_start as u32));
         for group in seeds.groups {
             for ((_, _), row) in &group.rows {
                 let text = group.names.name(row.name).to_string();
-                ctx.carried_names.entry(text).or_insert_with(|| group.requester.clone());
+                ctx.carried_names
+                    .entry(text)
+                    .or_insert_with(|| group.requester.clone());
             }
         }
         for group in seeds.groups {
@@ -1561,7 +1656,11 @@ fn compile_program_inner(
         // a generic class's instantiation carries ONLY the class's own
         // arguments — a generic method's ride the request tail (below)
         let class_arity = d.as_ref().map_or(0, |d| d.generics.len());
-        ctx.mk_data_inst(dname, args[..class_arity.min(args.len())].to_vec(), rut_lexer::span::Span::new(0, 0));
+        ctx.mk_data_inst(
+            dname,
+            args[..class_arity.min(args.len())].to_vec(),
+            rut_lexer::span::Span::new(0, 0),
+        );
         if let Some(d) = d {
             // a generic CLASS's bodies substitute the class parameters
             // (a generic METHOD's own parameters ride the request's
@@ -1571,21 +1670,30 @@ fn compile_program_inner(
             // a PLAIN class's seeded method (`MutCtx::set<A, R>`) reads
             // the args as the METHOD's own parameters, in declaration
             // order
-            let plain_method_env = |ctx: &Ctx, mname: rut_core::IdentId| -> Vec<(rut_core::IdentId, rut_core::types::TypeId)> {
-                d.methods
-                    .iter()
-                    .find(|(n, _)| *n == mname)
-                    .map(|(_, node)| ctx.ast.method_decl(*node).generics.clone())
-                    .unwrap_or_default()
-                    .into_iter()
-                    .zip(args.iter().cloned())
-                    .collect()
-            };
+            let plain_method_env =
+                |ctx: &Ctx,
+                 mname: rut_core::IdentId|
+                 -> Vec<(rut_core::IdentId, rut_core::types::TypeId)> {
+                    d.methods
+                        .iter()
+                        .find(|(n, _)| *n == mname)
+                        .map(|(_, node)| ctx.ast.method_decl(*node).generics.clone())
+                        .unwrap_or_default()
+                        .into_iter()
+                        .zip(args.iter().cloned())
+                        .collect()
+                };
             if !d.generics.is_empty() {
-                let env: Vec<(rut_core::IdentId, rut_core::types::TypeId)> =
-                    d.generics.iter().cloned().zip(args.iter().cloned()).collect();
+                let env: Vec<(rut_core::IdentId, rut_core::types::TypeId)> = d
+                    .generics
+                    .iter()
+                    .cloned()
+                    .zip(args.iter().cloned())
+                    .collect();
                 for m in &methods {
-                    let Some(mname) = ctx.lookup_name(m) else { continue };
+                    let Some(mname) = ctx.lookup_name(m) else {
+                        continue;
+                    };
                     let mgen = d
                         .methods
                         .iter()
@@ -1599,16 +1707,24 @@ fn compile_program_inner(
                         }
                     }
                     seeded_bodies.push(Inst {
-                        key: FnKey::Method { data: dname, name: mname },
+                        key: FnKey::Method {
+                            data: dname,
+                            name: mname,
+                        },
                         subst: full,
                         iface_origins: vec![],
                     });
                 }
             } else {
                 for m in &methods {
-                    let Some(mname) = ctx.lookup_name(m) else { continue };
+                    let Some(mname) = ctx.lookup_name(m) else {
+                        continue;
+                    };
                     seeded_bodies.push(Inst {
-                        key: FnKey::Method { data: dname, name: mname },
+                        key: FnKey::Method {
+                            data: dname,
+                            name: mname,
+                        },
                         subst: plain_method_env(&ctx, mname),
                         iface_origins: vec![],
                     });
@@ -1724,7 +1840,9 @@ fn compile_program_inner(
                 continue;
             }
             let row_id = ctx.types.id_for_pub((seed_start + i) as u32);
-            ctx.inst_data.entry(row_id).or_insert((base_id, args.clone()));
+            ctx.inst_data
+                .entry(row_id)
+                .or_insert((base_id, args.clone()));
             // the drain's mk_data_inst must dedup onto THIS row: seed the
             // type_inst cache with the carried id (a local base's carried
             // instantiation otherwise mints a second row and the admit
@@ -1741,7 +1859,12 @@ fn compile_program_inner(
             );
             continue;
         };
-        let Some(node) = ctx.fn_nodes.iter().find(|(n, _)| *n == fname).map(|(_, n)| *n) else {
+        let Some(node) = ctx
+            .fn_nodes
+            .iter()
+            .find(|(n, _)| *n == fname)
+            .map(|(_, n)| *n)
+        else {
             continue;
         };
         let generics = ctx.ast.fn_decl(node).generics.clone();
@@ -1750,7 +1873,11 @@ fn compile_program_inner(
         }
         let subst: Vec<(rut_core::IdentId, rut_core::types::TypeId)> =
             generics.iter().cloned().zip(args.iter().cloned()).collect();
-        seeded_bodies.push(Inst { key: FnKey::Free(fname), subst, iface_origins: vec![] });
+        seeded_bodies.push(Inst {
+            key: FnKey::Free(fname),
+            subst,
+            iface_origins: vec![],
+        });
     }
     // the dead-code-checking roots: every PRIVATE non-generic non-async
     // free fn and every private concrete-class/enum method compiles too
@@ -1788,7 +1915,9 @@ fn compile_program_inner(
             let saved_mod = ctx.cur_mod.clone();
             ctx.cur_mod = ctx.mod_of(node.id()).to_string();
             let boxed = fd.params.iter().any(|p| match ctx.ast.param(*p) {
-                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData { ty: Some(t), .. }) => {
+                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
+                    ty: Some(t), ..
+                }) => {
                     let ty = ctx.resolve_sig_ty(*t, &[], None);
                     matches!(ctx.types.kind(ty), TyKind::IfaceObj { .. })
                 }
@@ -1798,7 +1927,11 @@ fn compile_program_inner(
             if boxed {
                 continue;
             }
-            late_roots.push(Inst { key: FnKey::Free(name), subst: vec![], iface_origins: vec![] });
+            late_roots.push(Inst {
+                key: FnKey::Free(name),
+                subst: vec![],
+                iface_origins: vec![],
+            });
         }
         for (dname, d) in ctx.datas.clone() {
             if !d.generics.is_empty() {
@@ -1811,7 +1944,10 @@ fn compile_program_inner(
                     continue;
                 }
                 late_roots.push(Inst {
-                    key: FnKey::Method { data: dname, name: *mname },
+                    key: FnKey::Method {
+                        data: dname,
+                        name: *mname,
+                    },
                     subst: vec![],
                     iface_origins: vec![],
                 });
@@ -1825,7 +1961,10 @@ fn compile_program_inner(
                     continue;
                 }
                 late_roots.push(Inst {
-                    key: FnKey::Method { data: ename, name: *mname },
+                    key: FnKey::Method {
+                        data: ename,
+                        name: *mname,
+                    },
                     subst: vec![],
                     iface_origins: vec![],
                 });
@@ -1901,8 +2040,17 @@ fn compile_program_inner(
         // methods (a generic class's members, or a generic method on a
         // plain class — the inherents order)
         enum Decl {
-            Free { name: IdentId, generics: Vec<IdentId>, bounds: Vec<IdentId> },
-            Method { data: IdentId, name: IdentId, generics: Vec<IdentId>, bounds: Vec<IdentId> },
+            Free {
+                name: IdentId,
+                generics: Vec<IdentId>,
+                bounds: Vec<IdentId>,
+            },
+            Method {
+                data: IdentId,
+                name: IdentId,
+                generics: Vec<IdentId>,
+                bounds: Vec<IdentId>,
+            },
         }
         let mut decls: Vec<Decl> = Vec::new();
         for g in &surface.fn_generics {
@@ -1914,7 +2062,11 @@ fn compile_program_inner(
             let bounds = node
                 .map(|n| ctx.ast.fn_decl(n).bounds.iter().map(|(g, _)| *g).collect())
                 .unwrap_or_default();
-            decls.push(Decl::Free { name: g.name, generics: g.params.clone(), bounds });
+            decls.push(Decl::Free {
+                name: g.name,
+                generics: g.params.clone(),
+                bounds,
+            });
         }
         for (dname, d) in ctx.datas.clone() {
             for (mname, mnode) in &d.methods {
@@ -1927,10 +2079,14 @@ fn compile_program_inner(
                 }
                 let mut generics = d.generics.clone();
                 generics.extend(md.generics.iter().copied());
-                let mut bounds: Vec<IdentId> =
-                    d.requires.iter().map(|(g, _)| *g).collect();
+                let mut bounds: Vec<IdentId> = d.requires.iter().map(|(g, _)| *g).collect();
                 bounds.extend(md.bounds.iter().map(|(g, _)| *g));
-                decls.push(Decl::Method { data: dname, name: *mname, generics, bounds });
+                decls.push(Decl::Method {
+                    data: dname,
+                    name: *mname,
+                    generics,
+                    bounds,
+                });
             }
         }
         // mint the placeholder substitutions and queue every template
@@ -1940,7 +2096,12 @@ fn compile_program_inner(
         for decl in &decls {
             let (name, data, generics) = match decl {
                 Decl::Free { name, generics, .. } => (*name, None, generics),
-                Decl::Method { data, name, generics, .. } => (*name, Some(*data), generics),
+                Decl::Method {
+                    data,
+                    name,
+                    generics,
+                    ..
+                } => (*name, Some(*data), generics),
             };
             let subst: Vec<(IdentId, TypeId)> = generics
                 .iter()
@@ -1950,7 +2111,11 @@ fn compile_program_inner(
                 Some(d) => FnKey::Method { data: d, name },
                 None => FnKey::Free(name),
             };
-            let inst = Inst { key, subst, iface_origins: vec![] };
+            let inst = Inst {
+                key,
+                subst,
+                iface_origins: vec![],
+            };
             let fid = ctx.ensure_inst(inst.clone());
             roots.push((inst, fid));
         }
@@ -1981,20 +2146,32 @@ fn compile_program_inner(
                     FnKey::Free(n) => decls
                         .iter()
                         .find_map(|d| match d {
-                            Decl::Free { name: dn, bounds, .. } if *dn == *n => Some(bounds.clone()),
+                            Decl::Free {
+                                name: dn, bounds, ..
+                            } if *dn == *n => Some(bounds.clone()),
                             _ => None,
                         })
                         .unwrap_or_default(),
                     FnKey::Method { data: d, name: n } => decls
                         .iter()
                         .find_map(|decl| match decl {
-                            Decl::Method { data: dd, name: dn, bounds, .. } if *dd == *d && *dn == *n => Some(bounds.clone()),
+                            Decl::Method {
+                                data: dd,
+                                name: dn,
+                                bounds,
+                                ..
+                            } if *dd == *d && *dn == *n => Some(bounds.clone()),
                             _ => None,
                         })
                         .unwrap_or_default(),
                     _ => Vec::new(),
                 };
-                templates.push(rut_core::binary::TemplateRow { kind, param_rows, bounds, fid });
+                templates.push(rut_core::binary::TemplateRow {
+                    kind,
+                    param_rows,
+                    bounds,
+                    fid,
+                });
             }
             // the window's end: every body + stub the drain appended —
             // link drops the whole range from the merged table (the
@@ -2030,7 +2207,9 @@ fn compile_program_inner(
             let construct = check_template_stability(&ctx, template_first_fid)
                 .map(|(_, c)| c)
                 .or_else(|| ctx.diags.first().map(|d| d.msg.clone()))
-                .unwrap_or_else(|| "the body failed to compile against its placeholder rows".into());
+                .unwrap_or_else(|| {
+                    "the body failed to compile against its placeholder rows".into()
+                });
             template_failures.push((decl_text, construct));
             ctx.funcs.truncate(template_first_fid as usize);
             template_end_fid = ctx.funcs.len() as u32;
@@ -2125,7 +2304,15 @@ fn compile_program_inner(
         template_first_fid,
         template_end_fid,
     };
-    ProgramOutput { diags, ast_dump, ast_json, ir_dump, program: Some(program), requests, template_failures }
+    ProgramOutput {
+        diags,
+        ast_dump,
+        ast_json,
+        ir_dump,
+        program: Some(program),
+        requests,
+        template_failures,
+    }
 }
 
 /// The template stability law (v22): a template body's emission must
@@ -2136,7 +2323,12 @@ fn compile_program_inner(
 /// Returns `(fn name, construct)` on the first violation.
 fn check_template_stability(ctx: &Ctx, first_fid: u32) -> Option<(String, String)> {
     for fc in ctx.funcs.iter().skip(first_fid as usize) {
-        let reg_ty = |r: u16| -> TypeId { fc.regs.get(r as usize).copied().unwrap_or(rut_core::types::TY_NIL) };
+        let reg_ty = |r: u16| -> TypeId {
+            fc.regs
+                .get(r as usize)
+                .copied()
+                .unwrap_or(rut_core::types::TY_NIL)
+        };
         let field_ty = |t: TypeId, field: u32| -> Option<TypeId> {
             match ctx.types.kind(t) {
                 TyKind::Data { fields } => fields.get(field as usize).map(|f| f.ty),
@@ -2154,35 +2346,57 @@ fn check_template_stability(ctx: &Ctx, first_fid: u32) -> Option<(String, String
         };
         for op in &fc.code {
             match op {
-                Op::GetF { obj, field, repr, .. } | Op::SetF { obj, field, repr, .. } => {
+                Op::GetF {
+                    obj, field, repr, ..
+                }
+                | Op::SetF {
+                    obj, field, repr, ..
+                } => {
                     let want = field_ty(reg_ty(*obj), *field).map(|f| ctx.types.repr_of(f));
                     if let Some(w) = want {
                         if w != *repr {
-                            return refuse(fc, "a field access whose baked repr is not the field type's");
+                            return refuse(
+                                fc,
+                                "a field access whose baked repr is not the field type's",
+                            );
                         }
                     }
                 }
                 Op::ArrNew { ty, repr, .. } => {
                     if let Some(e) = arr_elem(*ty) {
                         if rut_core::types::arr_elem_repr(&ctx.types, e) != *repr {
-                            return refuse(fc, "an array op whose baked repr is not the element type's");
+                            return refuse(
+                                fc,
+                                "an array op whose baked repr is not the element type's",
+                            );
                         }
                     }
                 }
                 Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
                     if let Some(e) = arr_elem(reg_ty(*arr)) {
                         if rut_core::types::arr_elem_repr(&ctx.types, e) != *repr {
-                            return refuse(fc, "an array element op whose baked repr is not the element type's");
+                            return refuse(
+                                fc,
+                                "an array element op whose baked repr is not the element type's",
+                            );
                         }
                     }
                 }
-                Op::ArrGetF { obj, field, repr, .. } | Op::ArrSetF { obj, field, repr, .. } => {
+                Op::ArrGetF {
+                    obj, field, repr, ..
+                }
+                | Op::ArrSetF {
+                    obj, field, repr, ..
+                } => {
                     let want = field_ty(reg_ty(*obj), *field)
                         .and_then(arr_elem)
                         .map(|e| rut_core::types::arr_elem_repr(&ctx.types, e));
                     if let Some(w) = want {
                         if w != *repr {
-                            return refuse(fc, "a field-array op whose baked repr is not the element type's");
+                            return refuse(
+                                fc,
+                                "a field-array op whose baked repr is not the element type's",
+                            );
                         }
                     }
                 }

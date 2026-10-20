@@ -14,8 +14,13 @@ pub(crate) fn designate(entry: Option<String>, prog: &rut_core::binary::Program)
         Some(name) => {
             if !entries.iter().any(|e| *e == name) {
                 match entries.as_slice() {
-                    [] => eprintln!("run: no `entry fn {name}` — this program declares no entry fns at all"),
-                    _ => eprintln!("run: no `entry fn {name}` — this program's entry fns: {}", entries.join(", ")),
+                    [] => eprintln!(
+                        "run: no `entry fn {name}` — this program declares no entry fns at all"
+                    ),
+                    _ => eprintln!(
+                        "run: no `entry fn {name}` — this program's entry fns: {}",
+                        entries.join(", ")
+                    ),
                 }
                 std::process::exit(1);
             }
@@ -24,7 +29,9 @@ pub(crate) fn designate(entry: Option<String>, prog: &rut_core::binary::Program)
         None => match entries.as_slice() {
             [one] => one.clone(),
             [] => {
-                eprintln!("no `entry fn` — nothing to run (declare one: `entry fn main() {{ .. }}`)");
+                eprintln!(
+                    "no `entry fn` — nothing to run (declare one: `entry fn main() {{ .. }}`)"
+                );
                 std::process::exit(1);
             }
             many => {

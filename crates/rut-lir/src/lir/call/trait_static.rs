@@ -6,7 +6,6 @@ use crate::check::TcResult;
 use crate::lir::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     /// A STATIC member call on a bound type parameter's concrete type —
     /// `T.decode(r)` inside a monomorphized body (`decodeJson<T>`'s
     /// wrapper story): the body compiles per instantiation, so the
@@ -42,44 +41,74 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let is_template_row = self.ctx.is_template_param(concrete);
         if is_template_row || self.ctx.type_is_carried(concrete) {
             let Some(ifaces) = iface_id else {
-                self.ctx.err(sp, format!(
-                    "`{}` is carried from another unit and names no interface bound here",
-                    self.ctx.type_name(concrete)
-                ));
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}` is carried from another unit and names no interface bound here",
+                        self.ctx.type_name(concrete)
+                    ),
+                );
                 return Err(());
             };
             let (ptys, ret_ty, iface_id) = self.iface_member_shape(concrete, &ifaces, name, sp)?;
             if args.len() != ptys.len() {
-                self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                self.ctx.err(
+                    sp,
+                    format!("call arity: {} args for {} params", args.len(), ptys.len()),
+                );
                 return Err(());
             }
             let mut aregs = Vec::new();
             for (i, a) in args.iter().enumerate() {
                 let t = self.compile_expr(*a, Some(ptys[i]))?;
                 if !self.widens_val(*a, t, ptys[i]) {
-                    self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                        "argument {} is `{}`, `{}` expected",
-                        i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                    ));
+                    self.ctx.err(
+                        self.ctx.ast.span(a.id()),
+                        format!(
+                            "argument {} is `{}`, `{}` expected",
+                            i + 1,
+                            self.ctx.type_name(t),
+                            self.ctx.type_name(ptys[i])
+                        ),
+                    );
                 }
                 aregs.push(self.last_reg);
             }
             let fid = if is_template_row {
-                self.ctx.mint_member_stub(concrete, name, ptys, ret_ty, false)
+                self.ctx
+                    .mint_member_stub(concrete, name, ptys, ret_ty, false)
             } else {
                 self.mirror_carried(concrete, iface_id, name)
             };
-            let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+            let dst = if ret_ty == TY_NIL {
+                None
+            } else {
+                Some(self.new_reg(ret_ty))
+            };
             let _ = expected;
-            { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+            {
+                let (argv_off, argc) = self.pool_args(&(aregs));
+                self.emit(
+                    Op::Call {
+                        func: fid,
+                        argv_off,
+                        argc,
+                        dst: opt_reg(dst),
+                    },
+                    sp.lo,
+                );
+            }
             return Ok(ret_ty);
         }
         let Some(member) = self.ctx.find_inherent_member(concrete, name) else {
-            self.ctx.err(sp, format!(
-                "`{}` has no static member `{}`",
-                self.ctx.type_name(concrete),
-                self.ctx.name(name)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` has no static member `{}`",
+                    self.ctx.type_name(concrete),
+                    self.ctx.name(name)
+                ),
+            );
             return Err(());
         };
         match member {
@@ -91,7 +120,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let mut ptys = Vec::new();
                 for p in md.params.iter() {
                     match self.ctx.ast.param(*p) {
-                        MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
+                        MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                            ptys.push(self.resolve_type_now(*t))
+                        }
                         _ => ptys.push(TY_I32),
                     }
                 }
@@ -99,17 +130,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.subst = saved_subst;
                 self.self_ty = saved_self;
                 if args.len() != ptys.len() {
-                    self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                    self.ctx.err(
+                        sp,
+                        format!("call arity: {} args for {} params", args.len(), ptys.len()),
+                    );
                     return Err(());
                 }
                 let mut aregs = Vec::new();
                 for (i, a) in args.iter().enumerate() {
                     let t = self.compile_expr(*a, Some(ptys[i]))?;
                     if !self.widens_val(*a, t, ptys[i]) {
-                        self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                            "argument {} is `{}`, `{}` expected",
-                            i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                        ));
+                        self.ctx.err(
+                            self.ctx.ast.span(a.id()),
+                            format!(
+                                "argument {} is `{}`, `{}` expected",
+                                i + 1,
+                                self.ctx.type_name(t),
+                                self.ctx.type_name(ptys[i])
+                            ),
+                        );
                     }
                     aregs.push(self.last_reg);
                 }
@@ -119,9 +158,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     iface_origins: vec![],
                 };
                 let fid = self.ctx.ensure_inst(inst);
-                let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+                let dst = if ret_ty == TY_NIL {
+                    None
+                } else {
+                    Some(self.new_reg(ret_ty))
+                };
                 let _ = expected;
-                { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(aregs));
+                    self.emit(
+                        Op::Call {
+                            func: fid,
+                            argv_off,
+                            argc,
+                            dst: opt_reg(dst),
+                        },
+                        sp.lo,
+                    );
+                }
                 Ok(ret_ty)
             }
             crate::check::MemberSrc::Extern { subst, data, .. } => {
@@ -144,31 +198,59 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None => (vec![], TY_NIL),
                 };
                 if args.len() != ptys.len() {
-                    self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                    self.ctx.err(
+                        sp,
+                        format!("call arity: {} args for {} params", args.len(), ptys.len()),
+                    );
                     return Err(());
                 }
                 let mut aregs = Vec::new();
                 for (i, a) in args.iter().enumerate() {
                     let t = self.compile_expr(*a, Some(ptys[i]))?;
                     if !self.widens_val(*a, t, ptys[i]) {
-                        self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                            "argument {} is `{}`, `{}` expected",
-                            i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                        ));
+                        self.ctx.err(
+                            self.ctx.ast.span(a.id()),
+                            format!(
+                                "argument {} is `{}`, `{}` expected",
+                                i + 1,
+                                self.ctx.type_name(t),
+                                self.ctx.type_name(ptys[i])
+                            ),
+                        );
                     }
                     aregs.push(self.last_reg);
                 }
-                let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-                { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+                let dst = if ret_ty == TY_NIL {
+                    None
+                } else {
+                    Some(self.new_reg(ret_ty))
+                };
+                {
+                    let (argv_off, argc) = self.pool_args(&(aregs));
+                    self.emit(
+                        Op::Call {
+                            func: fid,
+                            argv_off,
+                            argc,
+                            dst: opt_reg(dst),
+                        },
+                        sp.lo,
+                    );
+                }
                 Ok(ret_ty)
             }
         }
     }
 
-
     /// The descriptor-typed shape of one interface member, respelled
     /// for the carried concrete (`Self` leaves become the concrete).
-    pub(crate) fn iface_member_shape(&mut self, concrete: TypeId, ifaces: &[u32], name: IdentId, sp: rut_lexer::span::Span) -> TcResult<(Vec<TypeId>, TypeId, u32)> {
+    pub(crate) fn iface_member_shape(
+        &mut self,
+        concrete: TypeId,
+        ifaces: &[u32],
+        name: IdentId,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<(Vec<TypeId>, TypeId, u32)> {
         // the bound spells the capabilities; the member picks its own
         // descriptor (spelled, finite — never a search)
         let mut found: Option<(rut_core::binary::IfaceMethod, u32)> = None;
@@ -180,15 +262,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         let Some((tm, iface_id)) = found else {
-            let names: Vec<String> = ifaces.iter().map(|t| self.ctx.iface_base_name(*t)).collect();
-            self.ctx.err(sp, format!(
-                "`{}` is not a member of the bound's interfaces ({})",
-                self.ctx.name(name),
-                names.join(", ")
-            ));
+            let names: Vec<String> = ifaces
+                .iter()
+                .map(|t| self.ctx.iface_base_name(*t))
+                .collect();
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` is not a member of the bound's interfaces ({})",
+                    self.ctx.name(name),
+                    names.join(", ")
+                ),
+            );
             return Err(());
         };
-        let ptys = tm.params.iter().map(|&t| self.respell_self(t, iface_id, concrete)).collect();
+        let ptys = tm
+            .params
+            .iter()
+            .map(|&t| self.respell_self(t, iface_id, concrete))
+            .collect();
         let ret = self.respell_self(tm.ret, iface_id, concrete);
         Ok((ptys, ret, iface_id))
     }
@@ -201,7 +293,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn respell_self(&mut self, t: TypeId, iface_id: u32, concrete: TypeId) -> TypeId {
         match self.ctx.types.kind(t).clone() {
             TyKind::IfaceObj { iface_id: tid } => {
-                if tid == iface_id || self.ctx.iface_base_name(tid) == self.ctx.iface_base_name(iface_id) {
+                if tid == iface_id
+                    || self.ctx.iface_base_name(tid) == self.ctx.iface_base_name(iface_id)
+                {
                     return concrete;
                 }
                 t
@@ -210,18 +304,30 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // the leaf under the shape
             TyKind::Opt { elem } => {
                 let e = self.respell_self(elem, iface_id, concrete);
-                if e == elem { t } else { self.ctx.mk_opt(e) }
+                if e == elem {
+                    t
+                } else {
+                    self.ctx.mk_opt(e)
+                }
             }
             TyKind::Array { elem } => {
                 let e = self.respell_self(elem, iface_id, concrete);
-                if e == elem { t } else { self.ctx.mk_array(e) }
+                if e == elem {
+                    t
+                } else {
+                    self.ctx.mk_array(e)
+                }
             }
             TyKind::Data { fields } => {
                 let out: Vec<Option<TypeId>> = fields
                     .iter()
                     .map(|f| {
                         let r = self.respell_self(f.ty, iface_id, concrete);
-                        if r == f.ty { None } else { Some(r) }
+                        if r == f.ty {
+                            None
+                        } else {
+                            Some(r)
+                        }
                     })
                     .collect();
                 if out.iter().all(|o| o.is_none()) {
@@ -230,7 +336,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let fields = fields
                     .iter()
                     .zip(out.iter())
-                    .map(|(f, o)| rut_core::types::FieldInfo { name: f.name, ty: o.unwrap_or(f.ty) })
+                    .map(|(f, o)| rut_core::types::FieldInfo {
+                        name: f.name,
+                        ty: o.unwrap_or(f.ty),
+                    })
                     .collect();
                 self.ctx.types.intern(rut_core::types::RutType {
                     name: self.ctx.types.type_at(t).name,
@@ -289,23 +398,49 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         if args.len() != param_tys.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), param_tys.len()));
+            self.ctx.err(
+                sp,
+                format!(
+                    "call arity: {} args for {} params",
+                    args.len(),
+                    param_tys.len()
+                ),
+            );
             return Err(());
         }
         let mut aregs = Vec::new();
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(param_tys[i]))?;
             if !self.widens_val(*a, t, param_tys[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(param_tys[i])
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(a.id()),
+                    format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(param_tys[i])
+                    ),
+                );
             }
             aregs.push(self.last_reg);
         }
-        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallI { slot: slot, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        let dst = if ret_ty == TY_NIL {
+            None
+        } else {
+            Some(self.new_reg(ret_ty))
+        };
+        {
+            let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs));
+            self.emit(
+                Op::CallI {
+                    slot: slot,
+                    argv_off,
+                    argc,
+                    dst: opt_reg(dst),
+                },
+                sp.lo,
+            );
+        }
         Ok(ret_ty)
     }
-
 }

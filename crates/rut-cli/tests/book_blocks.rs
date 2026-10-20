@@ -149,7 +149,10 @@ fn book_blocks_compile_and_run() {
             let ctx = rut_driver::host_pkg_ctx(&world);
 
             let compiled = {
-                let walk = rut_driver::Walk { pkgs: world, root: String::new() };
+                let walk = rut_driver::Walk {
+                    pkgs: world,
+                    root: String::new(),
+                };
                 let chain = walk
                     .pkgs
                     .iter()
@@ -195,14 +198,21 @@ fn book_blocks_compile_and_run() {
             // the bindings BEFORE the Vm: the same set the wasm
             // host's rut_run installs — the buttons' answers are the truth
             let mut hosts = rut_vm::interp::HostRegistry::new();
-            hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
-                sink.borrow_mut().push(msg.to_string())
-            }));
+            hosts.install_host_pkg(
+                &ctx,
+                rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())),
+            );
             hosts.install_host_pkg(&ctx, rut_std::math::pkg());
             hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
             hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
             hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-            let mut vm = match rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build() {
+            let mut vm = match rut_vm::interp::Vm::builder()
+                .program(Rc::new(prog))
+                .limits(limits)
+                .hooks(rut_vm::interp::HostHooks::default())
+                .hosts(hosts)
+                .build()
+            {
                 Ok(vm) => vm,
                 Err(t) => {
                     failures.push(format!("{rel}#{n}: boot: {}", t.msg));

@@ -10,9 +10,13 @@
 
 use rut_parser::Mode;
 
-
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -38,7 +42,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -52,7 +59,10 @@ fn compile_program(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
+        &[
+            (2, rut_core::binary::Surface::core(), "core".to_string()),
+            (3, collection, "collection".to_string()),
+        ],
     )
 }
 
@@ -68,8 +78,13 @@ fn run_main(app_src: &str) -> i32 {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
@@ -107,7 +122,10 @@ fn clone_content_compares_equal_and_runs() {
              return a.len() * 100 + b.len() * 10 + c.len();\n\
          }\n",
     );
-    assert_eq!(sum, 333, "3+3+3 octets across original, clone, and the unlike buffer");
+    assert_eq!(
+        sum, 333,
+        "3+3+3 octets across original, clone, and the unlike buffer"
+    );
 }
 
 #[test]
@@ -138,7 +156,8 @@ fn clone_takes_no_arguments_and_other_members_still_diagnose() {
     .map(|d| d.msg.clone())
     .collect();
     assert!(
-        ds.iter().any(|d| d.contains("`bytes` has no method") && d.contains("`clone`")),
+        ds.iter()
+            .any(|d| d.contains("`bytes` has no method") && d.contains("`clone`")),
         "the no-method diagnostic must list the clone member: {ds:?}"
     );
 }

@@ -11,8 +11,6 @@
 use rut_driver::GraphOutput;
 use rut_parser::Mode;
 
-
-
 /// The shapes library: the interface AND both satisfying types live
 /// here (each type's inherent impl carries `area`).
 const SHAPES: &str = "\
@@ -46,12 +44,16 @@ pub fn describe(s: Shape) -> f64 {
 }
 ";
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -77,7 +79,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -90,10 +95,15 @@ fn graph(modules: &[(&str, &str)]) -> GraphOutput {
     // uses — a suite-wide loose table is this helper's deliberate
     // shape; the negative closure shapes mount nothing)
     for (spec, src) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
-        chain = chain
-            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
+        chain = chain.pkg(
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     let (root, _) = modules.last().expect("root module");
     graph_of(chain.entrypoint(root).compile())
@@ -115,8 +125,13 @@ fn run_main(p: rut_core::binary::Program) -> i32 {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call("main", ()).expect("main runs")
 }
 
@@ -124,7 +139,10 @@ fn ir(p: &rut_core::binary::Program) -> String {
     rut_driver::ir_dump_of(&p.funcs, &p.interner)
 }
 
-fn iface_of<'p>(p: &'p rut_core::binary::Program, name: &str) -> Option<(u32, &'p rut_core::binary::IfaceDesc)> {
+fn iface_of<'p>(
+    p: &'p rut_core::binary::Program,
+    name: &str,
+) -> Option<(u32, &'p rut_core::binary::IfaceDesc)> {
     p.ifaces
         .iter()
         .enumerate()
@@ -142,18 +160,27 @@ fn cross_module_member_call_binds_statically() {
     // binds to its compiled fn directly — static dispatch, no vtable hop
     let p = linked(&[
         ("shapes", SHAPES),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::{Point, make_point};
 entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     return 0;
 }
-"),
+",
+        ),
     ]);
     let dump = ir(&p);
-    assert!(dump.contains("callm"), "static bind through the foreign impl:\n{dump}");
-    assert!(!dump.contains("calli"), "no vtable hop for a single concrete origin:\n{dump}");
+    assert!(
+        dump.contains("callm"),
+        "static bind through the foreign impl:\n{dump}"
+    );
+    assert!(
+        !dump.contains("calli"),
+        "no vtable hop for a single concrete origin:\n{dump}"
+    );
 }
 
 #[test]
@@ -163,19 +190,31 @@ fn cross_module_iface_call_uses_the_vtable_when_origins_merge() {
     // each concrete type's row carries its own fill
     let p = linked(&[
         ("shapes", SHAPES),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::{Shape, pick};
 entry fn main() -> i32 {
     let s: Shape = pick(true);
     let v = s.area();
     return 0;
 }
-"),
+",
+        ),
     ]);
     let dump = ir(&p);
-    assert!(dump.contains("calli"), "merged origins dispatch through the vtable:\n{dump}");
+    assert!(
+        dump.contains("calli"),
+        "merged origins dispatch through the vtable:\n{dump}"
+    );
     let Some((gid, tdesc)) = iface_of(&p, "Shape") else {
-        panic!("one global Shape interface: {:?}", p.ifaces.iter().map(|t| p.name_of(t.name)).collect::<Vec<_>>());
+        panic!(
+            "one global Shape interface: {:?}",
+            p.ifaces
+                .iter()
+                .map(|t| p.name_of(t.name))
+                .collect::<Vec<_>>()
+        );
     };
     assert_eq!(tdesc.methods.len(), 1);
     let slot = p.slot_of(gid, 0).expect("global slot");
@@ -201,16 +240,27 @@ fn inherent_impl_on_a_used_class_is_refused() {
     // a foreign one.
     let g = graph(&[
         ("shapes", SHAPES_LIB),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::{Point};
 impl<T> Point {
     pub fn probe_hi(self) -> i64 { return 7; }
 }
 entry fn main() -> i32 { return 0; }
-"),
+",
+        ),
     ]);
-    assert!(g.program.is_none(), "the foreign inherent block must refuse");
-    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
+    assert!(
+        g.program.is_none(),
+        "the foreign inherent block must refuse"
+    );
+    let ds = g
+        .diags
+        .iter()
+        .map(|d| d.msg.clone())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(
         ds.contains("inherent impls live in the type's module"),
         "{ds}"
@@ -225,7 +275,9 @@ fn consumer_satisfies_a_foreign_interface_on_its_own_type() {
     // the boundary check at the interface-typed call admits it.
     let g = graph(&[
         ("extras", EXTRAS),
-        ("app", "\
+        (
+            "app",
+            "\
 use extras::{Shape, describe};
 struct Square { s: f64 }
 impl Square {
@@ -235,19 +287,37 @@ entry fn main() -> i32 {
     let d = describe(Square { s: 3.0 });
     return 0;
 }
-"),
+",
+        ),
     ]);
     assert!(g.diags.is_empty(), "{:?}", g.diags);
-    let p = g.program.expect("the consumer's own type satisfies the foreign interface");
+    let p = g
+        .program
+        .expect("the consumer's own type satisfies the foreign interface");
     // the consumer's boxing site filled the GLOBAL row of its own type
     // under extras' interface (link merges used-interface ids)
-    let Some((gid, _)) = iface_of(&p, "Shape") else { panic!("Shape in the global interface table: {:?}", p.ifaces.iter().map(|t| p.name_of(t.name)).collect::<Vec<_>>()) };
+    let Some((gid, _)) = iface_of(&p, "Shape") else {
+        panic!(
+            "Shape in the global interface table: {:?}",
+            p.ifaces
+                .iter()
+                .map(|t| p.name_of(t.name))
+                .collect::<Vec<_>>()
+        )
+    };
     let slot = p.slot_of(gid, 0).expect("global slot");
     let square = type_of(&p, "Square").expect("one global Square");
     let f = p.vtables[square as usize][slot as usize];
-    assert!(f.is_some(), "the boxing site fills Square's row: {:?}", p.vtables[square as usize]);
+    assert!(
+        f.is_some(),
+        "the boxing site fills Square's row: {:?}",
+        p.vtables[square as usize]
+    );
     let fname = p.name_of(p.funcs[f.unwrap() as usize].name);
-    assert!(fname.contains("area"), "the fill names the area member: {fname}");
+    assert!(
+        fname.contains("area"),
+        "the fill names the area member: {fname}"
+    );
 }
 
 #[test]
@@ -258,17 +328,25 @@ fn member_missing_on_the_receiver_is_the_unknown_member_diag() {
     // names the type and the member.
     let g = graph(&[
         ("shapes", SHAPES_LIB),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::{Point, make_point};
 entry fn main() -> i32 {
     let p = make_point();
     let a = p.area();
     return 0;
 }
-"),
+",
+        ),
     ]);
     assert!(g.program.is_none(), "the memberless receiver must refuse");
-    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
+    let ds = g
+        .diags
+        .iter()
+        .map(|d| d.msg.clone())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(
         ds.contains("area"),
         "the diag names the missing member: {ds}"
@@ -282,15 +360,21 @@ fn iface_typed_parameter_links_and_dispatches_through_the_vtable() {
     // the consumer's boxing site filled. `main` calls the linked fn
     // through a plain Call, and the fn's body hops the slot (CallI).
     let g = graph(&[
-        ("shapes", &format!("{SHAPES}\npub fn describe(s: Shape) -> f64 {{ return s.area(); }}\n")),
-        ("app", "\
+        (
+            "shapes",
+            &format!("{SHAPES}\npub fn describe(s: Shape) -> f64 {{ return s.area(); }}\n"),
+        ),
+        (
+            "app",
+            "\
 use shapes::{Shape, Point, make_point, describe};
 entry fn main() -> i32 {
     let p = make_point();
     let d = describe(p);
     return 0;
 }
-"),
+",
+        ),
     ]);
     assert!(g.diags.is_empty(), "{:?}", g.diags);
     let p = g.program.expect("program");
@@ -298,9 +382,14 @@ entry fn main() -> i32 {
     // through a spliced clone
     let didx = p.funcs.iter().position(|f| p.name_of(f.name) == "describe");
     let didx = didx.unwrap_or_else(|| panic!("describe linked:\n{}", ir(&p)));
-    let main = p.funcs.iter().find(|f| p.name_of(f.name) == "main").unwrap();
+    let main = p
+        .funcs
+        .iter()
+        .find(|f| p.name_of(f.name) == "main")
+        .unwrap();
     assert!(
-        main.code.iter()
+        main.code
+            .iter()
             .any(|op| matches!(op, rut_core::ops::Op::Call { func, .. } if *func as usize == didx)),
         "main calls the linked describe:\n{}",
         ir(&p)
@@ -308,7 +397,10 @@ entry fn main() -> i32 {
     // the linked body dispatches through the interface slot — the
     // per-type fill, not a per-argument clone
     assert!(
-        p.funcs[didx].code.iter().any(|op| matches!(op, rut_core::ops::Op::CallI { .. })),
+        p.funcs[didx]
+            .code
+            .iter()
+            .any(|op| matches!(op, rut_core::ops::Op::CallI { .. })),
         "describe dispatches through the vtable:\n{}",
         ir(&p)
     );
@@ -324,17 +416,25 @@ fn satisfaction_failure_names_the_missing_member() {
     // error names the type, the interface, and the first missing member
     let g = graph(&[
         ("extras", EXTRAS),
-        ("app", "\
+        (
+            "app",
+            "\
 use extras::{Shape, describe};
 struct TheirType { n: i32 }
 entry fn main() -> i32 {
     let d = describe(TheirType { n: 1 });
     return 0;
 }
-"),
+",
+        ),
     ]);
     assert!(g.program.is_none(), "an unsatisfied concrete must refuse");
-    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
+    let ds = g
+        .diags
+        .iter()
+        .map(|d| d.msg.clone())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(
         ds.contains("`TheirType` does not satisfy `Shape`: no member `area`"),
         "{ds}"
@@ -347,7 +447,9 @@ fn satisfaction_failure_names_the_signature_mismatch() {
     // mismatched member instead
     let g = graph(&[
         ("extras", EXTRAS),
-        ("app", "\
+        (
+            "app",
+            "\
 use extras::{Shape, describe};
 struct Odd { n: i32 }
 impl Odd {
@@ -357,10 +459,16 @@ entry fn main() -> i32 {
     let d = describe(Odd { n: 1 });
     return 0;
 }
-"),
+",
+        ),
     ]);
     assert!(g.program.is_none(), "a mismatched member must refuse");
-    let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n");
+    let ds = g
+        .diags
+        .iter()
+        .map(|d| d.msg.clone())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(
         ds.contains("`Odd` does not satisfy `Shape`")
             && ds.contains("member `area`'s signature differs from the interface's"),
@@ -379,7 +487,10 @@ fn two_phase_surfaces_carry_interfaces() {
     let dep = dep.program.expect("dep");
     let surface = dep.surface.clone();
     assert!(
-        surface.ifaces.iter().any(|t| surface.names.name(t.name) == "Shape"),
+        surface
+            .ifaces
+            .iter()
+            .any(|t| surface.names.name(t.name) == "Shape"),
         "surface exports the Shape decl"
     );
     let app = rut_driver::compile_program(
@@ -398,5 +509,8 @@ fn two_phase_surfaces_carry_interfaces() {
     let out = rut_core::link::link(vec![dep, app.program.expect("app")]).expect("link");
     assert!(iface_of(&out, "Shape").is_some(), "one merged Shape");
     let dump = ir(&out);
-    assert!(dump.contains("callm") && !dump.contains("calli"), "\n{dump}");
+    assert!(
+        dump.contains("callm") && !dump.contains("calli"),
+        "\n{dump}"
+    );
 }

@@ -3,7 +3,6 @@
 use super::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     /// Compile one instantiation into `ctx.funcs[fid]`.
     pub fn compile(ctx: &mut Ctx<'a>, inst: &Inst, fid: u32) -> TcResult<()> {
         // every body resolves in its DECL's module (phase 3): the key's
@@ -26,7 +25,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .iter()
                     .find(|(n, _)| *n == *data)
                     .map(|(_, d)| d.node.id())
-                    .or_else(|| ctx.enums.iter().find(|(n, _)| *n == *data).map(|(_, e)| e.node));
+                    .or_else(|| {
+                        ctx.enums
+                            .iter()
+                            .find(|(n, _)| *n == *data)
+                            .map(|(_, e)| e.node)
+                    });
                 if let Some(dn) = dn {
                     ctx.cur_mod = ctx.mod_of(dn).to_string();
                 }
@@ -55,7 +59,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // handled by the early return above
             FnKey::ForOfEmit { .. } => unreachable!(),
             FnKey::Free(name) => {
-                let Some(n) = ctx.fn_nodes.iter().find(|(n, _)| n == name).map(|(_, n)| *n) else {
+                let Some(n) = ctx
+                    .fn_nodes
+                    .iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, n)| *n)
+                else {
                     return Ok(()); // unknown fn —already diagnosed
                 };
                 (n.id(), None, false, None)
@@ -201,7 +210,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             if let Some(cn) = class_name {
-                let rs = ctx.find_data(cn).map(|d| d.requires.clone()).unwrap_or_default();
+                let rs = ctx
+                    .find_data(cn)
+                    .map(|d| d.requires.clone())
+                    .unwrap_or_default();
                 for (g, b) in &rs {
                     let members = ctx.resolve_bound_members(*b, &[]);
                     for m in &members {
@@ -236,13 +248,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             union_bounds,
             iface_bounds,
             union_syms: std::collections::HashMap::new(),
-        async_frame: None,
-        assigned: std::collections::HashSet::new(),
-        captured: std::collections::HashSet::new(),
-        cell_counter: 0,
-        async_infer: false,
-        async_founds: Vec::new(),
-        terminated: false,
+            async_frame: None,
+            assigned: std::collections::HashSet::new(),
+            captured: std::collections::HashSet::new(),
+            cell_counter: 0,
+            async_infer: false,
+            async_founds: Vec::new(),
+            terminated: false,
         };
         // the capture law's pre-pass: names first (a fn-level walk over
         // the body), promotion at each `bind_local` once types resolve
@@ -300,11 +312,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // trait-typed parameters: the Inst carries this call's
                     // concrete origin (a trait parameter IS an implicit
                     // generic bound) — single origin ⇒ static
-                    let origins = if matches!(c.ctx.types.kind(param_tys[i]), TyKind::IfaceObj { .. }) {
-                        param_origins_iter.next().map(|t| vec![t]).unwrap_or_default()
-                    } else {
-                        Vec::new()
-                    };
+                    let origins =
+                        if matches!(c.ctx.types.kind(param_tys[i]), TyKind::IfaceObj { .. }) {
+                            param_origins_iter
+                                .next()
+                                .map(|t| vec![t])
+                                .unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        };
                     // union-bound provenance: a param whose
                     // declared type NODE spells a union-bounded generic
                     // records that generic — method calls on it gate on
@@ -333,11 +349,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             c.promote_param(li, 0);
         }
         let _ = generics; // user generic methods unsupported (diag at call)
-        // body: the block's TAIL (an explicit tail expression, or a
-        // tail-position `if` statement with an else) is the implicit
-        // return — Rust-style. The tail value is checked against the
-        // fn's return type and counted as the return for the
-        // definite-return law below.
+                          // body: the block's TAIL (an explicit tail expression, or a
+                          // tail-position `if` statement with an else) is the implicit
+                          // return — Rust-style. The tail value is checked against the
+                          // fn's return type and counted as the return for the
+                          // definite-return law below.
         let tail_ty = c.compile_block_value(body, Some(ret_ty))?;
         if let Some(t) = tail_ty {
             c.emit_body_tail(body, t, ret_ty);
@@ -359,11 +375,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 Some(r) => c.ctx.ast.span(r.id()),
                 None => c.ctx.ast.span(node),
             };
-            c.ctx.err(sp, format!(
-                "missing return: `{}` is `-> {}` but a path reaches the end of the body",
-                c.ctx.name(fn_name),
-                c.ctx.type_name(ret_ty)
-            ));
+            c.ctx.err(
+                sp,
+                format!(
+                    "missing return: `{}` is `-> {}` but a path reaches the end of the body",
+                    c.ctx.name(fn_name),
+                    c.ctx.type_name(ret_ty)
+                ),
+            );
         }
         // implicit `return` for nil fns; non-nil fns diagnosed above —
         // this fallback Ret is the dead tail the diagnostics reject
@@ -396,7 +415,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// Compile a lambda instantiation: declared params ++ captures.
-    pub(crate) fn compile_lambda_fn(ctx: &mut Ctx<'a>, inst: &Inst, fid: u32, lambda_node: NodeId) -> TcResult<()> {
+    pub(crate) fn compile_lambda_fn(
+        ctx: &mut Ctx<'a>,
+        inst: &Inst,
+        fid: u32,
+        lambda_node: NodeId,
+    ) -> TcResult<()> {
         // the capture list was recorded when the MakeClosure was emitted;
         // the node we keyed on is the lambda BODY
         let (params, ret, body) = match ctx.ast.expr(NodeHandle::new(lambda_node)) {
@@ -428,13 +452,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             union_bounds: std::collections::HashMap::new(),
             iface_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
-        async_frame: None,
-        assigned: std::collections::HashSet::new(),
-        captured: std::collections::HashSet::new(),
-        cell_counter: 0,
-        async_infer: false,
-        async_founds: Vec::new(),
-        terminated: false,
+            async_frame: None,
+            assigned: std::collections::HashSet::new(),
+            captured: std::collections::HashSet::new(),
+            cell_counter: 0,
+            async_infer: false,
+            async_founds: Vec::new(),
+            terminated: false,
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -456,14 +480,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut param_tys = Vec::new();
         for (i, p) in params.iter().enumerate() {
             let ty = match c.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                    saved.as_ref().and_then(|s| s.0.get(i).copied()).unwrap_or_else(|| c.resolve_type_now(*t))
-                }
-                _ => saved.as_ref().and_then(|s| s.0.get(i).copied()).unwrap_or(TY_I32),
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => saved
+                    .as_ref()
+                    .and_then(|s| s.0.get(i).copied())
+                    .unwrap_or_else(|| c.resolve_type_now(*t)),
+                _ => saved
+                    .as_ref()
+                    .and_then(|s| s.0.get(i).copied())
+                    .unwrap_or(TY_I32),
             };
             param_tys.push(ty);
         }
-        let ret_ty = saved.as_ref().map(|s| s.1)
+        let ret_ty = saved
+            .as_ref()
+            .map(|s| s.1)
             .or_else(|| ret.map(|r| c.resolve_type_now(r)))
             .unwrap_or(TY_NIL);
         c.ret_ty = ret_ty;
@@ -474,16 +504,42 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, p) in params.iter().enumerate() {
             if let MemberKind::Param(ParamData { name, is_mut, .. }) = c.ctx.ast.param(*p) {
                 let reg = c.new_reg(param_tys[i]);
-                c.locals.push(Local { name: *name, reg, ty: param_tys[i], is_mut: *is_mut, loop_var: false, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
+                c.locals.push(Local {
+                    name: *name,
+                    reg,
+                    ty: param_tys[i],
+                    is_mut: *is_mut,
+                    loop_var: false,
+                    loop_for_c: false,
+                    origins: Vec::new(),
+                    field: NO_FIELD,
+                    cell: None,
+                });
             }
         }
         for (cap) in &caps {
-            let Capture { name: n, ty: t, is_mut: m, cell: by_cell, origins: cap_origins } = cap;
+            let Capture {
+                name: n,
+                ty: t,
+                is_mut: m,
+                cell: by_cell,
+                origins: cap_origins,
+            } = cap;
             // a promoted capture's parameter carries the SHARED cell's
             // handle — the local re-binds cell-backed so both frames
             // route through one slot (stay-linked for the binding's scope)
             let reg = c.new_reg(by_cell.unwrap_or(*t));
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, loop_for_c: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
+            c.locals.push(Local {
+                name: *n,
+                reg,
+                ty: *t,
+                is_mut: *m,
+                loop_var: false,
+                loop_for_c: false,
+                origins: cap_origins.clone(),
+                field: NO_FIELD,
+                cell: *by_cell,
+            });
             // captures are part of the fn's parameter list (after declared)
             param_tys.push(by_cell.unwrap_or(*t));
         }
@@ -502,21 +558,33 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // expression — checked below); the fallback Ret still emits
             // for IR well-formedness
             if !c.terminated && ret_ty != TY_NIL {
-                c.ctx.err(c.ctx.ast.span(block.id()), format!(
+                c.ctx.err(
+                    c.ctx.ast.span(block.id()),
+                    format!(
                     "missing return: `lambda` is `-> {}` but a path reaches the end of the body",
                     c.ctx.type_name(ret_ty)
-                ));
+                ),
+                );
             }
             c.emit(Op::Ret { val: None }, 0);
         } else {
             let t = c.compile_expr(body, Some(ret_ty))?;
             if t != ret_ty {
-                c.ctx.err(c.ctx.ast.span(body.id()), format!(
-                    "lambda returns `{}` but is typed `{}`",
-                    c.ctx.type_name(t), c.ctx.type_name(ret_ty)
-                ));
+                c.ctx.err(
+                    c.ctx.ast.span(body.id()),
+                    format!(
+                        "lambda returns `{}` but is typed `{}`",
+                        c.ctx.type_name(t),
+                        c.ctx.type_name(ret_ty)
+                    ),
+                );
             }
-            c.emit(Op::Ret { val: Some(c.last_reg) }, 0);
+            c.emit(
+                Op::Ret {
+                    val: Some(c.last_reg),
+                },
+                0,
+            );
         }
         c.resolve_labels();
         let (code, spans) = sroa::run(c.code, c.spans, &mut c.pools, &c.ctx.disposal_dense_set());
@@ -555,7 +623,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// pooled it) and stores the incoming element into the cell at
     /// frame entry — a stashed inner lambda sees the value current at
     /// call time, exactly like the fused `while`-shaped form.
-    fn compile_for_of_emit_fn(ctx: &mut Ctx<'a>, fid: u32, body: NodeId, var: IdentId) -> TcResult<()> {
+    fn compile_for_of_emit_fn(
+        ctx: &mut Ctx<'a>,
+        fid: u32,
+        body: NodeId,
+        var: IdentId,
+    ) -> TcResult<()> {
         let Some((elem_ty, caps, var_cell, is_mut)) = ctx.for_of_sigs.get(&fid).cloned() else {
             return Ok(()); // creation site already diagnosed
         };
@@ -583,13 +656,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             union_bounds: std::collections::HashMap::new(),
             iface_bounds: std::collections::HashMap::new(),
             union_syms: std::collections::HashMap::new(),
-        async_frame: None,
-        assigned: std::collections::HashSet::new(),
-        captured: std::collections::HashSet::new(),
-        cell_counter: 0,
-        async_infer: false,
-        async_founds: Vec::new(),
-        terminated: false,
+            async_frame: None,
+            assigned: std::collections::HashSet::new(),
+            captured: std::collections::HashSet::new(),
+            cell_counter: 0,
+            async_infer: false,
+            async_founds: Vec::new(),
+            terminated: false,
         };
         // the emit closure's own pre-pass: its frame promotes its own
         // bindings (nested lambdas / for-of bodies under the loop body)
@@ -602,20 +675,64 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // `mut` rides the sig: the body's writes through the
             // binding obey the same law in this frame as in the outer one
             let crec = c.new_reg(cty);
-            c.locals.push(Local { name: var, reg: crec, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
+            c.locals.push(Local {
+                name: var,
+                reg: crec,
+                ty: elem_ty,
+                is_mut,
+                loop_var: true,
+                loop_for_c: false,
+                origins: Vec::new(),
+                field: NO_FIELD,
+                cell: Some(cty),
+            });
             let repr = c.ctx.types.repr_of(elem_ty);
-            c.emit(Op::SetF { obj: crec, field: 0, val: preg, repr }, 0);
+            c.emit(
+                Op::SetF {
+                    obj: crec,
+                    field: 0,
+                    val: preg,
+                    repr,
+                },
+                0,
+            );
         } else {
             // the loop variable: the closure's parameter — a fresh binding
             // per iteration by construction (each emit call is a fresh frame);
             // loop-owned, so the capture law pools it when captured. The
             // header's `mut` alone gates the body's writes through it
-            c.locals.push(Local { name: var, reg: preg, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
+            c.locals.push(Local {
+                name: var,
+                reg: preg,
+                ty: elem_ty,
+                is_mut,
+                loop_var: true,
+                loop_for_c: false,
+                origins: Vec::new(),
+                field: NO_FIELD,
+                cell: None,
+            });
         }
         for (cap) in &caps {
-            let Capture { name: n, ty: t, is_mut: m, cell: by_cell, origins: cap_origins } = cap;
+            let Capture {
+                name: n,
+                ty: t,
+                is_mut: m,
+                cell: by_cell,
+                origins: cap_origins,
+            } = cap;
             let reg = c.new_reg(by_cell.unwrap_or(*t));
-            c.locals.push(Local { name: *n, reg, ty: *t, is_mut: *m, loop_var: false, loop_for_c: false, origins: cap_origins.clone(), field: NO_FIELD, cell: *by_cell });
+            c.locals.push(Local {
+                name: *n,
+                reg,
+                ty: *t,
+                is_mut: *m,
+                loop_var: false,
+                loop_for_c: false,
+                origins: cap_origins.clone(),
+                field: NO_FIELD,
+                cell: *by_cell,
+            });
         }
         let block: NodeHandle<BlockNode> = NodeHandle::new(body);
         if c.compile_block(block).is_err() {

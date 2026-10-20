@@ -16,16 +16,15 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
+        &[
+            (2, rut_core::binary::Surface::core(), "core".to_string()),
+            (3, collection, "collection".to_string()),
+        ],
     )
 }
 
 fn diags_of(src: &str) -> Vec<String> {
-    compile(src)
-        .diags
-        .iter()
-        .map(|d| d.msg.clone())
-        .collect()
+    compile(src).diags.iter().map(|d| d.msg.clone()).collect()
 }
 
 #[test]
@@ -84,7 +83,11 @@ fn valid_dead_private_code_compiles_clean() {
          fn unused_dial() -> Dial { return Dial::Low; }\n\
          entry fn main() -> i32 { return 0; }\n",
     );
-    assert!(out.diags.is_empty(), "valid dead private code must stay clean: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "valid dead private code must stay clean: {:?}",
+        out.diags
+    );
 }
 
 #[test]

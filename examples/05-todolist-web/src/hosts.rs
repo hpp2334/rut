@@ -61,7 +61,11 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
     hosts.register::<_, (&str,), OpaqueRef, _>("web::ui_get", {
         let st = st.clone();
         move |vm: &mut Vm, id: &str| -> Result<OpaqueRef, Trap> {
-            let el = st.borrow_mut().dom.get(id).map_err(|e| web_trap("ui_get", e))?;
+            let el = st
+                .borrow_mut()
+                .dom
+                .get(id)
+                .map_err(|e| web_trap("ui_get", e))?;
             box_element::<D>(vm, el)
         }
     });
@@ -70,7 +74,11 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
     hosts.register::<_, (&str,), OpaqueRef, _>("web::ui_create", {
         let st = st.clone();
         move |vm: &mut Vm, tag: &str| -> Result<OpaqueRef, Trap> {
-            let el = st.borrow_mut().dom.create(tag).map_err(|e| web_trap("ui_create", e))?;
+            let el = st
+                .borrow_mut()
+                .dom
+                .create(tag)
+                .map_err(|e| web_trap("ui_create", e))?;
             box_element::<D>(vm, el)
         }
     });
@@ -80,7 +88,9 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
         let st = st.clone();
         move |_vm: &mut Vm, el: OpaqueRef, text: &str| -> Result<(), Trap> {
             let b = element::<D>(&el, "ui_set_text")?;
-            backend_op(&b, "ui_set_text", |el| st.borrow_mut().dom.set_text(el, text))
+            backend_op(&b, "ui_set_text", |el| {
+                st.borrow_mut().dom.set_text(el, text)
+            })
         }
     });
 
@@ -89,7 +99,9 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
         let st = st.clone();
         move |_vm: &mut Vm, el: OpaqueRef, name: &str, value: &str| -> Result<(), Trap> {
             let b = element::<D>(&el, "ui_attr")?;
-            backend_op(&b, "ui_attr", |el| st.borrow_mut().dom.attr(el, name, value))
+            backend_op(&b, "ui_attr", |el| {
+                st.borrow_mut().dom.attr(el, name, value)
+            })
         }
     });
 
@@ -127,7 +139,9 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
         let st = st.clone();
         move |_vm: &mut Vm, el: OpaqueRef, v: &str| -> Result<(), Trap> {
             let b = element::<D>(&el, "ui_set_input_value")?;
-            backend_op(&b, "ui_set_input_value", |el| st.borrow_mut().dom.set_input_value(el, v))
+            backend_op(&b, "ui_set_input_value", |el| {
+                st.borrow_mut().dom.set_input_value(el, v)
+            })
         }
     });
 
@@ -144,9 +158,13 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
                 st.borrow_mut().dom.listen(el, event, id)?;
                 Ok(el.clone())
             })?;
-            st.borrow_mut()
-                .listeners
-                .insert(id, ListenerRow { el: el_row, event: event.to_string() });
+            st.borrow_mut().listeners.insert(
+                id,
+                ListenerRow {
+                    el: el_row,
+                    event: event.to_string(),
+                },
+            );
             Ok(id)
         }
     });
@@ -157,7 +175,10 @@ pub fn install_web_hosts<D: DomBackend>(hosts: &mut HostRegistry, st: &Shared<D>
     hosts.register::<_, (i64, &str), (), _>("web::tim_after", {
         let st = st.clone();
         move |_vm: &mut Vm, ms: i64, tag: &str| -> Result<(), Trap> {
-            st.borrow_mut().dom.after(ms, tag).map_err(|e| web_trap("tim_after", e))
+            st.borrow_mut()
+                .dom
+                .after(ms, tag)
+                .map_err(|e| web_trap("tim_after", e))
         }
     });
 }

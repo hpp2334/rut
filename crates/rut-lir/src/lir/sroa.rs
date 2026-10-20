@@ -104,8 +104,14 @@ fn one_round(
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms {
                     mark(&mut is_target, *t, n);
                 }
@@ -120,7 +126,14 @@ fn one_round(
     let mut replace_getf: HashMap<usize, (u16, u16)> = HashMap::new();
 
     for pc in 0..n {
-        let Op::MakeRecord { dst: p, ty, argv_off, argc, .. } = &code[pc] else {
+        let Op::MakeRecord {
+            dst: p,
+            ty,
+            argv_off,
+            argc,
+            ..
+        } = &code[pc]
+        else {
             continue;
         };
         let p = *p;
@@ -135,7 +148,9 @@ fn one_round(
         }
         // no uses at all: a dead allocation — leave it for the dead-op
         // rounds rather than reasoning about unreachable code here
-        let Some(use_pcs) = uses.get(&p) else { continue };
+        let Some(use_pcs) = uses.get(&p) else {
+            continue;
+        };
         let mut ok = true;
         let mut repl: Vec<(usize, u16, u16)> = Vec::new();
         for &j in use_pcs {
@@ -143,7 +158,13 @@ fn one_round(
                 ok = false;
                 break;
             }
-            let Op::GetF { dst: g, obj, field, repr } = &code[j] else {
+            let Op::GetF {
+                dst: g,
+                obj,
+                field,
+                repr,
+            } = &code[j]
+            else {
                 ok = false;
                 break;
             };
@@ -222,8 +243,14 @@ fn one_round(
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }
@@ -298,8 +325,14 @@ fn ret_round(
                 mark(&mut is_target, *then_t, n);
                 mark(&mut is_target, *else_t, n);
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms {
                     mark(&mut is_target, *t, n);
                 }
@@ -315,7 +348,14 @@ fn ret_round(
     let mut replace_getf: HashMap<usize, Op> = HashMap::new();
 
     for pc in 0..n {
-        let Op::MakeRecord { dst: p, ty, argv_off, argc, .. } = &code[pc] else {
+        let Op::MakeRecord {
+            dst: p,
+            ty,
+            argv_off,
+            argc,
+            ..
+        } = &code[pc]
+        else {
             continue;
         };
         let p = *p;
@@ -386,7 +426,13 @@ fn ret_round(
                 }
             } else if all_getf {
                 for &j in us {
-                    if let Op::GetF { dst: g, obj, field, repr } = &code[j] {
+                    if let Op::GetF {
+                        dst: g,
+                        obj,
+                        field,
+                        repr,
+                    } = &code[j]
+                    {
                         debug_assert!(*obj == r);
                         terminals.push((j, *g, *field, *repr));
                     }
@@ -480,8 +526,14 @@ fn ret_round(
                 *then_t = old_to_new[(*then_t as usize).min(n)];
                 *else_t = old_to_new[(*else_t as usize).min(n)];
             }
-            Op::BrTable { table_off, count, default, .. } => {
-                let arms = &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
+            Op::BrTable {
+                table_off,
+                count,
+                default,
+                ..
+            } => {
+                let arms =
+                    &mut pools.labels[*table_off as usize..*table_off as usize + *count as usize];
                 for t in arms.iter_mut() {
                     *t = old_to_new[(*t as usize).min(n)];
                 }

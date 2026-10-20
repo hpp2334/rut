@@ -12,13 +12,27 @@ mod trace;
 impl Vm {
     // ---- natives (named things are natives, not ops) ----
 
-    pub(super) fn call_nat(&mut self, nat: Nat, recv: Reg, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+    pub(super) fn call_nat(
+        &mut self,
+        nat: Nat,
+        recv: Reg,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    ) -> Result<(), Trap> {
         let prog = std::rc::Rc::clone(&self.prog);
         let args = self.cur_argv(&prog, argv_off, argc);
         let (recv, dst) = (reg_opt(recv), reg_opt(dst));
         match nat {
             Nat::ArrLen => self.nat_arr_len(recv, dst),
-            Nat::Str | Nat::StrFromCode | Nat::Concat | Nat::StrLen | Nat::StrJoin | Nat::StrSlice | Nat::StrScan | Nat::StrStartsWith => self.call_str_nat(nat, recv, args, dst),
+            Nat::Str
+            | Nat::StrFromCode
+            | Nat::Concat
+            | Nat::StrLen
+            | Nat::StrJoin
+            | Nat::StrSlice
+            | Nat::StrScan
+            | Nat::StrStartsWith => self.call_str_nat(nat, recv, args, dst),
             Nat::ArrSlice => self.nat_arr_slice(recv, args, dst),
             Nat::BytesClone => self.nat_bytes_clone(recv, dst),
             Nat::CaptureTrace => self.nat_capture_trace(dst),

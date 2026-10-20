@@ -12,12 +12,16 @@ use std::rc::Rc;
 use rut_parser::Mode;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -43,7 +47,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -70,7 +77,12 @@ fn diags_of(src: &str) -> Vec<String> {
 fn run_returns(src: &str) -> Result<i64, String> {
     let out = compile(src);
     if !out.diags.is_empty() {
-        return Err(out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
+        return Err(out
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; "));
     }
     let prog = rut_core::link::flatten(out.program.expect("linked program"));
     let limits = Limits {
@@ -78,9 +90,16 @@ fn run_returns(src: &str) -> Result<i64, String> {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(HostRegistry::new()).build()
-    .map_err(|e| format!("{e:?}"))?;
-    vm.call::<_, i32>("main", ()).map(|v| v as i64).map_err(|e| format!("{e:?}"))
+    let mut vm = Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(HostRegistry::new())
+        .build()
+        .map_err(|e| format!("{e:?}"))?;
+    vm.call::<_, i32>("main", ())
+        .map(|v| v as i64)
+        .map_err(|e| format!("{e:?}"))
 }
 
 const WRAPPER: &str = "\
@@ -121,7 +140,10 @@ fn wrapper_crosses_the_boundary_and_plain_value_does_not() {
              let s = dump(JsonI64(64));\n\
          }}\n"
     ));
-    assert!(ds.is_empty(), "the wrapper satisfies at the spelled constructor: {ds:?}");
+    assert!(
+        ds.is_empty(),
+        "the wrapper satisfies at the spelled constructor: {ds:?}"
+    );
     let ds = diags_of(&format!(
         "{WRAPPER}\n\
          entry fn main() {{\n\
@@ -129,7 +151,8 @@ fn wrapper_crosses_the_boundary_and_plain_value_does_not() {
          }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d.contains("i32") && d.contains("Serializable")),
+        ds.iter()
+            .any(|d| d.contains("i32") && d.contains("Serializable")),
         "no auto-insertion, forever: {ds:?}"
     );
 }
@@ -186,8 +209,10 @@ fn binder_not_in_the_wrapped_arg_demands_the_spelling() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`Converter`'s parameter `T` is not determined by `str`")
-            && d.contains("spell it: `Converter<")),
+        ds.iter().any(
+            |d| d.contains("`Converter`'s parameter `T` is not determined by `str`")
+                && d.contains("spell it: `Converter<")
+        ),
         "the undetermined binder names the fix: {ds:?}"
     );
     // ... and the explicit form compiles and runs
@@ -212,7 +237,8 @@ fn explicit_args_are_all_or_nothing() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("takes 2 type argument(s), 1 given")),
+        ds.iter()
+            .any(|d| d.contains("takes 2 type argument(s), 1 given")),
         "partial spelling diagnoses: {ds:?}"
     );
     // the full spelling compiles
@@ -336,9 +362,16 @@ fn adapter_wrapper_constructs_across_modules() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface, "theirjson".to_string()), (3, rut_core::binary::Surface::core(), "core".to_string())],
+        &[
+            (1, surface, "theirjson".to_string()),
+            (3, rut_core::binary::Surface::core(), "core".to_string()),
+        ],
     );
-    assert!(root.diags.is_empty(), "cross-module construction: {:?}", root.diags);
+    assert!(
+        root.diags.is_empty(),
+        "cross-module construction: {:?}",
+        root.diags
+    );
 }
 
 #[test]
@@ -361,7 +394,10 @@ fn generic_adapter_wrapper_spells_across_modules() {
             Mode::Impl,
             "app",
             2,
-            &[(1, surface.clone(), "theirjson".to_string()), (3, rut_core::binary::Surface::core(), "core".to_string())],
+            &[
+                (1, surface.clone(), "theirjson".to_string()),
+                (3, rut_core::binary::Surface::core(), "core".to_string()),
+            ],
         );
         assert!(root.diags.is_empty(), "{src}: {:?}", root.diags);
     }
@@ -379,7 +415,10 @@ fn undetermined_binder_at_a_distance_names_the_spelling() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface, "theirjson".to_string()), (3, rut_core::binary::Surface::core(), "core".to_string())],
+        &[
+            (1, surface, "theirjson".to_string()),
+            (3, rut_core::binary::Surface::core(), "core".to_string()),
+        ],
     );
     assert!(
         root.diags.iter().any(|d| d.msg.contains("not determined")),

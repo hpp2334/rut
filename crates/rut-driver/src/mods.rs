@@ -92,7 +92,11 @@ pub enum ChildLookup {
     /// a child file read; `canon` is its canonical identity (the
     /// cycle guard's key — a symlinked alias repeats it) and `file`
     /// the physical name the diagnostics spell
-    Found { text: String, canon: String, file: String },
+    Found {
+        text: String,
+        canon: String,
+        file: String,
+    },
     /// both spellings exist — `NAME/<child file>` AND `NAME.rut`;
     /// which mounts is ambiguous, named loudly
     Ambiguous,
@@ -136,7 +140,16 @@ pub fn mount_mod_children(
     }
     let mut out = BTreeMap::new();
     let mut visiting = vec![root_canon.to_string()];
-    mount_rec("", child_file, &ast, mode, child_file, read, &mut out, &mut visiting)?;
+    mount_rec(
+        "",
+        child_file,
+        &ast,
+        mode,
+        child_file,
+        read,
+        &mut out,
+        &mut visiting,
+    )?;
     Ok(out)
 }
 
@@ -187,12 +200,26 @@ fn mount_rec(
                 // into its declarations, never splice it here
                 let (child_ast, diags) = parse(&text, mode);
                 if diags.is_empty() {
-                    mount_rec(&child_path, &file, &child_ast, mode, child_file, read, out, visiting)?;
+                    mount_rec(
+                        &child_path,
+                        &file,
+                        &child_ast,
+                        mode,
+                        child_file,
+                        read,
+                        out,
+                        visiting,
+                    )?;
                 }
                 visiting.pop();
                 out.insert(
                     child_path.clone(),
-                    ModSource { path: child_path, vis: *vis, text, file: file.clone() },
+                    ModSource {
+                        path: child_path,
+                        vis: *vis,
+                        text,
+                        file: file.clone(),
+                    },
                 );
             }
             ChildLookup::Ambiguous => {
@@ -314,7 +341,11 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             let m = if *is_decl { Mode::Decl } else { Mode::Impl };
             let (ast, diags) = parse(text, m);
             if !diags.is_empty() {
-                problems.extend(diags.iter().map(|d| format!("`{spec}` (mod.rut): {}", d.msg)));
+                problems.extend(
+                    diags
+                        .iter()
+                        .map(|d| format!("`{spec}` (mod.rut): {}", d.msg)),
+                );
                 BTreeMap::new()
             } else {
                 let decls = decl_rows(&ast);
@@ -323,14 +354,25 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .filter(|d| d.kind == DeclKind::Mod)
                     .map(|d| (d.name.clone(), d.vis))
                     .collect();
-                set.units.push(ModuleUnit { path: String::new(), ast, decls });
+                set.units.push(ModuleUnit {
+                    path: String::new(),
+                    ast,
+                    decls,
+                });
                 declared
             }
         }
-        MountedBody::Host { root_surface: Some(text), .. } => {
+        MountedBody::Host {
+            root_surface: Some(text),
+            ..
+        } => {
             let (ast, diags) = parse(text, Mode::Decl);
             if !diags.is_empty() {
-                problems.extend(diags.iter().map(|d| format!("`{spec}` ({child_file}): {}", d.msg)));
+                problems.extend(
+                    diags
+                        .iter()
+                        .map(|d| format!("`{spec}` ({child_file}): {}", d.msg)),
+                );
                 BTreeMap::new()
             } else {
                 let decls = decl_rows(&ast);
@@ -339,7 +381,11 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .filter(|d| d.kind == DeclKind::Mod)
                     .map(|d| (d.name.clone(), d.vis))
                     .collect();
-                set.units.push(ModuleUnit { path: String::new(), ast, decls });
+                set.units.push(ModuleUnit {
+                    path: String::new(),
+                    ast,
+                    decls,
+                });
                 declared
             }
         }
@@ -350,9 +396,17 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     for (path, m) in &pkg.mods {
         let (ast, diags) = parse(&m.text, mode);
         if !diags.is_empty() {
-            problems.extend(diags.iter().map(|d| format!("`{spec}` ({path}/{child_file}): {}", d.msg)));
+            problems.extend(
+                diags
+                    .iter()
+                    .map(|d| format!("`{spec}` ({path}/{child_file}): {}", d.msg)),
+            );
             child_decls.insert(path.clone(), BTreeMap::new());
-            set.units.push(ModuleUnit { path: path.clone(), ast, decls: vec![] });
+            set.units.push(ModuleUnit {
+                path: path.clone(),
+                ast,
+                decls: vec![],
+            });
             continue;
         }
         let decls = decl_rows(&ast);
@@ -362,7 +416,11 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             .map(|d| (d.name.clone(), d.vis))
             .collect();
         child_decls.insert(path.clone(), declared);
-        set.units.push(ModuleUnit { path: path.clone(), ast, decls });
+        set.units.push(ModuleUnit {
+            path: path.clone(),
+            ast,
+            decls,
+        });
     }
     // every DECLARED child must be mounted (the loader's law; a
     // hand-offered pkg that disagrees is named, never guessed around)
@@ -432,12 +490,21 @@ pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
             // a `host fn` surface row — the host tree's leaf decl: the
             // declaring `pub` rides it, so a qualified use validates
             // (`pub host fn` crosses, a bare `host fn` is private)
-            ItemKind::SurfaceFn { linkage: Linkage::Host, vis, name, is_async, .. } => {
-                (*name, *vis, DeclKind::HostFn, *is_async)
-            }
+            ItemKind::SurfaceFn {
+                linkage: Linkage::Host,
+                vis,
+                name,
+                is_async,
+                ..
+            } => (*name, *vis, DeclKind::HostFn, *is_async),
             _ => continue,
         };
-        out.push(DeclRow { name: ast.name(name).to_string(), vis, kind, is_async });
+        out.push(DeclRow {
+            name: ast.name(name).to_string(),
+            vis,
+            kind,
+            is_async,
+        });
     }
     out
 }
@@ -452,7 +519,10 @@ pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
 /// same bytes, the pack determinism law.
 pub fn rows_json(root_text: &str, mods: &BTreeMap<String, ModSource>) -> String {
     let mut map = serde_json::Map::new();
-    map.insert(String::new(), serde_json::Value::String(root_text.to_string()));
+    map.insert(
+        String::new(),
+        serde_json::Value::String(root_text.to_string()),
+    );
     for (path, m) in mods {
         map.insert(path.clone(), serde_json::Value::String(m.text.clone()));
     }
@@ -463,8 +533,7 @@ pub fn rows_json(root_text: &str, mods: &BTreeMap<String, ModSource>) -> String 
 /// by mod path. Malformed keys and shapes are loud, naming the entry.
 pub fn parse_rows(text: &str) -> Result<(String, BTreeMap<String, String>), String> {
     let bad = |msg: String| format!("{ROWS_NAME}: {msg}");
-    let value: serde_json::Value =
-        serde_json::from_str(text).map_err(|e| bad(e.to_string()))?;
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| bad(e.to_string()))?;
     let obj = value
         .as_object()
         .ok_or_else(|| bad("expected a JSON object of module rows — `\"\": \"<root source>\"` plus one row per child".to_string()))?;
@@ -486,7 +555,10 @@ pub fn parse_rows(text: &str) -> Result<(String, BTreeMap<String, String>), Stri
         rows.insert(k.clone(), text.to_string());
     }
     let root = root.ok_or_else(|| {
-        bad("no `\"\"` row — the root module's source is missing (re-pack the directory)".to_string())
+        bad(
+            "no `\"\"` row — the root module's source is missing (re-pack the directory)"
+                .to_string(),
+        )
     })?;
     Ok((root, rows))
 }
@@ -566,7 +638,12 @@ mod tests {
 
         /// the flavor-aware twin: `file` is the physical name a found
         /// file reports (the Decl test's `mod.d.rut`)
-        fn lookup_as(&mut self, parent: &str, name: &str, file: &str) -> Result<ChildLookup, String> {
+        fn lookup_as(
+            &mut self,
+            parent: &str,
+            name: &str,
+            file: &str,
+        ) -> Result<ChildLookup, String> {
             let child = if parent.is_empty() {
                 name.to_string()
             } else {
@@ -574,7 +651,11 @@ mod tests {
             };
             match self.files.get(&child) {
                 Some(text) => {
-                    let canon = self.aliases.get(&child).cloned().unwrap_or_else(|| child.clone());
+                    let canon = self
+                        .aliases
+                        .get(&child)
+                        .cloned()
+                        .unwrap_or_else(|| child.clone());
                     Ok(ChildLookup::Found {
                         text: text.clone(),
                         canon,
@@ -608,16 +689,29 @@ mod tests {
     fn mounts_two_levels_in_declaration_order() {
         let mut fs = FakeFs {
             files: BTreeMap::from([
-                ("layout".into(), "pub mod grid;\npub fn span() -> i32 { return 1; }\n".into()),
-                ("layout/grid".into(), "pub fn cell() -> i32 { return 2; }\n".into()),
+                (
+                    "layout".into(),
+                    "pub mod grid;\npub fn span() -> i32 { return 1; }\n".into(),
+                ),
+                (
+                    "layout/grid".into(),
+                    "pub fn cell() -> i32 { return 2; }\n".into(),
+                ),
             ]),
             aliases: BTreeMap::new(),
         };
-        let mods = mount_mod_children("mod layout;\nentry fn main() {}\n", "root", Mode::Impl, "mod.rut", &mut |p, n| {
-            fs.lookup(p, n)
-        })
+        let mods = mount_mod_children(
+            "mod layout;\nentry fn main() {}\n",
+            "root",
+            Mode::Impl,
+            "mod.rut",
+            &mut |p, n| fs.lookup(p, n),
+        )
         .unwrap();
-        assert_eq!(mods.keys().collect::<Vec<_>>(), vec!["layout", "layout/grid"]);
+        assert_eq!(
+            mods.keys().collect::<Vec<_>>(),
+            vec!["layout", "layout/grid"]
+        );
         assert_eq!(mods["layout"].vis, Vis::Self_);
         assert_eq!(mods["layout/grid"].vis, Vis::Pub);
         assert!(mods["layout"].text.starts_with("pub mod grid;"));
@@ -625,20 +719,24 @@ mod tests {
 
     #[test]
     fn missing_child_names_both_spellings() {
-        let mut fs = FakeFs { files: BTreeMap::new(), aliases: BTreeMap::new() };
-        let err = mount_mod_children("mod grid;", "root", Mode::Impl, "mod.rut", &mut |p, n| fs.lookup(p, n))
-            .unwrap_err();
-        assert_eq!(
-            err,
-            "`mod grid;` in mod.rut — no `grid/mod.rut` beside it"
-        );
+        let mut fs = FakeFs {
+            files: BTreeMap::new(),
+            aliases: BTreeMap::new(),
+        };
+        let err = mount_mod_children("mod grid;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            fs.lookup(p, n)
+        })
+        .unwrap_err();
+        assert_eq!(err, "`mod grid;` in mod.rut — no `grid/mod.rut` beside it");
         // a nested declaration names the declaring file
         let mut fs = FakeFs {
             files: BTreeMap::from([("layout".into(), "mod grid;\n".into())]),
             aliases: BTreeMap::new(),
         };
-        let err = mount_mod_children("mod layout;", "root", Mode::Impl, "mod.rut", &mut |p, n| fs.lookup(p, n))
-            .unwrap_err();
+        let err = mount_mod_children("mod layout;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            fs.lookup(p, n)
+        })
+        .unwrap_err();
         assert_eq!(
             err,
             "`mod grid;` in layout/mod.rut — no `grid/mod.rut` beside it"
@@ -652,14 +750,24 @@ mod tests {
         // file, never the directory-form guess
         let mut fs = FakeFs {
             files: BTreeMap::from([
-                ("imp".into(), "pub fn one() -> i32 { return 1; }\nmod deep;\n".into()),
-                ("imp/deep".into(), "pub fn two() -> i32 { return 2; }\n".into()),
+                (
+                    "imp".into(),
+                    "pub fn one() -> i32 { return 1; }\nmod deep;\n".into(),
+                ),
+                (
+                    "imp/deep".into(),
+                    "pub fn two() -> i32 { return 2; }\n".into(),
+                ),
             ]),
             aliases: BTreeMap::new(),
         };
-        let mods = mount_mod_children("mod imp;\nentry fn main() {}\n", "root", Mode::Impl, "mod.rut", &mut |p, n| {
-            fs.lookup_file_form(p, n)
-        })
+        let mods = mount_mod_children(
+            "mod imp;\nentry fn main() {}\n",
+            "root",
+            Mode::Impl,
+            "mod.rut",
+            &mut |p, n| fs.lookup_file_form(p, n),
+        )
         .unwrap();
         assert_eq!(mods.keys().collect::<Vec<_>>(), vec!["imp", "imp/deep"]);
         // the missing-child error inside the file child names ITS file
@@ -680,7 +788,10 @@ mod tests {
 
     #[test]
     fn both_spellings_are_the_loud_ambiguity() {
-        let mut fs = FakeFs { files: BTreeMap::new(), aliases: BTreeMap::new() };
+        let mut fs = FakeFs {
+            files: BTreeMap::new(),
+            aliases: BTreeMap::new(),
+        };
         let err = mount_mod_children("mod imp;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
             if p.is_empty() {
                 Ok(ChildLookup::Ambiguous)
@@ -728,9 +839,14 @@ mod tests {
             ]),
             aliases: BTreeMap::from([("a/b".into(), "a".into())]),
         };
-        let err = mount_mod_children("mod a;", "root", Mode::Impl, "mod.rut", &mut |p, n| fs.lookup(p, n))
-            .unwrap_err();
-        assert_eq!(err, "cyclic mod: `b` (a/b/mod.rut) is already being mounted");
+        let err = mount_mod_children("mod a;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            fs.lookup(p, n)
+        })
+        .unwrap_err();
+        assert_eq!(
+            err,
+            "cyclic mod: `b` (a/b/mod.rut) is already being mounted"
+        );
     }
 
     #[test]
@@ -739,8 +855,14 @@ mod tests {
             files: BTreeMap::from([("a".into(), "pub fn one() -> i32 { return 1; }\n".into())]),
             aliases: BTreeMap::new(),
         };
-        let mods = mount_mod_children("mod a;\nmod a;\n", "root", Mode::Impl, "mod.rut", &mut |p, n| fs.lookup(p, n))
-            .unwrap();
+        let mods = mount_mod_children(
+            "mod a;\nmod a;\n",
+            "root",
+            Mode::Impl,
+            "mod.rut",
+            &mut |p, n| fs.lookup(p, n),
+        )
+        .unwrap();
         assert_eq!(mods.len(), 1, "the second `mod a;` mounts nothing new");
     }
 
@@ -753,8 +875,10 @@ mod tests {
             files: BTreeMap::from([("a".into(), "fn broken( {{".into())]),
             aliases: BTreeMap::new(),
         };
-        let mods = mount_mod_children("mod a;", "root", Mode::Impl, "mod.rut", &mut |p, n| fs.lookup(p, n))
-            .unwrap();
+        let mods = mount_mod_children("mod a;", "root", Mode::Impl, "mod.rut", &mut |p, n| {
+            fs.lookup(p, n)
+        })
+        .unwrap();
         assert_eq!(mods.len(), 1);
     }
 
@@ -765,8 +889,14 @@ mod tests {
         // names that spelling
         let mut fs = FakeFs {
             files: BTreeMap::from([
-                ("net".into(), "pub mod tls;\npub host fn connect(url: str) -> opaque;\n".into()),
-                ("net/tls".into(), "pub host fn handshake(c: opaque) -> opaque;\n".into()),
+                (
+                    "net".into(),
+                    "pub mod tls;\npub host fn connect(url: str) -> opaque;\n".into(),
+                ),
+                (
+                    "net/tls".into(),
+                    "pub host fn handshake(c: opaque) -> opaque;\n".into(),
+                ),
             ]),
             aliases: BTreeMap::new(),
         };
@@ -782,7 +912,10 @@ mod tests {
         assert_eq!(mods["net"].vis, Vis::Pub);
         assert!(mods["net/tls"].text.contains("handshake"));
         // the missing-child error names `mod.d.rut`, the declaring file included
-        let mut fs = FakeFs { files: BTreeMap::new(), aliases: BTreeMap::new() };
+        let mut fs = FakeFs {
+            files: BTreeMap::new(),
+            aliases: BTreeMap::new(),
+        };
         let err = mount_mod_children(
             "pub mod net;\n",
             "root",
@@ -819,7 +952,12 @@ mod tests {
         let mut mods = BTreeMap::new();
         mods.insert(
             "layout".to_string(),
-            ModSource { path: String::new(), vis: Vis::Self_, text: "pub fn span() -> i32 { return 1; }\n".into(), file: "mod.rut".into() },
+            ModSource {
+                path: String::new(),
+                vis: Vis::Self_,
+                text: "pub fn span() -> i32 { return 1; }\n".into(),
+                file: "mod.rut".into(),
+            },
         );
         let json = rows_json("mod layout;\n", &mods);
         let (root, rows) = parse_rows(&json).unwrap();
@@ -844,9 +982,13 @@ mod tests {
         // the Decl flavor names `mod.d.rut` in the undeclared-row error
         let (_, rows) = parse_rows(r#"{"": "pub mod net;\n", "net": "y", "tls": "z"}"#).unwrap();
         let err = mount_rows("pub mod net;\n", &rows, Mode::Decl, "mod.d.rut").unwrap_err();
-        assert!(err.contains("`tls/mod.d.rut` is carried but no `mod tls;` declares it"), "{err}");
+        assert!(
+            err.contains("`tls/mod.d.rut` is carried but no `mod tls;` declares it"),
+            "{err}"
+        );
         // and the Decl mount itself rides the tree
-        let (_, rows) = parse_rows(r#"{"": "pub mod net;\n", "net": "pub host fn c() -> opaque;\n"}"#).unwrap();
+        let (_, rows) =
+            parse_rows(r#"{"": "pub mod net;\n", "net": "pub host fn c() -> opaque;\n"}"#).unwrap();
         let mounted = mount_rows("pub mod net;\n", &rows, Mode::Decl, "mod.d.rut").unwrap();
         assert_eq!(mounted.keys().collect::<Vec<_>>(), vec!["net"]);
     }
@@ -858,7 +1000,12 @@ mod tests {
         for (path, vis, text) in children {
             mods.insert(
                 path.to_string(),
-                ModSource { path: path.to_string(), vis: *vis, text: text.to_string(), file: "mod.d.rut".to_string() },
+                ModSource {
+                    path: path.to_string(),
+                    vis: *vis,
+                    text: text.to_string(),
+                    file: "mod.d.rut".to_string(),
+                },
             );
         }
         Mounted {
@@ -885,8 +1032,16 @@ mod tests {
         let pkg = host_pkg(
             "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             &[
-                ("net", Vis::Pub, "pub mod tls;\npub host fn connect(url: str) -> opaque;\n"),
-                ("net/tls", Vis::Pub, "host fn private_probe();\npub host fn handshake(c: opaque) -> opaque;\n"),
+                (
+                    "net",
+                    Vis::Pub,
+                    "pub mod tls;\npub host fn connect(url: str) -> opaque;\n",
+                ),
+                (
+                    "net/tls",
+                    Vis::Pub,
+                    "host fn private_probe();\npub host fn handshake(c: opaque) -> opaque;\n",
+                ),
             ],
         );
         let (set, problems) = collect_module_set("myhost", &pkg);
@@ -924,12 +1079,17 @@ mod tests {
         let pkg = host_pkg("pub mod net;\n", &[]);
         let (_, problems) = collect_module_set("myhost", &pkg);
         assert!(
-            problems.iter().any(|p| p.contains("`mod net;` in `myhost`'s mod.d.rut")
-                && p.contains("the loader mounts `net/mod.d.rut` beside it")),
+            problems
+                .iter()
+                .any(|p| p.contains("`mod net;` in `myhost`'s mod.d.rut")
+                    && p.contains("the loader mounts `net/mod.d.rut` beside it")),
             "{problems:?}"
         );
         // a mounted child nothing declares — the reverse law, same flavor
-        let pkg = host_pkg("pub host fn legacy_ping() -> bool;\n", &[("net", Vis::Pub, "")]);
+        let pkg = host_pkg(
+            "pub host fn legacy_ping() -> bool;\n",
+            &[("net", Vis::Pub, "")],
+        );
         let (_, problems) = collect_module_set("myhost", &pkg);
         assert!(
             problems
@@ -938,10 +1098,15 @@ mod tests {
             "{problems:?}"
         );
         // a child that fails to parse names its `.d.rut` file
-        let pkg = host_pkg("pub mod net;\n", &[("net", Vis::Pub, "pub host fn broken( {{")]);
+        let pkg = host_pkg(
+            "pub mod net;\n",
+            &[("net", Vis::Pub, "pub host fn broken( {{")],
+        );
         let (_, problems) = collect_module_set("myhost", &pkg);
         assert!(
-            problems.iter().any(|p| p.starts_with("`myhost` (net/mod.d.rut):")),
+            problems
+                .iter()
+                .any(|p| p.starts_with("`myhost` (net/mod.d.rut):")),
             "{problems:?}"
         );
     }
@@ -950,10 +1115,7 @@ mod tests {
     fn a_source_tree_collects_exactly_as_before() {
         // the lib shape is untouched by the host arm: Impl children,
         // `mod.rut` spellings, no host rows
-        let mut pkg = Mounted::source(
-            "app",
-            "mod layout;\nentry fn main() {}\n",
-        );
+        let mut pkg = Mounted::source("app", "mod layout;\nentry fn main() {}\n");
         pkg.mods.insert(
             "layout".to_string(),
             ModSource {
@@ -966,6 +1128,9 @@ mod tests {
         let (set, problems) = collect_module_set("app", &pkg);
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(set.paths(), vec!["", "layout"]);
-        assert!(set.units[1].decls.iter().any(|d| d.kind == DeclKind::Fn && d.name == "span"));
+        assert!(set.units[1]
+            .decls
+            .iter()
+            .any(|d| d.kind == DeclKind::Fn && d.name == "span"));
     }
 }

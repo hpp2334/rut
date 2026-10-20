@@ -17,9 +17,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-
-use rut_vm::OpaqueRef;
 use rut_vm::interp::Vm;
+use rut_vm::OpaqueRef;
 
 const FIXTURE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/fastlane");
 
@@ -68,7 +67,8 @@ fn install_fastlane(hosts: &mut rut_vm::interp::HostRegistry, kept_str: Rc<RefCe
     });
     rut_vm::register!(hosts, "fastlane::make_ref", () -> OpaqueRef, |vm: &mut Vm| -> OpaqueRef {
         rut_vm::Opaque::alloc(vm, 42i64).expect("alloc").handle().clone()
-    });}
+    });
+}
 
 fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
     let mut world = rut_native::dir_pkgs(std::path::Path::new(FIXTURE_DIR))
@@ -80,14 +80,26 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
             .manifest(rut_driver::Manifest::lib("app", &["fastlane"])),
     );
     let expected = rut_driver::declared_host_fns(&world);
-    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
+    let compiled = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
@@ -99,7 +111,12 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install_fastlane(&mut hosts, kept_str);
     hosts.verify_against(&expected); // the surface ↔ the bodies, pre-boot
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .unwrap()
 }
 
@@ -121,7 +138,11 @@ fn prim_round_trips_hold_bits_including_the_u64_high_half() {
         (1u64 << 63) + 12345,
         0xDEAD_BEEF_CAFE_BABE,
     ] {
-        assert_eq!(vm.call::<_, u64>("rt_u64", (v,)).unwrap(), v, "bits lost for {v:#x}");
+        assert_eq!(
+            vm.call::<_, u64>("rt_u64", (v,)).unwrap(),
+            v,
+            "bits lost for {v:#x}"
+        );
     }
     // and the bits are USABLE rut-side: the shift sees the high word
     assert_eq!(vm.call::<_, u64>("rt_u64_shr", (u64::MAX,)).unwrap(), 1);
@@ -138,11 +159,26 @@ fn prim_round_trips_hold_bits_including_the_u64_high_half() {
 fn borrow_params_read_their_cells_zero_copy() {
     let kept = Rc::new(RefCell::new(String::new()));
     let mut vm = vm_with_surface(kept);
-    assert_eq!(vm.call::<_, i64>("rt_str_len", ("hello".to_string(),)).unwrap(), 5);
-    assert_eq!(vm.call::<_, i64>("rt_str_len", (String::new(),)).unwrap(), 0);
+    assert_eq!(
+        vm.call::<_, i64>("rt_str_len", ("hello".to_string(),))
+            .unwrap(),
+        5
+    );
+    assert_eq!(
+        vm.call::<_, i64>("rt_str_len", (String::new(),)).unwrap(),
+        0
+    );
     // byte length, not char count — the octets are what crossed
-    assert_eq!(vm.call::<_, i64>("rt_str_len", ("héllo".to_string(),)).unwrap(), 6);
-    assert_eq!(vm.call::<_, i64>("rt_bytes_sum", (vec![1u8, 2, 3, 250],)).unwrap(), 256);
+    assert_eq!(
+        vm.call::<_, i64>("rt_str_len", ("héllo".to_string(),))
+            .unwrap(),
+        6
+    );
+    assert_eq!(
+        vm.call::<_, i64>("rt_bytes_sum", (vec![1u8, 2, 3, 250],))
+            .unwrap(),
+        256
+    );
     assert_eq!(vm.call::<_, i64>("rt_bytes_sum", (Vec::new(),)).unwrap(), 0);
 }
 
@@ -150,9 +186,20 @@ fn borrow_params_read_their_cells_zero_copy() {
 fn owned_params_arrive_as_copies_the_host_keeps() {
     let kept = Rc::new(RefCell::new(String::new()));
     let mut vm = vm_with_surface(kept.clone());
-    assert_eq!(vm.call::<_, i64>("rt_str_keep", ("ada".to_string(),)).unwrap(), 3);
-    assert_eq!(*kept.borrow(), "ada", "the host body received the owned copy");
-    assert_eq!(vm.call::<_, i64>("rt_bytes_keep", (vec![7u8; 9],)).unwrap(), 9);
+    assert_eq!(
+        vm.call::<_, i64>("rt_str_keep", ("ada".to_string(),))
+            .unwrap(),
+        3
+    );
+    assert_eq!(
+        *kept.borrow(),
+        "ada",
+        "the host body received the owned copy"
+    );
+    assert_eq!(
+        vm.call::<_, i64>("rt_bytes_keep", (vec![7u8; 9],)).unwrap(),
+        9
+    );
 }
 
 #[test]
@@ -162,12 +209,20 @@ fn embedder_wrong_shape_traps_unchanged() {
     // ARG side (value_in — untouched): an integer where the entry takes
     // a str is a trap naming both sides, before any slot exists
     let err = vm.call::<_, i64>("rt_str_len", (7i64,)).unwrap_err();
-    assert!(err.msg.contains("an integer") && err.msg.contains("str"), "{}", err.msg);
+    assert!(
+        err.msg.contains("an integer") && err.msg.contains("str"),
+        "{}",
+        err.msg
+    );
     // RET side (Ret::from_slot — the CHECKED read, untouched): the host
     // answers opaque, the embedder asked i64 — the boundary trap names both
     let err = vm.call::<_, i64>("rt_ref_back", (5i64,)).unwrap_err();
     assert!(err.msg.contains("boundary:"), "{}", err.msg);
-    assert!(err.msg.contains("`opaque`") && err.msg.contains("`i64`"), "{}", err.msg);
+    assert!(
+        err.msg.contains("`opaque`") && err.msg.contains("`i64`"),
+        "{}",
+        err.msg
+    );
     // the right shape still crosses: the box arrives, payload intact
     let back: rut_vm::Opaque<i64> = vm.call("rt_ref_back", (5i64,)).unwrap();
     assert_eq!(back.with(|v| *v).unwrap(), 42i64);

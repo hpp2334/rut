@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 
 use rut_ast::ast::Vis;
 use rut_driver::mods::{collect_module_set, DeclKind, ModSource};
-use rut_driver::{Walk, Mounted, MountedBody};
+use rut_driver::{Mounted, MountedBody, Walk};
 
 mod common;
 use common::{dep_dir, pkg_named};
@@ -157,7 +157,11 @@ fn a_file_module_mounts_and_runs() {
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
     let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
-    assert_eq!(keys, vec!["imp"], "the file child mounts at its logical mod path");
+    assert_eq!(
+        keys,
+        vec!["imp"],
+        "the file child mounts at its logical mod path"
+    );
     assert!(pkg.mods["imp"].text.contains("pub fn span"));
     assert_eq!(run_main(loaded), 47);
 }
@@ -180,7 +184,11 @@ fn a_mixed_tree_mounts_both_forms_at_every_level() {
         "layout/mod.rut",
         "mod grid;\npub fn span() -> i32 { return 1; }\n",
     );
-    write(&pkg, "layout/grid.rut", "pub fn cell() -> i32 { return 2; }\n");
+    write(
+        &pkg,
+        "layout/grid.rut",
+        "pub fn cell() -> i32 { return 2; }\n",
+    );
     write(&pkg, "helper.rut", "pub fn two() -> i32 { return 20; }\n");
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
@@ -195,7 +203,11 @@ fn both_forms_are_the_loud_ambiguity() {
     // undecidable; the error names both spellings
     let root = world("ambiguous", false);
     let pkg = root.join("pkg");
-    write(&pkg, "layout/grid.rut", "pub fn cell() -> i32 { return 2; }\n");
+    write(
+        &pkg,
+        "layout/grid.rut",
+        "pub fn cell() -> i32 { return 2; }\n",
+    );
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(
         err.contains("`mod grid;` in layout/mod.rut — both `grid/mod.rut` and `grid.rut` exist"),
@@ -212,9 +224,14 @@ fn a_cycle_through_a_file_child_is_the_loud_cyclic_mod_error() {
     let root = scratch("file-cycle");
     let pkg = root.join("pkg");
     write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
-    write(&pkg, "mod.rut", "mod a;\nentry fn main() -> i32 { return 7; }\n");
+    write(
+        &pkg,
+        "mod.rut",
+        "mod a;\nentry fn main() -> i32 { return 7; }\n",
+    );
     write(&pkg, "a.rut", "mod b;\npub fn one() -> i32 { return 1; }\n");
-    std::os::unix::fs::symlink(pkg.join("a.rut").canonicalize().unwrap(), pkg.join("b.rut")).unwrap();
+    std::os::unix::fs::symlink(pkg.join("a.rut").canonicalize().unwrap(), pkg.join("b.rut"))
+        .unwrap();
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("cyclic mod:"), "{err}");
     assert!(err.contains("`b` (a/b/b.rut)"), "{err}");
@@ -252,8 +269,16 @@ fn a_symlinked_cycle_is_the_loud_cyclic_mod_error() {
     // the root declares `mod a;`; a/mod.rut declares `mod b;`; `b`
     // aliases `a` itself — the canonical identity of a/mod.rut repeats
     // inside the mount chain
-    write(&pkg, "mod.rut", "mod a;\nentry fn main() -> i32 { return 7; }\n");
-    write(&pkg, "a/mod.rut", "mod b;\npub fn one() -> i32 { return 1; }\n");
+    write(
+        &pkg,
+        "mod.rut",
+        "mod a;\nentry fn main() -> i32 { return 7; }\n",
+    );
+    write(
+        &pkg,
+        "a/mod.rut",
+        "mod b;\npub fn one() -> i32 { return 1; }\n",
+    );
     std::os::unix::fs::symlink(pkg.join("a").canonicalize().unwrap(), pkg.join("a/b")).unwrap();
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("cyclic mod:"), "{err}");
@@ -366,7 +391,10 @@ fn entry_lib_manifests_refuse_loudly_naming_the_fix() {
     write(&pkg, "lib.rut", "entry fn main() -> i32 { return 7; }\n");
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("entry.lib: repealed"), "{err}");
-    assert!(err.contains("the root module is `mod.rut` beside the manifest"), "{err}");
+    assert!(
+        err.contains("the root module is `mod.rut` beside the manifest"),
+        "{err}"
+    );
     assert!(err.contains("rename the file, drop the key"), "{err}");
 
     // `entry.libs` — structure lives in `mod` directories
@@ -379,7 +407,10 @@ fn entry_lib_manifests_refuse_loudly_naming_the_fix() {
     write(&pkg2, "tail.rut", "// the splice tail\n");
     let err = rut_native::load_dir(&pkg2).unwrap_err().to_string();
     assert!(err.contains("entry.libs: repealed"), "{err}");
-    assert!(err.contains("structure lives in `mod` directories"), "{err}");
+    assert!(
+        err.contains("structure lives in `mod` directories"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -397,7 +428,9 @@ fn mod_rut_beside_an_entry_type_surface_is_the_root() {
     write(&pkg, "mod.rut", "entry fn main() -> i32 { return 7; }\n");
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
-    let MountedBody::Source { text, is_decl } = &pkg.body else { panic!("source body") };
+    let MountedBody::Source { text, is_decl } = &pkg.body else {
+        panic!("source body")
+    };
     assert!(!*is_decl, "the mod.rut is a body, not the dev state");
     assert_eq!(text, "entry fn main() -> i32 { return 7; }\n");
     assert_eq!(run_main(loaded), 7);
@@ -415,8 +448,13 @@ fn entry_type_only_without_mod_rut_is_still_the_dev_state() {
     write(&pkg, "pkg.d.rut", "/// documented surface, no body yet.\n");
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
-    let MountedBody::Source { is_decl, .. } = &pkg.body else { panic!("source body") };
-    assert!(*is_decl, "no `mod.rut` — today's surface-only dev state stands");
+    let MountedBody::Source { is_decl, .. } = &pkg.body else {
+        panic!("source body")
+    };
+    assert!(
+        *is_decl,
+        "no `mod.rut` — today's surface-only dev state stands"
+    );
     assert!(pkg.mods.is_empty());
 }
 
@@ -453,7 +491,10 @@ fn a_mod_package_packs_rows_and_loads_the_same_tree() {
     let bundled = pkg_named(&loaded, "pkg");
     let dir = load(&root.join("pkg"));
     let on_disk = dir.pkg("pkg").expect("pkg mounted");
-    assert_eq!(bundled.mods, on_disk.mods, "the bundle mounts the same tree");
+    assert_eq!(
+        bundled.mods, on_disk.mods,
+        "the bundle mounts the same tree"
+    );
     assert_eq!(run_main(loaded), 7);
 }
 
@@ -513,9 +554,10 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
         vec!["http", "json", "nmapset", "pouch"],
         "the pinned artifacts ride in dist/std-v8: {names:?}"
     );
-    for path in names.iter().filter(|p| {
-        p.file_stem().unwrap().to_string_lossy() != "json"
-    }) {
+    for path in names
+        .iter()
+        .filter(|p| p.file_stem().unwrap().to_string_lossy() != "json")
+    {
         let bytes = std::fs::read(path).expect("read the bundle");
         // the OLD manifest grammar still parses one level down: the
         // archive's own rut.jsonc spells the repealed keys, and the
@@ -543,7 +585,11 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
             "{}: {err}",
             path.display()
         );
-        assert!(err.contains("re-pack the directory"), "{}: {err}", path.display());
+        assert!(
+            err.contains("re-pack the directory"),
+            "{}: {err}",
+            path.display()
+        );
     }
 }
 
@@ -565,7 +611,11 @@ fn the_peer_deps_bundle_refuses_at_the_manifest_door() {
         .read("rut.jsonc")
         .unwrap();
     let err = rut_driver::bundle::parse_manifest_compat(&manifest_text).unwrap_err();
-    assert_eq!(err.to_string(), "manifest: unknown key 'peer-deps'", "{err}");
+    assert_eq!(
+        err.to_string(),
+        "manifest: unknown key 'peer-deps'",
+        "{err}"
+    );
     // at the bundle door the manifest parse precedes the version gate —
     // the unknown key refuses first, exactly like any unknown key
     let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
@@ -626,9 +676,11 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
         "/../../rut/pouch"
     )))
     .expect("pack the tree pouch");
-    let pouch_src =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/pouch/mod.rut"))
-            .unwrap();
+    let pouch_src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../rut/pouch/mod.rut"
+    ))
+    .unwrap();
     let legacy = r#"{"format": "rutbundle", "format_version": 12, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
     let entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
@@ -639,7 +691,10 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
                 vec![
                     ("rut.jsonc".to_string(), legacy.as_bytes().to_vec()),
                     ("pouch.rut".to_string(), pouch_src.clone().into_bytes()),
-                    ("extra.rut".to_string(), b"// the legacy splice tail\n".to_vec()),
+                    (
+                        "extra.rut".to_string(),
+                        b"// the legacy splice tail\n".to_vec(),
+                    ),
                 ]
             } else {
                 vec![(n, b)]
@@ -672,13 +727,21 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
 fn modpkg(spec: &str, root: &str, mods: Vec<(&str, Vis, &str)>) -> rut_driver::Mounted {
     rut_driver::Mounted {
         spec: spec.to_string(),
-        body: rut_driver::MountedBody::Source { text: root.to_string(), is_decl: false },
+        body: rut_driver::MountedBody::Source {
+            text: root.to_string(),
+            is_decl: false,
+        },
         mods: mods
             .into_iter()
             .map(|(p, v, t)| {
                 (
                     p.to_string(),
-                    ModSource { path: p.to_string(), vis: v, text: t.to_string(), file: "mod.rut".to_string() },
+                    ModSource {
+                        path: p.to_string(),
+                        vis: v,
+                        text: t.to_string(),
+                        file: "mod.rut".to_string(),
+                    },
                 )
             })
             .collect(),
@@ -694,11 +757,20 @@ fn compile_with_diags(pkgs: &[rut_driver::Mounted], entry: &str) -> Vec<String> 
     // (the law bounds uses by declarations, never declarations by
     // uses — these tests pin visibility/positions, not nameability)
     for p in pkgs {
-        let heads: Vec<&str> =
-            pkgs.iter().map(|q| q.spec.as_str()).filter(|s| *s != p.spec).collect();
-        run = run.pkg(p.clone().manifest(rut_driver::Manifest::lib(&p.spec, &heads)));
+        let heads: Vec<&str> = pkgs
+            .iter()
+            .map(|q| q.spec.as_str())
+            .filter(|s| *s != p.spec)
+            .collect();
+        run = run.pkg(
+            p.clone()
+                .manifest(rut_driver::Manifest::lib(&p.spec, &heads)),
+        );
     }
-    let c = run.entrypoint(entry).compile().expect("compile carries the diags");
+    let c = run
+        .entrypoint(entry)
+        .compile()
+        .expect("compile carries the diags");
     c.graph.diags.iter().map(|d| d.msg.clone()).collect()
 }
 
@@ -706,9 +778,15 @@ fn run_main_pkgs(pkgs: &[rut_driver::Mounted], entry: &str) -> i64 {
     let mut run = rut_driver::RutRun::new();
     // the same loose table as [`compile_with_diags`]
     for p in pkgs {
-        let heads: Vec<&str> =
-            pkgs.iter().map(|q| q.spec.as_str()).filter(|s| *s != p.spec).collect();
-        run = run.pkg(p.clone().manifest(rut_driver::Manifest::lib(&p.spec, &heads)));
+        let heads: Vec<&str> = pkgs
+            .iter()
+            .map(|q| q.spec.as_str())
+            .filter(|s| *s != p.spec)
+            .collect();
+        run = run.pkg(
+            p.clone()
+                .manifest(rut_driver::Manifest::lib(&p.spec, &heads)),
+        );
     }
     let c = run.entrypoint(entry).compile().expect("compile the walk");
     assert!(c.graph.diags.is_empty(), "{:?}", c.graph.diags);
@@ -783,7 +861,9 @@ fn leaf_not_found_names_the_module() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`ghost` is not declared in module `a` (a/mod.rut)")),
+        diags
+            .iter()
+            .any(|d| d.contains("`ghost` is not declared in module `a` (a/mod.rut)")),
         "{diags:?}"
     );
 }
@@ -833,8 +913,16 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
             "pkg",
             "mod a;\nentry fn main() -> i32 { return a::go(); }\n",
             vec![
-                ("a", Vis::Self_, "pub mod c;\npub fn go() -> i32 { return c::sup(); }\n"),
-                ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
+                (
+                    "a",
+                    Vis::Self_,
+                    "pub mod c;\npub fn go() -> i32 { return c::sup(); }\n",
+                ),
+                (
+                    "a/c",
+                    Vis::Pub,
+                    "pub(super) fn sup() -> i32 { return 11; }\n",
+                ),
             ],
         ),
     ];
@@ -847,13 +935,19 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
             "mod a;\nentry fn main() -> i32 { return a::c::sup(); }\n",
             vec![
                 ("a", Vis::Self_, "pub mod c;\n"),
-                ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
+                (
+                    "a/c",
+                    Vis::Pub,
+                    "pub(super) fn sup() -> i32 { return 11; }\n",
+                ),
             ],
         ),
     ];
     let diags = compile_with_diags(&world, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`pub(super)` — visible only in `a`'s subtree")),
+        diags
+            .iter()
+            .any(|d| d.contains("`pub(super)` — visible only in `a`'s subtree")),
         "{diags:?}"
     );
     // visible from the SIBLING subtree: pub(super) on a/c's decl is
@@ -865,9 +959,21 @@ fn visibility_matrix_private_pub_super_pub_pkg_pub() {
             "pkg",
             "mod a;\nentry fn main() -> i32 { return a::go(); }\n",
             vec![
-                ("a", Vis::Self_, "pub mod c;\npub mod d;\npub fn go() -> i32 { return d::reach(); }\n"),
-                ("a/c", Vis::Pub, "pub(super) fn sup() -> i32 { return 11; }\n"),
-                ("a/d", Vis::Pub, "pub fn reach() -> i32 { return a::c::sup(); }\n"),
+                (
+                    "a",
+                    Vis::Self_,
+                    "pub mod c;\npub mod d;\npub fn go() -> i32 { return d::reach(); }\n",
+                ),
+                (
+                    "a/c",
+                    Vis::Pub,
+                    "pub(super) fn sup() -> i32 { return 11; }\n",
+                ),
+                (
+                    "a/d",
+                    Vis::Pub,
+                    "pub fn reach() -> i32 { return a::c::sup(); }\n",
+                ),
             ],
         ),
     ];
@@ -881,7 +987,11 @@ fn pub_pkg_stays_inside_its_package() {
     let dep = modpkg(
         "dep",
         "pub mod alpha;\nentry fn main() -> i32 { return dep::alpha::inside(); }\n",
-        vec![("alpha", Vis::Pub, "pub(pkg) fn inside() -> i32 { return 44; }\n")],
+        vec![(
+            "alpha",
+            Vis::Pub,
+            "pub(pkg) fn inside() -> i32 { return 44; }\n",
+        )],
     );
     assert_eq!(run_main_pkgs(&[dep.clone()], "dep"), 44);
     // across the use door: refused — pub(pkg) does not cross packages
@@ -892,7 +1002,9 @@ fn pub_pkg_stays_inside_its_package() {
     );
     let diags = compile_with_diags(&[dep, consumer], "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("is not `pub` — only `pub` names cross packages")),
+        diags
+            .iter()
+            .any(|d| d.contains("is not `pub` — only `pub` names cross packages")),
         "{diags:?}"
     );
 }
@@ -929,12 +1041,18 @@ fn member_visibility_methods_matrix() {
     // prefixed, the free-fn wording family after the dash
     let pkgs = vec![
         dep.clone(),
-        modpkg("pkg", root_calls, vec![("a", Vis::Self_, counter_mod(None).as_str())]),
+        modpkg(
+            "pkg",
+            root_calls,
+            vec![("a", Vis::Self_, counter_mod(None).as_str())],
+        ),
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Counter.bump` — `bump` is private to module `a`")
-            && d.contains("declare it `pub` (or `pub(pkg)`) to widen")),
+        diags.iter().any(
+            |d| d.contains("`Counter.bump` — `bump` is private to module `a`")
+                && d.contains("declare it `pub` (or `pub(pkg)`) to widen")
+        ),
         "{diags:?}"
     );
 
@@ -958,7 +1076,9 @@ fn member_visibility_methods_matrix() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Counter.bump` — `bump` is private to module `a/c`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`Counter.bump` — `bump` is private to module `a/c`")),
         "{diags:?}"
     );
 
@@ -981,7 +1101,11 @@ fn member_visibility_methods_matrix() {
             "pkg",
             "mod a;\nentry fn main() -> i32 { return a::sub::reach(); }\n",
             vec![
-                ("a", Vis::Self_, format!("pub mod sub;\n{}", counter_mod(None)).as_str()),
+                (
+                    "a",
+                    Vis::Self_,
+                    format!("pub mod sub;\n{}", counter_mod(None)).as_str(),
+                ),
                 (
                     "a/sub",
                     Vis::Pub,
@@ -995,14 +1119,22 @@ fn member_visibility_methods_matrix() {
     // `pub`: crosses to the root
     let pkgs = vec![
         dep.clone(),
-        modpkg("pkg", root_calls, vec![("a", Vis::Self_, counter_mod(Some("pub ")).as_str())]),
+        modpkg(
+            "pkg",
+            root_calls,
+            vec![("a", Vis::Self_, counter_mod(Some("pub ")).as_str())],
+        ),
     ];
     assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
 
     // `pub(pkg)`: crosses within the package
     let pkgs = vec![
         dep.clone(),
-        modpkg("pkg", root_calls, vec![("a", Vis::Self_, counter_mod(Some("pub(pkg) ")).as_str())]),
+        modpkg(
+            "pkg",
+            root_calls,
+            vec![("a", Vis::Self_, counter_mod(Some("pub(pkg) ")).as_str())],
+        ),
     ];
     assert_eq!(run_main_pkgs(&pkgs, "pkg"), 42);
 
@@ -1057,7 +1189,8 @@ fn member_visibility_methods_matrix() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Counter.bump` — `bump` is `pub(super)` — visible only in `a`'s subtree")),
+        diags.iter().any(|d| d
+            .contains("`Counter.bump` — `bump` is `pub(super)` — visible only in `a`'s subtree")),
         "{diags:?}"
     );
 }
@@ -1084,7 +1217,9 @@ fn member_visibility_static_calls() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Acc.make` — `make` is private to module `a`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`Acc.make` — `make` is private to module `a`")),
         "{diags:?}"
     );
     // ...and the same static SAME-MODULE runs
@@ -1118,7 +1253,9 @@ fn member_visibility_static_calls() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Point.from_xy` — `from_xy` is private to module `a`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`Point.from_xy` — `from_xy` is private to module `a`")),
         "{diags:?}"
     );
     let pkgs = vec![
@@ -1169,7 +1306,9 @@ fn member_visibility_enum_methods() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Mood.flipped` — `flipped` is private to module `a`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`Mood.flipped` — `flipped` is private to module `a`")),
         "{diags:?}"
     );
 
@@ -1184,7 +1323,9 @@ fn member_visibility_enum_methods() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Mood.start` — `start` is private to module `a`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`Mood.start` — `start` is private to module `a`")),
         "{diags:?}"
     );
 
@@ -1225,11 +1366,15 @@ fn the_todolist_shape_private_impl_methods_are_errors() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`TodoList.toggle_task` — `toggle_task` is private to module `imp`")),
+        diags.iter().any(
+            |d| d.contains("`TodoList.toggle_task` — `toggle_task` is private to module `imp`")
+        ),
         "{diags:?}"
     );
     assert!(
-        diags.iter().any(|d| d.contains("`TodoList.append_task` — `append_task` is private to module `imp`")),
+        diags.iter().any(
+            |d| d.contains("`TodoList.append_task` — `append_task` is private to module `imp`")
+        ),
         "{diags:?}"
     );
     // the same class with `pub` members runs — the law is the dial,
@@ -1284,11 +1429,17 @@ fn for_of_gates_the_iterable_member() {
     // a private marked member refuses the root's for-of
     let pkgs = vec![
         dep.clone(),
-        modpkg("pkg", root_loop, vec![("a", Vis::Self_, count("").as_str())]),
+        modpkg(
+            "pkg",
+            root_loop,
+            vec![("a", Vis::Self_, count("").as_str())],
+        ),
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`Count.iterate` — `iterate` is private to module `a`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`Count.iterate` — `iterate` is private to module `a`")),
         "{diags:?}"
     );
     // same-module for-of over the private member: runs (3 iterations)
@@ -1304,7 +1455,11 @@ fn for_of_gates_the_iterable_member() {
     // and a `pub` marked member crosses: the root's for-of runs
     let pkgs = vec![
         dep,
-        modpkg("pkg", root_loop, vec![("a", Vis::Self_, count("pub ").as_str())]),
+        modpkg(
+            "pkg",
+            root_loop,
+            vec![("a", Vis::Self_, count("pub ").as_str())],
+        ),
     ];
     assert_eq!(run_main_pkgs(&pkgs, "pkg"), 3);
 }
@@ -1385,12 +1540,17 @@ fn member_visibility_fields_matrix() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert_eq!(
-        diags.iter().filter(|d| d.contains("`Box.v` — `v` is private to module `a`")).count(),
+        diags
+            .iter()
+            .filter(|d| d.contains("`Box.v` — `v` is private to module `a`"))
+            .count(),
         3,
         "read, write, and literal each diagnose: {diags:?}"
     );
     assert!(
-        diags.iter().any(|d| d.contains("declare it `pub` (or `pub(pkg)`) to widen")),
+        diags
+            .iter()
+            .any(|d| d.contains("declare it `pub` (or `pub(pkg)`) to widen")),
         "{diags:?}"
     );
 
@@ -1402,7 +1562,11 @@ fn member_visibility_fields_matrix() {
             "pkg",
             "mod a;\nentry fn main() -> i32 { return a::sub::sub_go(); }\n",
             vec![
-                ("a", Vis::Self_, format!("pub mod sub;\n{}", box_mod("")).as_str()),
+                (
+                    "a",
+                    Vis::Self_,
+                    format!("pub mod sub;\n{}", box_mod("")).as_str(),
+                ),
                 ("a/sub", Vis::Pub, box_site("a", "sub").as_str()),
             ],
         ),
@@ -1425,7 +1589,10 @@ fn member_visibility_fields_matrix() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert_eq!(
-        diags.iter().filter(|d| d.contains("`Box.v` — `v` is private to module `a/c`")).count(),
+        diags
+            .iter()
+            .filter(|d| d.contains("`Box.v` — `v` is private to module `a/c`"))
+            .count(),
         3,
         "{diags:?}"
     );
@@ -1433,7 +1600,8 @@ fn member_visibility_fields_matrix() {
     // `pub` and `pub(pkg)`: cross to the root, a sibling subtree, and
     // another top-level module alike
     for dial in ["pub ", "pub(pkg) "] {
-        let pkgs = vec![
+        let pkgs =
+            vec![
             dep.clone(),
             modpkg(
                 "pkg",
@@ -1456,7 +1624,11 @@ fn member_visibility_fields_matrix() {
             "pkg",
             "mod a;\nentry fn main() -> i32 { return a::a_go() + a::d::d_go(); }\n",
             vec![
-                ("a", Vis::Self_, format!("pub mod c;\npub mod d;\n{}", box_site("a::c", "a")).as_str()),
+                (
+                    "a",
+                    Vis::Self_,
+                    format!("pub mod c;\npub mod d;\n{}", box_site("a::c", "a")).as_str(),
+                ),
                 ("a/c", Vis::Pub, box_mod("pub(super) ").as_str()),
                 ("a/d", Vis::Pub, box_site("a::c", "d").as_str()),
             ],
@@ -1481,9 +1653,12 @@ fn member_visibility_fields_matrix() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert_eq!(
-        diags.iter().filter(|d| {
-            d.contains("`Box.v` — `v` is `pub(super)` — visible only in `a`'s subtree")
-        }).count(),
+        diags
+            .iter()
+            .filter(|d| {
+                d.contains("`Box.v` — `v` is `pub(super)` — visible only in `a`'s subtree")
+            })
+            .count(),
         3,
         "the read, the write, and the literal each diagnose: {diags:?}"
     );
@@ -1503,7 +1678,10 @@ fn member_visibility_fields_matrix() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert_eq!(
-        diags.iter().filter(|d| d.contains("`Box.v` — `v` is private to module `a`")).count(),
+        diags
+            .iter()
+            .filter(|d| d.contains("`Box.v` — `v` is private to module `a`"))
+            .count(),
         2,
         "the path-form read and write each diagnose: {diags:?}"
     );
@@ -1565,11 +1743,15 @@ fn the_todolist_shape_private_fields_are_errors() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`TodoList.tasks` — `tasks` is private to module `imp`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`TodoList.tasks` — `tasks` is private to module `imp`")),
         "{diags:?}"
     );
     assert!(
-        diags.iter().any(|d| d.contains("`TodoList._id` — `_id` is private to module `imp`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`TodoList._id` — `_id` is private to module `imp`")),
         "{diags:?}"
     );
 
@@ -1621,7 +1803,10 @@ fn the_todolist_shape_private_members_full_two_file_shape() {
         "`TodoList.tasks` — `tasks` is private to module `imp`",
         "`TodoList._id` — `_id` is private to module `imp`",
     ] {
-        assert!(diags.iter().any(|d| d.contains(want)), "missing `{want}`: {diags:?}");
+        assert!(
+            diags.iter().any(|d| d.contains(want)),
+            "missing `{want}`: {diags:?}"
+        );
     }
 
     // spelling `pub` on all four members turns the program green with
@@ -1649,8 +1834,16 @@ fn use_through_pub_mod_chain_two_levels() {
         "dep",
         "pub mod alpha;\n",
         vec![
-            ("alpha", Vis::Pub, "pub mod beta;\npub fn top() -> i32 { return 10; }\n"),
-            ("alpha/beta", Vis::Pub, "pub fn cell() -> i32 { return 2; }\n"),
+            (
+                "alpha",
+                Vis::Pub,
+                "pub mod beta;\npub fn top() -> i32 { return 10; }\n",
+            ),
+            (
+                "alpha/beta",
+                Vis::Pub,
+                "pub fn cell() -> i32 { return 2; }\n",
+            ),
         ],
     );
     let consumer = modpkg(
@@ -1670,7 +1863,11 @@ fn use_of_a_non_pub_mod_is_rejected() {
                 "pub mod alpha;\nmod secret;\n",
                 vec![
                     ("alpha", Vis::Pub, "pub fn top() -> i32 { return 10; }\n"),
-                    ("secret", Vis::Self_, "pub fn whisper() -> i32 { return 1; }\n"),
+                    (
+                        "secret",
+                        Vis::Self_,
+                        "pub fn whisper() -> i32 { return 1; }\n",
+                    ),
                 ],
             ),
             modpkg(
@@ -1682,9 +1879,8 @@ fn use_of_a_non_pub_mod_is_rejected() {
         "pkg",
     );
     assert!(
-        diags.iter().any(|d| d.contains(
-            "`secret` is not visible from outside the package (`mod`, not `pub mod`)"
-        )),
+        diags.iter().any(|d| d
+            .contains("`secret` is not visible from outside the package (`mod`, not `pub mod`)")),
         "{diags:?}"
     );
 }
@@ -1740,8 +1936,10 @@ fn a_package_head_in_a_position_names_the_use_fix() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("uses are the only cross-package door")
-            && d.contains("use dep::alpha::{ top }")),
+        diags
+            .iter()
+            .any(|d| d.contains("uses are the only cross-package door")
+                && d.contains("use dep::alpha::{ top }")),
         "{diags:?}"
     );
 }
@@ -1764,8 +1962,10 @@ fn use_bindings_are_per_file() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("`cell` is bound by a `use` in the root module")
-            && d.contains("write the `use` in this file")),
+        diags.iter().any(
+            |d| d.contains("`cell` is bound by a `use` in the root module")
+                && d.contains("write the `use` in this file")
+        ),
         "{diags:?}"
     );
 }
@@ -1805,8 +2005,10 @@ fn duplicate_names_across_modules_are_loud() {
     ];
     let diags = compile_with_diags(&pkgs, "pkg");
     assert!(
-        diags.iter().any(|d| d.contains("duplicate type name `Thing`")
-            && d.contains("already declared in module `a`")),
+        diags
+            .iter()
+            .any(|d| d.contains("duplicate type name `Thing`")
+                && d.contains("already declared in module `a`")),
         "{diags:?}"
     );
 }
@@ -1900,11 +2102,7 @@ fn one_file_two_heads_same_leaf_errors() {
             "pub fn dup(x: i32) -> i32 { return x + 1; }\n",
             vec![],
         ),
-        modpkg(
-            "pkgb",
-            "pub fn dup(s: str) -> str { return s; }\n",
-            vec![],
-        ),
+        modpkg("pkgb", "pub fn dup(s: str) -> str { return s; }\n", vec![]),
         modpkg(
             "app",
             "use pkga::{ dup };\nuse pkgb::{ dup };\nentry fn main() -> i32 { return dup(41); }\n",
@@ -1958,8 +2156,9 @@ fn one_file_same_head_same_leaf_twice_errors() {
     ];
     let diags = compile_with_diags(&self_dup, "app");
     assert!(
-        diags.iter().any(|d| d.contains("duplicate name `x`")
-            && d.contains("already binds it in this file")),
+        diags.iter().any(
+            |d| d.contains("duplicate name `x`") && d.contains("already binds it in this file")
+        ),
         "{diags:?}"
     );
     // the control: two leaves, one head, DIFFERENT names — fine
@@ -1998,7 +2197,8 @@ fn unimported_name_errors_with_hint() {
     ];
     let diags = compile_with_diags(&pkgs, "app");
     assert!(
-        diags.iter()
+        diags
+            .iter()
             .any(|d| d.contains("`dup` is not bound — no `use` statement names it")),
         "{diags:?}"
     );
@@ -2027,8 +2227,10 @@ fn other_file_binding_names_the_module() {
     ];
     let diags = compile_with_diags(&pkgs, "app");
     assert!(
-        diags.iter().any(|d| d.contains("`dup` is bound by a `use` in the root module")
-            && d.contains("write the `use` in this file")),
+        diags.iter().any(
+            |d| d.contains("`dup` is bound by a `use` in the root module")
+                && d.contains("write the `use` in this file")
+        ),
         "{diags:?}"
     );
 }
@@ -2105,8 +2307,9 @@ fn private_use_errors_at_use_line() {
     ];
     let diags = compile_with_diags(&pkgs, "app");
     assert!(
-        diags.iter().any(|d| d.contains("`helper` is not exported")
-            && d.contains("mark it `pub`")),
+        diags
+            .iter()
+            .any(|d| d.contains("`helper` is not exported") && d.contains("mark it `pub`")),
         "{diags:?}"
     );
     // the control: marking it `pub` binds and runs
@@ -2162,8 +2365,10 @@ fn async_use_errors_at_use_line() {
     ];
     let diags = compile_with_diags(&gap, "app");
     assert!(
-        diags.iter().any(|d| d.contains("`grab` is a generic `pub async fn`")
-            && d.contains("generic async fns do not cross package surfaces yet")),
+        diags
+            .iter()
+            .any(|d| d.contains("`grab` is a generic `pub async fn`")
+                && d.contains("generic async fns do not cross package surfaces yet")),
         "{diags:?}"
     );
     // and a `pub` fn the dep does carry imports and runs beside it
@@ -2285,11 +2490,20 @@ fn anchor_no_longer_feeds_the_child() {
     ];
     let mut run = rut_driver::RutRun::new();
     for p in &pkgs {
-        let heads: Vec<&str> =
-            pkgs.iter().map(|q| q.spec.as_str()).filter(|s| *s != p.spec).collect();
-        run = run.pkg(p.clone().manifest(rut_driver::Manifest::lib(&p.spec, &heads)));
+        let heads: Vec<&str> = pkgs
+            .iter()
+            .map(|q| q.spec.as_str())
+            .filter(|s| *s != p.spec)
+            .collect();
+        run = run.pkg(
+            p.clone()
+                .manifest(rut_driver::Manifest::lib(&p.spec, &heads)),
+        );
     }
-    let c = run.entrypoint("app").compile().expect("compile carries the diags");
+    let c = run
+        .entrypoint("app")
+        .compile()
+        .expect("compile carries the diags");
     let hit = c
         .graph
         .diags
@@ -2297,5 +2511,10 @@ fn anchor_no_longer_feeds_the_child() {
         .find(|d| d.msg.contains("`helper` is not exported") && d.msg.contains("mark it `pub`"))
         .expect("the child's use line errors");
     // the use statement's span: the CHILD file's, not the root's
-    assert_eq!(hit.file.as_deref(), Some("app/child"), "{:?}", c.graph.diags);
+    assert_eq!(
+        hit.file.as_deref(),
+        Some("app/child"),
+        "{:?}",
+        c.graph.diags
+    );
 }

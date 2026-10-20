@@ -10,7 +10,12 @@ impl Vm {
     /// own body. `inline(always)` guarantees the fold; `#[inline]` alone left
     /// the wider `Div`/`Mod` bodies as calls with a runtime `op` switch.
     #[inline(always)]
-    pub(super) fn arith_int<const OP: i32, const WRAP: bool>(&self, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
+    pub(super) fn arith_int<const OP: i32, const WRAP: bool>(
+        &self,
+        p: PrimTy,
+        x: Slot,
+        y: Slot,
+    ) -> Result<Slot, Trap> {
         use PrimTy::*;
         let a = unsafe { x.i };
         let b = unsafe { y.i };
@@ -23,13 +28,27 @@ impl Vm {
                 if b == 0 {
                     return Err(Trap::new(TrapKind::DivByZero, "division by zero"));
                 }
-                (if unsigned { (a as u64 / b as u64) as i64 } else { a / b }, false)
+                (
+                    if unsigned {
+                        (a as u64 / b as u64) as i64
+                    } else {
+                        a / b
+                    },
+                    false,
+                )
             }
             IOP_MOD => {
                 if b == 0 {
                     return Err(Trap::new(TrapKind::DivByZero, "mod by zero"));
                 }
-                (if unsigned { (a as u64 % b as u64) as i64 } else { a % b }, false)
+                (
+                    if unsigned {
+                        (a as u64 % b as u64) as i64
+                    } else {
+                        a % b
+                    },
+                    false,
+                )
             }
             _ => unreachable!("bad arith op code"),
         };
@@ -64,7 +83,11 @@ impl Vm {
     #[inline(always)]
     pub(super) fn neg_float(&self, p: PrimTy, x: Slot) -> Slot {
         let a = unsafe { x.f };
-        Slot::float(if p == PrimTy::F32 { (-(a as f32)) as f64 } else { -a })
+        Slot::float(if p == PrimTy::F32 {
+            (-(a as f32)) as f64
+        } else {
+            -a
+        })
     }
 
     /// Float compare, monomorphic per operation via const generics. Values
@@ -87,7 +110,12 @@ impl Vm {
     /// specialized `andi`/`shli`/... opcodes call it with a constant `OP`, so
     /// the operation `match` folds and each opcode gets its own body.
     #[inline(always)]
-    pub(super) fn bitop_int<const OP: i32>(&self, p: PrimTy, x: Slot, y: Slot) -> Result<Slot, Trap> {
+    pub(super) fn bitop_int<const OP: i32>(
+        &self,
+        p: PrimTy,
+        x: Slot,
+        y: Slot,
+    ) -> Result<Slot, Trap> {
         use PrimTy::*;
         let a = unsafe { x.i };
         let b = unsafe { y.i };
@@ -140,7 +168,11 @@ impl Vm {
                 let x = unsafe { v.i };
                 // an unsigned source carries bit 63 — the f64 must see the
                 // magnitude, not the two's-complement sign
-                let x = if fp.is_unsigned() { (x as u64) as f64 } else { x as f64 };
+                let x = if fp.is_unsigned() {
+                    (x as u64) as f64
+                } else {
+                    x as f64
+                };
                 if tp == F32 {
                     Slot::float(x as f32 as f64)
                 } else {
@@ -162,8 +194,18 @@ impl Vm {
                     U64 => (0.0, 18446744073709551616.0, 0, u64::MAX as i64),
                     I8 => (-128.0, 128.0, i8::MIN as i64, i8::MAX as i64),
                     I16 => (-32768.0, 32768.0, i16::MIN as i64, i16::MAX as i64),
-                    I32 => (-2147483648.0, 2147483648.0, i32::MIN as i64, i32::MAX as i64),
-                    I64 => (-9223372036854775808.0, 9223372036854775808.0, i64::MIN, i64::MAX),
+                    I32 => (
+                        -2147483648.0,
+                        2147483648.0,
+                        i32::MIN as i64,
+                        i32::MAX as i64,
+                    ),
+                    I64 => (
+                        -9223372036854775808.0,
+                        9223372036854775808.0,
+                        i64::MIN,
+                        i64::MAX,
+                    ),
                     // Char/Bool are not numeric cast targets; the compiler
                     // rejects them before this runs
                     _ => return Ok(Slot::int(0)),

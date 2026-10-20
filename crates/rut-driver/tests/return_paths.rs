@@ -16,7 +16,12 @@ use rut_vm::interp::Vm;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 #[allow(dead_code)]
@@ -24,7 +29,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -33,7 +41,11 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 fn one_diag(src: &str) -> String {
     let d = compiled("app", src);
     let msgs: Vec<String> = d.diags.iter().map(|d| d.msg.clone()).collect();
-    assert_eq!(msgs.len(), 1, "expected exactly one diagnostic, got {msgs:?}");
+    assert_eq!(
+        msgs.len(),
+        1,
+        "expected exactly one diagnostic, got {msgs:?}"
+    );
     msgs[0].clone()
 }
 

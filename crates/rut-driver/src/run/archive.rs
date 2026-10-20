@@ -47,7 +47,12 @@ impl Bundle {
     /// handle stays opaque; the public door is
     /// [`crate::pack::pack_inline_pkg`], the pack verb).
     pub(crate) fn from_source_member(name: &str, text: String) -> Bundle {
-        Bundle { inner: Inner::Source { name: name.to_string(), text } }
+        Bundle {
+            inner: Inner::Source {
+                name: name.to_string(),
+                text,
+            },
+        }
     }
 
     /// Parse + verify a `.rutbundle` once: the container's entry CRCs,
@@ -56,12 +61,15 @@ impl Bundle {
     /// is reusable across runs, and each offer only relocates + mounts.
     pub fn parse(bytes: &[u8]) -> Result<Bundle, RunError> {
         let origin = "bundle";
-        let container =
-            crate::bundle::Bundle::parse(bytes).map_err(|e| RunError::law(format!("{origin}: {e}")))?;
+        let container = crate::bundle::Bundle::parse(bytes)
+            .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
         let layout =
             Layout::parse(&container).map_err(|e| RunError::law(format!("{origin}: {e}")))?;
         Ok(Bundle {
-            inner: Inner::Archive { entries: container.entries().to_vec(), layout },
+            inner: Inner::Archive {
+                entries: container.entries().to_vec(),
+                layout,
+            },
         })
     }
 
@@ -79,7 +87,13 @@ impl Bundle {
         let Inner::Archive { layout, .. } = &mut self.inner else {
             return;
         };
-        let Layout::Compiled { manifest, root, groups, .. } = layout else {
+        let Layout::Compiled {
+            manifest,
+            root,
+            groups,
+            ..
+        } = layout
+        else {
             return; // a decl root carries no programs
         };
         // names first: linking and the VM both see the real thing
@@ -89,7 +103,8 @@ impl Bundle {
             .map(|(m, o)| (m.as_str(), o.as_str()))
             .collect();
         let remap = |prog: &mut rut_core::binary::Program| {
-            prog.interner.remap_tail(|s| restore.get(s).copied().unwrap_or(s).to_string());
+            prog.interner
+                .remap_tail(|s| restore.get(s).copied().unwrap_or(s).to_string());
         };
         remap(root);
         for (_, group) in groups.iter_mut() {
@@ -153,7 +168,10 @@ impl Bundle {
     pub fn is_host(&self) -> bool {
         matches!(
             &self.inner,
-            Inner::Archive { layout: Layout::Decl { .. }, .. }
+            Inner::Archive {
+                layout: Layout::Decl { .. },
+                ..
+            }
         )
     }
 
@@ -164,7 +182,9 @@ impl Bundle {
     pub fn carried_specs(&self) -> Vec<String> {
         match &self.inner {
             Inner::Archive { layout, .. } => match layout {
-                Layout::Compiled { manifest, groups, .. } => {
+                Layout::Compiled {
+                    manifest, groups, ..
+                } => {
                     let mut out = Vec::new();
                     if let Some(name) = &manifest.name {
                         out.push(name.clone());

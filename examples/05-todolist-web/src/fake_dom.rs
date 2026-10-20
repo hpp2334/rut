@@ -38,7 +38,13 @@ pub struct FakeNode {
 
 impl FakeNode {
     fn new(tag: String) -> FakeNode {
-        FakeNode { tag, attrs: HashMap::new(), text: None, children: Vec::new(), parent: None }
+        FakeNode {
+            tag,
+            attrs: HashMap::new(),
+            text: None,
+            children: Vec::new(),
+            parent: None,
+        }
     }
 
     fn id_attr(&self) -> Option<&str> {
@@ -54,7 +60,11 @@ struct TimerRec {
 
 impl Clone for TimerRec {
     fn clone(&self) -> TimerRec {
-        TimerRec { at: self.at, seq: self.seq, tag: self.tag.clone() }
+        TimerRec {
+            at: self.at,
+            seq: self.seq,
+            tag: self.tag.clone(),
+        }
     }
 }
 
@@ -87,7 +97,11 @@ impl FakeDom {
     /// contract; `ui_get` searches from the seeded roots.
     pub fn seed_page(&mut self, tag: &str, id: &str) -> El {
         let el = self.fresh_node(tag);
-        self.nodes.get_mut(&el.id).unwrap().attrs.insert("id".to_string(), id.to_string());
+        self.nodes
+            .get_mut(&el.id)
+            .unwrap()
+            .attrs
+            .insert("id".to_string(), id.to_string());
         self.roots.push(el.id);
         el
     }
@@ -96,7 +110,10 @@ impl FakeDom {
         let id = self.next_id;
         self.next_id += 1;
         self.nodes.insert(id, FakeNode::new(tag.to_string()));
-        El { id, tag: tag.to_string() }
+        El {
+            id,
+            tag: tag.to_string(),
+        }
     }
 
     // ---- the test drive (the twin's Closure stand-ins) ----
@@ -113,17 +130,22 @@ impl FakeDom {
     /// sink: the caller holds the state borrow, and the sink needs it.
     pub fn advance(&mut self, ms: i64) -> Vec<crate::state::Ev> {
         self.now += ms;
-        let mut due: Vec<TimerRec> =
-            self.timers.iter().filter(|t| t.at <= self.now).cloned().collect();
+        let mut due: Vec<TimerRec> = self
+            .timers
+            .iter()
+            .filter(|t| t.at <= self.now)
+            .cloned()
+            .collect();
         self.timers.retain(|t| t.at > self.now);
         due.sort_by_key(|t| (t.at, t.seq));
-        due.into_iter().map(|t| crate::state::Ev::Timer(t.tag)).collect()
+        due.into_iter()
+            .map(|t| crate::state::Ev::Timer(t.tag))
+            .collect()
     }
 
     /// `(deadline, tag)` rows still pending — test assertions only.
     pub fn pending_timers(&self) -> Vec<(i64, String)> {
-        let mut v: Vec<(i64, String)> =
-            self.timers.iter().map(|t| (t.at, t.tag.clone())).collect();
+        let mut v: Vec<(i64, String)> = self.timers.iter().map(|t| (t.at, t.tag.clone())).collect();
         v.sort();
         v
     }
@@ -137,7 +159,8 @@ impl FakeDom {
             Ok(None) => Err(rut_vm::Trap::new(rut_vm::TrapKind::Invalid, "no such node")),
             Err(e) => Err(e),
         }
-    }    /// The element's text content, through a real rut-held handle.
+    }
+    /// The element's text content, through a real rut-held handle.
     pub fn text_of(&self, el: &OpaqueRef) -> Result<String, Trap> {
         self.view(el, |n| n.text.clone().unwrap_or_default())
     }
@@ -216,7 +239,11 @@ impl FakeDom {
             tag: n.tag.clone(),
             text: n.text.clone(),
             attrs: n.attrs.clone(),
-            child_tags: n.children.iter().filter_map(|c| self.nodes.get(c).map(|c| c.tag.clone())).collect(),
+            child_tags: n
+                .children
+                .iter()
+                .filter_map(|c| self.nodes.get(c).map(|c| c.tag.clone()))
+                .collect(),
             child_texts: n
                 .children
                 .iter()
@@ -273,7 +300,10 @@ impl DomBackend for FakeDom {
         while let Some(id_num) = stack.pop() {
             let node = self.nodes.get(&id_num).ok_or("node table drift")?;
             if node.id_attr() == Some(id) {
-                return Ok(El { id: id_num, tag: node.tag.clone() });
+                return Ok(El {
+                    id: id_num,
+                    tag: node.tag.clone(),
+                });
             }
             stack.extend(node.children.iter().rev().copied());
         }
@@ -282,7 +312,9 @@ impl DomBackend for FakeDom {
 
     fn create(&mut self, tag: &str) -> Result<El, String> {
         if !valid_tag(tag) {
-            return Err(format!("InvalidCharacterError: '{tag}' is not a valid element name"));
+            return Err(format!(
+                "InvalidCharacterError: '{tag}' is not a valid element name"
+            ));
         }
         Ok(self.fresh_node(tag))
     }
@@ -311,7 +343,7 @@ impl DomBackend for FakeDom {
     fn append(&mut self, parent: &El, child: &El) -> Result<(), String> {
         if parent.id == child.id {
             return Err(
-                "HierarchyRequestError: the node to be inserted is the parent itself".to_string()
+                "HierarchyRequestError: the node to be inserted is the parent itself".to_string(),
             );
         }
         if is_ancestor(&self.nodes, child.id, parent.id) {
@@ -326,7 +358,10 @@ impl DomBackend for FakeDom {
                 old_node.children.retain(|&c| c != child.id);
             }
         }
-        self.nodes.get_mut(&child.id).ok_or("node table drift")?.parent = Some(parent.id);
+        self.nodes
+            .get_mut(&child.id)
+            .ok_or("node table drift")?
+            .parent = Some(parent.id);
         self.nodes
             .get_mut(&parent.id)
             .ok_or("node table drift")?
@@ -348,13 +383,22 @@ impl DomBackend for FakeDom {
     }
 
     fn clear(&mut self, el: &El) -> Result<(), String> {
-        let children = self.nodes.get(&el.id).ok_or("node table drift")?.children.clone();
+        let children = self
+            .nodes
+            .get(&el.id)
+            .ok_or("node table drift")?
+            .children
+            .clone();
         for c in children {
             if let Some(node) = self.nodes.get_mut(&c) {
                 node.parent = None;
             }
         }
-        self.nodes.get_mut(&el.id).ok_or("node table drift")?.children.clear();
+        self.nodes
+            .get_mut(&el.id)
+            .ok_or("node table drift")?
+            .children
+            .clear();
         Ok(())
     }
 
@@ -395,7 +439,11 @@ impl DomBackend for FakeDom {
         // setTimeout clamps negatives to 0 — the same law here
         let seq = self.next_seq;
         self.next_seq += 1;
-        self.timers.push(TimerRec { at: self.now + ms.max(0), seq, tag: tag.to_string() });
+        self.timers.push(TimerRec {
+            at: self.now + ms.max(0),
+            seq,
+            tag: tag.to_string(),
+        });
         Ok(())
     }
 }

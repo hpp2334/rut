@@ -45,9 +45,9 @@
 //! module-private and each layer keeps its privates private for real
 //! in one file.
 
-use std::collections::BTreeMap;
 use rut_core::binary::Program;
-use rut_driver::{Compiled, Walk, Mounted, RutRun};
+use rut_driver::{Compiled, Mounted, RutRun, Walk};
+use std::collections::BTreeMap;
 
 // ---- the packages, embedded verbatim --------------------------------
 // The mirror reads the SAME files the manifest names. wasm32 has no
@@ -160,7 +160,11 @@ pub fn ui_pkg() -> Mounted {
     ]
     .into();
     let base = Mounted::source("ui", UI_ROOT).manifest(ui_manifest());
-    Mounted { spec: "ui".into(), mods, ..base }
+    Mounted {
+        spec: "ui".into(),
+        mods,
+        ..base
+    }
 }
 
 /// biz's module tree, offered whole: the root module (the law header +
@@ -178,14 +182,20 @@ pub fn biz_pkg() -> Mounted {
     ]
     .into();
     let base = Mounted::source("app", BIZ_ROOT).manifest(biz_manifest());
-    Mounted { spec: "app".into(), mods, ..base }
+    Mounted {
+        spec: "app".into(),
+        mods,
+        ..base
+    }
 }
 
 /// The rut/ project root — the manifest lane's walk point. Native
 /// only: the wasm lane has no filesystem and uses the mirror.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn project_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rut").join("biz")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("rut")
+        .join("biz")
 }
 
 /// A probe's module dir — `tests/<probe>/`. Each probe under tests/ is
@@ -193,7 +203,9 @@ pub fn project_dir() -> std::path::PathBuf {
 /// for the test suites exactly like `rut/` is for the app.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn probe_dir(probe: &str) -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(probe)
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join(probe)
 }
 
 /// The `web` host surface as a pkg — the embedder half both lanes
@@ -204,9 +216,11 @@ pub fn probe_dir(probe: &str) -> std::path::PathBuf {
 /// is its only declaration spelling (it `use`s nothing — the row set
 /// is empty).
 pub fn web_pkg() -> Result<Mounted, String> {
-    Ok(rut_driver::lower_decl_module(WEB_D_RUT, &BTreeMap::new(), "web.d.rut")?
-        .named("web")
-        .manifest(rut_driver::Manifest::lib("web", &[])))
+    Ok(
+        rut_driver::lower_decl_module(WEB_D_RUT, &BTreeMap::new(), "web.d.rut")?
+            .named("web")
+            .manifest(rut_driver::Manifest::lib("web", &[])),
+    )
 }
 
 /// THE MIRROR — every package `rut/biz/rut.jsonc` names, offered by
@@ -233,7 +247,9 @@ pub fn mirror_pkgs() -> Result<Vec<Mounted>, String> {
     let nmap_host_spec = rut_driver::bundle::identity::identity("nmap_host", &fp16);
     let mut pkgs = vec![web_pkg()?];
     for bytes in [NMAP_HOST_BUNDLE, POUCH_BUNDLE, NMAPSET_BUNDLE] {
-        let mut mounted = rut_driver::Mounted::from_bundle(bytes).map_err(|e| e.to_string())?.pkgs;
+        let mut mounted = rut_driver::Mounted::from_bundle(bytes)
+            .map_err(|e| e.to_string())?
+            .pkgs;
         for p in mounted.iter_mut() {
             if rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host" {
                 p.spec = nmap_host_spec.clone();
@@ -269,8 +285,8 @@ pub fn mirror_run() -> Result<RutRun, String> {
 fn std_remote() -> rut_native::HttpRemote {
     static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     rut_native::HttpRemote::at(ROOT.get_or_init(|| {
-        let root = std::env::temp_dir()
-            .join(format!("rut-05-todolist-web-cache-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("rut-05-todolist-web-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         // every manifest this example loads with deps — the app's two
         // packages and the two probes that name the std closure
@@ -285,8 +301,12 @@ fn std_remote() -> rut_native::HttpRemote {
             "tests/store_probe/rut.jsonc",
             "tests/t1_harness/rut.jsonc",
         ] {
-            let Ok(text) = std::fs::read_to_string(base.join(rel)) else { continue };
-            let Ok(manifest) = rut_driver::bundle::parse_manifest(&text) else { continue };
+            let Ok(text) = std::fs::read_to_string(base.join(rel)) else {
+                continue;
+            };
+            let Ok(manifest) = rut_driver::bundle::parse_manifest(&text) else {
+                continue;
+            };
             for desc in manifest.deps.values() {
                 if let Some(url) = desc.get("url") {
                     urls.insert(url.clone());
@@ -368,9 +388,11 @@ pub fn offer(mut run: RutRun, loaded: &Walk) -> RutRun {
         Ok(w) => run.pkg(w),
         Err(_) => run, // unreachable: the surface is include_str!'d
     };
-    if loaded.pkgs.iter().any(|p| {
-        rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host"
-    }) {
+    if loaded
+        .pkgs
+        .iter()
+        .any(|p| rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host")
+    {
         run = run.pkg(rut_std::nmap::pkg());
     }
     run
@@ -421,7 +443,13 @@ fn checked(compiled: Compiled) -> Result<Compiled, String> {
     if !compiled.graph.diags.is_empty() {
         return Err(format!(
             "the app does not compile: {}",
-            compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+            compiled
+                .graph
+                .diags
+                .iter()
+                .map(|d| d.msg.clone())
+                .collect::<Vec<_>>()
+                .join("; ")
         ));
     }
     if compiled.graph.program.is_none() {

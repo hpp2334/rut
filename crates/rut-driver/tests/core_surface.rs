@@ -13,8 +13,6 @@ use rut_parser::{parse, Mode};
 
 const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 
-
-
 /// The names core.d.rut declares: (builtin fns, builtin types, builtin
 /// traits, plain traits) + the `builtin impl` method table
 /// (prim → method names). The fn/type/trait name lists carry each
@@ -26,7 +24,12 @@ const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -52,7 +55,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -72,7 +78,12 @@ fn declared_names() -> (
     let mut builtin_impls = Vec::new();
     for it in ast.module_items(ast.root).to_vec() {
         match ast.item(it) {
-            ItemKind::SurfaceFn { name, linkage, generics, .. } => {
+            ItemKind::SurfaceFn {
+                name,
+                linkage,
+                generics,
+                ..
+            } => {
                 assert!(
                     matches!(*linkage, Linkage::Builtin { .. }),
                     "the prelude's fns are all engine-lowered"
@@ -126,10 +137,16 @@ fn core_decl_matches_the_compilers_surface() {
     // types — name AND ambient bit (the decl spelling vs the row)
     let mut decl_types = builtin_types;
     decl_types.sort();
-    let mut surf_types: Vec<(String, bool)> =
-        surface.native_types.iter().map(|(n, _, a)| (surface.names.name(*n).to_string(), *a)).collect();
+    let mut surf_types: Vec<(String, bool)> = surface
+        .native_types
+        .iter()
+        .map(|(n, _, a)| (surface.names.name(*n).to_string(), *a))
+        .collect();
     surf_types.sort();
-    assert_eq!(decl_types, surf_types, "core.d.rut builtin decls == Surface::core native_types");
+    assert_eq!(
+        decl_types, surf_types,
+        "core.d.rut builtin decls == Surface::core native_types"
+    );
 
     // the trait ERA is gone (the structural-interfaces fork): the decl
     // carries no trait rows, the surface registers no native traits
@@ -152,10 +169,16 @@ fn core_decl_matches_the_compilers_surface() {
     // bare spelling is an ordinary unknown name)
     let mut decl_fns = builtin_fns;
     decl_fns.sort();
-    let mut surf_fns: Vec<(String, bool)> =
-        surface.native_fns.iter().map(|(n, a)| (surface.names.name(*n).to_string(), *a)).collect();
+    let mut surf_fns: Vec<(String, bool)> = surface
+        .native_fns
+        .iter()
+        .map(|(n, a)| (surface.names.name(*n).to_string(), *a))
+        .collect();
     surf_fns.sort();
-    assert_eq!(decl_fns, surf_fns, "core.d.rut builtin fns == Surface::core native_fns");
+    assert_eq!(
+        decl_fns, surf_fns,
+        "core.d.rut builtin fns == Surface::core native_fns"
+    );
 
     // builtin impls: the decl's `builtin impl <prim>` blocks are exactly
     // the numeric-method table — same prims, same method names per prim
@@ -163,8 +186,14 @@ fn core_decl_matches_the_compilers_surface() {
     let prim_name = |t: rut_core::types::TypeId| -> String {
         use rut_core::types::*;
         match t {
-            TY_I8 => "i8", TY_I16 => "i16", TY_I32 => "i32", TY_I64 => "i64",
-            TY_U8 => "u8", TY_U16 => "u16", TY_U32 => "u32", TY_U64 => "u64",
+            TY_I8 => "i8",
+            TY_I16 => "i16",
+            TY_I32 => "i32",
+            TY_I64 => "i64",
+            TY_U8 => "u8",
+            TY_U16 => "u16",
+            TY_U32 => "u32",
+            TY_U64 => "u64",
             _ => panic!("non-int prim in native_impls: {t:?}"),
         }
         .to_string()
@@ -194,8 +223,11 @@ fn core_decl_matches_the_compilers_surface() {
     );
 
     // consts: `NAN` is core's one const — f64, name-explicit
-    let surf_consts: Vec<String> =
-        surface.consts.iter().map(|c| surface.names.name(c.name).to_string()).collect();
+    let surf_consts: Vec<String> = surface
+        .consts
+        .iter()
+        .map(|c| surface.names.name(c.name).to_string())
+        .collect();
     assert_eq!(surf_consts, vec!["NAN"], "core's consts are exactly [NAN]");
     assert_eq!(surface.consts[0].bits, f64::NAN.to_bits());
 }
@@ -210,20 +242,28 @@ fn retired_names_are_ordinary_unknown_names() {
     // the validated-must-bind law's (plan10 phase 2): a leaf that binds
     // nothing errors AT THE USE LINE — the ordinary nothing-binds
     // message, no retired-name special case anywhere.
-    let out = compiled("app_main", "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n".into());
+    let out = compiled(
+        "app_main",
+        "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n".into(),
+    );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("unknown name `Option`")),
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("unknown name `Option`")),
         "diags: {:?}",
         out.diags
     );
 
-    let out = compiled("app_main", "use core::{ Option };\n\
+    let out = compiled(
+        "app_main",
+        "use core::{ Option };\n\
                  entry fn main() -> i32 { let x = Option.some(1); return 0; }\n"
-                    .into());
+            .into(),
+    );
     assert!(
-        out.diags
-            .iter()
-            .any(|d| d.msg.contains("`Option` is not part of `core`'s exported surface")),
+        out.diags.iter().any(|d| d
+            .msg
+            .contains("`Option` is not part of `core`'s exported surface")),
         "diags: {:?}",
         out.diags
     );
@@ -249,8 +289,13 @@ fn vm_for(src: &str) -> rut_vm::interp::Vm {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm")
+    rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm")
 }
 
 #[test]
@@ -284,11 +329,16 @@ fn own_assert_helper_still_resolves() {
 fn unresolved_assert_is_an_ordinary_unknown_fn() {
     let out = compile_with_core("entry fn main() -> i32 { assert(1 == 1, \"fine\"); return 0; }\n");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("unknown function `assert`")),
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("unknown function `assert`")),
         "the bare assert miss carries the plain unknown-fn diag: {:?}",
         out.diags
     );
-    assert!(out.program.is_none(), "the unresolved spelling must not compile");
+    assert!(
+        out.program.is_none(),
+        "the unresolved spelling must not compile"
+    );
 }
 
 /// The numeric-conversion CALL spellings (`i32(x)` …) retired with the
@@ -299,11 +349,16 @@ fn unresolved_assert_is_an_ordinary_unknown_fn() {
 fn numeric_conversion_call_is_an_ordinary_unknown_fn() {
     let out = compile_with_core("entry fn main() -> i32 { return i32(5); }\n");
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("unknown function `i32`")),
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("unknown function `i32`")),
         "i32(x) falls to the plain unknown-fn diag: {:?}",
         out.diags
     );
-    assert!(out.program.is_none(), "the unresolved spelling must not compile");
+    assert!(
+        out.program.is_none(),
+        "the unresolved spelling must not compile"
+    );
 }
 
 /// Twin of the assert pin: a module's OWN
@@ -318,7 +373,11 @@ fn own_strbuf_named_type_still_resolves() {
          \x20   pub fn len(self) -> i32 { return self.n; }\n}\n\
          entry fn main() -> i32 { let b = StrBuf::new(); b.push(4); return b.len(); }\n",
     );
-    assert!(out.diags.is_empty(), "{:?}", out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>());
+    assert!(
+        out.diags.is_empty(),
+        "{:?}",
+        out.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
+    );
     let flat = rut_core::link::flatten(out.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
@@ -326,8 +385,13 @@ fn own_strbuf_named_type_still_resolves() {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 4);
 }
 
@@ -343,14 +407,26 @@ fn own_strbuf_named_type_still_resolves() {
 fn engine_trait_rows_are_import_gated_everything_else_ambient() {
     let surface = rut_core::binary::Surface::core();
     for (name, _, ambient) in &surface.native_types {
-        let expected = matches!(surface.names.name(*name), "Weak" | "DisposalContext" | "Future" | "RunContext");
-        assert_eq!(!*ambient, expected, "native type `{}`: ambient bit", surface.names.name(*name));
+        let expected = matches!(
+            surface.names.name(*name),
+            "Weak" | "DisposalContext" | "Future" | "RunContext"
+        );
+        assert_eq!(
+            !*ambient,
+            expected,
+            "native type `{}`: ambient bit",
+            surface.names.name(*name)
+        );
     }
     assert!(
         surface.ifaces.is_empty(),
         "the prelude crosses no interfaces (the row kind is a library concern)"
     );
     for (name, ambient) in &surface.native_fns {
-        assert!(*ambient, "native fn `{}` stays ambient", surface.names.name(*name));
+        assert!(
+            *ambient,
+            "native fn `{}` stays ambient",
+            surface.names.name(*name)
+        );
     }
 }

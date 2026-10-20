@@ -14,14 +14,16 @@ use std::path::{Path, PathBuf};
 use rut_driver::PackOpts;
 use rut_native::pack_dir_opts;
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -47,7 +49,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -85,7 +90,11 @@ fn fc_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "mod.rut", r#", "deps": {"util": {"path": "../util"}}"#,)
+        &bundle_manifest(
+            "app",
+            "mod.rut",
+            r#", "deps": {"util": {"path": "../util"}}"#,
+        ),
     );
     write(
         &app,
@@ -149,7 +158,7 @@ fn mixed_world(tag: &str) -> PathBuf {
         &bundle_manifest(
             "app",
             "mod.rut",
-            r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#
+            r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#,
         ),
     );
     write(
@@ -162,14 +171,22 @@ fn mixed_world(tag: &str) -> PathBuf {
     );
     let util = root.join("util");
     write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
-    write(&util, "mod.rut", "pub fn twice(v: i64) -> i64 { return v * 2; }\n");
+    write(
+        &util,
+        "mod.rut",
+        "pub fn twice(v: i64) -> i64 { return v * 2; }\n",
+    );
     let boxy = root.join("boxy");
     write(
         &boxy,
         "rut.jsonc",
         &format!(
             "{}",
-            manifest("boxy", "mod.rut", r#", "deps": {"util": {"path": "../util"}}"#)
+            manifest(
+                "boxy",
+                "mod.rut",
+                r#", "deps": {"util": {"path": "../util"}}"#
+            )
         ),
     );
     write(
@@ -183,11 +200,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     root
 }
 
-fn load_and_run<R: rut_vm::interp::Ret>(
-    bytes: &[u8],
-    entry: &str,
-    symtab: Option<&[u8]>,
-) -> R {
+fn load_and_run<R: rut_vm::interp::Ret>(bytes: &[u8], entry: &str, symtab: Option<&[u8]>) -> R {
     // the handle lane: decode + verify ONCE, restore on the handle
     // (before any offer), then offer the SAME archive
     let mut archive = rut_driver::Bundle::parse(bytes).expect("decode");
@@ -204,10 +217,7 @@ fn load_and_run<R: rut_vm::interp::Ret>(
         }
         archive.restore_symbols(&map);
     }
-    let root = archive
-        .walk()
-        .expect("walk")
-        .root;
+    let root = archive.walk().expect("walk").root;
     let g = rut_driver::RutRun::new()
         .pkg(&archive)
         .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -222,8 +232,13 @@ fn load_and_run<R: rut_vm::interp::Ret>(
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
 
@@ -237,8 +252,11 @@ fn stripped_bundle_loads_verifies_and_runs_like_the_plain_pack() {
     let symtab = symtab.expect("--strip returns the sidecar");
     assert!(!symtab.is_empty());
     // the sidecar is the PRIVATE half — never an entry inside the bundle
-    let names: Vec<String> =
-        rut_driver::bundle::parse_bundle(&stripped).unwrap().into_iter().map(|(n, _)| n).collect();
+    let names: Vec<String> = rut_driver::bundle::parse_bundle(&stripped)
+        .unwrap()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
     assert!(!names.iter().any(|n| n.contains("rutsym")), "{names:?}");
 
     let got: i64 = load_and_run(&plain, "go", None);
@@ -264,7 +282,10 @@ fn sidecar_restores_names_and_positions_for_the_trace() {
     let full_lines: Vec<&str> = full.lines().collect();
     assert_eq!(full_lines.len(), 2, "boom + probe, innermost first: {full}");
     assert!(full_lines[0].starts_with("at boom ("), "{full}");
-    assert!(full_lines[0].contains(":") && !full_lines[0].contains("@ pc"), "{full}");
+    assert!(
+        full_lines[0].contains(":") && !full_lines[0].contains("@ pc"),
+        "{full}"
+    );
 
     // the mangled pack: %N names, pc-only degradation
     let mangled: String = load_and_run(&stripped, "probe", None);
@@ -300,7 +321,9 @@ fn mixed_closure_with_a_source_group_refuses_strip() {
     let dir = root.join("app");
     // without --strip the mixed world packs as always
     pack_dir_opts(&dir, &PackOpts::default()).expect("plain pack rides mixed");
-    let err = pack_dir_opts(&dir, &PackOpts { strip: true }).unwrap_err().to_string();
+    let err = pack_dir_opts(&dir, &PackOpts { strip: true })
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("boxy"), "names the source group: {err}");
     assert!(err.contains("util"), "names the compiled dep: {err}");
     assert!(err.contains("fully-compiled"), "says why: {err}");
@@ -317,11 +340,7 @@ fn strip_serves_a_generic_owning_closure() {
     // from the stripped binary's templates at link
     let root = scratch("stripgen");
     let lib = root.join("pairz");
-    write(
-        &lib,
-        "rut.jsonc",
-        &bundle_manifest("pairz", "mod.rut", ""),
-    );
+    write(&lib, "rut.jsonc", &bundle_manifest("pairz", "mod.rut", ""));
     write(
         &lib,
         "mod.rut",
@@ -334,7 +353,11 @@ fn strip_serves_a_generic_owning_closure() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest(
+            "app",
+            "mod.rut",
+            r#", "deps": {"pairz": {"path": "../pairz"}}"#,
+        ),
     );
     write(
         &app,
@@ -361,7 +384,9 @@ fn strip_serves_a_generic_owning_closure() {
     );
     // and a consumer of the stripped bundle still materializes the
     // consumer-spelled shape from the templates
-    let mut world = rut_driver::Mounted::from_bundle(&bytes).expect("mount the stripped bundle").pkgs;
+    let mut world = rut_driver::Mounted::from_bundle(&bytes)
+        .expect("mount the stripped bundle")
+        .pkgs;
     world.push(
         rut_driver::Mounted::source(
             "app2",
@@ -373,14 +398,25 @@ fn strip_serves_a_generic_owning_closure() {
         )
         .manifest(rut_driver::Manifest::lib("app2", &["pairz"])),
     );
-    let c = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app2")
-        .compile()
-        .expect("the consumer of the stripped generic bundle compiles");
+    let c = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app2")
+    .compile()
+    .expect("the consumer of the stripped generic bundle compiles");
     assert!(
         c.graph.diags.is_empty(),
         "diags:\n{}",
-        c.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        c.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let flat = rut_core::link::flatten(c.graph.program.expect("linked"));
     rut_vm::verify::verify(&flat).expect("verify");

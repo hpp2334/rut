@@ -35,7 +35,10 @@ pub struct NodeHandle<T> {
 
 impl<T> NodeHandle<T> {
     pub fn new(id: NodeId) -> Self {
-        NodeHandle { id, _ty: PhantomData }
+        NodeHandle {
+            id,
+            _ty: PhantomData,
+        }
     }
     pub fn id(&self) -> NodeId {
         self.id
@@ -79,7 +82,7 @@ pub struct AnyPat;
 pub struct AnyTy;
 pub struct AnyParam; // Param | SelfParam
 pub struct AnyArm;
-pub struct BlockNode;      // fn/method/loop/if-then bodies, block arms
+pub struct BlockNode; // fn/method/loop/if-then bodies, block arms
 pub struct FieldDeclNode;
 pub struct MethodDeclNode;
 pub struct FnNode;
@@ -320,13 +323,18 @@ pub struct AliasData {
 
 #[derive(Clone, Debug)]
 pub enum ItemKind {
-    Module { items: Vec<NodeHandle<AnyItem>> },
+    Module {
+        items: Vec<NodeHandle<AnyItem>>,
+    },
     /// `pub? mod NAME;` — a file-module DECLARATION: the body lives in
     /// the sibling `NAME/mod.rut` (the loader mounts it — declarations
     /// are the graph). In implementation files the inline
     /// `mod NAME { .. }` block form is gone — one mechanism, files
     /// only.
-    ModDecl { vis: Vis, name: IdentId },
+    ModDecl {
+        vis: Vis,
+        name: IdentId,
+    },
     /// `pub? mod NAME { <declarations> }` — the INLINE module form,
     /// declaration files only (wire v12): a `.d.rut` nests its
     /// declarations in the grammar — structure lives in the grammar,
@@ -335,18 +343,34 @@ pub enum ItemKind {
     /// no bodies (a `.d.rut` is body-free by law; the parser refuses
     /// them in Decl mode as always). The consolidated declaration
     /// entry a bundle group rides parses to exactly this shape.
-    ModInline { vis: Vis, name: IdentId, items: Vec<NodeHandle<AnyItem>> },
+    ModInline {
+        vis: Vis,
+        name: IdentId,
+        items: Vec<NodeHandle<AnyItem>>,
+    },
     /// `use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — `path[0]` is
     /// the package, the middle segments name modules, and the leaf
     /// names are the imports. The flat forms (`use pkg::{A, B};` /
     /// `use pkg::A;`) degenerate to `path = [pkg]`.
-    Use { path: Vec<IdentId>, names: Vec<IdentId> },
+    Use {
+        path: Vec<IdentId>,
+        names: Vec<IdentId>,
+    },
     /// `type X = A;` / `type X = A | B;` — transparent alias / bound-only
     /// union alias; aliases are non-generic (the row form is
     /// repealed — one name, one decl)
     Alias(AliasData),
-    ModuleLet { vis: Vis, name: IdentId, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
-    Enum { vis: Vis, name: IdentId, members: Vec<IdentId> },
+    ModuleLet {
+        vis: Vis,
+        name: IdentId,
+        ty: Option<NodeHandle<AnyTy>>,
+        init: NodeHandle<AnyExpr>,
+    },
+    Enum {
+        vis: Vis,
+        name: IdentId,
+        members: Vec<IdentId>,
+    },
     Struct {
         vis: Vis,
         name: IdentId,
@@ -540,15 +564,45 @@ pub enum ElseBranch {
 
 #[derive(Clone, Debug)]
 pub enum StmtKind {
-    LetStmt { is_mut: bool, name: IdentId, destructure: Option<Vec<IdentId>>, ty: Option<NodeHandle<AnyTy>>, init: NodeHandle<AnyExpr> },
-    If { cond: NodeHandle<AnyExpr>, then: NodeHandle<BlockNode>, els: Option<ElseBranch> },
-    While { cond: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode> },
-    ForOf { var: IdentId, is_mut: bool, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode> },
-    ForC { var: IdentId, is_mut: bool, init: NodeHandle<AnyExpr>, cond: NodeHandle<AnyExpr>, update: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode> },
-    Return { value: Option<NodeHandle<AnyExpr>> },
+    LetStmt {
+        is_mut: bool,
+        name: IdentId,
+        destructure: Option<Vec<IdentId>>,
+        ty: Option<NodeHandle<AnyTy>>,
+        init: NodeHandle<AnyExpr>,
+    },
+    If {
+        cond: NodeHandle<AnyExpr>,
+        then: NodeHandle<BlockNode>,
+        els: Option<ElseBranch>,
+    },
+    While {
+        cond: NodeHandle<AnyExpr>,
+        body: NodeHandle<BlockNode>,
+    },
+    ForOf {
+        var: IdentId,
+        is_mut: bool,
+        iter: NodeHandle<AnyExpr>,
+        body: NodeHandle<BlockNode>,
+    },
+    ForC {
+        var: IdentId,
+        is_mut: bool,
+        init: NodeHandle<AnyExpr>,
+        cond: NodeHandle<AnyExpr>,
+        update: NodeHandle<AnyExpr>,
+        body: NodeHandle<BlockNode>,
+    },
+    Return {
+        value: Option<NodeHandle<AnyExpr>>,
+    },
     Break,
     Continue,
-    WhenStmt { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
+    WhenStmt {
+        scrut: NodeHandle<AnyExpr>,
+        arms: Vec<NodeHandle<AnyArm>>,
+    },
     ExprStmt(NodeHandle<AnyExpr>),
 }
 
@@ -556,7 +610,10 @@ pub enum StmtKind {
 
 #[derive(Clone, Debug)]
 pub enum ArmKind {
-    WhenArm { pats: Vec<NodeHandle<AnyPat>>, body: NodeHandle<AnyExpr> },
+    WhenArm {
+        pats: Vec<NodeHandle<AnyPat>>,
+        body: NodeHandle<AnyExpr>,
+    },
 }
 
 // ---- patterns (constructor/binding forms per corpus) ----
@@ -566,10 +623,15 @@ pub enum PatKind {
     /// literal pattern (int/float/bool/char/string) — expr node, literal only
     PatLit(NodeHandle<AnyExpr>),
     /// enum-member path: `Color.Red`
-    PatPath { segs: Vec<PathSeg> },
+    PatPath {
+        segs: Vec<PathSeg>,
+    },
     /// constructor pattern: `Ok(cfg)`, `Option<T>.Some(x)`, `Some(_)`,
     /// payloadless `Option<T>.None`; args are binding names (`None` = `_`)
-    PatCtor { segs: Vec<PathSeg>, args: Vec<Option<IdentId>> },
+    PatCtor {
+        segs: Vec<PathSeg>,
+        args: Vec<Option<IdentId>>,
+    },
     PatWild,
     PatElse,
 }
@@ -583,7 +645,10 @@ pub enum TypeKind {
     /// the bare name spells it
     TyPath { segs: Vec<PathSeg> },
     /// fn type: `fn(Store, P) -> R` — params are bare types
-    TyFn { params: Vec<NodeHandle<AnyTy>>, ret: NodeHandle<AnyTy> },
+    TyFn {
+        params: Vec<NodeHandle<AnyTy>>,
+        ret: NodeHandle<AnyTy>,
+    },
     /// nullable type `?T` — the prefix `?` binds
     /// the following type term: `[?T]` is an array of nullables,
     /// `?[T]` a nullable array, `??T` chains. The postfix `T?` spelling
@@ -611,40 +676,97 @@ pub enum ExprKind {
     /// value; a trailing `if` statement with an `else` reads as the tail
     /// too (statement-if in tail position). `None` ⇒ the block's value
     /// is `nil`.
-    Block { stmts: Vec<NodeHandle<AnyStmt>>, tail: Option<NodeHandle<AnyExpr>> },
+    Block {
+        stmts: Vec<NodeHandle<AnyStmt>>,
+        tail: Option<NodeHandle<AnyExpr>>,
+    },
     Lit(Lit),
     /// dotted path, possibly with generic args on any segment:
     /// `primes`, `Color.Red`, `Vec.from`, `MyMap<K, V>.new`, `Self`
-    Path { segs: Vec<PathSeg> },
-    Call { callee: NodeHandle<AnyExpr>, args: Vec<NodeHandle<AnyExpr>> },
-    Method { recv: NodeHandle<AnyExpr>, name: IdentId, generics: Vec<NodeHandle<AnyTy>>, args: Vec<NodeHandle<AnyExpr>> },
-    Field { recv: NodeHandle<AnyExpr>, name: IdentId },
-    Index { recv: NodeHandle<AnyExpr>, idx: NodeHandle<AnyExpr> },
-    Unary { op: UnOp, expr: NodeHandle<AnyExpr> },
-    Binary { op: BinOp, lhs: NodeHandle<AnyExpr>, rhs: NodeHandle<AnyExpr> },
-    Assign { op: Option<BinOp>, target: NodeHandle<AnyExpr>, value: NodeHandle<AnyExpr> },
-    Lambda { params: Vec<NodeHandle<AnyParam>>, ret: Option<NodeHandle<AnyTy>>, body: NodeHandle<AnyExpr> },
-    Try { expr: NodeHandle<AnyExpr> }, // postfix `?`
-    FStr { parts: Vec<FPartAst> },
+    Path {
+        segs: Vec<PathSeg>,
+    },
+    Call {
+        callee: NodeHandle<AnyExpr>,
+        args: Vec<NodeHandle<AnyExpr>>,
+    },
+    Method {
+        recv: NodeHandle<AnyExpr>,
+        name: IdentId,
+        generics: Vec<NodeHandle<AnyTy>>,
+        args: Vec<NodeHandle<AnyExpr>>,
+    },
+    Field {
+        recv: NodeHandle<AnyExpr>,
+        name: IdentId,
+    },
+    Index {
+        recv: NodeHandle<AnyExpr>,
+        idx: NodeHandle<AnyExpr>,
+    },
+    Unary {
+        op: UnOp,
+        expr: NodeHandle<AnyExpr>,
+    },
+    Binary {
+        op: BinOp,
+        lhs: NodeHandle<AnyExpr>,
+        rhs: NodeHandle<AnyExpr>,
+    },
+    Assign {
+        op: Option<BinOp>,
+        target: NodeHandle<AnyExpr>,
+        value: NodeHandle<AnyExpr>,
+    },
+    Lambda {
+        params: Vec<NodeHandle<AnyParam>>,
+        ret: Option<NodeHandle<AnyTy>>,
+        body: NodeHandle<AnyExpr>,
+    },
+    Try {
+        expr: NodeHandle<AnyExpr>,
+    }, // postfix `?`
+    FStr {
+        parts: Vec<FPartAst>,
+    },
     /// struct / `Self { .. }` literal — classes have no instance literal
-    Struct { ty: NodeHandle<AnyTy>, fields: Vec<(IdentId, NodeHandle<AnyExpr>)> },
+    Struct {
+        ty: NodeHandle<AnyTy>,
+        fields: Vec<(IdentId, NodeHandle<AnyExpr>)>,
+    },
     /// tuple expression `(a, b, ..)` — a record with numeric fields
     /// (`()` is rejected — the empty value is `nil`)
-    Tuple { elems: Vec<NodeHandle<AnyExpr>> },
+    Tuple {
+        elems: Vec<NodeHandle<AnyExpr>>,
+    },
     /// `[e1, .., en] : [T]`
-    ArrayLit { elems: Vec<NodeHandle<AnyExpr>> },
+    ArrayLit {
+        elems: Vec<NodeHandle<AnyExpr>>,
+    },
     /// `[v; n] : [T]` — the repeat construction: `n` slots
     /// filled with the VALUE `v`. There is no type-in-expression form — a
     /// type is not a value.
-    ArrayRepeat { value: NodeHandle<AnyExpr>, count: NodeHandle<AnyExpr> },
-    WhenExpr { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
+    ArrayRepeat {
+        value: NodeHandle<AnyExpr>,
+        count: NodeHandle<AnyExpr>,
+    },
+    WhenExpr {
+        scrut: NodeHandle<AnyExpr>,
+        arms: Vec<NodeHandle<AnyArm>>,
+    },
     /// `if (cond) { then } else { els }` as an EXPRESSION — the
     /// statement-if's own field set (`else if` chains hold if STATEMENT
     /// nodes, `ElseBranch::If`, exactly as the statement form does).
     /// `if` atoms parse beside `when`: the `(` must follow, the
     /// statement-leading `if` is claimed by the statement grammar first.
-    If { cond: NodeHandle<AnyExpr>, then: NodeHandle<BlockNode>, els: Option<ElseBranch> },
-    Await { expr: NodeHandle<AnyExpr> },
+    If {
+        cond: NodeHandle<AnyExpr>,
+        then: NodeHandle<BlockNode>,
+        els: Option<ElseBranch>,
+    },
+    Await {
+        expr: NodeHandle<AnyExpr>,
+    },
     /// `async { .. }` — the async block, the async primitive (v20): ONE
     /// expression form, keyword before a block. Evaluating it MINTS the
     /// frame (the body woven by the same machinery an `async fn` body
@@ -652,13 +774,21 @@ pub enum ExprKind {
     /// is `Future<T>` with `T` inferred from the block's `return`
     /// statements (fn-body rules); the `return` is the FUTURE's answer,
     /// not any enclosing fn's.
-    AsyncBlock { body: NodeHandle<BlockNode> },
+    AsyncBlock {
+        body: NodeHandle<BlockNode>,
+    },
     /// `expr is Type` — relational precedence, non-associative
-    Is { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
+    Is {
+        expr: NodeHandle<AnyExpr>,
+        ty: NodeHandle<AnyTy>,
+    },
     /// `expr as T` — the numeric cast, truncating like C/Rust; binds
     /// tighter than `*`, left-associative, RHS a naming position
     /// restricted to the numeric primitives
-    Cast { expr: NodeHandle<AnyExpr>, ty: NodeHandle<AnyTy> },
+    Cast {
+        expr: NodeHandle<AnyExpr>,
+        ty: NodeHandle<AnyTy>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -687,8 +817,22 @@ pub enum UnOp {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinOp {
-    Add, Sub, Mul, Div, Mod,
-    Eq, Ne, Lt, Gt, Le, Ge,
-    And, Or, // logical short-circuit
-    BitAnd, BitOr, BitXor, Shl, Shr,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    And,
+    Or, // logical short-circuit
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
 }

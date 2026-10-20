@@ -75,7 +75,7 @@
 use hashbrown::hash_table;
 use hashbrown::HashTable;
 
-use rut_vm::heap::{Heap};
+use rut_vm::heap::Heap;
 use rut_vm::interp::{HostPkg, Ret, Vm};
 use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot, Value};
 
@@ -268,7 +268,13 @@ impl NativeTable {
                 }
                 let handle = self.next_handle;
                 self.next_handle += 1;
-                v.insert((key.to_keyval(), Entry { handle, val: ValSlot::Empty }));
+                v.insert((
+                    key.to_keyval(),
+                    Entry {
+                        handle,
+                        val: ValSlot::Empty,
+                    },
+                ));
                 Ok(pack_answer(handle, true))
             }
         }
@@ -377,7 +383,13 @@ impl NativeTable {
     /// false`); `Vacant` → a fresh monotonic birth holding `val`
     /// (`newly = true`). The packed answer is bit-for-bit the h-family's.
     /// `val` arrives pre-owned — see [`NativeTable::hvput_ref`].
-    pub fn hvput(&mut self, vm: &Vm, kind: KeyKind, key: KeyVal, val: ValSlot) -> Result<i64, Trap> {
+    pub fn hvput(
+        &mut self,
+        vm: &Vm,
+        kind: KeyKind,
+        key: KeyVal,
+        val: ValSlot,
+    ) -> Result<i64, Trap> {
         self.admit(kind)?;
         self.hvput_ref(vm, KeyRef::from(&key), val)
     }
@@ -702,7 +714,10 @@ fn sv_range<'a>(parent: &'a str, off: i32, len: i32) -> Result<&'a str, Trap> {
     if !parent.is_char_boundary(o) {
         return Err(Trap::new(
             TrapKind::Invalid,
-            format!("nmap: sv offset {off} is not a UTF-8 boundary (parent {} bytes)", parent.len()),
+            format!(
+                "nmap: sv offset {off} is not a UTF-8 boundary (parent {} bytes)",
+                parent.len()
+            ),
         ));
     }
     if !parent.is_char_boundary(o + l) {
@@ -795,7 +810,13 @@ fn fused_find_sv(t: &NativeTable, parent: &str, off: i32, len: i32) -> Result<i3
 }
 
 /// The sv lane's fused remove.
-fn fused_remove_sv(vm: &Vm, t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Result<i32, Trap> {
+fn fused_remove_sv(
+    vm: &Vm,
+    t: &mut NativeTable,
+    parent: &str,
+    off: i32,
+    len: i32,
+) -> Result<i32, Trap> {
     let range = sv_range(parent, off, len)?;
     fused_remove_s(vm, t, range)
 }
@@ -1080,8 +1101,13 @@ mod tests {
     fn bare_vm() -> Vm {
         let mut prog = rut_core::binary::Program::default();
         prog.types = rut_core::types::TypeTable::boot();
-        rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(rut_vm::interp::Limits::default()).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-        .expect("bare vm")
+        rut_vm::interp::Vm::builder()
+            .program(Rc::new(prog))
+            .limits(rut_vm::interp::Limits::default())
+            .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(rut_vm::interp::HostRegistry::new())
+            .build()
+            .expect("bare vm")
     }
 
     /// mapset.rut's mix64 — the pinned integer/bool hash, mirrored here
@@ -1144,7 +1170,10 @@ mod tests {
         assert_eq!(fused_find_s(&t, "alpha").unwrap(), alpha);
         assert_eq!(fused_find_s(&t, "alph").unwrap(), -1);
         // a replace answers the same handle, not newly
-        assert_eq!(fused_put_s(&mut t, "alpha").unwrap(), pack_answer(alpha, false));
+        assert_eq!(
+            fused_put_s(&mut t, "alpha").unwrap(),
+            pack_answer(alpha, false)
+        );
         assert_eq!(t.len(), 1);
         assert_eq!(fused_remove_s(&vm, &mut t, "alpha").unwrap(), alpha);
         assert_eq!(fused_find_s(&t, "alpha").unwrap(), -1);
@@ -1235,7 +1264,10 @@ mod tests {
         let fal = fused_put(&mut t, bits(0)).unwrap();
         assert_eq!(fal & 1, 1);
         assert_eq!(fused_find(&t, &bits(0)).unwrap(), (fal >> 1) as i32);
-        assert_eq!(fused_remove(&vm, &mut t, &bits(0)).unwrap(), (fal >> 1) as i32);
+        assert_eq!(
+            fused_remove(&vm, &mut t, &bits(0)).unwrap(),
+            (fal >> 1) as i32
+        );
         // hash_payload IS mix64(0)/mix64(1) for the bool bits
         assert_eq!(hash_payload(&KeyVal::Bits(0)), mix64(0));
         assert_eq!(hash_payload(&KeyVal::Bits(1)), mix64(1));
@@ -1340,7 +1372,8 @@ mod tests {
         for k in (0u64..150).step_by(4) {
             let ans = fused_put(&mut t, bits(k)).unwrap();
             assert_eq!(ans, pack_answer(handles[&k], false), "replace key {k}");
-            t.val_set_u(&vm, handles[&k], val_of(k).wrapping_add(1)).unwrap();
+            t.val_set_u(&vm, handles[&k], val_of(k).wrapping_add(1))
+                .unwrap();
             reference.insert(k, val_of(k).wrapping_add(1));
         }
         // removes on the % 3 keys: the dead handle traps afterwards
@@ -1398,12 +1431,14 @@ mod tests {
         let held = vm.heap_usage();
         assert!(held > base, "the box charges its payload: {base} -> {held}");
         // a stored box reads back as the SAME cell — never a copy
-        let ans = t
-            .hvput(&vm, KeyKind::Bits, bits(0), sealed0)
-            .unwrap();
+        let ans = t.hvput(&vm, KeyKind::Bits, bits(0), sealed0).unwrap();
         assert_eq!(ans, pack_answer(0, true), "fresh birth");
         drop(b0); // the mint rc folds; the store's own rc holds the box
-        assert_eq!(vm.heap_usage(), held, "the store took over the box's rc, no new charge");
+        assert_eq!(
+            vm.heap_usage(),
+            held,
+            "the store took over the box's rc, no new charge"
+        );
         let stored = t.hvget(KeyKind::Bits, &bits(0)).unwrap();
         match stored {
             Some(ValSlot::Ref(s)) => assert!(unsafe { s.r } == p0, "identity"),
@@ -1425,18 +1460,24 @@ mod tests {
         let sealed1 = seal_transfer(b1.handle().clone(), &mut vm).unwrap();
         drop(b1);
         let before_replace = vm.heap_usage();
-        let ans = t
-            .hvput(&vm, KeyKind::Bits, bits(0), sealed1)
-            .unwrap();
+        let ans = t.hvput(&vm, KeyKind::Bits, bits(0), sealed1).unwrap();
         assert_eq!(ans, pack_answer(0, false), "replace");
-        assert_eq!(vm.heap_usage(), held, "the displaced box freed in-crossing (equal charges)");
+        assert_eq!(
+            vm.heap_usage(),
+            held,
+            "the displaced box freed in-crossing (equal charges)"
+        );
         // the h-family placeholder: an hput birth read through a valued
         // lane TRAPS loudly (§0.8 g)
         let ans = t.hput(KeyKind::Bits, bits(9)).unwrap();
         let hd = (ans >> 1) as i32;
         let err = t.hvget(KeyKind::Bits, &bits(9)).unwrap_err();
         assert_eq!(err.kind, TrapKind::Invalid);
-        assert!(err.msg.contains("Empty") && err.msg.contains("placeholder"), "{}", err.msg);
+        assert!(
+            err.msg.contains("Empty") && err.msg.contains("placeholder"),
+            "{}",
+            err.msg
+        );
         // and a valued put OVER that same key replaces the placeholder
         let ans = t
             .hvput(&vm, KeyKind::Bits, bits(9), ValSlot::Bits(Slot::int(90)))
@@ -1446,7 +1487,11 @@ mod tests {
         assert_eq!(t.hremove(&vm, KeyKind::Bits, &bits(0)).unwrap(), 0);
         assert_eq!(t.hvget(KeyKind::Bits, &bits(0)).unwrap(), None);
         assert_eq!(t.hremove(&vm, KeyKind::Bits, &bits(0)).unwrap(), -1);
-        assert_eq!(vm.heap_usage(), base, "the removed key's box freed in-crossing");
+        assert_eq!(
+            vm.heap_usage(),
+            base,
+            "the removed key's box freed in-crossing"
+        );
         // a raw `map_val_set_*` store is BITS, not a seal box: the core
         // answers it (storage is value-shape-agnostic), the row's
         // ?opaque conversion refuses it by name
@@ -1456,7 +1501,11 @@ mod tests {
             other => panic!("expected Bits at the core, got {other:?}"),
         }
         let err = seal_answer(&vm, t.hvget(KeyKind::Bits, &bits(9)).unwrap()).unwrap_err();
-        assert!(err.msg.contains("raw bits") && err.msg.contains("not a seal box"), "{}", err.msg);
+        assert!(
+            err.msg.contains("raw bits") && err.msg.contains("not a seal box"),
+            "{}",
+            err.msg
+        );
         // floats never reach the table: the typed key rows admit only
         // the closed set (str/bits/bytes), so there is no float key
         // crossing left to refuse — the admission trap is the wrapper's
@@ -1481,7 +1530,12 @@ mod tests {
         let val_of = |k: u64| k * 7 + 1;
         for k in 0u64..150 {
             let ans = t
-                .hvput(&vm, KeyKind::Bits, bits(k), ValSlot::Bits(Slot::int(val_of(k) as i64)))
+                .hvput(
+                    &vm,
+                    KeyKind::Bits,
+                    bits(k),
+                    ValSlot::Bits(Slot::int(val_of(k) as i64)),
+                )
                 .unwrap();
             assert_eq!(ans & 1, 1, "key {k} fresh");
             handles.insert(k, (ans >> 1) as i32);
@@ -1490,7 +1544,12 @@ mod tests {
         assert_eq!(t.len(), 150);
         for k in (0u64..150).step_by(4) {
             let ans = t
-                .hvput(&vm, KeyKind::Bits, bits(k), ValSlot::Bits(Slot::int((val_of(k) + 1) as i64)))
+                .hvput(
+                    &vm,
+                    KeyKind::Bits,
+                    bits(k),
+                    ValSlot::Bits(Slot::int((val_of(k) + 1) as i64)),
+                )
                 .unwrap();
             assert_eq!(ans, pack_answer(handles[&k], false), "replace key {k}");
             reference.insert(k, val_of(k) + 1);
@@ -1499,7 +1558,11 @@ mod tests {
             let hd = handles.remove(&k).unwrap();
             assert_eq!(t.hremove(&vm, KeyKind::Bits, &bits(k)).unwrap(), hd);
             reference.remove(&k);
-            assert_eq!(t.hvget(KeyKind::Bits, &bits(k)).unwrap(), None, "key {k} gone");
+            assert_eq!(
+                t.hvget(KeyKind::Bits, &bits(k)).unwrap(),
+                None,
+                "key {k} gone"
+            );
         }
         assert_eq!(t.len(), reference.len() as i32);
         for (k, v) in &reference {
@@ -1530,15 +1593,24 @@ mod tests {
         let base = vm.heap_usage();
         let mut t = NativeTable::new(8);
         for k in 0u64..8 {
-            t.hvput(&vm, KeyKind::Bits, bits(k), ValSlot::Bits(Slot::int(k as i64 * 3)))
-                .unwrap();
+            t.hvput(
+                &vm,
+                KeyKind::Bits,
+                bits(k),
+                ValSlot::Bits(Slot::int(k as i64 * 3)),
+            )
+            .unwrap();
         }
         assert_eq!(t.len(), 8);
         let b = Opaque::alloc_hosted(&mut vm, t).expect("hosted mint");
         let held = vm.heap_usage();
         assert!(held > base, "the box charges its payload: {base} -> {held}");
         drop(b);
-        assert_eq!(vm.heap_usage(), base, "rc-0 freed the payload; finalize ran inside the walk");
+        assert_eq!(
+            vm.heap_usage(),
+            base,
+            "rc-0 freed the payload; finalize ran inside the walk"
+        );
     }
 
     // ---- the sv lanes (strings-round1, phase 1) ------------------------
@@ -1553,14 +1625,30 @@ mod tests {
         // the s-lane pins from the hash test above, over raw ranges
         assert_eq!(hash_bytes(b"alpha"), 9999721509958787115);
         assert_eq!(hash_bytes(b"beta"), 8513880941419438247);
-        assert_eq!(hash_bytes(b""), 14695981039346656037, "the bare offset basis");
-        assert_eq!(hash_bytes(b"alpha"), hash_payload(&KeyVal::Str("alpha".into())));
-        assert_eq!(hash_bytes(b"beta"), hash_payload(&KeyVal::Str("beta".into())));
+        assert_eq!(
+            hash_bytes(b""),
+            14695981039346656037,
+            "the bare offset basis"
+        );
+        assert_eq!(
+            hash_bytes(b"alpha"),
+            hash_payload(&KeyVal::Str("alpha".into()))
+        );
+        assert_eq!(
+            hash_bytes(b"beta"),
+            hash_payload(&KeyVal::Str("beta".into()))
+        );
         // multi-byte content: the range hash runs over the OCTETS
         let s = "héllo→";
-        assert_eq!(hash_bytes(s.as_bytes()), hash_payload(&KeyVal::Str(s.into())));
+        assert_eq!(
+            hash_bytes(s.as_bytes()),
+            hash_payload(&KeyVal::Str(s.into()))
+        );
         // the bytes lane rides the same hasher
-        assert_eq!(hash_bytes(&[1, 2, 3]), hash_payload(&KeyVal::Bytes(vec![1, 2, 3])));
+        assert_eq!(
+            hash_bytes(&[1, 2, 3]),
+            hash_payload(&KeyVal::Bytes(vec![1, 2, 3]))
+        );
         // a carved window of a longer parent = the whole text's bits
         let parent = "alpha-beta";
         assert_eq!(hash_bytes(&parent.as_bytes()[0..5]), hash_bytes(b"alpha"));
@@ -1691,17 +1779,27 @@ mod tests {
             assert_eq!(ha, fused_find_s(&a, &texts[i]).unwrap());
             assert_eq!(ha, fused_find_sv(&b, parent, off, len).unwrap());
             assert_eq!(ha, fused_find_s(&b, &texts[i]).unwrap());
-            assert_eq!(ha, fused_find_s(&c, &texts[i]).unwrap(), "the mixed build too");
+            assert_eq!(
+                ha,
+                fused_find_s(&c, &texts[i]).unwrap(),
+                "the mixed build too"
+            );
         }
 
         // replaces cross lanes: a put through the OPPOSITE lane answers
         // the same handle, newly = false, and stores no second entry
         let mut a = a;
         let alpha = fused_find_sv(&a, parent, 0, 5).unwrap();
-        assert_eq!(fused_put_s(&mut a, "alpha").unwrap(), pack_answer(alpha, false));
+        assert_eq!(
+            fused_put_s(&mut a, "alpha").unwrap(),
+            pack_answer(alpha, false)
+        );
         assert_eq!(a.len(), 8);
         let beta = fused_find_s(&a, "beta").unwrap();
-        assert_eq!(fused_put_sv(&mut a, parent, 6, 4).unwrap(), pack_answer(beta, false));
+        assert_eq!(
+            fused_put_sv(&mut a, parent, 6, 4).unwrap(),
+            pack_answer(beta, false)
+        );
         assert_eq!(a.len(), 8);
 
         // removes cross lanes: sv remove of the s-replaced key answers
@@ -1828,10 +1926,7 @@ mod tests {
             assert_eq!(ans, pack_answer(i as i32, true), "birth {i}");
         }
         // replace: the SAME handle, newly = false
-        assert_eq!(
-            fused_put(&mut t, bits(1)).unwrap(),
-            pack_answer(1, false)
-        );
+        assert_eq!(fused_put(&mut t, bits(1)).unwrap(), pack_answer(1, false));
         // hfind answers the handle; a miss is -1
         assert_eq!(fused_find(&t, &bits(0)).unwrap(), 0);
         assert_eq!(fused_find(&t, &bits(1)).unwrap(), 1);
@@ -1851,7 +1946,11 @@ mod tests {
             assert_eq!(ans & 1, 1, "every key fresh");
             handles.push((ans >> 1) as i32);
         }
-        assert!(t.cap() >= 500, "the sweep grew the map internally: {}", t.cap());
+        assert!(
+            t.cap() >= 500,
+            "the sweep grew the map internally: {}",
+            t.cap()
+        );
         assert_eq!(t.len(), 500);
         for (i, hd) in handles.iter().enumerate() {
             let key = (i as u64).wrapping_mul(0x9E3779B1);
@@ -1871,8 +1970,8 @@ mod tests {
         let mut t = NativeTable::new(8);
         fused_put(&mut t, bits(7)).unwrap(); // handle 0
         fused_put(&mut t, bits(8)).unwrap(); // handle 1
-        // remove answers the DEAD key's OWN handle — the wrapper nils
-        // exactly that sidecar slot
+                                             // remove answers the DEAD key's OWN handle — the wrapper nils
+                                             // exactly that sidecar slot
         assert_eq!(fused_remove(&vm, &mut t, &bits(7)).unwrap(), 0);
         assert_eq!(fused_remove(&vm, &mut t, &bits(7)).unwrap(), -1);
         assert_eq!(fused_find(&t, &bits(7)).unwrap(), -1);
@@ -1925,7 +2024,10 @@ mod tests {
             fused_put(&mut t, KeyVal::Bytes(vec![1, 2, 3])).unwrap(),
             pack_answer(0, false)
         );
-        assert_eq!(fused_remove(&vm, &mut t, &KeyVal::Bytes(vec![1, 2, 3])).unwrap(), 0);
+        assert_eq!(
+            fused_remove(&vm, &mut t, &KeyVal::Bytes(vec![1, 2, 3])).unwrap(),
+            0
+        );
         // bool on its own table — `true` is bits 1 on the b lane
         let mut b = NativeTable::new(8);
         assert_eq!(

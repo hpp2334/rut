@@ -23,14 +23,16 @@ use rut_native::{load_dir, pack_dir};
 // ------------------------------------------------------------------
 // the fixture world: real dirs, real packed bundles
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -56,7 +58,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -115,7 +120,16 @@ fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
-    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    assert!(
+        g.graph.diags.is_empty(),
+        "{:?}",
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     rut_core::binary::encode(&g.graph.program.expect("linked program"))
 }
 
@@ -129,7 +143,16 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
-    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    assert!(
+        g.graph.diags.is_empty(),
+        "{:?}",
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits {
@@ -137,8 +160,13 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
 
@@ -155,7 +183,11 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
     write(
         &app,
@@ -166,8 +198,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
     write_lock(&app, &table);
-    let loaded = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
-        .expect("url load");
+    let loaded = block_on(rut_native::load_dir_with(&app, &Table::from(table))).expect("url load");
     assert_eq!(loaded.root, "app");
     // the url dep is a leaf: mounted, not walked — its body is the
     // bundle's compiled root
@@ -180,8 +211,20 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     // the pinned equivalence: the url lane and the path lane link to
     // the identical binary
     let twin = root.join("app_path");
-    write(&twin, "rut.jsonc", &manifest("app", "mod.rut", r#", "deps": {"util": {"path": "../util"}}"#));
-    write(&twin, "mod.rut", "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n");
+    write(
+        &twin,
+        "rut.jsonc",
+        &manifest(
+            "app",
+            "mod.rut",
+            r#", "deps": {"util": {"path": "../util"}}"#,
+        ),
+    );
+    write(
+        &twin,
+        "mod.rut",
+        "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
+    );
     let dir_loaded = load_dir(&twin).expect("dir load");
     assert_eq!(
         linked_binary(&dir_loaded),
@@ -218,20 +261,25 @@ fn the_manifest_pin_retires_loudly_even_with_a_fetcher() {
             &format!(r#", "deps": {{"util": {{"url": "{url}", "sha256": "{pin}"}}}}"#),
         ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
-    let err =
-        block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
-            .unwrap_err()
-            .to_string();
+    let err = block_on(rut_native::load_dir_with(&app, &Table::from(table.clone())))
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("deps.util: 'sha256' retired"), "{err}");
     assert!(err.contains("rut.lock"), "{err}");
 
     // the same refusal on the vendored-map lane: the parse is the
     // door, not the fetcher
-    let err = rut_native::load_dir_fetched(&app, &table).unwrap_err().to_string();
+    let err = rut_native::load_dir_fetched(&app, &table)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("'sha256' retired"), "{err}");
 }
 
@@ -245,9 +293,17 @@ fn name_vs_key_refuses() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"not_util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"not_util": {{"url": "{url}"}}}}"#),
+        ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
@@ -280,7 +336,9 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     );
 
     // the direct bundle lane
-    let err = rut_driver::Mounted::from_bundle(&doctored).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&doctored)
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains("the bundle is missing its `ghost` dependency group"),
         "{err}"
@@ -294,9 +352,17 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), doctored);
     write_lock(&app, &table);
@@ -321,9 +387,17 @@ fn embedder_mount_outranks_the_url_dep() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
 
     let mut chain = rut_driver::RutRun::new()
         // the embedder's own mount, offered first
@@ -379,9 +453,17 @@ fn codec_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     write(
         &root.join("zeta"),
         "rut.jsonc",
-        &manifest("zeta", "mod.rut", r#", "deps": {"codec": {"path": "../codec"}}"#),
+        &manifest(
+            "zeta",
+            "mod.rut",
+            r#", "deps": {"codec": {"path": "../codec"}}"#,
+        ),
     );
-    write(&root.join("zeta"), "mod.rut", "pub fn ping() -> i32 {\n    return 7;\n}\n");
+    write(
+        &root.join("zeta"),
+        "mod.rut",
+        "pub fn ping() -> i32 {\n    return 7;\n}\n",
+    );
     let bytes = pack_dir(&root.join("zeta")).expect("pack zeta");
     let url = "https://fixtures.test/zeta.rutbundle";
     (root, bytes, url.to_string())
@@ -397,7 +479,11 @@ fn colliding_pack_numberings_namespace_per_archive() {
     // consumer compiles over both, each dep resolving through its OWN
     // archive's rows.
     let a = leaf_world("leda", "util_a", UTIL_BODY);
-    let b = leaf_world("ledb", "util_b", "pub fn thrice(v: i64) -> i64 {\n    return v * 3;\n}\n");
+    let b = leaf_world(
+        "ledb",
+        "util_b",
+        "pub fn thrice(v: i64) -> i64 {\n    return v * 3;\n}\n",
+    );
     let bytes_a = pack_dir(&a.join("util_a")).expect("pack a");
     let bytes_b = pack_dir(&b.join("util_b")).expect("pack b");
 
@@ -423,8 +509,14 @@ fn colliding_pack_numberings_namespace_per_archive() {
     write_lock(&app, &table);
     let session = block_on(rut_native::load_dir_with(&app, &Table::from(table)))
         .expect("colliding numberings namespace per archive");
-    assert!(matches!(session.pkg("util_a").unwrap().body, rut_driver::MountedBody::Compiled(_)));
-    assert!(matches!(session.pkg("util_b").unwrap().body, rut_driver::MountedBody::Compiled(_)));
+    assert!(matches!(
+        session.pkg("util_a").unwrap().body,
+        rut_driver::MountedBody::Compiled(_)
+    ));
+    assert!(matches!(
+        session.pkg("util_b").unwrap().body,
+        rut_driver::MountedBody::Compiled(_)
+    ));
     // and the value semantics survive both rebases: 2*1 + 3*2 = 8
     assert_eq!(run_entry::<i64>(session, "go"), 8);
 }
@@ -439,9 +531,17 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
 
     let err = load_dir(&app).unwrap_err().to_string();
     assert!(err.contains("this loader has no `dep_fetch`"), "{err}");
@@ -460,7 +560,11 @@ fn pack_url_dep_rode_along_and_deterministic() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
     write(
         &app,
@@ -474,7 +578,10 @@ fn pack_url_dep_rode_along_and_deterministic() {
     let packed = rut_native::pack_dir_fetched(&app, &map).expect("pack");
     // determinism: the same world ⇒ the same bytes
     let packed_again = rut_native::pack_dir_fetched(&app, &map).expect("pack again");
-    assert_eq!(packed, packed_again, "same inputs must pack byte-identically");
+    assert_eq!(
+        packed, packed_again,
+        "same inputs must pack byte-identically"
+    );
 
     // the rode-along group: the output carries util as a compiled group
     // (re-encoded from THIS session's units, under its content
@@ -485,13 +592,19 @@ fn pack_url_dep_rode_along_and_deterministic() {
         .into_iter()
         .map(|(n, _)| n)
         .collect();
-    assert!(names.contains(&format!("{}/mod.rutc", dep_dir(&names, "util"))), "{names:?}");
+    assert!(
+        names.contains(&format!("{}/mod.rutc", dep_dir(&names, "util"))),
+        "{names:?}"
+    );
     assert!(names.contains(&"mod.rutc".to_string()), "{names:?}");
     let out_manifest = rut_driver::bundle::Bundle::parse(&packed)
         .unwrap()
         .read("rut.jsonc")
         .unwrap();
-    assert!(out_manifest.contains(&format!(r#""url": "{url}""#)), "{out_manifest}");
+    assert!(
+        out_manifest.contains(&format!(r#""url": "{url}""#)),
+        "{out_manifest}"
+    );
     assert!(!out_manifest.contains("sha256"), "{out_manifest}");
 
     // the packed artifact runs, straight from the output bytes
@@ -526,7 +639,9 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
         &manifest(
             "app",
             "mod.rut",
-            &format!(r#", "deps": {{"pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#),
+            &format!(
+                r#", "deps": {{"pouch": {{"path": "../pouch"}}, "zeta": {{"url": "{url}"}}}}"#
+            ),
         ),
     );
     write(
@@ -538,11 +653,14 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
     let mut map = BTreeMap::new();
     map.insert(url, bytes);
     write_lock(&app, &map);
-    let err = rut_native::pack_dir_fetched(&app, &map).unwrap_err().to_string();
+    let err = rut_native::pack_dir_fetched(&app, &map)
+        .unwrap_err()
+        .to_string();
     // the dep mounts under its content identity — the message spells
     // the mount key
     assert!(
-        err.contains("packed dep `codec@") && err.contains("` needs its own [dev-deps] directories"),
+        err.contains("packed dep `codec@")
+            && err.contains("` needs its own [dev-deps] directories"),
         "{err}"
     );
     assert!(err.contains("vendor this dep"), "{err}");
@@ -560,18 +678,25 @@ fn pack_refuses_unused_compiled_url_dep() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
 
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
     write_lock(&app, &map);
-    let err = rut_native::pack_dir_fetched(&app, &map).unwrap_err().to_string();
-    assert!(
-        err.contains("compiled group `util`"),
-        "{err}"
-    );
+    let err = rut_native::pack_dir_fetched(&app, &map)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("compiled group `util`"), "{err}");
     assert!(err.contains("cannot ride unpackaged"), "{err}");
     assert!(err.contains("vendor this dep"), "{err}");
 }
@@ -592,9 +717,17 @@ fn an_unpinned_url_row_refuses_with_the_install_recipe() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
 
     let err = block_on(rut_native::load_dir_with(&app, &Table::new()))
         .unwrap_err()
@@ -611,8 +744,13 @@ fn an_unpinned_url_row_refuses_with_the_install_recipe() {
     // empty map keeps ITS law: no bytes, no load, pin or no pin)
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
-    let err = rut_native::load_dir_fetched(&app, &map).unwrap_err().to_string();
-    assert!(err.contains("is not pinned — rut.lock has no row for it"), "{err}");
+    let err = rut_native::load_dir_fetched(&app, &map)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("is not pinned — rut.lock has no row for it"),
+        "{err}"
+    );
     assert!(err.contains("run `rut install`"), "{err}");
 }
 
@@ -628,23 +766,47 @@ fn a_lock_pin_mismatch_names_both_hashes() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
 
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
     let stale = "2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e";
-    write(&app, "rut.lock", &rut_driver::render_lock(&rut_driver::LockFile::from_rows(
-        vec![rut_driver::LockRow { pkg: "util".into(), url: url.to_string(), sha256: stale.into() }],
-    )));
+    write(
+        &app,
+        "rut.lock",
+        &rut_driver::render_lock(&rut_driver::LockFile::from_rows(vec![
+            rut_driver::LockRow {
+                pkg: "util".into(),
+                url: url.to_string(),
+                sha256: stale.into(),
+            },
+        ])),
+    );
 
-    let err = rut_native::load_dir_fetched(&app, &table).unwrap_err().to_string();
+    let err = rut_native::load_dir_fetched(&app, &table)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("sha256 pin mismatch for "), "{err}");
-    assert!(err.contains(&format!("dep `util` — sha256 pin mismatch for {url}")), "{err}");
+    assert!(
+        err.contains(&format!("dep `util` — sha256 pin mismatch for {url}")),
+        "{err}"
+    );
     assert!(err.contains(&format!("rut.lock pins {stale}")), "{err}");
     let got = rut_driver::sha256_hex(table.get(url).unwrap());
-    assert!(err.contains(&format!("the fetched bytes hash to {got}")), "{err}");
+    assert!(
+        err.contains(&format!("the fetched bytes hash to {got}")),
+        "{err}"
+    );
 }
 
 #[test]
@@ -654,7 +816,11 @@ fn a_malformed_lock_refuses_loudly_naming_the_file() {
     let root = leaf_world("badlock", "util", UTIL_BODY);
     let app = root.join("app");
     write(&app, "rut.jsonc", &manifest("app", "mod.rut", ""));
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
     write(
         &app,
         "rut.lock",
@@ -663,7 +829,10 @@ fn a_malformed_lock_refuses_loudly_naming_the_file() {
 
     let err = load_dir(&app).unwrap_err().to_string();
     assert!(err.contains("rut.lock"), "{err}");
-    assert!(err.contains("deps[0].sha256: must be 64 hex digits, found 'nothex'"), "{err}");
+    assert!(
+        err.contains("deps[0].sha256: must be 64 hex digits, found 'nothex'"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -678,7 +847,11 @@ fn the_resolved_lane_validates_computed_pins_without_a_lock_file() {
     write(
         &app,
         "rut.jsonc",
-        &manifest("app", "mod.rut", &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#)),
+        &manifest(
+            "app",
+            "mod.rut",
+            &format!(r#", "deps": {{"util": {{"url": "{url}"}}}}"#),
+        ),
     );
     write(
         &app,
@@ -689,13 +862,21 @@ fn the_resolved_lane_validates_computed_pins_without_a_lock_file() {
     let mut map = BTreeMap::new();
     map.insert(url.to_string(), bytes);
     let mut pins = BTreeMap::new();
-    pins.insert(url.to_string(), rut_driver::sha256_hex(map.get(url).unwrap()));
+    pins.insert(
+        url.to_string(),
+        rut_driver::sha256_hex(map.get(url).unwrap()),
+    );
     let loaded = rut_native::load_dir_resolved(&app, &map, &pins).expect("computed pins load");
     assert_eq!(run_entry::<i64>(loaded, "go"), 42);
 
     // and the same door refuses a wrong computed pin
-    pins.insert(url.to_string(), "2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e".into());
-    let err = rut_native::load_dir_resolved(&app, &map, &pins).unwrap_err().to_string();
+    pins.insert(
+        url.to_string(),
+        "2f6e6a20c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e".into(),
+    );
+    let err = rut_native::load_dir_resolved(&app, &map, &pins)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("sha256 pin mismatch for "), "{err}");
 }
 
@@ -715,12 +896,14 @@ fn url_dep_rows_collect_the_closure_deduped_by_url() {
         &manifest(
             "app",
             "mod.rut",
-            &format!(
-                r#", "deps": {{"util": {{"url": "{url_a}"}}, "sub": {{"path": "../sub"}}}}"#
-            ),
+            &format!(r#", "deps": {{"util": {{"url": "{url_a}"}}, "sub": {{"path": "../sub"}}}}"#),
         ),
     );
-    write(&app, "mod.rut", "entry fn go() -> i64 {\n    return 1;\n}\n");
+    write(
+        &app,
+        "mod.rut",
+        "entry fn go() -> i64 {\n    return 1;\n}\n",
+    );
     write(
         &root.join("sub"),
         "rut.jsonc",
@@ -735,7 +918,11 @@ fn url_dep_rows_collect_the_closure_deduped_by_url() {
     write(
         &root.join("other"),
         "rut.jsonc",
-        &manifest("other", "mod.rut", &format!(r#", "deps": {{"deep": {{"url": "{url_b}"}}}}"#)),
+        &manifest(
+            "other",
+            "mod.rut",
+            &format!(r#", "deps": {{"deep": {{"url": "{url_b}"}}}}"#),
+        ),
     );
 
     let rows = rut_native::url_dep_rows(&app).expect("collect");

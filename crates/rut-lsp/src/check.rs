@@ -76,12 +76,16 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
     let mut order: Vec<String> = Vec::new();
     let mut groups: BTreeMap<String, PkgFiles> = BTreeMap::new();
     for d in defs {
-        let Some(module) = d.module.clone() else { continue };
+        let Some(module) = d.module.clone() else {
+            continue;
+        };
         if module == "core" {
             continue;
         }
         let path = d.mod_path.clone().unwrap_or_default();
-        let mode = d.mode.unwrap_or_else(|| crate::analysis::mode_of(&d.origin));
+        let mode = d
+            .mode
+            .unwrap_or_else(|| crate::analysis::mode_of(&d.origin));
         let name = module.clone();
         if !groups.contains_key(&name) {
             order.push(name.clone());
@@ -104,10 +108,18 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
         let vis = edge_vis(defs, &g.module, &path);
         g.files.insert(
             path,
-            FileSrc { uri: d.origin.clone(), text: d.src.clone(), mode, vis },
+            FileSrc {
+                uri: d.origin.clone(),
+                text: d.src.clone(),
+                mode,
+                vis,
+            },
         );
     }
-    order.into_iter().filter_map(|m| groups.remove(&m)).collect()
+    order
+        .into_iter()
+        .filter_map(|m| groups.remove(&m))
+        .collect()
 }
 
 /// The `mod` edge a child file was mounted under, read off its parent's
@@ -217,8 +229,7 @@ pub fn check_doc(
         let Some(file) = d.file.as_ref() else {
             continue; // graph-level refusal — no position, no squiggle
         };
-        let Some((_, (uri, text))) =
-            where_.iter().find(|((s, p), _)| *file == stamp_of(s, p))
+        let Some((_, (uri, text))) = where_.iter().find(|((s, p), _)| *file == stamp_of(s, p))
         else {
             continue; // a file the assembly never carried — never guessed at
         };
@@ -252,7 +263,9 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
     let names: Vec<String> = groups.iter().map(|g| g.module.clone()).collect();
     let mut out = Vec::new();
     for g in groups {
-        let Some(root) = g.files.get("") else { continue };
+        let Some(root) = g.files.get("") else {
+            continue;
+        };
         let deps: Vec<&str> = names
             .iter()
             .filter(|n| n.as_str() != g.module)

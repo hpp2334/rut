@@ -58,9 +58,7 @@ fn parse_args() -> Args {
             "--workload" => workload = Some(take(&mut i)),
             "--iters" => iters = take(&mut i).parse().unwrap_or_else(|_| usage()),
             "--fuel" => fuel = Some(take(&mut i).parse().unwrap_or_else(|_| usage())),
-            "--heap-bytes" => {
-                heap_bytes = Some(take(&mut i).parse().unwrap_or_else(|_| usage()))
-            }
+            "--heap-bytes" => heap_bytes = Some(take(&mut i).parse().unwrap_or_else(|_| usage())),
             "-h" | "--help" => usage(),
             other => {
                 eprintln!("unknown argument: {other}");
@@ -147,7 +145,10 @@ fn main() {
             }
             fail("compile failed");
         }
-        let prog = compiled.graph.program.unwrap_or_else(|| fail("no program emitted"));
+        let prog = compiled
+            .graph
+            .program
+            .unwrap_or_else(|| fail("no program emitted"));
         // the rows snapshot replaces the walk — the installs answer to
         // the ctx, owned
         let mut world = loaded.pkgs;
@@ -190,10 +191,16 @@ fn main() {
             .compile()
             .unwrap_or_else(|e| fail(format!("compile: {e}")));
         if !compiled.graph.diags.is_empty() {
-            print!("{}", rut_lexer::diag::render_diags(&src, &compiled.graph.diags));
+            print!(
+                "{}",
+                rut_lexer::diag::render_diags(&src, &compiled.graph.diags)
+            );
             fail("compile failed");
         }
-        let prog = compiled.graph.program.unwrap_or_else(|| fail("no binary emitted"));
+        let prog = compiled
+            .graph
+            .program
+            .unwrap_or_else(|| fail("no binary emitted"));
         (rut_driver::host_pkg_ctx(&world), prog)
     };
     let compile_ms = t0.elapsed().as_secs_f64() * 1e3;

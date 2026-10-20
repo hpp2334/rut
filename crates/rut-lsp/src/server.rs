@@ -86,7 +86,9 @@ fn collect_rut_files(root: &Path) -> Vec<PathBuf> {
         if out.len() >= MAX_FILES {
             break;
         }
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for e in entries.flatten() {
             let p = e.path();
             let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -277,7 +279,11 @@ impl<'a> Walk<'a> {
                 return;
             }
             match &row.source {
-                DepSource::Url { url, sha256, cache_path } => {
+                DepSource::Url {
+                    url,
+                    sha256,
+                    cache_path,
+                } => {
                     // a url row of the ROOT manifest is a direct dep;
                     // a dep's own url rows mount transitively
                     self.mount_url(&row.name, url, sha256.as_deref(), cache_path, depth == 1);
@@ -309,7 +315,14 @@ impl<'a> Walk<'a> {
     /// deliberate asymmetry — the extension's job), so an unpinned row,
     /// a miss, or a poisoned cache is ONE info hint naming the CLI
     /// alternative, never silent, never network.
-    fn mount_url(&mut self, name: &str, url: &str, pin: Option<&str>, cache_path: &str, direct: bool) {
+    fn mount_url(
+        &mut self,
+        name: &str,
+        url: &str,
+        pin: Option<&str>,
+        cache_path: &str,
+        direct: bool,
+    ) {
         let Some(pin) = pin else {
             self.hint_once(
                 format!("unpinned:{url}"),
@@ -432,9 +445,10 @@ impl<'a> Walk<'a> {
             self.insert(Self::mark(idx, direct));
         }
         let mut files = std::collections::BTreeMap::new();
-        let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
-            Ok(fs_child_lookup(dir, &mut files, parent, name, "mod.rut"))
-        };
+        let mut read =
+            |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
+                Ok(fs_child_lookup(dir, &mut files, parent, name, "mod.rut"))
+            };
         let canon = p.to_string_lossy().into_owned();
         match rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read) {
             Ok(mods) => {
@@ -446,10 +460,13 @@ impl<'a> Walk<'a> {
                     // the physical file the lookup found — a file-form
                     // child's real path never re-derives from the mod
                     // path (`layout/grid` may mount from `grid.rut`)
-                    let child = files.get(&path).cloned()
+                    let child = files
+                        .get(&path)
+                        .cloned()
                         .unwrap_or_else(|| dir.join(&path).join("mod.rut"));
                     let uri = child.to_string_lossy().into_owned();
-                    let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Impl, None, &[]);
+                    let idx =
+                        deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Impl, None, &[]);
                     self.insert(Self::mark(idx, direct));
                 }
             }
@@ -482,11 +499,13 @@ impl<'a> Walk<'a> {
         };
         let child_file = rut_driver::decl::DECL_CHILD_FILE;
         let mut files = std::collections::BTreeMap::new();
-        let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
-            Ok(fs_child_lookup(dir, &mut files, parent, name, child_file))
-        };
+        let mut read =
+            |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
+                Ok(fs_child_lookup(dir, &mut files, parent, name, child_file))
+            };
         let canon = root_path.to_string_lossy().into_owned();
-        match rut_driver::mount_mod_children(&root_text, &canon, Mode::Decl, child_file, &mut read) {
+        match rut_driver::mount_mod_children(&root_text, &canon, Mode::Decl, child_file, &mut read)
+        {
             Ok(mods) => {
                 for (path, m) in mods {
                     if self.files == 0 {
@@ -496,10 +515,13 @@ impl<'a> Walk<'a> {
                     // the physical file the lookup found — the mod path
                     // alone never re-derives it (a file-form child of a
                     // file-form parent mounts beside it)
-                    let child = files.get(&path).cloned()
+                    let child = files
+                        .get(&path)
+                        .cloned()
                         .unwrap_or_else(|| dir.join(&path).join(child_file));
                     let uri = child.to_string_lossy().into_owned();
-                    let idx = deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Decl, None, &[]);
+                    let idx =
+                        deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Decl, None, &[]);
                     self.insert(Self::mark(idx, direct));
                 }
             }
@@ -589,7 +611,10 @@ fn resolve_doc_mods_at(file: &Path) -> (Option<PathBuf>, DocMods) {
                             .join("/");
                         return (
                             Some(dir.to_path_buf()),
-                            DocMods { mod_path: Some(mod_path), pkg: Some(name) },
+                            DocMods {
+                                mod_path: Some(mod_path),
+                                pkg: Some(name),
+                            },
                         );
                     }
                 }
@@ -623,7 +648,10 @@ fn fs_child_lookup(
     child_file: &str,
 ) -> rut_driver::ChildLookup {
     let base = match files.get(parent) {
-        Some(f) => f.parent().map(Path::to_path_buf).unwrap_or_else(|| dir.to_path_buf()),
+        Some(f) => f
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| dir.to_path_buf()),
         None if parent.is_empty() => dir.to_path_buf(),
         None => dir.join(parent),
     };
@@ -655,7 +683,11 @@ fn fs_child_lookup(
         format!("{parent}/{name}")
     };
     files.insert(child_path, probe.0.clone());
-    rut_driver::ChildLookup::Found { text, canon, file: probe.1 }
+    rut_driver::ChildLookup::Found {
+        text,
+        canon,
+        file: probe.1,
+    }
 }
 
 impl Backend {
@@ -705,10 +737,7 @@ impl Backend {
     async fn publish(&self, uri: Uri, version: Option<i32>) {
         // empty list on failure/fix — diagnostics must always publish, or
         // stale squiggles never clear
-        let parse = self
-            .analyze_uri(&uri)
-            .map(|a| a.diags)
-            .unwrap_or_default();
+        let parse = self.analyze_uri(&uri).map(|a| a.diags).unwrap_or_default();
         let diags = self.check_lane(&uri, parse);
         self.client.publish_diagnostics(uri, diags, version).await;
     }
@@ -721,10 +750,16 @@ impl Backend {
     /// checker's per-file diags merge into the parse set; no package
     /// graph → parse-only (today's behavior, never worse).
     fn check_lane(&self, uri: &Uri, parse: Vec<Diagnostic>) -> Vec<Diagnostic> {
-        let Some(text) = self.get(uri) else { return parse };
+        let Some(text) = self.get(uri) else {
+            return parse;
+        };
         // one directory is one module — only a module file carries a
         // package's voice; every other shape stays parse-only
-        let is_module_file = uri.as_str().rsplit('/').next().is_some_and(|n| n == "mod.rut");
+        let is_module_file = uri
+            .as_str()
+            .rsplit('/')
+            .next()
+            .is_some_and(|n| n == "mod.rut");
         if !is_module_file {
             return parse;
         }
@@ -733,10 +768,16 @@ impl Backend {
             None => return parse,
         };
         let (dir, dm) = resolve_doc_mods_at(&path);
-        let (Some(dir), Some(pkg)) = (dir, dm.pkg) else { return parse };
-        let Some(doc_group) =
-            fs_pkg_group(&dir, &pkg, dm.mod_path.as_deref().unwrap_or(""), &text, uri.as_str())
-        else {
+        let (Some(dir), Some(pkg)) = (dir, dm.pkg) else {
+            return parse;
+        };
+        let Some(doc_group) = fs_pkg_group(
+            &dir,
+            &pkg,
+            dm.mod_path.as_deref().unwrap_or(""),
+            &text,
+            uri.as_str(),
+        ) else {
             return parse; // the package cannot assemble — never worse
         };
         let mut groups = {
@@ -783,7 +824,10 @@ fn fs_pkg_group(
     let (root_text, root_uri) = if doc_path.is_empty() {
         (doc_text.to_string(), doc_uri.to_string())
     } else {
-        (std::fs::read_to_string(&root_path).ok()?, file_uri(&root_path))
+        (
+            std::fs::read_to_string(&root_path).ok()?,
+            file_uri(&root_path),
+        )
     };
     let mut files = std::collections::BTreeMap::new();
     files.insert(
@@ -796,18 +840,23 @@ fn fs_pkg_group(
         },
     );
     let mut found = std::collections::BTreeMap::new();
-    let mut read = |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
-        Ok(fs_child_lookup(dir, &mut found, parent, name, "mod.rut"))
-    };
+    let mut read =
+        |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
+            Ok(fs_child_lookup(dir, &mut found, parent, name, "mod.rut"))
+        };
     let canon = root_path.to_string_lossy().into_owned();
-    if let Ok(mods) = rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read) {
+    if let Ok(mods) =
+        rut_driver::mount_mod_children(&root_text, &canon, Mode::Impl, "mod.rut", &mut read)
+    {
         for (path, m) in mods {
             let (text, uri) = if path == doc_path {
                 (doc_text.to_string(), doc_uri.to_string())
             } else {
                 // the physical file the lookup found — the mod path
                 // alone never re-derives it
-                let child = found.get(&path).cloned()
+                let child = found
+                    .get(&path)
+                    .cloned()
                     .unwrap_or_else(|| dir.join(&path).join("mod.rut"));
                 (m.text.clone(), file_uri(&child))
             };
@@ -822,7 +871,11 @@ fn fs_pkg_group(
             );
         }
     }
-    Some(check::PkgFiles { module: pkg.to_string(), namespace: table.namespace, files })
+    Some(check::PkgFiles {
+        module: pkg.to_string(),
+        namespace: table.namespace,
+        files,
+    })
 }
 
 /// the namespace head a dep group's manifest spells, read off the
@@ -850,8 +903,12 @@ impl LanguageServer for Backend {
         tokio::spawn(async move {
             let hints = tokio::task::spawn_blocking(move || {
                 let Some(root) = root else { return Vec::new() };
-                let Ok(u) = Uri::from_str(&root) else { return Vec::new() };
-                let Some(cow) = u.to_file_path() else { return Vec::new() };
+                let Ok(u) = Uri::from_str(&root) else {
+                    return Vec::new();
+                };
+                let Some(cow) = u.to_file_path() else {
+                    return Vec::new();
+                };
                 let path = cow.into_owned();
                 *root_slot.write().unwrap() = Some(path.clone());
                 let mut guard = defs.write().unwrap();
@@ -879,20 +936,22 @@ impl LanguageServer for Backend {
                         ..Default::default()
                     },
                 )),
-                semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
-                    SemanticTokensOptions {
-                        legend: SemanticTokensLegend {
-                            token_types: TokenType::legend()
-                                .into_iter()
-                                .map(SemanticTokenType::from)
-                                .collect(),
-                            token_modifiers: vec![],
+                semantic_tokens_provider: Some(
+                    SemanticTokensServerCapabilities::SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            legend: SemanticTokensLegend {
+                                token_types: TokenType::legend()
+                                    .into_iter()
+                                    .map(SemanticTokenType::from)
+                                    .collect(),
+                                token_modifiers: vec![],
+                            },
+                            full: Some(SemanticTokensFullOptions::Bool(true)),
+                            range: Some(false),
+                            ..Default::default()
                         },
-                        full: Some(SemanticTokensFullOptions::Bool(true)),
-                        range: Some(false),
-                        ..Default::default()
-                    },
-                )),
+                    ),
+                ),
                 document_symbol_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 definition_provider: Some(OneOf::Left(true)),
@@ -904,7 +963,11 @@ impl LanguageServer for Backend {
                     // the `::` tiers and the type tier at an annotation
                     // boundary; `{` — the brace form of a use
                     // (`use pkg::{ ⏐`)
-                    trigger_characters: Some(vec![".".to_string(), ":".to_string(), "{".to_string()]),
+                    trigger_characters: Some(vec![
+                        ".".to_string(),
+                        ":".to_string(),
+                        "{".to_string(),
+                    ]),
                     ..Default::default()
                 }),
                 signature_help_provider: Some(SignatureHelpOptions {
@@ -954,7 +1017,10 @@ impl LanguageServer for Backend {
         self.client.publish_diagnostics(uri, vec![], None).await;
     }
 
-    async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
         match self.analyze_uri(&params.text_document.uri) {
             Some(a) => Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
                 result_id: None,
@@ -964,7 +1030,10 @@ impl LanguageServer for Backend {
         }
     }
 
-    async fn document_symbol(&self, params: DocumentSymbolParams) -> Result<Option<DocumentSymbolResponse>> {
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Result<Option<DocumentSymbolResponse>> {
         match self.analyze_uri(&params.text_document.uri) {
             Some(a) => Ok(Some(DocumentSymbolResponse::Nested(a.symbols))),
             None => Ok(None),
@@ -973,7 +1042,9 @@ impl LanguageServer for Backend {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = params.text_document_position_params.text_document.uri;
-        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let Some(text) = self.get(&uri) else {
+            return Ok(None);
+        };
         let p = params.text_document_position_params.position;
         let doc = self.doc_mods(&uri);
         let out = {
@@ -985,7 +1056,9 @@ impl LanguageServer for Backend {
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
-        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let Some(text) = self.get(&uri) else {
+            return Ok(None);
+        };
         let p = params.text_document_position.position;
         let doc = self.doc_mods(&uri);
         let items = {
@@ -1000,7 +1073,9 @@ impl LanguageServer for Backend {
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
-        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let Some(text) = self.get(&uri) else {
+            return Ok(None);
+        };
         let p = params.text_document_position_params.position;
         let doc = self.doc_mods(&uri);
         let locs = {
@@ -1015,7 +1090,9 @@ impl LanguageServer for Backend {
         params: GotoTypeDefinitionParams,
     ) -> Result<Option<GotoTypeDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
-        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let Some(text) = self.get(&uri) else {
+            return Ok(None);
+        };
         let p = params.text_document_position_params.position;
         let doc = self.doc_mods(&uri);
         let locs = {
@@ -1032,7 +1109,9 @@ impl LanguageServer for Backend {
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri;
-        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let Some(text) = self.get(&uri) else {
+            return Ok(None);
+        };
         let out = {
             let defs = self.defs.read().unwrap();
             analysis::inlay_hints_at(uri.as_str(), &text, &defs, params.range)
@@ -1042,7 +1121,9 @@ impl LanguageServer for Backend {
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let uri = params.text_document_position.text_document.uri;
-        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let Some(text) = self.get(&uri) else {
+            return Ok(None);
+        };
         let p = params.text_document_position.position;
         let doc = self.doc_mods(&uri);
         let locs = {
@@ -1062,7 +1143,9 @@ impl LanguageServer for Backend {
 
     async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
         let uri = params.text_document_position_params.text_document.uri;
-        let Some(text) = self.get(&uri) else { return Ok(None) };
+        let Some(text) = self.get(&uri) else {
+            return Ok(None);
+        };
         let p = params.text_document_position_params.position;
         let out = {
             let defs = self.defs.read().unwrap();
@@ -1077,7 +1160,10 @@ impl Backend {
     /// relative targets (the std surface's true `rut/...` paths) resolve
     /// against the workspace root; targets that resolve nowhere stay
     /// relative (the client may still know the file — never a wrong jump)
-    fn resolve_locations(&self, locs: Vec<crate::definition::DefLocation>) -> Option<Vec<Location>> {
+    fn resolve_locations(
+        &self,
+        locs: Vec<crate::definition::DefLocation>,
+    ) -> Option<Vec<Location>> {
         let root = self.root.read().unwrap().clone();
         let out: Vec<Location> = locs
             .into_iter()
@@ -1095,8 +1181,12 @@ impl Backend {
         }
     }
 
-    fn locations(&self, locs: Vec<crate::definition::DefLocation>) -> Option<GotoDefinitionResponse> {
-        self.resolve_locations(locs).map(GotoDefinitionResponse::Array)
+    fn locations(
+        &self,
+        locs: Vec<crate::definition::DefLocation>,
+    ) -> Option<GotoDefinitionResponse> {
+        self.resolve_locations(locs)
+            .map(GotoDefinitionResponse::Array)
     }
 }
 
@@ -1105,11 +1195,11 @@ impl Backend {
 fn resolve_target_uri(raw: &str, root: Option<&Path>) -> Option<Uri> {
     // scheme = a letter/letter-digit run followed by `:` —
     // checked on the raw string; ls-types' parser is strict about the rest
-    let has_scheme = raw
-        .split(':')
-        .next()
-        .is_some_and(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.')))
-        && raw.contains(':');
+    let has_scheme = raw.split(':').next().is_some_and(|s| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    }) && raw.contains(':');
     if has_scheme {
         if let Ok(u) = Uri::from_str(raw) {
             return Some(u);

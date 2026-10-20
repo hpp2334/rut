@@ -13,10 +13,17 @@
 use rut_vm::interp::Vm;
 
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    match rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile() {
+    match rut_driver::RutRun::new()
+        .pkg(rut_driver::Mounted::source(spec, src))
+        .entrypoint(spec)
+        .compile()
+    {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -26,7 +33,11 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
 fn one_diag(src: &str) -> String {
     let d = compiled("app", src);
     let msgs: Vec<String> = d.diags.iter().map(|d| d.msg.clone()).collect();
-    assert_eq!(msgs.len(), 1, "expected exactly one diagnostic, got {msgs:?}");
+    assert_eq!(
+        msgs.len(),
+        1,
+        "expected exactly one diagnostic, got {msgs:?}"
+    );
     msgs[0].clone()
 }
 

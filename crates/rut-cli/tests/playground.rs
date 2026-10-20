@@ -59,8 +59,8 @@ fn classics_run_clean() {
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .pkg(rut_driver::Mounted::source("main", &src).manifest(manifest));
         for d in ["rut/ink", "rut/pouch", "rut/nmapset"] {
-            let pkgs = rut_native::dir_pkgs(&tree.join(d))
-                .unwrap_or_else(|e| panic!("mount {d}: {e}"));
+            let pkgs =
+                rut_native::dir_pkgs(&tree.join(d)).unwrap_or_else(|e| panic!("mount {d}: {e}"));
             chain = pkgs.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
         }
         let out = match chain.entrypoint("main").compile() {
@@ -111,7 +111,13 @@ fn classics_run_clean() {
         hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
         hosts.install_host_pkg(&ctx, rut_std::math::pkg());
         hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
-        let mut vm = match rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build() {
+        let mut vm = match rut_vm::interp::Vm::builder()
+            .program(Rc::new(prog))
+            .limits(limits)
+            .hooks(rut_vm::interp::HostHooks::default())
+            .hosts(hosts)
+            .build()
+        {
             Ok(vm) => vm,
             Err(t) => {
                 failures.push(format!("{name}: boot: {}", t.msg));

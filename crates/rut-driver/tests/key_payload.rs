@@ -9,9 +9,8 @@
 
 use std::rc::Rc;
 
-
-use rut_vm::OpaqueRef;
 use rut_vm::interp::{KeyPayload, Vm};
+use rut_vm::OpaqueRef;
 
 const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/keypayload");
 
@@ -44,14 +43,16 @@ const STR: i64 = 2;
 const BYTES: i64 = 3;
 const UNSUPPORTED: i64 = 4;
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -77,7 +78,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -102,7 +106,12 @@ fn vm_with_host() -> Vm {
     assert!(
         g.graph.diags.is_empty(),
         "{}",
-        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = rut_core::link::flatten(g.graph.program.expect("compile"));
     rut_vm::verify::verify(&prog).unwrap();
@@ -124,14 +133,21 @@ fn vm_with_host() -> Vm {
         })
     });
     hosts.verify_against(&expected); // keypayload.d.rut ↔ the body
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .unwrap()
 }
 
 #[test]
 fn key_payload_classifies_through_the_host_crossing() {
     let mut vm = vm_with_host();
-    let tag = |vm: &mut Vm, h: &OpaqueRef| -> i64 { vm.call::<_, i64>("classify", (h.clone(),)).unwrap() };
+    let tag = |vm: &mut Vm, h: &OpaqueRef| -> i64 {
+        vm.call::<_, i64>("classify", (h.clone(),)).unwrap()
+    };
 
     // the closed set: integers and bool cross as Bits
     let i: OpaqueRef = vm.call("box_i32", (7i32,)).unwrap();
@@ -166,7 +182,9 @@ fn distinct_boxes_of_the_same_key_stay_distinct_handles() {
     let a: OpaqueRef = vm.call("box_i32", (7i32,)).unwrap();
     let b: OpaqueRef = vm.call("box_i32", (7i32,)).unwrap();
     assert_ne!(a, b, "opaque(..) mints a fresh box per call");
-    let tag = |vm: &mut Vm, h: &OpaqueRef| -> i64 { vm.call::<_, i64>("classify", (h.clone(),)).unwrap() };
+    let tag = |vm: &mut Vm, h: &OpaqueRef| -> i64 {
+        vm.call::<_, i64>("classify", (h.clone(),)).unwrap()
+    };
     assert_eq!(tag(&mut vm, &a), BITS);
     assert_eq!(tag(&mut vm, &b), BITS);
 }

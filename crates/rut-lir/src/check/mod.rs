@@ -5,12 +5,12 @@
 //! diag stops before emit.
 
 use rut_ast::ast::*;
+use rut_core::binary::{ConstVal, FuncCode, IfaceDesc};
+use rut_core::types::*;
+use rut_core::{sym, Interner};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
 use rut_lexer::token::{FloatSuffix, IntSuffix};
-use rut_core::binary::{ConstVal, FuncCode, IfaceDesc};
-use rut_core::types::*;
-use rut_core::{Interner, sym};
 
 pub(crate) mod collect;
 mod collect_impl;
@@ -193,7 +193,10 @@ pub struct Capture {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FnKey {
     Free(IdentId),
-    Method { data: IdentId, name: IdentId },
+    Method {
+        data: IdentId,
+        name: IdentId,
+    },
     /// one lambda AST node (its enclosing fn is non-generic in this build,
     /// so one instantiation per node)
     Lambda(NodeId),
@@ -204,7 +207,10 @@ pub enum FnKey {
     /// the emit closure of a desugared `for (v of xs)` over the
     /// `iterate` protocol: `body` with `v: E` bound;
     /// `break` → `return false`, `continue` → `return true`
-    ForOfEmit { body: NodeId, var: IdentId },
+    ForOfEmit {
+        body: NodeId,
+        var: IdentId,
+    },
     /// An engine-backed thunk: a bodyless FuncCode whose
     /// `host_id` names the embedder's registered body — the sleep
     /// future's `Future::yield`. The VM joins it like any host fn.
@@ -471,7 +477,8 @@ pub struct Ctx<'a> {
     /// constructor. The prelude is used, never ambient — `Array`/
     /// `Opaque` resolve only through this map; the ambient prelude
     /// rows bind under [`AMBIENT_SITE`]
-    pub extern_native_types: std::collections::HashMap<(String, IdentId), rut_core::binary::NativeTy>,
+    pub extern_native_types:
+        std::collections::HashMap<(String, IdentId), rut_core::binary::NativeTy>,
     /// used core builtin ifaces: name -> contract
     /// (`Disposal`/`Index`/`Iterable`)
     /// ifaces exported by used modules' surfaces:
@@ -511,8 +518,7 @@ pub struct Ctx<'a> {
     /// and the header's `mut` flag, the loop var's write law in the
     /// body). Fid-keyed: one loop body may compile under several
     /// enclosing generic substitutions, each with its own element typing.
-    pub for_of_sigs:
-        std::collections::HashMap<u32, (TypeId, Vec<Capture>, Option<TypeId>, bool)>,
+    pub for_of_sigs: std::collections::HashMap<u32, (TypeId, Vec<Capture>, Option<TypeId>, bool)>,
     /// used core compiler-lowered functions (`own`, `downcast`,
     /// `assert`/`panic`, the `str`/`bytes` natives):
     /// `(binding file, name)` — the name is callable only where bound;
@@ -772,7 +778,11 @@ pub(crate) fn bound_ty_str(ctx: &Ctx, node: NodeHandle<AnyTy>) -> String {
             if !last.generics.is_empty() {
                 s.push_str(&format!(
                     "<{}>",
-                    last.generics.iter().map(|&g| bound_ty_str(ctx, g)).collect::<Vec<_>>().join(", ")
+                    last.generics
+                        .iter()
+                        .map(|&g| bound_ty_str(ctx, g))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ));
             }
             s
@@ -897,7 +907,9 @@ impl<'a> Ctx<'a> {
     pub fn not_in_core_scope(&self, n: IdentId) -> Option<String> {
         let text = self.interner.name(n);
         if let Some(name) = self.pub_core.get(&n) {
-            return Some(format!("`{name}` is not in scope — `use core::{{ {name} }}`"));
+            return Some(format!(
+                "`{name}` is not in scope — `use core::{{ {name} }}`"
+            ));
         }
         rut_core::binary::is_core_name(n).then(|| {
             format!(
@@ -957,7 +969,11 @@ impl<'a> Ctx<'a> {
     /// resolved to. Answers the final module; `Err` names the first
     /// segment that is not a module there, with the path walked so far
     /// (the error's "under" spelling).
-    pub(crate) fn walk_mod_path(&self, start: &str, segs: &[PathSeg]) -> Result<String, (IdentId, String)> {
+    pub(crate) fn walk_mod_path(
+        &self,
+        start: &str,
+        segs: &[PathSeg],
+    ) -> Result<String, (IdentId, String)> {
         let mut cur = start.to_string();
         for seg in segs {
             let Some(scope) = self.mods.scopes.get(&cur) else {
@@ -1045,7 +1061,11 @@ impl<'a> Ctx<'a> {
             return None;
         }
         let q = home.replace('/', "::");
-        let prefix = if q.is_empty() { String::new() } else { format!("{q}::") };
+        let prefix = if q.is_empty() {
+            String::new()
+        } else {
+            format!("{q}::")
+        };
         Some(format!(
             "`{}` is declared in module `{}` ({}) — qualify it: `{}{}` (a bare {} name resolves in the current module only)",
             self.name(name),
@@ -1301,7 +1321,8 @@ impl<'a> Ctx<'a> {
             if id.0 < names.well_known_len() {
                 return id;
             }
-            *map.entry(id).or_insert_with(|| interner.intern(names.name(id)))
+            *map.entry(id)
+                .or_insert_with(|| interner.intern(names.name(id)))
         };
         let descs = descs
             .into_iter()
@@ -1347,7 +1368,8 @@ impl<'a> Ctx<'a> {
             if id.0 < source.well_known_len() {
                 return id;
             }
-            *map.entry(id).or_insert_with(|| interner.intern(source.name(id)))
+            *map.entry(id)
+                .or_insert_with(|| interner.intern(source.name(id)))
         };
         rows.into_iter()
             .map(|(key, mut d)| {
@@ -1427,7 +1449,9 @@ impl<'a> Ctx<'a> {
                 continue;
             }
             for p in &fd.params {
-                let MemberKind::Param(pd) = self.ast.param(*p) else { continue };
+                let MemberKind::Param(pd) = self.ast.param(*p) else {
+                    continue;
+                };
                 let Some(t) = pd.ty else { continue };
                 let ty = self.resolve_type(t, &[]);
                 if !self.crosses_boundary(ty) {
@@ -1532,7 +1556,11 @@ impl<'a> Ctx<'a> {
             TyKind::Future { elem } => format!("future{}", self.kind_spell(*elem)),
             TyKind::Fn { params, ret } => format!(
                 "fn({}) -> {}",
-                params.iter().map(|&p| self.kind_spell(p)).collect::<Vec<_>>().join(","),
+                params
+                    .iter()
+                    .map(|&p| self.kind_spell(p))
+                    .collect::<Vec<_>>()
+                    .join(","),
                 self.kind_spell(*ret)
             ),
             _ => self.type_name(t).to_string(),
@@ -1548,7 +1576,10 @@ impl<'a> Ctx<'a> {
 
     /// The template window's parameter index for placeholder row `t`.
     pub fn template_param_idx(&self, t: TypeId) -> Option<u32> {
-        self.template_params.iter().position(|(_, row)| *row == t).map(|i| i as u32)
+        self.template_params
+            .iter()
+            .position(|(_, row)| *row == t)
+            .map(|i| i as u32)
     }
 
     /// Mint a bodyless bound-member stub (the template window's
@@ -1556,8 +1587,16 @@ impl<'a> Ctx<'a> {
     /// stub shape the mirror law already uses — recorded for the
     /// wire's `TemplateRow`. The link-side materialization resolves the
     /// stub against the concrete argument's own inherent surface.
-    pub fn mint_member_stub(&mut self, param: TypeId, member: IdentId, params: Vec<TypeId>, ret: TypeId, is_method: bool) -> u32 {
-        let pname = self.template_params
+    pub fn mint_member_stub(
+        &mut self,
+        param: TypeId,
+        member: IdentId,
+        params: Vec<TypeId>,
+        ret: TypeId,
+        is_method: bool,
+    ) -> u32 {
+        let pname = self
+            .template_params
             .iter()
             .find(|(_, row)| *row == param)
             .map(|(n, _)| self.name(*n).to_string())
@@ -1593,10 +1632,16 @@ impl<'a> Ctx<'a> {
 
         let name = self.types.type_at(concrete).name;
         let text = self.interner.name(name).to_string();
-        let Some((head, args_text)) = text.split_once('<') else { return };
-        let Some(args_text) = args_text.strip_suffix('>') else { return };
+        let Some((head, args_text)) = text.split_once('<') else {
+            return;
+        };
+        let Some(args_text) = args_text.strip_suffix('>') else {
+            return;
+        };
         let head_id = self.intern(head);
-        let Some(d) = self.find_data(head_id) else { return; };
+        let Some(d) = self.find_data(head_id) else {
+            return;
+        };
         if d.generics.is_empty() {
             return;
         }
@@ -1620,7 +1665,10 @@ impl<'a> Ctx<'a> {
                 .or_else(|| self.synth_text_type(at));
             match resolved {
                 Some(a) => args.push(a),
-                None => { ok = false; break; }
+                None => {
+                    ok = false;
+                    break;
+                }
             }
         }
         if !ok {
@@ -1652,9 +1700,18 @@ impl<'a> Ctx<'a> {
             let mut cur = String::new();
             for ch in inner.chars() {
                 match ch {
-                    '<' | '(' => { depth += 1; cur.push(ch); }
-                    '>' | ')' => { depth = depth.saturating_sub(1); cur.push(ch); }
-                    ',' if depth == 0 => { parts.push(cur.trim().to_string()); cur = String::new(); }
+                    '<' | '(' => {
+                        depth += 1;
+                        cur.push(ch);
+                    }
+                    '>' | ')' => {
+                        depth = depth.saturating_sub(1);
+                        cur.push(ch);
+                    }
+                    ',' if depth == 0 => {
+                        parts.push(cur.trim().to_string());
+                        cur = String::new();
+                    }
                     _ => cur.push(ch),
                 }
             }
@@ -1679,7 +1736,10 @@ impl<'a> Ctx<'a> {
         self.datas.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
     }
     pub fn find_iface(&self, name: IdentId) -> Option<&IfaceDeclInfo> {
-        self.iface_decls.iter().find(|(n, _)| *n == name).map(|(_, d)| d)
+        self.iface_decls
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, d)| d)
     }
     pub fn find_alias(&self, name: IdentId) -> Option<&AliasDecl> {
         self.aliases.iter().find(|a| a.name == name)
@@ -1702,9 +1762,22 @@ impl<'a> Ctx<'a> {
     /// Route an instantiation request to its declaring package
     /// (deduplicated — one request per `owner + decl + args`).
     pub fn request_inst(&mut self, owner: String, decl: IdentId, args: Vec<TypeId>) {
-        let key = (owner.clone(), self.name(decl).to_string(), args.clone(), String::new());
+        let key = (
+            owner.clone(),
+            self.name(decl).to_string(),
+            args.clone(),
+            String::new(),
+        );
         if self.requests_seen.insert(key) {
-            self.inst_requests.push(InstRequest { owner, decl, args, methods: vec![], is_fn: false, is_impl: false, impl_target: 0 });
+            self.inst_requests.push(InstRequest {
+                owner,
+                decl,
+                args,
+                methods: vec![],
+                is_fn: false,
+                is_impl: false,
+                impl_target: 0,
+            });
         }
     }
 
@@ -1744,7 +1817,12 @@ impl<'a> Ctx<'a> {
     /// consumer's space (the seed block carries their rows to the
     /// owner, so the ids spell identically there).
     pub fn request_generic_fn_body(&mut self, owner: String, name: IdentId, args: Vec<TypeId>) {
-        let key = (owner.clone(), format!("fn:{}", self.name(name)), args.clone(), String::new());
+        let key = (
+            owner.clone(),
+            format!("fn:{}", self.name(name)),
+            args.clone(),
+            String::new(),
+        );
         if self.requests_seen.insert(key) {
             self.inst_requests.push(InstRequest {
                 owner,
@@ -1846,7 +1924,10 @@ impl<'a> Ctx<'a> {
             .collect()
     }
 
-    pub fn find_let(&self, name: IdentId) -> Option<&(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> {
+    pub fn find_let(
+        &self,
+        name: IdentId,
+    ) -> Option<&(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> {
         self.lets.iter().find(|(n, ..)| *n == name)
     }
     pub fn find_free_fn(&self, name: IdentId) -> bool {
@@ -1951,13 +2032,16 @@ impl<'a> Ctx<'a> {
             name,
             kind: TyKind::Array { elem },
         });
-        
+
         id
     }
     /// A trait-typed value (`i: I`) — the trait object type: a cell handle whose cell's own
     /// type reaches the vtable
     pub fn mk_iface_obj(&mut self, iface_id: u32) -> TypeId {
-        let tname = self.interner.name(self.ifaces[iface_id as usize].name).to_string();
+        let tname = self
+            .interner
+            .name(self.ifaces[iface_id as usize].name)
+            .to_string();
         let name = self.intern(&format!("[interface] {tname}"));
         self.types.intern(RutType {
             name,
@@ -1999,12 +2083,19 @@ impl<'a> Ctx<'a> {
     pub fn mk_tuple(&mut self, elems: Vec<TypeId>) -> TypeId {
         let name = self.intern(&format!(
             "({})",
-            elems.iter().map(|&t| self.type_name(t)).collect::<Vec<_>>().join(", ")
+            elems
+                .iter()
+                .map(|&t| self.type_name(t))
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
         let fields = elems
             .into_iter()
             .enumerate()
-            .map(|(i, ty)| FieldInfo { name: self.intern(&i.to_string()), ty })
+            .map(|(i, ty)| FieldInfo {
+                name: self.intern(&i.to_string()),
+                ty,
+            })
             .collect();
         self.types.intern(RutType {
             name,
@@ -2012,7 +2103,10 @@ impl<'a> Ctx<'a> {
         })
     }
     pub fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
-        let ps: Vec<String> = params.iter().map(|&p| self.type_name(p).to_string()).collect();
+        let ps: Vec<String> = params
+            .iter()
+            .map(|&p| self.type_name(p).to_string())
+            .collect();
         let name = self.intern(&format!("fn({}) -> {}", ps.join(", "), self.type_name(ret)));
         self.types.intern(RutType {
             name,
@@ -2033,8 +2127,14 @@ pub(crate) fn seg_str(ctx: &Ctx, segs: &[PathSeg]) -> String {
 // int suffix → type id
 pub fn int_suffix_ty(s: IntSuffix) -> TypeId {
     match s {
-        IntSuffix::U8 => TY_U8, IntSuffix::U16 => TY_U16, IntSuffix::U32 => TY_U32, IntSuffix::U64 => TY_U64,
-        IntSuffix::I8 => TY_I8, IntSuffix::I16 => TY_I16, IntSuffix::I32 => TY_I32, IntSuffix::I64 => TY_I64,
+        IntSuffix::U8 => TY_U8,
+        IntSuffix::U16 => TY_U16,
+        IntSuffix::U32 => TY_U32,
+        IntSuffix::U64 => TY_U64,
+        IntSuffix::I8 => TY_I8,
+        IntSuffix::I16 => TY_I16,
+        IntSuffix::I32 => TY_I32,
+        IntSuffix::I64 => TY_I64,
     }
 }
 
@@ -2043,9 +2143,16 @@ pub fn int_suffix_ty(s: IntSuffix) -> TypeId {
 pub fn numeric_prim(p: PrimTy) -> bool {
     matches!(
         p,
-        PrimTy::U8 | PrimTy::U16 | PrimTy::U32 | PrimTy::U64
-            | PrimTy::I8 | PrimTy::I16 | PrimTy::I32 | PrimTy::I64
-            | PrimTy::F32 | PrimTy::F64
+        PrimTy::U8
+            | PrimTy::U16
+            | PrimTy::U32
+            | PrimTy::U64
+            | PrimTy::I8
+            | PrimTy::I16
+            | PrimTy::I32
+            | PrimTy::I64
+            | PrimTy::F32
+            | PrimTy::F64
     )
 }
 

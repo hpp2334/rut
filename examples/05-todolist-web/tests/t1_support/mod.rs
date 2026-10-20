@@ -8,12 +8,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_vm::interp::{ HostHooks, Vm };
-use rut_vm::{ Opaque, OpaqueRef };
+use rut_vm::interp::{HostHooks, Vm};
+use rut_vm::{Opaque, OpaqueRef};
 
-use todolist_web::fake_dom::{ FakeDom, Snapshot };
+use todolist_web::fake_dom::{FakeDom, Snapshot};
 use todolist_web::host::WebHost;
-use todolist_web::{ hosts, mount, state, WebState };
+use todolist_web::{hosts, mount, state, WebState};
 
 /// The booted twin host the tests pass around.
 pub type Host = WebHost<FakeDom>;
@@ -55,14 +55,14 @@ pub fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
 /// One element's shape, read by the hook the lowering emitted as `id`.
 pub fn snap(host: &WebHost<FakeDom>, hook: &str) -> Snapshot {
     host.with_dom(|d| {
-        d.snapshot_by_id(hook).unwrap_or_else(|| panic!("no element '#{hook}' in the twin's tree"))
+        d.snapshot_by_id(hook)
+            .unwrap_or_else(|| panic!("no element '#{hook}' in the twin's tree"))
     })
 }
 
 /// Run one scenario render probe (`t1p_*`).
 pub fn render(host: &mut WebHost<FakeDom>, app: &OpaqueRef, probe: &str) {
-    host
-        .call::<_, ()>(probe, (app.clone(),))
+    host.call::<_, ()>(probe, (app.clone(),))
         .unwrap_or_else(|e| panic!("{probe} failed: {}", e.msg));
 }
 
@@ -87,8 +87,7 @@ fn el_id(h: &OpaqueRef) -> u32 {
 /// ids through the hook, never by predicting the counter).
 pub fn listener_of(host: &mut WebHost<FakeDom>, app: &OpaqueRef, path: &str) -> i64 {
     let nid = node_id(host, app, path);
-    host
-        .state
+    host.state
         .borrow()
         .listeners
         .iter()
@@ -105,7 +104,8 @@ pub fn regs_len(host: &mut WebHost<FakeDom>, app: &OpaqueRef) -> i32 {
 /// Whether one firing id answers a live event mutation (retired ids
 /// answer false; the fired LOG is where the labels live).
 pub fn regs_has(host: &mut WebHost<FakeDom>, app: &OpaqueRef, id: i64) -> bool {
-    host.call("t1p_regs_has", (app.clone(), id.to_string())).unwrap()
+    host.call("t1p_regs_has", (app.clone(), id.to_string()))
+        .unwrap()
 }
 
 /// The framework's live handle rows (path -> element).
@@ -114,7 +114,8 @@ pub fn els_len(host: &mut WebHost<FakeDom>, app: &OpaqueRef) -> i32 {
 }
 
 pub fn els_has(host: &mut WebHost<FakeDom>, app: &OpaqueRef, path: &str) -> bool {
-    host.call("t1p_els_has", (app.clone(), path.to_string())).unwrap()
+    host.call("t1p_els_has", (app.clone(), path.to_string()))
+        .unwrap()
 }
 
 /// The delivered subjects, "|"-joined in arrival order.

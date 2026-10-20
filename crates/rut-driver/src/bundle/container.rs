@@ -33,7 +33,11 @@ pub fn crc32(data: &[u8]) -> u32 {
     for (i, t) in table.iter_mut().enumerate() {
         let mut c = i as u32;
         for _ in 0..8 {
-            c = if c & 1 != 0 { 0xEDB8_8320 ^ (c >> 1) } else { c >> 1 };
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
         }
         *t = c;
     }
@@ -75,7 +79,9 @@ pub fn parse_bundle(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>, BundleError> 
         }
     }
     let Some(eocd) = eocd else {
-        return Err(BundleError("not a zip archive (no end-of-central-directory)".into()));
+        return Err(BundleError(
+            "not a zip archive (no end-of-central-directory)".into(),
+        ));
     };
     let n = get16(data, eocd + 10).unwrap_or(0) as usize;
     let cd_size = get32(data, eocd + 12).unwrap_or(0);
@@ -108,7 +114,8 @@ fn get16(d: &[u8], at: usize) -> Option<u16> {
     d.get(at..at + 2).map(|b| u16::from_le_bytes([b[0], b[1]]))
 }
 fn get32(d: &[u8], at: usize) -> Option<u32> {
-    d.get(at..at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    d.get(at..at + 4)
+        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
 #[cfg(test)]
@@ -119,7 +126,10 @@ mod tests {
     fn round_trip_and_determinism() {
         let entries = vec![
             ("rut.jsonc".to_string(), b"name = \"app:x\"\n".to_vec()),
-            ("x.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
+            (
+                "x.rut".to_string(),
+                b"fn main() -> i32 { return 7; }\n".to_vec(),
+            ),
         ];
         let a = write_bundle(&entries).unwrap();
         let b = write_bundle(&entries).unwrap();
@@ -196,7 +206,10 @@ mod tests {
                 "rut.jsonc".to_string(),
                 br#"{"format": "rutbundle", "format_version": 12, "name": "golden"}"#.to_vec(),
             ),
-            ("golden.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
+            (
+                "golden.rut".to_string(),
+                b"fn main() -> i32 { return 7; }\n".to_vec(),
+            ),
         ];
         let bytes = write_bundle(&entries).unwrap();
         use sha2::{Digest, Sha256};
@@ -205,8 +218,7 @@ mod tests {
             .map(|b| format!("{b:02x}"))
             .collect();
         assert_eq!(
-            hex,
-            "e7f97f09f4649be341bac18fb6783abcdb7941c072d83e3a6a752b280a979171",
+            hex, "e7f97f09f4649be341bac18fb6783abcdb7941c072d83e3a6a752b280a979171",
             "the .rutbundle byte layout moved — is the shift intended? re-pin consciously: {hex}"
         );
     }

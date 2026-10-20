@@ -306,7 +306,11 @@ pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
                 if !last.generics.is_empty() {
                     s.push_str(&format!(
                         "<{}>",
-                        last.generics.iter().map(|&g| ty_src(ast, g)).collect::<Vec<_>>().join(", ")
+                        last.generics
+                            .iter()
+                            .map(|&g| ty_src(ast, g))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ));
                 }
             }
@@ -322,7 +326,11 @@ pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         // hovers (the inlay phase's find)
         TypeKind::TyTuple { elems } => format!(
             "({})",
-            elems.iter().map(|&e| ty_src(ast, e)).collect::<Vec<_>>().join(", ")
+            elems
+                .iter()
+                .map(|&e| ty_src(ast, e))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         TypeKind::TyUnion { elems } => elems
             .iter()

@@ -12,8 +12,8 @@ use rut_lexer::token::{Tok, Token};
 use super::bindings::{self, Binding};
 use super::infer::is_cap;
 use super::render::{
-    binding_markdown, render_candidates, render_fn_hits, render_member, render_mod,
-    render_module_target, render_primitive, render_ty, render_let,
+    binding_markdown, render_candidates, render_fn_hits, render_let, render_member, render_mod,
+    render_module_target, render_primitive, render_ty,
 };
 use super::types::{DefIndex, FnDef, LetDef, MemberSrc, TyDef, TyForm};
 use crate::mods::DocMods;
@@ -34,13 +34,24 @@ pub struct HoverOut {
 /// document's file-module context (the face's knowledge): an
 /// own-package use-path segment hover resolves through it, the default
 /// keeps the cross-package lanes only.
-pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, doc: &DocMods, pos: u32) -> Option<HoverOut> {
+pub fn hover(
+    idxs: &[&DefIndex],
+    toks: &[Token],
+    ast: &Ast,
+    doc: &DocMods,
+    pos: u32,
+) -> Option<HoverOut> {
     let t = tok_at(toks, pos)?;
-    let Tok::Ident(name) = &t.tok else { return None };
+    let Tok::Ident(name) = &t.tok else {
+        return None;
+    };
     if is_keyword(name) {
         if name == "self" {
             let (i, ty) = enclosing_type(idxs, pos)?;
-            return Some(HoverOut { markdown: render_ty(i, ty), span: t.span });
+            return Some(HoverOut {
+                markdown: render_ty(i, ty),
+                span: t.span,
+            });
         }
         return None;
     }
@@ -50,14 +61,20 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, doc: &DocMods, pos: 
     // namespace edge (the decl layer's token-recovered spans; a use
     // site never matches)
     if let Some(md) = decl_site_hover(idxs, t.span, name) {
-        return Some(HoverOut { markdown: md, span: t.span });
+        return Some(HoverOut {
+            markdown: md,
+            span: t.span,
+        });
     }
 
     // use-path segments — the hovered ident is a path segment of one
     // of the document's `use pkg::a::b::{ .. }` edges: hover the
     // resolved module through the dep tree (a miss is no hover)
     if let Some(md) = use_segment_hover(idxs, doc, t.span) {
-        return Some(HoverOut { markdown: md, span: t.span });
+        return Some(HoverOut {
+            markdown: md,
+            span: t.span,
+        });
     }
 
     // the binding pass — receivers below AND the plain-identifier hover
@@ -69,7 +86,12 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, doc: &DocMods, pos: 
     // answer is final.
     if let Some(recv) = member_context(toks, t) {
         match member_hover(idxs, ast, &binds, pos, name, recv) {
-            MemberText::Found(out) => return Some(HoverOut { markdown: out, span: t.span }),
+            MemberText::Found(out) => {
+                return Some(HoverOut {
+                    markdown: out,
+                    span: t.span,
+                })
+            }
             MemberText::None => return None,
             MemberText::UnknownReceiver => {} // fall through to the name search
         }
@@ -78,41 +100,66 @@ pub fn hover(idxs: &[&DefIndex], toks: &[Token], ast: &Ast, doc: &DocMods, pos: 
     // type position: capitalized or primitive names
     if is_cap(name) || rut_parser::is_primitive_ty(name) {
         if let Some((i, ty)) = find_ty(idxs, name) {
-            return Some(HoverOut { markdown: render_ty(i, ty), span: t.span });
+            return Some(HoverOut {
+                markdown: render_ty(i, ty),
+                span: t.span,
+            });
         }
         // M7 — the numeric/bool primitives have no surface decl to
         // index; the static blurb is the answer
         if let Some(md) = render_primitive(name) {
-            return Some(HoverOut { markdown: md, span: t.span });
+            return Some(HoverOut {
+                markdown: md,
+                span: t.span,
+            });
         }
     }
 
     // identifier hover — the binding layer's shadow-correct resolve
     // (params, lets, loop variables; decl and use sites alike)
     if let Some(b) = bindings::resolve(&binds, pos, name) {
-        return Some(HoverOut { markdown: binding_markdown(b), span: t.span });
+        return Some(HoverOut {
+            markdown: binding_markdown(b),
+            span: t.span,
+        });
     }
 
     // module-let use sites — a unique name match across the chain
     if let Some(md) = module_let_hover(idxs, name) {
-        return Some(HoverOut { markdown: md, span: t.span });
+        return Some(HoverOut {
+            markdown: md,
+            span: t.span,
+        });
     }
 
     // bare name: unique fn match (free fns, methods); ambiguity lists
     let hits: Vec<(&DefIndex, &FnDef)> = idxs
         .iter()
-        .flat_map(|i| i.fns.iter().filter(|f| &f.name == name).map(move |f| (*i, f)))
+        .flat_map(|i| {
+            i.fns
+                .iter()
+                .filter(|f| &f.name == name)
+                .map(move |f| (*i, f))
+        })
         .collect();
     match hits.as_slice() {
         [] => None,
-        [(_, one)] => Some(HoverOut { markdown: render_fn_hits(&hits, one), span: t.span }),
-        _ => Some(HoverOut { markdown: render_candidates(&hits), span: t.span }),
+        [(_, one)] => Some(HoverOut {
+            markdown: render_fn_hits(&hits, one),
+            span: t.span,
+        }),
+        _ => Some(HoverOut {
+            markdown: render_candidates(&hits),
+            span: t.span,
+        }),
     }
 }
 
 /// token under (or immediately before) `pos`
 pub(crate) fn tok_at<'t>(toks: &'t [Token], pos: u32) -> Option<&'t Token> {
-    toks.iter().rev().find(|t| t.span.lo <= pos && pos <= t.span.hi)
+    toks.iter()
+        .rev()
+        .find(|t| t.span.lo <= pos && pos <= t.span.hi)
 }
 
 /// when the hovered token follows a `.` (value access) or a `::`
@@ -190,7 +237,10 @@ fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String>
 fn mounted_child<'a>(idxs: &[&'a DefIndex], owner: &DefIndex, child: &str) -> Option<&'a DefIndex> {
     match crate::mods::find_mod(idxs, owner.module.as_deref(), child) {
         Some(c) => Some(c),
-        None if owner.module.is_none() => idxs.iter().copied().find(|i| crate::mods::mod_path_of(i) == child),
+        None if owner.module.is_none() => idxs
+            .iter()
+            .copied()
+            .find(|i| crate::mods::mod_path_of(i) == child),
         None => None,
     }
 }
@@ -218,7 +268,12 @@ fn use_segment_hover(idxs: &[&DefIndex], doc: &DocMods, span: Span) -> Option<St
                 let path = if k == 0 {
                     start
                 } else {
-                    crate::mods::walk_position_mods(idxs, doc.pkg.as_deref(), &start, &u.path[1..=k])?
+                    crate::mods::walk_position_mods(
+                        idxs,
+                        doc.pkg.as_deref(),
+                        &start,
+                        &u.path[1..=k],
+                    )?
                 };
                 let target = if doc.mod_path.as_deref() == Some(path.as_str()) {
                     di
@@ -245,7 +300,12 @@ fn use_segment_hover(idxs: &[&DefIndex], doc: &DocMods, span: Span) -> Option<St
 fn module_let_hover(idxs: &[&DefIndex], name: &str) -> Option<String> {
     let hits: Vec<(&DefIndex, &LetDef)> = idxs
         .iter()
-        .flat_map(|i| i.lets.iter().filter(|l| l.name == name).map(move |l| (*i, l)))
+        .flat_map(|i| {
+            i.lets
+                .iter()
+                .filter(|l| l.name == name)
+                .map(move |l| (*i, l))
+        })
         .collect();
     match hits.as_slice() {
         [(i, l)] => Some(render_let(i, l)),
@@ -275,24 +335,34 @@ pub(crate) fn recv_type(
 
 /// the type whose body contains `pos` — a class/struct/interface body,
 /// or the target of the enclosing impl (via the method's owner)
-pub(crate) fn enclosing_type<'a>(idxs: &'a [&'a DefIndex], pos: u32) -> Option<(&'a DefIndex, &'a TyDef)> {
+pub(crate) fn enclosing_type<'a>(
+    idxs: &'a [&'a DefIndex],
+    pos: u32,
+) -> Option<(&'a DefIndex, &'a TyDef)> {
     let mut best: Option<(u32, &'a DefIndex, &'a TyDef)> = None;
     for i in idxs.iter().copied() {
         for t in &i.types {
             if t.form == TyForm::Enum || !contains(t.span, pos) {
                 continue;
             }
-            if best.map(|(l, _, _)| t.span.hi - t.span.lo < l).unwrap_or(true) {
+            if best
+                .map(|(l, _, _)| t.span.hi - t.span.lo < l)
+                .unwrap_or(true)
+            {
                 best = Some((t.span.hi - t.span.lo, i, t));
             }
         }
         for f in &i.fns {
             // the impl's target — the owner string IS the type's name
             // (inherent impls own their methods)
-            let Some(target) = f.owner.as_deref() else { continue };
+            let Some(target) = f.owner.as_deref() else {
+                continue;
+            };
             if let Some(t) = i.ty(target) {
                 if contains(f.span, pos)
-                    && best.map(|(l, _, _)| f.span.hi - f.span.lo < l).unwrap_or(true)
+                    && best
+                        .map(|(l, _, _)| f.span.hi - f.span.lo < l)
+                        .unwrap_or(true)
                 {
                     best = Some((f.span.hi - f.span.lo, i, t));
                 }
@@ -426,7 +496,10 @@ pub(crate) fn render_target(t: MemberTarget) -> String {
 
 /// the index declaring interface `name` — its home module; the
 /// declaration and the observing receiver may live in different indexes
-pub(crate) fn iface_decl<'a>(idxs: &'a [&'a DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
+pub(crate) fn iface_decl<'a>(
+    idxs: &'a [&'a DefIndex],
+    name: &str,
+) -> Option<(&'a DefIndex, &'a TyDef)> {
     find_ty(idxs, name).filter(|(_, t)| matches!(t.form, TyForm::Interface))
 }
 
@@ -437,7 +510,11 @@ pub(crate) fn iface_decl<'a>(idxs: &'a [&'a DefIndex], name: &str) -> Option<(&'
 /// surfaces) have no recorded params: a hit there is FINAL (the
 /// known-receiver-is-final law) and yields `None`, never a wrong
 /// signature from a same-named impl fn in another index.
-pub(crate) fn impl_method_fn<'a>(idxs: &[&'a DefIndex], ty_name: &str, member: &str) -> Option<&'a FnDef> {
+pub(crate) fn impl_method_fn<'a>(
+    idxs: &[&'a DefIndex],
+    ty_name: &str,
+    member: &str,
+) -> Option<&'a FnDef> {
     for i in idxs {
         if let Some(t) = i.ty(ty_name) {
             if t.methods.iter().any(|m| m.name == member) {

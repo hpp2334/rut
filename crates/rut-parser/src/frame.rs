@@ -12,9 +12,9 @@ use rut_lexer::token::Tok;
 
 use crate::expr::{AtomFrame, ExprFrame, ExprMode, FStrFrame, LambdaFrame};
 use crate::item::{
-    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, ModDeclFrame, ModInlineFrame,
-    TypeAliasFrame, UseFrame, InterfaceFrame, MethodFrame, ModuleLetFrame, ParamsFrame,
-    SurfaceFrame, TyDeclFrame, TypeBodyFrame,
+    classify_item, classify_pub, EnumFrame, FnFrame, ImplFrame, InterfaceFrame, MethodFrame,
+    ModDeclFrame, ModInlineFrame, ModuleLetFrame, ParamsFrame, SurfaceFrame, TyDeclFrame,
+    TypeAliasFrame, TypeBodyFrame, UseFrame,
 };
 use crate::stmt::{BlockFrame, IfFrame, PatternFrame, StmtFrame, WhenFrame};
 use crate::ty::TypeFrame;
@@ -40,8 +40,14 @@ pub(crate) enum Done {
     Members(Vec<NodeHandle<AnyParam>>),
     Method(NodeHandle<MethodDeclNode>),
     /// a struct/class/interface/impl body: (fields, methods)
-    Body(Vec<NodeHandle<FieldDeclNode>>, Vec<NodeHandle<MethodDeclNode>>),
-    WhenParts { scrut: NodeHandle<AnyExpr>, arms: Vec<NodeHandle<AnyArm>> },
+    Body(
+        Vec<NodeHandle<FieldDeclNode>>,
+        Vec<NodeHandle<MethodDeclNode>>,
+    ),
+    WhenParts {
+        scrut: NodeHandle<AnyExpr>,
+        arms: Vec<NodeHandle<AnyArm>>,
+    },
     Failed,
 }
 
@@ -175,7 +181,10 @@ pub(crate) struct ModuleFrame {
 
 impl ModuleFrame {
     pub(crate) fn new() -> Self {
-        ModuleFrame { items: Vec::new(), before: 0 }
+        ModuleFrame {
+            items: Vec::new(),
+            before: 0,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {

@@ -18,7 +18,10 @@ impl<T> Vec2<T> {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Impl { generics, target, .. } = ast.item(items[1]) else {
+    let ItemKind::Impl {
+        generics, target, ..
+    } = ast.item(items[1])
+    else {
         panic!("expected an inherent impl");
     };
     assert_eq!(generics.len(), 1, "the inherent impl declares one binder");
@@ -60,7 +63,10 @@ impl<T requires Hash2> Box2<T> {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Impl { generics, bounds, .. } = ast.item(items[2]) else {
+    let ItemKind::Impl {
+        generics, bounds, ..
+    } = ast.item(items[2])
+    else {
         panic!("expected an impl block");
     };
     assert_eq!(generics.len(), 1);

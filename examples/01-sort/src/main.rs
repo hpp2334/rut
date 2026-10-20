@@ -63,7 +63,6 @@ fn main() {
         .build()
         .unwrap();
 
-
     // the session: one bank, exact values in, JSON out — typed
     let c: rut_vm::OpaqueRef = vm.call("create", ()).unwrap();
     let ser = |vm: &mut rut_vm::interp::Vm| -> String {
@@ -75,7 +74,8 @@ fn main() {
         vm.call::<_, ()>("push", (c.clone(), x)).unwrap();
     }
     println!("pushed: {}", ser(&mut vm));
-    vm.call::<_, String>("sort", (c.clone(), "insertion")).unwrap();
+    vm.call::<_, String>("sort", (c.clone(), "insertion"))
+        .unwrap();
     println!("after insertion: {}", ser(&mut vm));
 
     // the full sweep: same deterministic input, every algorithm, fuel
@@ -86,11 +86,18 @@ fn main() {
         let before = vm.fuel_used;
         vm.call::<_, String>("sort", (c.clone(), algo)).unwrap();
         let sorted: bool = vm.call("is_sorted", (c.clone(),)).unwrap();
-        println!("  {algo:<9} {sorted}  fuel {:>6}  {}", vm.fuel_used - before, ser(&mut vm));
+        println!(
+            "  {algo:<9} {sorted}  fuel {:>6}  {}",
+            vm.fuel_used - before,
+            ser(&mut vm)
+        );
     }
 
     // unknown names are values, not traps
-    println!("sort(bogus) = {:?}", vm.call::<_, String>("sort", (c.clone(), "bogus")).unwrap());
+    println!(
+        "sort(bogus) = {:?}",
+        vm.call::<_, String>("sort", (c.clone(), "bogus")).unwrap()
+    );
 
     println!("fuel used: {} of {:?}", vm.fuel_used, Some(5_000_000u64));
 }

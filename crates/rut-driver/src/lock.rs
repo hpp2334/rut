@@ -95,8 +95,7 @@ fn found(value: Option<&Value>) -> String {
 /// value laws are path-targeted.
 pub fn parse_lock(text: &str) -> Result<LockFile, LockError> {
     let plain = strip(text);
-    let root: Value = serde_json::from_str(&plain)
-        .map_err(|e| LockError(syntax_error(&e).0))?;
+    let root: Value = serde_json::from_str(&plain).map_err(|e| LockError(syntax_error(&e).0))?;
     let Some(root) = root.as_object() else {
         return Err(LockError("rut.lock: expected a JSON object".into()));
     };
@@ -162,15 +161,17 @@ pub fn parse_lock(text: &str) -> Result<LockFile, LockError> {
 /// A row's string field — the diagnostic names the row's path and the
 /// key (`deps[1]: expected a string for 'pkg'`), the manifest's
 /// `expect_field_string` shape.
-fn field_string(path: &str, obj: &serde_json::Map<String, Value>, key: &str) -> Result<String, LockError> {
+fn field_string(
+    path: &str,
+    obj: &serde_json::Map<String, Value>,
+    key: &str,
+) -> Result<String, LockError> {
     let Some(v) = obj.get(key) else {
         return Err(LockError(format!("{path}: missing '{key}'")));
     };
     match v.as_str() {
         Some(s) => Ok(s.to_string()),
-        None => Err(LockError(format!(
-            "{path}: expected a string for '{key}'"
-        ))),
+        None => Err(LockError(format!("{path}: expected a string for '{key}'"))),
     }
 }
 
@@ -296,7 +297,11 @@ mod tests {
             &INK_SHA[1..]
         );
         let err = parse_lock(&text).unwrap_err();
-        assert!(err.to_string().starts_with("deps[0].sha256: must be 64 hex digits"), "{err}");
+        assert!(
+            err.to_string()
+                .starts_with("deps[0].sha256: must be 64 hex digits"),
+            "{err}"
+        );
         // a non-string is not a pin either
         let err = parse_lock(
             r#"{"format": "rutlock", "format_version": 1, "deps": [{"pkg": "p", "url": "https://x/p", "sha256": 3}]}"#,
@@ -351,12 +356,13 @@ mod tests {
         let err = parse_lock(r#"{"format_version": 1, "deps": []}"#).unwrap_err();
         assert_eq!(err.to_string(), "format: expected 'rutlock', found nothing");
         let base = |format: &str, version: &str| {
-            format!(
-                r#"{{"format": {format}, "format_version": {version}, "deps": []}}"#
-            )
+            format!(r#"{{"format": {format}, "format_version": {version}, "deps": []}}"#)
         };
         let err = parse_lock(&base("\"rutlock2\"", "1")).unwrap_err();
-        assert_eq!(err.to_string(), "format: expected 'rutlock', found \"rutlock2\"");
+        assert_eq!(
+            err.to_string(),
+            "format: expected 'rutlock', found \"rutlock2\""
+        );
         let err = parse_lock(&base("null", "1")).unwrap_err();
         assert_eq!(err.to_string(), "format: expected 'rutlock', found null");
         let err = parse_lock(&base("\"rutlock\"", "\"1\"")).unwrap_err();
@@ -390,14 +396,15 @@ mod tests {
         // the root, the rows array, each row
         let err = parse_lock("[1, 2]").unwrap_err();
         assert_eq!(err.to_string(), "rut.lock: expected a JSON object");
-        let err = parse_lock(r#"{"format": "rutlock", "format_version": 1, "deps": {}}"#)
-            .unwrap_err();
+        let err =
+            parse_lock(r#"{"format": "rutlock", "format_version": 1, "deps": {}}"#).unwrap_err();
         assert_eq!(err.to_string(), "deps: expected an array, found {}");
-        let err = parse_lock(
-            r#"{"format": "rutlock", "format_version": 1, "deps": ["pouch"]}"#,
-        )
-        .unwrap_err();
-        assert_eq!(err.to_string(), "deps[0]: expected an object, found \"pouch\"");
+        let err = parse_lock(r#"{"format": "rutlock", "format_version": 1, "deps": ["pouch"]}"#)
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "deps[0]: expected an object, found \"pouch\""
+        );
         let err = parse_lock(
             r#"{"format": "rutlock", "format_version": 1, "deps": [{"url": "https://x/p", "sha256": "abcdefgh"}]}"#,
         )
@@ -408,10 +415,9 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err.to_string(), "deps[0]: expected a string for 'pkg'");
-        let err = parse_lock(
-            r#"{"format": "rutlock", "format_version": 1, "deps": [{"pkg": "p"}]}"#,
-        )
-        .unwrap_err();
+        let err =
+            parse_lock(r#"{"format": "rutlock", "format_version": 1, "deps": [{"pkg": "p"}]}"#)
+                .unwrap_err();
         assert_eq!(err.to_string(), "deps[0]: missing 'url'");
     }
 
@@ -479,7 +485,10 @@ mod tests {
         // a NON-canonical lock parses to its file order; rendering is
         // what sorts, so the pair parse∘render normalizes it
         let shuffled = LockFile::from_rows(vec![pouch_row(), ink_row()]);
-        assert_eq!(render_lock(&parse_lock(&render_lock(&shuffled)).unwrap()), render_lock(&lock));
+        assert_eq!(
+            render_lock(&parse_lock(&render_lock(&shuffled)).unwrap()),
+            render_lock(&lock)
+        );
     }
 
     #[test]

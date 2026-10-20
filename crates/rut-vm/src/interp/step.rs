@@ -36,16 +36,21 @@ impl Vm {
             }
             Op::ConstRaw { dst, bits } => self.cur_regs[dst as usize] = Slot { i: bits as i64 },
 
-
             Op::Not { dst, a } => {
                 let v = !r!(a).as_bool();
                 self.cur_regs[dst as usize] = Slot::bool(v);
             }
             // threaded scalar ops are handled by rut-vm-threaded; they never
             // reach this match
-            Op::AddI { .. } | Op::SubI { .. } | Op::WAddI { .. } | Op::WSubI { .. }
-            | Op::WMulI { .. } | Op::LtI { .. }
-            | Op::AddF { .. } | Op::SubF { .. } | Op::MulF { .. } => {
+            Op::AddI { .. }
+            | Op::SubI { .. }
+            | Op::WAddI { .. }
+            | Op::WSubI { .. }
+            | Op::WMulI { .. }
+            | Op::LtI { .. }
+            | Op::AddF { .. }
+            | Op::SubF { .. }
+            | Op::MulF { .. } => {
                 unreachable!("threaded scalar ops are handled by rut-vm-threaded")
             }
             // remaining scalar ops run here (the `T_SLOW` path)
@@ -158,10 +163,19 @@ impl Vm {
             }
 
             Op::Jmp { target } => self.cur_pc = target,
-            Op::Br { cond, then_t, else_t } => {
+            Op::Br {
+                cond,
+                then_t,
+                else_t,
+            } => {
                 self.cur_pc = if r!(cond).as_bool() { then_t } else { else_t };
             }
-            Op::BrTable { idx, table_off, count, default } => {
+            Op::BrTable {
+                idx,
+                table_off,
+                count,
+                default,
+            } => {
                 let prog = Rc::clone(&self.prog);
                 let table = &prog.funcs[self.cur_func as usize].labels
                     [table_off as usize..table_off as usize + count as usize];
@@ -177,11 +191,37 @@ impl Vm {
                 self.cur_pc = table.get(m).copied().unwrap_or(default);
             }
 
-            Op::Call { func, argv_off, argc, dst } => self.op_call(func, argv_off, argc, dst),
-            Op::CallM { func, argv_off, argc, dst } => self.op_call(func, argv_off, argc, dst),
-            Op::CallI { slot, argv_off, argc, dst } => self.op_call_i(slot, argv_off, argc, dst)?,
-            Op::CallFn { fval, argv_off, argc, dst } => self.op_call_fn(fval, argv_off, argc, dst)?,
-            Op::CallNat { nat, recv, argv_off, argc, dst } => self.call_nat(nat, recv, argv_off, argc, dst)?,
+            Op::Call {
+                func,
+                argv_off,
+                argc,
+                dst,
+            } => self.op_call(func, argv_off, argc, dst),
+            Op::CallM {
+                func,
+                argv_off,
+                argc,
+                dst,
+            } => self.op_call(func, argv_off, argc, dst),
+            Op::CallI {
+                slot,
+                argv_off,
+                argc,
+                dst,
+            } => self.op_call_i(slot, argv_off, argc, dst)?,
+            Op::CallFn {
+                fval,
+                argv_off,
+                argc,
+                dst,
+            } => self.op_call_fn(fval, argv_off, argc, dst)?,
+            Op::CallNat {
+                nat,
+                recv,
+                argv_off,
+                argc,
+                dst,
+            } => self.call_nat(nat, recv, argv_off, argc, dst)?,
             // handled in run_loop (root returns surface the run's value)
             Op::Ret { .. } => unreachable!("Op::Ret is handled by the run loop"),
             Op::NewCell { dst, ty } => {
@@ -194,9 +234,24 @@ impl Vm {
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::MakeRecord { dst, ty, argv_off, argc } => self.op_make_record(dst, ty, argv_off, argc)?,
-            Op::GetF { dst, obj, field, repr } => self.op_getf(dst, obj, field, repr)?,
-            Op::SetF { obj, field, val, repr } => self.op_setf(obj, field, val, repr)?,
+            Op::MakeRecord {
+                dst,
+                ty,
+                argv_off,
+                argc,
+            } => self.op_make_record(dst, ty, argv_off, argc)?,
+            Op::GetF {
+                dst,
+                obj,
+                field,
+                repr,
+            } => self.op_getf(dst, obj, field, repr)?,
+            Op::SetF {
+                obj,
+                field,
+                val,
+                repr,
+            } => self.op_setf(obj, field, val, repr)?,
             Op::Own { dst, src, ty } => {
                 let v = self.heap.own(r!(src), ty, &self.prog.types)?;
                 let old = self.cur_regs[dst as usize];
@@ -217,16 +272,48 @@ impl Vm {
                     _ => return Err(Trap::new(TrapKind::Invalid, "arrnew on non-array")),
                 };
                 let n = unsafe { r!(len).i }.max(0) as usize;
-                let c = self.heap.alloc_array_filled(elem, n, default_slot_repr(repr), &self.prog.types)?;
+                let c = self.heap.alloc_array_filled(
+                    elem,
+                    n,
+                    default_slot_repr(repr),
+                    &self.prog.types,
+                )?;
                 let old = self.cur_regs[dst as usize];
                 self.cur_regs[dst as usize] = c;
                 self.heap.release(old);
             }
-            Op::ArrLit { dst, ty, argv_off, argc } => self.op_arr_lit(dst, ty, argv_off, argc)?,
-            Op::ArrGet { dst, arr, idx, repr } => self.op_arr_get(dst, arr, idx, repr)?,
-            Op::ArrSet { arr, idx, val, repr } => self.op_arr_set(arr, idx, val, repr)?,
-            Op::ArrGetF { dst, obj, field, idx, repr } => self.op_arr_get_f(dst, obj, field, idx, repr)?,
-            Op::ArrSetF { obj, field, idx, val, repr } => self.op_arr_set_f(obj, field, idx, val, repr)?,
+            Op::ArrLit {
+                dst,
+                ty,
+                argv_off,
+                argc,
+            } => self.op_arr_lit(dst, ty, argv_off, argc)?,
+            Op::ArrGet {
+                dst,
+                arr,
+                idx,
+                repr,
+            } => self.op_arr_get(dst, arr, idx, repr)?,
+            Op::ArrSet {
+                arr,
+                idx,
+                val,
+                repr,
+            } => self.op_arr_set(arr, idx, val, repr)?,
+            Op::ArrGetF {
+                dst,
+                obj,
+                field,
+                idx,
+                repr,
+            } => self.op_arr_get_f(dst, obj, field, idx, repr)?,
+            Op::ArrSetF {
+                obj,
+                field,
+                idx,
+                val,
+                repr,
+            } => self.op_arr_set_f(obj, field, idx, val, repr)?,
 
             Op::EnumNew { dst, ty, member } => {
                 let c = self.heap.enum_member(ty, member)?;
@@ -315,7 +402,12 @@ impl Vm {
                 self.heap.release(old);
             }
 
-            Op::MakeClosure { dst, func, argv_off, argc } => {
+            Op::MakeClosure {
+                dst,
+                func,
+                argv_off,
+                argc,
+            } => {
                 let prog = Rc::clone(&self.prog);
                 let captures = self.cur_argv(&prog, argv_off, argc);
                 let caps: Vec<Slot> = captures.iter().map(|&c| r!(c)).collect();
@@ -366,7 +458,10 @@ impl Vm {
                     text.chars().nth(i as usize).ok_or_else(|| {
                         Trap::new(
                             TrapKind::IndexOutOfBounds,
-                            format!("string index {i} out of bounds ({} chars)", text.chars().count()),
+                            format!(
+                                "string index {i} out of bounds ({} chars)",
+                                text.chars().count()
+                            ),
                         )
                     })?
                 };

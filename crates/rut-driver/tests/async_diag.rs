@@ -5,16 +5,16 @@
 
 use std::collections::BTreeMap;
 
-
-
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -40,24 +40,35 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
 }
 
 fn diags_of(src: &str) -> Vec<String> {
-    let async_pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
-    let compiled = rut_driver::Walk { pkgs: async_pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
-            rut_driver::Mounted::source("app", src)
-                .manifest(rut_driver::Manifest::lib("app", &["futures"])),
-        )
-        .entrypoint("app")
-        .compile()
-        .unwrap();
+    let async_pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
+    let compiled = rut_driver::Walk {
+        pkgs: async_pkgs,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .pkg(
+        rut_driver::Mounted::source("app", src)
+            .manifest(rut_driver::Manifest::lib("app", &["futures"])),
+    )
+    .entrypoint("app")
+    .compile()
+    .unwrap();
     compiled.graph.diags.iter().map(|d| d.msg.clone()).collect()
 }
 
@@ -69,22 +80,22 @@ fn one_diag(src: &str) -> String {
 
 #[test]
 fn await_outside_an_async_fn_diagnoses() {
-    let msg = one_diag(r#"
+    let msg = one_diag(
+        r#"
 use futures::sleep;
 
 entry fn main() -> nil {
     await sleep(5);
 }
-"#);
-    assert!(
-        msg.contains("`await` outside an async fn"),
-        "got: {msg}"
+"#,
     );
+    assert!(msg.contains("`await` outside an async fn"), "got: {msg}");
 }
 
 #[test]
 fn await_on_a_non_future_diagnoses() {
-    let msg = one_diag(r#"
+    let msg = one_diag(
+        r#"
 async fn work() -> nil {
     await 7;
 }
@@ -92,7 +103,8 @@ async fn work() -> nil {
 entry fn main() -> nil {
     work();
 }
-"#);
+"#,
+    );
     assert!(msg.contains("`await` needs a Future"), "got: {msg}");
     assert!(msg.contains("i32"), "got: {msg}");
 }
@@ -103,7 +115,8 @@ fn await_on_a_user_type_diagnoses() {
     // diagnoses with the frame law — the record is a raw frame type
     // that cannot surface, and the awaitable is the async CALL's
     // `Future<T>`, never the argument
-    let msg = one_diag(r#"
+    let msg = one_diag(
+        r#"
 class NotWoven {
     n: i32 = 0;
 }
@@ -115,7 +128,8 @@ async fn work(f: NotWoven) -> nil {
 entry fn main() -> nil {
     work(NotWoven { });
 }
-"#);
+"#,
+    );
     assert!(
         msg.contains("`await` needs a `Future<..>`")
             && msg.contains("`NotWoven` is a raw frame type and cannot surface anymore")
@@ -126,7 +140,8 @@ entry fn main() -> nil {
 
 #[test]
 fn await_on_the_receipt_diagnoses_with_the_join_law() {
-    let msg = one_diag(r#"
+    let msg = one_diag(
+        r#"
 use futures::{ launch_future, LaunchedFutureHandle };
 
 async fn work() -> nil { }
@@ -138,9 +153,11 @@ async fn awaiter(h: LaunchedFutureHandle<nil>) -> nil {
 entry fn main() -> nil {
     awaiter(launch_future(work()));
 }
-"#);
+"#,
+    );
     assert!(
-        msg.contains("cannot `await` a LaunchedFutureHandle") && msg.contains("cannot be re-launched"),
+        msg.contains("cannot `await` a LaunchedFutureHandle")
+            && msg.contains("cannot be re-launched"),
         "got: {msg}"
     );
 }
@@ -149,7 +166,8 @@ entry fn main() -> nil {
 fn relaunching_the_receipt_is_a_type_error() {
     // ruling 6: `launch_future(launch_future(f))` — the receipt is not
     // a Future; the arrow fails to type, never a runtime check
-    let msg = one_diag(r#"
+    let msg = one_diag(
+        r#"
 use futures::launch_future;
 
 async fn work() -> nil { }
@@ -157,7 +175,8 @@ async fn work() -> nil { }
 entry fn main() -> nil {
     launch_future(launch_future(work()));
 }
-"#);
+"#,
+    );
     assert!(
         msg.contains("cannot infer type parameter `T` of `launch_future`"),
         "got: {msg}"
@@ -168,13 +187,15 @@ entry fn main() -> nil {
 fn an_async_fn_never_spells_the_cx_parameter() {
     // the resume context is INJECTED as `cx` — a spelled parameter of
     // that name diagnoses (the parameter list carries ordinary values)
-    let msg = one_diag(r#"
+    let msg = one_diag(
+        r#"
 async fn work(cx: i32) -> nil { }
 
 entry fn main() -> nil {
     work(7);
 }
-"#);
+"#,
+    );
     assert!(
         msg.contains("an async fn's parameters are ordinary values")
             && msg.contains("the resume context is injected as `cx`, never spelled"),
@@ -184,7 +205,8 @@ entry fn main() -> nil {
 
 #[test]
 fn runcontext_has_no_other_members() {
-    let msg = one_diag(r#"
+    let msg = one_diag(
+        r#"
 use core::{ RunContext };
 
 async fn work() -> nil {
@@ -194,7 +216,8 @@ async fn work() -> nil {
 entry fn main() -> nil {
     work();
 }
-"#);
+"#,
+    );
     assert!(
         msg.contains("`RunContext` has no member `bogus`"),
         "got: {msg}"

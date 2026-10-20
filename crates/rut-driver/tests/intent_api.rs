@@ -43,16 +43,20 @@ fn util_world(tag: &str) -> std::path::PathBuf {
     );
     let util = root.join("util");
     write(&util, "rut.jsonc", r#"{"name": "util"}"#);
-    write(&util, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    write(
+        &util,
+        "mod.rut",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     root
 }
 
 /// The flat text of the linked root program — the lane-equality probe
 /// (dir-compiled vs archive-mounted must spell the same program).
 fn linked_binary(compiled: &rut_driver::Compiled) -> Vec<u8> {
-    rut_core::binary::encode(
-        &rut_core::link::flatten(compiled.graph.program.clone().expect("linked")),
-    )
+    rut_core::binary::encode(&rut_core::link::flatten(
+        compiled.graph.program.clone().expect("linked"),
+    ))
 }
 
 /// One run over the decoded handle: parse once, offer many. Two runs
@@ -120,11 +124,13 @@ fn pkg_host_offers_the_host_bodies() {
     let mut calc = rut_vm::HostPkg::new("calc");
     calc.register::<_, (i64,), i64, _>("twice", |_vm: &mut rut_vm::interp::Vm, v: i64| v * 2);
     let compiled = rut_driver::RutRun::new()
-        .pkg(Mounted::source(
-            "app",
-            "use calc::{ twice };\n\nentry fn go() -> i64 {\n    return twice(20);\n}\n",
+        .pkg(
+            Mounted::source(
+                "app",
+                "use calc::{ twice };\n\nentry fn go() -> i64 {\n    return twice(20);\n}\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["calc"])),
         )
-        .manifest(rut_driver::Manifest::lib("app", &["calc"])))
         .pkg(Mounted::host(
             "calc",
             vec![rut_driver::HostRow::root(
@@ -141,7 +147,12 @@ fn pkg_host_offers_the_host_bodies() {
     assert!(
         compiled.graph.diags.is_empty(),
         "{:?}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>()
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
     );
     let flat = rut_core::link::flatten(compiled.graph.program.expect("linked"));
     let limits = rut_vm::interp::Limits::default();
@@ -208,7 +219,8 @@ fn the_retired_names_still_function() {
     assert!(compiled.graph.program.is_some());
 
     // the pkg data constructor, through the deprecated alias
-    let data: rut_driver::Pkg = rut_driver::Pkg::source("solo", "entry fn go() -> i64 { return 1; }");
+    let data: rut_driver::Pkg =
+        rut_driver::Pkg::source("solo", "entry fn go() -> i64 { return 1; }");
     let compiled = rut_driver::RutRun::new()
         .pkg(data)
         .entrypoint("solo")
@@ -240,7 +252,11 @@ fn a_mount_refusal_surfaces_at_compile_not_at_offer() {
                 for line in text.lines() {
                     if let Some((l, r)) = line.split_once('=') {
                         let scope: u32 = l.trim().parse().unwrap();
-                        out.push_str(&format!("{span} = {rest}\n", span = scope + 100, rest = r.trim()));
+                        out.push_str(&format!(
+                            "{span} = {rest}\n",
+                            span = scope + 100,
+                            rest = r.trim()
+                        ));
                     }
                 }
                 b = out.into_bytes();

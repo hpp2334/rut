@@ -3,15 +3,16 @@
 
 use rut_parser::Mode;
 
-
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -37,7 +38,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -57,7 +61,13 @@ fn uses_and_links_a_function() {
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep program");
     let surface = dep.surface.clone();
-    assert!(surface.funcs.iter().any(|f| surface.names.name(f.name) == "add"), "surface has add");
+    assert!(
+        surface
+            .funcs
+            .iter()
+            .any(|f| surface.names.name(f.name) == "add"),
+        "surface has add"
+    );
 
     // root "app" under scope 2 uses `add`
     let root = rut_driver::compile_program(
@@ -100,7 +110,9 @@ fn uses_of_an_unmounted_module_error() {
         "app",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`rut.jsonc` `deps`") || d.msg.contains("`math`")),
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("`rut.jsonc` `deps`") || d.msg.contains("`math`")),
         "{:?}",
         out.diags
     );
@@ -122,7 +134,10 @@ fn uses_and_links_a_type() {
     let dep = dep.program.expect("dep program");
     let surface = dep.surface.clone();
     assert!(
-        surface.type_exports.iter().any(|t| surface.names.name(t.name) == "Point"),
+        surface
+            .type_exports
+            .iter()
+            .any(|t| surface.names.name(t.name) == "Point"),
         "surface exports Point"
     );
 
@@ -162,11 +177,16 @@ fn uses_and_links_a_type() {
     let point = point_ids[0];
     // app's own funcs are appended after geo's (main, origin)
     let app: Vec<&rut_core::binary::FuncCode> = linked.funcs.iter().skip(2).collect();
-    let made = app.iter().flat_map(|f| &f.code).any(|op| matches!(
-        op,
-        rut_core::ops::Op::MakeRecord { ty, .. } if *ty == point
-    ));
-    let read = app.iter().flat_map(|f| &f.code).any(|op| matches!(op, rut_core::ops::Op::GetF { .. }));
+    let made = app.iter().flat_map(|f| &f.code).any(|op| {
+        matches!(
+            op,
+            rut_core::ops::Op::MakeRecord { ty, .. } if *ty == point
+        )
+    });
+    let read = app
+        .iter()
+        .flat_map(|f| &f.code)
+        .any(|op| matches!(op, rut_core::ops::Op::GetF { .. }));
     assert!(made, "app constructs the used Point\n{app_ir}");
     assert!(read, "app reads a used field\n{app_ir}");
 }
@@ -190,12 +210,17 @@ fn binary_round_trips_the_whole_surface() {
     );
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep program");
-    assert!(!dep.surface.type_exports.is_empty(), "the surface exports Point");
+    assert!(
+        !dep.surface.type_exports.is_empty(),
+        "the surface exports Point"
+    );
     // the inherent method surface is the satisfaction mechanism now —
     // nothing registers
-    assert!(!dep.surface.inherents.is_empty(), "the surface carries Point's inherent rows");
-    let back =
-        rut_core::binary::decode(&rut_core::binary::encode(&dep)).expect("decode");
+    assert!(
+        !dep.surface.inherents.is_empty(),
+        "the surface carries Point's inherent rows"
+    );
+    let back = rut_core::binary::decode(&rut_core::binary::encode(&dep)).expect("decode");
     assert_eq!(back.surface, dep.surface);
 }
 
@@ -266,7 +291,10 @@ fn graph_threads_a_type_through_a_chain() {
                      use geo_mid::{shifted};\n\
                      entry fn main() -> i32 { let p: Point = shifted(); return p.x; }\n",
                 )
-                .manifest(rut_driver::Manifest::lib("app_main", &["geo_base", "geo_mid"])),
+                .manifest(rut_driver::Manifest::lib(
+                    "app_main",
+                    &["geo_base", "geo_mid"],
+                )),
             )
             .entrypoint("app_main")
             .compile(),
@@ -276,14 +304,16 @@ fn graph_threads_a_type_through_a_chain() {
     let points = (0..p.types.types.len() as u32)
         .filter(|&i| p.type_name(i) == "Point")
         .count();
-    assert_eq!(points, 1, "Point is shared across the chain, not duplicated");
+    assert_eq!(
+        points, 1,
+        "Point is shared across the chain, not duplicated"
+    );
 }
 
 #[test]
 fn pouch_module_source_compiles() {
     // rut/pouch/mod.rut — one file, one module unit
-    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../rut/pouch/mod.rut");
+    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch/mod.rut");
     let merged = rut_native::load_module_source(&pouch).expect("read");
     assert!(merged.contains("class Vec<T>"), "Vec is here");
     let src = format!(
@@ -305,7 +335,14 @@ fn pouch_module_source_compiles() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Vec<i32>").count(), 1);
+    assert_eq!(
+        p.types
+            .types
+            .iter()
+            .filter(|t| p.name_of(t.name) == "Vec<i32>")
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -326,11 +363,7 @@ fn loads_a_directory_graph() {
         "use math::{seven};\nentry fn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
-    std::fs::write(
-        lib.join("rut.jsonc"),
-        r#"{"name": "math"}"#,
-    )
-    .unwrap();
+    std::fs::write(lib.join("rut.jsonc"), r#"{"name": "math"}"#).unwrap();
     std::fs::write(lib.join("mod.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
 
     let loaded = rut_native::load_dir(&app).expect("load_dir");
@@ -362,8 +395,7 @@ fn consumer_uses_pouch_vec() {
     // `Vec<i32>` instantiates as a mirror row and requests the bodies
     // from pouch's unit (owner-anchored generics); the methods bind
     // through the surface's inherent rows
-    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../rut/pouch/mod.rut");
+    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch/mod.rut");
     let coll_src = rut_native::load_module_source(&pouch).expect("read");
     let out = graph_of(
         rut_driver::RutRun::new()
@@ -389,7 +421,13 @@ fn consumer_uses_pouch_vec() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.funcs.iter().filter(|f| p.name_of(f.name) == "main").count(), 1);
+    assert_eq!(
+        p.funcs
+            .iter()
+            .filter(|f| p.name_of(f.name) == "main")
+            .count(),
+        1
+    );
     // the consumer's `Vec<i32>` and pouch's own row unify through the
     // ledger: ONE program-wide instantiation (dead mirrors may sit in
     // the merged table, but every ledger row maps to one id)
@@ -410,11 +448,16 @@ fn consumer_uses_pouch_vec() {
 
 #[test]
 fn graph_reports_a_missing_dependency() {
-    let out = compiled("app_main", "use missing::{nope};\n\
-                 entry fn main() -> i32 { return 0; }\n");
+    let out = compiled(
+        "app_main",
+        "use missing::{nope};\n\
+                 entry fn main() -> i32 { return 0; }\n",
+    );
     assert!(out.program.is_none());
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`rut.jsonc` `deps`")),
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("`rut.jsonc` `deps`")),
         "{:?}",
         out.diags
     );

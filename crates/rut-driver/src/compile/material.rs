@@ -141,23 +141,44 @@ impl<'a> Substitution<'a> {
             _ => {}
         }
         let name = self.interner.intern(&format!("?{}", self.name_of(elem)));
-        self.intern_structural(RutType { name, kind: TyKind::Opt { elem } })
+        self.intern_structural(RutType {
+            name,
+            kind: TyKind::Opt { elem },
+        })
     }
 
     fn mk_array(&mut self, elem: TypeId) -> TypeId {
-        let name = self.interner.intern(&format!("Array<{}>", self.name_of(elem)));
-        self.intern_structural(RutType { name, kind: TyKind::Array { elem } })
+        let name = self
+            .interner
+            .intern(&format!("Array<{}>", self.name_of(elem)));
+        self.intern_structural(RutType {
+            name,
+            kind: TyKind::Array { elem },
+        })
     }
 
     fn mk_weak(&mut self, elem: TypeId) -> TypeId {
-        let name = self.interner.intern(&format!("Weak<{}>", self.name_of(elem)));
-        self.intern_structural(RutType { name, kind: TyKind::Weak { elem } })
+        let name = self
+            .interner
+            .intern(&format!("Weak<{}>", self.name_of(elem)));
+        self.intern_structural(RutType {
+            name,
+            kind: TyKind::Weak { elem },
+        })
     }
 
     fn mk_fn_ty(&mut self, params: Vec<TypeId>, ret: TypeId) -> TypeId {
-        let ps: Vec<String> = params.iter().map(|&p| self.name_of(p).to_string()).collect();
-        let name = self.interner.intern(&format!("fn({}) -> {}", ps.join(", "), self.name_of(ret)));
-        self.intern_structural(RutType { name, kind: TyKind::Fn { params, ret } })
+        let ps: Vec<String> = params
+            .iter()
+            .map(|&p| self.name_of(p).to_string())
+            .collect();
+        let name = self
+            .interner
+            .intern(&format!("fn({}) -> {}", ps.join(", "), self.name_of(ret)));
+        self.intern_structural(RutType {
+            name,
+            kind: TyKind::Fn { params, ret },
+        })
     }
 
     /// Split a name's top-level argument list (`Base<a, b>` / `(a, b)`).
@@ -197,7 +218,10 @@ impl<'a> Substitution<'a> {
             TyKind::Data { fields } => {
                 let nf: Vec<FieldInfo> = fields
                     .iter()
-                    .map(|f| FieldInfo { name: f.name, ty: self.run(f.ty) })
+                    .map(|f| FieldInfo {
+                        name: f.name,
+                        ty: self.run(f.ty),
+                    })
                     .collect();
                 let fields_changed = nf.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
                 if !fields_changed {
@@ -234,8 +258,10 @@ impl<'a> Substitution<'a> {
                     }
                     let new_text = format!("{base}<{}>", parts.join(", "));
                     let name = self.interner.intern(&new_text);
-                    let row =
-                        self.intern_structural(RutType { name, kind: TyKind::Data { fields: nf } });
+                    let row = self.intern_structural(RutType {
+                        name,
+                        kind: TyKind::Data { fields: nf },
+                    });
                     // the owner-anchored identity row: link unifies every
                     // mirror of this instantiation onto ONE program-wide
                     // row — the anchor is the DECL's home pkg, the exact
@@ -295,7 +321,10 @@ impl<'a> Substitution<'a> {
                     text
                 };
                 let name = self.interner.intern(&new_text);
-                let row = self.tt.intern(RutType { name, kind: TyKind::Data { fields: nf } });
+                let row = self.tt.intern(RutType {
+                    name,
+                    kind: TyKind::Data { fields: nf },
+                });
                 // the owner-anchored identity row: link unifies every
                 // mirror of this instantiation onto ONE program-wide row.
                 // The anchor is the DECL's home pkg — a foreign base
@@ -305,10 +334,8 @@ impl<'a> Substitution<'a> {
                     if let Some(base_id) = self.interner.lookup(&base) {
                         // re-derive the concrete args from the new name
                         let (_, args) = Self::split_args(&new_text).expect("just split");
-                        let cargs: Vec<TypeId> = args
-                            .iter()
-                            .filter_map(|a| self.resolve_text(a))
-                            .collect();
+                        let cargs: Vec<TypeId> =
+                            args.iter().filter_map(|a| self.resolve_text(a)).collect();
                         if cargs.len() == args.len() {
                             let owner_text = self
                                 .foreign_owners
@@ -394,7 +421,12 @@ pub fn template_stability_violation(prog: &Program) -> Option<(String, String)> 
     let interner = &prog.interner;
     let tt = &prog.types;
     for fc in prog.funcs.iter().skip(prog.template_first_fid as usize) {
-        let reg_ty = |r: u16| -> TypeId { fc.regs.get(r as usize).copied().unwrap_or(rut_core::types::TY_NIL) };
+        let reg_ty = |r: u16| -> TypeId {
+            fc.regs
+                .get(r as usize)
+                .copied()
+                .unwrap_or(rut_core::types::TY_NIL)
+        };
         let field_ty = |t: TypeId, field: u32| -> Option<TypeId> {
             match tt.kind(t) {
                 TyKind::Data { fields } => fields.get(field as usize).map(|f| f.ty),
@@ -410,7 +442,12 @@ pub fn template_stability_violation(prog: &Program) -> Option<(String, String)> 
         for op in &fc.code {
             let bad = |what: &str| Some((interner.name(fc.name).to_string(), what.to_string()));
             match op {
-                Op::GetF { obj, field, repr, .. } | Op::SetF { obj, field, repr, .. } => {
+                Op::GetF {
+                    obj, field, repr, ..
+                }
+                | Op::SetF {
+                    obj, field, repr, ..
+                } => {
                     let want = field_ty(reg_ty(*obj), *field).map(|f| tt.repr_of(f));
                     if let Some(w) = want {
                         if w != *repr {
@@ -428,15 +465,26 @@ pub fn template_stability_violation(prog: &Program) -> Option<(String, String)> 
                 Op::ArrGet { arr, repr, .. } | Op::ArrSet { arr, repr, .. } => {
                     if let Some(e) = arr_elem(reg_ty(*arr)) {
                         if arr_elem_repr(tt, e) != *repr {
-                            return bad("an array element op whose baked repr is not the element type's");
+                            return bad(
+                                "an array element op whose baked repr is not the element type's",
+                            );
                         }
                     }
                 }
-                Op::ArrGetF { obj, field, repr, .. } | Op::ArrSetF { obj, field, repr, .. } => {
-                    let want = field_ty(reg_ty(*obj), *field).and_then(arr_elem).map(|e| arr_elem_repr(tt, e));
+                Op::ArrGetF {
+                    obj, field, repr, ..
+                }
+                | Op::ArrSetF {
+                    obj, field, repr, ..
+                } => {
+                    let want = field_ty(reg_ty(*obj), *field)
+                        .and_then(arr_elem)
+                        .map(|e| arr_elem_repr(tt, e));
                     if let Some(w) = want {
                         if w != *repr {
-                            return bad("a field-array op whose baked repr is not the element type's");
+                            return bad(
+                                "a field-array op whose baked repr is not the element type's",
+                            );
                         }
                     }
                 }
@@ -520,7 +568,12 @@ pub(crate) fn build_iface_remaps(
     // row at the return boundary (the T2b fill), and an iface-typed
     // local/reg names the row the body SPEAKS — want every one so the
     // map resolves each
-    for t in fc.params.iter().chain(std::iter::once(&fc.ret)).chain(fc.regs.iter()) {
+    for t in fc
+        .params
+        .iter()
+        .chain(std::iter::once(&fc.ret))
+        .chain(fc.regs.iter())
+    {
         if let rut_core::types::TyKind::IfaceObj { iface_id } = sub.tt.kind(*t) {
             wanted_rows.push(*iface_id);
         }
@@ -529,7 +582,10 @@ pub(crate) fn build_iface_remaps(
     wanted_slots.dedup();
     wanted_rows.sort_unstable();
     wanted_rows.dedup();
-    let mut remaps = IfaceRemaps { slots: HashMap::new(), rows: HashMap::new() };
+    let mut remaps = IfaceRemaps {
+        slots: HashMap::new(),
+        rows: HashMap::new(),
+    };
     for want in wanted_rows {
         let row = resolve_iface_row(sub, ifaces, iface_slots, vtables, want)?;
         remaps.rows.insert(want, row);
@@ -606,7 +662,10 @@ fn resolve_iface_row(
         })
         .collect();
     let new_row = ifaces.len() as u32;
-    ifaces.push(rut_core::binary::IfaceDesc { name: name_id, methods });
+    ifaces.push(rut_core::binary::IfaceDesc {
+        name: name_id,
+        methods,
+    });
     for m in 0..ifaces[new_row as usize].methods.len() as u32 {
         iface_slots.push((new_row, m));
     }
@@ -649,81 +708,422 @@ pub fn materialize_fn(
     out
 }
 
-fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32, ifc: &IfaceRemaps) -> Op {
+fn remap_op(
+    sub: &mut Substitution,
+    op: &Op,
+    map_fid: &mut dyn FnMut(u32) -> u32,
+    ifc: &IfaceRemaps,
+) -> Op {
     match op {
-        Op::Mov { dst, src } => Op::Mov { dst: *dst, src: *src },
-        Op::MovRef { dst, src } => Op::MovRef { dst: *dst, src: *src },
+        Op::Mov { dst, src } => Op::Mov {
+            dst: *dst,
+            src: *src,
+        },
+        Op::MovRef { dst, src } => Op::MovRef {
+            dst: *dst,
+            src: *src,
+        },
         Op::Const { dst, k } => Op::Const { dst: *dst, k: *k },
-        Op::ConstRaw { dst, bits } => Op::ConstRaw { dst: *dst, bits: *bits },
+        Op::ConstRaw { dst, bits } => Op::ConstRaw {
+            dst: *dst,
+            bits: *bits,
+        },
         Op::Not { dst, a } => Op::Not { dst: *dst, a: *a },
-        Op::AddF { prim, dst, a, b } => Op::AddF { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::SubF { prim, dst, a, b } => Op::SubF { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::MulF { prim, dst, a, b } => Op::MulF { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::DivF { prim, dst, a, b } => Op::DivF { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::ModF { prim, dst, a, b } => Op::ModF { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::NegF { prim, dst, a } => Op::NegF { prim: *prim, dst: *dst, a: *a },
-        Op::EqF { dst, a, b } => Op::EqF { dst: *dst, a: *a, b: *b },
-        Op::NeF { dst, a, b } => Op::NeF { dst: *dst, a: *a, b: *b },
-        Op::LtF { dst, a, b } => Op::LtF { dst: *dst, a: *a, b: *b },
-        Op::GtF { dst, a, b } => Op::GtF { dst: *dst, a: *a, b: *b },
-        Op::LeF { dst, a, b } => Op::LeF { dst: *dst, a: *a, b: *b },
-        Op::GeF { dst, a, b } => Op::GeF { dst: *dst, a: *a, b: *b },
-        Op::AddI { prim, dst, a, b } => Op::AddI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::SubI { prim, dst, a, b } => Op::SubI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::MulI { prim, dst, a, b } => Op::MulI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::DivI { prim, dst, a, b } => Op::DivI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::ModI { prim, dst, a, b } => Op::ModI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::WAddI { prim, dst, a, b } => Op::WAddI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::WSubI { prim, dst, a, b } => Op::WSubI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::WMulI { prim, dst, a, b } => Op::WMulI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::AndI { prim, dst, a, b } => Op::AndI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::OrI { prim, dst, a, b } => Op::OrI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::XorI { prim, dst, a, b } => Op::XorI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::ShlI { prim, dst, a, b } => Op::ShlI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::ShrI { prim, dst, a, b } => Op::ShrI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::WrapShlI { prim, dst, a, b } => Op::WrapShlI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::EqI { prim, dst, a, b } => Op::EqI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::NeI { prim, dst, a, b } => Op::NeI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::LtI { prim, dst, a, b } => Op::LtI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::GtI { prim, dst, a, b } => Op::GtI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::LeI { prim, dst, a, b } => Op::LeI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::GeI { prim, dst, a, b } => Op::GeI { prim: *prim, dst: *dst, a: *a, b: *b },
-        Op::NegI { prim, dst, a } => Op::NegI { prim: *prim, dst: *dst, a: *a },
-        Op::StrCmp { eq, dst, a, b } => Op::StrCmp { eq: *eq, dst: *dst, a: *a, b: *b },
-        Op::RefEq { eq, dst, a, b } => Op::RefEq { eq: *eq, dst: *dst, a: *a, b: *b },
+        Op::AddF { prim, dst, a, b } => Op::AddF {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::SubF { prim, dst, a, b } => Op::SubF {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::MulF { prim, dst, a, b } => Op::MulF {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::DivF { prim, dst, a, b } => Op::DivF {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::ModF { prim, dst, a, b } => Op::ModF {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::NegF { prim, dst, a } => Op::NegF {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+        },
+        Op::EqF { dst, a, b } => Op::EqF {
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::NeF { dst, a, b } => Op::NeF {
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::LtF { dst, a, b } => Op::LtF {
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::GtF { dst, a, b } => Op::GtF {
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::LeF { dst, a, b } => Op::LeF {
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::GeF { dst, a, b } => Op::GeF {
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::AddI { prim, dst, a, b } => Op::AddI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::SubI { prim, dst, a, b } => Op::SubI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::MulI { prim, dst, a, b } => Op::MulI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::DivI { prim, dst, a, b } => Op::DivI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::ModI { prim, dst, a, b } => Op::ModI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::WAddI { prim, dst, a, b } => Op::WAddI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::WSubI { prim, dst, a, b } => Op::WSubI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::WMulI { prim, dst, a, b } => Op::WMulI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::AndI { prim, dst, a, b } => Op::AndI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::OrI { prim, dst, a, b } => Op::OrI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::XorI { prim, dst, a, b } => Op::XorI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::ShlI { prim, dst, a, b } => Op::ShlI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::ShrI { prim, dst, a, b } => Op::ShrI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::WrapShlI { prim, dst, a, b } => Op::WrapShlI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::EqI { prim, dst, a, b } => Op::EqI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::NeI { prim, dst, a, b } => Op::NeI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::LtI { prim, dst, a, b } => Op::LtI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::GtI { prim, dst, a, b } => Op::GtI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::LeI { prim, dst, a, b } => Op::LeI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::GeI { prim, dst, a, b } => Op::GeI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::NegI { prim, dst, a } => Op::NegI {
+            prim: *prim,
+            dst: *dst,
+            a: *a,
+        },
+        Op::StrCmp { eq, dst, a, b } => Op::StrCmp {
+            eq: *eq,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::RefEq { eq, dst, a, b } => Op::RefEq {
+            eq: *eq,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
         Op::Jmp { target } => Op::Jmp { target: *target },
-        Op::Br { cond, then_t, else_t } => Op::Br { cond: *cond, then_t: *then_t, else_t: *else_t },
-        Op::BrTable { idx, table_off, count, default } => Op::BrTable { idx: *idx, table_off: *table_off, count: *count, default: *default },
-        Op::Call { func, argv_off, argc, dst } => Op::Call { func: map_fid(*func), argv_off: *argv_off, argc: *argc, dst: *dst },
-        Op::CallM { func, argv_off, argc, dst } => Op::CallM { func: map_fid(*func), argv_off: *argv_off, argc: *argc, dst: *dst },
+        Op::Br {
+            cond,
+            then_t,
+            else_t,
+        } => Op::Br {
+            cond: *cond,
+            then_t: *then_t,
+            else_t: *else_t,
+        },
+        Op::BrTable {
+            idx,
+            table_off,
+            count,
+            default,
+        } => Op::BrTable {
+            idx: *idx,
+            table_off: *table_off,
+            count: *count,
+            default: *default,
+        },
+        Op::Call {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } => Op::Call {
+            func: map_fid(*func),
+            argv_off: *argv_off,
+            argc: *argc,
+            dst: *dst,
+        },
+        Op::CallM {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } => Op::CallM {
+            func: map_fid(*func),
+            argv_off: *argv_off,
+            argc: *argc,
+            dst: *dst,
+        },
         // T2: a template's interface dispatch bakes the PLACEHOLDER
         // row's slot (`Readable<#T>.get`); the substituted body must
         // dispatch on the CONCRETE row (`Readable<i32>.get`) — the row
         // its consumer-side fills answer on
-        Op::CallI { slot, argv_off, argc, dst } => Op::CallI {
+        Op::CallI {
+            slot,
+            argv_off,
+            argc,
+            dst,
+        } => Op::CallI {
             slot: ifc.slots.get(slot).copied().unwrap_or(*slot),
             argv_off: *argv_off,
             argc: *argc,
             dst: *dst,
         },
-        Op::CallNat { nat, recv, argv_off, argc, dst } => Op::CallNat { nat: *nat, recv: *recv, argv_off: *argv_off, argc: *argc, dst: *dst },
-        Op::CallFn { fval, argv_off, argc, dst } => Op::CallFn { fval: *fval, argv_off: *argv_off, argc: *argc, dst: *dst },
+        Op::CallNat {
+            nat,
+            recv,
+            argv_off,
+            argc,
+            dst,
+        } => Op::CallNat {
+            nat: *nat,
+            recv: *recv,
+            argv_off: *argv_off,
+            argc: *argc,
+            dst: *dst,
+        },
+        Op::CallFn {
+            fval,
+            argv_off,
+            argc,
+            dst,
+        } => Op::CallFn {
+            fval: *fval,
+            argv_off: *argv_off,
+            argc: *argc,
+            dst: *dst,
+        },
         Op::Ret { val } => Op::Ret { val: *val },
-        Op::NewCell { dst, ty } => Op::NewCell { dst: *dst, ty: sub.run(*ty) },
-        Op::MakeRecord { dst, ty, argv_off, argc } => Op::MakeRecord { dst: *dst, ty: sub.run(*ty), argv_off: *argv_off, argc: *argc },
-        Op::GetF { dst, obj, field, repr } => Op::GetF { dst: *dst, obj: *obj, field: *field, repr: *repr },
-        Op::SetF { obj, field, val, repr } => Op::SetF { obj: *obj, field: *field, val: *val, repr: *repr },
-        Op::Own { dst, src, ty } => Op::Own { dst: *dst, src: *src, ty: sub.run(*ty) },
-        Op::MakeOpt { dst, src, ty } => Op::MakeOpt { dst: *dst, src: *src, ty: sub.run(*ty) },
-        Op::WeakNew { dst, src, ty } => Op::WeakNew { dst: *dst, src: *src, ty: sub.run(*ty) },
-        Op::WeakUpgrade { recv, dst, ty } => Op::WeakUpgrade { recv: *recv, dst: *dst, ty: sub.run(*ty) },
-        Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst: *dst, ty: sub.run(*ty), len: *len, repr: *repr },
-        Op::ArrLit { dst, ty, argv_off, argc } => Op::ArrLit { dst: *dst, ty: sub.run(*ty), argv_off: *argv_off, argc: *argc },
-        Op::ArrGet { dst, arr, idx, repr } => Op::ArrGet { dst: *dst, arr: *arr, idx: *idx, repr: *repr },
-        Op::ArrSet { arr, idx, val, repr } => Op::ArrSet { arr: *arr, idx: *idx, val: *val, repr: *repr },
-        Op::EnumNew { dst, ty, member } => Op::EnumNew { dst: *dst, ty: sub.run(*ty), member: *member },
-        Op::TidOf { dst, obj } => Op::TidOf { dst: *dst, obj: *obj },
-        Op::IsType { dst, obj, want } => Op::IsType { dst: *dst, obj: *obj, want: sub.run(*want) },
+        Op::NewCell { dst, ty } => Op::NewCell {
+            dst: *dst,
+            ty: sub.run(*ty),
+        },
+        Op::MakeRecord {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } => Op::MakeRecord {
+            dst: *dst,
+            ty: sub.run(*ty),
+            argv_off: *argv_off,
+            argc: *argc,
+        },
+        Op::GetF {
+            dst,
+            obj,
+            field,
+            repr,
+        } => Op::GetF {
+            dst: *dst,
+            obj: *obj,
+            field: *field,
+            repr: *repr,
+        },
+        Op::SetF {
+            obj,
+            field,
+            val,
+            repr,
+        } => Op::SetF {
+            obj: *obj,
+            field: *field,
+            val: *val,
+            repr: *repr,
+        },
+        Op::Own { dst, src, ty } => Op::Own {
+            dst: *dst,
+            src: *src,
+            ty: sub.run(*ty),
+        },
+        Op::MakeOpt { dst, src, ty } => Op::MakeOpt {
+            dst: *dst,
+            src: *src,
+            ty: sub.run(*ty),
+        },
+        Op::WeakNew { dst, src, ty } => Op::WeakNew {
+            dst: *dst,
+            src: *src,
+            ty: sub.run(*ty),
+        },
+        Op::WeakUpgrade { recv, dst, ty } => Op::WeakUpgrade {
+            recv: *recv,
+            dst: *dst,
+            ty: sub.run(*ty),
+        },
+        Op::ArrNew { dst, ty, len, repr } => Op::ArrNew {
+            dst: *dst,
+            ty: sub.run(*ty),
+            len: *len,
+            repr: *repr,
+        },
+        Op::ArrLit {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } => Op::ArrLit {
+            dst: *dst,
+            ty: sub.run(*ty),
+            argv_off: *argv_off,
+            argc: *argc,
+        },
+        Op::ArrGet {
+            dst,
+            arr,
+            idx,
+            repr,
+        } => Op::ArrGet {
+            dst: *dst,
+            arr: *arr,
+            idx: *idx,
+            repr: *repr,
+        },
+        Op::ArrSet {
+            arr,
+            idx,
+            val,
+            repr,
+        } => Op::ArrSet {
+            arr: *arr,
+            idx: *idx,
+            val: *val,
+            repr: *repr,
+        },
+        Op::EnumNew { dst, ty, member } => Op::EnumNew {
+            dst: *dst,
+            ty: sub.run(*ty),
+            member: *member,
+        },
+        Op::TidOf { dst, obj } => Op::TidOf {
+            dst: *dst,
+            obj: *obj,
+        },
+        Op::IsType { dst, obj, want } => Op::IsType {
+            dst: *dst,
+            obj: *obj,
+            want: sub.run(*want),
+        },
         // the same re-target for the interface TEST (`is` matches the
         // row id, not a slot — a stale row id answers false for a type
         // that satisfies the substituted row)
@@ -732,16 +1132,72 @@ fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32
             obj: *obj,
             want: ifc.rows.get(want).copied().unwrap_or(*want),
         },
-        Op::Unbox { dst, box_, ty } => Op::Unbox { dst: *dst, box_: *box_, ty: sub.run(*ty) },
-        Op::Box { dst, val, ty } => Op::Box { dst: *dst, val: *val, ty: sub.run(*ty) },
-        Op::MakeClosure { dst, func, argv_off, argc } => Op::MakeClosure { dst: *dst, func: map_fid(*func), argv_off: *argv_off, argc: *argc },
+        Op::Unbox { dst, box_, ty } => Op::Unbox {
+            dst: *dst,
+            box_: *box_,
+            ty: sub.run(*ty),
+        },
+        Op::Box { dst, val, ty } => Op::Box {
+            dst: *dst,
+            val: *val,
+            ty: sub.run(*ty),
+        },
+        Op::MakeClosure {
+            dst,
+            func,
+            argv_off,
+            argc,
+        } => Op::MakeClosure {
+            dst: *dst,
+            func: map_fid(*func),
+            argv_off: *argv_off,
+            argc: *argc,
+        },
         Op::Panic { msg } => Op::Panic { msg: *msg },
         Op::LoopHead => Op::LoopHead,
-        Op::Conv { dst, src, from, to } => Op::Conv { dst: *dst, src: *src, from: *from, to: *to },
-        Op::StrCodeAt { dst, s, idx } => Op::StrCodeAt { dst: *dst, s: *s, idx: *idx },
-        Op::ArrayCmp { eq, dst, a, b } => Op::ArrayCmp { eq: *eq, dst: *dst, a: *a, b: *b },
-        Op::ArrGetF { dst, obj, field, idx, repr } => Op::ArrGetF { dst: *dst, obj: *obj, field: *field, idx: *idx, repr: *repr },
-        Op::ArrSetF { obj, field, idx, val, repr } => Op::ArrSetF { obj: *obj, field: *field, idx: *idx, val: *val, repr: *repr },
+        Op::Conv { dst, src, from, to } => Op::Conv {
+            dst: *dst,
+            src: *src,
+            from: *from,
+            to: *to,
+        },
+        Op::StrCodeAt { dst, s, idx } => Op::StrCodeAt {
+            dst: *dst,
+            s: *s,
+            idx: *idx,
+        },
+        Op::ArrayCmp { eq, dst, a, b } => Op::ArrayCmp {
+            eq: *eq,
+            dst: *dst,
+            a: *a,
+            b: *b,
+        },
+        Op::ArrGetF {
+            dst,
+            obj,
+            field,
+            idx,
+            repr,
+        } => Op::ArrGetF {
+            dst: *dst,
+            obj: *obj,
+            field: *field,
+            idx: *idx,
+            repr: *repr,
+        },
+        Op::ArrSetF {
+            obj,
+            field,
+            idx,
+            val,
+            repr,
+        } => Op::ArrSetF {
+            obj: *obj,
+            field: *field,
+            idx: *idx,
+            val: *val,
+            repr: *repr,
+        },
         Op::Pad { .. } => unreachable!("diagnostic-only variant"),
     }
 }
@@ -759,7 +1215,12 @@ fn remap_op(sub: &mut Substitution, op: &Op, map_fid: &mut dyn FnMut(u32) -> u32
 /// (The converse never occurs: the template emitter spells `Mov` only
 /// for types the placeholder rows can never be.)
 fn rewrite_reprs(tt: &TypeTable, fc: &mut FuncCode) {
-    let reg_ty = |r: u16| -> TypeId { fc.regs.get(r as usize).copied().unwrap_or(rut_core::types::TY_NIL) };
+    let reg_ty = |r: u16| -> TypeId {
+        fc.regs
+            .get(r as usize)
+            .copied()
+            .unwrap_or(rut_core::types::TY_NIL)
+    };
     let arr_elem = |t: TypeId| -> Option<TypeId> {
         match tt.kind(t) {
             TyKind::Array { elem } => Some(*elem),

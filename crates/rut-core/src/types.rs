@@ -9,9 +9,16 @@ use crate::sym::{self, IdentId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimTy {
-    U8, U16, U32, U64,
-    I8, I16, I32, I64,
-    F32, F64,
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
+    F32,
+    F64,
     Bool,
 }
 
@@ -27,9 +34,16 @@ impl PrimTy {
     }
     pub fn name(self) -> &'static str {
         match self {
-            PrimTy::U8 => "u8", PrimTy::U16 => "u16", PrimTy::U32 => "u32", PrimTy::U64 => "u64",
-            PrimTy::I8 => "i8", PrimTy::I16 => "i16", PrimTy::I32 => "i32", PrimTy::I64 => "i64",
-            PrimTy::F32 => "f32", PrimTy::F64 => "f64",
+            PrimTy::U8 => "u8",
+            PrimTy::U16 => "u16",
+            PrimTy::U32 => "u32",
+            PrimTy::U64 => "u64",
+            PrimTy::I8 => "i8",
+            PrimTy::I16 => "i16",
+            PrimTy::I32 => "i32",
+            PrimTy::I64 => "i64",
+            PrimTy::F32 => "f32",
+            PrimTy::F64 => "f64",
             PrimTy::Bool => "bool",
         }
     }
@@ -37,16 +51,32 @@ impl PrimTy {
     /// longer needs the type table to execute a scalar op.
     pub fn to_u8(self) -> u8 {
         match self {
-            PrimTy::U8 => 0, PrimTy::U16 => 1, PrimTy::U32 => 2, PrimTy::U64 => 3,
-            PrimTy::I8 => 4, PrimTy::I16 => 5, PrimTy::I32 => 6, PrimTy::I64 => 7,
-            PrimTy::F32 => 8, PrimTy::F64 => 9, PrimTy::Bool => 10,
+            PrimTy::U8 => 0,
+            PrimTy::U16 => 1,
+            PrimTy::U32 => 2,
+            PrimTy::U64 => 3,
+            PrimTy::I8 => 4,
+            PrimTy::I16 => 5,
+            PrimTy::I32 => 6,
+            PrimTy::I64 => 7,
+            PrimTy::F32 => 8,
+            PrimTy::F64 => 9,
+            PrimTy::Bool => 10,
         }
     }
     pub fn from_u8(b: u8) -> Option<PrimTy> {
         Some(match b {
-            0 => PrimTy::U8, 1 => PrimTy::U16, 2 => PrimTy::U32, 3 => PrimTy::U64,
-            4 => PrimTy::I8, 5 => PrimTy::I16, 6 => PrimTy::I32, 7 => PrimTy::I64,
-            8 => PrimTy::F32, 9 => PrimTy::F64, 10 => PrimTy::Bool,
+            0 => PrimTy::U8,
+            1 => PrimTy::U16,
+            2 => PrimTy::U32,
+            3 => PrimTy::U64,
+            4 => PrimTy::I8,
+            5 => PrimTy::I16,
+            6 => PrimTy::I32,
+            7 => PrimTy::I64,
+            8 => PrimTy::F32,
+            9 => PrimTy::F64,
+            10 => PrimTy::Bool,
             // 11 is RETIRED (the char exorcism): a stale artifact's char
             // prim tag lands in the `_ => None` arm and fails decode loudly
             _ => return None,
@@ -185,15 +215,23 @@ pub enum TyKind {
     Bytes,
     /// heap array cell — runtime length, non-growable. The
     /// growable `Vec<T>` is a rut class over it (`pouch`).
-    Array { elem: TypeId },
+    Array {
+        elem: TypeId,
+    },
     /// named-int set; members are immortal singleton cells
-    Enum { members: Vec<(IdentId, i64)> },
+    Enum {
+        members: Vec<(IdentId, i64)>,
+    },
     /// struct or class record cell — fields stored as one slot each;
     /// construction rules differ, representation does not
-    Data { fields: Vec<FieldInfo> },
+    Data {
+        fields: Vec<FieldInfo>,
+    },
     /// trait object (`i: I`) — unsized object; the slot stores the cell handle and the
     /// cell's own type reaches the vtable
-    IfaceObj { iface_id: u32 },
+    IfaceObj {
+        iface_id: u32,
+    },
     /// erasure box
     Opaque,
     /// engine stack-trace snapshot — the
@@ -211,14 +249,18 @@ pub enum TyKind {
     /// `?T` — a nil-able cell; `nil` is the null slot.
     /// Same one-slot box the old `*T` pointer was: `T → ?T` boxes, `?T → T`
     /// reads field 0 (nil check on use)
-    Opt { elem: TypeId },
+    Opt {
+        elem: TypeId,
+    },
     /// weak reference — the `Weak<T>` builtin class's
     /// runtime type: a WeakBox side cell holding an UNRETAINED slot word
     /// to the referent, nulled when the referent dies. Generic like
     /// `Array { elem }`: interned per instantiation (`mk_weak`), no boot
     /// row. A ref type by the `is_ref` law (the box is a cell — the
     /// referent it holds is not).
-    Weak { elem: TypeId },
+    Weak {
+        elem: TypeId,
+    },
     /// `Future<T>` — the async handle, the `Weak<T>` shape:
     /// the CLOSED builtin class's runtime spelling, interned per
     /// instantiation (`mk_future`), no boot row. A HANDLE type, never a
@@ -226,9 +268,14 @@ pub enum TyKind {
     /// frame record (`#frame@..`), the way a trait-object slot held one —
     /// the hidden frame is representation, `Future<T>` is the one
     /// surface spelling. A ref type (the frame cell it names).
-    Future { elem: TypeId },
+    Future {
+        elem: TypeId,
+    },
     /// fn(P..) -> R — a closure value { func, captures } in one slot
-    Fn { params: Vec<TypeId>, ret: TypeId },
+    Fn {
+        params: Vec<TypeId>,
+        ret: TypeId,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -321,7 +368,11 @@ impl TypeTable {
     }
 
     fn boot_impl(packed: bool, scope: ScopeId) -> TypeTable {
-        let mut t = TypeTable { packed, scope, ..Default::default() };
+        let mut t = TypeTable {
+            packed,
+            scope,
+            ..Default::default()
+        };
         let mut push = |name: IdentId, kind: TyKind| {
             t.types.push(RutType { name, kind });
         };
@@ -392,7 +443,11 @@ impl TypeTable {
         if !self.packed {
             return id;
         }
-        let base = self.scope_base.get(scope_of(id) as usize).copied().unwrap_or(0);
+        let base = self
+            .scope_base
+            .get(scope_of(id) as usize)
+            .copied()
+            .unwrap_or(0);
         base + local_of(id)
     }
 

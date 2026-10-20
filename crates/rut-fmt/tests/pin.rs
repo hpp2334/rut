@@ -53,7 +53,10 @@ fn mod_decls_print_with_their_vis() {
 fn use_paths_print_all_segments_then_the_leaf() {
     // the mod path spells out in full; the leaf names ride the brace
     // form (the single-leaf spelling canonicalizes to it)
-    assert_eq!(fmt("use pkg::A::B::{C, D};\n"), "use pkg::A::B::{ C, D };\n");
+    assert_eq!(
+        fmt("use pkg::A::B::{C, D};\n"),
+        "use pkg::A::B::{ C, D };\n"
+    );
     assert_eq!(fmt("use pkg::A::B::C;\n"), "use pkg::A::B::{ C };\n");
     // the flat degenerate shapes are byte-stable
     assert_eq!(fmt("use ink::{ Logger };\n"), "use ink::{ Logger };\n");
@@ -95,14 +98,26 @@ fn comment_inside_empty_block_survives() {
 fn floats_keep_their_dot_and_suffix() {
     // `9.0f32` must not come back as `9f32` (that re-lexes as a
     // suffixed INT and refuses to compile)
-    assert_eq!(fmt("fn f() {\n    let a = 9.0f32;\n}"), "fn f() {\n    let a = 9.0f32;\n}\n");
-    assert_eq!(fmt("fn f() {\n    let a = 2.50;\n}"), "fn f() {\n    let a = 2.5;\n}\n");
+    assert_eq!(
+        fmt("fn f() {\n    let a = 9.0f32;\n}"),
+        "fn f() {\n    let a = 9.0f32;\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() {\n    let a = 2.50;\n}"),
+        "fn f() {\n    let a = 2.5;\n}\n"
+    );
 }
 
 #[test]
 fn ints_lose_the_radix_and_keep_the_suffix() {
-    assert_eq!(fmt("fn f() {\n    let a = 0xff;\n}"), "fn f() {\n    let a = 255;\n}\n");
-    assert_eq!(fmt("fn f() {\n    let a = 7u64;\n}"), "fn f() {\n    let a = 7u64;\n}\n");
+    assert_eq!(
+        fmt("fn f() {\n    let a = 0xff;\n}"),
+        "fn f() {\n    let a = 255;\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() {\n    let a = 7u64;\n}"),
+        "fn f() {\n    let a = 7u64;\n}\n"
+    );
 }
 
 #[test]
@@ -126,12 +141,24 @@ fn raw_strings_survive_verbatim() {
 #[test]
 fn grouping_parens_survive_where_flat_would_invert() {
     // `(1 + 2) * 3` — the parens ARE the tree
-    assert_eq!(fmt("fn f() {\n    let a = (1 + 2) * 3;\n}"), "fn f() {\n    let a = (1 + 2) * 3;\n}\n");
+    assert_eq!(
+        fmt("fn f() {\n    let a = (1 + 2) * 3;\n}"),
+        "fn f() {\n    let a = (1 + 2) * 3;\n}\n"
+    );
     // flat shapes stay bare
-    assert_eq!(fmt("fn f() {\n    let a = 1 + 2 * 3;\n}"), "fn f() {\n    let a = 1 + 2 * 3;\n}\n");
+    assert_eq!(
+        fmt("fn f() {\n    let a = 1 + 2 * 3;\n}"),
+        "fn f() {\n    let a = 1 + 2 * 3;\n}\n"
+    );
     // same-level rhs keeps its grouping
-    assert_eq!(fmt("fn f() {\n    let a = 10 - (2 + 3);\n}"), "fn f() {\n    let a = 10 - (2 + 3);\n}\n");
-    assert_eq!(fmt("fn f() {\n    let a = 10 - 2 - 3;\n}"), "fn f() {\n    let a = 10 - 2 - 3;\n}\n");
+    assert_eq!(
+        fmt("fn f() {\n    let a = 10 - (2 + 3);\n}"),
+        "fn f() {\n    let a = 10 - (2 + 3);\n}\n"
+    );
+    assert_eq!(
+        fmt("fn f() {\n    let a = 10 - 2 - 3;\n}"),
+        "fn f() {\n    let a = 10 - 2 - 3;\n}\n"
+    );
 }
 
 #[test]
@@ -170,7 +197,13 @@ fn style_manifest_parses_and_validates() {
 #[test]
 fn style_knobs_actually_color_the_output() {
     let src = "fn f() {\n    let x = 1;\n}";
-    let two = fmt_style(src, &Style { indent_width: 2, max_width: 100 });
+    let two = fmt_style(
+        src,
+        &Style {
+            indent_width: 2,
+            max_width: 100,
+        },
+    );
     assert!(two.contains("\n  let x = 1;"), "{two}");
 }
 

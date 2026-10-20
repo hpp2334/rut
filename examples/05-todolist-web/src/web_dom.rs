@@ -81,7 +81,10 @@ impl DomBackend for WebDom {
     }
 
     fn create(&mut self, tag: &str) -> Result<El, String> {
-        self.document.create_element(tag).map(|el| El { el }).map_err(js_err)
+        self.document
+            .create_element(tag)
+            .map(|el| El { el })
+            .map_err(js_err)
     }
 
     fn set_text(&mut self, el: &El, text: &str) -> Result<(), String> {
@@ -94,7 +97,11 @@ impl DomBackend for WebDom {
     }
 
     fn append(&mut self, parent: &El, child: &El) -> Result<(), String> {
-        parent.el.append_child(&child.el).map(|_| ()).map_err(js_err)
+        parent
+            .el
+            .append_child(&child.el)
+            .map(|_| ())
+            .map_err(js_err)
     }
 
     fn remove(&mut self, parent: &El, child: &El) -> Result<bool, String> {
@@ -313,7 +320,9 @@ pub extern "C" fn rut_web_pump() -> i32 {
 /// (the `rut-wasm` envelope pattern); read once, then null.
 #[no_mangle]
 pub extern "C" fn rut_web_last_error() -> *mut u8 {
-    let msg = LAST_ERROR.with(|e| e.borrow_mut().take()).unwrap_or_default();
+    let msg = LAST_ERROR
+        .with(|e| e.borrow_mut().take())
+        .unwrap_or_default();
     let bytes = msg.into_bytes();
     let mut buf: Vec<u8> = Vec::with_capacity(4 + bytes.len());
     buf.extend_from_slice(&(bytes.len() as u32).to_le_bytes());

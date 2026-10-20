@@ -98,11 +98,7 @@ pub(super) fn parse_deps_descriptor(
 /// the comparison is byte-exact. The directory grammar refuses the key
 /// before this can speak (see the retirement arm above); the lock file
 /// carries the law forward (`crates/rut-driver/src/lock.rs`).
-pub(super) fn parse_pin(
-    path: &str,
-    key: &str,
-    value: &Value,
-) -> Result<String, ManifestError> {
+pub(super) fn parse_pin(path: &str, key: &str, value: &Value) -> Result<String, ManifestError> {
     let v = expect_field_string(path, key, value)?;
     if v.len() != 64 || !v.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(ManifestError(format!(

@@ -25,15 +25,7 @@ const LOCK_TEMPLATE: &str = include_str!("../template/rut.lock");
 /// The nine dep keys the template declares — the swappable std set
 /// (no `core`, no `*_host`, no `bench_cross`).
 const STD_PKGS: [&str; 9] = [
-    "ink",
-    "pouch",
-    "flow",
-    "nmapset",
-    "json",
-    "strbuild",
-    "calc",
-    "futures",
-    "http",
+    "ink", "pouch", "flow", "nmapset", "json", "strbuild", "calc", "futures", "http",
 ];
 
 fn scratch(tag: &str) -> PathBuf {
@@ -89,7 +81,10 @@ fn scaffold_creates_the_manifest_and_root_module() {
         "exactly the nine — no core, no *_host, no bench_cross"
     );
     for pkg in STD_PKGS {
-        let dep = m.deps.get(pkg).unwrap_or_else(|| panic!("the manifest declares `{pkg}`"));
+        let dep = m
+            .deps
+            .get(pkg)
+            .unwrap_or_else(|| panic!("the manifest declares `{pkg}`"));
         let url = &dep["url"];
         assert!(
             url.ends_with(&format!("/dist/std/{pkg}.rutbundle")),
@@ -147,7 +142,9 @@ fn the_template_files_are_the_carrier() {
     );
     for (pkg, dep) in &m.deps {
         assert!(
-            lock.deps().iter().any(|r| &r.pkg == pkg && r.url == dep["url"]),
+            lock.deps()
+                .iter()
+                .any(|r| &r.pkg == pkg && r.url == dep["url"]),
             "the template lock pins `{pkg}`'s url"
         );
     }
@@ -196,7 +193,10 @@ fn scaffold_refuses_an_illegal_name() {
 #[test]
 fn template_is_fmt_clean() {
     let (root, dir) = scaffold("fmt-clean", "hello");
-    let out = rut_cmd(&root.join("cache"), &["fmt", dir.to_str().unwrap(), "--check"]);
+    let out = rut_cmd(
+        &root.join("cache"),
+        &["fmt", dir.to_str().unwrap(), "--check"],
+    );
     assert_eq!(
         out.status.code(),
         Some(0),
@@ -217,7 +217,8 @@ fn pins_match_the_frozen_std_snapshot() {
     let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v12");
     for row in lock.deps() {
         assert!(
-            row.url.ends_with(&format!("/dist/std/{}.rutbundle", row.pkg)),
+            row.url
+                .ends_with(&format!("/dist/std/{}.rutbundle", row.pkg)),
             "`{}` rides the std tag: {}",
             row.pkg,
             row.url
@@ -235,10 +236,16 @@ fn pins_match_the_frozen_std_snapshot() {
     // url has its pin row, unpinned in the manifest itself
     let manifest = std::fs::read_to_string(dir.join("rut.jsonc")).unwrap();
     let m = rut_driver::parse_manifest(&manifest).unwrap();
-    assert_eq!(m.deps.len(), lock.deps().len(), "one lock row per manifest url row");
+    assert_eq!(
+        m.deps.len(),
+        lock.deps().len(),
+        "one lock row per manifest url row"
+    );
     for (pkg, dep) in &m.deps {
         assert!(
-            lock.deps().iter().any(|r| &r.pkg == pkg && r.url == dep["url"]),
+            lock.deps()
+                .iter()
+                .any(|r| &r.pkg == pkg && r.url == dep["url"]),
             "the lock pins `{pkg}`'s url"
         );
     }

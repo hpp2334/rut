@@ -5,12 +5,16 @@
 
 use rut_parser::Mode;
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -36,7 +40,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -51,16 +58,15 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
+        &[
+            (2, rut_core::binary::Surface::core(), "core".to_string()),
+            (3, collection, "collection".to_string()),
+        ],
     )
 }
 
 fn diags_of(src: &str) -> Vec<String> {
-    compile(src)
-        .diags
-        .iter()
-        .map(|d| d.msg.clone())
-        .collect()
+    compile(src).diags.iter().map(|d| d.msg.clone()).collect()
 }
 
 #[test]
@@ -196,7 +202,8 @@ fn nullable_widen_narrow_and_nil_typing() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`i32`") && d.contains("`nil`")),
+        ds.iter()
+            .any(|d| d.contains("`i32`") && d.contains("`nil`")),
         "nil against `i32` must diagnose: {ds:?}"
     );
 }
@@ -223,7 +230,10 @@ fn prefix_question_binds_the_following_type_term() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let ir = out.ir_dump;
-    assert!(ir.contains("makeopt"), "the `[i32] -> ?[i32]` widen must box: {ir}");
+    assert!(
+        ir.contains("makeopt"),
+        "the `[i32] -> ?[i32]` widen must box: {ir}"
+    );
 
     // `[?i32]` is NOT itself nullable — nil against it is a mismatch
     let ds = diags_of(
@@ -269,7 +279,8 @@ fn impl_over_the_array_type_is_withdrawn() {
     .map(|d| d.msg.clone())
     .collect();
     assert!(
-        ds.iter().any(|d| d.contains("impl target must be a struct, class, or enum")),
+        ds.iter()
+            .any(|d| d.contains("impl target must be a struct, class, or enum")),
         "a builtin composite takes no impl block: {ds:?}"
     );
 }

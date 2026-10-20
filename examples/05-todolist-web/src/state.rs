@@ -22,8 +22,14 @@ use crate::backend::DomBackend;
 /// `value` is the element's current value when the element IS an
 /// input (the detail law), "" otherwise.
 pub enum WebEvent {
-    Dom { id: i64, event: String, value: String },
-    Timer { tag: String },
+    Dom {
+        id: i64,
+        event: String,
+        value: String,
+    },
+    Timer {
+        tag: String,
+    },
 }
 
 /// What fired: a DOM listener (by id) or a timer (by tag). The sink's
@@ -99,12 +105,18 @@ impl<D: DomBackend> WebState<D> {
             ),
         };
         let value = self.dom.current_value(&el).unwrap_or_default();
-        self.queue.push_back(WebEvent::Dom { id: listener, event, value });
+        self.queue.push_back(WebEvent::Dom {
+            id: listener,
+            event,
+            value,
+        });
     }
 
     /// A timer fired: the tag is the whole payload.
     pub fn push_timer(&mut self, tag: &str) {
-        self.queue.push_back(WebEvent::Timer { tag: tag.to_string() });
+        self.queue.push_back(WebEvent::Timer {
+            tag: tag.to_string(),
+        });
     }
 
     /// The sink's body: classify and enqueue.
@@ -175,7 +187,10 @@ pub fn drain_queue<D: DomBackend>(
         let r = match ev {
             WebEvent::Dom { id, event, value } => {
                 let export = format!("on_{event}");
-                vm.call::<_, (Option<OpaqueRef>, String)>(export.as_str(), (app, id.to_string(), value))
+                vm.call::<_, (Option<OpaqueRef>, String)>(
+                    export.as_str(),
+                    (app, id.to_string(), value),
+                )
             }
             WebEvent::Timer { tag } => {
                 vm.call::<_, (Option<OpaqueRef>, String)>("on_timer", (app, tag))
@@ -197,8 +212,10 @@ pub fn drain_queue<D: DomBackend>(
 /// weak breaks the `state → dom → sink → state` cycle, so the page
 /// state drops with its owner. The twin and the wasm32 boot both use
 /// the slot (the wasm sink wraps this one with a pump).
-pub fn weak_sink_slot<D: DomBackend>(
-) -> (Rc<RefCell<Option<std::rc::Weak<RefCell<WebState<D>>>>>>, EvSink) {
+pub fn weak_sink_slot<D: DomBackend>() -> (
+    Rc<RefCell<Option<std::rc::Weak<RefCell<WebState<D>>>>>>,
+    EvSink,
+) {
     let slot: Rc<RefCell<Option<std::rc::Weak<RefCell<WebState<D>>>>>> =
         Rc::new(RefCell::new(None));
     let s = slot.clone();
@@ -221,10 +238,7 @@ pub fn bind_weak_sink<D: DomBackend>(
 /// Box a backend element as the opaque rut holds — `Opaque<El>`: the
 /// payload is invisible to rut (`o is opaque` holds, `downcast` misses),
 /// released deterministically at rc 0.
-pub fn box_element<D: DomBackend>(
-    vm: &mut Vm,
-    el: D::El,
-) -> Result<OpaqueRef, Trap> {
+pub fn box_element<D: DomBackend>(vm: &mut Vm, el: D::El) -> Result<OpaqueRef, Trap> {
     Ok(rut_vm::Opaque::<D::El>::alloc(vm, el)?.handle().clone())
 }
 

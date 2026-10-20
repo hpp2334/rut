@@ -28,7 +28,10 @@ pub enum Slots {
 impl Slots {
     pub fn zeroed(n: usize) -> Slots {
         if n <= INLINE_SLOTS {
-            Slots::Inline { len: n as u8, data: [Slot::null(); INLINE_SLOTS] }
+            Slots::Inline {
+                len: n as u8,
+                data: [Slot::null(); INLINE_SLOTS],
+            }
         } else {
             Slots::Heap(vec![Slot::null(); n])
         }
@@ -187,7 +190,12 @@ impl ArrData {
     /// An empty run with room for `cap` elements — the block arrives
     /// zeroed, which IS the zero-fill for `Array<T>(n)`.
     pub(crate) fn new(kind: ArrKind, block: *mut u8, cap: u32) -> ArrData {
-        ArrData { block, len: 0, cap, kind }
+        ArrData {
+            block,
+            len: 0,
+            cap,
+            kind,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -213,7 +221,9 @@ impl ArrData {
             ArrKind::I16 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const i16) } as i64),
             ArrKind::U32 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const u32) } as i64),
             ArrKind::I32 => Slot::int(unsafe { std::ptr::read_unaligned(p as *const i32) } as i64),
-            ArrKind::F32 => Slot::float(unsafe { std::ptr::read_unaligned(p as *const f32) } as f64),
+            ArrKind::F32 => {
+                Slot::float(unsafe { std::ptr::read_unaligned(p as *const f32) } as f64)
+            }
             ArrKind::Bool => Slot::bool(unsafe { *(p as *const u8) } != 0),
             // the primitive-optional store: the generic slot decode yields
             // the null slot for nil, the RAW payload for some. This raw form
@@ -296,12 +306,24 @@ impl ArrData {
                         match pt {
                             PrimTy::U8 => *(e) = unsafe { raw.i } as u8,
                             PrimTy::I8 => *(e as *mut i8) = unsafe { raw.i } as i8,
-                            PrimTy::U16 => std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16),
-                            PrimTy::I16 => std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16),
-                            PrimTy::U32 => std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32),
-                            PrimTy::I32 => std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32),
-                            PrimTy::U64 | PrimTy::I64 => std::ptr::write_unaligned(q as *mut i64, unsafe { raw.i }),
-                            PrimTy::F32 => std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32),
+                            PrimTy::U16 => {
+                                std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16)
+                            }
+                            PrimTy::I16 => {
+                                std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16)
+                            }
+                            PrimTy::U32 => {
+                                std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32)
+                            }
+                            PrimTy::I32 => {
+                                std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32)
+                            }
+                            PrimTy::U64 | PrimTy::I64 => {
+                                std::ptr::write_unaligned(q as *mut i64, unsafe { raw.i })
+                            }
+                            PrimTy::F32 => {
+                                std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32)
+                            }
                             PrimTy::F64 => std::ptr::write_unaligned(q as *mut f64, raw.as_f64()),
                             PrimTy::Bool => *e = raw.as_bool() as u8,
                         }
@@ -328,7 +350,10 @@ impl ArrData {
     /// `opt_raw` + `Heap::alloc_opt_value`).
     #[inline]
     pub(crate) unsafe fn read_unchecked(&self, i: usize) -> Slot {
-        debug_assert!(!matches!(self.kind, ArrKind::Opt(_)), "read_unchecked on the opt store — decode through opt_raw");
+        debug_assert!(
+            !matches!(self.kind, ArrKind::Opt(_)),
+            "read_unchecked on the opt store — decode through opt_raw"
+        );
         self.slot_at(i)
     }
 
@@ -337,7 +362,10 @@ impl ArrData {
     /// primitive-optional store (`write_opt`/`write_opt_raw` encode there).
     #[inline]
     pub(crate) unsafe fn write_unchecked(&mut self, i: usize, s: Slot) -> Slot {
-        debug_assert!(!matches!(self.kind, ArrKind::Opt(_)), "write_unchecked on the opt store — encode through write_opt");
+        debug_assert!(
+            !matches!(self.kind, ArrKind::Opt(_)),
+            "write_unchecked on the opt store — encode through write_opt"
+        );
         let old = self.slot_at(i);
         self.write_slot(i, s);
         old
@@ -392,14 +420,24 @@ impl ArrData {
             match self.kind {
                 ArrKind::Opt(PrimTy::U8) => *e = unsafe { raw.i } as u8,
                 ArrKind::Opt(PrimTy::I8) => *(e as *mut i8) = unsafe { raw.i } as i8,
-                ArrKind::Opt(PrimTy::U16) => std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16),
-                ArrKind::Opt(PrimTy::I16) => std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16),
-                ArrKind::Opt(PrimTy::U32) => std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32),
-                ArrKind::Opt(PrimTy::I32) => std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32),
+                ArrKind::Opt(PrimTy::U16) => {
+                    std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16)
+                }
+                ArrKind::Opt(PrimTy::I16) => {
+                    std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16)
+                }
+                ArrKind::Opt(PrimTy::U32) => {
+                    std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32)
+                }
+                ArrKind::Opt(PrimTy::I32) => {
+                    std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32)
+                }
                 ArrKind::Opt(PrimTy::U64) | ArrKind::Opt(PrimTy::I64) => {
                     std::ptr::write_unaligned(q as *mut i64, unsafe { raw.i })
                 }
-                ArrKind::Opt(PrimTy::F32) => std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32),
+                ArrKind::Opt(PrimTy::F32) => {
+                    std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32)
+                }
                 ArrKind::Opt(PrimTy::F64) => std::ptr::write_unaligned(q as *mut f64, raw.as_f64()),
                 ArrKind::Opt(PrimTy::Bool) => *e = raw.as_bool() as u8,
                 _ => {}
@@ -423,7 +461,11 @@ impl ArrData {
     pub(crate) fn push(&mut self, s: Slot, blocks: &Blocks) {
         if self.len == self.cap {
             let old_len = self.len as usize;
-            self.block = blocks.grow(self.block, old_len * self.width(), (old_len + 1) * self.width());
+            self.block = blocks.grow(
+                self.block,
+                old_len * self.width(),
+                (old_len + 1) * self.width(),
+            );
             self.cap = (blocks.cap_of(self.block) / self.width()) as u32;
         }
         self.write_slot(self.len as usize, s);
@@ -485,7 +527,11 @@ impl StrVal {
     #[inline(always)]
     pub(crate) unsafe fn append(&mut self, extra: &[u8]) {
         unsafe {
-            std::ptr::copy_nonoverlapping(extra.as_ptr(), self.block.add(self.len as usize), extra.len());
+            std::ptr::copy_nonoverlapping(
+                extra.as_ptr(),
+                self.block.add(self.len as usize),
+                extra.len(),
+            );
         }
         self.len += extra.len() as u32;
         self.ascii = self.ascii && extra.is_ascii();
@@ -494,23 +540,39 @@ impl StrVal {
 
 pub enum CellData {
     Str(StrVal),
-    Array { elem: TypeId, items: RefCell<ArrData> },
+    Array {
+        elem: TypeId,
+        items: RefCell<ArrData>,
+    },
     /// str slice view: a window into an OWNED str cell,
     /// retained by `parent`. `off`/`len` are byte offsets into the
     /// parent's block; codepoint bounds were resolved to bytes at
     /// creation, and view-of-view flattens onto the root, so `parent`
     /// is always an owned `Str`.
-    StrView { parent: Slot, off: u32, len: u32, ascii: bool },
+    StrView {
+        parent: Slot,
+        off: u32,
+        len: u32,
+        ascii: bool,
+    },
     /// array window: a fixed-length view over a backing
     /// `Array` cell, retained by `parent`. Element `i` of the window is
     /// element `off + i` of the parent — WRITES GO THROUGH (the `*T`
     /// aliasing law): the window is a pointer, not a copy. Fixed-length
     /// by construction; `push`/`pop` on a window trap.
-    ArrView { parent: Slot, off: u32, len: u32 },
+    ArrView {
+        parent: Slot,
+        off: u32,
+        len: u32,
+    },
     /// enum member — immortal singleton per (ty, member)
-    Enum { member: u32 },
+    Enum {
+        member: u32,
+    },
     /// struct/class instance — the payload as one slot per field
-    Record { fields: RefCell<Slots> },
+    Record {
+        fields: RefCell<Slots>,
+    },
     /// closure value — v1 captures by value. The callee's
     /// signature (`params`/`ret`/capture types) is static program data in
     /// `prog.funcs[func]`; the cell carries only the function id and the
@@ -526,7 +588,9 @@ pub enum CellData {
     /// against the loaded program (the interner + the position table).
     /// One frame is one call site — `(func, pc)`:
     /// 8 bytes, so `len(frames) * 8` is the whole heap charge.
-    Trace { frames: Vec<TraceFrame> },
+    Trace {
+        frames: Vec<TraceFrame>,
+    },
     /// weak reference — the `Weak<T>` builtin class's
     /// payload: the referent's raw slot word (tagged for store entries),
     /// UNRETAINED — a weak never keeps its referent alive. `Cell` for
@@ -535,7 +599,9 @@ pub enum CellData {
     /// a plain pointer) so `retain`/`release` route tagged store-entry
     /// referents correctly, and so the slot can ride straight into an
     /// opt box on `upgrade`.
-    WeakBox { referent: std::cell::Cell<Slot> },
+    WeakBox {
+        referent: std::cell::Cell<Slot>,
+    },
 }
 
 /// One captured frame — the `RawFrame`, rut-only shape: the
@@ -556,11 +622,14 @@ impl CellVal {
     pub fn as_str(&self) -> &str {
         match &self.data {
             CellData::Str(v) => unsafe { std::str::from_utf8_unchecked(v.bytes()) },
-            CellData::StrView { parent, off, len, .. } => {
+            CellData::StrView {
+                parent, off, len, ..
+            } => {
                 // the view retains the parent, so the window is live
                 unsafe {
-                    std::str::from_utf8_unchecked(&cell_of(*parent).as_bytes()
-                        [*off as usize..*off as usize + *len as usize])
+                    std::str::from_utf8_unchecked(
+                        &cell_of(*parent).as_bytes()[*off as usize..*off as usize + *len as usize],
+                    )
                 }
             }
             _ => "",
@@ -570,7 +639,9 @@ impl CellVal {
     pub fn as_bytes(&self) -> &[u8] {
         match &self.data {
             CellData::Str(v) => v.bytes(),
-            CellData::StrView { parent, off, len, .. } => {
+            CellData::StrView {
+                parent, off, len, ..
+            } => {
                 let p = cell_of(*parent).as_bytes();
                 &p[*off as usize..*off as usize + *len as usize]
             }

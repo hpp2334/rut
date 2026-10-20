@@ -24,7 +24,9 @@
 //! `LetDef::ty`, literal defaults included) — and the tooltip
 //! IS the binding's hover markdown. Divergence would be a bug.
 
-use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position};
+use ls_types::{
+    InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position,
+};
 
 use rut_ast::ast::*;
 use rut_lexer::token::Token;
@@ -117,13 +119,19 @@ fn type_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
     // `LetDef::ty` (annotation-or-inferred, the hover render's source)
     // supplies the text
     for h in ctx.ast.module_items(ctx.ast.root) {
-        let ItemKind::ModuleLet { ty, .. } = ctx.ast.item(*h) else { continue };
+        let ItemKind::ModuleLet { ty, .. } = ctx.ast.item(*h) else {
+            continue;
+        };
         if ty.is_some() {
             continue;
         }
         let span = ctx.ast.span(h.id());
-        let Some(l) = ctx.doc.lets.iter().find(|l| l.span == span) else { continue };
-        let Some(text) = l.ty.as_deref().filter(|t| !t.trim().is_empty()) else { continue };
+        let Some(l) = ctx.doc.lets.iter().find(|l| l.span == span) else {
+            continue;
+        };
+        let Some(text) = l.ty.as_deref().filter(|t| !t.trim().is_empty()) else {
+            continue;
+        };
         let Some(name) = l.name_span else { continue };
         out.push(Raw {
             byte: name.hi,
@@ -182,7 +190,13 @@ impl CallCx<'_> {
                 self.walk_expr(*iter);
                 self.walk_block(*body);
             }
-            Kind::Stmt(StmtKind::ForC { init, cond, update, body, .. }) => {
+            Kind::Stmt(StmtKind::ForC {
+                init,
+                cond,
+                update,
+                body,
+                ..
+            }) => {
                 self.walk_expr(*init);
                 self.walk_expr(*cond);
                 self.walk_expr(*update);
@@ -228,7 +242,9 @@ impl CallCx<'_> {
                     self.walk_expr(a);
                 }
             }
-            ExprKind::Method { recv, name, args, .. } => {
+            ExprKind::Method {
+                recv, name, args, ..
+            } => {
                 self.method_call(e, *recv, *name, args);
                 self.walk_expr(*recv);
                 for a in args.clone() {
@@ -256,7 +272,9 @@ impl CallCx<'_> {
     /// `f(..)` — a free fn by unique match (the `call_ty` law:
     /// ambiguity is a miss, never a wrong name)
     fn free_call(&mut self, callee: NodeHandle<AnyExpr>, args: &[NodeHandle<AnyExpr>]) {
-        let ExprKind::Path { segs } = self.ctx.ast.expr(callee) else { return };
+        let ExprKind::Path { segs } = self.ctx.ast.expr(callee) else {
+            return;
+        };
         if segs.len() != 1 {
             return;
         }
@@ -274,20 +292,32 @@ impl CallCx<'_> {
 
     /// `recv.m(..)` — the receiver's type head, then the inherent impl
     /// fn's recorded params
-    fn method_call(&mut self, call: NodeHandle<AnyExpr>, recv: NodeHandle<AnyExpr>, name: IdentId, args: &[NodeHandle<AnyExpr>]) {
+    fn method_call(
+        &mut self,
+        call: NodeHandle<AnyExpr>,
+        recv: NodeHandle<AnyExpr>,
+        name: IdentId,
+        args: &[NodeHandle<AnyExpr>],
+    ) {
         let pos = self.ctx.ast.span(call.id()).lo;
         // a named receiver resolves through the phase-1 recv rule
         // (`self`, capitalized, primitive, binding, module let);
         // anything else (chained calls, field paths) through the
         // display-side expression inference
         let head = match self.ctx.ast.expr(recv) {
-            ExprKind::Path { segs } if segs.len() == 1 => {
-                recv_type(self.ctx.idxs, self.binds, pos, self.ctx.ast.name(segs[0].name))
-            }
-            _ => infer::expr_ty(self.ctx.ast, self.binds, self.ctx.idxs, recv).map(|t| head_of_ty(&t)),
+            ExprKind::Path { segs } if segs.len() == 1 => recv_type(
+                self.ctx.idxs,
+                self.binds,
+                pos,
+                self.ctx.ast.name(segs[0].name),
+            ),
+            _ => infer::expr_ty(self.ctx.ast, self.binds, self.ctx.idxs, recv)
+                .map(|t| head_of_ty(&t)),
         };
         let Some(ty_name) = head else { return };
-        let Some(params) = self.method_params(&ty_name, self.ctx.ast.name(name)) else { return };
+        let Some(params) = self.method_params(&ty_name, self.ctx.ast.name(name)) else {
+            return;
+        };
         self.arg_hints(&params, args);
     }
 
@@ -339,7 +369,13 @@ mod tests {
         let mut index = crate::hover::index(&src, &ast, &toks);
         index.origin = DOC.to_string();
         let lines = LineIndex::new(&src);
-        Doc { src, toks, ast, index, lines }
+        Doc {
+            src,
+            toks,
+            ast,
+            index,
+            lines,
+        }
     }
 
     /// the query context + its chain, both held by the caller (the
@@ -350,7 +386,10 @@ mod tests {
     }
 
     fn w<'a>(d: &'a Doc, extra: &'a [DefIndex]) -> W<'a> {
-        W { d, idxs: std::iter::once(&d.index).chain(extra.iter()).collect() }
+        W {
+            d,
+            idxs: std::iter::once(&d.index).chain(extra.iter()).collect(),
+        }
     }
 
     impl W<'_> {
@@ -437,8 +476,16 @@ mod tests {
         // right after the declaring ident: `let c⌊: Circle⌋ = ..`
         assert_eq!(pos(&hs[0]), end_of(&src, "let c", 1));
         // the tooltip IS the hover markdown
-        assert!(tooltip(&hs[0]).contains("let c: Circle"), "{:?}", tooltip(&hs[0]));
-        assert!(tooltip(&hs[0]).contains("type inferred"), "{:?}", tooltip(&hs[0]));
+        assert!(
+            tooltip(&hs[0]).contains("let c: Circle"),
+            "{:?}",
+            tooltip(&hs[0])
+        );
+        assert!(
+            tooltip(&hs[0]).contains("type inferred"),
+            "{:?}",
+            tooltip(&hs[0])
+        );
     }
 
     #[test]
@@ -481,8 +528,16 @@ mod tests {
         assert_eq!(labels(&hs), [": f32", ": Point", ": i32"], "{hs:?}");
         assert_eq!(pos(&hs[1]), end_of(&src, "for (let p", 1));
         assert_eq!(hs[1].kind, Some(InlayHintKind::TYPE));
-        assert!(tooltip(&hs[1]).contains("p: Point"), "{:?}", tooltip(&hs[1]));
-        assert!(tooltip(&hs[1]).contains("loop variable"), "{:?}", tooltip(&hs[1]));
+        assert!(
+            tooltip(&hs[1]).contains("p: Point"),
+            "{:?}",
+            tooltip(&hs[1])
+        );
+        assert!(
+            tooltip(&hs[1]).contains("loop variable"),
+            "{:?}",
+            tooltip(&hs[1])
+        );
     }
 
     #[test]
@@ -506,10 +561,22 @@ mod tests {
         let idxs: Vec<&DefIndex> = vec![&d.index];
         let (hl, hc) = at(&src, "let c", 1);
         let byte = d.lines.byte(&d.src, hl, hc) + 4; // the `c` ident
-        let hov = crate::hover::hover(&idxs, &d.toks, &d.ast, &crate::mods::DocMods::default(), byte);
+        let hov = crate::hover::hover(
+            &idxs,
+            &d.toks,
+            &d.ast,
+            &crate::mods::DocMods::default(),
+            byte,
+        );
         let md = hov.expect("hover at the binding").markdown;
         assert!(md.contains("let c: Circle"), "{md}");
-        let hover_ty = md.split("let c: ").nth(1).unwrap().split('\n').next().unwrap();
+        let hover_ty = md
+            .split("let c: ")
+            .nth(1)
+            .unwrap()
+            .split('\n')
+            .next()
+            .unwrap();
         assert_eq!(label(&hs[0]), format!(": {hover_ty}"));
     }
 
@@ -521,7 +588,11 @@ mod tests {
         assert_eq!(hs.len(), 1, "{hs:?}");
         assert_eq!(label(&hs[0]), ": i32");
         assert_eq!(pos(&hs[0]), end_of(&src, "let TOTAL", 1));
-        assert!(tooltip(&hs[0]).contains("let TOTAL = 41;"), "{:?}", tooltip(&hs[0]));
+        assert!(
+            tooltip(&hs[0]).contains("let TOTAL = 41;"),
+            "{:?}",
+            tooltip(&hs[0])
+        );
         // an annotated module let restates nothing
         let src2 = "let TOTAL: i32 = 41;\nfn bump() -> i32 {\n    return TOTAL + 1;\n}\n";
         let d2 = doc(src2);
@@ -566,9 +637,15 @@ mod tests {
         let idxs: Vec<&DefIndex> = vec![&d.index];
         let (hl, hc) = at(&src, "let v", 1);
         let byte = d.lines.byte(&d.src, hl, hc) + 4; // the `v` ident
-        let md = crate::hover::hover(&idxs, &d.toks, &d.ast, &crate::mods::DocMods::default(), byte)
-            .expect("hover at the binding")
-            .markdown;
+        let md = crate::hover::hover(
+            &idxs,
+            &d.toks,
+            &d.ast,
+            &crate::mods::DocMods::default(),
+            byte,
+        )
+        .expect("hover at the binding")
+        .markdown;
         assert!(md.contains("let v: (opaque, str)"), "{md}");
     }
 
@@ -638,7 +715,11 @@ mod tests {
         ]
         .join("\n");
         let d = doc(&src);
-        assert!(w(&d, &[]).all().is_empty(), "{:?}", labels(&w(&d, &[]).all()));
+        assert!(
+            w(&d, &[]).all().is_empty(),
+            "{:?}",
+            labels(&w(&d, &[]).all())
+        );
     }
 
     #[test]
@@ -675,7 +756,11 @@ mod tests {
         ]
         .join("\n");
         let d = doc(&src);
-        assert!(w(&d, &[]).all().is_empty(), "{:?}", labels(&w(&d, &[]).all()));
+        assert!(
+            w(&d, &[]).all().is_empty(),
+            "{:?}",
+            labels(&w(&d, &[]).all())
+        );
     }
 
     #[test]

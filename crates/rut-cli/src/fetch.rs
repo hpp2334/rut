@@ -20,7 +20,9 @@ pub(crate) fn fetch_cmd(args: &FetchArgs) {
     let dir = args.dir.as_str();
     let p = std::path::Path::new(dir);
     if !p.is_dir() {
-        eprintln!("fetch: {dir} is not a module directory (a `.rutbundle` is closed — nothing to fetch)");
+        eprintln!(
+            "fetch: {dir} is not a module directory (a `.rutbundle` is closed — nothing to fetch)"
+        );
         std::process::exit(2);
     }
     // the progress loop: per-dep stderr lines, the misses downloaded —
@@ -31,7 +33,10 @@ pub(crate) fn fetch_cmd(args: &FetchArgs) {
         std::process::exit(2);
     }
     match cache::load_offline(p) {
-        Ok(loaded) => println!("fetch: {dir} — all url deps are cached (root `{}`)", loaded.root),
+        Ok(loaded) => println!(
+            "fetch: {dir} — all url deps are cached (root `{}`)",
+            loaded.root
+        ),
         Err(e) => {
             eprintln!("{e}");
             cache::evict_poisoned_cache(p, &e);

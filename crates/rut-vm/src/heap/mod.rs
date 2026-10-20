@@ -8,7 +8,7 @@
 //! destruction, identity, `Trap::OutOfMemory` before any write — holds).
 
 use crate::arena::{release_ref_slot, Arena, ReleasePlan};
-use rut_core::types::{PrimTy, TypeId, TypeTable, TyKind};
+use rut_core::types::{PrimTy, TyKind, TypeId, TypeTable};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -52,7 +52,11 @@ impl Heap {
         disposal_impls: Vec<Option<u32>>,
     ) -> Heap {
         Heap {
-            acct: Rc::new(HeapAcct { used: Cell::new(0), peak: Cell::new(0), limit: Cell::new(limit) }),
+            acct: Rc::new(HeapAcct {
+                used: Cell::new(0),
+                peak: Cell::new(0),
+                limit: Cell::new(limit),
+            }),
             arena: Rc::new(Arena::new(Rc::new(plan), disposal_impls)),
         }
     }
@@ -62,7 +66,10 @@ impl Heap {
     /// a real `Heap` (alloc/release route into the SAME machine, never a
     /// copy; the enum-singleton map lives on the arena, shared by view).
     pub(crate) fn view(arena: &Rc<Arena>, acct: &Rc<HeapAcct>) -> Heap {
-        Heap { acct: acct.clone(), arena: arena.clone() }
+        Heap {
+            acct: acct.clone(),
+            arena: arena.clone(),
+        }
     }
 
     /// The Opaque store (tests probe the live-entry count).
@@ -122,7 +129,9 @@ impl Heap {
         };
         let p = self.arena.alloc_slot();
         unsafe { p.write(cell) };
-        Ok(Slot { r: p as *const CellVal })
+        Ok(Slot {
+            r: p as *const CellVal,
+        })
     }
 
     /// A `str` cell from owned text — the boundary path (literals at load,
@@ -146,7 +155,12 @@ impl Heap {
         d.len = bytes.len() as u32;
         self.mint(
             rut_core::types::TY_STR,
-            CellData::Str(StrVal { block, len: bytes.len() as u32, cap, ascii }),
+            CellData::Str(StrVal {
+                block,
+                len: bytes.len() as u32,
+                cap,
+                ascii,
+            }),
             n,
         )
     }
@@ -158,7 +172,11 @@ impl Heap {
     pub fn alloc_arr_view(&self, parent: Slot, off: u32, len: u32) -> Result<Slot, Trap> {
         self.retain(parent);
         let ty = unsafe { cell_of(parent).ty };
-        let r = self.mint(ty, CellData::ArrView { parent, off, len }, CELL_OVERHEAD + 8);
+        let r = self.mint(
+            ty,
+            CellData::ArrView { parent, off, len },
+            CELL_OVERHEAD + 8,
+        );
         match r {
             Ok(s) => Ok(s),
             Err(e) => {
@@ -185,7 +203,12 @@ impl Heap {
         unsafe { std::ptr::copy_nonoverlapping(s.as_ptr(), block, s.len()) };
         self.mint(
             rut_core::types::TY_STR,
-            CellData::Str(StrVal { block, len: s.len() as u32, cap, ascii: c.is_ascii() }),
+            CellData::Str(StrVal {
+                block,
+                len: s.len() as u32,
+                cap,
+                ascii: c.is_ascii(),
+            }),
             n,
         )
     }
@@ -194,11 +217,22 @@ impl Heap {
     /// `off`, retained. O(1) — no octets move. The view cell itself is
     /// tiny and accounted (`CELL_OVERHEAD` + fields); the parent's bytes
     /// stay alive as long as any view does.
-    pub fn alloc_str_view(&self, parent: Slot, off: u32, len: u32, ascii: bool) -> Result<Slot, Trap> {
+    pub fn alloc_str_view(
+        &self,
+        parent: Slot,
+        off: u32,
+        len: u32,
+        ascii: bool,
+    ) -> Result<Slot, Trap> {
         self.retain(parent);
         let r = self.mint(
             rut_core::types::TY_STR,
-            CellData::StrView { parent, off, len, ascii },
+            CellData::StrView {
+                parent,
+                off,
+                len,
+                ascii,
+            },
             CELL_OVERHEAD + 8,
         );
         match r {
@@ -230,7 +264,9 @@ impl Heap {
         }
         unsafe {
             let cell = &mut *p;
-            let CellData::Str(v) = &mut cell.data else { unreachable!() };
+            let CellData::Str(v) = &mut cell.data else {
+                unreachable!()
+            };
             let need = v.len as usize + extra;
             if need > v.cap as usize {
                 v.block = self.arena.blocks.grow(v.block, v.len as usize, need);
@@ -251,7 +287,9 @@ impl Heap {
         }
         unsafe {
             let cell = &mut *p;
-            let CellData::Str(v) = &mut cell.data else { unreachable!() };
+            let CellData::Str(v) = &mut cell.data else {
+                unreachable!()
+            };
             let need = v.len as usize + extra.len();
             if need > v.cap as usize {
                 v.block = self.arena.blocks.grow(v.block, v.len as usize, need);
@@ -276,7 +314,10 @@ impl Heap {
         d.len = b.len() as u32;
         self.mint(
             0,
-            CellData::Array { elem: rut_core::types::TY_U8, items: RefCell::new(d) },
+            CellData::Array {
+                elem: rut_core::types::TY_U8,
+                items: RefCell::new(d),
+            },
             n,
         )
     }
@@ -284,7 +325,13 @@ impl Heap {
     /// A `CellData::Array` with `n` elements pre-filled with `default` — the
     /// `Array<T>(n)` / `bytes_zeroed` path. Builds the packed store at its
     /// final length in one allocation (no `Vec<Slot>` temporary).
-    pub fn alloc_array_filled(&self, elem: TypeId, n: usize, default: Slot, table: &TypeTable) -> Result<Slot, Trap> {
+    pub fn alloc_array_filled(
+        &self,
+        elem: TypeId,
+        n: usize,
+        default: Slot,
+        table: &TypeTable,
+    ) -> Result<Slot, Trap> {
         let kind = ArrKind::of(elem, table);
         let w = kind.width();
         let block = self.arena.blocks.alloc(w * n);
@@ -304,10 +351,22 @@ impl Heap {
             }
         }
         let bytes = (n as u64) * w as u64;
-        self.mint(0, CellData::Array { elem, items: RefCell::new(d) }, bytes)
+        self.mint(
+            0,
+            CellData::Array {
+                elem,
+                items: RefCell::new(d),
+            },
+            bytes,
+        )
     }
 
-    pub fn alloc_array(&self, elem: TypeId, items: Vec<Slot>, table: &TypeTable) -> Result<Slot, Trap> {
+    pub fn alloc_array(
+        &self,
+        elem: TypeId,
+        items: Vec<Slot>,
+        table: &TypeTable,
+    ) -> Result<Slot, Trap> {
         let kind = ArrKind::of(elem, table);
         let w = kind.width();
         let n = items.len();
@@ -331,7 +390,14 @@ impl Heap {
             }
         }
         let bytes = (n as u64) * w as u64;
-        self.mint(0, CellData::Array { elem, items: RefCell::new(d) }, bytes)
+        self.mint(
+            0,
+            CellData::Array {
+                elem,
+                items: RefCell::new(d),
+            },
+            bytes,
+        )
     }
 
     pub fn alloc_opt_value(&self, opt_ty: TypeId, raw: Slot) -> Result<Slot, Trap> {
@@ -344,13 +410,25 @@ impl Heap {
 
     pub fn alloc_record(&self, ty: TypeId, fields: Vec<Slot>) -> Result<Slot, Trap> {
         let n = fields.len() as u64;
-        self.mint(ty, CellData::Record { fields: RefCell::new(Slots::from_vec(fields)) }, n * 8)
+        self.mint(
+            ty,
+            CellData::Record {
+                fields: RefCell::new(Slots::from_vec(fields)),
+            },
+            n * 8,
+        )
     }
 
     /// Record with `n` zeroed fields — the `Self { .. }` / struct literal
     /// path (`Op::NewCell`), keeping small payloads inline.
     pub fn alloc_record_zeroed(&self, ty: TypeId, n: usize) -> Result<Slot, Trap> {
-        self.mint(ty, CellData::Record { fields: RefCell::new(Slots::zeroed(n)) }, n as u64 * 8)
+        self.mint(
+            ty,
+            CellData::Record {
+                fields: RefCell::new(Slots::zeroed(n)),
+            },
+            n as u64 * 8,
+        )
     }
 
     pub fn alloc_opaque(&self, val: Slot, val_ty: TypeId) -> Result<Slot, Trap> {
@@ -401,7 +479,11 @@ impl Heap {
     /// header, depth-proportional, paid once per capture.
     pub fn alloc_trace(&self, frames: Vec<TraceFrame>) -> Result<Slot, Trap> {
         let n = frames.len() as u64;
-        self.mint(rut_core::types::TY_STACK_TRACE, CellData::Trace { frames }, n * 8)
+        self.mint(
+            rut_core::types::TY_STACK_TRACE,
+            CellData::Trace { frames },
+            n * 8,
+        )
     }
 
     /// A fresh `DisposalContext` cell — the engine mints one per
@@ -411,7 +493,9 @@ impl Heap {
     pub fn alloc_disposal_context(&self) -> Result<Slot, Trap> {
         self.mint(
             rut_core::types::TY_DISPOSAL_CONTEXT,
-            CellData::Record { fields: RefCell::new(Slots::zeroed(0)) },
+            CellData::Record {
+                fields: RefCell::new(Slots::zeroed(0)),
+            },
             0,
         )
     }
@@ -428,7 +512,13 @@ impl Heap {
         if word.is_null() {
             return Err(Trap::new(TrapKind::NilDeref, "weak on nil"));
         }
-        let r = self.mint(ty, CellData::WeakBox { referent: Cell::new(referent) }, 8);
+        let r = self.mint(
+            ty,
+            CellData::WeakBox {
+                referent: Cell::new(referent),
+            },
+            8,
+        );
         if let Ok(s) = &r {
             self.arena.weak_register(word as usize, unsafe { s.r });
         }
@@ -451,8 +541,13 @@ impl Heap {
         };
         let p = self.arena.alloc_slot();
         unsafe { p.write(cell) };
-        self.arena.singletons.borrow_mut().insert((ty, member), p as *const CellVal);
-        Ok(Slot { r: p as *const CellVal })
+        self.arena
+            .singletons
+            .borrow_mut()
+            .insert((ty, member), p as *const CellVal);
+        Ok(Slot {
+            r: p as *const CellVal,
+        })
     }
 
     // ---- ref discipline ----
@@ -488,7 +583,9 @@ impl Heap {
     /// The caller runs `dispose(cell, cx)` with a fresh cx, then
     /// releases the pin.
     pub(crate) fn take_pending_dispose(&self) -> Option<(Slot, u32)> {
-        self.arena.take_pending_dispose().map(|(p, fid)| (Slot { r: p }, fid))
+        self.arena
+            .take_pending_dispose()
+            .map(|(p, fid)| (Slot { r: p }, fid))
     }
 
     /// Build an owning host handle for an `Opaque` slot (retains once).
@@ -519,7 +616,10 @@ impl Heap {
         match table.kind(ty).clone() {
             // handles: the slot IS the value (the async future's frame
             // record is shared, never copied — one future, one state)
-            TyKind::Prim(_) | TyKind::Nil | TyKind::Fn { .. } | TyKind::Opt { .. }
+            TyKind::Prim(_)
+            | TyKind::Nil
+            | TyKind::Fn { .. }
+            | TyKind::Opt { .. }
             | TyKind::Future { .. } => Ok(s),
             TyKind::Str => {
                 let cell = cell_of(s);
@@ -602,7 +702,10 @@ impl Heap {
                     }
                 }
             }
-            TyKind::Enum { .. } | TyKind::IfaceObj { .. } | TyKind::Trace | TyKind::Weak { .. }
+            TyKind::Enum { .. }
+            | TyKind::IfaceObj { .. }
+            | TyKind::Trace
+            | TyKind::Weak { .. }
             | TyKind::DisposalContext => {
                 // singletons & trait refs alias one cell — own() must mint a
                 // new identity; for enums that would break singleton `==`,

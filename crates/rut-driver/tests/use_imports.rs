@@ -53,7 +53,10 @@ fn graph_of(app_src: &str) -> rut_driver::GraphOutput {
     {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -80,12 +83,7 @@ fn unknown_flat_leaf_rejects_at_the_use_line() {
     let src = "use util::{ Nope };\n\
                entry fn main() -> i32 { return 0; }\n";
     let g = graph_of(src);
-    assert_eq!(
-        g.diags.len(),
-        1,
-        "exactly one diagnostic: {:?}",
-        msgs(&g)
-    );
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
     let d = &g.diags[0];
     assert!(
         d.msg.contains("has no `Nope` — unknown import"),
@@ -184,9 +182,7 @@ fn a_flat_leaf_naming_a_module_diagnoses_with_the_walk_hint() {
     let g = graph_of(src);
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
     assert!(
-        g.diags[0]
-            .msg
-            .contains("`sub` is a module of `util`")
+        g.diags[0].msg.contains("`sub` is a module of `util`")
             && g.diags[0].msg.contains("use util::sub::{ .. }"),
         "got: {}",
         g.diags[0].msg
@@ -198,8 +194,10 @@ fn a_flat_leaf_naming_a_module_diagnoses_with_the_walk_hint() {
 /// The toolchain tree's ink walk (`rut/ink`): the pkg plus its
 /// `ink_host` dep; only the root's closure compiles.
 fn std_graph_of(app_src: &str) -> rut_driver::GraphOutput {
-    let tree = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/ink"))
-        .expect("the ink walk");
+    let tree = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/ink"),
+    )
+    .expect("the ink walk");
     match tree
         .pkgs
         .iter()
@@ -213,7 +211,10 @@ fn std_graph_of(app_src: &str) -> rut_driver::GraphOutput {
     {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }

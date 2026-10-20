@@ -119,12 +119,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if decl_generics.contains(&name) {
                     if let Some(&(_, prev)) = subst.iter().find(|(n, _)| *n == name) {
                         if prev != arg_ty {
-                            self.ctx.err(sp, format!(
-                                "generic parameter `{}` binds to both `{}` and `{}`",
-                                self.ctx.name(name),
-                                self.ctx.type_name(prev),
-                                self.ctx.type_name(arg_ty)
-                            ));
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "generic parameter `{}` binds to both `{}` and `{}`",
+                                    self.ctx.name(name),
+                                    self.ctx.type_name(prev),
+                                    self.ctx.type_name(arg_ty)
+                                ),
+                            );
                             return Err(());
                         }
                     }
@@ -139,10 +142,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None => self.widens(arg_ty, want),
                 };
                 if !ok {
-                    self.ctx.err(sp, format!(
-                        "argument is `{}`, `{}` expected",
-                        self.ctx.type_name(arg_ty), self.ctx.type_name(want)
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "argument is `{}`, `{}` expected",
+                            self.ctx.type_name(arg_ty),
+                            self.ctx.type_name(want)
+                        ),
+                    );
                     return Err(());
                 }
                 Ok(())
@@ -154,10 +161,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let TyKind::Array { elem: arg_elem } = arg_kind {
                     self.unify_generic(elem, arg_elem, decl_generics, subst, sp)
                 } else {
-                    self.ctx.err(sp, format!(
-                        "argument is `{}`, an array `[..]` expected",
-                        self.ctx.type_name(arg_ty)
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "argument is `{}`, an array `[..]` expected",
+                            self.ctx.type_name(arg_ty)
+                        ),
+                    );
                     Err(())
                 }
             }
@@ -165,7 +175,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if segs.len() == 1
                     && !segs[0].generics.is_empty()
                     && segs[0].name == rut_core::sym::FUTURE
-                    && !self.free_generics(param_node, decl_generics, subst).is_empty() =>
+                    && !self
+                        .free_generics(param_node, decl_generics, subst)
+                        .is_empty() =>
             {
                 // the closed `Future<T>` handle (v20): a generic handle
                 // parameter against a future argument unifies through
@@ -174,20 +186,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // machinery anywhere
                 let arg_nodes = segs[0].generics.clone();
                 let TyKind::Future { elem } = self.ctx.types.kind(arg_ty) else {
-                    self.ctx.err(sp, format!(
-                        "argument is `{}`, a `Future<..>` expected",
-                        self.ctx.type_name(arg_ty)
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "argument is `{}`, a `Future<..>` expected",
+                            self.ctx.type_name(arg_ty)
+                        ),
+                    );
                     return Err(());
                 };
                 let concrete = [*elem];
                 if concrete.len() != arg_nodes.len() {
-                    self.ctx.err(sp, format!(
-                        "`{}` takes {} type argument(s), {} given",
-                        self.ctx.name(segs[0].name),
-                        concrete.len(),
-                        arg_nodes.len()
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}` takes {} type argument(s), {} given",
+                            self.ctx.name(segs[0].name),
+                            concrete.len(),
+                            arg_nodes.len()
+                        ),
+                    );
                     return Err(());
                 }
                 for (node, c) in arg_nodes.iter().zip(concrete.into_iter()) {
@@ -203,7 +221,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .find_iface(segs[0].name)
                         .map(|t| !t.generics.is_empty())
                         .unwrap_or(false)
-                    && !self.free_generics(param_node, decl_generics, subst).is_empty() =>
+                    && !self
+                        .free_generics(param_node, decl_generics, subst)
+                        .is_empty() =>
             {
                 // a generic trait's instantiation against a concrete
                 // argument (`fn read_id<T>(a: Readable<T>)` over
@@ -227,11 +247,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         match hit {
                             Some((n, args)) if n == tname => args,
                             _ => {
-                                self.ctx.err(sp, format!(
-                                    "argument is `{}`, `{}` expected",
-                                    self.ctx.type_name(arg_ty),
-                                    self.ctx.name(tname)
-                                ));
+                                self.ctx.err(
+                                    sp,
+                                    format!(
+                                        "argument is `{}`, `{}` expected",
+                                        self.ctx.type_name(arg_ty),
+                                        self.ctx.name(tname)
+                                    ),
+                                );
                                 return Err(());
                             }
                         }
@@ -252,12 +275,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 };
                 if concrete.len() != arg_nodes.len() {
-                    self.ctx.err(sp, format!(
-                        "`{}` takes {} type argument(s), {} given",
-                        self.ctx.name(tname),
-                        concrete.len(),
-                        arg_nodes.len()
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}` takes {} type argument(s), {} given",
+                            self.ctx.name(tname),
+                            concrete.len(),
+                            arg_nodes.len()
+                        ),
+                    );
                     return Err(());
                 }
                 for (node, c) in arg_nodes.iter().zip(concrete.into_iter()) {
@@ -272,10 +298,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // which reports it as not in scope)
                 let want = self.ctx.resolve_type(param_node, subst);
                 if !self.widens(arg_ty, want) {
-                    self.ctx.err(sp, format!(
-                        "argument is `{}`, `{}` expected",
-                        self.ctx.type_name(arg_ty), self.ctx.type_name(want)
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "argument is `{}`, `{}` expected",
+                            self.ctx.type_name(arg_ty),
+                            self.ctx.type_name(want)
+                        ),
+                    );
                     Err(())
                 } else {
                     Ok(())
@@ -284,7 +314,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             TypeKind::TyFn { params, ret } => {
                 // fn(P1, P2) -> R against the arg's fn type
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
-                if let TyKind::Fn { params: aps, ret: ar } = arg_kind {
+                if let TyKind::Fn {
+                    params: aps,
+                    ret: ar,
+                } = arg_kind
+                {
                     if params.len() != aps.len() {
                         self.ctx.err(sp, "fn type arity mismatch");
                         return Err(());
@@ -292,21 +326,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     for (p, a) in params.iter().zip(aps.iter()) {
                         self.unify_generic(*p, *a, decl_generics, subst, sp)?;
                     }
-                    self.unify_generic(ret, ar, decl_generics, subst, sp)} else {
-                    self.ctx.err(sp, format!(
-                        "expected an fn type, found `{}`",
-                        self.ctx.type_name(arg_ty)
-                    ));
+                    self.unify_generic(ret, ar, decl_generics, subst, sp)
+                } else {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "expected an fn type, found `{}`",
+                            self.ctx.type_name(arg_ty)
+                        ),
+                    );
                     Err(())
                 }
             }
             _ => {
                 let want = self.ctx.resolve_type(param_node, subst);
                 if want != arg_ty {
-                    self.ctx.err(sp, format!(
-                        "argument is `{}`, `{}` expected",
-                        self.ctx.type_name(arg_ty), self.ctx.type_name(want)
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "argument is `{}`, `{}` expected",
+                            self.ctx.type_name(arg_ty),
+                            self.ctx.type_name(want)
+                        ),
+                    );
                     Err(())
                 } else {
                     Ok(())

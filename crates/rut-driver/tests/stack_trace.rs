@@ -24,9 +24,13 @@
 
 use rut_parser::Mode;
 
-
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -52,7 +56,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -70,8 +77,13 @@ fn run_main(src: &str) -> i32 {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
@@ -86,8 +98,13 @@ fn compile_vm(src: &str) -> (rut_core::binary::Program, rut_vm::interp::Vm) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat.clone())).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat.clone()))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     (flat, vm)
 }
 
@@ -181,8 +198,14 @@ fn call_site_lines_and_cols_are_exact() {
     let (_flat, mut vm) = compile_vm(&src);
     let r: String = vm.call::<_, String>("main", ()).expect("run");
     let lines: Vec<&str> = r.lines().collect();
-    assert_eq!(lines[0], "at c_big (core:27:13)", "capture site: the CallNat op's own position");
-    assert_eq!(lines[1], "at b_big (core:56:12)", "the call that pushed the c_big frame");
+    assert_eq!(
+        lines[0], "at c_big (core:27:13)",
+        "capture site: the CallNat op's own position"
+    );
+    assert_eq!(
+        lines[1], "at b_big (core:56:12)",
+        "the call that pushed the c_big frame"
+    );
     assert_eq!(lines[2], "at a_big (core:84:12)");
     assert_eq!(lines[3], "at main (core:87:12)");
     assert_eq!(lines.len(), 4, "innermost first, one line per frame: {r}");
@@ -198,7 +221,9 @@ fn members_report_positions_individually() {
     sum.push_str("    let t = capture_stacktrace();\n"); // line 27, col 13
     sum.push_str("    if (t.line(0) != 27) { return 1; }\n");
     sum.push_str("    if (t.col(0) != 13) { return 2; }\n");
-    sum.push_str(&format!("    if (t.line(1) != {main_call_line}) {{ return 3; }}\n"));
+    sum.push_str(&format!(
+        "    if (t.line(1) != {main_call_line}) {{ return 3; }}\n"
+    ));
     sum.push_str("    if (t.col(1) != 12) { return 4; }\n");
     sum.push_str("    return 9;\n");
     sum.push_str("}\n"); // line 29
@@ -219,7 +244,11 @@ fn out_of_range_index_traps_loud() {
         "the loud message names the index and the len: {}",
         err.msg
     );
-    assert!(err.msg.contains("len is 1"), "the trace's real depth is disclosed: {}", err.msg);
+    assert!(
+        err.msg.contains("len is 1"),
+        "the trace's real depth is disclosed: {}",
+        err.msg
+    );
 
     // a negative index is out of range too — the index is a bug, not data
     let src = "fn grab() -> i32 {\n    let t = capture_stacktrace();\n    return t.line(-1);\n}\nentry fn main() -> i32 {\n    return grab();\n}\n";
@@ -341,8 +370,13 @@ fn render_degrades_when_stripped() {
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let limits = rut_vm::interp::Limits::default();
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     let r: String = vm.call::<_, String>("main", ()).expect("run");
     let lines: Vec<&str> = r.lines().collect();
     // pcs: the capture sits at op 25 of c_big (25 pad statements push it

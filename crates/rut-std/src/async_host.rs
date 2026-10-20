@@ -57,7 +57,9 @@ fn find_ty(vm: &Vm, name: &str) -> Result<u32, Trap> {
         .ok_or_else(|| {
             Trap::new(
                 TrapKind::Invalid,
-                format!("async engine: `{name}` was not minted — the sleep surface was never compiled"),
+                format!(
+                    "async engine: `{name}` was not minted — the sleep surface was never compiled"
+                ),
             )
         })
 }
@@ -214,7 +216,12 @@ fn mint_select2(vm: &Vm, a: Slot, b: Slot) -> Result<OpaqueRef, Trap> {
     let ckpt = find_ty(vm, af::SELECT_CKPT)?;
     let nfields = match vm.prog.types.kind(frame_ty) {
         rut_core::types::TyKind::Data { fields } => fields.len(),
-        _ => return Err(Trap::new(TrapKind::Invalid, "async engine: the select frame type is not a record")),
+        _ => {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                "async engine: the select frame type is not a record",
+            ))
+        }
     };
     let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
     let s0 = vm.enum_member_slot(ckpt, 0)?;
@@ -234,44 +241,44 @@ pub fn pkg() -> HostPkg {
     // rut launcher minted with `opaque(f)`); the queue takes its own
     // reference
     rut_vm::pkg_fn!(pkg, "__launch", (OpaqueRef,) -> (),
-        |vm: &mut Vm, f: OpaqueRef| {
-            let frame = unsealed(vm, &f, "__launch")?;
-            vm.launch(frame);
-            Ok(())
-        });
+    |vm: &mut Vm, f: OpaqueRef| {
+        let frame = unsealed(vm, &f, "__launch")?;
+        vm.launch(frame);
+        Ok(())
+    });
     // LaunchedFutureHandle::abort's engine half: `false` when the frame
     // already retired, else the flag + re-enqueue (the probe at its
     // checkpoint runs the drop path)
     rut_vm::pkg_fn!(pkg, "__abort", (OpaqueRef,) -> bool,
-        |vm: &mut Vm, f: OpaqueRef| {
-            let frame = unsealed(vm, &f, "__abort")?;
-            Ok(vm.cancel(frame))
-        });
+    |vm: &mut Vm, f: OpaqueRef| {
+        let frame = unsealed(vm, &f, "__abort")?;
+        Ok(vm.cancel(frame))
+    });
     // sleep's engine-assisted mint: the sleep frame with `ms` in its
     // local field, SEALED under the `Future<nil>` object spelling — the
     // entry owns the mint reference, the owning handle hands the box's
     // own reference to the return path (`seal_opaque`)
     rut_vm::pkg_fn!(pkg, "__sleep", (u32,) -> OpaqueRef,
-        |vm: &mut Vm, ms: u32| {
-            let ckpt = find_ty(vm, af::SLEEP_CKPT)?;
-            let frame_ty = find_ty(vm, af::SLEEP_FRAME)?;
-            let fut_obj = find_ty(vm, FUTURE_NIL_OBJ)?;
-            // the minted frame type's own field count (state, cancelled,
-            // awaiter, pending, answer, ms) — the ANSWER lane joined the
-            // engine layout, so the count reads the type, never a literal
-            let nfields = match vm.prog.types.kind(frame_ty) {
-                rut_core::types::TyKind::Data { fields } => fields.len(),
-                _ => return Err(rut_vm::Trap::new(
-                    rut_vm::TrapKind::Invalid,
-                    "async engine: the sleep frame type is not a record",
-                )),
-            };
-            let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
-            let s0 = vm.enum_member_slot(ckpt, 0)?;
-            vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
-            vm.set_record_field(frame, af::LOCALS_BASE as usize, Slot::int(ms as i64));
-            Ok(vm.seal_opaque(frame, fut_obj)?)
-        });
+    |vm: &mut Vm, ms: u32| {
+        let ckpt = find_ty(vm, af::SLEEP_CKPT)?;
+        let frame_ty = find_ty(vm, af::SLEEP_FRAME)?;
+        let fut_obj = find_ty(vm, FUTURE_NIL_OBJ)?;
+        // the minted frame type's own field count (state, cancelled,
+        // awaiter, pending, answer, ms) — the ANSWER lane joined the
+        // engine layout, so the count reads the type, never a literal
+        let nfields = match vm.prog.types.kind(frame_ty) {
+            rut_core::types::TyKind::Data { fields } => fields.len(),
+            _ => return Err(rut_vm::Trap::new(
+                rut_vm::TrapKind::Invalid,
+                "async engine: the sleep frame type is not a record",
+            )),
+        };
+        let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
+        let s0 = vm.enum_member_slot(ckpt, 0)?;
+        vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
+        vm.set_record_field(frame, af::LOCALS_BASE as usize, Slot::int(ms as i64));
+        Ok(vm.seal_opaque(frame, fut_obj)?)
+    });
     // the sleep future's yield, engine-backed: the fresh arm arms the
     // timer and parks at s1; the resumed arm (or a fresh arm already
     // cancelled) retires — sleep's drop path has no locals to run. The
@@ -279,48 +286,48 @@ pub fn pkg() -> HostPkg {
     // frame/cx pair the shared ABI passes); the cx is the engine-minted
     // record and the body needs none of it.
     rut_vm::pkg_fn!(pkg, "__sleep_yield", (OpaqueRef, OpaqueRef) -> (),
-        |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
-            let ckpt = find_ty(vm, af::SLEEP_CKPT)?;
-            let frame = unsealed(vm, &f, "__sleep_yield")?;
-            let cancelled = vm
-                .record_field(frame, af::CANCELLED_FIELD as usize)
-                .map(|s| s.as_bool())
+    |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
+        let ckpt = find_ty(vm, af::SLEEP_CKPT)?;
+        let frame = unsealed(vm, &f, "__sleep_yield")?;
+        let cancelled = vm
+            .record_field(frame, af::CANCELLED_FIELD as usize)
+            .map(|s| s.as_bool())
+            .unwrap_or(false);
+        let state = vm
+            .record_field(frame, af::STATE_FIELD as usize)
+            .unwrap_or(Slot::null());
+        let fresh = !unsafe { state.r.is_null() }
+            && vm
+                .enum_member_slot(ckpt, 0)
+                .ok()
+                .map(|s0| Slot::same_ref(state, s0))
                 .unwrap_or(false);
-            let state = vm
-                .record_field(frame, af::STATE_FIELD as usize)
-                .unwrap_or(Slot::null());
-            let fresh = !unsafe { state.r.is_null() }
-                && vm
-                    .enum_member_slot(ckpt, 0)
-                    .ok()
-                    .map(|s0| Slot::same_ref(state, s0))
-                    .unwrap_or(false);
-            if fresh && !cancelled {
-                let ms = vm
-                    .record_field(frame, af::LOCALS_BASE as usize)
-                    .map(|s| unsafe { s.i } as u64)
-                    .unwrap_or(0);
-                let s1 = vm.enum_member_slot(ckpt, 1)?;
-                vm.arm_timer(vm.now_ms() + ms, frame);
-                vm.set_record_field(frame, af::STATE_FIELD as usize, s1);
-            } else {
-                // resumed at s1 (timer fired), cancelled at the checkpoint,
-                // or already retired: done either way
-                vm.set_record_field(frame, af::STATE_FIELD as usize, Slot::null());
-            }
-            Ok(())
-        });
+        if fresh && !cancelled {
+            let ms = vm
+                .record_field(frame, af::LOCALS_BASE as usize)
+                .map(|s| unsafe { s.i } as u64)
+                .unwrap_or(0);
+            let s1 = vm.enum_member_slot(ckpt, 1)?;
+            vm.arm_timer(vm.now_ms() + ms, frame);
+            vm.set_record_field(frame, af::STATE_FIELD as usize, s1);
+        } else {
+            // resumed at s1 (timer fired), cancelled at the checkpoint,
+            // or already retired: done either way
+            vm.set_record_field(frame, af::STATE_FIELD as usize, Slot::null());
+        }
+        Ok(())
+    });
     // ---- the structured-competition rows ----
     //
     // `__select2`: unbox both children, mint the race frame sealed under
     // the composite `Future<Either2<A, B>>` class spelling. Nothing runs here —
     // the yield's fresh arm arms the cohort and launches it.
     rut_vm::pkg_fn!(pkg, "__select2", (OpaqueRef, OpaqueRef) -> OpaqueRef,
-        |vm: &mut Vm, a: OpaqueRef, b: OpaqueRef| {
-            let a_slot = unsealed(vm, &a, "__select2")?;
-            let b_slot = unsealed(vm, &b, "__select2")?;
-            mint_select2(vm, a_slot, b_slot)
-        });
+    |vm: &mut Vm, a: OpaqueRef, b: OpaqueRef| {
+        let a_slot = unsealed(vm, &a, "__select2")?;
+        let b_slot = unsealed(vm, &b, "__select2")?;
+        mint_select2(vm, a_slot, b_slot)
+    });
     // `__select2_yield`: the race frame's `Future::yield`. Fresh: arm the
     // shared waker on both live children, launch them, park at s1. A
     // child already retired answers immediately. Resumed: the first
@@ -330,102 +337,102 @@ pub fn pkg() -> HostPkg {
     // race: cascade through the children and retire so the awaiting
     // frame takes its drop path.
     rut_vm::pkg_fn!(pkg, "__select2_yield", (OpaqueRef, OpaqueRef) -> (),
-        |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
-            let ckpt = find_ty(vm, af::SELECT_CKPT)?;
-            let frame = unsealed(vm, &f, "__select2_yield")?;
-            let cancelled = vm
-                .record_field(frame, af::CANCELLED_FIELD as usize)
-                .map(|s| s.as_bool())
+    |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
+        let ckpt = find_ty(vm, af::SELECT_CKPT)?;
+        let frame = unsealed(vm, &f, "__select2_yield")?;
+        let cancelled = vm
+            .record_field(frame, af::CANCELLED_FIELD as usize)
+            .map(|s| s.as_bool())
+            .unwrap_or(false);
+        let state = state_of(vm, frame);
+        let fresh = !unsafe { state.r.is_null() }
+            && vm
+                .enum_member_slot(ckpt, 0)
+                .ok()
+                .map(|s0| Slot::same_ref(state, s0))
                 .unwrap_or(false);
-            let state = state_of(vm, frame);
-            let fresh = !unsafe { state.r.is_null() }
-                && vm
-                    .enum_member_slot(ckpt, 0)
-                    .ok()
-                    .map(|s0| Slot::same_ref(state, s0))
-                    .unwrap_or(false);
-            let a = vm
-                .record_field(frame, af::CHILD_A_FIELD as usize)
-                .unwrap_or(Slot::null());
-            let b = vm
-                .record_field(frame, af::CHILD_B_FIELD as usize)
-                .unwrap_or(Slot::null());
-            if fresh && !cancelled {
-                let a_done = retired(vm, a);
-                let b_done = retired(vm, b);
-                if a_done || b_done {
-                    let (idx, winner, loser) =
-                        if a_done { (0u32, a, b) } else { (1u32, b, a) };
-                    settle_select2(vm, frame, idx, winner)?;
-                    cancel_child(vm, loser);
-                    return Ok(());
-                }
-                arm_child(vm, frame, a);
-                arm_child(vm, frame, b);
-                vm.launch(a);
-                vm.launch(b);
-                let s1 = vm.enum_member_slot(ckpt, 1)?;
-                vm.set_record_field(frame, af::STATE_FIELD as usize, s1);
-                return Ok(());
-            }
-            if cancelled {
-                // the race itself was aborted: cascade through the
-                // children, then retire — the awaiter's cancelled probe
-                // takes the drop path at its own checkpoint
-                cancel_child(vm, a);
-                cancel_child(vm, b);
-                retire(vm, frame);
-                return Ok(());
-            }
-            // resumed: one child completed and woke us
+        let a = vm
+            .record_field(frame, af::CHILD_A_FIELD as usize)
+            .unwrap_or(Slot::null());
+        let b = vm
+            .record_field(frame, af::CHILD_B_FIELD as usize)
+            .unwrap_or(Slot::null());
+        if fresh && !cancelled {
             let a_done = retired(vm, a);
             let b_done = retired(vm, b);
-            if a_done {
-                settle_select2(vm, frame, 0, a)?;
-                cancel_child(vm, b);
-            } else if b_done {
-                settle_select2(vm, frame, 1, b)?;
-                cancel_child(vm, a);
-            } else {
-                // woken by neither child (defensive): re-arm the live
-                // edges and stay parked
-                arm_child(vm, frame, a);
-                arm_child(vm, frame, b);
+            if a_done || b_done {
+                let (idx, winner, loser) =
+                    if a_done { (0u32, a, b) } else { (1u32, b, a) };
+                settle_select2(vm, frame, idx, winner)?;
+                cancel_child(vm, loser);
+                return Ok(());
             }
-            Ok(())
-        });
+            arm_child(vm, frame, a);
+            arm_child(vm, frame, b);
+            vm.launch(a);
+            vm.launch(b);
+            let s1 = vm.enum_member_slot(ckpt, 1)?;
+            vm.set_record_field(frame, af::STATE_FIELD as usize, s1);
+            return Ok(());
+        }
+        if cancelled {
+            // the race itself was aborted: cascade through the
+            // children, then retire — the awaiter's cancelled probe
+            // takes the drop path at its own checkpoint
+            cancel_child(vm, a);
+            cancel_child(vm, b);
+            retire(vm, frame);
+            return Ok(());
+        }
+        // resumed: one child completed and woke us
+        let a_done = retired(vm, a);
+        let b_done = retired(vm, b);
+        if a_done {
+            settle_select2(vm, frame, 0, a)?;
+            cancel_child(vm, b);
+        } else if b_done {
+            settle_select2(vm, frame, 1, b)?;
+            cancel_child(vm, a);
+        } else {
+            // woken by neither child (defensive): re-arm the live
+            // edges and stay parked
+            arm_child(vm, frame, a);
+            arm_child(vm, frame, b);
+        }
+        Ok(())
+    });
     // `__select_all`: mint the cohort race over the sealed `[Future<T>]`
     // array. The element answer spelling comes off the first member's
     // answer lane (the typed surface guarantees uniformity); an empty
     // cohort is a contract breach — a race with no member has no winner.
     rut_vm::pkg_fn!(pkg, "__select_all", (OpaqueRef,) -> OpaqueRef,
-        |vm: &mut Vm, cohort: OpaqueRef| {
-            let (cohort_slot, _cohort_ty) = vm
-                .opaque_rut_value(Slot { r: cohort.ptr() })
-                .ok_or_else(|| Trap::new(TrapKind::Invalid, "async engine: `__select_all` received a box that holds no rut value"))?;
-            let members = cell_of(cohort_slot)
-                .seq_items_copy()
-                .ok_or_else(|| Trap::new(TrapKind::Invalid, "async engine: `__select_all` takes a `[Future<T>]` cohort"))?;
-            let first = *members.first().ok_or_else(|| {
-                Trap::new(
-                    TrapKind::Invalid,
-                    "async engine: `select_all` over an empty cohort — a race with no member has no winner",
-                )
-            })?;
-            let t_ans = vm.prog.type_name(answer_ty_of(vm, cell_of(first).ty)?);
-            let frame_ty = find_ty(vm, &format!("{}{}>", af::SELECT_ALL_FRAME_PREFIX, t_ans))?;
-            let fut_obj = find_ty(vm, &format!("Future<(u32, {t_ans})>"))?;
-            let ckpt = find_ty(vm, af::SELECT_ALL_CKPT)?;
-            let nfields = match vm.prog.types.kind(frame_ty) {
-                rut_core::types::TyKind::Data { fields } => fields.len(),
-                _ => return Err(Trap::new(TrapKind::Invalid, "async engine: the select-all frame type is not a record")),
-            };
-            let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
-            let s0 = vm.enum_member_slot(ckpt, 0)?;
-            vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
-            vm.set_record_field(frame, af::CHILD_A_FIELD as usize, cohort_slot);
-            Ok(vm.seal_opaque(frame, fut_obj)?)
-        });
+    |vm: &mut Vm, cohort: OpaqueRef| {
+        let (cohort_slot, _cohort_ty) = vm
+            .opaque_rut_value(Slot { r: cohort.ptr() })
+            .ok_or_else(|| Trap::new(TrapKind::Invalid, "async engine: `__select_all` received a box that holds no rut value"))?;
+        let members = cell_of(cohort_slot)
+            .seq_items_copy()
+            .ok_or_else(|| Trap::new(TrapKind::Invalid, "async engine: `__select_all` takes a `[Future<T>]` cohort"))?;
+        let first = *members.first().ok_or_else(|| {
+            Trap::new(
+                TrapKind::Invalid,
+                "async engine: `select_all` over an empty cohort — a race with no member has no winner",
+            )
+        })?;
+        let t_ans = vm.prog.type_name(answer_ty_of(vm, cell_of(first).ty)?);
+        let frame_ty = find_ty(vm, &format!("{}{}>", af::SELECT_ALL_FRAME_PREFIX, t_ans))?;
+        let fut_obj = find_ty(vm, &format!("Future<(u32, {t_ans})>"))?;
+        let ckpt = find_ty(vm, af::SELECT_ALL_CKPT)?;
+        let nfields = match vm.prog.types.kind(frame_ty) {
+            rut_core::types::TyKind::Data { fields } => fields.len(),
+            _ => return Err(Trap::new(TrapKind::Invalid, "async engine: the select-all frame type is not a record")),
+        };
+        let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
+        let s0 = vm.enum_member_slot(ckpt, 0)?;
+        vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
+        vm.set_record_field(frame, af::CHILD_A_FIELD as usize, cohort_slot);
+        Ok(vm.seal_opaque(frame, fut_obj)?)
+    });
     // `__select_all_yield`: the cohort race's `Future::yield`. Same
     // shape as select2's over N members: fresh arms + launches every
     // live member; the first retirement (index order breaks ties)
@@ -433,53 +440,29 @@ pub fn pkg() -> HostPkg {
     // is cancelled; the cancelled race cascades through the whole
     // cohort.
     rut_vm::pkg_fn!(pkg, "__select_all_yield", (OpaqueRef, OpaqueRef) -> (),
-        |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
-            let ckpt = find_ty(vm, af::SELECT_ALL_CKPT)?;
-            let frame = unsealed(vm, &f, "__select_all_yield")?;
-            let cancelled = vm
-                .record_field(frame, af::CANCELLED_FIELD as usize)
-                .map(|s| s.as_bool())
+    |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
+        let ckpt = find_ty(vm, af::SELECT_ALL_CKPT)?;
+        let frame = unsealed(vm, &f, "__select_all_yield")?;
+        let cancelled = vm
+            .record_field(frame, af::CANCELLED_FIELD as usize)
+            .map(|s| s.as_bool())
+            .unwrap_or(false);
+        let state = state_of(vm, frame);
+        let fresh = !unsafe { state.r.is_null() }
+            && vm
+                .enum_member_slot(ckpt, 0)
+                .ok()
+                .map(|s0| Slot::same_ref(state, s0))
                 .unwrap_or(false);
-            let state = state_of(vm, frame);
-            let fresh = !unsafe { state.r.is_null() }
-                && vm
-                    .enum_member_slot(ckpt, 0)
-                    .ok()
-                    .map(|s0| Slot::same_ref(state, s0))
-                    .unwrap_or(false);
-            let cohort = vm
-                .record_field(frame, af::CHILD_A_FIELD as usize)
-                .unwrap_or(Slot::null());
-            let members = if unsafe { cohort.r.is_null() } {
-                Vec::new()
-            } else {
-                cell_of(cohort).seq_items_copy().unwrap_or_default()
-            };
-            if fresh && !cancelled {
-                if let Some(idx) = members.iter().position(|m| retired(vm, *m)) {
-                    settle_select_all(vm, frame, idx as u32, members[idx])?;
-                    for (i, m) in members.iter().enumerate() {
-                        if i != idx {
-                            cancel_child(vm, *m);
-                        }
-                    }
-                    return Ok(());
-                }
-                for m in &members {
-                    arm_child(vm, frame, *m);
-                    vm.launch(*m);
-                }
-                let s1 = vm.enum_member_slot(ckpt, 1)?;
-                vm.set_record_field(frame, af::STATE_FIELD as usize, s1);
-                return Ok(());
-            }
-            if cancelled {
-                for m in &members {
-                    cancel_child(vm, *m);
-                }
-                retire(vm, frame);
-                return Ok(());
-            }
+        let cohort = vm
+            .record_field(frame, af::CHILD_A_FIELD as usize)
+            .unwrap_or(Slot::null());
+        let members = if unsafe { cohort.r.is_null() } {
+            Vec::new()
+        } else {
+            cell_of(cohort).seq_items_copy().unwrap_or_default()
+        };
+        if fresh && !cancelled {
             if let Some(idx) = members.iter().position(|m| retired(vm, *m)) {
                 settle_select_all(vm, frame, idx as u32, members[idx])?;
                 for (i, m) in members.iter().enumerate() {
@@ -487,73 +470,97 @@ pub fn pkg() -> HostPkg {
                         cancel_child(vm, *m);
                     }
                 }
-            } else {
-                for m in &members {
-                    arm_child(vm, frame, *m);
+                return Ok(());
+            }
+            for m in &members {
+                arm_child(vm, frame, *m);
+                vm.launch(*m);
+            }
+            let s1 = vm.enum_member_slot(ckpt, 1)?;
+            vm.set_record_field(frame, af::STATE_FIELD as usize, s1);
+            return Ok(());
+        }
+        if cancelled {
+            for m in &members {
+                cancel_child(vm, *m);
+            }
+            retire(vm, frame);
+            return Ok(());
+        }
+        if let Some(idx) = members.iter().position(|m| retired(vm, *m)) {
+            settle_select_all(vm, frame, idx as u32, members[idx])?;
+            for (i, m) in members.iter().enumerate() {
+                if i != idx {
+                    cancel_child(vm, *m);
                 }
             }
-            Ok(())
-        });
+        } else {
+            for m in &members {
+                arm_child(vm, frame, *m);
+            }
+        }
+        Ok(())
+    });
     // `__completer`: the manual mint — a cold `#frame@completer<T>`
     // sealed under the `Future<T>` object spelling. `ty` is the linked
     // answer id (`type_id<T>()` rebases through link), the same text
     // the compiler's mint derived from the wrapper's type argument.
     rut_vm::pkg_fn!(pkg, "__completer", (u32,) -> OpaqueRef,
-        |vm: &mut Vm, ty: u32| {
-            let t_ans = vm.prog.type_name(ty).to_string();
-            let frame_ty = find_ty(vm, &format!("{}{}>", af::COMPLETER_FRAME_PREFIX, t_ans))?;
-            let fut_obj = find_ty(vm, &format!("Future<{t_ans}>"))?;
-            let ckpt = find_ty(vm, af::COMPLETER_CKPT)?;
-            let nfields = match vm.prog.types.kind(frame_ty) {
-                rut_core::types::TyKind::Data { fields } => fields.len(),
-                _ => return Err(Trap::new(TrapKind::Invalid, "async engine: the completer frame type is not a record")),
-            };
-            let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
-            let s0 = vm.enum_member_slot(ckpt, 0)?;
-            vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
-            Ok(vm.seal_opaque(frame, fut_obj)?)
-        });
+    |vm: &mut Vm, ty: u32| {
+        let t_ans = vm.prog.type_name(ty).to_string();
+        let frame_ty = find_ty(vm, &format!("{}{}>", af::COMPLETER_FRAME_PREFIX, t_ans))?;
+        let fut_obj = find_ty(vm, &format!("Future<{t_ans}>"))?;
+        let ckpt = find_ty(vm, af::COMPLETER_CKPT)?;
+        let nfields = match vm.prog.types.kind(frame_ty) {
+            rut_core::types::TyKind::Data { fields } => fields.len(),
+            _ => return Err(Trap::new(TrapKind::Invalid, "async engine: the completer frame type is not a record")),
+        };
+        let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
+        let s0 = vm.enum_member_slot(ckpt, 0)?;
+        vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
+        Ok(vm.seal_opaque(frame, fut_obj)?)
+    });
     // `__resolve`: the resolution right's engine half — store the
     // answer, retire, wake the awaiter. `__abort`-style stability:
     // false when the frame already retired (resolved, cancelled, or
     // abandoned); a cancelled-but-not-yet-retired frame stays on its
     // own retire path (the queued drive takes it).
     rut_vm::pkg_fn!(pkg, "__resolve", (OpaqueRef, OpaqueRef) -> bool,
-        |vm: &mut Vm, f: OpaqueRef, v: OpaqueRef| {
-            let frame = unsealed(vm, &f, "__resolve")?;
-            let (val, _val_ty) = vm
-                .opaque_rut_value(Slot { r: v.ptr() })
-                .ok_or_else(|| Trap::new(TrapKind::Invalid, "async engine: `__resolve` received a box that holds no rut value"))?;
-            if retired(vm, frame) {
-                return Ok(false);
-            }
-            vm.set_record_field(frame, af::ANSWER_FIELD as usize, val);
-            retire(vm, frame);
-            let awaiter = vm
-                .record_field(frame, af::AWAITER_FIELD as usize)
-                .unwrap_or(Slot::null());
-            if unsafe { !awaiter.r.is_null() } {
-                vm.set_record_field(frame, af::AWAITER_FIELD as usize, Slot::null());
-                vm.launch(awaiter);
-            }
-            Ok(true)
-        });
+    |vm: &mut Vm, f: OpaqueRef, v: OpaqueRef| {
+        let frame = unsealed(vm, &f, "__resolve")?;
+        let (val, _val_ty) = vm
+            .opaque_rut_value(Slot { r: v.ptr() })
+            .ok_or_else(|| Trap::new(TrapKind::Invalid, "async engine: `__resolve` received a box that holds no rut value"))?;
+        if retired(vm, frame) {
+            return Ok(false);
+        }
+        vm.set_record_field(frame, af::ANSWER_FIELD as usize, val);
+        retire(vm, frame);
+        let awaiter = vm
+            .record_field(frame, af::AWAITER_FIELD as usize)
+            .unwrap_or(Slot::null());
+        if unsafe { !awaiter.r.is_null() } {
+            vm.set_record_field(frame, af::AWAITER_FIELD as usize, Slot::null());
+            vm.launch(awaiter);
+        }
+        Ok(true)
+    });
     // `__completer_yield`: the manual frame's `Future::yield` — a no-op
     // while live (the future progresses when the resolution right
     // fires, never by being driven); the cancelled arm retires so the
     // awaiter's probe takes the drop path.
     rut_vm::pkg_fn!(pkg, "__completer_yield", (OpaqueRef, OpaqueRef) -> (),
-        |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
-            let frame = unsealed(vm, &f, "__completer_yield")?;
-            let cancelled = vm
-                .record_field(frame, af::CANCELLED_FIELD as usize)
-                .map(|s| s.as_bool())
-                .unwrap_or(false);
-            if cancelled {
-                retire(vm, frame);
-            }
-            Ok(())
-        });
+    |vm: &mut Vm, f: OpaqueRef, _cx: OpaqueRef| {
+        let frame = unsealed(vm, &f, "__completer_yield")?;
+        let cancelled = vm
+            .record_field(frame, af::CANCELLED_FIELD as usize)
+            .map(|s| s.as_bool())
+            .unwrap_or(false);
+        if cancelled {
+            retire(vm, frame);
+        }
+        Ok(())
+    });
     pkg.build()
 }
 

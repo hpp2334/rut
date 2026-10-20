@@ -9,35 +9,82 @@ pub enum Tok {
     // literals
     Int(u64, Option<IntSuffix>),
     Float(u64 /*f64 bits*/, Option<FloatSuffix>),
-    Str(String),           // decoded UTF-8, escapes resolved
-    RawStr(String),        // no escape processing
-    FStr(FStrTok),         // parts + lexed holes
+    Str(String),    // decoded UTF-8, escapes resolved
+    RawStr(String), // no escape processing
+    FStr(FStrTok),  // parts + lexed holes
     Bool(bool),
-    Ident(String),         // includes keywords after the reservation check
+    Ident(String), // includes keywords after the reservation check
 
     // punctuation & operators — exhaustive, single flat enum
-    LParen, RParen, LBrace, RBrace, LBracket, RBracket,
-    Comma, Semi, Colon, Colon2, Dot, DotDot, Arrow, FatArrow, // : :: . .. -> =>
-    Plus, Minus, Star, Slash, Percent,               // + - * / %
-    AmpAmp, PipePipe, Bang,                          // && || !
-    Eq, EqEq, NotEq, Lt, Gt, LtEq, GtEq,             // = == != < > <= >=
-    PlusEq, MinusEq, StarEq, SlashEq, PercentEq,     // += -= *= /= %=
-    Amp, Pipe, Caret, Tilde, Shl, Shr,               // & | ^ ~ << >>
-    AmpEq, PipeEq, CaretEq, ShlEq, ShrEq,            // &= |= ^= <<= >>=
-    AmpAmpEq, PipePipeEq,                            // &&= ||=
-    Question, At,
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
+    LBracket,
+    RBracket,
+    Comma,
+    Semi,
+    Colon,
+    Colon2,
+    Dot,
+    DotDot,
+    Arrow,
+    FatArrow, // : :: . .. -> =>
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent, // + - * / %
+    AmpAmp,
+    PipePipe,
+    Bang, // && || !
+    Eq,
+    EqEq,
+    NotEq,
+    Lt,
+    Gt,
+    LtEq,
+    GtEq, // = == != < > <= >=
+    PlusEq,
+    MinusEq,
+    StarEq,
+    SlashEq,
+    PercentEq, // += -= *= /= %=
+    Amp,
+    Pipe,
+    Caret,
+    Tilde,
+    Shl,
+    Shr, // & | ^ ~ << >>
+    AmpEq,
+    PipeEq,
+    CaretEq,
+    ShlEq,
+    ShrEq, // &= |= ^= <<= >>=
+    AmpAmpEq,
+    PipePipeEq, // &&= ||=
+    Question,
+    At,
 
     Eof,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntSuffix {
-    U8, U16, U32, U64, I8, I16, I32, I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FloatSuffix {
-    F32, F64,
+    F32,
+    F64,
 }
 
 /// `f"..."` — interleaved chunks and holes; holes are FULLY LEXED token
@@ -74,27 +121,55 @@ impl Token {
             FStr(_) => "format string".to_string(),
             Bool(b) => format!("`{b}`"),
             Ident(s) => format!("`{s}`"),
-            LParen => "`(`".into(), RParen => "`)`".into(),
-            LBrace => "`{`".into(), RBrace => "`}`".into(),
-            LBracket => "`[`".into(), RBracket => "`]`".into(),
-            Comma => "`,`".into(), Semi => "`;`".into(), Colon => "`:`".into(),
+            LParen => "`(`".into(),
+            RParen => "`)`".into(),
+            LBrace => "`{`".into(),
+            RBrace => "`}`".into(),
+            LBracket => "`[`".into(),
+            RBracket => "`]`".into(),
+            Comma => "`,`".into(),
+            Semi => "`;`".into(),
+            Colon => "`:`".into(),
             Colon2 => "`::`".into(),
-            Dot => "`.`".into(), DotDot => "`..`".into(),
-            Arrow => "`->`".into(), FatArrow => "`=>`".into(),
-            Plus => "`+`".into(), Minus => "`-`".into(),
-            Star => "`*`".into(), Slash => "`/`".into(), Percent => "`%`".into(),
-            AmpAmp => "`&&`".into(), PipePipe => "`||`".into(), Bang => "`!`".into(),
-            Eq => "`=`".into(), EqEq => "`==`".into(), NotEq => "`!=`".into(),
-            Lt => "`<`".into(), Gt => "`>`".into(),
-            LtEq => "`<=`".into(), GtEq => "`>=`".into(),
-            PlusEq => "`+=`".into(), MinusEq => "`-=`".into(),
-            StarEq => "`*=`".into(), SlashEq => "`/=`".into(), PercentEq => "`%=`".into(),
-            Amp => "`&`".into(), Pipe => "`|`".into(), Caret => "`^`".into(),
-            Tilde => "`~`".into(), Shl => "`<<`".into(), Shr => "`>>`".into(),
-            AmpEq => "`&=`".into(), PipeEq => "`|=`".into(), CaretEq => "`^=`".into(),
-            ShlEq => "`<<=`".into(), ShrEq => "`>>=`".into(),
-            AmpAmpEq => "`&&=`".into(), PipePipeEq => "`||=`".into(),
-            Question => "`?`".into(), At => "`@`".into(),
+            Dot => "`.`".into(),
+            DotDot => "`..`".into(),
+            Arrow => "`->`".into(),
+            FatArrow => "`=>`".into(),
+            Plus => "`+`".into(),
+            Minus => "`-`".into(),
+            Star => "`*`".into(),
+            Slash => "`/`".into(),
+            Percent => "`%`".into(),
+            AmpAmp => "`&&`".into(),
+            PipePipe => "`||`".into(),
+            Bang => "`!`".into(),
+            Eq => "`=`".into(),
+            EqEq => "`==`".into(),
+            NotEq => "`!=`".into(),
+            Lt => "`<`".into(),
+            Gt => "`>`".into(),
+            LtEq => "`<=`".into(),
+            GtEq => "`>=`".into(),
+            PlusEq => "`+=`".into(),
+            MinusEq => "`-=`".into(),
+            StarEq => "`*=`".into(),
+            SlashEq => "`/=`".into(),
+            PercentEq => "`%=`".into(),
+            Amp => "`&`".into(),
+            Pipe => "`|`".into(),
+            Caret => "`^`".into(),
+            Tilde => "`~`".into(),
+            Shl => "`<<`".into(),
+            Shr => "`>>`".into(),
+            AmpEq => "`&=`".into(),
+            PipeEq => "`|=`".into(),
+            CaretEq => "`^=`".into(),
+            ShlEq => "`<<=`".into(),
+            ShrEq => "`>>=`".into(),
+            AmpAmpEq => "`&&=`".into(),
+            PipePipeEq => "`||=`".into(),
+            Question => "`?`".into(),
+            At => "`@`".into(),
             Eof => "end of file".into(),
         }
     }

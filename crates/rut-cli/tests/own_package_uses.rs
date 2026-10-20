@@ -135,11 +135,7 @@ fn a_private_own_member_refuses_at_the_use_line() {
          mod imp;\n\
          entry fn main() {}\n",
     );
-    write(
-        &dir,
-        "imp/mod.rut",
-        "struct Task { id: i64; }\n",
-    );
+    write(&dir, "imp/mod.rut", "struct Task { id: i64; }\n");
     let out = Command::new(rut())
         .args(["run", dir.to_str().unwrap()])
         .output()

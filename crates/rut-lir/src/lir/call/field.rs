@@ -4,8 +4,12 @@ use crate::check::TcResult;
 use crate::lir::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
-    pub(crate) fn compile_field(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_field(
+        &mut self,
+        recv: NodeHandle<AnyExpr>,
+        name: IdentId,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
         // `<namespace>.CONST` — a used namespace's constant (checked
         // before the receiver is compiled, since the head is not a value).
         // Name-generic: routed by the bound head.
@@ -18,7 +22,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let ns = self.ctx.name(segs[0].name).to_string();
                 let fname = self.ctx.name(name).to_string();
-                self.ctx.err(sp, format!("`{ns}::{fname}` is not a namespace constant"));
+                self.ctx
+                    .err(sp, format!("`{ns}::{fname}` is not a namespace constant"));
                 return Err(());
             }
         }
@@ -41,17 +46,39 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let fty = fields[fidx].ty;
                 let dst = self.new_reg(fty);
-                self.emit(Op::GetF { dst, obj: rreg, field: fidx as u32, repr: self.ctx.types.repr_of(fty) }, sp.lo);
+                self.emit(
+                    Op::GetF {
+                        dst,
+                        obj: rreg,
+                        field: fidx as u32,
+                        repr: self.ctx.types.repr_of(fty),
+                    },
+                    sp.lo,
+                );
                 return Ok(fty);
             }
-            self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` has no field `{}`",
+                    self.ctx.type_name(rt),
+                    self.ctx.name(name)
+                ),
+            );
             return Err(());
         }
         if matches!(self.ctx.types.kind(rt), TyKind::IfaceObj { .. }) {
             self.ctx.err(sp, "interface objects have no fields —`d.x` on an interface-typed value is a compile error");
             return Err(());
         }
-        self.ctx.err(sp, format!("`{}` has no field `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
+        self.ctx.err(
+            sp,
+            format!(
+                "`{}` has no field `{}`",
+                self.ctx.type_name(rt),
+                self.ctx.name(name)
+            ),
+        );
         Err(())
     }
 
@@ -61,7 +88,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// either), or a direct data field whose declared type node spells
     /// the generic (`self.k` in a class body). Pure AST + declared-shape
     /// question — the receiver does not need compiling twice.
-    pub(crate) fn union_provenance(&mut self, recv: NodeHandle<AnyExpr>) -> Option<(IdentId, NodeHandle<AnyTy>)> {
+    pub(crate) fn union_provenance(
+        &mut self,
+        recv: NodeHandle<AnyExpr>,
+    ) -> Option<(IdentId, NodeHandle<AnyTy>)> {
         match self.ctx.ast.expr(recv).clone() {
             ExprKind::Path { segs } if segs.len() == 1 => {
                 let g = *self.union_syms.get(&segs[0].name)?;
@@ -96,13 +126,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn declared_field_ty_node(&self, base_ty: TypeId, name: IdentId) -> Option<NodeHandle<AnyTy>> {
         let decl_node: NodeHandle<AnyItem> = match self.ctx.inst_data.get(&base_ty).cloned() {
             Some((dname, _)) => self.ctx.find_data(dname)?.node,
-            None => self
-                .ctx
-                .datas
-                .iter()
-                .find(|(_, d)| self.ctx.types.dense(d.ty) == self.ctx.types.dense(base_ty))?
-                .1
-                .node,
+            None => {
+                self.ctx
+                    .datas
+                    .iter()
+                    .find(|(_, d)| self.ctx.types.dense(d.ty) == self.ctx.types.dense(base_ty))?
+                    .1
+                    .node
+            }
         };
         let fields = match self.ctx.ast.item(decl_node) {
             ItemKind::Class { fields, .. } | ItemKind::Struct { fields, .. } => fields.clone(),
@@ -121,7 +152,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match ty {
             Some(tn) => match self.ctx.ast.ty(tn) {
                 TypeKind::TyPath { segs, .. }
-                    if segs.len() == 1 && segs[0].generics.is_empty()
+                    if segs.len() == 1
+                        && segs[0].generics.is_empty()
                         && self.union_bounds.contains_key(&segs[0].name) =>
                 {
                     self.union_syms.insert(name, segs[0].name);
@@ -141,7 +173,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// instantiation compiles the same body, so the capability gate
     /// applies inside inlines too — a small body is not exempt from the
     /// union law.
-    pub(crate) fn arm_union_bounds(&mut self, bounds: &[(IdentId, NodeHandle<AnyTy>)], class_name: Option<IdentId>) {
+    pub(crate) fn arm_union_bounds(
+        &mut self,
+        bounds: &[(IdentId, NodeHandle<AnyTy>)],
+        class_name: Option<IdentId>,
+    ) {
         for (g, b) in bounds {
             if self.ctx.bound_is_union(*b) {
                 self.union_bounds.insert(*g, *b);
@@ -168,11 +204,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// implicit checking would only surface it if that member were ever
     /// actually instantiated. Dispatch is unaffected: the concrete member
     /// still binds its own impl below.
-    pub(crate) fn check_union_capability(&mut self, recv: NodeHandle<AnyExpr>, name: IdentId, sp: rut_lexer::span::Span) {
-        let Some((g, bnode)) = self.union_provenance(recv) else { return };
+    pub(crate) fn check_union_capability(
+        &mut self,
+        recv: NodeHandle<AnyExpr>,
+        name: IdentId,
+        sp: rut_lexer::span::Span,
+    ) {
+        let Some((g, bnode)) = self.union_provenance(recv) else {
+            return;
+        };
         let members = self.ctx.resolve_bound_members(bnode, &self.subst);
         for m in members {
-            let crate::check::BoundMember::Concrete(c) = m else { continue };
+            let crate::check::BoundMember::Concrete(c) = m else {
+                continue;
+            };
             if !self.ctx.member_has_method(c, name) {
                 let ty = self.ctx.type_name(c).to_string();
                 let union = crate::check::bound_ty_str(self.ctx, bnode);

@@ -24,17 +24,25 @@ fn run(src: &str) -> Result<Vec<String>, String> {
         );
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
-            // the probe DECLARES its uses structurally — the world's
-            // heads (the fmt lane must not change them, and doesn't:
-            // both texts compile over the same declaration)
-            rut_driver::Mounted::source("probe", src)
-                .manifest(rut_driver::Manifest::lib("probe", &["calc", "ink", "pouch"])),
-        )
-        .entrypoint("probe")
-        .compile()
-        .map_err(|e| format!("compile: {e}"))?;
+    let compiled = rut_driver::Walk {
+        pkgs: world.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .pkg(
+        // the probe DECLARES its uses structurally — the world's
+        // heads (the fmt lane must not change them, and doesn't:
+        // both texts compile over the same declaration)
+        rut_driver::Mounted::source("probe", src).manifest(rut_driver::Manifest::lib(
+            "probe",
+            &["calc", "ink", "pouch"],
+        )),
+    )
+    .entrypoint("probe")
+    .compile()
+    .map_err(|e| format!("compile: {e}"))?;
     if !compiled.graph.diags.is_empty() {
         return Err(format!("compile: {}", compiled.graph.diags[0].msg));
     }
@@ -44,9 +52,12 @@ fn run(src: &str) -> Result<Vec<String>, String> {
 
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg: &str| {
-        sink_lines.borrow_mut().push(msg.to_string());
-    }));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |msg: &str| {
+            sink_lines.borrow_mut().push(msg.to_string());
+        }),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten());
     let limits = Limits {
@@ -54,9 +65,16 @@ fn run(src: &str) -> Result<Vec<String>, String> {
         heap_limit_bytes: Some(8 << 20),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::builder().program(Rc::new(prog)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build()
+    let mut vm = Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(HostHooks::default())
+        .hosts(hosts)
+        .build()
         .map_err(|t| format!("boot: {}", t.msg))?;
-    let result = vm.call::<_, ()>("main", ()).map_err(|t| format!("run: {}", t.msg));
+    let result = vm
+        .call::<_, ()>("main", ())
+        .map_err(|t| format!("run: {}", t.msg));
     let out = lines.borrow().clone();
     result?;
     Ok(out)
@@ -229,7 +247,10 @@ entry fn main() {
         "shorthand must reprint expanded to `id: id`: {fmted}"
     );
     let got = run(&fmted).unwrap_or_else(|e| panic!("shorthand: FORMATTED text does not run: {e}"));
-    assert_eq!(want, got, "shorthand: the VM output changed under formatting");
+    assert_eq!(
+        want, got,
+        "shorthand: the VM output changed under formatting"
+    );
     let again = rut_fmt::format(&fmted, rut_parser::Mode::Impl, &rut_fmt::Style::default())
         .unwrap_or_else(|ds| panic!("shorthand: fmt(fmt) refused: {}", ds[0].msg));
     assert_eq!(fmted, again, "shorthand: fmt(fmt(x)) != fmt(x)");

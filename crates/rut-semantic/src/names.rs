@@ -37,10 +37,15 @@ fn classify_item(
     out: &mut Vec<(Span, TokenType)>,
 ) {
     match item {
-        ItemKind::Fn(d) => push_name(toks, span, ast.name(d.name), TokenType::Function, out, false),
-        ItemKind::Alias(d) => {
-            push_name(toks, span, ast.name(d.name), TokenType::Type, out, false)
-        }
+        ItemKind::Fn(d) => push_name(
+            toks,
+            span,
+            ast.name(d.name),
+            TokenType::Function,
+            out,
+            false,
+        ),
+        ItemKind::Alias(d) => push_name(toks, span, ast.name(d.name), TokenType::Type, out, false),
         ItemKind::SurfaceFn { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Function, out, false)
         }
@@ -68,10 +73,17 @@ fn classify_item(
         ItemKind::Struct { name, .. } | ItemKind::Class { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
-        ItemKind::Interface { name, .. } => {
-            push_name(toks, span, ast.name(*name), TokenType::Interface, out, false)
-        }
-        ItemKind::BuiltinTy { name, .. } | ItemKind::BuiltinPrimitive { name, .. } | ItemKind::SurfaceStruct { name, .. } => {
+        ItemKind::Interface { name, .. } => push_name(
+            toks,
+            span,
+            ast.name(*name),
+            TokenType::Interface,
+            out,
+            false,
+        ),
+        ItemKind::BuiltinTy { name, .. }
+        | ItemKind::BuiltinPrimitive { name, .. }
+        | ItemKind::SurfaceStruct { name, .. } => {
             push_name(toks, span, ast.name(*name), TokenType::Class, out, false)
         }
         // `builtin impl i32 { .. }` declares no new name — the primitive
@@ -81,7 +93,10 @@ fn classify_item(
         // namespaces, their names classify in a later phase (the
         // inline form's nested items classify through the same
         // Member/Type nodes)
-        ItemKind::Impl { .. } | ItemKind::ModDecl { .. } | ItemKind::ModInline { .. } | ItemKind::Module { .. } => {}
+        ItemKind::Impl { .. }
+        | ItemKind::ModDecl { .. }
+        | ItemKind::ModInline { .. }
+        | ItemKind::Module { .. } => {}
         // use names classify best-effort by the capitalization law until
         // real resolution (M2): the path segments read as their heads
         // (lowercase = a module → namespace, capitalized = a type), the
@@ -94,11 +109,25 @@ fn classify_item(
             let mut queue: Vec<(&str, TokenType)> = Vec::with_capacity(path.len() + names.len());
             for id in path {
                 let s = ast.name(*id);
-                queue.push((s, if is_cap(s) { TokenType::Type } else { TokenType::Namespace }));
+                queue.push((
+                    s,
+                    if is_cap(s) {
+                        TokenType::Type
+                    } else {
+                        TokenType::Namespace
+                    },
+                ));
             }
             for id in names {
                 let s = ast.name(*id);
-                queue.push((s, if is_cap(s) { TokenType::Type } else { TokenType::Function }));
+                queue.push((
+                    s,
+                    if is_cap(s) {
+                        TokenType::Type
+                    } else {
+                        TokenType::Function
+                    },
+                ));
             }
             let mut i = 0;
             for t in toks_in(toks, span) {
@@ -128,15 +157,25 @@ fn classify_member(
     out: &mut Vec<(Span, TokenType)>,
 ) {
     match m {
-        MemberKind::FieldDecl(d) => {
-            push_name(toks, span, ast.name(d.name), TokenType::Property, out, false)
-        }
+        MemberKind::FieldDecl(d) => push_name(
+            toks,
+            span,
+            ast.name(d.name),
+            TokenType::Property,
+            out,
+            false,
+        ),
         MemberKind::MethodDecl(d) => {
             push_name(toks, span, ast.name(d.name), TokenType::Method, out, false)
         }
-        MemberKind::Param(d) => {
-            push_name(toks, span, ast.name(d.name), TokenType::Parameter, out, false)
-        }
+        MemberKind::Param(d) => push_name(
+            toks,
+            span,
+            ast.name(d.name),
+            TokenType::Parameter,
+            out,
+            false,
+        ),
         // `self` is token-classified as a keyword everywhere it appears
         MemberKind::SelfParam(_) => {}
     }
@@ -182,7 +221,13 @@ fn classify_type(
     }
 }
 
-fn classify_pat(toks: &[Token], ast: &Ast, span: Span, p: &PatKind, out: &mut Vec<(Span, TokenType)>) {
+fn classify_pat(
+    toks: &[Token],
+    ast: &Ast,
+    span: Span,
+    p: &PatKind,
+    out: &mut Vec<(Span, TokenType)>,
+) {
     match p {
         // path segments in order — the last names the member, the rest the
         // type it rides on (`Color.Red`, `Option<T>.Some`); constructor
@@ -192,7 +237,10 @@ fn classify_pat(toks: &[Token], ast: &Ast, span: Span, p: &PatKind, out: &mut Ve
         }
         PatKind::PatCtor { segs, args } => {
             classify_path_segs(toks, ast, span, segs, out, TypeRule::EnumLast);
-            let names: Vec<&str> = args.iter().filter_map(|a| a.map(|id| ast.name(id))).collect();
+            let names: Vec<&str> = args
+                .iter()
+                .filter_map(|a| a.map(|id| ast.name(id)))
+                .collect();
             let mut i = 0;
             for tk in toks_in(toks, span) {
                 if i >= names.len() {
@@ -301,7 +349,11 @@ fn classify_path_segs(
                 let ty = match rule {
                     TypeRule::Type => TokenType::Type,
                     TypeRule::EnumLast => {
-                        if i + 1 == n { TokenType::EnumMember } else { TokenType::Type }
+                        if i + 1 == n {
+                            TokenType::EnumMember
+                        } else {
+                            TokenType::Type
+                        }
                     }
                     TypeRule::Value => value_seg_class(s, i, n),
                 };

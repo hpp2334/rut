@@ -13,7 +13,6 @@
 
 use std::rc::Rc;
 
-
 use rut_vm::interp::Vm;
 
 const FIXTURE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/bench-cross");
@@ -65,14 +64,26 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
             .manifest(rut_driver::Manifest::lib("app", &["bench_cross"])),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
+    let compiled = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
@@ -84,7 +95,12 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::bench_cross::pkg());
     hosts.verify_against(&ctx.flatten()); // the surface ↔ the bodies
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .unwrap()
 }
 
@@ -93,8 +109,12 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
 /// surfaces is a boot panic or this assert, never a silent skew.
 #[test]
 fn both_surfaces_declare_the_same_contract() {
-    let world_a = rut_native::dir_pkgs(std::path::Path::new(FIXTURE_DIR)).unwrap().pkgs;
-    let world_b = rut_native::dir_pkgs(std::path::Path::new(COMMITTED_DIR)).unwrap().pkgs;
+    let world_a = rut_native::dir_pkgs(std::path::Path::new(FIXTURE_DIR))
+        .unwrap()
+        .pkgs;
+    let world_b = rut_native::dir_pkgs(std::path::Path::new(COMMITTED_DIR))
+        .unwrap()
+        .pkgs;
     let ctx_a = rut_driver::host_pkg_ctx(&world_a);
     let ctx_b = rut_driver::host_pkg_ctx(&world_b);
     assert_eq!(ctx_a.flatten(), ctx_b.flatten());
@@ -110,7 +130,10 @@ fn nops_round_trip_through_the_crossing() {
     assert_eq!(vm.call::<_, i64>("host_nop", (7i64,)).unwrap(), 7);
     assert_eq!(vm.call::<_, i64>("host_nop", (-5i64,)).unwrap(), -5);
     assert_eq!(vm.call::<_, i64>("host_nop4", (1i64, 2, 3, 4)).unwrap(), 10);
-    assert_eq!(vm.call::<_, i64>("host_nop4", (-1i64, 1, -2, 2)).unwrap(), 0);
+    assert_eq!(
+        vm.call::<_, i64>("host_nop4", (-1i64, 1, -2, 2)).unwrap(),
+        0
+    );
     // the committed pkg drives identically (same contract, same bodies)
     let mut vm = vm_with_surface(COMMITTED_DIR);
     assert_eq!(vm.call::<_, i64>("host_nop", (7i64,)).unwrap(), 7);

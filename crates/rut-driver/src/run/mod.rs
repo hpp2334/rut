@@ -53,9 +53,9 @@ use std::collections::BTreeMap;
 
 use rut_parser::Mode;
 
-pub use archive::Bundle;
 use crate::graph::{compile_graph, GraphOutput};
 pub use crate::session::{Mounted, MountedBody};
+pub use archive::Bundle;
 
 pub use crate::session::HostRow;
 
@@ -188,12 +188,11 @@ impl std::fmt::Debug for Compiled {
 /// law — so a compiled run carries no budget opinion of its own.
 impl rut_vm::IntoVmParts for Compiled {
     fn into_vm_parts(self) -> Result<rut_vm::VmParts, rut_vm::VmError> {
-        let program = self
-            .graph
-            .program
-            .ok_or_else(|| rut_vm::VmError::new(
+        let program = self.graph.program.ok_or_else(|| {
+            rut_vm::VmError::new(
                 "no program — the compile failed; the diagnostics are on Compiled::graph",
-            ))?;
+            )
+        })?;
         Ok(rut_vm::VmParts {
             program: std::rc::Rc::new(program),
             limits: rut_vm::interp::Limits::default(),
@@ -244,9 +243,17 @@ pub(crate) fn core_pkg() -> Mounted {
         // it off the synthesized surface, so the `pub builtin`
         // spellings stay import-gated end to end
         body: MountedBody::Host {
-            native_types: core.native_types.iter().map(|(n, k, a)| (txt(*n), *k, *a)).collect(),
+            native_types: core
+                .native_types
+                .iter()
+                .map(|(n, k, a)| (txt(*n), *k, *a))
+                .collect(),
             native_fns: core.native_fns.iter().map(|(n, a)| (txt(*n), *a)).collect(),
-            consts: core.consts.iter().map(|c| (txt(c.name), c.ty, c.bits)).collect(),
+            consts: core
+                .consts
+                .iter()
+                .map(|c| (txt(c.name), c.ty, c.bits))
+                .collect(),
             native_impls: core
                 .native_impls
                 .iter()
@@ -362,7 +369,12 @@ impl RutRun {
     /// docs). `Ok` always carries a [`Compiled`]; check
     /// `Compiled::graph.diags` for the compile's own diagnostics.
     pub fn compile(self) -> Result<Compiled, RunError> {
-        let RutRun { pkgs, mut deferred, host_pkgs, entrypoint } = self;
+        let RutRun {
+            pkgs,
+            mut deferred,
+            host_pkgs,
+            entrypoint,
+        } = self;
         // 1. a deferred offer refusal — an archive that decoded at
         //    `Bundle::parse` but failed its per-world mount — surfaces
         //    here, the chain's first fallible step
@@ -389,20 +401,19 @@ impl RutRun {
         // rows' specs — pure data, no walk bookkeeping on the pkg (a
         // member rebases only when its body is a decoded program; a
         // shadowed name keeps its own, earlier-won body).
-        let mut roots: BTreeMap<String, Vec<(rut_core::id::ScopeId, String)>> =
-            pkgs.iter()
-                .filter(|(_, p)| !p.bundle_scopes.is_empty())
-                .map(|(n, p)| (n.clone(), p.bundle_scopes.clone()))
-                .collect();
+        let mut roots: BTreeMap<String, Vec<(rut_core::id::ScopeId, String)>> = pkgs
+            .iter()
+            .filter(|(_, p)| !p.bundle_scopes.is_empty())
+            .map(|(n, p)| (n.clone(), p.bundle_scopes.clone()))
+            .collect();
         for (root, rows) in &roots {
             // one shift per archive: the fit check + the map, applied to
             // the root and every decoded member
-            let base = session.bundle_scope_next_base().ok_or_else(|| {
-                RunError::law("the bundle scope numbering space is exhausted")
-            })?;
+            let base = session
+                .bundle_scope_next_base()
+                .ok_or_else(|| RunError::law("the bundle scope numbering space is exhausted"))?;
             for &(s, _) in rows {
-                if s != rut_core::id::BOOT_SCOPE
-                    && base as u32 + s as u32 > rut_core::id::MAX_SCOPE
+                if s != rut_core::id::BOOT_SCOPE && base as u32 + s as u32 > rut_core::id::MAX_SCOPE
                 {
                     return Err(RunError::law(format!(
                         "the bundle's scope ledger reaches scope {s}, which does not fit above this program's {base} — the numbering space is exhausted"
@@ -428,8 +439,11 @@ impl RutRun {
                 if let MountedBody::Compiled(prog) = &mut pkg.body {
                     *prog = rut_core::link::rebase(prog.clone(), &shift);
                 }
-                pkg.bundle_scopes =
-                    pkg.bundle_scopes.iter().map(|&(s, ref spec)| (shift(s), spec.clone())).collect();
+                pkg.bundle_scopes = pkg
+                    .bundle_scopes
+                    .iter()
+                    .map(|&(s, ref spec)| (shift(s), spec.clone()))
+                    .collect();
                 session
                     .register_module(root, pkg)
                     .map_err(|e| RunError::law(e.to_string()))?;
@@ -438,7 +452,9 @@ impl RutRun {
                 if member == root || member == "core" {
                     continue;
                 }
-                let Some(mut pkg) = pkgs.remove(member) else { continue };
+                let Some(mut pkg) = pkgs.remove(member) else {
+                    continue;
+                };
                 if let MountedBody::Compiled(prog) = &mut pkg.body {
                     *prog = rut_core::link::rebase(prog.clone(), &shift);
                 }
@@ -474,14 +490,17 @@ impl RutRun {
                 "entrypoint `{root}` is not offered — .pkg(..) it (or offer the walk's root) before .compile()"
             )));
         }
-        let mounted: Vec<(String, Mounted)> =
-            session.modules().map(|(s, m)| (s.clone(), m.clone())).collect();
+        let mounted: Vec<(String, Mounted)> = session
+            .modules()
+            .map(|(s, m)| (s.clone(), m.clone()))
+            .collect();
         for (spec, pkg) in &mounted {
             // a per-file layout for the use split: files = [(0, this
             // file's mod path)], the scopes tree the pkg mounted — the
             // own-package lane's walk starts at the file the use is
             // written in
-            let layout_for = |from: &str| crate::graph::mod_inputs_of(pkg, vec![(0, from.to_string())]);
+            let layout_for =
+                |from: &str| crate::graph::mod_inputs_of(pkg, vec![(0, from.to_string())]);
             // the root's own uses — a source body's parse (compiled
             // bodies carry no source; the flat shape is exactly
             // today's check)
@@ -508,10 +527,7 @@ impl RutRun {
                 let layout = layout_for(&m.path);
                 for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &ast) {
                     if let Err(e) = session.resolve_use(spec, &name, &root) {
-                        return Err(RunError::law(format!(
-                            "`{}` ({}): {e}",
-                            pkg.spec, m.path
-                        )));
+                        return Err(RunError::law(format!("`{}` ({}): {e}", pkg.spec, m.path)));
                     }
                 }
             }
@@ -538,9 +554,8 @@ fn apply_symbols(pkgs: &mut BTreeMap<String, Mounted>, map: &rut_core::strip::Sy
         .collect();
     for (_, pkg) in pkgs.iter_mut() {
         if let MountedBody::Compiled(prog) = &mut pkg.body {
-            prog.interner.remap_tail(|s| {
-                restore.get(s).copied().unwrap_or(s).to_string()
-            });
+            prog.interner
+                .remap_tail(|s| restore.get(s).copied().unwrap_or(s).to_string());
         }
     }
     // then the span/pos sections, spec-resolved like the names

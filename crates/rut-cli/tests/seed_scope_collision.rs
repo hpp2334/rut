@@ -24,10 +24,15 @@ fn compile_graph(modules: &[(&str, &str)]) -> rut_core::binary::Program {
     // (the law bounds uses by declarations, never declarations by
     // uses — this suite's subject is scope collisions, not nameability)
     for (spec, src) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
-        chain = chain
-            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
+        chain = chain.pkg(
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     let (root, _) = modules.last().expect("root");
     let g = chain.entrypoint(root).compile().expect("compile the graph");

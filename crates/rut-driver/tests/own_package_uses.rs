@@ -92,7 +92,10 @@ fn graph_of(pkgs: Vec<rut_driver::Mounted>, root: &str) -> rut_driver::GraphOutp
     match run.entrypoint(root).compile() {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -166,7 +169,10 @@ pub fn use_helper() -> i64 { return helper() + 1; }
 "#,
         ),
     );
-    app.mods.insert("imp".to_string(), mod_source("imp", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"));
+    app.mods.insert(
+        "imp".to_string(),
+        mod_source("imp", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"),
+    );
     let g = graph_of(vec![app], "app");
     run_main(g, 5);
 }
@@ -190,7 +196,11 @@ entry fn main() -> i64 {
     );
     app.mods.insert(
         "imp".to_string(),
-        mod_source("imp", Vis::Self_, "mod grid;\npub fn ignored() -> i64 { return 0; }\n"),
+        mod_source(
+            "imp",
+            Vis::Self_,
+            "mod grid;\npub fn ignored() -> i64 { return 0; }\n",
+        ),
     );
     app.mods.insert(
         "imp/grid".to_string(),
@@ -317,7 +327,11 @@ fn a_missing_leaf_hint_names_the_module_it_lives_in() {
     );
     app.mods.insert(
         "imp".to_string(),
-        mod_source("imp", Vis::Self_, "mod grid;\npub fn ignored() -> i64 { return 0; }\n"),
+        mod_source(
+            "imp",
+            Vis::Self_,
+            "mod grid;\npub fn ignored() -> i64 { return 0; }\n",
+        ),
     );
     app.mods.insert(
         "imp/grid".to_string(),
@@ -342,11 +356,19 @@ fn a_deep_walk_miss_reads_the_walked_module() {
     );
     app.mods.insert(
         "imp".to_string(),
-        mod_source("imp", Vis::Self_, "mod grid;\npub fn ignored() -> i64 { return 0; }\n"),
+        mod_source(
+            "imp",
+            Vis::Self_,
+            "mod grid;\npub fn ignored() -> i64 { return 0; }\n",
+        ),
     );
     app.mods.insert(
         "imp/grid".to_string(),
-        mod_source("imp/grid", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"),
+        mod_source(
+            "imp/grid",
+            Vis::Self_,
+            "pub fn ignored() -> i64 { return 0; }\n",
+        ),
     );
     let g = graph_of(vec![app], "app");
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
@@ -404,7 +426,11 @@ fn a_head_naming_both_dep_and_mod_edge_is_ambiguous() {
     .manifest(rut_driver::Manifest::lib("app", &["util"]));
     app.mods.insert(
         "util".to_string(),
-        mod_source("util", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"),
+        mod_source(
+            "util",
+            Vis::Self_,
+            "pub fn ignored() -> i64 { return 0; }\n",
+        ),
     );
     let dep = rut_driver::Mounted::source("util", "pub fn half(x: i32) -> i32 { return x / 2; }\n");
     let g = graph_of(vec![dep, app], "app");
@@ -449,7 +475,11 @@ entry fn main() -> i64 { return sub::go(); }
     );
     app.mods.insert(
         "sub".to_string(),
-        mod_source("sub", Vis::Self_, "pub fn go() -> i64 { return helper(); }\n"),
+        mod_source(
+            "sub",
+            Vis::Self_,
+            "pub fn go() -> i64 { return helper(); }\n",
+        ),
     );
     let g = graph_of(vec![app], "app");
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
@@ -513,7 +543,11 @@ fn a_module_name_is_not_an_import() {
     );
     app.mods.insert(
         "imp/grid".to_string(),
-        mod_source("imp/grid", Vis::Self_, "pub fn ignored() -> i64 { return 0; }\n"),
+        mod_source(
+            "imp/grid",
+            Vis::Self_,
+            "pub fn ignored() -> i64 { return 0; }\n",
+        ),
     );
     let g = graph_of(vec![app], "app");
     assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
@@ -597,11 +631,7 @@ fn a_host_dep_keeps_the_d_rut_spelling() {
     let mut children = BTreeMap::new();
     children.insert(
         "net".to_string(),
-        mod_source(
-            "net",
-            Vis::Pub,
-            "pub host fn connect(url: str) -> i64;\n",
-        ),
+        mod_source("net", Vis::Pub, "pub host fn connect(url: str) -> i64;\n"),
     );
     let host = rut_driver::lower_decl_module(root, &children, "myhost.d.rut")
         .expect("lowers")

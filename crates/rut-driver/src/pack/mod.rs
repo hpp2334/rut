@@ -192,7 +192,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     }
     for pkg in w.loaded.pkgs.clone() {
         let spec = pkg.spec.clone();
-        session.register_module(&spec, pkg).map_err(|e| PackError::law(e.to_string()))?;
+        session
+            .register_module(&spec, pkg)
+            .map_err(|e| PackError::law(e.to_string()))?;
     }
     let _ = session.mount(crate::run::core_pkg());
     // the rode-along closure law: every dep an archive group's manifest
@@ -206,7 +208,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             let dm = group_manifest(source, &w.archives, &w.read).map_err(PackError::law)?;
             for dep in dm.deps.keys() {
                 let ridden = *dep == root
-                    || w.sources.keys().any(|k| crate::bundle::mount_name(k) == dep.as_str());
+                    || w.sources
+                        .keys()
+                        .any(|k| crate::bundle::mount_name(k) == dep.as_str());
                 if !ridden {
                     return Err(PackError::law(format!(
                         "packed dep `{spec}` declares `{dep}`, but that group did not ride — the output would be missing its `{dep}` group; vendor this dep (unpack the url dep into your project) instead"
@@ -275,14 +279,27 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     //    sidecar.
     // (The riding-source refusal of the pre-v22 strip arm is dead: no
     // source rides a compiled pkg anymore — the delivery law.)
-    let symtab = strip_arm(&mut units, &session, &w.sources, &w.archives, &w.read, &root, root_idx, opts.strip)?;
+    let symtab = strip_arm(
+        &mut units,
+        &session,
+        &w.sources,
+        &w.archives,
+        &w.read,
+        &root,
+        root_idx,
+        opts.strip,
+    )?;
     // the templates-must-emit law (v22): a compiled program whose
     // surface exports an OPEN generic surface must carry template
     // bodies — the delivery law's producer half. A miss here is a
     // compiler regression, never a packable shape (the consumer's
     // mount seam refuses the same shape loudly).
     for (spec, idx) in std::iter::once((root.clone(), root_idx)).chain(
-        units.linked.iter().filter(|(s, _)| s.as_str() != root && session.resolve(s).is_ok()).map(|(s, (i, _))| (s.clone(), *i)),
+        units
+            .linked
+            .iter()
+            .filter(|(s, _)| s.as_str() != root && session.resolve(s).is_ok())
+            .map(|(s, (i, _))| (s.clone(), *i)),
     ) {
         let prog = &units.programs[idx];
         if !rides_compiled(&session, &spec, &units) {
@@ -297,7 +314,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         // the stability law's pack half: a template body whose
         // repr-carrying ops are not grounded would lower wrongly for
         // some instantiation — the HARD refusal, the recipe spelled
-        if let Some((decl, construct)) = crate::compile::material::template_stability_violation(prog) {
+        if let Some((decl, construct)) =
+            crate::compile::material::template_stability_violation(prog)
+        {
             return Err(PackError::law(format!(
                 "pack: `{spec}`'s generic `{decl}` does not lower to an instantiation-independent \
                  body ({construct}) — restructure the surface or share the directory; a published \
@@ -320,7 +339,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // the identity fingerprints the SOURCE set. (Since v22 a
     // generic-owning pkg rides NO source: its generic bodies are
     // template rows inside the binary — the delivery law.)
-    let root_pkg = session.resolve(&root).map_err(|e| PackError::law(e.to_string()))?;
+    let root_pkg = session
+        .resolve(&root)
+        .map_err(|e| PackError::law(e.to_string()))?;
     let mut root_files: Vec<(String, Vec<u8>)> = Vec::new();
     if !opts.strip {
         let entry = decl_entry::render_program_entry(&units.programs[root_idx]);
@@ -365,7 +386,10 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             let toml =
                 group_file(source, MANIFEST_NAME, &w.archives, &w.read).map_err(PackError::law)?;
             files.push((MANIFEST_NAME.into(), toml));
-            files.push(("mod.rutc".into(), rut_core::binary::encode(&units.programs[idx])));
+            files.push((
+                "mod.rutc".into(),
+                rut_core::binary::encode(&units.programs[idx]),
+            ));
             // the GENERATED declaration entry (wire v12) — rendered from
             // the validated surface, round-trip gated, `--strip` omitted
             // (the strip law). An ARCHIVE-sourced group copies the entry
@@ -382,12 +406,9 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                     files.push(("mod.d.rut".into(), entry.into_bytes()));
                 }
                 PkgSource::Archive { slot, prefix } => {
-                    let key = bundle_key(&format!("{prefix}mod.d.rut"))
-                        .map_err(PackError::law)?;
-                    if let Some((_, bytes)) = w.archives[*slot]
-                        .entries
-                        .iter()
-                        .find(|(n, _)| *n == key)
+                    let key = bundle_key(&format!("{prefix}mod.d.rut")).map_err(PackError::law)?;
+                    if let Some((_, bytes)) =
+                        w.archives[*slot].entries.iter().find(|(n, _)| *n == key)
                     {
                         files.push(("mod.d.rut".into(), bytes.clone()));
                     }
@@ -406,7 +427,10 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         } else {
             match source {
                 PkgSource::Dir(gdir) => {
-                    let mods = session.resolve(spec).map(|m| m.mods.clone()).unwrap_or_default();
+                    let mods = session
+                        .resolve(spec)
+                        .map(|m| m.mods.clone())
+                        .unwrap_or_default();
                     let is_host = matches!(
                         session.resolve(spec).map(|m| &m.body),
                         Ok(MountedBody::Host { .. })
@@ -418,17 +442,19 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                         // gate: the entry must lower to the same rows the
                         // file-tree form did (the loader law, checked at
                         // pack)
-                        let m = session.resolve(spec).map_err(|e| PackError::law(e.to_string()))?;
+                        let m = session
+                            .resolve(spec)
+                            .map_err(|e| PackError::law(e.to_string()))?;
                         let (root_text, host_rows) = match &m.body {
-                            MountedBody::Host { root_surface, host_funcs, .. } => (
-                                root_surface.clone().unwrap_or_default(),
-                                host_funcs.clone(),
-                            ),
+                            MountedBody::Host {
+                                root_surface,
+                                host_funcs,
+                                ..
+                            } => (root_surface.clone().unwrap_or_default(), host_funcs.clone()),
                             _ => (String::new(), Vec::new()),
                         };
-                        let entry =
-                            decl_entry::normalize_decl_tree(&root_text, &mods)
-                                .map_err(PackError::law)?;
+                        let entry = decl_entry::normalize_decl_tree(&root_text, &mods)
+                            .map_err(PackError::law)?;
                         let entry_rows =
                             decl_entry::lower_inline_entry(&entry, &format!("{gdir}/mod.d.rut"))
                                 .map_err(PackError::law)?;
@@ -452,10 +478,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                                 .resolve(spec)
                                 .map(rows_root_text)
                                 .unwrap_or_default();
-                            files.push((
-                                ROWS_NAME.into(),
-                                rows_json(&text, &mods).into_bytes(),
-                            ));
+                            files.push((ROWS_NAME.into(), rows_json(&text, &mods).into_bytes()));
                         }
                     }
                 }
@@ -536,10 +559,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 // no rode file set (an engine mount, a dev-table pkg):
                 // the identity of the empty set; a loader binds the
                 // bare name
-                crate::bundle::identity::identity(
-                    spec,
-                    &crate::bundle::identity::fp16_of(&[], ""),
-                )
+                crate::bundle::identity::identity(spec, &crate::bundle::identity::fp16_of(&[], ""))
             };
             Ok((scope, row))
         })
@@ -551,7 +571,10 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     entries.push(("rut.scopes".into(), ledger_text(&ledger).into_bytes()));
     // the root's compiled binary, then its staged file set (the
     // surface, the module rows)
-    entries.push(("mod.rutc".into(), rut_core::binary::encode(&units.programs[root_idx])));
+    entries.push((
+        "mod.rutc".into(),
+        rut_core::binary::encode(&units.programs[root_idx]),
+    ));
     entries.extend(root_files);
     // the dep groups, identity order — the archive mirrors the
     // manifest's deps table

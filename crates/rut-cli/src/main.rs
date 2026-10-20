@@ -14,7 +14,12 @@ use clap::Parser;
 /// the rut toolchain's temporary-run lane: run, scaffold, install,
 /// format, pack, fetch, inspect.
 #[derive(Parser)]
-#[command(name = "rut", version, subcommand_required = true, arg_required_else_help = true)]
+#[command(
+    name = "rut",
+    version,
+    subcommand_required = true,
+    arg_required_else_help = true
+)]
 enum Cli {
     /// compile and run a package directory or a packed archive (`.rutbundle`)
     Run(run::RunArgs),

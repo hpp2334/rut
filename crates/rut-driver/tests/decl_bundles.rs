@@ -21,14 +21,16 @@ use rut_native::{load_dir_with, pack_dir, pack_dir_opts, DepRemote, RemoteError}
 // ------------------------------------------------------------------
 // the fixture world: a host pkg + a consumer, in scratch dirs
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -54,7 +56,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -148,7 +153,10 @@ fn host_root_packs_v6_and_loads_back() {
         .unwrap()
         .read("rut.jsonc")
         .unwrap();
-    assert_eq!(toml, std::fs::read_to_string(dir.join("rut.jsonc")).unwrap());
+    assert_eq!(
+        toml,
+        std::fs::read_to_string(dir.join("rut.jsonc")).unwrap()
+    );
     let m = rut_driver::bundle::parse_manifest(&toml).unwrap();
     assert_eq!(m.format_version, Some(12), "a decl root declares 12");
 
@@ -182,9 +190,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     write(
         &app,
         "rut.jsonc",
-        &format!(
-            r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#
-        ),
+        &format!(r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#),
     );
     write(
         &app,
@@ -211,7 +217,13 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     assert!(
         units.graph.diags.is_empty(),
         "{}",
-        units.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        units
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; ")
     );
     assert!(units.graph.program.is_some(), "the consumer links");
 }
@@ -227,7 +239,11 @@ fn shim_tree_host(tag: &str, name: &str, surface: &str) -> PathBuf {
     let dir = scratch(tag).join(name);
     let toml = std::fs::read_to_string(tree.join("rut.jsonc")).unwrap();
     write(&dir, "rut.jsonc", &toml);
-    write(&dir, surface, &std::fs::read_to_string(tree.join(surface)).unwrap());
+    write(
+        &dir,
+        surface,
+        &std::fs::read_to_string(tree.join(surface)).unwrap(),
+    );
     dir
 }
 
@@ -240,8 +256,7 @@ fn the_real_tree_host_pkgs_pack_and_load() {
         ("core", "core.d.rut"),
     ] {
         let dir = shim_tree_host("tree", name, surface);
-        let bytes = pack_dir(&dir)
-            .unwrap_or_else(|e| panic!("pack rut/{name}: {e}"));
+        let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("pack rut/{name}: {e}"));
         let names = entry_names(&bytes);
         assert_eq!(
             names,
@@ -251,7 +266,10 @@ fn the_real_tree_host_pkgs_pack_and_load() {
         let session = rut_driver::Mounted::from_bundle(&bytes)
             .unwrap_or_else(|e| panic!("load rut/{name}: {e}"));
         assert_eq!(session.root, name);
-        assert!(matches!(session.pkg(name).unwrap().body, MountedBody::Host { .. }));
+        assert!(matches!(
+            session.pkg(name).unwrap().body,
+            MountedBody::Host { .. }
+        ));
     }
 }
 
@@ -275,15 +293,29 @@ fn a_lib_root_packs_the_one_wire_number_too() {
     // `type` row (absent ⇒ lib) routes the layout, never the version
     let base = scratch("onewire");
     let lib = base.join("util");
-    write(&lib, "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "util"}"#);
-    write(&lib, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    write(
+        &lib,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 12, "name": "util"}"#,
+    );
+    write(
+        &lib,
+        "mod.rut",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     let bytes = pack_dir(&lib).expect("pack the lib");
     let m = rut_driver::bundle::parse_manifest(
-        &rut_driver::bundle::Bundle::parse(&bytes).unwrap().read("rut.jsonc").unwrap(),
+        &rut_driver::bundle::Bundle::parse(&bytes)
+            .unwrap()
+            .read("rut.jsonc")
+            .unwrap(),
     )
     .unwrap();
-    assert_eq!(m.format_version, Some(12), "a lib root's manifest declares 12, the current wire");
+    assert_eq!(
+        m.format_version,
+        Some(12),
+        "a lib root's manifest declares 12, the current wire"
+    );
     let names = entry_names(&bytes);
     assert!(names.contains(&"rut.scopes".to_string()), "{names:?}");
     assert!(names.contains(&"mod.rutc".to_string()), "{names:?}");
@@ -295,7 +327,9 @@ fn a_lib_root_packs_the_one_wire_number_too() {
 #[test]
 fn strip_refuses_on_a_host_root() {
     let dir = host_world("strip", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
-    let err = pack_dir_opts(&dir, &PackOpts { strip: true }).unwrap_err().to_string();
+    let err = pack_dir_opts(&dir, &PackOpts { strip: true })
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("no symbols to strip"), "{err}");
 }
 
@@ -313,7 +347,10 @@ fn any_other_version_refuses_with_the_one_recipe() {
     let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("reads bundle format_version 12 (and the old 11 lane) only"), "{err}");
+    assert!(
+        err.contains("reads bundle format_version 12 (and the old 11 lane) only"),
+        "{err}"
+    );
     assert!(err.contains("found 9"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
 
@@ -335,13 +372,17 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
     // a root `.rutc` in a host bundle: the contradiction refusal —
     // a host bundle's root is its surface, not a compiled unit
     let with_rutc = appended(&bytes, "mod.rutc", b"not a real program");
-    let err = rut_driver::Mounted::from_bundle(&with_rutc).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&with_rutc)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
     assert!(err.contains("mod.rutc"), "{err}");
 
     // a scope ledger: no programs, no ledger
     let with_ledger = appended(&bytes, "rut.scopes", b"0 = \"h\"\n");
-    let err = rut_driver::Mounted::from_bundle(&with_ledger).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&with_ledger)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("no programs"), "{err}");
 
     // a dep group: single-package law
@@ -350,12 +391,15 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
         br#"{"name": "g", "entry": {"lib": "./g.rut"}}"#.to_vec(),
     )])
     .unwrap();
-    let entries: Vec<(String, Vec<u8>)> =
-        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().chain(
-            rut_driver::bundle::parse_bundle(&group_manifest).unwrap(),
-        ).collect();
+    let entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
+        .unwrap()
+        .into_iter()
+        .chain(rut_driver::bundle::parse_bundle(&group_manifest).unwrap())
+        .collect();
     let with_group = rut_driver::bundle::write_bundle(&entries).unwrap();
-    let err = rut_driver::Mounted::from_bundle(&with_group).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&with_group)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("single-package"), "{err}");
 
     // a missing surface: the root IS the surface — no entry, no bundle
@@ -368,12 +412,20 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
         rut_driver::Mounted::from_bundle(&rut_driver::bundle::write_bundle(&stripped).unwrap())
             .unwrap_err()
             .to_string();
-    assert!(err.contains("root is `mod.d.rut` beside the manifest"), "{err}");
+    assert!(
+        err.contains("root is `mod.d.rut` beside the manifest"),
+        "{err}"
+    );
 }
 
 #[test]
 fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
-    let dir = host_world("pins", "logger_host", "logger_host.d.rut", "pub host fn log(line: str);\n");
+    let dir = host_world(
+        "pins",
+        "logger_host",
+        "logger_host.d.rut",
+        "pub host fn log(line: str);\n",
+    );
     let bytes = pack_dir(&dir).expect("pack");
     let url = "https://cdn.test/std-v2/dist/std/logger_host.rutbundle";
 
@@ -402,16 +454,17 @@ fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
     write(
         &app2,
         "rut.jsonc",
-        &format!(
-            r#"{{"name": "app2", "deps": {{"not_logger": {{"url": "{url}"}}}}}}"#
-        ),
+        &format!(r#"{{"name": "app2", "deps": {{"not_logger": {{"url": "{url}"}}}}}}"#),
     );
     write(&app2, "mod.rut", "entry fn main() -> nil {}\n");
     write_lock(&app2, &table);
     let err = block_on(load_dir_with(&app2, &common::Table::from(table)))
         .unwrap_err()
         .to_string();
-    assert!(err.contains("the bundle names itself `logger_host`"), "{err}");
+    assert!(
+        err.contains("the bundle names itself `logger_host`"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -420,7 +473,12 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     // nothing else — there is no closure to walk (and a bundle-internal
     // url row would be inert metadata anyway; a host manifest cannot
     // even carry one)
-    let dir = host_world("leaf", "logger_host", "logger_host.d.rut", "pub host fn log(line: str);\n");
+    let dir = host_world(
+        "leaf",
+        "logger_host",
+        "logger_host.d.rut",
+        "pub host fn log(line: str);\n",
+    );
     let bytes = pack_dir(&dir).expect("pack");
     let url = "https://cdn.test/std-v2/dist/std/logger_host.rutbundle";
 
@@ -439,7 +497,11 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     let pouch = root_dir.join("pouch");
     std::fs::create_dir_all(&pouch).unwrap();
     write(&pouch, "rut.jsonc", r#"{"name": "pouch"}"#);
-    write(&pouch, "mod.rut", "pub class Vec<T> {\n    items: [T];\n}\n");
+    write(
+        &pouch,
+        "mod.rut",
+        "pub class Vec<T> {\n    items: [T];\n}\n",
+    );
 
     struct Counting(BTreeMap<String, Vec<u8>>);
     impl DepRemote for Counting {
@@ -457,8 +519,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
     write_lock(&app, &table);
-    let session =
-        block_on(load_dir_with(&app, &Counting(table))).expect("load");
+    let session = block_on(load_dir_with(&app, &Counting(table))).expect("load");
     assert!(matches!(
         session.pkg("logger_host").unwrap().body,
         MountedBody::Host { .. }
@@ -485,9 +546,7 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     write(
         &app,
         "rut.jsonc",
-        &format!(
-            r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#
-        ),
+        &format!(r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}"}}}}}}"#),
     );
     write(
         &app,
@@ -509,7 +568,12 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     assert!(
         g.graph.diags.is_empty(),
         "{}",
-        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; ")
     );
     assert!(g.graph.program.is_some());
 }

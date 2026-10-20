@@ -41,8 +41,8 @@ fn main() {
     // core prelude auto-offers at `.compile()`; `pouch` rode the
     // manifest — a third-party pkg the app declares, which the driver
     // does not know by name), verify, drive
-    let loaded = load(std::path::Path::new(env!("CARGO_MANIFEST_DIR")))
-        .expect("load the module dir");
+    let loaded =
+        load(std::path::Path::new(env!("CARGO_MANIFEST_DIR"))).expect("load the module dir");
     let compiled = loaded
         .pkgs
         .iter()
@@ -50,7 +50,17 @@ fn main() {
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");
-    assert!(compiled.graph.diags.is_empty(), "{}", compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{}",
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
     rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary emitted")).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
@@ -67,22 +77,38 @@ fn main() {
     let c: rut_vm::OpaqueRef = vm.call("createContainer", ()).unwrap();
     let list: u32 = vm.call("create", (c.clone(),)).unwrap();
 
-    let mut add = |title: &str| -> i32 {
-        vm.call::<_, i32>("add", (c.clone(), list, title)).unwrap()
-    };
+    let mut add =
+        |title: &str| -> i32 { vm.call::<_, i32>("add", (c.clone(), list, title)).unwrap() };
     let rfc = add("write the RFC");
     let vmf = add("implement the VM");
     let demo = add("ship the demo");
     println!("added: #{rfc}, #{vmf}, #{demo}");
 
-    vm.call::<_, bool>("set_done", (c.clone(), list, vmf, true)).unwrap();
+    vm.call::<_, bool>("set_done", (c.clone(), list, vmf, true))
+        .unwrap();
     println!("set_done(#{vmf}, true)");
 
-    println!("title_of(#{vmf}) = {:?}", vm.call::<_, String>("title_of", (c.clone(), list, vmf)).unwrap());
-    println!("title_of(42) = {:?}", vm.call::<_, String>("title_of", (c.clone(), list, 42)).unwrap());
+    println!(
+        "title_of(#{vmf}) = {:?}",
+        vm.call::<_, String>("title_of", (c.clone(), list, vmf))
+            .unwrap()
+    );
+    println!(
+        "title_of(42) = {:?}",
+        vm.call::<_, String>("title_of", (c.clone(), list, 42))
+            .unwrap()
+    );
 
-    println!("remove(#{rfc}) = {:?}", vm.call::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
-    println!("remove(#{rfc}) again = {:?}", vm.call::<_, bool>("remove", (c.clone(), list, rfc)).unwrap());
+    println!(
+        "remove(#{rfc}) = {:?}",
+        vm.call::<_, bool>("remove", (c.clone(), list, rfc))
+            .unwrap()
+    );
+    println!(
+        "remove(#{rfc}) again = {:?}",
+        vm.call::<_, bool>("remove", (c.clone(), list, rfc))
+            .unwrap()
+    );
 
     let text: String = vm.call("render", (c.clone(), list)).unwrap();
     println!("{text}");

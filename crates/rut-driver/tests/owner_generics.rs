@@ -17,7 +17,12 @@ use common::dep_dir;
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -43,7 +48,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -82,13 +90,20 @@ fn session_of(modules: &[(&str, &str, bool)]) -> rut_driver::Walk {
     // (the law bounds uses by declarations, never declarations by
     // uses — this suite's subject is owner-anchored generics)
     for (spec, src, _inline_retired) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _, _)| *s).filter(|s| *s != *spec).collect();
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
         pkgs.push(
-            rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)),
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
         );
     }
-    rut_driver::Walk { pkgs, root: String::new() }
+    rut_driver::Walk {
+        pkgs,
+        root: String::new(),
+    }
 }
 
 fn run_entry<R: rut_vm::interp::Ret>(world: &rut_driver::Walk, root: &str, entry: &str) -> R {
@@ -109,8 +124,13 @@ fn run_entry<R: rut_vm::interp::Ret>(world: &rut_driver::Walk, root: &str, entry
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
 
@@ -151,9 +171,16 @@ entry fn go() -> i64 {
 
 #[test]
 fn cross_module_type_identity_is_one_row() {
-    let s = session_of(&[("cells", CELLS_SRC, false), ("maker", MAKER_SRC, false), ("app", CONSUMER_SRC, false)]);
+    let s = session_of(&[
+        ("cells", CELLS_SRC, false),
+        ("maker", MAKER_SRC, false),
+        ("app", CONSUMER_SRC, false),
+    ]);
     let got: i64 = run_entry(&s, "app", "go");
-    assert_eq!(got, 7, "the lib's instantiation and the consumer's are one type");
+    assert_eq!(
+        got, 7,
+        "the lib's instantiation and the consumer's are one type"
+    );
 }
 
 #[test]
@@ -180,8 +207,7 @@ entry fn go2() -> i64 {
         ("app2", consumer2, false),
     ]);
     let g = graph_of(
-        s
-            .pkgs
+        s.pkgs
             .iter()
             .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -195,9 +221,7 @@ entry fn go2() -> i64 {
     let mut tys: Vec<u32> = p
         .inst_types
         .iter()
-        .filter(|r| {
-            p.interner.name(r.owner) == "cells" && p.interner.name(r.decl) == "Cell"
-        })
+        .filter(|r| p.interner.name(r.owner) == "cells" && p.interner.name(r.decl) == "Cell")
         .map(|r| r.ty)
         .collect();
     tys.sort();
@@ -243,10 +267,17 @@ entry fn go2() -> i64 {
     // ONE body set: every `Cell<i64>` instantiation fn appears once
     // across the whole program
     let flat = rut_core::link::flatten(p);
-    let mut fns: Vec<String> = flat.funcs.iter().map(|f| flat.interner.name(f.name).to_string()).collect();
+    let mut fns: Vec<String> = flat
+        .funcs
+        .iter()
+        .map(|f| flat.interner.name(f.name).to_string())
+        .collect();
     fns.sort();
     let dupes: Vec<String> = fns.iter().duplicates().cloned().collect();
-    assert!(dupes.is_empty(), "no duplicated instantiation bodies: {dupes:?}");
+    assert!(
+        dupes.is_empty(),
+        "no duplicated instantiation bodies: {dupes:?}"
+    );
 }
 
 trait DuplicatesExt: Iterator {
@@ -255,7 +286,10 @@ trait DuplicatesExt: Iterator {
         Self: Sized,
         Self::Item: PartialEq + Clone,
     {
-        Duplicates { inner: self, seen: Vec::new() }
+        Duplicates {
+            inner: self,
+            seen: Vec::new(),
+        }
     }
 }
 
@@ -337,7 +371,11 @@ fn packaged_generic_owner_serves_consumer_requests() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest(
+            "app",
+            "mod.rut",
+            r#", "deps": {"pairz": {"path": "../pairz"}}"#,
+        ),
     );
     write(
         &app,
@@ -355,13 +393,22 @@ fn packaged_generic_owner_serves_consumer_requests() {
     // the generic lib rode compiled — and, the delivery law (v22), its
     // generic bodies ride as template rows INSIDE the binary, so
     // consumer-spelled shapes stay servable at load
-    let names: Vec<String> =
-        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+    let names: Vec<String> = rut_driver::bundle::parse_bundle(&bytes)
+        .unwrap()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
     let pairz_dir = dep_dir(&names, "pairz");
-    assert!(names.contains(&format!("{pairz_dir}/mod.rutc")), "{names:?}");
+    assert!(
+        names.contains(&format!("{pairz_dir}/mod.rutc")),
+        "{names:?}"
+    );
     // v22 — the delivery law: no source rides; the generic bodies are
     // template rows inside the binary
-    assert!(!names.contains(&format!("{pairz_dir}/mod.rut")), "{names:?}");
+    assert!(
+        !names.contains(&format!("{pairz_dir}/mod.rut")),
+        "{names:?}"
+    );
     // and the pack-time closure's instantiation is IN the binary's ledger
     {
         let group = rut_driver::bundle::parse_bundle(&bytes)
@@ -372,9 +419,14 @@ fn packaged_generic_owner_serves_consumer_requests() {
             .1;
         let prog = rut_core::binary::decode(&group).expect("decode");
         assert!(
-            prog.inst_types.iter().any(|r| prog.interner.name(r.decl) == "Pair"),
+            prog.inst_types
+                .iter()
+                .any(|r| prog.interner.name(r.decl) == "Pair"),
             "the seeded instantiation rides the binary: {:?}",
-            prog.inst_types.iter().map(|r| prog.interner.name(r.decl)).collect::<Vec<_>>()
+            prog.inst_types
+                .iter()
+                .map(|r| prog.interner.name(r.decl))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -395,7 +447,10 @@ fn packaged_generic_owner_serves_consumer_requests() {
         )
         // the consumer declares the heads it names (the nameability
         // law — mounted-but-undeclared is D5)
-        .manifest(rut_driver::Manifest::lib("consumer", &["pairz", "app", "calc"])),
+        .manifest(rut_driver::Manifest::lib(
+            "consumer",
+            &["pairz", "app", "calc"],
+        )),
     );
     let got: i64 = run_entry(&session, "consumer", "go2");
     assert_eq!(got, 6, "the packaged instantiation served the consumer");
@@ -419,8 +474,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
         .manifest(rut_driver::Manifest::lib("late", &["pairz", "calc"])),
     );
     let g = graph_of(
-        lone
-            .pkgs
+        lone.pkgs
             .iter()
             .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
@@ -455,7 +509,11 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest(
+            "app",
+            "mod.rut",
+            r#", "deps": {"pairz": {"path": "../pairz"}}"#,
+        ),
     );
     write(
         &app,
@@ -469,7 +527,10 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     );
     let a = pack_dir(&app).expect("pack");
     let b = pack_dir(&app).expect("pack again");
-    assert_eq!(a, b, "same dir => byte-identical bundle (canonical request order)");
+    assert_eq!(
+        a, b,
+        "same dir => byte-identical bundle (canonical request order)"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -492,7 +553,11 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "mod.rut", r#", "deps": {"pairz": {"path": "../pairz"}}"#,)
+        &bundle_manifest(
+            "app",
+            "mod.rut",
+            r#", "deps": {"pairz": {"path": "../pairz"}}"#,
+        ),
     );
     write(
         &app,

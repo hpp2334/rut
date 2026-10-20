@@ -67,11 +67,13 @@ pub(crate) fn run(args: &RunArgs) {
         }
     };
     if let Some(cached) = cache_entry {
-        match std::fs::read(&cached).map_err(|e| e.to_string()).and_then(|b| {
-            rut_driver::Bundle::parse(&b)
-                .map_err(|e| e.to_string())
-                .map(|a| (b, a))
-        }) {
+        match std::fs::read(&cached)
+            .map_err(|e| e.to_string())
+            .and_then(|b| {
+                rut_driver::Bundle::parse(&b)
+                    .map_err(|e| e.to_string())
+                    .map(|a| (b, a))
+            }) {
             Ok((_, archive)) => {
                 let label = cached.display().to_string();
                 // defense-in-depth: a host archive never lands in the
@@ -208,7 +210,11 @@ fn run_archive_bytes(
     if !compiled.graph.diags.is_empty() {
         eprint!(
             "{}",
-            rut_lexer::diag::render_diags_grouped(&compiled.graph.diags, &walked_sources(&walked), None)
+            rut_lexer::diag::render_diags_grouped(
+                &compiled.graph.diags,
+                &walked_sources(&walked),
+                None
+            )
         );
         std::process::exit(1);
     }
@@ -231,9 +237,7 @@ fn run_archive_bytes(
 
 /// The diag renderer's file → text map over a walked archive world —
 /// the archive twin of `chain::loaded_sources`.
-fn walked_sources(
-    walked: &rut_driver::Walk,
-) -> std::collections::BTreeMap<String, &str> {
+fn walked_sources(walked: &rut_driver::Walk) -> std::collections::BTreeMap<String, &str> {
     let mut out = std::collections::BTreeMap::new();
     for pkg in &walked.pkgs {
         if let rut_driver::MountedBody::Source { text, .. } = &pkg.body {

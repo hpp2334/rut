@@ -10,7 +10,10 @@ fn fn_body(src: &str) -> (Ast, NodeHandle<BlockNode>) {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let f = items.iter().find(|i| matches!(ast.item(**i), ItemKind::Fn(_))).expect("fn");
+    let f = items
+        .iter()
+        .find(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
+        .expect("fn");
     let body = match ast.item(*f) {
         ItemKind::Fn(d) => d.body,
         _ => unreachable!(),
@@ -22,7 +25,11 @@ fn fn_body(src: &str) -> (Ast, NodeHandle<BlockNode>) {
 fn bare_last_statement_is_the_tail() {
     // `x` closed by the block's `}` — the tail, not an ExprStmt
     let (ast, body) = fn_body("fn f() -> i32 { x }");
-    assert_eq!(ast.block(body).len(), 0, "no statements: the expr became the tail");
+    assert_eq!(
+        ast.block(body).len(),
+        0,
+        "no statements: the expr became the tail"
+    );
     let tail = ast.block_tail(body).expect("tail");
     assert!(matches!(ast.expr(tail), ExprKind::Path { segs } if segs.len() == 1));
 }
@@ -41,7 +48,11 @@ fn semicolon_keeps_it_a_statement() {
 #[test]
 fn tail_after_statements() {
     let (ast, body) = fn_body("fn f() -> i32 { let a = 1; a + a }");
-    assert_eq!(ast.block(body).len(), 1, "the let; the tail rides beside it");
+    assert_eq!(
+        ast.block(body).len(),
+        1,
+        "the let; the tail rides beside it"
+    );
     let tail = ast.block_tail(body).expect("tail");
     assert!(matches!(ast.expr(tail), ExprKind::Binary { .. }));
 }
@@ -52,7 +63,9 @@ fn let_still_demands_its_semicolon_before_another_statement() {
     // statement still diagnoses
     let (_, diags) = parse("fn f() -> i32 { let x = 1 let y = 2; y }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected ;") && d.msg.contains("let")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected ;") && d.msg.contains("let")),
         "the missing `;` must be diagnosed: {diags:?}"
     );
 }
@@ -80,14 +93,24 @@ fn if_branches_carry_tails_as_blocks() {
     // the statement-leading if is the statement grammar's (the if ATOM
     // claims only expression positions)
     let (ast, body) = fn_body("fn f(c: bool) -> i32 { if (c) { 1 } else { 2 } }");
-    assert_eq!(ast.block(body).len(), 1, "the if is the body's one statement");
+    assert_eq!(
+        ast.block(body).len(),
+        1,
+        "the if is the body's one statement"
+    );
     let Kind::Stmt(StmtKind::If { then, els, .. }) = ast.kind(ast.block(body)[0].id()) else {
         panic!("expected an if statement");
     };
-    assert!(matches!(ast.expr(ast.block_tail(*then).expect("then tail")), ExprKind::Lit(Lit::Int(1, _))));
+    assert!(matches!(
+        ast.expr(ast.block_tail(*then).expect("then tail")),
+        ExprKind::Lit(Lit::Int(1, _))
+    ));
     match els {
         Some(ElseBranch::Block(b)) => {
-            assert!(matches!(ast.expr(ast.block_tail(*b).expect("else tail")), ExprKind::Lit(Lit::Int(2, _))));
+            assert!(matches!(
+                ast.expr(ast.block_tail(*b).expect("else tail")),
+                ExprKind::Lit(Lit::Int(2, _))
+            ));
         }
         _ => panic!("expected a block else"),
     }
@@ -95,7 +118,8 @@ fn if_branches_carry_tails_as_blocks() {
 
 #[test]
 fn when_block_arms_carry_tails() {
-    let (ast, body) = fn_body("fn f(x: i32) -> i32 { let w = when (x) { 0 -> { 1 }, else -> { 2 } }; w }");
+    let (ast, body) =
+        fn_body("fn f(x: i32) -> i32 { let w = when (x) { 0 -> { 1 }, else -> { 2 } }; w }");
     let Kind::Stmt(StmtKind::LetStmt { init, .. }) = ast.kind(ast.block(body)[0].id()) else {
         panic!("expected the let");
     };
@@ -105,11 +129,19 @@ fn when_block_arms_carry_tails() {
     let bodies: Vec<Option<NodeHandle<AnyExpr>>> = arms
         .iter()
         .map(|&a| match ast.arm(a) {
-            ArmKind::WhenArm { body, .. } => ast.narrow_block(*body).and_then(|b| ast.block_tail(b)),
+            ArmKind::WhenArm { body, .. } => {
+                ast.narrow_block(*body).and_then(|b| ast.block_tail(b))
+            }
         })
         .collect();
-    assert!(matches!(ast.expr(bodies[0].expect("arm 0 tail")), ExprKind::Lit(Lit::Int(1, _))));
-    assert!(matches!(ast.expr(bodies[1].expect("arm 1 tail")), ExprKind::Lit(Lit::Int(2, _))));
+    assert!(matches!(
+        ast.expr(bodies[0].expect("arm 0 tail")),
+        ExprKind::Lit(Lit::Int(1, _))
+    ));
+    assert!(matches!(
+        ast.expr(bodies[1].expect("arm 1 tail")),
+        ExprKind::Lit(Lit::Int(2, _))
+    ));
 }
 
 #[test]
@@ -123,7 +155,10 @@ fn lambda_block_body_takes_a_tail() {
     };
     let b = ast.narrow_block(*lb).expect("block body");
     assert_eq!(ast.block(b).len(), 0);
-    assert!(matches!(ast.expr(ast.block_tail(b).expect("lambda tail")), ExprKind::Lit(Lit::Int(4, _))));
+    assert!(matches!(
+        ast.expr(ast.block_tail(b).expect("lambda tail")),
+        ExprKind::Lit(Lit::Int(4, _))
+    ));
 }
 
 #[test]

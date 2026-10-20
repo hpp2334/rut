@@ -46,7 +46,10 @@ pub(super) fn raw(value: &Value) -> String {
 }
 
 /// A table value must be an object — `{table}: expected an object`.
-pub(super) fn expect_object<'a>(table: &str, value: &'a Value) -> Result<&'a Map<String, Value>, ManifestError> {
+pub(super) fn expect_object<'a>(
+    table: &str,
+    value: &'a Value,
+) -> Result<&'a Map<String, Value>, ManifestError> {
     value
         .as_object()
         .ok_or_else(|| ManifestError(format!("{table}: expected an object, found {}", raw(value))))
@@ -148,7 +151,11 @@ pub(super) fn walk_top_lane(
 /// [`Manifest::legacy_entry`] under the old value laws instead. The
 /// retired `entry.ir` rides either way; unknown keys are refused (the
 /// entry strictness).
-pub(super) fn walk_entry(value: &Value, m: &mut Manifest, compat: bool) -> Result<(), ManifestError> {
+pub(super) fn walk_entry(
+    value: &Value,
+    m: &mut Manifest,
+    compat: bool,
+) -> Result<(), ManifestError> {
     let table = expect_object("entry", value)?;
     for (key, v) in table {
         if key.starts_with('_') {
@@ -234,7 +241,8 @@ pub(super) fn walk_style(value: &Value, m: &mut Manifest) -> Result<(), Manifest
         if key.starts_with('_') {
             return Err(underscore_refused("style", key));
         }
-        m.style.insert(key.clone(), expect_field_string("style", key, v)?);
+        m.style
+            .insert(key.clone(), expect_field_string("style", key, v)?);
     }
     Ok(())
 }

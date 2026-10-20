@@ -9,10 +9,10 @@
 //! `OpaqueRef` is the host-facing handle: it owns one arena
 //! reference and holds the shared arena, so it can outlive the `Vm`.
 
-use crate::heap::{Heap, blocks::Blocks, CellData, CellVal, HeapAcct, Slot};
 use crate::heap::store::{self, OpaqueEntry, Store};
+use crate::heap::{blocks::Blocks, CellData, CellVal, Heap, HeapAcct, Slot};
 use rut_core::binary::FuncCode;
-use rut_core::types::{TypeTable, TypeId, TyKind};
+use rut_core::types::{TyKind, TypeId, TypeTable};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::mem::MaybeUninit;
@@ -66,7 +66,11 @@ impl ReleasePlan {
             .iter()
             .map(|f| f.params.iter().map(of).collect())
             .collect();
-        ReleasePlan { is_ref, record_refs, closure_capture_ref }
+        ReleasePlan {
+            is_ref,
+            record_refs,
+            closure_capture_ref,
+        }
     }
 }
 
@@ -163,7 +167,11 @@ impl Arena {
     /// Register a fresh WeakBox into its referent's weak list.
     /// `word` is the referent's full slot word.
     pub(crate) fn weak_register(&self, word: usize, box_cell: *const CellVal) {
-        self.weak_lists.borrow_mut().entry(word).or_default().push(box_cell);
+        self.weak_lists
+            .borrow_mut()
+            .entry(word)
+            .or_default()
+            .push(box_cell);
     }
 
     /// Referent death: null every WeakBox in the referent's
@@ -326,12 +334,7 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
     match &c.data {
         CellData::Record { fields } => {
             let fb = fields.borrow();
-            for &i in plan
-                .record_refs
-                .get(c.ty as usize)
-                .into_iter()
-                .flatten()
-            {
+            for &i in plan.record_refs.get(c.ty as usize).into_iter().flatten() {
                 if let Some(s) = fb.get(i as usize) {
                     out.push(s);
                 }
@@ -374,8 +377,7 @@ unsafe fn collect_ref_children(c: &CellVal, plan: &ReleasePlan) -> Vec<Slot> {
             }
         }
         // a trace cell's frames are plain (func, pc) words, never handles
-        CellData::Enum { .. } | CellData::Str(_)
-        | CellData::Trace { .. } => {}
+        CellData::Enum { .. } | CellData::Str(_) | CellData::Trace { .. } => {}
     }
     out
 }
@@ -401,7 +403,8 @@ pub(crate) fn release_cell(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut CellV
     }
     let children = unsafe {
         match (*p).data {
-            CellData::Str(_) | CellData::Enum { .. }
+            CellData::Str(_)
+            | CellData::Enum { .. }
             | CellData::Trace { .. }
             | CellData::WeakBox { .. } => None,
             _ => Some(collect_ref_children(&*p, &arena.plan)),
@@ -446,7 +449,10 @@ pub(crate) fn release_entry(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut stor
     let taken = unsafe {
         std::mem::replace(
             &mut (*p).e,
-            OpaqueEntry::Rut(store::RutOpaque { slot: Slot::null(), val_ty: 0 }),
+            OpaqueEntry::Rut(store::RutOpaque {
+                slot: Slot::null(),
+                val_ty: 0,
+            }),
         )
     };
     let bytes = unsafe { (*p).bytes } as u64;
@@ -466,7 +472,13 @@ pub(crate) fn release_entry(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, p: *mut stor
         OpaqueEntry::Rut(r) => {
             // the held value cell dies with the entry (a prim payload is
             // raw bits — nothing to release; the plan's is_ref table knows)
-            if arena.plan.is_ref.get(r.val_ty as usize).copied().unwrap_or(false) {
+            if arena
+                .plan
+                .is_ref
+                .get(r.val_ty as usize)
+                .copied()
+                .unwrap_or(false)
+            {
                 release_ref_slot(arena, acct, r.slot);
             }
         }
@@ -500,9 +512,16 @@ impl OpaqueRef {
     /// Wrap a tagged slot word, retaining once (the caller transfers
     /// ownership).
     pub(crate) fn new(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, ptr: *const CellVal) -> OpaqueRef {
-        debug_assert!(store::is_entry(Slot { r: ptr }), "opaque_handle on a non-store slot");
+        debug_assert!(
+            store::is_entry(Slot { r: ptr }),
+            "opaque_handle on a non-store slot"
+        );
         unsafe { Self::bump(ptr) };
-        OpaqueRef { arena: arena.clone(), acct: acct.clone(), ptr }
+        OpaqueRef {
+            arena: arena.clone(),
+            acct: acct.clone(),
+            ptr,
+        }
     }
 
     /// Wrap an entry JUST minted (`refs` == 1): the handle takes over the
@@ -510,24 +529,28 @@ impl OpaqueRef {
     /// host-fn return path use this — mint, then hand straight to the
     /// boundary — so the box's first crossing owns exactly one reference.
     pub(crate) fn owning(arena: &Rc<Arena>, acct: &Rc<HeapAcct>, ptr: *const CellVal) -> OpaqueRef {
-        OpaqueRef { arena: arena.clone(), acct: acct.clone(), ptr }
+        OpaqueRef {
+            arena: arena.clone(),
+            acct: acct.clone(),
+            ptr,
+        }
     }
 }
 
 impl Clone for OpaqueRef {
     fn clone(&self) -> Self {
         unsafe { Self::bump(self.ptr) };
-        OpaqueRef { arena: self.arena.clone(), acct: self.acct.clone(), ptr: self.ptr }
+        OpaqueRef {
+            arena: self.arena.clone(),
+            acct: self.acct.clone(),
+            ptr: self.ptr,
+        }
     }
 }
 
 impl Drop for OpaqueRef {
     fn drop(&mut self) {
-        release_ref_slot(
-            &self.arena,
-            &self.acct,
-            Slot { r: self.ptr },
-        );
+        release_ref_slot(&self.arena, &self.acct, Slot { r: self.ptr });
     }
 }
 

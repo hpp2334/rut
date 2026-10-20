@@ -1,12 +1,11 @@
 //! Method dispatch on a value receiver: resolution through inherent and registered trait impls, plus the missing-method diagnostic and receiver naming.
 
 use crate::check::{MemberSrc, TcResult};
-use rut_core::sym;
 use crate::lir::slice::SliceSource;
 use crate::lir::*;
+use rut_core::sym;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     pub(crate) fn compile_method(
         &mut self,
         recv: NodeHandle<AnyExpr>,
@@ -35,7 +34,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Path { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
                 let l = self.lookup(segs[0].name).cloned();
                 l.map(|l| {
-                    let reg = if l.cell.is_some() { self.read_local(&l, sp.lo) } else { l.reg };
+                    let reg = if l.cell.is_some() {
+                        self.read_local(&l, sp.lo)
+                    } else {
+                        l.reg
+                    };
                     (l.ty, reg)
                 })
             }
@@ -54,8 +57,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             },
             None => None,
         };
-        if let Some((ty, reg)) = recv_opt_raw {
-            }
+        if let Some((ty, reg)) = recv_opt_raw {}
         let (rt, rreg) = match recv_raw {
             Some((ty, reg)) => self.deref_for_use(ty, reg, sp.lo),
             None => {
@@ -79,12 +81,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // side-effecting receiver still evaluates exactly once.
         if let Some(i) = self.ctx.builtin_impl(name, rt) {
             let [rhs, ..] = &args[..] else {
-                self.ctx.err(sp, format!(
-                    "`{}.{}` takes one argument — `x.{}(y)`",
-                    self.ctx.type_name(rt),
-                    self.ctx.name(name),
-                    self.ctx.name(name)
-                ));
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}.{}` takes one argument — `x.{}(y)`",
+                        self.ctx.type_name(rt),
+                        self.ctx.name(name),
+                        self.ctx.name(name)
+                    ),
+                );
                 return Err(());
             };
             return self.compile_intrinsic_method(i, rt, rreg, *rhs, sp);
@@ -102,7 +107,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let dst = self.new_reg(TY_U32);
                     let zero = self.new_reg(TY_I32);
                     self.emit(Op::ConstRaw { dst: zero, bits: 0 }, sp.lo);
-                    self.emit(Op::StrCodeAt { dst, s: rreg, idx: zero }, sp.lo);
+                    self.emit(
+                        Op::StrCodeAt {
+                            dst,
+                            s: rreg,
+                            idx: zero,
+                        },
+                        sp.lo,
+                    );
                     self.last_reg = dst;
                     return Ok(TY_U32);
                 }
@@ -127,7 +139,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                     let tr = self.last_reg;
                     let dst = self.new_reg(TY_STR);
-                    { let (argv_off, argc) = self.pool_args(&(vec![fr, tr])); self.emit(Op::CallNat { nat: Nat::StrSlice, recv: rreg, argv_off, argc, dst: dst }, sp.lo,); }
+                    {
+                        let (argv_off, argc) = self.pool_args(&(vec![fr, tr]));
+                        self.emit(
+                            Op::CallNat {
+                                nat: Nat::StrSlice,
+                                recv: rreg,
+                                argv_off,
+                                argc,
+                                dst: dst,
+                            },
+                            sp.lo,
+                        );
+                    }
                     return Ok(TY_STR);
                 }
                 if name == sym::LEN && args.is_empty() {
@@ -149,7 +173,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // ONE op — the u32 codepoint (the char exorcism's
                     // re-spell; see s.code())
                     let dst = self.new_reg(TY_U32);
-                    self.emit(Op::StrCodeAt { dst, s: rreg, idx: ir }, sp.lo);
+                    self.emit(
+                        Op::StrCodeAt {
+                            dst,
+                            s: rreg,
+                            idx: ir,
+                        },
+                        sp.lo,
+                    );
                     self.last_reg = dst;
                     return Ok(TY_U32);
                 }
@@ -165,18 +196,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // O(bytes) of interpreted ops.
                     let ft = self.compile_expr(args[0], Some(TY_I32))?;
                     if ft != TY_I32 {
-                        self.ctx.err(sp, "scan(from, set) takes an `i32` start index");
+                        self.ctx
+                            .err(sp, "scan(from, set) takes an `i32` start index");
                         return Err(());
                     }
                     let fr = self.last_reg;
                     let st = self.compile_expr(args[1], Some(TY_BYTES))?;
-                    if !matches!(self.ctx.types.kind(st), TyKind::Array { elem } if *elem == TY_U8) {
+                    if !matches!(self.ctx.types.kind(st), TyKind::Array { elem } if *elem == TY_U8)
+                    {
                         self.ctx.err(sp, "scan(from, set) takes a `[u8]` class table — entry `min(cp, len-1)` classes each codepoint, `0` keeps scanning");
                         return Err(());
                     }
                     let sr = self.last_reg;
                     let dst = self.new_reg(TY_I64);
-                    { let (argv_off, argc) = self.pool_args(&(vec![fr, sr])); self.emit(Op::CallNat { nat: Nat::StrScan, recv: rreg, argv_off, argc, dst: dst }, sp.lo); }
+                    {
+                        let (argv_off, argc) = self.pool_args(&(vec![fr, sr]));
+                        self.emit(
+                            Op::CallNat {
+                                nat: Nat::StrScan,
+                                recv: rreg,
+                                argv_off,
+                                argc,
+                                dst: dst,
+                            },
+                            sp.lo,
+                        );
+                    }
                     return Ok(TY_I64);
                 }
                 if name == sym::STARTS_WITH && args.len() == 2 {
@@ -185,18 +230,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // compared host-side (no per-char str cells)
                     let ft = self.compile_expr(args[0], Some(TY_I32))?;
                     if ft != TY_I32 {
-                        self.ctx.err(sp, "starts_with(from, head) takes an `i32` start index");
+                        self.ctx
+                            .err(sp, "starts_with(from, head) takes an `i32` start index");
                         return Err(());
                     }
                     let fr = self.last_reg;
                     let ht = self.compile_expr(args[1], Some(TY_STR))?;
                     if ht != TY_STR {
-                        self.ctx.err(sp, "starts_with(from, head) takes a `str` head");
+                        self.ctx
+                            .err(sp, "starts_with(from, head) takes a `str` head");
                         return Err(());
                     }
                     let hr = self.last_reg;
                     let dst = self.new_reg(TY_BOOL);
-                    { let (argv_off, argc) = self.pool_args(&(vec![fr, hr])); self.emit(Op::CallNat { nat: Nat::StrStartsWith, recv: rreg, argv_off, argc, dst: dst }, sp.lo); }
+                    {
+                        let (argv_off, argc) = self.pool_args(&(vec![fr, hr]));
+                        self.emit(
+                            Op::CallNat {
+                                nat: Nat::StrStartsWith,
+                                recv: rreg,
+                                argv_off,
+                                argc,
+                                dst: dst,
+                            },
+                            sp.lo,
+                        );
+                    }
                     return Ok(TY_BOOL);
                 }
                 // a registered trait impl on the ref target dispatches
@@ -229,7 +288,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // 0044): the ONLY copy escape hatch. Every binding
                     // shares its cell; this member mints a fresh one.
                     let dst = self.new_reg(TY_BYTES);
-                    { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::BytesClone, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                    {
+                        let (argv_off, argc) = self.pool_args(&(vec![]));
+                        self.emit(
+                            Op::CallNat {
+                                nat: Nat::BytesClone,
+                                recv: rreg,
+                                argv_off,
+                                argc,
+                                dst,
+                            },
+                            sp.lo,
+                        );
+                    }
                     self.last_reg = dst;
                     return Ok(TY_BYTES);
                 }
@@ -251,7 +322,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match (name, args.len()) {
                     (sym::LEN, 0) => {
                         let dst = self.new_reg(TY_I32);
-                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::TraceLen, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::TraceLen,
+                                    recv: rreg,
+                                    argv_off,
+                                    argc,
+                                    dst,
+                                },
+                                sp.lo,
+                            );
+                        }
                         return Ok(TY_I32);
                     }
                     (sym::NAME, 1) => {
@@ -262,7 +345,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let ir = self.last_reg;
                         let dst = self.new_reg(TY_STR);
-                        { let (argv_off, argc) = self.pool_args(&(vec![ir])); self.emit(Op::CallNat { nat: Nat::TraceName, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![ir]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::TraceName,
+                                    recv: rreg,
+                                    argv_off,
+                                    argc,
+                                    dst,
+                                },
+                                sp.lo,
+                            );
+                        }
                         return Ok(TY_STR);
                     }
                     (sym::LINE, 1) => {
@@ -273,7 +368,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let ir = self.last_reg;
                         let dst = self.new_reg(TY_I32);
-                        { let (argv_off, argc) = self.pool_args(&(vec![ir])); self.emit(Op::CallNat { nat: Nat::TraceLine, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![ir]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::TraceLine,
+                                    recv: rreg,
+                                    argv_off,
+                                    argc,
+                                    dst,
+                                },
+                                sp.lo,
+                            );
+                        }
                         return Ok(TY_I32);
                     }
                     (sym::COL, 1) => {
@@ -284,12 +391,36 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let ir = self.last_reg;
                         let dst = self.new_reg(TY_I32);
-                        { let (argv_off, argc) = self.pool_args(&(vec![ir])); self.emit(Op::CallNat { nat: Nat::TraceCol, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![ir]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::TraceCol,
+                                    recv: rreg,
+                                    argv_off,
+                                    argc,
+                                    dst,
+                                },
+                                sp.lo,
+                            );
+                        }
                         return Ok(TY_I32);
                     }
                     (sym::RENDER, 0) => {
                         let dst = self.new_reg(TY_STR);
-                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::TraceRender, recv: rreg, argv_off, argc, dst }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::TraceRender,
+                                    recv: rreg,
+                                    argv_off,
+                                    argc,
+                                    dst,
+                                },
+                                sp.lo,
+                            );
+                        }
                         return Ok(TY_STR);
                     }
                     _ => {
@@ -311,7 +442,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     (sym::UPGRADE, 0) => {
                         let opt_ty = self.ctx.mk_opt(*elem);
                         let dst = self.new_reg(opt_ty);
-                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::WeakUpgrade { recv: rreg, dst, ty: opt_ty }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            self.emit(
+                                Op::WeakUpgrade {
+                                    recv: rreg,
+                                    dst,
+                                    ty: opt_ty,
+                                },
+                                sp.lo,
+                            );
+                        }
                         return Ok(opt_ty);
                     }
                     _ => {
@@ -350,12 +491,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if name == sym::SLICE && args.len() == 2 {
             if let Some(info) = self.slice_info(rt) {
                 match &info.source {
-                    SliceSource::DataBuf { buf_field, len_field } => {
+                    SliceSource::DataBuf {
+                        buf_field,
+                        len_field,
+                    } => {
                         let arr_ty = info.array_ty(self.ctx);
                         let arr = self.new_reg(arr_ty);
-                        self.emit(Op::GetF { dst: arr, obj: rreg, field: *buf_field, repr: Repr::Ref }, sp.lo);
+                        self.emit(
+                            Op::GetF {
+                                dst: arr,
+                                obj: rreg,
+                                field: *buf_field,
+                                repr: Repr::Ref,
+                            },
+                            sp.lo,
+                        );
                         let live = self.new_reg(TY_I32);
-                        self.emit(Op::GetF { dst: live, obj: rreg, field: *len_field, repr: Repr::Prim(PrimTy::I32) }, sp.lo);
+                        self.emit(
+                            Op::GetF {
+                                dst: live,
+                                obj: rreg,
+                                field: *len_field,
+                                repr: Repr::Prim(PrimTy::I32),
+                            },
+                            sp.lo,
+                        );
                         let ft = self.compile_expr(args[0], Some(TY_I32))?;
                         if ft != TY_I32 {
                             self.ctx.err(sp, "slice(from, to) takes `i32` bounds");
@@ -369,10 +529,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let tr = self.last_reg;
                         let view = self.new_reg(arr_ty);
-                        { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: arr, argv_off, argc, dst: view }, sp.lo,); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::ArrSlice,
+                                    recv: arr,
+                                    argv_off,
+                                    argc,
+                                    dst: view,
+                                },
+                                sp.lo,
+                            );
+                        }
                         let ptr_ty = self.ctx.mk_opt(rt);
                         let dst = self.new_reg(ptr_ty);
-                        self.emit(Op::MakeOpt { dst, src: view, ty: ptr_ty }, sp.lo);
+                        self.emit(
+                            Op::MakeOpt {
+                                dst,
+                                src: view,
+                                ty: ptr_ty,
+                            },
+                            sp.lo,
+                        );
                         return Ok(ptr_ty);
                     }
                     SliceSource::Array => {
@@ -389,16 +568,48 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let tr = self.last_reg;
                         let live = self.new_reg(TY_I32);
-                        { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: rreg, argv_off, argc, dst: live }, sp.lo); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::ArrLen,
+                                    recv: rreg,
+                                    argv_off,
+                                    argc,
+                                    dst: live,
+                                },
+                                sp.lo,
+                            );
+                        }
                         let view = self.new_reg(rt);
-                        { let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live])); self.emit(Op::CallNat { nat: Nat::ArrSlice, recv: rreg, argv_off, argc, dst: view }, sp.lo,); }
+                        {
+                            let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live]));
+                            self.emit(
+                                Op::CallNat {
+                                    nat: Nat::ArrSlice,
+                                    recv: rreg,
+                                    argv_off,
+                                    argc,
+                                    dst: view,
+                                },
+                                sp.lo,
+                            );
+                        }
                         let ptr_ty = self.ctx.mk_opt(rt);
                         let dst = self.new_reg(ptr_ty);
-                        self.emit(Op::MakeOpt { dst, src: view, ty: ptr_ty }, sp.lo);
+                        self.emit(
+                            Op::MakeOpt {
+                                dst,
+                                src: view,
+                                ty: ptr_ty,
+                            },
+                            sp.lo,
+                        );
                         return Ok(ptr_ty);
                     }
                     _ => {
-                        self.ctx.err(sp, "`slice` on this sequence is not supported");
+                        self.ctx
+                            .err(sp, "`slice` on this sequence is not supported");
                         return Err(());
                     }
                 }
@@ -408,7 +619,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the engine's downcast static
         match self.ctx.types.kind(rt).clone() {
             TyKind::Opaque => {
-                self.ctx.err(sp, "`opaque` has no methods in this build —recover with `opaque::downcast<T>(o)`");
+                self.ctx.err(
+                    sp,
+                    "`opaque` has no methods in this build —recover with `opaque::downcast<T>(o)`",
+                );
                 return Err(());
             }
             _ => {}
@@ -461,14 +675,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, msg);
                     return Err(());
                 }
-                return self.compile_inherent_call(dname, class_args, rt, mnode, rreg, generics, args, expected, sp);
+                return self.compile_inherent_call(
+                    dname, class_args, rt, mnode, rreg, generics, args, expected, sp,
+                );
             }
             // a used class (the linkable-classes phase): the surface's
             // inherent rows answer — a plain class binds the exporter's
             // fn, a generic class mints the mirror instantiation the
             // owner's unit compiles
             if let Some((ih, midx, subst, dname)) = self.find_extern_inherent(rt, name) {
-                return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp);
+                return self.compile_extern_method_call(
+                    ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp,
+                );
             }
             // the carried-member law: a REQUESTER-CARRIED instantiation
             // (an owner-anchored mirror body over a consumer's type)
@@ -477,28 +695,56 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // with the real body
             if self.ctx.type_is_carried(rt) {
                 if let Some(ifaces) = self.subst.iter().find_map(|(n, t)| {
-                    if *t == rt { self.iface_bounds.get(n).cloned() } else { None }
+                    if *t == rt {
+                        self.iface_bounds.get(n).cloned()
+                    } else {
+                        None
+                    }
                 }) {
-                    let (ptys, ret_ty, decl_iface) = self.iface_member_shape(rt, &ifaces, name, sp)?;
+                    let (ptys, ret_ty, decl_iface) =
+                        self.iface_member_shape(rt, &ifaces, name, sp)?;
                     if args.len() != ptys.len() {
-                        self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                        self.ctx.err(
+                            sp,
+                            format!("call arity: {} args for {} params", args.len(), ptys.len()),
+                        );
                         return Err(());
                     }
                     let mut aregs = Vec::new();
                     for (i, a) in args.iter().enumerate() {
                         let t = self.compile_expr(*a, Some(ptys[i]))?;
                         if !self.widens_val(*a, t, ptys[i]) {
-                            self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                                "argument {} is `{}`, `{}` expected",
-                                i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                            ));
+                            self.ctx.err(
+                                self.ctx.ast.span(a.id()),
+                                format!(
+                                    "argument {} is `{}`, `{}` expected",
+                                    i + 1,
+                                    self.ctx.type_name(t),
+                                    self.ctx.type_name(ptys[i])
+                                ),
+                            );
                         }
                         aregs.push(self.last_reg);
                     }
                     let fid = self.mirror_carried(rt, decl_iface, name);
-                    let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+                    let dst = if ret_ty == TY_NIL {
+                        None
+                    } else {
+                        Some(self.new_reg(ret_ty))
+                    };
                     let _ = expected;
-                    { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+                    {
+                        let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs));
+                        self.emit(
+                            Op::CallM {
+                                func: fid,
+                                argv_off,
+                                argc,
+                                dst: opt_reg(dst),
+                            },
+                            sp.lo,
+                        );
+                    }
                     return Ok(ret_ty);
                 }
             }
@@ -509,7 +755,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // against the concrete argument's own surface)
             if self.ctx.is_template_param(rt) {
                 let ifaces = self.subst.iter().find_map(|(n, t)| {
-                    if *t == rt { self.iface_bounds.get(n).cloned() } else { None }
+                    if *t == rt {
+                        self.iface_bounds.get(n).cloned()
+                    } else {
+                        None
+                    }
                 });
                 let Some(ifaces) = ifaces else {
                     self.ctx.err(sp, format!(
@@ -520,24 +770,47 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 };
                 let (ptys, ret_ty, _) = self.iface_member_shape(rt, &ifaces, name, sp)?;
                 if args.len() != ptys.len() {
-                    self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), ptys.len()));
+                    self.ctx.err(
+                        sp,
+                        format!("call arity: {} args for {} params", args.len(), ptys.len()),
+                    );
                     return Err(());
                 }
                 let mut aregs = Vec::new();
                 for (i, a) in args.iter().enumerate() {
                     let t = self.compile_expr(*a, Some(ptys[i]))?;
                     if !self.widens_val(*a, t, ptys[i]) {
-                        self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                            "argument {} is `{}`, `{}` expected",
-                            i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                        ));
+                        self.ctx.err(
+                            self.ctx.ast.span(a.id()),
+                            format!(
+                                "argument {} is `{}`, `{}` expected",
+                                i + 1,
+                                self.ctx.type_name(t),
+                                self.ctx.type_name(ptys[i])
+                            ),
+                        );
                     }
                     aregs.push(self.last_reg);
                 }
                 let fid = self.ctx.mint_member_stub(rt, name, ptys, ret_ty, true);
-                let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+                let dst = if ret_ty == TY_NIL {
+                    None
+                } else {
+                    Some(self.new_reg(ret_ty))
+                };
                 let _ = expected;
-                { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+                {
+                    let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs));
+                    self.emit(
+                        Op::CallM {
+                            func: fid,
+                            argv_off,
+                            argc,
+                            dst: opt_reg(dst),
+                        },
+                        sp.lo,
+                    );
+                }
                 return Ok(ret_ty);
             }
             self.no_method_error(rt, name, sp);
@@ -557,11 +830,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.ctx.err(sp, msg);
                         return Err(());
                     }
-                    return self.compile_inherent_call(ename, vec![], rt, mnode, rreg, generics, args, expected, sp);
+                    return self.compile_inherent_call(
+                        ename,
+                        vec![],
+                        rt,
+                        mnode,
+                        rreg,
+                        generics,
+                        args,
+                        expected,
+                        sp,
+                    );
                 }
             }
             if let Some((ih, midx, subst, dname)) = self.find_extern_inherent(rt, name) {
-                return self.compile_extern_method_call(ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp);
+                return self.compile_extern_method_call(
+                    ih, midx, &subst, dname, rt, rreg, generics, args, expected, sp,
+                );
             }
             self.no_method_error(rt, name, sp);
             return Err(());
@@ -594,16 +879,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                         // a member call — the visibility
                                         // law rides it
                                         let mvis = self.ctx.ast.method_decl(node).vis;
-                                        if let Some(msg) = self.ctx.member_vis_err(data, node.id(), name, mvis) {
+                                        if let Some(msg) =
+                                            self.ctx.member_vis_err(data, node.id(), name, mvis)
+                                        {
                                             self.ctx.err(sp, msg);
                                             return Err(());
                                         }
-                                        let cargs = self.ctx.inst_data.get(&origin).cloned().map(|(_, a)| a).unwrap_or_default();
-                                        return self.compile_inherent_call(data, cargs, origin, node, rreg, generics, args, expected, sp);
+                                        let cargs = self
+                                            .ctx
+                                            .inst_data
+                                            .get(&origin)
+                                            .cloned()
+                                            .map(|(_, a)| a)
+                                            .unwrap_or_default();
+                                        return self.compile_inherent_call(
+                                            data, cargs, origin, node, rreg, generics, args,
+                                            expected, sp,
+                                        );
                                     }
                                     MemberSrc::Extern { .. } => {
-                                        if let Some((ih, emidx, subst, dname)) = self.find_extern_inherent(origin, name) {
-                                            return self.compile_extern_method_call(ih, emidx, &subst, dname, origin, rreg, generics, args, expected, sp);
+                                        if let Some((ih, emidx, subst, dname)) =
+                                            self.find_extern_inherent(origin, name)
+                                        {
+                                            return self.compile_extern_method_call(
+                                                ih, emidx, &subst, dname, origin, rreg, generics,
+                                                args, expected, sp,
+                                            );
                                         }
                                     }
                                 }
@@ -612,15 +913,35 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
                 let slot = self.ctx.iface_slot(iface_id, midx as u32).unwrap();
-                return self.finish_iface_call(slot, tdesc.methods[midx].params.clone(), tdesc.methods[midx].ret, rreg, args, expected, sp);
+                return self.finish_iface_call(
+                    slot,
+                    tdesc.methods[midx].params.clone(),
+                    tdesc.methods[midx].ret,
+                    rreg,
+                    args,
+                    expected,
+                    sp,
+                );
             }
-            self.ctx.err(sp, format!(
-                "`{}` values reach only `{}`'s methods —`{}` is not one of them",
-                self.ctx.name(tdesc.name), self.ctx.name(tdesc.name), self.ctx.name(name)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` values reach only `{}`'s methods —`{}` is not one of them",
+                    self.ctx.name(tdesc.name),
+                    self.ctx.name(tdesc.name),
+                    self.ctx.name(name)
+                ),
+            );
             return Err(());
         }
-        self.ctx.err(sp, format!("`{}` has no method `{}` in this build", self.ctx.type_name(rt), self.ctx.name(name)));
+        self.ctx.err(
+            sp,
+            format!(
+                "`{}` has no method `{}` in this build",
+                self.ctx.type_name(rt),
+                self.ctx.name(name)
+            ),
+        );
         Err(())
     }
 
@@ -629,9 +950,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// speak at their boundary (the instantiation's `admit_bounds`, the
     /// widening site's check) — this is the residue.
     pub(crate) fn no_method_error(&mut self, rt: TypeId, name: IdentId, sp: rut_lexer::span::Span) {
-        self.ctx.err(sp, format!("`{}` has no method `{}`", self.ctx.type_name(rt), self.ctx.name(name)));
+        self.ctx.err(
+            sp,
+            format!(
+                "`{}` has no method `{}`",
+                self.ctx.type_name(rt),
+                self.ctx.name(name)
+            ),
+        );
     }
-
 
     /// The used class whose inherent surface answers `name` on `rt`:
     /// `(row, method index, class substitution, decl name when
@@ -649,8 +976,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         for (i, ih) in self.ctx.extern_inherents.iter().enumerate() {
             let generic = dname.and_then(|d| self.ctx.extern_generics.get(&d));
-            let hit = ih.target == rt
-                || generic.map_or(false, |g| g.template == ih.target);
+            let hit = ih.target == rt || generic.map_or(false, |g| g.template == ih.target);
             if !hit {
                 continue;
             }
@@ -658,24 +984,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 continue;
             };
             let subst = generic
-                .map(|g| g.params.iter().cloned().zip(cargs.iter().cloned()).collect())
+                .map(|g| {
+                    g.params
+                        .iter()
+                        .cloned()
+                        .zip(cargs.iter().cloned())
+                        .collect()
+                })
                 .unwrap_or_default();
-            return Some((i, midx, subst, generic.map(|g| {
-                dname.expect("generic implies decl name")
-            })));
+            return Some((
+                i,
+                midx,
+                subst,
+                generic.map(|g| dname.expect("generic implies decl name")),
+            ));
         }
         None
     }
-
 }
 
 /// The receiver's source name for a diagnostic (`x` for `x.f()`, else
 /// `expr`) — used when a primitive method call is rejected.
 fn recv_name(ctx: &crate::check::Ctx, recv: NodeHandle<AnyExpr>) -> String {
     match ctx.ast.expr(recv) {
-        ExprKind::Path { segs } => {
-            segs.iter().map(|s| ctx.name(s.name).to_string()).collect::<Vec<_>>().join("::")
-        }
+        ExprKind::Path { segs } => segs
+            .iter()
+            .map(|s| ctx.name(s.name).to_string())
+            .collect::<Vec<_>>()
+            .join("::"),
         _ => "expr".to_string(),
     }
 }

@@ -277,12 +277,19 @@ mod tests {
 
     #[test]
     fn the_cross_package_walk_gates_pub_edges() {
-        let root = mod_index("gadgets", "", &[("layout", Vis::Pub), ("secret", Vis::Self_)]);
+        let root = mod_index(
+            "gadgets",
+            "",
+            &[("layout", Vis::Pub), ("secret", Vis::Self_)],
+        );
         let layout = mod_index("gadgets", "layout", &[("grid", Vis::Pub)]);
         let grid = mod_index("gadgets", "layout/grid", &[]);
         let idxs = [&root, &layout, &grid];
 
-        assert_eq!(walk_use_mods(&idxs, "gadgets", &["layout".into()]).as_deref(), Some("layout"));
+        assert_eq!(
+            walk_use_mods(&idxs, "gadgets", &["layout".into()]).as_deref(),
+            Some("layout")
+        );
         assert_eq!(
             walk_use_mods(&idxs, "gadgets", &["layout".into(), "grid".into()]).as_deref(),
             Some("layout/grid")
@@ -302,7 +309,10 @@ mod tests {
         let grid = mod_index("app", "layout/grid", &[("util", Vis::Self_)]);
         let util = mod_index("app", "layout/grid/util", &[]);
         let idxs = [&root, &layout, &grid, &util];
-        let mk = |p: &str| DocMods { mod_path: Some(p.into()), pkg: Some("app".into()) };
+        let mk = |p: &str| DocMods {
+            mod_path: Some(p.into()),
+            pkg: Some("app".into()),
+        };
 
         // from layout/grid: a sibling resolves through the parent scope
         let doc = mk("layout/grid");
@@ -311,7 +321,10 @@ mod tests {
             Some("layout/grid/util")
         );
         // the own-pkg head names the root
-        assert_eq!(resolve_position_head(&doc, &grid, &idxs, "app").as_deref(), Some(""));
+        assert_eq!(
+            resolve_position_head(&doc, &grid, &idxs, "app").as_deref(),
+            Some("")
+        );
         // from layout: its own child (read off the doc's own rows when
         // the doc index IS that module)
         let doc2 = mk("layout");
@@ -363,7 +376,10 @@ mod tests {
         assert!(!matches_mod(&stray, None, "layout"));
         stray.mod_path = Some("layout".into());
         assert!(matches_mod(&stray, None, "layout"));
-        assert!(!matches_mod(&stray, Some("gadgets"), "layout"), "unnamed never answers a named pkg");
+        assert!(
+            !matches_mod(&stray, Some("gadgets"), "layout"),
+            "unnamed never answers a named pkg"
+        );
         // mod_path None answers the root for a named index
         let flat = mod_index("pouch", "", &[]);
         assert!(matches_mod(&flat, Some("pouch"), ""));
@@ -387,7 +403,10 @@ mod tests {
         assert_eq!(display_of(&idxs, Some("gadgets"), "imp"), "imp.rut");
         // the dir-form child keeps the loader's spelling (its origin
         // basename is the flavor's `mod.rut`)
-        assert_eq!(display_of(&idxs, Some("gadgets"), "layout"), "layout/mod.rut");
+        assert_eq!(
+            display_of(&idxs, Some("gadgets"), "layout"),
+            "layout/mod.rut"
+        );
         // an unindexed child (or a non-file origin — `core`) falls back
         assert_eq!(display_of(&idxs, Some("gadgets"), "ghost"), "ghost/mod.rut");
         let mut core = mod_index("core", "prim", &[]);

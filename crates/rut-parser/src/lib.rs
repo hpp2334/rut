@@ -100,7 +100,9 @@ pub(crate) struct Parser {
 
 impl Parser {
     pub(crate) fn peek(&self, n: usize) -> &Token {
-        self.toks.get(self.pos + n).unwrap_or_else(|| self.toks.last().unwrap())
+        self.toks
+            .get(self.pos + n)
+            .unwrap_or_else(|| self.toks.last().unwrap())
     }
     pub(crate) fn tok(&self) -> &Tok {
         &self.peek(0).tok
@@ -164,7 +166,11 @@ impl Parser {
             Some(self.bump().span)
         } else {
             let found = self.peek(0).describe();
-            let want = Token { tok: tok.clone(), span: Span::new(0, 0) }.describe();
+            let want = Token {
+                tok: tok.clone(),
+                span: Span::new(0, 0),
+            }
+            .describe();
             let want = want.trim_matches('`').to_string();
             self.err_here(format!("expected {want}, found {found}"));
             None
@@ -259,16 +265,28 @@ impl Parser {
     pub(crate) fn field_decl(&mut self, d: FieldDeclData, span: Span) -> NodeHandle<FieldDeclNode> {
         NodeHandle::new(self.push_raw(Kind::Member(MemberKind::FieldDecl(d)), span))
     }
-    pub(crate) fn method_decl(&mut self, d: MethodDeclData, span: Span) -> NodeHandle<MethodDeclNode> {
+    pub(crate) fn method_decl(
+        &mut self,
+        d: MethodDeclData,
+        span: Span,
+    ) -> NodeHandle<MethodDeclNode> {
         NodeHandle::new(self.push_raw(Kind::Member(MemberKind::MethodDecl(d)), span))
     }
     pub(crate) fn fn_decl(&mut self, d: FnData, span: Span) -> NodeHandle<FnNode> {
         NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Fn(d)), span))
     }
-    pub(crate) fn module(&mut self, items: Vec<NodeHandle<AnyItem>>, span: Span) -> NodeHandle<ModuleNode> {
+    pub(crate) fn module(
+        &mut self,
+        items: Vec<NodeHandle<AnyItem>>,
+        span: Span,
+    ) -> NodeHandle<ModuleNode> {
         NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Module { items }), span))
     }
-    pub(crate) fn block(&mut self, stmts: Vec<NodeHandle<AnyStmt>>, span: Span) -> NodeHandle<BlockNode> {
+    pub(crate) fn block(
+        &mut self,
+        stmts: Vec<NodeHandle<AnyStmt>>,
+        span: Span,
+    ) -> NodeHandle<BlockNode> {
         self.block_with_tail(stmts, None, span)
     }
     /// a block with its tail expression (the `}`-closed last statement)
@@ -280,7 +298,13 @@ impl Parser {
     ) -> NodeHandle<BlockNode> {
         NodeHandle::new(self.push_raw(Kind::Expr(ExprKind::Block { stmts, tail }), span))
     }
-    pub(crate) fn if_stmt(&mut self, cond: NodeHandle<AnyExpr>, then: NodeHandle<BlockNode>, els: Option<ElseBranch>, span: Span) -> NodeHandle<IfNode> {
+    pub(crate) fn if_stmt(
+        &mut self,
+        cond: NodeHandle<AnyExpr>,
+        then: NodeHandle<BlockNode>,
+        els: Option<ElseBranch>,
+        span: Span,
+    ) -> NodeHandle<IfNode> {
         NodeHandle::new(self.push_raw(Kind::Stmt(StmtKind::If { cond, then, els }), span))
     }
 
@@ -451,10 +475,33 @@ impl Parser {
 /// `where` is gone (bounds are inline); `type` is the
 /// contextual alias introducer — an ordinary identifier elsewhere.
 pub const RESERVED_KW: &[&str] = &[
-    "let", "mut", "if", "else", "while", "for", "of", "return", "when",
-    "enum", "class", "struct", "interface", "impl", "requires", "use", "pub",
-    "static", "async", "await", "extern", "is", "host", "fn",
-    "true", "false", "nil",
+    "let",
+    "mut",
+    "if",
+    "else",
+    "while",
+    "for",
+    "of",
+    "return",
+    "when",
+    "enum",
+    "class",
+    "struct",
+    "interface",
+    "impl",
+    "requires",
+    "use",
+    "pub",
+    "static",
+    "async",
+    "await",
+    "extern",
+    "is",
+    "host",
+    "fn",
+    "true",
+    "false",
+    "nil",
 ];
 
 pub fn is_reserved_kw(s: &str) -> bool {
@@ -468,7 +515,8 @@ pub fn is_reserved_kw(s: &str) -> bool {
 /// the free `string_len`/`string_encode` host fns declared in core.
 /// `bytes` is the immutable binary primitive alongside `str`.
 pub const PRIMITIVE_TYS: &[&str] = &[
-    "bool", "str", "bytes", "nil", "f32", "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
+    "bool", "str", "bytes", "nil", "f32", "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32",
+    "u64",
 ];
 
 /// The primitive types — contextual type names, matched by

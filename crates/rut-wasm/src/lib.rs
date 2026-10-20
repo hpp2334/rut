@@ -81,8 +81,16 @@ fn base64(bytes: &[u8]) -> String {
         let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | b[2] as u32;
         out.push(T[(n >> 18) as usize & 63] as char);
         out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            T[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            T[n as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -115,10 +123,7 @@ unsafe fn read_str<'a>(ptr: *const u8, len: usize) -> &'a str {
 /// SAME declaration-driven mount core the FS lane runs (missing row ⇒
 /// the loud missing-child spelling). The embedded surfaces are flat
 /// today; a child is one map entry.
-fn mount_memory(
-    root: &str,
-    children: &[(&str, &str)],
-) -> BTreeMap<String, rut_driver::ModSource> {
+fn mount_memory(root: &str, children: &[(&str, &str)]) -> BTreeMap<String, rut_driver::ModSource> {
     let map: BTreeMap<String, String> = children
         .iter()
         .map(|(p, t)| (p.to_string(), t.to_string()))
@@ -140,14 +145,25 @@ fn mount_memory(
             None => Ok(rut_driver::ChildLookup::Missing),
         }
     };
-    rut_driver::mount_mod_children(root, "\u{0}wasm", rut_driver::Mode::Decl, "mod.d.rut", &mut read)
-        .expect("the embedded surface's mod tree mounts")
+    rut_driver::mount_mod_children(
+        root,
+        "\u{0}wasm",
+        rut_driver::Mode::Decl,
+        "mod.d.rut",
+        &mut read,
+    )
+    .expect("the embedded surface's mod tree mounts")
 }
 
 /// One embedded host surface as a pkg: the `.d.rut` text lowers with
 /// its (include_str!-fed) mod tree, under the registration scope the
 /// spec spells.
-fn host_surface(spec: &str, src: &str, origin: &str, children: &[(&str, &str)]) -> rut_driver::Mounted {
+fn host_surface(
+    spec: &str,
+    src: &str,
+    origin: &str,
+    children: &[(&str, &str)],
+) -> rut_driver::Mounted {
     let mods = mount_memory(src, children);
     rut_driver::lower_decl_module(src, &mods, origin)
         .expect("the embedded surface is valid")
@@ -165,12 +181,8 @@ macro_rules! std_pkg {
             include_str!(concat!("../../../rut/", $name, "/mod.rut")),
         )
         .manifest(
-            rut_driver::parse_manifest(include_str!(concat!(
-                "../../../rut/",
-                $name,
-                "/rut.jsonc"
-            )))
-            .expect(concat!("the std `", $name, "` manifest is valid")),
+            rut_driver::parse_manifest(include_str!(concat!("../../../rut/", $name, "/rut.jsonc")))
+                .expect(concat!("the std `", $name, "` manifest is valid")),
         )
     };
 }
@@ -264,7 +276,8 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     .manifest(calc_manifest);
     calc.namespace = calc.manifest.namespace.clone();
     if let rut_driver::MountedBody::Host { consts, .. } = &mut calc.body {
-        *consts = calc.manifest
+        *consts = calc
+            .manifest
             .consts
             .iter()
             .map(|(n, v)| (n.clone(), rut_core::types::TY_F64, v.to_bits()))
@@ -325,10 +338,16 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
                 .collect::<Vec<_>>(),
         ),
     };
-    let compiled = rut_driver::Walk { pkgs: lib_pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_driver::Mounted::source("main", src).manifest(main_manifest))
-        .entrypoint("main")
-        .compile();
+    let compiled = rut_driver::Walk {
+        pkgs: lib_pkgs,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .pkg(rut_driver::Mounted::source("main", src).manifest(main_manifest))
+    .entrypoint("main")
+    .compile();
     match compiled {
         Ok(c) => {
             let ir_dump = c
@@ -346,7 +365,10 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
             }
         }
         Err(e) => CompileOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             ast_json,
             ast_dump: String::new(),
             ir_dump: String::new(),
@@ -417,8 +439,7 @@ static OUTPUT: std::sync::Mutex<Option<Vec<String>>> = std::sync::Mutex::new(Non
 /// `rut_run` answer to it (the ctx is OWNED: the compile-time world is
 /// long gone by the time the page presses Run, and every run installs
 /// a fresh registry against it).
-static CTX: std::sync::Mutex<Option<rut_vm::interp::HostPkgContext>> =
-    std::sync::Mutex::new(None);
+static CTX: std::sync::Mutex<Option<rut_vm::interp::HostPkgContext>> = std::sync::Mutex::new(None);
 
 /// The one parked frame (survey D5). `rut_run` parks its `Vm` here when
 /// the guest traps OutOfFuel with a live frame — `rut_resume` adds fuel
@@ -465,7 +486,14 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
 /// here when it is a non-empty `str` (the empty err is success, and any
 /// other return shape is just data: no err). A soft-fail run reads
 /// `"trap": null, "err": "<why>"`.
-fn run_envelope(output: &[String], trap: Option<&str>, err: Option<&str>, fuel_used: u64, heap: u64, parked: bool) -> *mut u8 {
+fn run_envelope(
+    output: &[String],
+    trap: Option<&str>,
+    err: Option<&str>,
+    fuel_used: u64,
+    heap: u64,
+    parked: bool,
+) -> *mut u8 {
     let mut json = String::new();
     json.push_str("{\"output\":[");
     for (i, l) in output.iter().enumerate() {
@@ -532,7 +560,11 @@ pub extern "C" fn rut_run(
     *OUTPUT.lock().unwrap() = Some(Vec::new());
     let limits = rut_vm::interp::Limits {
         fuel: if fuel == 0 { None } else { Some(fuel) },
-        heap_limit_bytes: if heap_bytes == 0 { None } else { Some(heap_bytes) },
+        heap_limit_bytes: if heap_bytes == 0 {
+            None
+        } else {
+            Some(heap_bytes)
+        },
         interrupt_every: 1024,
     };
     // the playground host's bindings, BEFORE the Vm: the logger routes
@@ -543,13 +575,16 @@ pub extern "C" fn rut_run(
     // rest merge inert unless the program mounts their pkg
     let ctx = CTX.lock().unwrap().clone().unwrap_or_default();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|s| {
-        if let Ok(mut g) = OUTPUT.lock() {
-            if let Some(v) = g.as_mut() {
-                v.push(s.to_string());
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(|s| {
+            if let Ok(mut g) = OUTPUT.lock() {
+                if let Some(v) = g.as_mut() {
+                    v.push(s.to_string());
+                }
             }
-        }
-    }));
+        }),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     // the nmap experiment's native key table (survey D6) — a program
     // only reaches it when it declares `use nmap_host::{...}` or a pkg
@@ -613,16 +648,30 @@ pub extern "C" fn rut_run(
         unsafe { PARKED = Some(vm) };
     }
     let lines = OUTPUT.lock().unwrap().clone().unwrap_or_default();
-    run_envelope(&lines, trap.as_deref(), err.as_deref(), fuel_used, heap, parked)
+    run_envelope(
+        &lines,
+        trap.as_deref(),
+        err.as_deref(),
+        fuel_used,
+        heap,
+        parked,
+    )
 }
 
 /// demo utilities (base64 in/out keeps the ABI tiny)
 #[no_mangle]
-pub extern "C" fn rut_run_b64(bin_b64_ptr: *const u8, bin_b64_len: usize, fuel: u64, heap: u64) -> *mut u8 {
+pub extern "C" fn rut_run_b64(
+    bin_b64_ptr: *const u8,
+    bin_b64_len: usize,
+    fuel: u64,
+    heap: u64,
+) -> *mut u8 {
     let s = unsafe { read_str(bin_b64_ptr, bin_b64_len) };
     match base64_decode(s) {
         Some(b) => rut_run(b.as_ptr(), b.len(), fuel, heap),
-        None => envelope(b"{\"output\":[],\"trap\":\"bad base64\",\"err\":null,\"fuelUsed\":0,\"heapBytes\":0}"),
+        None => envelope(
+            b"{\"output\":[],\"trap\":\"bad base64\",\"err\":null,\"fuelUsed\":0,\"heapBytes\":0}",
+        ),
     }
 }
 
@@ -668,7 +717,14 @@ pub extern "C" fn rut_resume(extra_fuel: u64, _heap: u64) -> *mut u8 {
     }
     // the ACCUMULATED lines — run + every resume so far
     let lines = OUTPUT.lock().unwrap().clone().unwrap_or_default();
-    run_envelope(&lines, trap.as_deref(), err.as_deref(), fuel_used, heap, parked)
+    run_envelope(
+        &lines,
+        trap.as_deref(),
+        err.as_deref(),
+        fuel_used,
+        heap,
+        parked,
+    )
 }
 
 /// Retire the parked frame (a case switch must not inherit the previous
@@ -757,7 +813,9 @@ entry fn main() {
 
     fn field<'a>(json: &'a str, key: &str) -> &'a str {
         let needle = format!("\"{key}\":");
-        let at = json.find(&needle).unwrap_or_else(|| panic!("no {key} in {json}"));
+        let at = json
+            .find(&needle)
+            .unwrap_or_else(|| panic!("no {key} in {json}"));
         let rest = &json[at + needle.len()..];
         // array values (output) scan to their MATCHING bracket — a naive
         // cut at the first comma would split ["a","b"]
@@ -864,11 +922,17 @@ entry fn main() {
         };
         assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["net"]);
         assert_eq!(
-            host_funcs.iter().map(|r| r.full_name("tree_host")).collect::<Vec<_>>(),
+            host_funcs
+                .iter()
+                .map(|r| r.full_name("tree_host"))
+                .collect::<Vec<_>>(),
             vec!["tree_host::legacy_ping", "tree_host::net::probe"],
             "the root row stays flat, the tree row registers path-qualified"
         );
-        assert!(host_funcs[1].is_async, "the child's async row keeps its lane");
+        assert!(
+            host_funcs[1].is_async,
+            "the child's async row keeps its lane"
+        );
         // a declared child with no map entry is the loud missing-child
         // spelling, named for the wasm host's map lane
         let err = std::panic::catch_unwind(|| {
@@ -897,7 +961,10 @@ entry fn main() {
         };
         assert_eq!(pkg.mods.keys().collect::<Vec<_>>(), vec!["net"]);
         assert_eq!(
-            host_funcs.iter().map(|r| r.full_name("root_host")).collect::<Vec<_>>(),
+            host_funcs
+                .iter()
+                .map(|r| r.full_name("root_host"))
+                .collect::<Vec<_>>(),
             vec!["root_host::legacy_ping", "root_host::net::connect"],
         );
     }
@@ -947,11 +1014,7 @@ entry fn main() {
         unsafe { PARKED = None };
         let j = run_json(&compile_case(BOOK_JSON), 10_000_000, 4 * 1024 * 1024);
         assert_eq!(field(&j, "trap"), "null", "{j}");
-        assert_eq!(
-            field(&j, "output"),
-            "[\"n=42\",\"count: up to 42\"]",
-            "{j}"
-        );
+        assert_eq!(field(&j, "output"), "[\"n=42\",\"count: up to 42\"]", "{j}");
     }
 
     // the book's async block: launch + sleep must DRAIN like `rut run` —
@@ -1020,10 +1083,13 @@ entry fn main() {
         let out = compile_playground(HELLO, Some("{\"name\": \"main\", "));
         assert_eq!(out.diags.len(), 1, "{:?}", out.diags);
         assert_eq!(out.diags[0].span.lo, 0);
-        assert!(out.diags[0].msg.contains("does not parse"), "{:?}", out.diags[0].msg);
+        assert!(
+            out.diags[0].msg.contains("does not parse"),
+            "{:?}",
+            out.diags[0].msg
+        );
         assert!(out.binary.is_none());
     }
-
 
     // ---- the entry-err channel (err-channel phase 3): "err" beside
     // "trap". A (?T, err) main crosses under the ORIGINAL rule (the

@@ -207,7 +207,10 @@ mod tests {
             v["url"],
             "https://example.com/p.rutbundle // not a comment /* neither */"
         );
-        assert_eq!(v["prose"], "he said \"hi\" // and the quote kept the string open");
+        assert_eq!(
+            v["prose"],
+            "he said \"hi\" // and the quote kept the string open"
+        );
         assert_eq!(v["block"], "a/*b*/c");
     }
 

@@ -15,7 +15,7 @@ pub(crate) fn dump(args: &DumpArgs) {
         print!("{}", rut_lexer::diag::render_diags(&src, &out.diags));
         std::process::exit(1);
     }
-    println!("== AST =="); 
+    println!("== AST ==");
     print!("{}", out.ast_dump);
     println!("== IR ==");
     print!("{}", out.ir_dump);

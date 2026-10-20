@@ -40,9 +40,13 @@ use rut_vm::OpaqueRef;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -68,7 +72,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -86,8 +93,13 @@ fn run_main(src: &str) -> i32 {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
@@ -103,8 +115,13 @@ fn run_trap(src: &str) -> Option<String> {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     match vm.call::<_, i32>("main", ()) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -114,10 +131,7 @@ fn run_trap(src: &str) -> Option<String> {
 /// Compile only — the rendered diagnostics (negative pins).
 fn compile_diags(src: &str) -> Vec<String> {
     let out = compiled("app_main", src);
-    out.diags
-        .iter()
-        .map(|d| format!("{d:?}"))
-        .collect()
+    out.diags.iter().map(|d| format!("{d:?}")).collect()
 }
 
 /// The logged lane (the e2e harness shape): ink's Logger captures lines
@@ -128,8 +142,7 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let ink = rut_native::dir_pkgs(&root.join("rut/ink")).expect("mount ink (+rt)");
     let out = graph_of(
-        ink
-            .pkgs
+        ink.pkgs
             .iter()
             .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
             .pkg(
@@ -154,9 +167,12 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
-        sink.borrow_mut().push(msg.to_string());
-    }));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |msg| {
+            sink.borrow_mut().push(msg.to_string());
+        }),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten());
     let limits = rut_vm::interp::Limits {
@@ -164,7 +180,13 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     let trap = match vm.call::<_, ()>("main", ()) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -303,7 +325,6 @@ entry fn main() -> nil {
 
 // ---- immortals --------------------------------------------------------------
 
-
 #[test]
 fn weak_over_immortal_enum_member_upgrades_forever() {
     let src = r#"
@@ -405,7 +426,10 @@ entry fn main() -> i32 {
     return probe_o(w);
 }
 "#;
-    let mut chain = weak_host.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
+    let mut chain = weak_host
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
     let ctx = rut_driver::host_pkg_ctx(&weak_host.pkgs);
     chain = chain
         .pkg(
@@ -431,7 +455,13 @@ entry fn main() -> i32 {
         Ok(b.handle().clone())
     });
     hosts.verify_against(&ctx.flatten());
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build().expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     let r = vm.call::<_, i32>("main", ()).expect("run");
     assert_eq!(r, 42);
 }
@@ -492,7 +522,9 @@ entry fn main() -> i32 {
 "#,
     );
     assert!(
-        diags.iter().any(|d| d.contains("weak needs a reference type")),
+        diags
+            .iter()
+            .any(|d| d.contains("weak needs a reference type")),
         "{diags:?}"
     );
 }
@@ -512,7 +544,9 @@ entry fn main() -> i32 {
 "#,
     );
     assert!(
-        diags.iter().any(|d| d.contains("weak needs a reference type")),
+        diags
+            .iter()
+            .any(|d| d.contains("weak needs a reference type")),
         "{diags:?}"
     );
 }
@@ -577,7 +611,9 @@ entry fn main() -> i32 {
 "#,
     );
     assert!(
-        diags.iter().any(|d| d.contains("exactly one type parameter")),
+        diags
+            .iter()
+            .any(|d| d.contains("exactly one type parameter")),
         "{diags:?}"
     );
 }
@@ -669,7 +705,9 @@ entry fn main() -> i32 {{
     );
     let diags = compile_diags(&src);
     assert!(
-        diags.iter().any(|d| d.contains("its member is `upgrade()`")),
+        diags
+            .iter()
+            .any(|d| d.contains("its member is `upgrade()`")),
         "{diags:?}"
     );
 }
@@ -747,8 +785,13 @@ entry fn main() -> i32 {{
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 50);
     // every cell, box and opt box released; the weak lists are empty;
     // the budget is back where boot left it
@@ -778,8 +821,13 @@ entry fn main() -> i32 {{
         heap_limit_bytes: Some(1),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     let err = vm.call::<_, i32>("main", ()).expect_err("budget trip");
     assert_eq!(err.name(), "OutOfMemory", "{err:?}");
 }

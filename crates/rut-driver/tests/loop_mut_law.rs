@@ -19,9 +19,13 @@ fn world() -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
     for d in ["rut/ink"] {
         world.extend(
-            rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d))
-                .expect("mount case libs")
-                .pkgs,
+            rut_native::dir_pkgs(
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../..")
+                    .join(d),
+            )
+            .expect("mount case libs")
+            .pkgs,
         );
     }
     world
@@ -31,21 +35,26 @@ fn chain(src: &str) -> rut_driver::RutRun {
     // the logger use appended so the original spans stay put
     let combined = format!("{src}\nuse ink::{{Logger}};\n");
     let world = world();
-    world.iter().fold(
-        rut_driver::RutRun::new().pkg(
-            rut_driver::Mounted::source("test", &combined)
-                .manifest(rut_driver::Manifest::lib("test", &["ink"])),
-        ),
-        |r, p| r.pkg(p.clone()),
-    )
-    .entrypoint("test")
+    world
+        .iter()
+        .fold(
+            rut_driver::RutRun::new().pkg(
+                rut_driver::Mounted::source("test", &combined)
+                    .manifest(rut_driver::Manifest::lib("test", &["ink"])),
+            ),
+            |r, p| r.pkg(p.clone()),
+        )
+        .entrypoint("test")
 }
 
 fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -73,7 +82,10 @@ fn run_lines(src: &str) -> Vec<String> {
     let sink = lines.clone();
     let ctx = rut_driver::host_pkg_ctx(&world());
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())),
+    );
     hosts.verify_against(&ctx.flatten());
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
@@ -136,7 +148,9 @@ entry fn main() -> nil {
 "#,
     );
     assert!(
-        diags.iter().any(|d| d.contains("mut") && d.contains("binding")),
+        diags
+            .iter()
+            .any(|d| d.contains("mut") && d.contains("binding")),
         "want a mut-binding law diag for the captured plain loop var: {diags:?}"
     );
 }
@@ -414,12 +428,18 @@ entry fn main() -> nil {
 const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 
 fn async_pkgs(src: &str) -> Vec<rut_driver::Mounted> {
-    let ink_host = rut_driver::lower_decl_module(INK_HOST_DECL, &std::collections::BTreeMap::new(), "ink_host.d.rut")
-        .expect("the ink_host surface is valid")
-        .named("ink_host");
-    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
+    let ink_host = rut_driver::lower_decl_module(
+        INK_HOST_DECL,
+        &std::collections::BTreeMap::new(),
+        "ink_host.d.rut",
+    )
+    .expect("the ink_host surface is valid")
+    .named("ink_host");
+    let mut pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
     pkgs.push(ink_host);
     pkgs.push(
         rut_driver::Mounted::source("app", src)
@@ -431,11 +451,21 @@ fn async_pkgs(src: &str) -> Vec<rut_driver::Mounted> {
 fn async_setup(src: &str) -> (rut_vm::interp::Vm, Rc<RefCell<Vec<String>>>) {
     let pkgs = async_pkgs(src);
     let expected = rut_driver::declared_host_fns(&pkgs);
-    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let compiled = rut_driver::Walk {
+        pkgs: pkgs.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
@@ -443,7 +473,10 @@ fn async_setup(src: &str) -> (rut_vm::interp::Vm, Rc<RefCell<Vec<String>>>) {
     let sink2 = sink.clone();
     let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     hosts.verify_against(&expected);
     let limits = rut_vm::interp::Limits {
@@ -463,15 +496,21 @@ fn async_setup(src: &str) -> (rut_vm::interp::Vm, Rc<RefCell<Vec<String>>>) {
 
 fn async_diags_of(src: &str) -> Vec<String> {
     let pkgs = async_pkgs(src);
-    rut_driver::Walk { pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap()
-        .graph
-        .diags
-        .iter()
-        .map(|d| d.msg.clone())
-        .collect()
+    rut_driver::Walk {
+        pkgs,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap()
+    .graph
+    .diags
+    .iter()
+    .map(|d| d.msg.clone())
+    .collect()
 }
 
 /// The async driving loop: drain the ready queue, wake timers by
@@ -488,5 +527,8 @@ fn run_async_loop(vm: &mut rut_vm::interp::Vm, cap: usize) {
             }
         }
     }
-    panic!("the driving loop stalled: {} task(s) pending", vm.pending_tasks());
+    panic!(
+        "the driving loop stalled: {} task(s) pending",
+        vm.pending_tasks()
+    );
 }

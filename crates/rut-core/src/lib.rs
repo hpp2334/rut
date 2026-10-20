@@ -12,7 +12,7 @@ pub mod strip;
 pub mod sym;
 pub mod types;
 
-pub use id::{pack, scope_of, local_of, ScopeId, BOOT_SCOPE};
+pub use id::{local_of, pack, scope_of, ScopeId, BOOT_SCOPE};
 pub use link::{link, LinkError};
 pub use sym::{IdentId, Interner};
-pub use types::{PrimTy, RutType, TypeId, TypeTable, TyKind};
+pub use types::{PrimTy, RutType, TyKind, TypeId, TypeTable};

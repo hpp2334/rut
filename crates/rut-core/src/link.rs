@@ -32,7 +32,9 @@
 //! sanity pass after link is the `verify` stage (the load gate,
 //! `rut-vm`'s `verify`).
 
-use crate::binary::{ConstVal, FuncCode, InstFn, InstFnKind, InstTy, Program, IfaceDesc, IfaceMethod};
+use crate::binary::{
+    ConstVal, FuncCode, IfaceDesc, IfaceMethod, InstFn, InstFnKind, InstTy, Program,
+};
 use crate::ops::Op;
 use crate::sym::IdentId;
 use crate::types::{RutType, TyKind, TypeId, TypeTable};
@@ -103,10 +105,15 @@ fn walk_type_ids(prog: &Program, f: &mut impl FnMut(TypeId)) {
             | TyKind::DisposalContext
             | TyKind::Enum { .. }
             | TyKind::IfaceObj { .. } => {}
-            TyKind::Array { elem } | TyKind::Weak { elem } | TyKind::Opt { elem } | TyKind::Future { elem } => f(*elem),
-            TyKind::Data { fields } => for fl in fields {
-                f(fl.ty);
-            },
+            TyKind::Array { elem }
+            | TyKind::Weak { elem }
+            | TyKind::Opt { elem }
+            | TyKind::Future { elem } => f(*elem),
+            TyKind::Data { fields } => {
+                for fl in fields {
+                    f(fl.ty);
+                }
+            }
             TyKind::Fn { params, ret } => {
                 for p in params {
                     f(*p);
@@ -299,7 +306,10 @@ pub fn own_scope(prog: &Program) -> Option<crate::id::ScopeId> {
 /// ids and the blocks but not the bookkeeping — and a mount calls it
 /// once with the pack-time → load-time scope map. Dense (post-link)
 /// programs must not be rebased: their ids are not scope-qualified.
-pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id::ScopeId) -> Program {
+pub fn rebase(
+    mut prog: Program,
+    map: &impl Fn(crate::id::ScopeId) -> crate::id::ScopeId,
+) -> Program {
     // the own scope, read from the PACK-TIME blocks before any rewrite:
     // the block ids remap below, and the own scope must map exactly once
     let own_pack = own_scope(&prog);
@@ -364,16 +374,27 @@ pub fn rebase(mut prog: Program, map: &impl Fn(crate::id::ScopeId) -> crate::id:
     // encoded shape without changing a single id
     prog.types.scope_base.clear();
     for &(scope, off) in &s.scope_blocks {
-        let mapped = if scope == crate::id::BOOT_SCOPE { scope } else { map(scope) };
+        let mapped = if scope == crate::id::BOOT_SCOPE {
+            scope
+        } else {
+            map(scope)
+        };
         set_scope_base(&mut prog.types, mapped, off);
-    }// the surface's own block ids rewrite to the load-time scopes: a
-    // consumer registers the carried descriptors under THESE scopes and
-    // binds exports at `(its dep scope, local)` — the halves must agree
+    } // the surface's own block ids rewrite to the load-time scopes: a
+      // consumer registers the carried descriptors under THESE scopes and
+      // binds exports at `(its dep scope, local)` — the halves must agree
     let remapped: Vec<(crate::id::ScopeId, u32)> = s
         .scope_blocks
         .iter()
         .map(|&(scope, off)| {
-            (if scope == crate::id::BOOT_SCOPE { scope } else { map(scope) }, off)
+            (
+                if scope == crate::id::BOOT_SCOPE {
+                    scope
+                } else {
+                    map(scope)
+                },
+                off,
+            )
         })
         .collect();
     s.scope_blocks = remapped;
@@ -481,7 +502,8 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     // re-emits as a later module; its bodies claim the same keys).
     let is_stub_carrier = |m: &Program| -> bool {
         m.inst_fns.iter().any(|r| {
-            m.funcs.get(r.fid as usize)
+            m.funcs
+                .get(r.fid as usize)
                 .map_or(false, |f| f.code.is_empty() && f.host_id.is_none())
         })
     };
@@ -495,10 +517,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         disposal_impls: vec![None; boot],
         ..Default::default()
     };
-    out.name = modules
-        .first()
-        .map(|m| m.name.clone())
-        .unwrap_or_default();
+    out.name = modules.first().map(|m| m.name.clone()).unwrap_or_default();
 
     // ---- planning pass: the owner-anchored instantiation ledger ----
     //
@@ -536,7 +555,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         let mut staged: Vec<(crate::id::ScopeId, u32)> = Vec::new();
         for m in modules.iter() {
             let packed = m.types.packed;
-            let m_boot = if packed { m.types.boot_len } else { boot as u32 };
+            let m_boot = if packed {
+                m.types.boot_len
+            } else {
+                boot as u32
+            };
             let own_base = if packed {
                 m.types
                     .scope_base
@@ -611,7 +634,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     let mut plans: Vec<ModulePlan> = Vec::with_capacity(modules.len());
     let mut deferred_all: Vec<Vec<(String, u32)>> = Vec::with_capacity(modules.len());
     for m in modules.iter() {
-        let m_boot = if m.types.packed { m.types.boot_len } else { boot as u32 };
+        let m_boot = if m.types.packed {
+            m.types.boot_len
+        } else {
+            boot as u32
+        };
         let packed = m.types.packed;
         let own_base = if packed {
             m.types
@@ -710,14 +737,23 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         }
         for r in &m.inst_fns {
             let key = match &r.kind {
-                InstFnKind::Free { name, subst, origins } => format!(
+                InstFnKind::Free {
+                    name,
+                    subst,
+                    origins,
+                } => format!(
                     "{}#f#{}#({})#({})",
                     text(r.owner),
                     text(*name),
                     canonv(subst),
                     canonv(origins)
                 ),
-                InstFnKind::Method { data, name, subst, origins } => format!(
+                InstFnKind::Method {
+                    data,
+                    name,
+                    subst,
+                    origins,
+                } => format!(
                     "{}#m#{}${}#({})#({})",
                     text(r.owner),
                     text(*data),
@@ -729,7 +765,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                     format!("{}#h#{}", text(r.owner), text(*name))
                 }
             };
-            let bodyless = m.funcs.get(r.fid as usize).map(|f| f.code.is_empty()).unwrap_or(false);
+            let bodyless = m
+                .funcs
+                .get(r.fid as usize)
+                .map(|f| f.code.is_empty())
+                .unwrap_or(false);
             match claim_fn.get(&key) {
                 Some(&g) => {
                     plan.fn_redirect.insert(r.fid, g);
@@ -776,7 +816,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             let slot = plan.renumber.get(&fid).copied().unwrap_or(fid);
             claim_fn.insert(key, slot + func_off_plan);
         }
-        deferred_all.last_mut().expect("pushed").extend(deferred_claims);
+        deferred_all
+            .last_mut()
+            .expect("pushed")
+            .extend(deferred_claims);
         plan.appended = m.funcs.len() - plan.skip_fns.len();
         func_off_plan += plan.appended as u32;
         // a host-synth module carries an empty (non-packed) table — the
@@ -855,7 +898,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
 
         // where this module's OWN types land, and where its boot prefix ends
         let base = out.types.types.len() as u32;
-        let m_boot = if m.types.packed { m.types.boot_len } else { boot as u32 };
+        let m_boot = if m.types.packed {
+            m.types.boot_len
+        } else {
+            boot as u32
+        };
         let packed = m.types.packed;
         // used blocks carried in the table belong to their own scopes and
         // were appended by those modules — link only this module's own block
@@ -882,9 +929,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 out.interner.intern(n)
             });
         }
-        let nm = |id: IdentId| -> IdentId {
-            name_map.get(id.0 as usize).copied().unwrap_or(id)
-        };
+        let nm = |id: IdentId| -> IdentId { name_map.get(id.0 as usize).copied().unwrap_or(id) };
         // function ids: `0`-scoped are this module's own (dense); other
         // scopes name a used module's block. An instantiation fn that
         // lost the ledger claim redirects to the claiming copy.
@@ -901,15 +946,12 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 if let Some(&g) = final_fn_pos.get(&(scope, local)) {
                     return g;
                 }
-                let base = *final_func_base
-                    .get(&scope)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "link: no function base for scope {} (module {})",
-                            scope,
-                            m.name
-                        )
-                    });
+                let base = *final_func_base.get(&scope).unwrap_or_else(|| {
+                    panic!(
+                        "link: no function base for scope {} (module {})",
+                        scope, m.name
+                    )
+                });
                 base + local
             }
         };
@@ -1007,9 +1049,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         }
         // every compiler-emitted slot indexes its own table; the fallback
         // is unreachable for well-formed programs
-        let sm = |slot: u32| -> u32 {
-            slot_map.get(slot as usize).copied().unwrap_or(slot)
-        };
+        let sm = |slot: u32| -> u32 { slot_map.get(slot as usize).copied().unwrap_or(slot) };
 
         for t in m.types.types.iter().skip(own_base as usize) {
             out.types.types.push(RutType {
@@ -1081,7 +1121,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         // per-type disposal rows: `(target type, dispose func id)` — the
         // same remap the vtable loop applies, func ids rebased like every
         // other func ref; mirrored instantiation rows land on the claim.
-        for (i, fid) in std::mem::take(&mut m.disposal_impls).into_iter().enumerate() {
+        for (i, fid) in std::mem::take(&mut m.disposal_impls)
+            .into_iter()
+            .enumerate()
+        {
             let Some(fid) = fid else { continue };
             let gi = plan
                 .ty_redirect_dense
@@ -1144,7 +1187,10 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             // the template window's rows (v22) die here too: their
             // arguments spell `#<param>` placeholder rows — inert keys
             // that would otherwise ride the merged ledger
-            if m.templates.iter().any(|t| t.param_rows.contains(&r.args.first().copied().unwrap_or(u32::MAX))) {
+            if m.templates.iter().any(|t| {
+                t.param_rows
+                    .contains(&r.args.first().copied().unwrap_or(u32::MAX))
+            }) {
                 continue;
             }
             out_types_ledger.push(InstTy {
@@ -1165,12 +1211,21 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 continue;
             }
             let kind = match r.kind {
-                InstFnKind::Free { name, subst, origins } => InstFnKind::Free {
+                InstFnKind::Free {
+                    name,
+                    subst,
+                    origins,
+                } => InstFnKind::Free {
                     name: nm(name),
                     subst: subst.iter().map(|&t| map(t)).collect(),
                     origins: origins.iter().map(|&t| map(t)).collect(),
                 },
-                InstFnKind::Method { data, name, subst, origins } => InstFnKind::Method {
+                InstFnKind::Method {
+                    data,
+                    name,
+                    subst,
+                    origins,
+                } => InstFnKind::Method {
                     data: nm(data),
                     name: nm(name),
                     subst: subst.iter().map(|&t| map(t)).collect(),
@@ -1178,7 +1233,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
                 },
                 InstFnKind::HostThunk { name } => InstFnKind::HostThunk { name: nm(name) },
             };
-            out_fns_ledger.push(InstFn { owner: nm(r.owner), kind, fid: map_func(r.fid) });
+            out_fns_ledger.push(InstFn {
+                owner: nm(r.owner),
+                kind,
+                fid: map_func(r.fid),
+            });
         }
 
         // exports: function ids
@@ -1220,10 +1279,7 @@ fn remap_kind(
         // per-instantiation generic (`Weak<T>`)
         TyKind::Future { elem } => TyKind::Future { elem: map(*elem) },
         TyKind::Enum { members } => TyKind::Enum {
-            members: members
-                .iter()
-                .map(|(n, v)| (nm(*n), *v))
-                .collect(),
+            members: members.iter().map(|(n, v)| (nm(*n), *v)).collect(),
         },
         TyKind::Data { fields } => TyKind::Data {
             fields: fields
@@ -1234,7 +1290,9 @@ fn remap_kind(
                 })
                 .collect(),
         },
-        TyKind::IfaceObj { iface_id } => TyKind::IfaceObj { iface_id: tm(*iface_id) },
+        TyKind::IfaceObj { iface_id } => TyKind::IfaceObj {
+            iface_id: tm(*iface_id),
+        },
         TyKind::Fn { params, ret } => TyKind::Fn {
             params: params.iter().map(|&p| map(p)).collect(),
             ret: map(*ret),
@@ -1259,33 +1317,128 @@ fn remap_op(
     const_off: u32,
 ) -> Op {
     match op {
-        Op::Const { dst, k } => Op::Const { dst, k: k + const_off },
+        Op::Const { dst, k } => Op::Const {
+            dst,
+            k: k + const_off,
+        },
         Op::NewCell { dst, ty } => Op::NewCell { dst, ty: map(ty) },
-        Op::MakeRecord { dst, ty, argv_off, argc } => Op::MakeRecord { dst, ty: map(ty), argv_off, argc },
-        Op::Own { dst, src, ty } => Op::Own { dst, src, ty: map(ty) },
-        Op::MakeOpt { dst, src, ty } => Op::MakeOpt { dst, src, ty: map(ty) },
-        Op::WeakNew { dst, src, ty } => Op::WeakNew { dst, src, ty: map(ty) },
-        Op::WeakUpgrade { recv, dst, ty } => Op::WeakUpgrade { recv, dst, ty: map(ty) },
-        Op::ArrNew { dst, ty, len, repr } => Op::ArrNew { dst, ty: map(ty), len, repr },
-        Op::ArrLit { dst, ty, argv_off, argc } => Op::ArrLit { dst, ty: map(ty), argv_off, argc },
-        Op::EnumNew { dst, ty, member } => Op::EnumNew { dst, ty: map(ty), member },
-        Op::IsType { dst, obj, want } => Op::IsType { dst, obj, want: map(want) },
-        Op::Unbox { dst, box_, ty } => Op::Unbox { dst, box_, ty: map(ty) },
-        Op::Box { dst, val, ty } => Op::Box { dst, val, ty: map(ty) },
-        Op::Call { func, argv_off, argc, dst } => Op::Call { func: map_func(func), argv_off, argc, dst },
-        Op::CallM { func, argv_off, argc, dst } => {
-            Op::CallM { func: map_func(func), argv_off, argc, dst }
-        }
-        Op::CallI { slot, argv_off, argc, dst } => {
-            Op::CallI { slot: sm(slot), argv_off, argc, dst }
-        }
-        Op::MakeClosure { dst, func, argv_off, argc } => Op::MakeClosure {
+        Op::MakeRecord {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } => Op::MakeRecord {
+            dst,
+            ty: map(ty),
+            argv_off,
+            argc,
+        },
+        Op::Own { dst, src, ty } => Op::Own {
+            dst,
+            src,
+            ty: map(ty),
+        },
+        Op::MakeOpt { dst, src, ty } => Op::MakeOpt {
+            dst,
+            src,
+            ty: map(ty),
+        },
+        Op::WeakNew { dst, src, ty } => Op::WeakNew {
+            dst,
+            src,
+            ty: map(ty),
+        },
+        Op::WeakUpgrade { recv, dst, ty } => Op::WeakUpgrade {
+            recv,
+            dst,
+            ty: map(ty),
+        },
+        Op::ArrNew { dst, ty, len, repr } => Op::ArrNew {
+            dst,
+            ty: map(ty),
+            len,
+            repr,
+        },
+        Op::ArrLit {
+            dst,
+            ty,
+            argv_off,
+            argc,
+        } => Op::ArrLit {
+            dst,
+            ty: map(ty),
+            argv_off,
+            argc,
+        },
+        Op::EnumNew { dst, ty, member } => Op::EnumNew {
+            dst,
+            ty: map(ty),
+            member,
+        },
+        Op::IsType { dst, obj, want } => Op::IsType {
+            dst,
+            obj,
+            want: map(want),
+        },
+        Op::Unbox { dst, box_, ty } => Op::Unbox {
+            dst,
+            box_,
+            ty: map(ty),
+        },
+        Op::Box { dst, val, ty } => Op::Box {
+            dst,
+            val,
+            ty: map(ty),
+        },
+        Op::Call {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } => Op::Call {
+            func: map_func(func),
+            argv_off,
+            argc,
+            dst,
+        },
+        Op::CallM {
+            func,
+            argv_off,
+            argc,
+            dst,
+        } => Op::CallM {
+            func: map_func(func),
+            argv_off,
+            argc,
+            dst,
+        },
+        Op::CallI {
+            slot,
+            argv_off,
+            argc,
+            dst,
+        } => Op::CallI {
+            slot: sm(slot),
+            argv_off,
+            argc,
+            dst,
+        },
+        Op::MakeClosure {
+            dst,
+            func,
+            argv_off,
+            argc,
+        } => Op::MakeClosure {
             dst,
             func: map_func(func),
             argv_off,
             argc,
         },
-        Op::IsIface { dst, obj, want } => Op::IsIface { dst, obj, want: tm(want) },
+        Op::IsIface { dst, obj, want } => Op::IsIface {
+            dst,
+            obj,
+            want: tm(want),
+        },
         other => other,
     }
 }
@@ -1307,7 +1460,10 @@ mod tests {
             p.types.types.push(RutType {
                 name: point,
                 kind: TyKind::Data {
-                    fields: vec![FieldInfo { name: x, ty: TY_I32 }],
+                    fields: vec![FieldInfo {
+                        name: x,
+                        ty: TY_I32,
+                    }],
                 },
             });
             let pid = (p.types.types.len() - 1) as u32;
@@ -1380,7 +1536,11 @@ mod tests {
         let area = p.interner.intern("area");
         p.ifaces.push(IfaceDesc {
             name: shape,
-            methods: vec![IfaceMethod { name: area, params: vec![], ret: TY_I32 }],
+            methods: vec![IfaceMethod {
+                name: area,
+                params: vec![],
+                ret: TY_I32,
+            }],
         });
         p.iface_slots.push((0, 0));
         let main = p.interner.intern("main");
@@ -1394,8 +1554,17 @@ mod tests {
             argv: vec![],
             labels: vec![],
             code: vec![
-                Op::CallI { slot: 0, argv_off: 0, argc: 0, dst: 0 },
-                Op::IsIface { dst: 0, obj: 0, want: 0 },
+                Op::CallI {
+                    slot: 0,
+                    argv_off: 0,
+                    argc: 0,
+                    dst: 0,
+                },
+                Op::IsIface {
+                    dst: 0,
+                    obj: 0,
+                    want: 0,
+                },
                 Op::Ret { val: Some(0) },
             ],
             spans: vec![],
@@ -1426,7 +1595,6 @@ mod tests {
             );
         }
     }
-
 }
 // (the duplicate-(trait, type)-impl link error died with the impl
 // registrations — satisfaction is structural, nothing registers)

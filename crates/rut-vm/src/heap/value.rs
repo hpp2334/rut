@@ -103,7 +103,9 @@ impl Slot {
         unsafe { self.f }
     }
     pub fn null() -> Slot {
-        Slot { r: std::ptr::null() }
+        Slot {
+            r: std::ptr::null(),
+        }
     }
     /// SAFETY: caller guarantees the slot is a ref slot (verifier-checked).
     pub unsafe fn get_ref(&self) -> Option<*const CellVal> {

@@ -15,12 +15,16 @@ use std::rc::Rc;
 use rut_core::binary::Surface;
 use rut_parser::Mode;
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -46,7 +50,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -59,7 +66,10 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
+        &[
+            (2, Surface::core(), "core".to_string()),
+            (3, collection, "collection".to_string()),
+        ],
     )
 }
 
@@ -75,8 +85,13 @@ fn run_main(src: &str) -> i64 {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i64>("main", ()).expect("run")
 }
 
@@ -99,7 +114,10 @@ fn main_ir(src: &str) -> String {
     let dump = ir_dump(src);
     let start = dump.find("fn #0 ").expect("fn #0 (main) in the dump");
     let rest = &dump[start..];
-    let end = rest[1..].find("\nfn #").map(|i| i + 1).unwrap_or(rest.len());
+    let end = rest[1..]
+        .find("\nfn #")
+        .map(|i| i + 1)
+        .unwrap_or(rest.len());
     rest[..end].to_string()
 }
 
@@ -202,7 +220,10 @@ fn ref_component_pair_elides_to_one_retain_per_read() {
         !dump.contains("makerecord"),
         "the (i64, str) pairs must not mint — the str handoff is a movref:\n{dump}"
     );
-    assert!(dump.contains("movref"), "str components cross as refs:\n{dump}");
+    assert!(
+        dump.contains("movref"),
+        "str components cross as refs:\n{dump}"
+    );
     assert_eq!(run_main(src), 7 + (0 - 4) + 3 + 3);
 }
 

@@ -23,7 +23,10 @@ pub struct Trap {
 
 impl Trap {
     pub fn new(kind: TrapKind, msg: impl Into<String>) -> Trap {
-        Trap { kind, msg: msg.into() }
+        Trap {
+            kind,
+            msg: msg.into(),
+        }
     }
     pub fn name(&self) -> String {
         match self.kind {

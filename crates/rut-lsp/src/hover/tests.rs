@@ -188,7 +188,9 @@ fn ambiguity_lists_candidates() {
     doc.origin = "main.rut".to_string();
     let idxs = [&doc, &a, &b];
     let pos = find_ident_pos(&toks, "helper", 0).unwrap();
-    let md = hover(&idxs, &toks, &ast, &crate::mods::DocMods::default(), pos).unwrap().markdown;
+    let md = hover(&idxs, &toks, &ast, &crate::mods::DocMods::default(), pos)
+        .unwrap()
+        .markdown;
     assert!(md.contains("multiple definitions"), "{md}");
     assert!(md.contains("a.rut") && md.contains("b.rut"), "{md}");
 }
@@ -302,7 +304,10 @@ fn foreign_interface_member_requires_use() {
     };
 
     let gated = "fn go(g: Greeter) -> nil { g.greet(); }\n";
-    assert!(mk(gated).is_none(), "unused foreign interface must not resolve");
+    assert!(
+        mk(gated).is_none(),
+        "unused foreign interface must not resolve"
+    );
 
     let used = "use greets::{ Greeter };\nfn go(g: Greeter) -> nil { g.greet(); }\n";
     let md = mk(used).unwrap();
@@ -647,7 +652,14 @@ fn binding_decl_span_is_byte_exact() {
     assert_eq!(total.decl_ident_span, decl_span);
     // the hover decorates exactly the token under the cursor
     let use_pos = src2.rfind("total").unwrap() as u32;
-    let out = hover(&idxs, &toks, &ast, &crate::mods::DocMods::default(), use_pos).unwrap();
+    let out = hover(
+        &idxs,
+        &toks,
+        &ast,
+        &crate::mods::DocMods::default(),
+        use_pos,
+    )
+    .unwrap();
     let use_span = toks
         .iter()
         .filter(|t| matches!(&t.tok, Tok::Ident(s) if s == "total"))
@@ -695,7 +707,9 @@ fn surface_primitives_keep_their_rich_hover() {
     let di = index(&d2, &ast, &toks);
     let idxs = [&di, &core];
     let pos = find_ident_pos(&toks, "str", 0).unwrap();
-    let md = hover(&idxs, &toks, &ast, &crate::mods::DocMods::default(), pos).unwrap().markdown;
+    let md = hover(&idxs, &toks, &ast, &crate::mods::DocMods::default(), pos)
+        .unwrap()
+        .markdown;
     assert!(md.contains("primitive str {"), "{md}");
 }
 
@@ -756,9 +770,21 @@ fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
     let (ast, _) = rut_parser::parse(&doc2, rut_parser::Mode::Impl);
     let idx = index(&doc2, &ast, &toks);
     let dep = vec![
-        dep_index("gadgets", "", "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n"),
-        dep_index("gadgets", "layout", "pub mod grid;\npub struct Column {\n    w: i32;\n}\n"),
-        dep_index("gadgets", "layout/grid", "pub struct Cell {\n    x: i32;\n}\n"),
+        dep_index(
+            "gadgets",
+            "",
+            "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n",
+        ),
+        dep_index(
+            "gadgets",
+            "layout",
+            "pub mod grid;\npub struct Column {\n    w: i32;\n}\n",
+        ),
+        dep_index(
+            "gadgets",
+            "layout/grid",
+            "pub struct Cell {\n    x: i32;\n}\n",
+        ),
         dep_index("gadgets", "secret", "pub fn open() -> i32 { return 1; }\n"),
     ];
     let mut idxs: Vec<&DefIndex> = vec![&idx];
@@ -805,10 +831,16 @@ fn use_segment_hover_resolves_through_the_dep_tree() {
     // the pkg head resolves the dep's root module
     let md = hover_over_dep(doc, "gadgets", 0).unwrap();
     assert!(md.contains("mod.rut") && md.contains("file module"), "{md}");
-    assert!(md.contains("2 child modules"), "the root mounts layout + secret: {md}");
+    assert!(
+        md.contains("2 child modules"),
+        "the root mounts layout + secret: {md}"
+    );
     // a use the chain cannot walk: no hover, never wrong text
     let doc2 = "use gadgets::secret::open;\nentry fn main() -> nil { }\n";
-    assert!(hover_over_dep(doc2, "secret", 0).is_none(), "a non-pub edge resolves to no hover");
+    assert!(
+        hover_over_dep(doc2, "secret", 0).is_none(),
+        "a non-pub edge resolves to no hover"
+    );
 }
 
 #[test]
@@ -832,8 +864,14 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     let idx = index(&s, &ast, &toks);
     // the surface decl span starts at `fn` (`pub` rides before it) — the
     // old slice was `host fn abs(x: f64) -> f64;\npub`
-    assert_eq!(idx.fns[0].src, "host fn abs(x: f64) -> f64", "no `;pub` artifact");
-    assert_eq!(idx.fns[1].src, "host fn ceil(x: f64) -> f64", "each row cuts at its own `;`");
+    assert_eq!(
+        idx.fns[0].src, "host fn abs(x: f64) -> f64",
+        "no `;pub` artifact"
+    );
+    assert_eq!(
+        idx.fns[1].src, "host fn ceil(x: f64) -> f64",
+        "each row cuts at its own `;`"
+    );
 }
 
 #[test]
@@ -850,8 +888,9 @@ fn host_fn_hover_via_the_calc_surface_has_no_next_decl_artifact() {
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.find("abs(").unwrap() as u32;
-    let md = hover(&chain, &toks, &ast, &crate::mods::DocMods::default(), pos).expect("abs hovers through the calc surface").markdown;
+    let md = hover(&chain, &toks, &ast, &crate::mods::DocMods::default(), pos)
+        .expect("abs hovers through the calc surface")
+        .markdown;
     assert!(md.contains("host fn abs(x: f64) -> f64"), "{md}");
     assert!(!md.contains(";pub"), "the next-decl artifact leaked: {md}");
 }
-

@@ -47,13 +47,20 @@ fn shorthand_desugars_to_a_single_seg_path() {
     // span is exactly the field-name token
     assert_eq!(ast.name(fs[0].0), "id");
     let ExprKind::Path { segs } = ast.expr(fs[0].1) else {
-        panic!("the shorthand must desugar to a path, got {:?}", ast.expr(fs[0].1));
+        panic!(
+            "the shorthand must desugar to a path, got {:?}",
+            ast.expr(fs[0].1)
+        );
     };
     assert_eq!(segs.len(), 1);
     assert_eq!(ast.name(segs[0].name), "id");
     assert!(segs[0].generics.is_empty());
     let sp = ast.span(fs[0].1.id());
-    assert_eq!(&src[sp.lo as usize..sp.hi as usize], "id", "the value's span is the name token");
+    assert_eq!(
+        &src[sp.lo as usize..sp.hi as usize],
+        "id",
+        "the value's span is the name token"
+    );
     // the spelled fields are untouched
     assert_eq!(ast.name(fs[1].0), "title");
     assert!(matches!(ast.expr(fs[1].1), ExprKind::Lit(Lit::Str(_))));

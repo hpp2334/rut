@@ -22,13 +22,22 @@ fn host_fn_parses() {
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 2);
-    let ItemKind::SurfaceFn { name, params, linkage, .. } = ast.item(items[0]) else {
+    let ItemKind::SurfaceFn {
+        name,
+        params,
+        linkage,
+        ..
+    } = ast.item(items[0])
+    else {
         panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
     };
     assert_eq!(*linkage, Linkage::Host);
     assert_eq!(ast.name(*name), "string_len");
     assert_eq!(params.len(), 1);
-    let ItemKind::SurfaceFn { linkage, generics, .. } = ast.item(items[1]) else {
+    let ItemKind::SurfaceFn {
+        linkage, generics, ..
+    } = ast.item(items[1])
+    else {
         panic!("expected a SurfaceFn item, got {:?}", ast.item(items[1]));
     };
     assert!(
@@ -59,28 +68,45 @@ pub host fn legacy_ping() -> bool;
     };
     assert_eq!(edge(0), (Vis::Pub, "net".to_string()));
     assert_eq!(edge(1), (Vis::Self_, "helper".to_string()));
-    let ItemKind::SurfaceFn { vis, linkage, name, .. } = ast.item(items[2]) else {
+    let ItemKind::SurfaceFn {
+        vis, linkage, name, ..
+    } = ast.item(items[2])
+    else {
         panic!("expected a SurfaceFn after the edges");
     };
-    assert_eq!(*vis, Vis::Pub, "`pub host fn` keeps its pub beside mod edges");
+    assert_eq!(
+        *vis,
+        Vis::Pub,
+        "`pub host fn` keeps its pub beside mod edges"
+    );
     assert_eq!(*linkage, Linkage::Host);
     assert_eq!(ast.name(*name), "legacy_ping");
 }
-
 
 #[test]
 fn builtin_trait_spelling_is_removed() {
     let src = "prelude builtin trait Index<T> {\n    fn len(self) -> i32;\n}\n";
     let (ast, diags) = parse(src, Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`builtin trait` is removed")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`builtin trait` is removed")),
         "the removed spelling must be diagnosed: {diags:?}"
     );
     // recovery: the members still parse (as a class)
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTy { name, generics, members, .. } = ast.item(items[0]) else {
-        panic!("expected the recovered BuiltinTy item, got {:?}", ast.item(items[0]));
+    let ItemKind::BuiltinTy {
+        name,
+        generics,
+        members,
+        ..
+    } = ast.item(items[0])
+    else {
+        panic!(
+            "expected the recovered BuiltinTy item, got {:?}",
+            ast.item(items[0])
+        );
     };
     assert_eq!(ast.name(*name), "Index");
     assert_eq!(generics.len(), 1);
@@ -100,7 +126,13 @@ fn builtin_ty_parses() {
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTy { name, generics, members, .. } = ast.item(items[0]) else {
+    let ItemKind::BuiltinTy {
+        name,
+        generics,
+        members,
+        ..
+    } = ast.item(items[0])
+    else {
         panic!("expected a BuiltinTy item, got {:?}", ast.item(items[0]));
     };
     assert_eq!(ast.name(*name), "Option");
@@ -113,7 +145,10 @@ fn builtin_requires_a_kind_word() {
     // builtin decls spell their kind — `prelude builtin primitive` /
     // `prelude builtin class` / `prelude builtin trait`; a
     // bare `builtin Name { .. }` is diagnosed
-    let (_, diags) = parse("prelude builtin Option<T> { fn some(v: T) -> Self; }", Mode::Decl);
+    let (_, diags) = parse(
+        "prelude builtin Option<T> { fn some(v: T) -> Self; }",
+        Mode::Decl,
+    );
     assert!(
         diags.iter().any(|d| d.msg.contains("spells its kind")),
         "a kind-less `builtin` decl must be diagnosed: {diags:?}"
@@ -125,7 +160,10 @@ fn zero_member_builtin_bodies_parse() {
     // an empty member contract is legal — e.g. a marker trait or a type
     // whose members are entirely compiler-lowered and invisible
     let (ast, diags) = parse("prelude builtin class Mark<T> { }", Mode::Decl);
-    assert!(diags.is_empty(), "zero-member builtin class must parse clean: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "zero-member builtin class must parse clean: {diags:?}"
+    );
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
     let ItemKind::BuiltinTy { members, .. } = ast.item(items[0]) else {
@@ -135,13 +173,18 @@ fn zero_member_builtin_bodies_parse() {
 
     let (ast, diags) = parse("prelude builtin trait Mark { }", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`builtin trait` is removed")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`builtin trait` is removed")),
         "the removed spelling must be diagnosed: {diags:?}"
     );
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
     let ItemKind::BuiltinTy { members, .. } = ast.item(items[0]) else {
-        panic!("expected the recovered BuiltinTy item, got {:?}", ast.item(items[0]));
+        panic!(
+            "expected the recovered BuiltinTy item, got {:?}",
+            ast.item(items[0])
+        );
     };
     assert!(members.is_empty());
 }
@@ -161,7 +204,10 @@ fn host_struct_parses() {
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
     let ItemKind::SurfaceStruct { name, fields, .. } = ast.item(items[0]) else {
-        panic!("expected a SurfaceStruct item, got {:?}", ast.item(items[0]));
+        panic!(
+            "expected a SurfaceStruct item, got {:?}",
+            ast.item(items[0])
+        );
     };
     assert_eq!(ast.name(*name), "Location");
     assert_eq!(fields.len(), 3);
@@ -187,7 +233,10 @@ fn host_struct_members_are_fields_only() {
 fn host_fn_generics_are_rejected() {
     // host fn signatures are concrete — a generic parameter
     // has no shape the boundary could check
-    let (_, diags) = parse("pub host fn downcast<T>(o: opaque) -> Option<T>;", Mode::Decl);
+    let (_, diags) = parse(
+        "pub host fn downcast<T>(o: opaque) -> Option<T>;",
+        Mode::Decl,
+    );
     assert!(
         diags.iter().any(|d| d.msg.contains("concrete")),
         "generic host fn must be diagnosed: {diags:?}"
@@ -207,7 +256,14 @@ fn host_async_fn_parses() {
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 2);
-    let ItemKind::SurfaceFn { linkage, is_async, name, params, ret, .. } = ast.item(items[0])
+    let ItemKind::SurfaceFn {
+        linkage,
+        is_async,
+        name,
+        params,
+        ret,
+        ..
+    } = ast.item(items[0])
     else {
         panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
     };
@@ -229,7 +285,9 @@ fn host_async_fn_generics_are_rejected_with_the_same_words() {
     // generic refusal is the same diagnostic
     let (_, diags) = parse("pub host async fn fetch<T>(u: T) -> T;", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("concrete") && d.msg.contains("generic parameters")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("concrete") && d.msg.contains("generic parameters")),
         "generic async host fn must be diagnosed: {diags:?}"
     );
 }
@@ -258,7 +316,6 @@ fn host_async_fn_terminates_on_malformed() {
     }
 }
 
-
 #[test]
 fn builtin_impl_decl() {
     // `builtin impl <prim> { .. }` — the integer
@@ -270,7 +327,10 @@ fn builtin_impl_decl() {
                \x20   fn checked_add(self, y: i32) -> (i32, bool);\n\
                }";
     let (ast, diags) = parse(src, Mode::Decl);
-    assert!(diags.is_empty(), "builtin impl must parse cleanly: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "builtin impl must parse cleanly: {diags:?}"
+    );
     let items = ast.module_items(ast.root).to_vec();
     let ItemKind::BuiltinImpl { prim, methods, .. } = ast.item(items[0]) else {
         panic!("expected a BuiltinImpl item, got {:?}", ast.item(items[0]));
@@ -278,7 +338,10 @@ fn builtin_impl_decl() {
     assert_eq!(ast.name(*prim), "i32");
     assert_eq!(methods.len(), 3);
     // it is a declaration form: an implementation file rejects it
-    let (_, diags) = parse("prelude builtin impl i32 { fn abs(self) -> i32; }", Mode::Impl);
+    let (_, diags) = parse(
+        "prelude builtin impl i32 { fn abs(self) -> i32; }",
+        Mode::Impl,
+    );
     assert!(
         diags.iter().any(|d| d.msg.contains("belong in a `.d.rut`")),
         "builtin impl in a .rut must be diagnosed: {diags:?}"
@@ -302,15 +365,25 @@ fn builtin_primitive_parses() {
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 1);
     let ItemKind::BuiltinPrimitive { name, members, .. } = ast.item(items[0]) else {
-        panic!("expected a BuiltinPrimitive item, got {:?}", ast.item(items[0]));
+        panic!(
+            "expected a BuiltinPrimitive item, got {:?}",
+            ast.item(items[0])
+        );
     };
     assert_eq!(ast.name(*name), "opaque");
-    assert_eq!(members.len(), 2, "`new` and `downcast` are both on the primitive");
+    assert_eq!(
+        members.len(),
+        2,
+        "`new` and `downcast` are both on the primitive"
+    );
 }
 
 #[test]
 fn builtin_primitive_takes_no_generics() {
-    let (_, diags) = parse("prelude builtin primitive str<T> { fn len(self) -> i32; }", Mode::Decl);
+    let (_, diags) = parse(
+        "prelude builtin primitive str<T> { fn len(self) -> i32; }",
+        Mode::Decl,
+    );
     assert!(
         diags.iter().any(|d| d.msg.contains("no generic arguments")),
         "a primitive takes no generic arguments: {diags:?}"
@@ -324,7 +397,10 @@ fn the_two_builtin_spellings_parse_clean() {
     // keep the full builtin grammar (fn / class / trait / impl /
     // primitive).
     let (ast, diags) = parse("prelude builtin fn own<T>(x: T) -> T;", Mode::Decl);
-    assert!(diags.is_empty(), "`prelude builtin fn` must parse clean: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "`prelude builtin fn` must parse clean: {diags:?}"
+    );
     let items = ast.module_items(ast.root);
     let ItemKind::SurfaceFn { linkage, .. } = ast.item(items[0]) else {
         panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
@@ -335,7 +411,10 @@ fn the_two_builtin_spellings_parse_clean() {
     );
 
     let (ast, diags) = parse("pub builtin fn own<T>(x: T) -> T;", Mode::Decl);
-    assert!(diags.is_empty(), "`pub builtin fn` must parse clean: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "`pub builtin fn` must parse clean: {diags:?}"
+    );
     let items = ast.module_items(ast.root);
     let ItemKind::SurfaceFn { linkage, .. } = ast.item(items[0]) else {
         panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
@@ -357,7 +436,9 @@ fn the_two_builtin_spellings_parse_clean() {
     }
     let (_, diags) = parse("pub builtin trait Mark { }", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`builtin trait` is removed")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`builtin trait` is removed")),
         "the removed spelling must diagnose: {diags:?}"
     );
 }
@@ -366,7 +447,10 @@ fn the_two_builtin_spellings_parse_clean() {
 fn bare_builtin_diagnoses_the_two_spellings() {
     // the bare keyword is gone: it diagnoses with the two-spelling
     // message and recovers as ambient so parsing continues
-    let (_, diags) = parse("builtin fn assert(cond: bool, msg: str) -> nil;", Mode::Decl);
+    let (_, diags) = parse(
+        "builtin fn assert(cond: bool, msg: str) -> nil;",
+        Mode::Decl,
+    );
     assert!(
         diags.iter().any(|d| d.msg.contains(
             "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)"
@@ -379,12 +463,20 @@ fn bare_builtin_diagnoses_the_two_spellings() {
 fn prelude_is_contextual() {
     // `prelude` is a legal identifier everywhere except directly
     // before `builtin`
-    let (_, diags) = parse("fn f() -> i32 { let prelude = 3; return prelude; }", Mode::Impl);
-    assert!(diags.is_empty(), "`prelude` must stay a legal identifier: {diags:?}");
+    let (_, diags) = parse(
+        "fn f() -> i32 { let prelude = 3; return prelude; }",
+        Mode::Impl,
+    );
+    assert!(
+        diags.is_empty(),
+        "`prelude` must stay a legal identifier: {diags:?}"
+    );
     // ...and `prelude fn` is NOT a declaration form
     let (_, diags) = parse("prelude fn f() -> i32 { return 0; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected a declaration, found `prelude`")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected a declaration, found `prelude`")),
         "`prelude` must diagnose when not before `builtin`: {diags:?}"
     );
 }
@@ -392,21 +484,33 @@ fn prelude_is_contextual() {
 #[test]
 fn removed_forms_are_rejected() {
     // `host primitive` — the removed member-surface grammar
-    let (_, diags) = parse("pub host primitive string { fn len(self) -> i32; }", Mode::Decl);
+    let (_, diags) = parse(
+        "pub host primitive string { fn len(self) -> i32; }",
+        Mode::Decl,
+    );
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected `fn` or `struct` after `host`")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected `fn` or `struct` after `host`")),
         "`host primitive` must be diagnosed: {diags:?}"
     );
     // `host class` — removed: wrap native state in a rut class over opaque
-    let (_, diags) = parse("pub host class Canvas { fn flush(self) -> nil; }", Mode::Decl);
+    let (_, diags) = parse(
+        "pub host class Canvas { fn flush(self) -> nil; }",
+        Mode::Decl,
+    );
     assert!(
-        diags.iter().any(|d| d.msg.contains("`host class` is removed")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`host class` is removed")),
         "`host class` must be diagnosed: {diags:?}"
     );
     // `extern` — removed linkage
     let (_, diags) = parse("pub extern fn string_encode(s: str) -> bytes;", Mode::Decl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`extern` linkage is removed")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("`extern` linkage is removed")),
         "`extern` must be diagnosed: {diags:?}"
     );
 }
@@ -454,7 +558,9 @@ fn std_surface_parses_clean() {
     let mut files = Vec::new();
     let mut stack = vec![root];
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for e in entries.flatten() {
             let p = e.path();
             if p.is_dir() {
@@ -465,18 +571,32 @@ fn std_surface_parses_clean() {
         }
     }
     files.sort();
-    assert!(files.len() >= 3, "expected the std surface, found {}", files.len());
+    assert!(
+        files.len() >= 3,
+        "expected the std surface, found {}",
+        files.len()
+    );
     let mut failures = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
-        let mode = if f.to_string_lossy().ends_with(".d.rut") { Mode::Decl } else { Mode::Impl };
+        let mode = if f.to_string_lossy().ends_with(".d.rut") {
+            Mode::Decl
+        } else {
+            Mode::Impl
+        };
         let (_, diags) = parse(&src, mode);
         if !diags.is_empty() {
             failures.push(format!("{}: first = {}", f.display(), diags[0].msg));
         }
     }
-    assert!(files.iter().any(|f| f.to_string_lossy().ends_with("core.d.rut")));
-    assert!(failures.is_empty(), "std surface regressions:\n{}", failures.join("\n"));
+    assert!(files
+        .iter()
+        .any(|f| f.to_string_lossy().ends_with("core.d.rut")));
+    assert!(
+        failures.is_empty(),
+        "std surface regressions:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]
@@ -502,13 +622,21 @@ pub host fn legacy() -> bool;
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
     assert_eq!(items.len(), 3);
-    let ItemKind::ModInline { vis, name, items: net } = ast.item(items[0]) else {
+    let ItemKind::ModInline {
+        vis,
+        name,
+        items: net,
+    } = ast.item(items[0])
+    else {
         panic!("expected a ModInline, got {:?}", ast.item(items[0]));
     };
     assert_eq!(*vis, Vis::Pub);
     assert_eq!(ast.name(*name), "net");
     assert_eq!(net.len(), 2, "the nested edge + the row: {net:?}");
-    let ItemKind::ModInline { name, items: tls, .. } = ast.item(net[0]) else {
+    let ItemKind::ModInline {
+        name, items: tls, ..
+    } = ast.item(net[0])
+    else {
         panic!("expected the nested ModInline, got {:?}", ast.item(net[0]));
     };
     assert_eq!(ast.name(*name), "tls");
@@ -526,7 +654,9 @@ pub host fn legacy() -> bool;
     // inline form is DECL-ONLY
     let (_, diags) = parse("mod gone { }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("inline `mod { }` blocks are gone")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("inline `mod { }` blocks are gone")),
         "implementation files keep the refusal: {diags:?}"
     );
 }
@@ -575,7 +705,8 @@ pub struct Pair {
     // the bodiless spelling carries an empty block (the arena's fn
     // shape) — no machine lowers it
     assert_eq!(
-        ast.span(d.body.id()).lo, ast.span(d.body.id()).hi,
+        ast.span(d.body.id()).lo,
+        ast.span(d.body.id()).hi,
         "the empty body: zero-width at the semi"
     );
 
@@ -584,7 +715,9 @@ pub struct Pair {
     assert!(!diags.is_empty(), "a bodiless fn refuses in .rut");
     let (_, diags) = parse("class C {\n    pub fn m(self) -> C;\n}", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("methods live in `impl` blocks")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("methods live in `impl` blocks")),
         "class members keep the impl-blocks law in .rut: {diags:?}"
     );
 }

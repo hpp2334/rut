@@ -51,35 +51,77 @@ impl Vm {
             return Ok(self.do_ret(v));
         }
         match op {
-            Op::ArrGet { dst, arr, idx, repr } => {
+            Op::ArrGet {
+                dst,
+                arr,
+                idx,
+                repr,
+            } => {
                 self.op_arr_get(*dst, *arr, *idx, *repr)?;
                 self.cur_pc += 1;
             }
-            Op::ArrSet { arr, idx, val, repr } => {
+            Op::ArrSet {
+                arr,
+                idx,
+                val,
+                repr,
+            } => {
                 self.op_arr_set(*arr, *idx, *val, *repr)?;
                 self.cur_pc += 1;
             }
-            Op::ArrGetF { dst, obj, field, idx, repr } => {
+            Op::ArrGetF {
+                dst,
+                obj,
+                field,
+                idx,
+                repr,
+            } => {
                 self.op_arr_get_f(*dst, *obj, *field, *idx, *repr)?;
                 self.cur_pc += 1;
             }
-            Op::ArrSetF { obj, field, idx, val, repr } => {
+            Op::ArrSetF {
+                obj,
+                field,
+                idx,
+                val,
+                repr,
+            } => {
                 self.op_arr_set_f(*obj, *field, *idx, *val, *repr)?;
                 self.cur_pc += 1;
             }
-            Op::GetF { dst, obj, field, repr } => {
+            Op::GetF {
+                dst,
+                obj,
+                field,
+                repr,
+            } => {
                 self.op_getf(*dst, *obj, *field, *repr)?;
                 self.cur_pc += 1;
             }
-            Op::SetF { obj, field, val, repr } => {
+            Op::SetF {
+                obj,
+                field,
+                val,
+                repr,
+            } => {
                 self.op_setf(*obj, *field, *val, *repr)?;
                 self.cur_pc += 1;
             }
-            Op::MakeRecord { dst, ty, argv_off, argc } => {
+            Op::MakeRecord {
+                dst,
+                ty,
+                argv_off,
+                argc,
+            } => {
                 self.op_make_record(*dst, *ty, *argv_off, *argc)?;
                 self.cur_pc += 1;
             }
-            Op::Call { func, argv_off, argc, dst } => {
+            Op::Call {
+                func,
+                argv_off,
+                argc,
+                dst,
+            } => {
                 if self.prog.funcs[*func as usize].host_id.is_some() {
                     // run with the cursor AT this op: a trap (including a
                     // nested `vm.call` that ran out of fuel) parks here, so
@@ -91,27 +133,58 @@ impl Vm {
                     self.op_call(*func, *argv_off, *argc, *dst);
                 }
             }
-            Op::CallM { func, argv_off, argc, dst } => {
+            Op::CallM {
+                func,
+                argv_off,
+                argc,
+                dst,
+            } => {
                 self.cur_pc += 1;
                 self.op_call(*func, *argv_off, *argc, *dst);
             }
-            Op::CallI { slot, argv_off, argc, dst } => {
+            Op::CallI {
+                slot,
+                argv_off,
+                argc,
+                dst,
+            } => {
                 self.cur_pc += 1;
                 self.op_call_i(*slot, *argv_off, *argc, *dst)?;
             }
-            Op::CallFn { fval, argv_off, argc, dst } => {
+            Op::CallFn {
+                fval,
+                argv_off,
+                argc,
+                dst,
+            } => {
                 self.cur_pc += 1;
                 self.op_call_fn(*fval, *argv_off, *argc, *dst)?;
             }
-            Op::CallNat { nat, recv, argv_off, argc, dst } => {
+            Op::CallNat {
+                nat,
+                recv,
+                argv_off,
+                argc,
+                dst,
+            } => {
                 self.call_nat(*nat, *recv, *argv_off, *argc, *dst)?;
                 self.cur_pc += 1;
             }
-            Op::ArrLit { dst, ty, argv_off, argc } => {
+            Op::ArrLit {
+                dst,
+                ty,
+                argv_off,
+                argc,
+            } => {
                 self.op_arr_lit(*dst, *ty, *argv_off, *argc)?;
                 self.cur_pc += 1;
             }
-            Op::BrTable { idx, table_off, count, default } => {
+            Op::BrTable {
+                idx,
+                table_off,
+                count,
+                default,
+            } => {
                 let table = &self.prog.funcs[self.cur_func as usize].labels
                     [*table_off as usize..*table_off as usize + *count as usize];
                 let raw = self.cur_regs[*idx as usize];

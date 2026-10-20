@@ -3,12 +3,16 @@
 
 use rut_parser::Mode;
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -34,7 +38,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -70,11 +77,23 @@ fn generic_class_monomorphizes_per_instantiation() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    let boxes = p.types.types.iter().filter(|t| p.name_of(t.name) == "Box<i32>").count();
+    let boxes = p
+        .types
+        .types
+        .iter()
+        .filter(|t| p.name_of(t.name) == "Box<i32>")
+        .count();
     assert_eq!(boxes, 1, "Box<i32> instantiated once");
     // body compiled: `new` (static) + `main`; `get` is a small instance
     // method and inlines at its call site (sequence lowering)
-    assert!(p.funcs.len() >= 2, "funcs: {:?}", p.funcs.iter().map(|f| p.name_of(f.name)).collect::<Vec<_>>());
+    assert!(
+        p.funcs.len() >= 2,
+        "funcs: {:?}",
+        p.funcs
+            .iter()
+            .map(|f| p.name_of(f.name))
+            .collect::<Vec<_>>()
+    );
     assert!(p.funcs.iter().any(|f| p.name_of(f.name) == "main"));
 }
 
@@ -97,8 +116,22 @@ fn two_instantiations_are_distinct() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Pair<i32>").count(), 1);
-    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Pair<i64>").count(), 1);
+    assert_eq!(
+        p.types
+            .types
+            .iter()
+            .filter(|t| p.name_of(t.name) == "Pair<i32>")
+            .count(),
+        1
+    );
+    assert_eq!(
+        p.types
+            .types
+            .iter()
+            .filter(|t| p.name_of(t.name) == "Pair<i64>")
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -117,7 +150,14 @@ fn recursive_generic_terminates() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Node<i32>").count(), 1);
+    assert_eq!(
+        p.types
+            .types
+            .iter()
+            .filter(|t| p.name_of(t.name) == "Node<i32>")
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -177,6 +217,12 @@ fn vec_over_pointer_array_compiles() {
     );
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let p = out.program.expect("program");
-    assert_eq!(p.types.types.iter().filter(|t| p.name_of(t.name) == "Vec<i32>").count(), 1);
+    assert_eq!(
+        p.types
+            .types
+            .iter()
+            .filter(|t| p.name_of(t.name) == "Vec<i32>")
+            .count(),
+        1
+    );
 }
-

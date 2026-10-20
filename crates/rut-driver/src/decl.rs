@@ -24,10 +24,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rut_ast::ast::{AnyTy, AnyItem, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
+use rut_ast::ast::{AnyItem, AnyTy, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
 use rut_core::types::{
-    TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL,
-    TY_OPAQUE, TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
+    TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
+    TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
 };
 use rut_parser::{parse, Mode};
 
@@ -88,9 +88,11 @@ fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         TypeKind::TyPath { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
             ast.name(segs[0].name).to_string()
         }
-        TypeKind::TyPath { segs } => {
-            segs.iter().map(|s| ast.name(s.name)).collect::<Vec<_>>().join("::")
-        }
+        TypeKind::TyPath { segs } => segs
+            .iter()
+            .map(|s| ast.name(s.name))
+            .collect::<Vec<_>>()
+            .join("::"),
         TypeKind::TyOpt { inner } => format!("?{}", ty_text(ast, *inner)),
         _ => "<a nested type>".to_string(),
     }
@@ -117,7 +119,10 @@ pub fn lower_decl_module(
     let (ast, diags) = parse(src, Mode::Decl);
     if !diags.is_empty() {
         let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
-        return Err(format!("{origin}: the surface does not parse: {}", msgs.join("; ")));
+        return Err(format!(
+            "{origin}: the surface does not parse: {}",
+            msgs.join("; ")
+        ));
     }
     let mut host_funcs: Vec<HostRow> = Vec::new();
     // first mount wins, mirrored in the lowering: a repeated
@@ -141,12 +146,7 @@ pub fn lower_decl_module(
 /// One module's `host fn` rows, off the module's OWN items — the
 /// row-lowering both lanes share (the host tree recursion, the inline
 /// form, and the lib-surface law's root probe).
-fn lower_rows(
-    ast: &Ast,
-    path: &str,
-    display: &str,
-    rows: &mut Vec<HostRow>,
-) -> Result<(), String> {
+fn lower_rows(ast: &Ast, path: &str, display: &str, rows: &mut Vec<HostRow>) -> Result<(), String> {
     lower_rows_in(ast, ast.module_items(ast.root), path, display, rows)
 }
 
@@ -158,7 +158,14 @@ fn lower_rows_in(
     rows: &mut Vec<HostRow>,
 ) -> Result<(), String> {
     for &it in items {
-        let ItemKind::SurfaceFn { linkage: Linkage::Host, is_async, name, params, ret, .. } = ast.item(it)
+        let ItemKind::SurfaceFn {
+            linkage: Linkage::Host,
+            is_async,
+            name,
+            params,
+            ret,
+            ..
+        } = ast.item(it)
         else {
             continue;
         };
@@ -257,7 +264,11 @@ fn lower_module(
                 }
                 lower_module(&child_ast, &child_path, children, origin, rows, lowered)?;
             }
-            ItemKind::ModInline { vis: _, name, items } => {
+            ItemKind::ModInline {
+                vis: _,
+                name,
+                items,
+            } => {
                 // the inline declaration module: the nested declarations
                 // lower at the child's mod path — no mounted file, no
                 // children-map entry. First-wins applies to the same
@@ -295,7 +306,12 @@ fn lower_inline(
 ) -> Result<(), String> {
     lower_rows_in(ast, items, path, display, rows)?;
     for &it in items {
-        let ItemKind::ModInline { vis: _, name, items: nested } = ast.item(it) else {
+        let ItemKind::ModInline {
+            vis: _,
+            name,
+            items: nested,
+        } = ast.item(it)
+        else {
             continue;
         };
         let name = ast.name(*name).to_string();

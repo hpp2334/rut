@@ -9,22 +9,22 @@
 
 use std::path::{Path, PathBuf};
 
+use rut_driver::MountedBody;
 use rut_native::pack_dir;
-use rut_driver::{
-    MountedBody,
-};
 
 mod common;
 use common::{dep_dir, pkg_named};
-
-
-
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -50,7 +50,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -95,7 +98,11 @@ fn mixed_world(tag: &str) -> PathBuf {
     write(
         &app,
         "rut.jsonc",
-        &bundle_manifest("app", "mod.rut", r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#,)
+        &bundle_manifest(
+            "app",
+            "mod.rut",
+            r#", "deps": {"util": {"path": "../util"}, "boxy": {"path": "../boxy"}}"#,
+        ),
     );
     write(
         &app,
@@ -159,8 +166,13 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, R>(entry, ()).expect("run")
 }
 
@@ -179,7 +191,11 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
     let bytes = pack_dir(&root.join("app")).expect("pack");
     let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     assert_eq!(loaded.root, "app");
-    assert_eq!(run_entry::<i64>(loaded.clone(), "go"), from_dir, "dir and bundle run identically");
+    assert_eq!(
+        run_entry::<i64>(loaded.clone(), "go"),
+        from_dir,
+        "dir and bundle run identically"
+    );
 
     // the closure mixed as declared: the linked pkgs compiled, the
     // declared-but-unused one a source group
@@ -195,14 +211,30 @@ fn mixed_closure_pack_load_run_equals_the_directory() {
         pkg_named(&loaded, "boxy").body,
         MountedBody::Source { .. }
     ));
-    let names: Vec<String> =
-        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+    let names: Vec<String> = rut_driver::bundle::parse_bundle(&bytes)
+        .unwrap()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
     let util_dir = dep_dir(&names, "util");
     let boxy_dir = dep_dir(&names, "boxy");
-    for key in ["rut.jsonc", "rut.scopes", "mod.rutc", &format!("{util_dir}/mod.rutc"), &format!("{boxy_dir}/rut.jsonc"), &format!("{boxy_dir}/mod.rut")] {
-        assert!(names.contains(&key.to_string()), "the bundle must carry `{key}`: {names:?}");
+    for key in [
+        "rut.jsonc",
+        "rut.scopes",
+        "mod.rutc",
+        &format!("{util_dir}/mod.rutc"),
+        &format!("{boxy_dir}/rut.jsonc"),
+        &format!("{boxy_dir}/mod.rut"),
+    ] {
+        assert!(
+            names.contains(&key.to_string()),
+            "the bundle must carry `{key}`: {names:?}"
+        );
     }
-    assert!(!names.iter().any(|n| n == &format!("{boxy_dir}/mod.rutc")), "the unused group rides source, not a binary");
+    assert!(
+        !names.iter().any(|n| n == &format!("{boxy_dir}/mod.rutc")),
+        "the unused group rides source, not a binary"
+    );
 
     // the ledger names every linked module of the packed closure — by
     // its content identity (the one wire's row spelling)
@@ -238,7 +270,10 @@ fn a_source_group_splices_into_a_consumer_session() {
         )
         // the consumer declares the bundle groups it names (the
         // nameability law — mounted-but-undeclared is D5)
-        .manifest(rut_driver::Manifest::lib("consumer", &["boxy", "util", "calc"])),
+        .manifest(rut_driver::Manifest::lib(
+            "consumer",
+            &["boxy", "util", "calc"],
+        )),
     );
     // the CONSUMER is the root here — a source unit over the bundle's
     // mounted groups, compiled and linked exactly like a directory world
@@ -258,8 +293,13 @@ fn a_source_group_splices_into_a_consumer_session() {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     assert_eq!(vm.call::<_, i64>("go2", ()).expect("run"), 10);
 }
 
@@ -302,8 +342,11 @@ fn generic_and_iface_param_roots_publish_compiled() {
          }\n",
     );
     let bytes = pack_dir(&app).expect("a generic root publishes compiled");
-    let names: Vec<String> =
-        rut_driver::bundle::parse_bundle(&bytes).unwrap().into_iter().map(|(n, _)| n).collect();
+    let names: Vec<String> = rut_driver::bundle::parse_bundle(&bytes)
+        .unwrap()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
     assert!(names.contains(&"mod.rutc".to_string()), "{names:?}");
     // v22 — the delivery law: generic bodies ride the binary as
     // template rows; NO source rides beside it (the riding law is dead)
@@ -389,7 +432,9 @@ fn stale_and_corrupt_group_binaries_are_refused() {
         .expect("the entry name rides the container");
     let data_at = at + needle.len() + 30; // local header: fixed 30 bytes + name
     corrupt[data_at] ^= 0x01;
-    let err = rut_driver::Mounted::from_bundle(&corrupt).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&corrupt)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("CRC"), "{err}");
 
     // a doctored scope ledger: the group's binary carries its own
@@ -414,13 +459,11 @@ fn stale_and_corrupt_group_binaries_are_refused() {
             (n, b)
         })
         .collect();
-    let err = rut_driver::Mounted::from_bundle(&rut_driver::bundle::write_bundle(&doctored).unwrap())
-        .unwrap_err()
-        .to_string();
-    assert!(
-        err.contains("ledger") || err.contains("scope"),
-        "{err}"
-    );
+    let err =
+        rut_driver::Mounted::from_bundle(&rut_driver::bundle::write_bundle(&doctored).unwrap())
+            .unwrap_err()
+            .to_string();
+    assert!(err.contains("ledger") || err.contains("scope"), "{err}");
 }
 
 /// The one-closure fixture for the lane-equivalence golden: the std
@@ -489,13 +532,8 @@ fn staged_lane_produces_what_the_reference_lane_would() {
         .entrypoint("app")
         .compile()
         .expect("reference compile");
-    let ref_bytes = rut_core::binary::encode(
-        &reference
-            .graph
-            .program
-            .clone()
-            .expect("linked program"),
-    );
+    let ref_bytes =
+        rut_core::binary::encode(&reference.graph.program.clone().expect("linked program"));
     assert!(!ref_bytes.is_empty());
     assert_eq!(run_compiled::<i32>(reference, "go"), 260);
 
@@ -509,14 +547,12 @@ fn staged_lane_produces_what_the_reference_lane_would() {
         .entrypoint("app")
         .compile()
         .expect("reference recompile");
-    let ref_bytes_again = rut_core::binary::encode(
-        &recompiled
-            .graph
-            .program
-            .clone()
-            .expect("linked program"),
+    let ref_bytes_again =
+        rut_core::binary::encode(&recompiled.graph.program.clone().expect("linked program"));
+    assert_eq!(
+        ref_bytes_again, ref_bytes,
+        "the reference lane is deterministic"
     );
-    assert_eq!(ref_bytes_again, ref_bytes, "the reference lane is deterministic");
 
     // (b) the staged lane: pack the closure to an archive, walk +
     // mount it, compile the consumer against its surface
@@ -538,7 +574,11 @@ fn staged_lane_produces_what_the_reference_lane_would() {
         .entrypoint("app")
         .compile()
         .expect("staged compile");
-    assert_eq!(run_compiled::<i32>(staged, "go"), 260, "staged == reference");
+    assert_eq!(
+        run_compiled::<i32>(staged, "go"),
+        260,
+        "staged == reference"
+    );
 }
 
 // ---- the substitution-shape matrix (the F0 falsifier, as a gate) ----
@@ -995,7 +1035,11 @@ fn staged_and_reference_lanes_agree_across_the_substitution_matrix() {
             reference.graph.diags
         );
         let from_dir = run_compiled::<i32>(reference, "main");
-        assert_eq!(from_dir, cell.expect, "{}: the reference lane's own answer", cell.tag);
+        assert_eq!(
+            from_dir, cell.expect,
+            "{}: the reference lane's own answer",
+            cell.tag
+        );
 
         // (b) the staged lane: pack the owner, mount the archive, serve
         // the consumer's instantiation from the templates
@@ -1248,7 +1292,11 @@ fn staged_and_reference_lanes_agree_across_the_interface_dispatch_matrix() {
             reference.graph.diags
         );
         let from_dir = run_compiled::<i32>(reference, "main");
-        assert_eq!(from_dir, cell.expect, "{}: the reference lane's own answer", cell.tag);
+        assert_eq!(
+            from_dir, cell.expect,
+            "{}: the reference lane's own answer",
+            cell.tag
+        );
 
         // (b) the staged lane: pack the owner, mount the archive,
         // serve the consumer's instantiation from the templates
@@ -1340,5 +1388,8 @@ entry fn main() -> i32 {
             &staged.graph.program.clone().expect("linked program"),
         ));
     }
-    assert_eq!(encodings[0], encodings[1], "two independent staged sessions link byte-identically");
+    assert_eq!(
+        encodings[0], encodings[1],
+        "two independent staged sessions link byte-identically"
+    );
 }

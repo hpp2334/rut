@@ -17,15 +17,16 @@
 //!   concrete member's own member (different members → different
 //!   engines).
 
-
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -51,7 +52,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -75,7 +79,11 @@ fn run_entry(src: &str, entry: &str) -> i64 {
     assert!(
         out.diags.is_empty(),
         "unexpected diags:\n{}",
-        out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        out.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -85,8 +93,13 @@ fn run_entry(src: &str, entry: &str) -> i64 {
         heap_limit_bytes: Some(64 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i64>(entry, ()).expect("run")
 }
 
@@ -105,7 +118,11 @@ fn union_bound_admits_each_member_type() {
              return a + b + c;\n\
          }}\n"
     ));
-    assert!(out.diags.is_empty(), "every named member admits: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "every named member admits: {:?}",
+        out.diags
+    );
 }
 
 #[test]
@@ -117,7 +134,8 @@ fn union_bound_rejects_record_and_user_class_naming_the_bound() {
          entry fn probe() -> i64 {{ return take(Pt {{ x: 1 }}); }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d.contains("`Pt` does not satisfy `K` requires `i32 | i64 | bool`")),
+        ds.iter()
+            .any(|d| d.contains("`Pt` does not satisfy `K` requires `i32 | i64 | bool`")),
         "the reject names the record and the bound: {ds:?}"
     );
 
@@ -129,7 +147,8 @@ fn union_bound_rejects_record_and_user_class_naming_the_bound() {
          entry fn probe() -> i64 {{ let t: Tok = Tok::new(); return take(t); }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d.contains("`Tok` does not satisfy `K` requires `i32 | i64 | bool`")),
+        ds.iter()
+            .any(|d| d.contains("`Tok` does not satisfy `K` requires `i32 | i64 | bool`")),
         "the reject names the class and the bound: {ds:?}"
     );
 }
@@ -152,7 +171,11 @@ fn iface_union_admits_a_satisfying_type_and_fails_outside() {
          fn tag<K requires Enc | Shade>(k: K) -> i64 { return 0; }\n\
          entry fn probe() -> i64 { let t: Token = Token { v: 1 }; return tag(t); }\n",
     );
-    assert!(out.diags.is_empty(), "an Enc-satisfying type admits: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "an Enc-satisfying type admits: {:?}",
+        out.diags
+    );
 
     let ds = diags_of(
         "interface Enc { fn enc(self) -> bytes; }\n\
@@ -161,7 +184,8 @@ fn iface_union_admits_a_satisfying_type_and_fails_outside() {
          entry fn probe() -> i64 { return tag(\"s\"); }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`str` does not satisfy `K` requires `Enc | Shade`")),
+        ds.iter()
+            .any(|d| d.contains("`str` does not satisfy `K` requires `Enc | Shade`")),
         "the failure names the whole bound: {ds:?}"
     );
 }
@@ -194,7 +218,8 @@ fn mixed_union_admits_concrete_and_iface_members() {
          entry fn probe() -> i64 { return tag(true); }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`bool` does not satisfy `K` requires `i32 | Enc`")),
+        ds.iter()
+            .any(|d| d.contains("`bool` does not satisfy `K` requires `i32 | Enc`")),
         "the failure names the union: {ds:?}"
     );
 }
@@ -215,7 +240,11 @@ fn iface_union_through_an_alias_admits() {
              return a + tag(t);\n\
          }\n",
     );
-    assert!(out.diags.is_empty(), "the alias-spelled union admits both: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "the alias-spelled union admits both: {:?}",
+        out.diags
+    );
 }
 
 #[test]
@@ -230,7 +259,11 @@ fn single_iface_bound_stays_legal() {
          fn seal<T requires Enc>(x: T) -> i64 { return 0; }\n\
          entry fn probe() -> i64 { let t: Token = Token { v: 1 }; return seal(t); }\n",
     );
-    assert!(out.diags.is_empty(), "a single-interface bound admits: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "a single-interface bound admits: {:?}",
+        out.diags
+    );
 }
 
 // ---- capability resolution through the union ----
@@ -272,9 +305,10 @@ fn method_call_diagnoses_when_a_member_lacks_the_method() {
          entry fn probe() -> i64 { let a = lane_of(5); return a; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`bool` does not provide `wrapping_mul`")
-            && d.contains("`K` requires `i32 | bool`")
-            && d.contains("every member")),
+        ds.iter()
+            .any(|d| d.contains("`bool` does not provide `wrapping_mul`")
+                && d.contains("`K` requires `i32 | bool`")
+                && d.contains("every member")),
         "the capability failure names the member and the allowed set: {ds:?}"
     );
 }
@@ -302,7 +336,11 @@ fn class_body_method_call_through_the_union_bound() {
          }}\n"
     );
     let out = compile_app(&full);
-    assert!(out.diags.is_empty(), "both members satisfy the class bound: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "both members satisfy the class bound: {:?}",
+        out.diags
+    );
 
     // a member WITHOUT the capability inside a class union bound
     let ds = diags_of(
@@ -320,8 +358,9 @@ fn class_body_method_call_through_the_union_bound() {
          }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`bool` does not provide `wrapping_mul`")
-            && d.contains("`K` requires `i32 | bool`")),
+        ds.iter()
+            .any(|d| d.contains("`bool` does not provide `wrapping_mul`")
+                && d.contains("`K` requires `i32 | bool`")),
         "the class-body capability failure names the member and the bound: {ds:?}"
     );
 }

@@ -12,7 +12,7 @@
 //! `Ret`: the positional decode for hosts that read the raw driver
 //! result (`Value::Tuple` for a pair return) instead of a typed shape.
 
-use rut_core::types::{PrimTy, TypeId, TyKind};
+use rut_core::types::{PrimTy, TyKind, TypeId};
 use rut_core::types::{
     TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
     TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
@@ -44,7 +44,10 @@ pub trait Ret: Sized {
         let _ = vm;
         Err(Trap::new(
             TrapKind::Invalid,
-            format!("`{}` does not cross as a host-fn argument or return", Self::rust_name()),
+            format!(
+                "`{}` does not cross as a host-fn argument or return",
+                Self::rust_name()
+            ),
         ))
     }
 }
@@ -74,7 +77,10 @@ pub(super) fn expect_kind(vm: &Vm, slot: Slot, declared: TypeId, rust: &str) -> 
     let bad = |m: String| {
         Trap::new(
             TrapKind::Invalid,
-            format!("boundary: got `{}` where `{rust}` binds: {m}", vm.prog.type_name(declared)),
+            format!(
+                "boundary: got `{}` where `{rust}` binds: {m}",
+                vm.prog.type_name(declared)
+            ),
         )
     };
     if unsafe { slot.r.is_null() }
@@ -125,7 +131,10 @@ fn bytes_view<'a>(slot: Slot) -> &'a [u8] {
 
 fn narrow_i64<T: TryFrom<i64>>(n: i64, rust: &str) -> Result<T, Trap> {
     T::try_from(n).map_err(|_| {
-        Trap::new(TrapKind::Invalid, format!("boundary: `{n}` does not fit `{rust}`"))
+        Trap::new(
+            TrapKind::Invalid,
+            format!("boundary: `{n}` does not fit `{rust}`"),
+        )
     })
 }
 
@@ -133,7 +142,9 @@ macro_rules! int_ret {
     ($t:ty, $name:literal, $ty:ident) => {
         impl Ret for $t {
             const TY: TypeId = $ty;
-            fn rust_name() -> &'static str { $name }
+            fn rust_name() -> &'static str {
+                $name
+            }
             fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
                 expect_kind(vm, slot, declared, $name)?;
                 Ok(narrow_i64::<$t>(unsafe { slot.i }, $name)?)
@@ -158,7 +169,9 @@ int_ret!(u32, "u32", TY_U32);
 /// no i64 narrowing applies
 impl Ret for u64 {
     const TY: TypeId = TY_U64;
-    fn rust_name() -> &'static str { "u64" }
+    fn rust_name() -> &'static str {
+        "u64"
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "u64")?;
         Ok(unsafe { slot.i } as u64)
@@ -171,7 +184,9 @@ impl Ret for u64 {
 
 impl Ret for f64 {
     const TY: TypeId = TY_F64;
-    fn rust_name() -> &'static str { "f64" }
+    fn rust_name() -> &'static str {
+        "f64"
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "f64")?;
         Ok(slot.as_f64())
@@ -184,7 +199,9 @@ impl Ret for f64 {
 
 impl Ret for f32 {
     const TY: TypeId = TY_F32;
-    fn rust_name() -> &'static str { "f32" }
+    fn rust_name() -> &'static str {
+        "f32"
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "f32")?;
         Ok(slot.as_f64() as f32)
@@ -197,7 +214,9 @@ impl Ret for f32 {
 
 impl Ret for bool {
     const TY: TypeId = TY_BOOL;
-    fn rust_name() -> &'static str { "bool" }
+    fn rust_name() -> &'static str {
+        "bool"
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "bool")?;
         Ok(slot.as_bool())
@@ -210,7 +229,9 @@ impl Ret for bool {
 
 impl Ret for () {
     const TY: TypeId = TY_NIL;
-    fn rust_name() -> &'static str { "()" }
+    fn rust_name() -> &'static str {
+        "()"
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "()")?;
         let _ = slot;
@@ -224,7 +245,9 @@ impl Ret for () {
 
 /// owned copy — the explicit "I keep this data"
 impl Ret for String {
-    fn rust_name() -> &'static str { "String" }
+    fn rust_name() -> &'static str {
+        "String"
+    }
     const TY: TypeId = TY_STR;
     const OPT_TY: TypeId = TY_OPT_STR;
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
@@ -239,7 +262,9 @@ impl Ret for String {
 
 /// owned copy — the explicit "I keep this data"
 impl Ret for Vec<u8> {
-    fn rust_name() -> &'static str { "Vec<u8>" }
+    fn rust_name() -> &'static str {
+        "Vec<u8>"
+    }
     const TY: TypeId = TY_BYTES;
     const OPT_TY: TypeId = TY_OPT_BYTES;
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
@@ -255,12 +280,17 @@ impl Ret for Vec<u8> {
 impl Ret for OpaqueRef {
     const TY: TypeId = TY_OPAQUE;
     const OPT_TY: TypeId = TY_OPT_OPAQUE;
-    fn rust_name() -> &'static str { "OpaqueRef" }
+    fn rust_name() -> &'static str {
+        "OpaqueRef"
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "OpaqueRef")?;
         let p = unsafe { slot.r };
         if p.is_null() {
-            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueRef`"));
+            return Err(Trap::new(
+                TrapKind::NilDeref,
+                "boundary: nil does not bind `OpaqueRef`",
+            ));
         }
         Ok(vm.heap.opaque_handle(p))
     }
@@ -276,13 +306,18 @@ impl Ret for OpaqueRef {
 }
 
 impl<T: 'static> Ret for Opaque<T> {
-    fn rust_name() -> &'static str { "Opaque" }
+    fn rust_name() -> &'static str {
+        "Opaque"
+    }
     const OPT_TY: TypeId = TY_OPT_OPAQUE;
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         expect_kind(vm, slot, declared, "Opaque")?;
         let p = unsafe { slot.r };
         if p.is_null() {
-            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `Opaque`"));
+            return Err(Trap::new(
+                TrapKind::NilDeref,
+                "boundary: nil does not bind `Opaque`",
+            ));
         }
         Opaque::from_handle(&vm.heap.opaque_handle(p))
     }
@@ -309,12 +344,18 @@ impl<T: 'static> Ret for Opaque<T> {
 /// `?opaque` cross back.
 impl<T: Ret> Ret for Option<T> {
     const TY: TypeId = T::OPT_TY;
-    fn rust_name() -> &'static str { std::any::type_name::<Self>() }
+    fn rust_name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
         let TyKind::Opt { elem } = vm.prog.types.kind(declared) else {
             return Err(Trap::new(
                 TrapKind::Invalid,
-                format!("boundary: `{}` is not the option `{}` binds", vm.prog.type_name(declared), Self::rust_name()),
+                format!(
+                    "boundary: `{}` is not the option `{}` binds",
+                    vm.prog.type_name(declared),
+                    Self::rust_name()
+                ),
             ));
         };
         if unsafe { slot.r.is_null() } {
@@ -324,10 +365,9 @@ impl<T: Ret> Ret for Option<T> {
         let CellData::Record { fields } = &cell.data else {
             return Err(Trap::new(TrapKind::Invalid, "boundary: not an option box"));
         };
-        let inner = fields
-            .borrow()
-            .get(0)
-            .ok_or_else(|| Trap::new(TrapKind::Invalid, "boundary: option box without a payload"))?;
+        let inner = fields.borrow().get(0).ok_or_else(|| {
+            Trap::new(TrapKind::Invalid, "boundary: option box without a payload")
+        })?;
         Ok(Some(T::from_slot(vm, inner, *elem)?))
     }
     fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
@@ -410,9 +450,13 @@ tuple_ret!(A1, A2, A3, A4, A5, A6, A7, A8);
 /// without naming `T` in its type. `slot_to_value` IS the read; into_slot
 /// is meaningless (a `Value` has no declared type to bind against).
 impl Ret for Value {
-    fn rust_name() -> &'static str { "Value" }
+    fn rust_name() -> &'static str {
+        "Value"
+    }
     fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
-        Ok(super::util::slot_to_value(slot, declared, &vm.prog, &vm.heap))
+        Ok(super::util::slot_to_value(
+            slot, declared, &vm.prog, &vm.heap,
+        ))
     }
 }
 
@@ -428,7 +472,9 @@ macro_rules! call_arg_int {
     ($t:ty, $name:literal) => {
         impl CallArg for $t {
             const NAME: &'static str = $name;
-            fn into_value(self) -> Value { Value::I64(self as i64) }
+            fn into_value(self) -> Value {
+                Value::I64(self as i64)
+            }
         }
     };
 }
@@ -444,47 +490,65 @@ call_arg_int!(u64, "u64");
 
 impl CallArg for f64 {
     const NAME: &'static str = "f64";
-    fn into_value(self) -> Value { Value::F64(self) }
+    fn into_value(self) -> Value {
+        Value::F64(self)
+    }
 }
 
 impl CallArg for f32 {
     const NAME: &'static str = "f32";
-    fn into_value(self) -> Value { Value::F64(self as f64) }
+    fn into_value(self) -> Value {
+        Value::F64(self as f64)
+    }
 }
 
 impl CallArg for bool {
     const NAME: &'static str = "bool";
-    fn into_value(self) -> Value { Value::Bool(self) }
+    fn into_value(self) -> Value {
+        Value::Bool(self)
+    }
 }
 
 impl CallArg for String {
     const NAME: &'static str = "String";
-    fn into_value(self) -> Value { Value::Str(self) }
+    fn into_value(self) -> Value {
+        Value::Str(self)
+    }
 }
 
 impl CallArg for &str {
     const NAME: &'static str = "&str";
-    fn into_value(self) -> Value { Value::Str(self.to_string()) }
+    fn into_value(self) -> Value {
+        Value::Str(self.to_string())
+    }
 }
 
 impl CallArg for Vec<u8> {
     const NAME: &'static str = "Vec<u8>";
-    fn into_value(self) -> Value { Value::Bytes(self) }
+    fn into_value(self) -> Value {
+        Value::Bytes(self)
+    }
 }
 
 impl CallArg for &[u8] {
     const NAME: &'static str = "&[u8]";
-    fn into_value(self) -> Value { Value::Bytes(self.to_vec()) }
+    fn into_value(self) -> Value {
+        Value::Bytes(self.to_vec())
+    }
 }
 
 impl CallArg for OpaqueRef {
     const NAME: &'static str = "OpaqueRef";
-    fn into_value(self) -> Value { Value::Opaque(self) }
+    fn into_value(self) -> Value {
+        Value::Opaque(self)
+    }
 }
 
 impl<T: 'static> CallArg for Opaque<T> {
     const NAME: &'static str = "Opaque";
-    fn into_value(self) -> Value { Value::Opaque(self.handle().clone()) }
+    fn into_value(self) -> Value {
+        Value::Opaque(self.handle().clone())
+    }
 }
 
 /// the argument bundle of a typed `call` — tuples up to arity 8
@@ -493,7 +557,9 @@ pub trait CallArgs {
 }
 
 impl CallArgs for () {
-    fn into_values(self) -> Vec<Value> { Vec::new() }
+    fn into_values(self) -> Vec<Value> {
+        Vec::new()
+    }
 }
 
 macro_rules! call_args {
@@ -676,7 +742,10 @@ impl HostParam for OpaqueRef {
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let p = unsafe { slot.r };
         if p.is_null() {
-            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `OpaqueRef`"));
+            return Err(Trap::new(
+                TrapKind::NilDeref,
+                "boundary: nil does not bind `OpaqueRef`",
+            ));
         }
         Ok(vm.heap.opaque_handle(p)) // the bump is the handle's own count
     }
@@ -698,7 +767,10 @@ impl<T: 'static> HostParam for Opaque<T> {
     unsafe fn read<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
         let p = unsafe { slot.r };
         if p.is_null() {
-            return Err(Trap::new(TrapKind::NilDeref, "boundary: nil does not bind `Opaque`"));
+            return Err(Trap::new(
+                TrapKind::NilDeref,
+                "boundary: nil does not bind `Opaque`",
+            ));
         }
         Opaque::from_handle(&vm.heap.opaque_handle(p))
     }
@@ -925,8 +997,13 @@ mod fast_lane_tests {
     fn bare_vm() -> Vm {
         let mut prog = rut_core::binary::Program::default();
         prog.types = rut_core::types::TypeTable::boot();
-        Vm::new(Rc::new(prog), &Limits::default(), HostHooks::default(), HostRegistry::new())
-            .expect("bare vm")
+        Vm::new(
+            Rc::new(prog),
+            &Limits::default(),
+            HostHooks::default(),
+            HostRegistry::new(),
+        )
+        .expect("bare vm")
     }
 
     /// Drive the adapter itself (the HostSlot code pointer shape): box
@@ -947,17 +1024,35 @@ mod fast_lane_tests {
         let vm = bare_vm();
         // every int width, at its extremes — `as` reinterpret, no narrow
         unsafe {
-            assert_eq!(<i8 as HostParam>::read(&vm, Slot::int(i8::MIN as i64)).unwrap(), i8::MIN);
+            assert_eq!(
+                <i8 as HostParam>::read(&vm, Slot::int(i8::MIN as i64)).unwrap(),
+                i8::MIN
+            );
             assert_eq!(<u8 as HostParam>::read(&vm, Slot::int(255)).unwrap(), 255u8);
-            assert_eq!(<u32 as HostParam>::read(&vm, Slot::int(u32::MAX as i64)).unwrap(), u32::MAX);
+            assert_eq!(
+                <u32 as HostParam>::read(&vm, Slot::int(u32::MAX as i64)).unwrap(),
+                u32::MAX
+            );
             // u64: the raw-bit read — 2^63..2^64-1 keep their bits
             for bits in [1i64 << 63, (1i64 << 63) + 12345, -2, -1] {
-                assert_eq!(<u64 as HostParam>::read(&vm, Slot::int(bits)).unwrap(), bits as u64);
+                assert_eq!(
+                    <u64 as HostParam>::read(&vm, Slot::int(bits)).unwrap(),
+                    bits as u64
+                );
             }
-            assert_eq!(<u64 as HostParam>::read(&vm, Slot::int(-1)).unwrap(), u64::MAX);
+            assert_eq!(
+                <u64 as HostParam>::read(&vm, Slot::int(-1)).unwrap(),
+                u64::MAX
+            );
             // floats/bool: the raw union reads
-            assert_eq!(<f64 as HostParam>::read(&vm, Slot::float(-0.5)).unwrap(), -0.5);
-            assert_eq!(<bool as HostParam>::read(&vm, Slot::bool(true)).unwrap(), true);
+            assert_eq!(
+                <f64 as HostParam>::read(&vm, Slot::float(-0.5)).unwrap(),
+                -0.5
+            );
+            assert_eq!(
+                <bool as HostParam>::read(&vm, Slot::bool(true)).unwrap(),
+                true
+            );
         }
     }
 
@@ -974,7 +1069,10 @@ mod fast_lane_tests {
             assert!(err.msg.contains("does not fit"), "{}", err.msg);
             // the checked twin preserves the historical semantics where
             // they differed from nothing: u64 never narrows
-            assert_eq!(<u64 as HostParam>::read_checked(&vm, Slot::int(-1)).unwrap(), u64::MAX);
+            assert_eq!(
+                <u64 as HostParam>::read_checked(&vm, Slot::int(-1)).unwrap(),
+                u64::MAX
+            );
         }
     }
 
@@ -992,7 +1090,11 @@ mod fast_lane_tests {
         unsafe {
             let err = err_of(<OpaqueRef as HostParam>::read(&vm, Slot::null()));
             assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
-            assert!(err.msg.contains("nil does not bind `OpaqueRef`"), "{}", err.msg);
+            assert!(
+                err.msg.contains("nil does not bind `OpaqueRef`"),
+                "{}",
+                err.msg
+            );
             let err = err_of(<Opaque<u64> as HostParam>::read(&vm, Slot::null()));
             assert_eq!(err.kind, TrapKind::NilDeref, "{}", err.msg);
         }
@@ -1010,11 +1112,18 @@ mod fast_lane_tests {
         }
         let mut vm = bare_vm();
         let out = entry_of::<_, OpaqueRef, i64, Fallible>(&mut vm, fallible_body, &[Slot::null()]);
-        let t = vm.host_trap.take().expect("fallible adapter reports the nil");
+        let t = vm
+            .host_trap
+            .take()
+            .expect("fallible adapter reports the nil");
         assert_eq!(t.kind, TrapKind::NilDeref, "{}", t.msg);
         let _ = out;
-        let out = entry_of::<_, OpaqueRef, i64, Infallible>(&mut vm, infallible_body, &[Slot::null()]);
-        let t = vm.host_trap.take().expect("infallible adapter reports the nil");
+        let out =
+            entry_of::<_, OpaqueRef, i64, Infallible>(&mut vm, infallible_body, &[Slot::null()]);
+        let t = vm
+            .host_trap
+            .take()
+            .expect("infallible adapter reports the nil");
         assert_eq!(t.kind, TrapKind::NilDeref, "{}", t.msg);
         let _ = out;
     }
@@ -1031,7 +1140,8 @@ mod fast_lane_tests {
         let out = entry_of::<_, i64, i64, Fallible>(&mut vm, fallible_id, &[Slot::int(-404)]);
         assert!(vm.host_trap.is_none());
         assert_eq!(unsafe { out.i }, -404);
-        let out = entry_of::<_, i64, i64, Infallible>(&mut vm, infallible_id, &[Slot::int(i64::MIN)]);
+        let out =
+            entry_of::<_, i64, i64, Infallible>(&mut vm, infallible_id, &[Slot::int(i64::MIN)]);
         assert!(vm.host_trap.is_none());
         assert_eq!(unsafe { out.i }, i64::MIN);
     }
@@ -1065,7 +1175,10 @@ mod fast_lane_tests {
         unsafe {
             // the copy IS the read: str → String, bytes → Vec<u8>
             assert_eq!(<String as HostParam>::read(&vm, s).unwrap(), "ada");
-            assert_eq!(<Vec<u8> as HostParam>::read(&vm, bytes).unwrap(), vec![9u8, 8, 7]);
+            assert_eq!(
+                <Vec<u8> as HostParam>::read(&vm, bytes).unwrap(),
+                vec![9u8, 8, 7]
+            );
         }
     }
 
@@ -1073,7 +1186,9 @@ mod fast_lane_tests {
     fn the_box_payload_token_still_traps_on_a_wrong_t() {
         let mut vm = bare_vm();
         let boxed = crate::heap::Opaque::alloc(&mut vm, 7i64).expect("alloc");
-        let slot = Slot { r: boxed.handle().ptr() };
+        let slot = Slot {
+            r: boxed.handle().ptr(),
+        };
         // the fast read keeps `from_handle`'s type-token check — a wrong
         // `T` is a trap, never a reinterpret
         unsafe {
@@ -1135,7 +1250,13 @@ mod return_lane_tests {
         thunk.ret = ret;
         thunk.argv = vec![];
         prog.funcs.push(thunk);
-        Vm::new(Rc::new(prog), &Limits::default(), HostHooks::default(), registry).expect("vm")
+        Vm::new(
+            Rc::new(prog),
+            &Limits::default(),
+            HostHooks::default(),
+            registry,
+        )
+        .expect("vm")
     }
 
     #[test]
@@ -1208,7 +1329,11 @@ mod return_lane_tests {
         let back = <Vec<u8> as Ret>::from_slot(&vm, reg, TY_BYTES).expect("decode");
         assert_eq!(back, vec![1u8, 2, 3], "the octets crossed");
         vm.heap.release(reg);
-        assert_eq!(vm.heap_usage(), base, "the answer cell released exactly once");
+        assert_eq!(
+            vm.heap_usage(),
+            base,
+            "the answer cell released exactly once"
+        );
     }
 
     #[test]
@@ -1274,7 +1399,11 @@ mod return_lane_tests {
         vm.cur_func = 0;
         vm.cur_regs = vec![Slot::int(0), Slot::int(0)];
         vm.call_host(1, 0, 0, 1).expect("the crossing");
-        assert_eq!(unsafe { vm.cur_regs[1].i }, 0, "the nil case is the flat nil");
+        assert_eq!(
+            unsafe { vm.cur_regs[1].i },
+            0,
+            "the nil case is the flat nil"
+        );
         assert_eq!(vm.heap_usage(), base, "no cell minted for the nil");
     }
 
@@ -1288,10 +1417,20 @@ mod return_lane_tests {
         let mut vm = vm_with_ret(hosts, vec![TY_I32, TY_I32], TY_I32);
         vm.cur_func = 0;
         vm.cur_regs = vec![Slot::int(0), Slot::int(777)];
-        let err = vm.call_host(1, 0, 0, 1).expect_err("a laneless answer traps");
-        assert!(err.msg.contains("does not cross as a host-fn answer"), "{}", err.msg);
+        let err = vm
+            .call_host(1, 0, 0, 1)
+            .expect_err("a laneless answer traps");
+        assert!(
+            err.msg.contains("does not cross as a host-fn answer"),
+            "{}",
+            err.msg
+        );
         assert!(err.msg.contains("?str"), "{}", err.msg);
-        assert_eq!(unsafe { vm.cur_regs[1].i }, 777, "the trap fired before the dst write");
+        assert_eq!(
+            unsafe { vm.cur_regs[1].i },
+            777,
+            "the trap fired before the dst write"
+        );
     }
 
     #[test]
@@ -1307,7 +1446,11 @@ mod return_lane_tests {
         // the nil-flattened read over a NULL slot binds only under a real
         // `?T` — a null word against a non-option declared type is the
         // reference-kind mismatch, never a silent None
-        let err = err_of(<Option<String> as Ret>::from_slot(&vm, Slot::null(), TY_BYTES));
+        let err = err_of(<Option<String> as Ret>::from_slot(
+            &vm,
+            Slot::null(),
+            TY_BYTES,
+        ));
         assert!(err.msg.contains("is not the option"), "{}", err.msg);
     }
 }

@@ -4,7 +4,11 @@
 use super::*;
 
 impl Vm {
-    pub(in crate::interp) fn nat_bytes_clone(&mut self, recv: Option<Reg>, dst: Option<Reg>) -> Result<(), Trap> {
+    pub(in crate::interp) fn nat_bytes_clone(
+        &mut self,
+        recv: Option<Reg>,
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         use crate::heap::ArrKind;
         let cell = cell_of(self.reg(recv.unwrap()));
         match &cell.data {

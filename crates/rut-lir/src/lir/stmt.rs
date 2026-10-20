@@ -2,11 +2,11 @@
 //! when statements (pattern-test chains), exhaustiveness, and the
 //! expression-depth budget.
 
+use super::*;
 use crate::check::{float_suffix_ty, int_suffix_ty, TcResult};
 use rut_core::ops::*;
 use rut_core::sym;
 use rut_core::types::*;
-use super::*;
 
 /// Where a for-of's designated `[iterable]` member binds (v20): the
 /// receiver's own class/enum decl (the method monomorphizes here,
@@ -15,10 +15,20 @@ use super::*;
 /// request the linkable-classes machinery already speaks).
 pub(crate) enum IterSource {
     /// `(decl name, marked member name, substitution env)`
-    Local { data: IdentId, method: IdentId, env: Vec<(IdentId, TypeId)> },
+    Local {
+        data: IdentId,
+        method: IdentId,
+        env: Vec<(IdentId, TypeId)>,
+    },
     /// the mirror: same key shape, the bodies live in the owner —
     /// `(decl name, marked member name, substitution, owner, concrete target)`
-    Extern { data: IdentId, method: IdentId, subst: Vec<(IdentId, TypeId)>, owner: String, concrete: TypeId },
+    Extern {
+        data: IdentId,
+        method: IdentId,
+        subst: Vec<(IdentId, TypeId)>,
+        owner: String,
+        concrete: TypeId,
+    },
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -32,7 +42,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// binding of this block leaves with its own storage. `None`: the
     /// block produces no value (no tail, or a tail-position `if` whose
     /// arms all terminate — their `return`s ARE the answers).
-    pub(crate) fn compile_block_value(&mut self, h: impl Into<NodeId>, expected: Option<TypeId>) -> TcResult<Option<TypeId>> {
+    pub(crate) fn compile_block_value(
+        &mut self,
+        h: impl Into<NodeId>,
+        expected: Option<TypeId>,
+    ) -> TcResult<Option<TypeId>> {
         let id = h.into();
         self.span = self.ctx.ast.span(id).lo;
         let (stmts, tail) = match self.ctx.ast.kind(id) {
@@ -41,10 +55,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         // a trailing `if` STATEMENT with an else is tail position too
         let if_tail = tail.is_none()
-            && stmts
-                .last()
-                .is_some_and(|s| matches!(self.ctx.ast.stmt(*s), StmtKind::If { els: Some(_), .. }));
-        let split = if if_tail { stmts.len() - 1 } else { stmts.len() };
+            && stmts.last().is_some_and(|s| {
+                matches!(self.ctx.ast.stmt(*s), StmtKind::If { els: Some(_), .. })
+            });
+        let split = if if_tail {
+            stmts.len() - 1
+        } else {
+            stmts.len()
+        };
         let base = self.locals.len();
         // sibling recovery: a failing statement reports its site(s), its
         // partial scope rolls back, and the walk continues — the NEXT
@@ -180,11 +198,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         ElseBranch::Block(b) => self.ctx.ast.span(b.id()),
                         ElseBranch::If(h) => self.ctx.ast.span(h.id()),
                     };
-                    self.ctx.err(sp, format!(
-                        "`if` arms must agree: `{}` vs `{}`",
-                        self.ctx.type_name(a),
-                        self.ctx.type_name(b)
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`if` arms must agree: `{}` vs `{}`",
+                            self.ctx.type_name(a),
+                            self.ctx.type_name(b)
+                        ),
+                    );
                 }
                 if a != TY_NIL {
                     if let Some(o) = out {
@@ -280,7 +301,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             Some(ElseBranch::Block(b)) => {
                 let t = self.compile_expr(b.into(), expected)?;
                 let term = self.terminated;
-                if term { None } else { Some(t) }
+                if term {
+                    None
+                } else {
+                    Some(t)
+                }
             }
             // an else-if chain: the nested if STATEMENT is the else arm;
             // its own all-arms-terminated verdict IS the contribution
@@ -311,11 +336,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         Some(ElseBranch::If(h)) => self.ctx.ast.span(h.id()),
                         None => sp,
                     };
-                    self.ctx.err(esp, format!(
-                        "`if` arms must agree: `{}` vs `{}`",
-                        self.ctx.type_name(a),
-                        self.ctx.type_name(b)
-                    ));
+                    self.ctx.err(
+                        esp,
+                        format!(
+                            "`if` arms must agree: `{}` vs `{}`",
+                            self.ctx.type_name(a),
+                            self.ctx.type_name(b)
+                        ),
+                    );
                 }
                 if a != TY_NIL {
                     if let Some(o) = out {
@@ -410,7 +438,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// diag list. Records every name the statement would have bound.
     fn poison_let_names(&mut self, s: NodeHandle<AnyStmt>, out: &mut Vec<rut_core::IdentId>) {
         let (name, destructure) = match self.ctx.ast.stmt(s) {
-            StmtKind::LetStmt { name, destructure, .. } => (*name, destructure.clone()),
+            StmtKind::LetStmt {
+                name, destructure, ..
+            } => (*name, destructure.clone()),
             _ => return,
         };
         if destructure.is_none() && self.ctx.poisoned.insert(name) {
@@ -456,10 +486,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         if tail_ty == TY_NIL {
             if ret_ty != TY_NIL {
-                self.ctx.err(rut_lexer::span::Span::new(sp_lo, sp_lo), format!(
-                    "tail type mismatch: `{}` expected, `nil` is the body's tail",
-                    self.ctx.type_name(ret_ty)
-                ));
+                self.ctx.err(
+                    rut_lexer::span::Span::new(sp_lo, sp_lo),
+                    format!(
+                        "tail type mismatch: `{}` expected, `nil` is the body's tail",
+                        self.ctx.type_name(ret_ty)
+                    ),
+                );
             }
             self.terminated = true;
             return;
@@ -469,14 +502,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None => self.widens(tail_ty, ret_ty),
         };
         if !ok {
-            self.ctx.err(rut_lexer::span::Span::new(sp_lo, sp_lo), format!(
-                "tail type mismatch: `{}` expected, `{}` is the body's tail",
-                self.ctx.type_name(ret_ty),
-                self.ctx.type_name(tail_ty)
-            ));
+            self.ctx.err(
+                rut_lexer::span::Span::new(sp_lo, sp_lo),
+                format!(
+                    "tail type mismatch: `{}` expected, `{}` is the body's tail",
+                    self.ctx.type_name(ret_ty),
+                    self.ctx.type_name(tail_ty)
+                ),
+            );
         }
         self.widen_to_slot(tail_ty, ret_ty, sp_lo);
-        self.emit(Op::Ret { val: Some(self.last_reg) }, sp_lo);
+        self.emit(
+            Op::Ret {
+                val: Some(self.last_reg),
+            },
+            sp_lo,
+        );
         self.terminated = true;
     }
 
@@ -484,16 +525,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let sp = self.ctx.ast.span(node.id());
         self.span = sp.lo;
         match self.ctx.ast.stmt(node).clone() {
-            StmtKind::LetStmt { is_mut, name, destructure, ty, init } => {
+            StmtKind::LetStmt {
+                is_mut,
+                name,
+                destructure,
+                ty,
+                init,
+            } => {
                 let ty_node = ty; // the annotation node (shadowed below)
                 let expected = ty.map(|t| self.resolve_type_now(t));
                 let t = self.compile_expr(init, expected)?;
                 if let Some(e) = expected {
                     if !self.widens_val(init, t, e) {
-                        self.ctx.err(sp, format!(
-                            "let `{}` is `{}` but the initializer is `{}`",
-                            self.ctx.name(name), self.ctx.type_name(e), self.ctx.type_name(t)
-                        ));
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "let `{}` is `{}` but the initializer is `{}`",
+                                self.ctx.name(name),
+                                self.ctx.type_name(e),
+                                self.ctx.type_name(t)
+                            ),
+                        );
                     }
                     // concrete → slot widening boxes scalars (the slot
                     // ABI): the binding always holds a cell
@@ -506,15 +558,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // its origins; anything else stays unknown (vtable)
                 let mut origins: Vec<TypeId> = Vec::new();
                 if matches!(self.ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
-                    origins = if t != ty && !matches!(self.ctx.types.kind(t), TyKind::IfaceObj { .. }) {
-                        // a widening let: the initializer's concrete type
-                        // is the single origin
-                        vec![t]
-                    } else if let ExprKind::Path { segs } = self.ctx.ast.expr(init) {
-                        if segs.len() == 1 { self.origins_of(segs[0].name) } else { Vec::new() }
-                    } else {
-                        Vec::new()
-                    };
+                    origins =
+                        if t != ty && !matches!(self.ctx.types.kind(t), TyKind::IfaceObj { .. }) {
+                            // a widening let: the initializer's concrete type
+                            // is the single origin
+                            vec![t]
+                        } else if let ExprKind::Path { segs } = self.ctx.ast.expr(init) {
+                            if segs.len() == 1 {
+                                self.origins_of(segs[0].name)
+                            } else {
+                                Vec::new()
+                            }
+                        } else {
+                            Vec::new()
+                        };
                 }
                 match destructure {
                     None => {
@@ -530,10 +587,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             self.note_union_binding(name, Some(tn));
                         } else {
                             let copied = match self.ctx.ast.expr(init) {
-                                ExprKind::Path { segs } if segs.len() == 1 => self
-                                    .union_syms
-                                    .get(&segs[0].name)
-                                    .copied(),
+                                ExprKind::Path { segs } if segs.len() == 1 => {
+                                    self.union_syms.get(&segs[0].name).copied()
+                                }
                                 _ => self.union_provenance(init).map(|(g, _)| g),
                             };
                             match copied {
@@ -550,14 +606,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // `let (a, b) = ..`: each binding takes
                         // the matching tuple field
                         let TyKind::Data { fields } = self.ctx.types.kind(ty).clone() else {
-                            self.ctx.err(sp, format!("destructuring needs a tuple —got `{}`", self.ctx.type_name(ty)));
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "destructuring needs a tuple —got `{}`",
+                                    self.ctx.type_name(ty)
+                                ),
+                            );
                             return Err(());
                         };
                         if fields.len() != names.len() {
-                            self.ctx.err(sp, format!(
-                                "the pattern binds {} names but the tuple has {} fields",
-                                names.len(), fields.len()
-                            ));
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "the pattern binds {} names but the tuple has {} fields",
+                                    names.len(),
+                                    fields.len()
+                                ),
+                            );
                             return Err(());
                         }
                         let tuple_reg = self.last_reg;
@@ -646,7 +712,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = saved || self.while_never_falls_through(cond, body);
                 Ok(())
             }
-            StmtKind::ForOf { var, is_mut, iter, body } => {
+            StmtKind::ForOf {
+                var,
+                is_mut,
+                iter,
+                body,
+            } => {
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
@@ -654,7 +725,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = saved;
                 r
             }
-            StmtKind::ForC { var, is_mut, init, cond, update, body } => {
+            StmtKind::ForC {
+                var,
+                is_mut,
+                init,
+                cond,
+                update,
+                body,
+            } => {
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
@@ -734,10 +812,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             if self.async_infer {
                                 self.async_founds.push(t);
                             } else if !self.widens_val(v, t, ans_ty) {
-                                self.ctx.err(sp, format!(
-                                    "return type mismatch: `{}` expected, `{}` returned",
-                                    self.ctx.type_name(ans_ty), self.ctx.type_name(t)
-                                ));
+                                self.ctx.err(
+                                    sp,
+                                    format!(
+                                        "return type mismatch: `{}` expected, `{}` returned",
+                                        self.ctx.type_name(ans_ty),
+                                        self.ctx.type_name(t)
+                                    ),
+                                );
                             }
                             self.widen_to_slot(t, ans_ty, sp.lo);
                             let src = self.last_reg;
@@ -793,7 +875,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             ));
                         }
                         self.widen_to_slot(t, self.ret_ty, sp.lo);
-                        self.emit(Op::Ret { val: Some(self.last_reg) }, sp.lo);
+                        self.emit(
+                            Op::Ret {
+                                val: Some(self.last_reg),
+                            },
+                            sp.lo,
+                        );
                     }
                     None => {
                         if self.ret_ty != TY_NIL {
@@ -871,7 +958,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `async {}` bodies are their own fn frames — nothing inside binds
     /// to this loop (their `break`s diagnose there, their `return`s
     /// answer their own fn) — so the walk stops at their edges.
-    fn while_never_falls_through(&self, cond: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>) -> bool {
+    fn while_never_falls_through(
+        &self,
+        cond: NodeHandle<AnyExpr>,
+        body: NodeHandle<BlockNode>,
+    ) -> bool {
         if !matches!(self.ctx.ast.expr(cond), ExprKind::Lit(Lit::Bool(true))) {
             return false;
         }
@@ -906,10 +997,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     None => false,
                 }
             }
-            Kind::Stmt(StmtKind::WhenStmt { arms, .. }) => arms
-                .iter()
-                .any(|a| self.binds_break_in_arm(a.id(), depth)),
-            Kind::Stmt(StmtKind::LetStmt { init, .. }) => self.binds_break_in_expr(init.id(), depth),
+            Kind::Stmt(StmtKind::WhenStmt { arms, .. }) => {
+                arms.iter().any(|a| self.binds_break_in_arm(a.id(), depth))
+            }
+            Kind::Stmt(StmtKind::LetStmt { init, .. }) => {
+                self.binds_break_in_expr(init.id(), depth)
+            }
             Kind::Stmt(StmtKind::ExprStmt(e)) => self.binds_break_in_expr(e.id(), depth),
             _ => false,
         }
@@ -925,9 +1018,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 stmts.iter().any(|s| self.binds_break(s.id(), depth))
                     || tail.is_some_and(|t| self.binds_break_in_expr(t.id(), depth))
             }
-            Kind::Expr(ExprKind::WhenExpr { arms, .. }) => arms
-                .iter()
-                .any(|a| self.binds_break_in_arm(a.id(), depth)),
+            Kind::Expr(ExprKind::WhenExpr { arms, .. }) => {
+                arms.iter().any(|a| self.binds_break_in_arm(a.id(), depth))
+            }
             // the if ATOM: the branch blocks are statement bearers (the
             // condition cannot be — expressions carry no `break` outside
             // blocks). `else if` links are if STATEMENTS — the statement
@@ -952,7 +1045,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    pub(crate) fn compile_for_of(&mut self, node: NodeId, var: IdentId, is_mut: bool, iter: NodeHandle<AnyExpr>, body: NodeHandle<BlockNode>, sp: rut_lexer::span::Span) -> TcResult<()> {
+    pub(crate) fn compile_for_of(
+        &mut self,
+        node: NodeId,
+        var: IdentId,
+        is_mut: bool,
+        iter: NodeHandle<AnyExpr>,
+        body: NodeHandle<BlockNode>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
         let iter_reg = self.last_reg;
         // `for (v of p)` auto-derefs a pointer
@@ -965,16 +1066,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             None => match self.iterate_impl(it, sp) {
                 Some(Ok((src, elem_ty))) => {
                     if std::env::var("RUT_PROBE_BT").is_ok() {
-                        eprintln!("PROBE for-of marked member found, elem={}", self.ctx.type_name(elem_ty));
+                        eprintln!(
+                            "PROBE for-of marked member found, elem={}",
+                            self.ctx.type_name(elem_ty)
+                        );
                     }
-                    return self.compile_for_of_iterate(var, iter_reg, src, elem_ty, is_mut, body, sp);
+                    return self
+                        .compile_for_of_iterate(var, iter_reg, src, elem_ty, is_mut, body, sp);
                 }
                 // the marked member exists but refused the crossing —
                 // already diagnosed, no "needs a sequence" tail
                 Some(Err(())) => return Err(()),
                 None => {
                     if std::env::var("RUT_PROBE_BT").is_ok() {
-                        eprintln!("PROBE for-of NO marked member on {}", self.ctx.type_name(it));
+                        eprintln!(
+                            "PROBE for-of NO marked member on {}",
+                            self.ctx.type_name(it)
+                        );
                     }
                     self.ctx.err(sp, format!(
                         "`for (let .. of ..)` needs a sequence — `{}` is not one and marks no `[iterable]` member",
@@ -1005,12 +1113,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.cell_counter += 1;
             let cty = self.ctx.types.intern(RutType {
                 name: cname,
-                kind: TyKind::Data { fields: vec![FieldInfo { name: var, ty: elem_ty }] },
+                kind: TyKind::Data {
+                    fields: vec![FieldInfo {
+                        name: var,
+                        ty: elem_ty,
+                    }],
+                },
             });
             let crec = self.new_reg(cty);
             let null = self.new_reg(elem_ty);
             self.emit(Op::ConstRaw { dst: null, bits: 0 }, sp.lo);
-            { let (argv_off, argc) = self.pool_args(&[null]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp.lo); }
+            {
+                let (argv_off, argc) = self.pool_args(&[null]);
+                self.emit(
+                    Op::MakeRecord {
+                        dst: crec,
+                        ty: cty,
+                        argv_off,
+                        argc,
+                    },
+                    sp.lo,
+                );
+            }
             var_cell = Some(cty);
             cell_reg = crec;
         }
@@ -1050,11 +1174,39 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // stores through the binding (the per-iteration element
                 // store is machinery, never gated)
                 let repr = self.ctx.types.repr_of(elem_ty);
-                self.emit(Op::SetF { obj: cell_reg, field: 0, val: var_reg, repr }, sp.lo);
-                self.locals.push(Local { name: var, reg: cell_reg, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: Some(cty) });
+                self.emit(
+                    Op::SetF {
+                        obj: cell_reg,
+                        field: 0,
+                        val: var_reg,
+                        repr,
+                    },
+                    sp.lo,
+                );
+                self.locals.push(Local {
+                    name: var,
+                    reg: cell_reg,
+                    ty: elem_ty,
+                    is_mut,
+                    loop_var: true,
+                    loop_for_c: false,
+                    origins: Vec::new(),
+                    field: NO_FIELD,
+                    cell: Some(cty),
+                });
             }
             None => {
-                self.locals.push(Local { name: var, reg: var_reg, ty: elem_ty, is_mut, loop_var: true, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
+                self.locals.push(Local {
+                    name: var,
+                    reg: var_reg,
+                    ty: elem_ty,
+                    is_mut,
+                    loop_var: true,
+                    loop_for_c: false,
+                    origins: Vec::new(),
+                    field: NO_FIELD,
+                    cell: None,
+                });
             }
         }
         self.loops.push((l_cont, l_end));
@@ -1066,13 +1218,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.emit(Op::ConstRaw { dst: one, bits: 1 }, sp.lo);
         let next = self.new_reg(TY_I32);
         self.emit(arith(ArithOp::Add, PrimTy::I32, next, idx, one), sp.lo);
-        self.emit(Op::Mov { dst: idx, src: next }, sp.lo);
+        self.emit(
+            Op::Mov {
+                dst: idx,
+                src: next,
+            },
+            sp.lo,
+        );
         self.jmp(l_head);
         self.bind(l_end);
         let _ = node;
         Ok(())
     }
-
 
     /// The receiver's designated `[iterable]` member (v20, the marker's
     /// dispatch): where the weave's `xs.<member>(emit)` binds, and the
@@ -1083,7 +1240,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// cross-package inherent rows (the linkable-classes registry):
     /// another module's marked member, a template row whose per-
     /// instantiation bodies live in its owner.
-    fn iterate_impl(&mut self, ty: TypeId, sp: rut_lexer::span::Span) -> Option<Result<(IterSource, TypeId), ()>> {
+    fn iterate_impl(
+        &mut self,
+        ty: TypeId,
+        sp: rut_lexer::span::Span,
+    ) -> Option<Result<(IterSource, TypeId), ()>> {
         if matches!(self.ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
             // trait objects dispatch through their vtable — a concrete
             // iterable is needed at the call site in this build
@@ -1098,7 +1259,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         // LOCAL: the class's or enum's own marked member (methods attach
         // to the decl — the ordinary inherent machinery)
-        let mut locals: Vec<(IdentId, Vec<(IdentId, NodeHandle<MethodDeclNode>)>, Vec<IdentId>)> = Vec::new();
+        let mut locals: Vec<(
+            IdentId,
+            Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+            Vec<IdentId>,
+        )> = Vec::new();
         if let Some((n, d)) = self.ctx.datas.iter().find(|(n, _)| *n == dname) {
             locals.push((*n, d.methods.clone(), d.generics.clone()));
         }
@@ -1118,11 +1283,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.ctx.err(sp, msg);
                     return Some(Err(()));
                 }
-                let env: Vec<(IdentId, TypeId)> = generics
-                    .iter()
-                    .cloned()
-                    .zip(args.iter().cloned())
-                    .collect();
+                let env: Vec<(IdentId, TypeId)> =
+                    generics.iter().cloned().zip(args.iter().cloned()).collect();
                 let Some(elem) = self.marker_emit_elem(&md.params, &env) else {
                     self.ctx.err(
                         self.ctx.ast.span(mnode.id()),
@@ -1134,7 +1296,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     );
                     return None;
                 };
-                return Some(Ok((IterSource::Local { data: n, method: *mname, env }, elem)));
+                return Some(Ok((
+                    IterSource::Local {
+                        data: n,
+                        method: *mname,
+                        env,
+                    },
+                    elem,
+                )));
             }
         }
         self.iterate_impl_extern(ty, dname, args).map(Ok)
@@ -1142,7 +1311,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// The emit parameter's element: the marked member's one non-self
     /// parameter must be `fn(E) -> bool` — `E` resolved under `env`.
-    fn marker_emit_elem(&mut self, params: &[NodeHandle<AnyParam>], env: &[(IdentId, TypeId)]) -> Option<TypeId> {
+    fn marker_emit_elem(
+        &mut self,
+        params: &[NodeHandle<AnyParam>],
+        env: &[(IdentId, TypeId)],
+    ) -> Option<TypeId> {
         for p in params {
             if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ctx.ast.param(*p) {
                 let ty = self.ctx.resolve_sig_ty(*t, env, None);
@@ -1164,7 +1337,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// exporter. The concrete member body need not exist here at all:
     /// the weave lowers to the mirror request and link binds the
     /// owner's compiled body.
-    fn iterate_impl_extern(&mut self, ty: TypeId, dname: IdentId, args: Vec<TypeId>) -> Option<(IterSource, TypeId)> {
+    fn iterate_impl_extern(
+        &mut self,
+        ty: TypeId,
+        dname: IdentId,
+        args: Vec<TypeId>,
+    ) -> Option<(IterSource, TypeId)> {
         let rows = self.ctx.extern_inherents.clone();
         for (_ih, row) in rows.iter().enumerate() {
             let hits_template = self
@@ -1187,12 +1365,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     Some(g) => g.params.iter().cloned().zip(args.iter().cloned()).collect(),
                     None => vec![],
                 };
-                let Some(elem) = self.extern_marker_emit_elem(m.params.first().copied(), &subst) else {
+                let Some(elem) = self.extern_marker_emit_elem(m.params.first().copied(), &subst)
+                else {
                     continue;
                 };
                 let owner = self.ctx.owner_of_data(dname);
                 let method = m.name;
-                return Some((IterSource::Extern { data: dname, method, subst, owner, concrete: ty }, elem));
+                return Some((
+                    IterSource::Extern {
+                        data: dname,
+                        method,
+                        subst,
+                        owner,
+                        concrete: ty,
+                    },
+                    elem,
+                ));
             }
         }
         None
@@ -1202,7 +1390,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// (`fn(#E) -> bool`) resolves its leaf text through the target
     /// substitution — the leaf spells the parameter, the substitution
     /// keys the bare name.
-    fn extern_marker_emit_elem(&mut self, param: Option<TypeId>, subst: &[(IdentId, TypeId)]) -> Option<TypeId> {
+    fn extern_marker_emit_elem(
+        &mut self,
+        param: Option<TypeId>,
+        subst: &[(IdentId, TypeId)],
+    ) -> Option<TypeId> {
         let p = param?;
         let TyKind::Fn { params: fps, ret } = self.ctx.types.kind(p).clone() else {
             return None;
@@ -1220,7 +1412,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // element's own spelling
         bid.and_then(|b| self.ctx.types.dense_id_of_name(b))
     }
-
 
     /// `for (v of xs)` over a user iterable — desugars to
     /// `xs.iterate(emit)` on the registered impl, where `emit` is a
@@ -1259,14 +1450,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if l.cell.is_some() {
                     // promoted: pool the SHARED CELL (not the value) —
                     // reads and writes on either side route through it
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: l.cell, origins: l.origins.clone() });
+                    caps.push(Capture {
+                        name: n,
+                        ty: l.ty,
+                        is_mut: l.is_mut,
+                        cell: l.cell,
+                        origins: l.origins.clone(),
+                    });
                     cap_regs.push(l.reg);
                 } else {
                     // copy the CURRENT value into a capture register
                     // (the immediate-slot copy: primitives copy, ref
                     // handles share their cell)
                     let cap_reg = self.read_local(&l, sp.lo);
-                    caps.push(Capture { name: n, ty: l.ty, is_mut: l.is_mut, cell: None, origins: l.origins.clone() });
+                    caps.push(Capture {
+                        name: n,
+                        ty: l.ty,
+                        is_mut: l.is_mut,
+                        cell: None,
+                        origins: l.origins.clone(),
+                    });
                     cap_regs.push(cap_reg);
                 }
             }
@@ -1286,17 +1489,36 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.cell_counter += 1;
             let cty = self.ctx.types.intern(RutType {
                 name: cname,
-                kind: TyKind::Data { fields: vec![FieldInfo { name: var, ty: elem_ty }] },
+                kind: TyKind::Data {
+                    fields: vec![FieldInfo {
+                        name: var,
+                        ty: elem_ty,
+                    }],
+                },
             });
             let crec = self.new_reg(cty);
             let null = self.new_reg(elem_ty);
             self.emit(Op::ConstRaw { dst: null, bits: 0 }, sp.lo);
-            { let (argv_off, argc) = self.pool_args(&[null]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp.lo); }
+            {
+                let (argv_off, argc) = self.pool_args(&[null]);
+                self.emit(
+                    Op::MakeRecord {
+                        dst: crec,
+                        ty: cty,
+                        argv_off,
+                        argc,
+                    },
+                    sp.lo,
+                );
+            }
             var_cell = Some(cty);
             var_cell_reg = Some(crec);
         }
         let emit = crate::check::Inst {
-            key: crate::check::FnKey::ForOfEmit { body: body.id(), var },
+            key: crate::check::FnKey::ForOfEmit {
+                body: body.id(),
+                var,
+            },
             subst: self.subst.clone(),
             iface_origins: vec![],
         };
@@ -1315,7 +1537,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let mut argv: Vec<u16> = var_cell_reg.into_iter().collect();
             argv.extend(cap_regs.iter().copied());
             let (argv_off, argc) = self.pool_args(&argv);
-            self.emit(Op::MakeClosure { dst: clo, func: fid, argv_off, argc }, sp.lo);
+            self.emit(
+                Op::MakeClosure {
+                    dst: clo,
+                    func: fid,
+                    argv_off,
+                    argc,
+                },
+                sp.lo,
+            );
         }
         // `xs.iterate(emit)` — the impl's method, statically bound to
         // this impl (nominal registry); a cross-package row binds the
@@ -1326,14 +1556,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // the marked member IS an inherent method: the ordinary
             // class-method key (the same one a plain `xs.<member>(..)`
             // call binds), monomorphized under the target substitution
-            IterSource::Local { data, method, env } => self
-                .ctx
-                .ensure_inst(crate::check::Inst {
-                    key: crate::check::FnKey::Method { data, name: method },
-                    subst: env,
-                    iface_origins: vec![],
-                }),
-            IterSource::Extern { data, method, subst, owner, concrete } => {
+            IterSource::Local { data, method, env } => self.ctx.ensure_inst(crate::check::Inst {
+                key: crate::check::FnKey::Method { data, name: method },
+                subst: env,
+                iface_origins: vec![],
+            }),
+            IterSource::Extern {
+                data,
+                method,
+                subst,
+                owner,
+                concrete,
+            } => {
                 // the mirror claims under the class decl + method +
                 // substitution: the OWNER's compiled bodies ledger under
                 // that key, so link binds the call to the real body —
@@ -1348,7 +1582,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 })
             }
         };
-        { let (argv_off, argc) = self.pool_recv_args(rreg, &(vec![clo])); self.emit(Op::CallM { func: mfid, argv_off, argc, dst: NOREG }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_recv_args(rreg, &(vec![clo]));
+            self.emit(
+                Op::CallM {
+                    func: mfid,
+                    argv_off,
+                    argc,
+                    dst: NOREG,
+                },
+                sp.lo,
+            );
+        }
         if std::env::var("RUT_PROBE_BT").is_ok() {
             eprintln!("PROBE for-of iterate call emitted: mfid={mfid} recv_reg={rreg}");
         }
@@ -1402,7 +1647,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut all_terminate = !arms.is_empty();
         for arm in arms {
             let arm = *arm;
-            let ArmKind::WhenArm { pats, body } = self.ctx.ast.arm(arm) else { continue };
+            let ArmKind::WhenArm { pats, body } = self.ctx.ast.arm(arm) else {
+                continue;
+            };
             let l_arm = self.new_label();
             let l_next_arm = self.new_label();
             // alternatives chain within the arm: `1, 2, 3 -> ..`
@@ -1425,21 +1672,44 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // block arms are value blocks now (compile_expr's Block arm
             // → compile_block_value); a nil-context block still compiles
             // as statements
-            let bt = self.compile_expr(*body, if result_ty != TY_NIL { Some(result_ty) } else { None })?;
+            let bt = self.compile_expr(
+                *body,
+                if result_ty != TY_NIL {
+                    Some(result_ty)
+                } else {
+                    None
+                },
+            )?;
             all_terminate &= self.terminated;
             self.terminated = arm_saved;
             if result_ty != TY_NIL {
                 if bt != result_ty {
-                    self.ctx.err(self.ctx.ast.span(body.id()), format!(
-                        "`when` arms must agree: `{}` vs `{}`",
-                        self.ctx.type_name(result_ty), self.ctx.type_name(bt)
-                    ));
+                    self.ctx.err(
+                        self.ctx.ast.span(body.id()),
+                        format!(
+                            "`when` arms must agree: `{}` vs `{}`",
+                            self.ctx.type_name(result_ty),
+                            self.ctx.type_name(bt)
+                        ),
+                    );
                 }
                 let rr = result_reg.unwrap();
                 if self.ctx.types.is_ref(result_ty) {
-                    self.emit(Op::MovRef { dst: rr, src: self.last_reg }, sp.lo);
+                    self.emit(
+                        Op::MovRef {
+                            dst: rr,
+                            src: self.last_reg,
+                        },
+                        sp.lo,
+                    );
                 } else {
-                    self.emit(Op::Mov { dst: rr, src: self.last_reg }, sp.lo);
+                    self.emit(
+                        Op::Mov {
+                            dst: rr,
+                            src: self.last_reg,
+                        },
+                        sp.lo,
+                    );
                 }
             }
             self.jmp(l_end);
@@ -1478,15 +1748,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ExprKind::Block { tail, .. } => tail.map_or(TY_NIL, |t| self.expr_type_hint(t)),
             // an if ATOM hints at its then arm's tail (the completing-arm
             // law; the compile-time agreement check does the rest)
-            ExprKind::If { then, .. } => {
-                self.ctx.ast.block_tail(*then).map_or(TY_NIL, |t| self.expr_type_hint(t))
-            }
+            ExprKind::If { then, .. } => self
+                .ctx
+                .ast
+                .block_tail(*then)
+                .map_or(TY_NIL, |t| self.expr_type_hint(t)),
             ExprKind::Struct { ty, .. } => self.resolve_type_now(*ty),
             _ => TY_NIL,
         }
     }
 
-    pub(crate) fn check_when_exhaustive(&mut self, scrut_ty: TypeId, arms: &[NodeHandle<AnyArm>], sp: rut_lexer::span::Span) -> TcResult<()> {
+    pub(crate) fn check_when_exhaustive(
+        &mut self,
+        scrut_ty: TypeId,
+        arms: &[NodeHandle<AnyArm>],
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<()> {
         let mut has_else = false;
         let mut seen: Vec<String> = Vec::new();
         for a in arms {
@@ -1511,7 +1788,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         PatKind::PatWild => "_".to_string(),
                     };
                     if seen.contains(&key) && key != "else" {
-                        self.ctx.err(self.ctx.ast.span(p.id()), format!("duplicate pattern `{key}`"));
+                        self.ctx.err(
+                            self.ctx.ast.span(p.id()),
+                            format!("duplicate pattern `{key}`"),
+                        );
                     }
                     seen.push(key);
                 }
@@ -1521,7 +1801,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let TyKind::Enum { members } = self.ctx.types.kind(scrut_ty).clone() {
                 for (m, _v) in &members {
                     let mtext = self.ctx.name(*m);
-                    if !seen.iter().any(|s| s.ends_with(&format!("::{mtext}")) || s == mtext) {
+                    if !seen
+                        .iter()
+                        .any(|s| s.ends_with(&format!("::{mtext}")) || s == mtext)
+                    {
                         self.ctx.err(
                             sp,
                             format!(
@@ -1542,8 +1825,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             } else {
                 // bool: covered iff true and false appear
-                if !(seen.contains(&"Bool(true)".to_string()) && seen.contains(&"Bool(false)".to_string())) {
-                    self.ctx.err(sp, "`when` over `bool` must cover `true` and `false`");
+                if !(seen.contains(&"Bool(true)".to_string())
+                    && seen.contains(&"Bool(false)".to_string()))
+                {
+                    self.ctx
+                        .err(sp, "`when` over `bool` must cover `true` and `false`");
                     return Err(());
                 }
             }
@@ -1552,7 +1838,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// Emit the match test for one pattern; returns the bool reg.
-    pub(crate) fn compile_pattern_test(&mut self, p: NodeHandle<AnyPat>, scrut_ty: TypeId, scrut_reg: u16, sp: rut_lexer::span::Span) -> TcResult<u16> {
+    pub(crate) fn compile_pattern_test(
+        &mut self,
+        p: NodeHandle<AnyPat>,
+        scrut_ty: TypeId,
+        scrut_reg: u16,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<u16> {
         match self.ctx.ast.pat(p).clone() {
             PatKind::PatElse | PatKind::PatWild => {
                 let r = self.new_reg(TY_BOOL);
@@ -1575,10 +1867,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.emit(cmpop(CmpOp::Eq, p, r, scrut_reg, lreg), sp.lo);
                     }
                     TyKind::Str => {
-                        self.emit(Op::StrCmp { eq: true, dst: r, a: scrut_reg, b: lreg }, sp.lo);
+                        self.emit(
+                            Op::StrCmp {
+                                eq: true,
+                                dst: r,
+                                a: scrut_reg,
+                                b: lreg,
+                            },
+                            sp.lo,
+                        );
                     }
                     _ => {
-                        self.ctx.err(sp, "this literal pattern cannot match the scrutinee type");
+                        self.ctx
+                            .err(sp, "this literal pattern cannot match the scrutinee type");
                     }
                 }
                 Ok(r)
@@ -1593,59 +1894,88 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // local half resolves in the CURRENT module (phase 3),
                     // the own-package import lane between (the target
                     // module's enum, the crossing predicate gating)
-                    let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> =
-                        if let Some(e) = self.ctx.enum_here(ename) {
-                            let members: Vec<(IdentId, i64)> = match self.ctx.types.kind(e.ty) {
-                                TyKind::Enum { members } => members.clone(),
-                                _ => vec![],
-                            };
-                            Some((e.ty, members))
-                        } else if let Some(target) = self.ctx.own_use_target(ename) {
-                            match self.ctx.enum_in(&target, ename) {
-                                Some(e) => {
-                                    let from = self.ctx.cur_mod.clone();
-                                    if !self.ctx.vis_crosses(&from, &target, e.vis) {
-                                        self.ctx.err(sp, format!(
+                    let enum_hit: Option<(TypeId, Vec<(IdentId, i64)>)> = if let Some(e) =
+                        self.ctx.enum_here(ename)
+                    {
+                        let members: Vec<(IdentId, i64)> = match self.ctx.types.kind(e.ty) {
+                            TyKind::Enum { members } => members.clone(),
+                            _ => vec![],
+                        };
+                        Some((e.ty, members))
+                    } else if let Some(target) = self.ctx.own_use_target(ename) {
+                        match self.ctx.enum_in(&target, ename) {
+                            Some(e) => {
+                                let from = self.ctx.cur_mod.clone();
+                                if !self.ctx.vis_crosses(&from, &target, e.vis) {
+                                    self.ctx.err(
+                                        sp,
+                                        format!(
                                             "`{}::{}` — {}",
                                             target,
                                             self.ctx.name(ename),
                                             self.ctx.vis_hint(ename, &from, &target, e.vis)
-                                        ));
-                                        return Err(());
-                                    }
-                                    let members: Vec<(IdentId, i64)> =
-                                        match self.ctx.types.kind(e.ty) {
-                                            TyKind::Enum { members } => members.clone(),
-                                            _ => vec![],
-                                        };
-                                    Some((e.ty, members))
+                                        ),
+                                    );
+                                    return Err(());
                                 }
-                                None => None,
+                                let members: Vec<(IdentId, i64)> = match self.ctx.types.kind(e.ty) {
+                                    TyKind::Enum { members } => members.clone(),
+                                    _ => vec![],
+                                };
+                                Some((e.ty, members))
                             }
-                        } else {
-                            // the per-file key IS the gate
-                            self.ctx.extern_enum(ename)
-                        };
+                            None => None,
+                        }
+                    } else {
+                        // the per-file key IS the gate
+                        self.ctx.extern_enum(ename)
+                    };
                     if let Some((ety, members)) = enum_hit {
                         if ety == scrut_ty {
                             let midx = members.iter().position(|&(m, _)| m == mname);
                             match midx {
                                 Some(i) => {
                                     let mreg = self.new_reg(scrut_ty);
-                                    self.emit(Op::EnumNew { dst: mreg, ty: scrut_ty, member: i as u32 }, sp.lo);
+                                    self.emit(
+                                        Op::EnumNew {
+                                            dst: mreg,
+                                            ty: scrut_ty,
+                                            member: i as u32,
+                                        },
+                                        sp.lo,
+                                    );
                                     let r = self.new_reg(TY_BOOL);
-                                    self.emit(Op::RefEq { eq: true, dst: r, a: scrut_reg, b: mreg }, sp.lo);
+                                    self.emit(
+                                        Op::RefEq {
+                                            eq: true,
+                                            dst: r,
+                                            a: scrut_reg,
+                                            b: mreg,
+                                        },
+                                        sp.lo,
+                                    );
                                     return Ok(r);
                                 }
                                 None => {
-                                    self.ctx.err(sp, format!("`{}` is not a member of {}", self.ctx.name(mname), self.ctx.name(ename)));
+                                    self.ctx.err(
+                                        sp,
+                                        format!(
+                                            "`{}` is not a member of {}",
+                                            self.ctx.name(mname),
+                                            self.ctx.name(ename)
+                                        ),
+                                    );
                                 }
                             }
                         } else {
-                            self.ctx.err(sp, format!(
-                                "`when` pattern `{}` does not match the scrutinee type `{}`",
-                                self.ctx.name(ename), self.ctx.type_name(scrut_ty)
-                            ));
+                            self.ctx.err(
+                                sp,
+                                format!(
+                                    "`when` pattern `{}` does not match the scrutinee type `{}`",
+                                    self.ctx.name(ename),
+                                    self.ctx.type_name(scrut_ty)
+                                ),
+                            );
                         }
                     }
                 }
@@ -1655,22 +1985,42 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let mname = segs[0].name;
                         if let Some(i) = members.iter().position(|(m, _)| *m == mname) {
                             let mreg = self.new_reg(scrut_ty);
-                            self.emit(Op::EnumNew { dst: mreg, ty: scrut_ty, member: i as u32 }, sp.lo);
+                            self.emit(
+                                Op::EnumNew {
+                                    dst: mreg,
+                                    ty: scrut_ty,
+                                    member: i as u32,
+                                },
+                                sp.lo,
+                            );
                             let r = self.new_reg(TY_BOOL);
-                            self.emit(Op::RefEq { eq: true, dst: r, a: scrut_reg, b: mreg }, sp.lo);
+                            self.emit(
+                                Op::RefEq {
+                                    eq: true,
+                                    dst: r,
+                                    a: scrut_reg,
+                                    b: mreg,
+                                },
+                                sp.lo,
+                            );
                             return Ok(r);
                         }
                     }
                     self.ctx.err(sp, "unknown pattern");
                 }
-                self.ctx.err(sp, "patterns in this build: enum members, literals, and `else`");
+                self.ctx.err(
+                    sp,
+                    "patterns in this build: enum members, literals, and `else`",
+                );
                 Err(())
             }
             PatKind::PatCtor { .. } => {
-                self.ctx.err(sp, "constructor patterns (Ok(x), Some(y)) are not supported in this build");
+                self.ctx.err(
+                    sp,
+                    "constructor patterns (Ok(x), Some(y)) are not supported in this build",
+                );
                 Err(())
             }
         }
     }
-
 }

@@ -27,14 +27,16 @@ use rut_vm::interp::Vm;
 
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -60,7 +62,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -84,7 +89,12 @@ fn vm_nmapset(src: &str) -> Vm {
     assert!(
         g.graph.diags.is_empty(),
         "{}",
-        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = g.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
@@ -96,8 +106,13 @@ fn vm_nmapset(src: &str) -> Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten()); // the mounted .d.rut ↔ the bodies
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-    .unwrap()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .unwrap()
 }
 
 fn run_main(src: &str) -> i64 {
@@ -286,7 +301,11 @@ entry fn main() -> i64 {
 
 #[test]
 fn prim_get_semantics_hold_through_the_family_spelling() {
-    assert_eq!(run_main(GET_SEMANTICS_SRC), 0, "fresh opt per hit, held copies keep pre-replace bits");
+    assert_eq!(
+        run_main(GET_SEMANTICS_SRC),
+        0,
+        "fresh opt per hit, held copies keep pre-replace bits"
+    );
 }
 
 // ---- growth under collisions, through the wrapper -------------------
@@ -329,7 +348,11 @@ entry fn main() -> i64 {
 
 #[test]
 fn primmap_vals_survive_multi_grow_under_collisions() {
-    assert_eq!(run_main(GROW_SRC), 0, "500 colliding keys from cap 4: eight sentinel grows, remove/re-add churn, every val exact");
+    assert_eq!(
+        run_main(GROW_SRC),
+        0,
+        "500 colliding keys from cap 4: eight sentinel grows, remove/re-add churn, every val exact"
+    );
 }
 
 // ---- the u64 / f64 lanes at the wrapper -----------------------------
@@ -460,5 +483,9 @@ fn primmap_coexists_with_hashmap_and_hashset() {
          \x20   return acc + pm.len() as i64;\n\
          }\n",
     );
-    assert_eq!(checksum, 24 + 21 + 1 + 1 + 24, "str lane adds, the k7 val 21, the ref-V and set checks, len");
+    assert_eq!(
+        checksum,
+        24 + 21 + 1 + 1 + 24,
+        "str lane adds, the k7 val 21, the ref-V and set checks, len"
+    );
 }

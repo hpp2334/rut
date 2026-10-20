@@ -20,7 +20,9 @@ fn corpus() -> Vec<std::path::PathBuf> {
     ];
     let mut stack = roots.to_vec();
     while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for e in entries.flatten() {
             let p = e.path();
             if p.is_dir() {
@@ -37,7 +39,11 @@ fn corpus() -> Vec<std::path::PathBuf> {
 #[test]
 fn corpus_parses_clean() {
     let files = corpus();
-    assert!(files.len() >= 50, "expected the full corpus, found {}", files.len());
+    assert!(
+        files.len() >= 50,
+        "expected the full corpus, found {}",
+        files.len()
+    );
     let mut failures = Vec::new();
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
@@ -52,15 +58,26 @@ fn corpus_parses_clean() {
             ));
         }
     }
-    assert!(failures.is_empty(), "parser regressions:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "parser regressions:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]
 fn depth_budget_is_a_diag_not_a_crash() {
     // 100k-deep parens: one clean "nesting too deep", never a host crash (C3)
-    let src = format!("fn f() -> nil {{ let x = {}1{}; }}", "(".repeat(100_000), ")".repeat(100_000));
+    let src = format!(
+        "fn f() -> nil {{ let x = {}1{}; }}",
+        "(".repeat(100_000),
+        ")".repeat(100_000)
+    );
     let (_, diags) = parse(&src, Mode::Impl);
-    assert!(diags.iter().any(|d| d.msg.contains("nesting too deep")), "want a nesting diag, got: {diags:?}");
+    assert!(
+        diags.iter().any(|d| d.msg.contains("nesting too deep")),
+        "want a nesting diag, got: {diags:?}"
+    );
 }
 
 #[test]
@@ -76,8 +93,10 @@ fn enum_member_values_are_gone() {
             "want the member-value diag, got: {diags:?}"
         );
         let items = ast.module_items(ast.root);
-        let Some(ItemKind::Enum { members, .. }) =
-            items.iter().map(|it| ast.item(*it)).find(|k| matches!(k, ItemKind::Enum { .. }))
+        let Some(ItemKind::Enum { members, .. }) = items
+            .iter()
+            .map(|it| ast.item(*it))
+            .find(|k| matches!(k, ItemKind::Enum { .. }))
         else {
             panic!("enum item still parses: {diags:?}")
         };
@@ -87,11 +106,7 @@ fn enum_member_values_are_gone() {
 
 #[test]
 fn reserved_words_explain_themselves() {
-    for (word, want) in [
-        ("private", "pub"),
-        ("void", "nil"),
-        ("in", "of"),
-    ] {
+    for (word, want) in [("private", "pub"), ("void", "nil"), ("in", "of")] {
         let src = format!("fn f() -> nil {{ let x = {word}; }}");
         let (_, diags) = parse(&src, Mode::Impl);
         assert!(
@@ -110,7 +125,10 @@ fn interface_is_reserved_and_trait_is_not() {
     assert!(rut_parser::is_reserved_kw("interface"));
     let src = "fn f() -> nil { let trait = 1; let y = trait; }";
     let (_, diags) = parse(src, Mode::Impl);
-    assert!(diags.is_empty(), "`trait` must lex and parse as an identifier: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "`trait` must lex and parse as an identifier: {diags:?}"
+    );
     // ...and `interface` no longer hard-errors at lex — the word flows
     // through the parser like any identifier token
     let src = "fn f() -> nil { let x = interface; }";
@@ -129,11 +147,23 @@ fn retired_reservations_are_ordinary_identifiers() {
     // `any`, …) are gone. `let x = null;` degrades to an
     // unresolved-name error at RESOLUTION, not a lex/parse diag.
     for (label, src, mode) in [
-        ("binding", "fn f() -> nil { let null = 5; let var = null; }", Mode::Impl),
+        (
+            "binding",
+            "fn f() -> nil { let null = 5; let var = null; }",
+            Mode::Impl,
+        ),
         ("fn name", "fn match() -> nil { }", Mode::Impl),
         ("struct name", "struct var { n: i32 }", Mode::Impl),
-        ("method call", "fn f() -> nil { let m = 1; let k = m.delete(m); }", Mode::Impl),
-        ("with ident", "fn f() -> nil { let with = 1; let const = with; }", Mode::Impl),
+        (
+            "method call",
+            "fn f() -> nil { let m = 1; let k = m.delete(m); }",
+            Mode::Impl,
+        ),
+        (
+            "with ident",
+            "fn f() -> nil { let with = 1; let const = with; }",
+            Mode::Impl,
+        ),
         (
             "decl param + answer",
             "pub host fn del(m: opaque, k: bytes) -> any;",
@@ -141,7 +171,10 @@ fn retired_reservations_are_ordinary_identifiers() {
         ),
     ] {
         let (_, diags) = parse(src, mode);
-        assert!(diags.is_empty(), "{label}: retired reservation drew a diag: {diags:?}");
+        assert!(
+            diags.is_empty(),
+            "{label}: retired reservation drew a diag: {diags:?}"
+        );
     }
 }
 
@@ -150,7 +183,8 @@ fn fstring_holes_allow_string_arguments() {
     // corpus-driven (closures-generics.rut L32): hole termination is
     // brace-based, so string literals lex fine inside holes — the
     // "bind it first" stays a style note, not a lex error
-    let src = "fn f() -> nil { let name = Option.some(\"x\"); print(f\"n={name.unwrap_or(\"?\")}\"); }";
+    let src =
+        "fn f() -> nil { let name = Option.some(\"x\"); print(f\"n={name.unwrap_or(\"?\")}\"); }";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
 }
@@ -257,28 +291,56 @@ fn nullable_types_parse() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
     let items = ast.module_items(ast.root);
-    let f = items.iter().find(|i| matches!(ast.item(**i), ItemKind::Fn(_))).expect("fn");
-    let ItemKind::Fn(d) = ast.item(*f) else { unreachable!() };
+    let f = items
+        .iter()
+        .find(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
+        .expect("fn");
+    let ItemKind::Fn(d) = ast.item(*f) else {
+        unreachable!()
+    };
     let param_ty = |i: usize| ast.param(d.params[i]).clone();
-    let MemberKind::Param(p0) = param_ty(0) else { panic!("param 0") };
-    let MemberKind::Param(p1) = param_ty(1) else { panic!("param 1") };
-    let MemberKind::Param(p2) = param_ty(2) else { panic!("param 2") };
-    let MemberKind::Param(p3) = param_ty(3) else { panic!("param 3") };
+    let MemberKind::Param(p0) = param_ty(0) else {
+        panic!("param 0")
+    };
+    let MemberKind::Param(p1) = param_ty(1) else {
+        panic!("param 1")
+    };
+    let MemberKind::Param(p2) = param_ty(2) else {
+        panic!("param 2")
+    };
+    let MemberKind::Param(p3) = param_ty(3) else {
+        panic!("param 3")
+    };
     // `[?i32]` — the array OUTSIDE, the nullable on the ELEMENT
     let TypeKind::TyArray { elem } = ast.ty(p0.ty.unwrap()) else {
-        panic!("`[?i32]` must be TyArray(TyOpt), got {:?}", ast.ty(p0.ty.unwrap()));
+        panic!(
+            "`[?i32]` must be TyArray(TyOpt), got {:?}",
+            ast.ty(p0.ty.unwrap())
+        );
     };
-    assert!(matches!(ast.ty(*elem), TypeKind::TyOpt { .. }), "the element carries the `?`");
+    assert!(
+        matches!(ast.ty(*elem), TypeKind::TyOpt { .. }),
+        "the element carries the `?`"
+    );
     // `?[i32]` — the nullable OUTSIDE, the array inside
     let TypeKind::TyOpt { inner } = ast.ty(p1.ty.unwrap()) else {
-        panic!("`?[i32]` must be TyOpt(TyArray), got {:?}", ast.ty(p1.ty.unwrap()));
+        panic!(
+            "`?[i32]` must be TyOpt(TyArray), got {:?}",
+            ast.ty(p1.ty.unwrap())
+        );
     };
-    assert!(matches!(ast.ty(*inner), TypeKind::TyArray { .. }), "the array is the payload");
+    assert!(
+        matches!(ast.ty(*inner), TypeKind::TyArray { .. }),
+        "the array is the payload"
+    );
     // `??i32` chains — Opt(Opt(path))
     let TypeKind::TyOpt { inner } = ast.ty(p2.ty.unwrap()) else {
         panic!("`??i32` must be TyOpt, got {:?}", ast.ty(p2.ty.unwrap()));
     };
-    assert!(matches!(ast.ty(*inner), TypeKind::TyOpt { .. }), "the chain nests");
+    assert!(
+        matches!(ast.ty(*inner), TypeKind::TyOpt { .. }),
+        "the chain nests"
+    );
     // `?[?i32]` — both at once: Opt(Array(Opt))
     let TypeKind::TyOpt { inner } = ast.ty(p3.ty.unwrap()) else {
         panic!("`?[?i32]` must be TyOpt, got {:?}", ast.ty(p3.ty.unwrap()));
@@ -286,7 +348,10 @@ fn nullable_types_parse() {
     let TypeKind::TyArray { elem } = ast.ty(*inner) else {
         panic!("the payload is the array, got {:?}", ast.ty(*inner));
     };
-    assert!(matches!(ast.ty(*elem), TypeKind::TyOpt { .. }), "the element is nullable");
+    assert!(
+        matches!(ast.ty(*elem), TypeKind::TyOpt { .. }),
+        "the element is nullable"
+    );
     // the return keeps the same rule
     let TypeKind::TyOpt { .. } = ast.ty(d.ret.unwrap()) else {
         panic!("`-> ?i32` must be TyOpt");
@@ -314,7 +379,10 @@ fn the_postfix_nullable_spelling_is_removed() {
     ] {
         let (_, diags) = parse(src, Mode::Impl);
         assert!(
-            diags.iter().any(|d| d.msg.contains("the postfix spelling `T?` was removed") && d.msg.contains("`?T`")),
+            diags
+                .iter()
+                .any(|d| d.msg.contains("the postfix spelling `T?` was removed")
+                    && d.msg.contains("`?T`")),
             "`{src}` must diagnose the removed postfix spelling: {diags:?}"
         );
     }
@@ -334,7 +402,10 @@ fn removed_pointer_spellings_diagnose() {
         diags.iter().any(|d| d.msg.contains("share by reference")),
         "`&x` should diagnose the sharing law: {diags:?}"
     );
-    let (_, diags) = parse("fn f() -> nil { let p: ?i32 = 7; let y: i32 = *p; }", Mode::Impl);
+    let (_, diags) = parse(
+        "fn f() -> nil { let p: ?i32 = 7; let y: i32 = *p; }",
+        Mode::Impl,
+    );
     assert!(
         diags.iter().any(|d| d.msg.contains("share by reference")),
         "`*x` should diagnose the sharing law: {diags:?}"
@@ -437,7 +508,8 @@ fn use_with_an_empty_leaf_diagnoses() {
     let (ast, diags) = parse("use pkg::A::B;\n", Mode::Impl);
     assert_eq!(diags.len(), 1, "one diag, no cascade: {diags:?}");
     assert!(
-        diags[0].msg.contains("imports nothing") && diags[0].msg.contains("spell a name at the leaf"),
+        diags[0].msg.contains("imports nothing")
+            && diags[0].msg.contains("spell a name at the leaf"),
         "the empty-leaf diag names the fix: {diags:?}"
     );
     let items = ast.module_items(ast.root);
@@ -460,12 +532,19 @@ fn inline_mod_blocks_are_gone() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert_eq!(diags.len(), 1, "one diag, no cascade: {diags:?}");
     assert!(
-        diags[0].msg.contains("inline `mod { }` blocks are gone") && diags[0].msg.contains("NAME/mod.rut"),
+        diags[0].msg.contains("inline `mod { }` blocks are gone")
+            && diags[0].msg.contains("NAME/mod.rut"),
         "the inline-block diag names the fix: {diags:?}"
     );
     let items = ast.module_items(ast.root);
-    assert!(matches!(ast.item(items[0]), ItemKind::ModDecl { .. }), "the decl survives");
-    assert!(matches!(ast.item(items[1]), ItemKind::Fn(_)), "the tail still parses");
+    assert!(
+        matches!(ast.item(items[0]), ItemKind::ModDecl { .. }),
+        "the decl survives"
+    );
+    assert!(
+        matches!(ast.item(items[1]), ItemKind::Fn(_)),
+        "the tail still parses"
+    );
 }
 
 #[test]
@@ -477,7 +556,10 @@ fn pub_mod_and_pub_self_are_gone_everywhere() {
         diags.iter().any(|d| d.msg.contains("are gone")),
         "{diags:?}"
     );
-    assert!(matches!(ast.item(ast.module_items(ast.root)[0]), ItemKind::Alias(_)));
+    assert!(matches!(
+        ast.item(ast.module_items(ast.root)[0]),
+        ItemKind::Alias(_)
+    ));
     let (_, diags) = parse("pub(self) mod m;", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("are gone")),

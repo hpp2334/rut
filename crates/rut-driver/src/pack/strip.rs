@@ -35,48 +35,47 @@ pub(super) fn strip_arm(
     if !strip {
         return Ok(None);
     }
-        for (spec, source) in sources.iter() {
-            if *spec == root || session.resolve(spec).is_err() {
-                continue; // the root rides compiled above; unmounted names never ride
-            }
-            if rides_compiled(session, spec, &units) {
-                continue; // a `.rutc` group — no source binds anything
-            }
-            let dm = group_manifest(source, archives, read).map_err(PackError::law)?;
-            for dep in dm.deps.keys() {
-                let dep_compiled = rides_compiled(session, dep, &units);
-                if dep_compiled {
-                    return Err(PackError::law(format!(
-                        "--strip needs a fully-compiled closure: the source group \
+    for (spec, source) in sources.iter() {
+        if *spec == root || session.resolve(spec).is_err() {
+            continue; // the root rides compiled above; unmounted names never ride
+        }
+        if rides_compiled(session, spec, &units) {
+            continue; // a `.rutc` group — no source binds anything
+        }
+        let dm = group_manifest(source, archives, read).map_err(PackError::law)?;
+        for dep in dm.deps.keys() {
+            let dep_compiled = rides_compiled(session, dep, &units);
+            if dep_compiled {
+                return Err(PackError::law(format!(
+                    "--strip needs a fully-compiled closure: the source group \
                          `{spec}` binds compiled `{dep}`'s surface at load, whose \
                          names would be mangled — restructure the closure, or \
                          pack without `--strip`"
-                    )));
-                }
+                )));
             }
         }
-        // the encoded set: the root, then every compiled-riding group in
-        // `sources` order — gathered in ONE pass so the programs reborrow
-        // disjointly
-        let mut wanted: Vec<(String, usize)> = vec![(root.to_string(), root_idx)];
-        for (spec, _) in sources.iter() {
-            if *spec == root || session.resolve(spec).is_err() {
-                continue;
-            }
-            if !rides_compiled(session, spec, &units) {
-                continue; // the declaration file set — no binary to strip
-            }
-            let &(idx, _) = units.linked.get(spec).unwrap();
-            wanted.push((spec.clone(), idx));
+    }
+    // the encoded set: the root, then every compiled-riding group in
+    // `sources` order — gathered in ONE pass so the programs reborrow
+    // disjointly
+    let mut wanted: Vec<(String, usize)> = vec![(root.to_string(), root_idx)];
+    for (spec, _) in sources.iter() {
+        if *spec == root || session.resolve(spec).is_err() {
+            continue;
         }
-        let mut groups: Vec<(String, &mut rut_core::binary::Program)> =
-            Vec::with_capacity(wanted.len());
-        for (i, prog) in units.programs.iter_mut().enumerate() {
-            if let Some((spec, _)) = wanted.iter().find(|(_, ix)| *ix == i) {
-                groups.push((spec.clone(), prog));
-            }
+        if !rides_compiled(session, spec, &units) {
+            continue; // the declaration file set — no binary to strip
         }
-        let map = rut_core::strip::strip_programs(&mut groups).map_err(PackError::law)?;
+        let &(idx, _) = units.linked.get(spec).unwrap();
+        wanted.push((spec.clone(), idx));
+    }
+    let mut groups: Vec<(String, &mut rut_core::binary::Program)> =
+        Vec::with_capacity(wanted.len());
+    for (i, prog) in units.programs.iter_mut().enumerate() {
+        if let Some((spec, _)) = wanted.iter().find(|(_, ix)| *ix == i) {
+            groups.push((spec.clone(), prog));
+        }
+    }
+    let map = rut_core::strip::strip_programs(&mut groups).map_err(PackError::law)?;
     Ok(Some(map.to_bytes()))
-
 }

@@ -18,10 +18,15 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
     // uses — the suites' negative shapes are satisfaction/closure
     // lanes, not nameability)
     for (spec, src) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
-        chain = chain
-            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
+        chain = chain.pkg(
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     let (root, _) = modules.last().expect("root");
     let g = chain.entrypoint(root).compile().expect("compile the graph");
@@ -34,7 +39,12 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
         .expect("vm");
     let n: i32 = vm.call("main", ()).expect("main runs");
     n
@@ -45,10 +55,15 @@ fn compile_expect_err(modules: &[(&str, &str)]) -> Vec<String> {
     let mut chain = rut_driver::RutRun::new();
     // the same loose table as [`run_graph`]: every pkg names every other
     for (spec, src) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
-        chain = chain
-            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
+        chain = chain.pkg(
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     let (root, _) = modules.last().expect("root");
     let g = chain.entrypoint(root).compile().expect("compile the graph");
@@ -72,16 +87,22 @@ impl Circle { pub fn area(self) -> f64 { return self.r; } }
 fn cross_module_member_call_runs_the_foreign_members() {
     let out = run_graph(&[
         ("shapes", SHAPES),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::Point;
 entry fn main() -> i32 {
     let p = Point { x: 3.0 };
     let a = p.area();
     return a as i32;
 }
-"),
+",
+        ),
     ]);
-    assert_eq!(out, 3, "Point's inherent members in shapes answered the call");
+    assert_eq!(
+        out, 3,
+        "Point's inherent members in shapes answered the call"
+    );
 }
 
 #[test]
@@ -91,26 +112,32 @@ fn cross_module_boxed_dispatch_runs_both_types() {
     // each result dispatches through the itable to its own members
     let true_case = run_graph(&[
         ("shapes", SHAPES),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::{Shape, pick};
 entry fn main() -> i32 {
     let s: Shape = pick(true);
     let a = s.area();
     return a as i32;
 }
-"),
+",
+        ),
     ]);
     assert_eq!(true_case, 1, "Point's members via the itable");
     let false_case = run_graph(&[
         ("shapes", SHAPES),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::{Shape, pick};
 entry fn main() -> i32 {
     let s: Shape = pick(false);
     let a = s.area();
     return a as i32;
 }
-"),
+",
+        ),
     ]);
     assert_eq!(false_case, 2, "Circle's members via the itable");
 }
@@ -123,16 +150,22 @@ fn cross_module_interface_param_boundary_carries_the_box() {
     // dispatches through the box's slot
     let out = run_graph(&[
         ("shapes", SHAPES),
-        ("app", "\
+        (
+            "app",
+            "\
 use shapes::{Shape, describe, pick};
 entry fn main() -> i32 {
     let s: Shape = pick(true);
     let a = describe(s);
     return a as i32;
 }
-"),
+",
+        ),
     ]);
-    assert_eq!(out, 1, "the boxed value crossed the param boundary and dispatched");
+    assert_eq!(
+        out, 1,
+        "the boxed value crossed the param boundary and dispatched"
+    );
 }
 
 #[test]
@@ -142,15 +175,21 @@ fn cross_module_fn_value_position() {
     // targets exactly like call targets)
     let out = run_graph(&[
         ("helpers", "pub fn triple(x: i32) -> i32 { return x * 3; }"),
-        ("app", "\
+        (
+            "app",
+            "\
 use helpers::triple;
 fn apply(f: fn(i32) -> i32, v: i32) -> i32 { return f(v); }
 entry fn main() -> i32 {
     return apply(triple, 4);
 }
-"),
+",
+        ),
     ]);
-    assert_eq!(out, 12, "the imported fn's value answered the indirect call");
+    assert_eq!(
+        out, 12,
+        "the imported fn's value answered the indirect call"
+    );
 }
 
 #[test]
@@ -193,7 +232,10 @@ entry fn main() -> i32 {
 }
 "),
     ]);
-    assert_eq!(out, 133, "42 + 42 + 42 + 7 — the foreign pair answered everywhere");
+    assert_eq!(
+        out, 133,
+        "42 + 42 + 42 + 7 — the foreign pair answered everywhere"
+    );
 }
 
 // ---- generic foreign interfaces (the v1 gates stay lifted) ----
@@ -219,7 +261,9 @@ pub fn try_get(b: Box2<i32>) -> i32 { return b.unwrap_or(-1); }
     let out = run_graph(&[
         ("traits", WRAP),
         ("extras", extras),
-        ("app", "\
+        (
+            "app",
+            "\
 use traits::Wrap;
 use extras::{Box2, make, try_get};
 entry fn main() -> i32 {
@@ -229,9 +273,13 @@ entry fn main() -> i32 {
     if (w.unwrap_or(1) != 7) { return 2; }
     return try_get(make());
 }
-"),
+",
+        ),
     ]);
-    assert_eq!(out, 7, "the consumer unit's members answered every call site");
+    assert_eq!(
+        out, 7,
+        "the consumer unit's members answered every call site"
+    );
 }
 
 #[test]
@@ -252,16 +300,22 @@ pub fn boxed() -> Wrap<i32> { let w: Wrap<i32> = make(); return w; }
     let out = run_graph(&[
         ("traits", WRAP),
         ("extras", extras),
-        ("app", "\
+        (
+            "app",
+            "\
 use traits::Wrap;
 use extras::boxed;
 fn describe(w: Wrap<i32>) -> i32 { return w.unwrap_or(0); }
 entry fn main() -> i32 {
     return describe(boxed());
 }
-"),
+",
+        ),
     ]);
-    assert_eq!(out, 9, "the spelled foreign interface type answered the call");
+    assert_eq!(
+        out, 9,
+        "the spelled foreign interface type answered the call"
+    );
 }
 
 #[test]
@@ -282,7 +336,9 @@ pub fn make_s() -> Box2<str> { return Box2 { v: \"hi\" }; }
     let out = run_graph(&[
         ("traits", WRAP),
         ("extras", extras),
-        ("app", "\
+        (
+            "app",
+            "\
 use traits::Wrap;
 use extras::{Box2, make_i, make_s};
 entry fn main() -> i32 {
@@ -294,7 +350,8 @@ entry fn main() -> i32 {
     let z: i32 = w.unwrap_or(1);
     return x + z + y.len() as i32;
 }
-"),
+",
+        ),
     ]);
     assert_eq!(out, 16, "both instantiations answered (7 + 7 + 2)");
 }
@@ -385,7 +442,9 @@ fn boxed_foreign_sources_dispatch_through_the_generic_ctx() {
     // land).
     let out = run_graph(&[
         ("kit", REACTOR_KIT),
-        ("app", "\
+        (
+            "app",
+            "\
 use kit::{ Readable, source_f64, mutate_ctx };
 entry fn main() -> i32 {
     let src: Readable<f64> = source_f64(60.0);
@@ -394,9 +453,13 @@ entry fn main() -> i32 {
     let after: f64 = ctx.get<f64>(src);
     return after as i32;
 }
-"),
+",
+        ),
     ]);
-    assert_eq!(out, 2, "the write through the boxed handle landed (60.0 -> 2.5)");
+    assert_eq!(
+        out, 2,
+        "the write through the boxed handle landed (60.0 -> 2.5)"
+    );
 }
 
 #[test]
@@ -407,7 +470,9 @@ fn a_consumer_fn_over_boxed_params_rides_the_param_origins() {
     // there, and both the write and the read answer
     let out = run_graph(&[
         ("kit", REACTOR_KIT),
-        ("app", "\
+        (
+            "app",
+            "\
 use kit::{ MutationCtx, Readable, source_f64, source_str, mutate_ctx };
 fn sync(ctx: MutationCtx, remaining: Readable<f64>, pill: Readable<str>) -> f64 {
     ctx.set<f64>(remaining, 41.0);
@@ -422,9 +487,13 @@ entry fn main() -> i32 {
     let after: f64 = probe.get<f64>(remaining);
     return (out + after) as i32;
 }
-"),
+",
+        ),
     ]);
-    assert_eq!(out, 82, "the write landed inside the callee AND through the caller's box");
+    assert_eq!(
+        out, 82,
+        "the write landed inside the callee AND through the caller's box"
+    );
 }
 
 #[test]
@@ -434,7 +503,9 @@ fn a_mutation_lambda_writes_through_its_captured_sources() {
     // origins
     let out = run_graph(&[
         ("kit", REACTOR_KIT),
-        ("app", "\
+        (
+            "app",
+            "\
 use kit::{ MutationCtx, source_f64, source_bool, mutate_ctx };
 entry fn main() -> i32 {
     let remaining = source_f64(60.0);
@@ -449,7 +520,8 @@ entry fn main() -> i32 {
     let b: bool = probe.get<bool>(running);
     return r as i32 + b as i32;
 }
-"),
+",
+        ),
     ]);
     assert_eq!(out, 6, "the captures' writes landed (5.0 + true)");
 }
@@ -462,7 +534,9 @@ fn an_untracked_box_refuses_the_cross_interface_pass() {
     // dispatch can never find
     let out = compile_expect_err(&[
         ("kit", REACTOR_KIT),
-        ("app", "\
+        (
+            "app",
+            "\
 use kit::{ MutationCtx, Readable, source_f64, mutate_ctx };
 fn fresh() -> Readable<f64> { return source_f64(1.0); }
 entry fn main() -> i32 {
@@ -470,10 +544,12 @@ entry fn main() -> i32 {
     ctx.set<f64>(fresh(), 2.0);
     return 0;
 }
-"),
+",
+        ),
     ]);
     assert!(
-        out.iter().any(|d| d.contains("does not satisfy") && d.contains("no member set is visible")),
+        out.iter()
+            .any(|d| d.contains("does not satisfy") && d.contains("no member set is visible")),
         "the untracked pass diagnoses: {out:?}"
     );
 }
@@ -485,7 +561,9 @@ fn the_write_face_refuses_a_read_only_source() {
     // missing member, never a silent dispatch
     let out = compile_expect_err(&[
         ("kit", REACTOR_KIT),
-        ("app", "\
+        (
+            "app",
+            "\
 use kit::{ MutationCtx, Readable, static_value, mutate_ctx };
 entry fn main() -> i32 {
     let lit: Readable<f64> = static_value(9.0);
@@ -493,10 +571,12 @@ entry fn main() -> i32 {
     ctx.set<f64>(lit, 1.0);
     return 0;
 }
-"),
+",
+        ),
     ]);
     assert!(
-        out.iter().any(|d| d.contains("does not satisfy") && d.contains("no member `put`")),
+        out.iter()
+            .any(|d| d.contains("does not satisfy") && d.contains("no member `put`")),
         "the read-only source refuses the write slot: {out:?}"
     );
 }

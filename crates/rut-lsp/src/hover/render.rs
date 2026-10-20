@@ -88,7 +88,12 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
     out
 }
 
-pub(crate) fn render_member(i: &DefIndex, ty: &TyDef, m: &MemberSrc, via: Option<String>) -> String {
+pub(crate) fn render_member(
+    i: &DefIndex,
+    ty: &TyDef,
+    m: &MemberSrc,
+    via: Option<String>,
+) -> String {
     let mut out = code_block(&m.src);
     match via {
         Some(v) => out.push_str(&format!("\nfrom `{v}`")),
@@ -107,7 +112,10 @@ pub(crate) fn render_member(i: &DefIndex, ty: &TyDef, m: &MemberSrc, via: Option
 }
 
 pub(crate) fn render_fn_hits(hits: &[(&DefIndex, &FnDef)], one: &FnDef) -> String {
-    let i = hits.iter().find(|(_, f)| f.span == one.span).map(|(i, _)| *i);
+    let i = hits
+        .iter()
+        .find(|(_, f)| f.span == one.span)
+        .map(|(i, _)| *i);
     let mut out = code_block(&one.src);
     if let Some(o) = &one.owner {
         out.push_str(&format!("\nin `{o}`"));
@@ -191,7 +199,12 @@ pub(crate) fn render_primitive(name: &str) -> Option<String> {
         "i8" => prim_line(name, "signed", 8, "-128 ..= 127"),
         "i16" => prim_line(name, "signed", 16, "-32768 ..= 32767"),
         "i32" => prim_line(name, "signed", 32, "-2147483648 ..= 2147483647"),
-        "i64" => prim_line(name, "signed", 64, "-9223372036854775808 ..= 9223372036854775807"),
+        "i64" => prim_line(
+            name,
+            "signed",
+            64,
+            "-9223372036854775808 ..= 9223372036854775807",
+        ),
         "u8" => prim_line(name, "unsigned", 8, "0 ..= 255"),
         "u16" => prim_line(name, "unsigned", 16, "0 ..= 65535"),
         "u32" => prim_line(name, "unsigned", 32, "0 ..= 4294967295"),
@@ -249,8 +262,17 @@ pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
 /// `mod` count (the walkable path segments beneath it). `children` is
 /// `None` when the mounted index is not in the chain (an honest dash,
 /// never a wrong count).
-pub(crate) fn render_mod(i: &DefIndex, m: &ModDef, mounted: &str, children: Option<usize>) -> String {
-    let edge = if m.vis == rut_ast::ast::Vis::Pub { "pub mod".to_string() } else { "mod".to_string() };
+pub(crate) fn render_mod(
+    i: &DefIndex,
+    m: &ModDef,
+    mounted: &str,
+    children: Option<usize>,
+) -> String {
+    let edge = if m.vis == rut_ast::ast::Vis::Pub {
+        "pub mod".to_string()
+    } else {
+        "mod".to_string()
+    };
     let mut out = code_block(&format!("{edge} {};", m.name));
     out.push_str(&format!("\nfile module — `{}`", mounted));
     if let Some(n) = children {

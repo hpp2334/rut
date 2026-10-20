@@ -38,7 +38,10 @@ fn let_init_if_is_an_if_expression() {
         panic!("expected an if expression");
     };
     assert!(matches!(ast.expr(*cond), ExprKind::Path { .. }));
-    assert!(matches!(ast.expr(ast.block_tail(*then).expect("then tail")), ExprKind::Lit(Lit::Int(1, _))));
+    assert!(matches!(
+        ast.expr(ast.block_tail(*then).expect("then tail")),
+        ExprKind::Lit(Lit::Int(1, _))
+    ));
     match els {
         Some(ElseBranch::Block(b)) => assert!(matches!(
             ast.expr(ast.block_tail(*b).expect("else tail")),
@@ -54,9 +57,16 @@ fn statement_leading_if_stays_a_statement() {
     // sees it (the `;`-less tail-if shape is phase 1's law; the `0`
     // after the if is the block's TAIL, not a second statement)
     let (ast, body) = fn_body("fn f(c: bool) -> i32 { if (c) { 1 } else { 2 } 0 }");
-    assert_eq!(ast.block(body).len(), 1, "the if statement; the 0 is the tail");
+    assert_eq!(
+        ast.block(body).len(),
+        1,
+        "the if statement; the 0 is the tail"
+    );
     assert!(ast.block_tail(body).is_some());
-    assert!(matches!(ast.kind(ast.block(body)[0].id()), Kind::Stmt(StmtKind::If { .. })));
+    assert!(matches!(
+        ast.kind(ast.block(body)[0].id()),
+        Kind::Stmt(StmtKind::If { .. })
+    ));
 }
 
 #[test]
@@ -64,24 +74,37 @@ fn statement_if_trailing_semicolon_is_eaten() {
     // the `;` decides: after the statement form it only ever discards
     // (the statement form keeps no value) — it must not strand
     let (ast, body) = fn_body("fn f(c: bool) -> i32 { if (c) { 1 } else { 2 }; 0 }");
-    assert_eq!(ast.block(body).len(), 1, "the if statement; no stray `;` statement");
+    assert_eq!(
+        ast.block(body).len(),
+        1,
+        "the if statement; no stray `;` statement"
+    );
     assert!(ast.block_tail(body).is_some(), "the 0 is the tail");
-    assert!(matches!(ast.kind(ast.block(body)[0].id()), Kind::Stmt(StmtKind::If { .. })));
+    assert!(matches!(
+        ast.kind(ast.block(body)[0].id()),
+        Kind::Stmt(StmtKind::If { .. })
+    ));
 }
 
 #[test]
 fn else_if_chain_in_expr_position() {
-    let (ast, body) =
-        fn_body("fn f(a: bool, b: bool) -> i32 { let x = if (a) { 1 } else if (b) { 2 } else { 3 }; x }");
+    let (ast, body) = fn_body(
+        "fn f(a: bool, b: bool) -> i32 { let x = if (a) { 1 } else if (b) { 2 } else { 3 }; x }",
+    );
     let ExprKind::If { els: first, .. } = ast.expr(let_init(&ast, body)) else {
         panic!("expected an if expression");
     };
     // the link is the statement grammar's if node — the shared enum
-    let Some(ElseBranch::If(h)) = first else { panic!("expected an else-if link") };
+    let Some(ElseBranch::If(h)) = first else {
+        panic!("expected an else-if link")
+    };
     let Kind::Stmt(StmtKind::If { then, els, .. }) = ast.kind(h.id()) else {
         panic!("the link is an if statement");
     };
-    assert!(matches!(ast.expr(ast.block_tail(*then).expect("link tail")), ExprKind::Lit(Lit::Int(2, _))));
+    assert!(matches!(
+        ast.expr(ast.block_tail(*then).expect("link tail")),
+        ExprKind::Lit(Lit::Int(2, _))
+    ));
     assert!(els.is_some(), "the chain's last else");
 }
 
@@ -106,9 +129,12 @@ fn return_if_expression() {
 #[test]
 fn if_expression_in_call_args() {
     // the call is the body's tail; its argument is the atom
-    let (ast, body) = fn_body("fn g(v: i32) -> i32 { v } fn f(c: bool) -> i32 { g(if (c) { 1 } else { 2 }) }");
+    let (ast, body) =
+        fn_body("fn g(v: i32) -> i32 { v } fn f(c: bool) -> i32 { g(if (c) { 1 } else { 2 }) }");
     let tail = ast.block_tail(body).expect("the call is the tail");
-    let ExprKind::Call { args, .. } = ast.expr(tail) else { panic!("expected a call") };
+    let ExprKind::Call { args, .. } = ast.expr(tail) else {
+        panic!("expected a call")
+    };
     assert_eq!(args.len(), 1);
     assert!(matches!(ast.expr(args[0]), ExprKind::If { .. }));
 }
@@ -159,15 +185,22 @@ fn nested_if_atoms_in_expr_positions() {
 fn parens_stay_required() {
     // the guard: `if` without `(` never enters the frame — the spelling
     // diagnoses (the struct-literal path is closed to it too: reserved)
-    let (_, diags) = parse("fn f(c: bool) -> i32 { let x = if c { 1 } else { 2 }; x }", Mode::Impl);
+    let (_, diags) = parse(
+        "fn f(c: bool) -> i32 { let x = if c { 1 } else { 2 }; x }",
+        Mode::Impl,
+    );
     assert!(!diags.is_empty(), "paren-less `if` must diagnose");
 }
 
 #[test]
 fn when_guard_shape_untouched() {
     // the when atom beside the new one still parses to a WhenExpr
-    let (ast, body) = fn_body("fn f(x: i32) -> i32 { let w = when (x) { 0 -> { 1 }, else -> { 2 } }; w }");
-    assert!(matches!(ast.expr(let_init(&ast, body)), ExprKind::WhenExpr { .. }));
+    let (ast, body) =
+        fn_body("fn f(x: i32) -> i32 { let w = when (x) { 0 -> { 1 }, else -> { 2 } }; w }");
+    assert!(matches!(
+        ast.expr(let_init(&ast, body)),
+        ExprKind::WhenExpr { .. }
+    ));
 }
 
 #[test]

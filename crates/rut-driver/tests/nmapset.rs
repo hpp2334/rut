@@ -18,8 +18,6 @@ use std::rc::Rc;
 
 const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapset");
 
-
-
 /// Offer the `nmapset` pkg (it pulls `nmap_host` through its `[deps]`)
 /// and `app_src` as the root.
 
@@ -27,7 +25,12 @@ const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapse
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -53,7 +56,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -94,10 +100,16 @@ fn diags_of(app_src: &str) -> Vec<String> {
 fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let world = world_with(app_src);
     let ctx = rut_driver::host_pkg_ctx(&world.pkgs);
-    for f in ["map_new", "map_len",
-              "map_hput", "map_hfind", "map_hremove",
-              "map_hvput", "map_hvget", "map_hvremove"]
-    {
+    for f in [
+        "map_new",
+        "map_len",
+        "map_hput",
+        "map_hfind",
+        "map_hremove",
+        "map_hvput",
+        "map_hvget",
+        "map_hvremove",
+    ] {
         assert!(
             ctx.rows_of("nmap_host").is_some_and(|r| r.contains_key(f)),
             "the nmap_host surface must cross through the [deps] mount: {ctx:?}"
@@ -113,7 +125,12 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     assert!(
         out.graph.diags.is_empty(),
         "{}",
-        out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        out.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = out.graph.program.expect("linked program");
     rut_vm::verify::verify(&prog).expect("verify");
@@ -125,7 +142,12 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten()); // rut/nmap_host/nmap.d.rut ↔ the bodies
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .expect("vm")
 }
 
@@ -144,7 +166,8 @@ fn run_main(app_src: &str) -> i32 {
 /// relocation the native grow drives.
 #[test]
 fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
-    let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
+    let checksum = run_main(
+        "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
          entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
@@ -177,8 +200,12 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
          \x20   assert(m.get(-7) == \"neg\", \"i32 map: negative key round-trips\");\n\
          \x20   acc = acc + m.len();\n\
          \x20   return acc;\n\
-         }\n");
-    assert_eq!(checksum, 132, "the scenario's pinned checksum (the ported mapset twin's)");
+         }\n",
+    );
+    assert_eq!(
+        checksum, 132,
+        "the scenario's pinned checksum (the ported mapset twin's)"
+    );
 }
 
 /// The str-key + HashSet scenario (ported from mapset): content-equal
@@ -187,7 +214,8 @@ fn hashmap_i32_keys_grow_get_replace_remove_and_reuse() {
 /// with no value machinery, duplicate adds, removes.
 #[test]
 fn hashmap_str_keys_and_hashset() {
-    let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
+    let checksum = run_main(
+        "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap, HashSet };\n\
          entry fn main() -> i32 {\n\
          \x20   let mut acc = 0;\n\
@@ -230,7 +258,8 @@ fn hashmap_str_keys_and_hashset() {
          \x20   assert(ss.remove(\"s8\"), \"str set: remove\");\n\
          \x20   acc = acc + ss.len();\n\
          \x20   return acc;\n\
-         }\n");
+         }\n",
+    );
     assert_eq!(checksum, 47 + 49 + 19, "the scenario's pinned live counts");
 }
 
@@ -239,7 +268,8 @@ fn hashmap_str_keys_and_hashset() {
 /// on its DEAD slot, and the re-added value is the fresh cell's.
 #[test]
 fn str_key_remove_readd_get_tombstone_round_trip() {
-    let checksum = run_main("fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
+    let checksum = run_main(
+        "fn assert(c: bool, m: str) { if (!c) { panic(m); } }\n\
          use nmapset::{ HashMap };\n\
          entry fn main() -> i32 {\n\
          \x20   let mut m: HashMap<str, str> = HashMap::new();\n\
@@ -254,7 +284,8 @@ fn str_key_remove_readd_get_tombstone_round_trip() {
          \x20   assert(p != nil, \"re-added key found\");\n\
          \x20   assert(p == \"two\", \"re-added value is the fresh cell's\");\n\
          \x20   return 7;\n\
-         }\n");
+         }\n",
+    );
     assert_eq!(checksum, 7, "the scenario's pinned checksum");
 }
 

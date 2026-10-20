@@ -35,7 +35,14 @@ fn corpus() -> Vec<std::path::PathBuf> {
     out
 }
 
-fn analyzed(src: &str, mode: Mode) -> (Vec<rut_lexer::token::Token>, rut_ast::ast::Ast, Vec<(rut_lexer::span::Span, TokenType)>) {
+fn analyzed(
+    src: &str,
+    mode: Mode,
+) -> (
+    Vec<rut_lexer::token::Token>,
+    rut_ast::ast::Ast,
+    Vec<(rut_lexer::span::Span, TokenType)>,
+) {
     let (toks, _) = rut_lexer::lexer::lex(src);
     let (ast, _) = rut_parser::parse(src, mode);
     let spans = classify(&toks, &ast);
@@ -73,7 +80,12 @@ fn corpus_classifies() {
         let index = LineIndex::new(&src);
         for (sp, _) in &spans {
             let (l, c) = index.position(&src, sp.lo);
-            assert_eq!(index.byte(&src, l, c), sp.lo, "{}: round trip", path.display());
+            assert_eq!(
+                index.byte(&src, l, c),
+                sp.lo,
+                "{}: round trip",
+                path.display()
+            );
         }
         // symbols exist for every Impl file
         if mode == Mode::Impl {
@@ -121,7 +133,11 @@ fn corpus_parses_clean_lsp() {
             ));
         }
     }
-    assert!(failures.is_empty(), "LSP corpus regressions:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "LSP corpus regressions:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]

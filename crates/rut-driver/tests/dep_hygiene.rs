@@ -67,7 +67,10 @@ fn world(
             .iter()
             .map(|(k, v)| format!(r#""{k}": {{"path": "{v}""#).to_string() + "}")
             .collect();
-        m.insert_str(m.len() - 1, &format!(", \"dev-deps\": {{{}}}", rows.join(", ")));
+        m.insert_str(
+            m.len() - 1,
+            &format!(", \"dev-deps\": {{{}}}", rows.join(", ")),
+        );
     }
     write(&app, "rut.jsonc", &m);
     write(&app, "mod.rut", "entry fn main() -> i32 { return 1; }\n");
@@ -149,7 +152,11 @@ fn declaring_the_transitive_head_compiles() {
     assert!(
         g.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
@@ -160,9 +167,15 @@ fn the_use_law_is_the_consumers_own_word_at_every_depth() {
     // every mounted source's uses, not just the root's. (`b` mounts
     // through the ROOT's row here; `a` still may not name it.)
     let root = world("d5-mid", &[("a", "../a"), ("b", "../b")], &[], &[]);
-    write(&root.join("a"), "mod.rut", "use b::{x};\npub fn mid() -> i32 { return x(); }\n");
-    let err =
-        refuse_root(&root, "use a::{mid};\nentry fn main() -> i32 { return mid(); }\n");
+    write(
+        &root.join("a"),
+        "mod.rut",
+        "use b::{x};\npub fn mid() -> i32 { return x(); }\n",
+    );
+    let err = refuse_root(
+        &root,
+        "use a::{mid};\nentry fn main() -> i32 { return mid(); }\n",
+    );
     assert_eq!(
         err,
         "cannot resolve `b` — `b` is mounted in this program (pulled by `app`) but `a` does not declare it; add \"b\": { \"path\": \"..\" } to `a`'s `rut.jsonc` `deps`",
@@ -205,7 +218,11 @@ fn root_dev_deps_are_usable_at_the_root() {
     assert!(
         g.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
@@ -215,9 +232,15 @@ fn the_same_dev_name_used_by_a_non_root_is_d5() {
     // dev tables mount only for a self-build, and nameability follows
     // the same root-only law (the puller edge is app's dev pass)
     let root = world("dev-nonroot", &[("a", "../a")], &[], &[("b", "../b")]);
-    write(&root.join("a"), "mod.rut", "use b::{x};\npub fn mid() -> i32 { return x(); }\n");
-    let err =
-        refuse_root(&root, "use a::{mid};\nentry fn main() -> i32 { return mid(); }\n");
+    write(
+        &root.join("a"),
+        "mod.rut",
+        "use b::{x};\npub fn mid() -> i32 { return x(); }\n",
+    );
+    let err = refuse_root(
+        &root,
+        "use a::{mid};\nentry fn main() -> i32 { return mid(); }\n",
+    );
     assert_eq!(
         err,
         "cannot resolve `b` — `b` is mounted in this program (pulled by `app`) but `a` does not declare it; add \"b\": { \"path\": \"..\" } to `a`'s `rut.jsonc` `deps`",
@@ -239,13 +262,25 @@ fn bundle_world(tag: &str) -> (PathBuf, Vec<u8>) {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"u": {"path": "../u"}, "g": {"path": "../g"}}}"#,
     );
-    write(&app, "mod.rut", "use u::{leaf};\nentry fn go() -> i32 { return leaf(); }\n");
+    write(
+        &app,
+        "mod.rut",
+        "use u::{leaf};\nentry fn go() -> i32 { return leaf(); }\n",
+    );
     let u = root.join("u");
     write(&u, "rut.jsonc", r#"{"name": "u"}"#);
     write(&u, "mod.rut", "pub fn leaf() -> i32 { return 5; }\n");
     let g = root.join("g");
-    write(&g, "rut.jsonc", r#"{"name": "g", "deps": {"u": {"path": "../u"}}}"#);
-    write(&g, "mod.rut", "use u::{leaf};\npub fn twice() -> i32 { return leaf() * 2; }\n");
+    write(
+        &g,
+        "rut.jsonc",
+        r#"{"name": "g", "deps": {"u": {"path": "../u"}}}"#,
+    );
+    write(
+        &g,
+        "mod.rut",
+        "use u::{leaf};\npub fn twice() -> i32 { return leaf() * 2; }\n",
+    );
     let bytes = rut_native::pack_dir(&app).expect("pack");
     (root, bytes)
 }
@@ -268,7 +303,12 @@ fn bundle_group_names_its_declared_in_archive_dep() {
     assert!(
         c.graph.diags.is_empty(),
         "{}",
-        c.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        c.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
@@ -322,7 +362,9 @@ fn the_pack_lane_refuses_through_the_same_resolver() {
         "rut.jsonc",
         r#"{"name": "a", "deps": {"b": {"path": "../b"}}}"#,
     );
-    let err = rut_native::pack_dir(&root.join("app")).unwrap_err().to_string();
+    let err = rut_native::pack_dir(&root.join("app"))
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains("cannot resolve `b`")
             && err.contains("is mounted in this program (pulled by `a`)")
@@ -361,9 +403,12 @@ fn manifest_lib_fills_the_tables_structurally() {
     // the builder door: `Mounted::manifest(Manifest::lib(..))` stamps the
     // structural form — no json text anywhere — and the use is
     // declared
-    let c = rut_driver::Mounted::source("c", C_USES_B)
-        .manifest(rut_driver::Manifest::lib("c", &["b"]));
-    assert!(c.manifest.deps.contains_key("b"), "the structural row rides");
+    let c =
+        rut_driver::Mounted::source("c", C_USES_B).manifest(rut_driver::Manifest::lib("c", &["b"]));
+    assert!(
+        c.manifest.deps.contains_key("b"),
+        "the structural row rides"
+    );
     let compiled = rut_driver::RutRun::new()
         .pkg(rut_driver::Mounted::source("b", B_SRC))
         .pkg(c)

@@ -6,10 +6,10 @@ use rut_ast::ast::*;
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
-use rut_core::sym;
 use crate::expr::{ExprFrame, ExprMode};
 use crate::frame::{Done, Frame, Step};
 use crate::Parser;
+use rut_core::sym;
 
 pub(crate) struct TypeFrame {
     lo: Span,
@@ -34,29 +34,51 @@ enum TyStage {
     Bracket,
     /// `(A, B)` / `(T)` — tuple, grouping; `()` is rejected —
     /// the empty type is spelled `nil` (v1.2)
-    Tuple { elems: Vec<NodeHandle<AnyTy>> },
+    Tuple {
+        elems: Vec<NodeHandle<AnyTy>>,
+    },
     /// `fn(...)`: collecting parameter types
-    FnParams { params: Vec<NodeHandle<AnyTy>> },
+    FnParams {
+        params: Vec<NodeHandle<AnyTy>>,
+    },
     /// `fn(...) ->`: waiting for the return type
-    FnRet { params: Vec<NodeHandle<AnyTy>> },
+    FnRet {
+        params: Vec<NodeHandle<AnyTy>>,
+    },
     /// a path type, possibly mid-dot-chain
-    Path { segs: Vec<PathSeg> },
+    Path {
+        segs: Vec<PathSeg>,
+    },
     /// inside a `<..>` after a segment name
-    GenArgs { segs: Vec<PathSeg>, seg_name: IdentId, args: Vec<NodeHandle<AnyTy>> },
+    GenArgs {
+        segs: Vec<PathSeg>,
+        seg_name: IdentId,
+        args: Vec<NodeHandle<AnyTy>>,
+    },
     /// `A | B` — a union bound: members collected after a
     /// completed type saw a `|`
-    Union { elems: Vec<NodeHandle<AnyTy>> },
+    Union {
+        elems: Vec<NodeHandle<AnyTy>>,
+    },
 }
 
 impl TypeFrame {
     pub(crate) fn new(p: &Parser) -> Self {
-        TypeFrame { lo: p.span(), allow_union: false, stage: TyStage::Init }
+        TypeFrame {
+            lo: p.span(),
+            allow_union: false,
+            stage: TyStage::Init,
+        }
     }
 
     /// A position where a union is legal: the alias target
     /// (`type U = A | B;`) and a `requires` bound (`T requires A | B`).
     pub(crate) fn new_bound(p: &Parser) -> Self {
-        TypeFrame { lo: p.span(), allow_union: true, stage: TyStage::Init }
+        TypeFrame {
+            lo: p.span(),
+            allow_union: true,
+            stage: TyStage::Init,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -118,11 +140,18 @@ impl TypeFrame {
                     TyStage::Path { segs } => std::mem::take(segs),
                     _ => unreachable!(),
                 };
-                self.stage = TyStage::GenArgs { segs, seg_name: name, args: Vec::new() };
+                self.stage = TyStage::GenArgs {
+                    segs,
+                    seg_name: name,
+                    args: Vec::new(),
+                };
                 return self.genargs_top(p);
             }
             if let TyStage::Path { segs, .. } = &mut self.stage {
-                segs.push(PathSeg { name, generics: Vec::new() });
+                segs.push(PathSeg {
+                    name,
+                    generics: Vec::new(),
+                });
             }
             if !p.eat_punct(Tok::Colon2) {
                 return self.path_pop(p);
@@ -176,7 +205,9 @@ impl TypeFrame {
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
         let elems = std::mem::take(elems);
-        Step::Pop(Done::Ty(p.typ(TypeKind::TyUnion { elems }, self.lo.to(p.span()))))
+        Step::Pop(Done::Ty(
+            p.typ(TypeKind::TyUnion { elems }, self.lo.to(p.span())),
+        ))
     }
 
     fn genargs_top(&mut self, p: &mut Parser) -> Step {
@@ -195,14 +226,19 @@ impl TypeFrame {
 
     fn genargs_done(&mut self, p: &mut Parser) -> Step {
         let (segs, seg_name, args) = match &mut self.stage {
-            TyStage::GenArgs { segs, seg_name, args } => {
-                (std::mem::take(segs), *seg_name, std::mem::take(args))
-            }
+            TyStage::GenArgs {
+                segs,
+                seg_name,
+                args,
+            } => (std::mem::take(segs), *seg_name, std::mem::take(args)),
             _ => unreachable!(),
         };
         self.stage = TyStage::Path { segs };
         if let TyStage::Path { segs, .. } = &mut self.stage {
-            segs.push(PathSeg { name: seg_name, generics: args });
+            segs.push(PathSeg {
+                name: seg_name,
+                generics: args,
+            });
         }
         self.path_resume(p)
     }
@@ -228,7 +264,10 @@ impl TypeFrame {
         let nil = sym::NIL;
         p.typ(
             TypeKind::TyPath {
-                segs: vec![PathSeg { name: nil, generics: Vec::new() }],
+                segs: vec![PathSeg {
+                    name: nil,
+                    generics: Vec::new(),
+                }],
             },
             self.lo.to(p.span()),
         )
@@ -245,15 +284,15 @@ impl TypeFrame {
             let nil = sym::NIL;
             let ret = p.typ(
                 TypeKind::TyPath {
-                    segs: vec![PathSeg { name: nil, generics: Vec::new() }],
+                    segs: vec![PathSeg {
+                        name: nil,
+                        generics: Vec::new(),
+                    }],
                 },
                 self.lo.to(p.span()),
             );
             self.stage = TyStage::Init;
-            let t = p.typ(
-                TypeKind::TyFn { params, ret },
-                self.lo.to(p.span()),
-            );
+            let t = p.typ(TypeKind::TyFn { params, ret }, self.lo.to(p.span()));
             return self.pop_or_union(p, t);
         }
         self.stage = TyStage::FnRet { params };

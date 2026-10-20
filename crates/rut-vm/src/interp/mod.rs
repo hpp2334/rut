@@ -6,12 +6,12 @@
 //! The ACTIVE frame lives directly on the `Vm` (`cur_*`); calls push it
 //! onto `frames` and rets pop — keeps register access borrow-friendly.
 
-use rut_core::binary::{ConstVal, Program};
-use crate::heap::{cell_of, CellData, CellVal, Heap, Slot, Trap, TrapKind, Value};
 use crate::arena::OpaqueRef;
+use crate::heap::{cell_of, CellData, CellVal, Heap, Slot, Trap, TrapKind, Value};
+use rut_core::binary::{ConstVal, Program};
 use rut_core::ops::*;
 use rut_core::types::{
-    PrimTy, Repr, TypeId, TyKind, TY_BOOL, TY_BYTES, TY_I16, TY_I32, TY_I64, TY_I8, TY_STR, TY_U16,
+    PrimTy, Repr, TyKind, TypeId, TY_BOOL, TY_BYTES, TY_I16, TY_I32, TY_I64, TY_I8, TY_STR, TY_U16,
     TY_U32, TY_U64, TY_U8,
 };
 use std::rc::Rc;
@@ -28,11 +28,11 @@ mod step;
 mod threaded;
 mod util;
 
+pub use boundary::{rut_box_payload, CallArg, CallArgs, Ret};
 pub use builder::{IntoVmParts, VmBuilder, VmError, VmParts};
 pub use completer::{Completer, FAILED, PENDING, READY};
-pub use host::{ExpectedHostFns, HostPkg, HostPkgContext, HostRegistry};
 use host::HostSlot;
-pub use boundary::{CallArg, CallArgs, Ret, rut_box_payload};
+pub use host::{ExpectedHostFns, HostPkg, HostPkgContext, HostRegistry};
 
 // free helpers live in the submodules; pull them into `interp` so the
 // sibling modules reach them through `use super::*`
@@ -62,7 +62,11 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Limits {
-        Limits { fuel: None, heap_limit_bytes: None, interrupt_every: 1024 }
+        Limits {
+            fuel: None,
+            heap_limit_bytes: None,
+            interrupt_every: 1024,
+        }
     }
 }
 
@@ -247,11 +251,16 @@ impl Vm {
         // body's ctx word, the declared return for the refcount law,
         // and the return's is-ref verdict frozen as a bit (phase 2 —
         // the write-back used to re-derive it per call).
-        let type_repr: Vec<Repr> = prog.types.types.iter().map(|t| match &t.kind {
-            TyKind::Prim(p) => Repr::Prim(*p),
-            TyKind::Nil | TyKind::Fn { .. } => Repr::Any,
-            _ => Repr::Ref,
-        }).collect();
+        let type_repr: Vec<Repr> = prog
+            .types
+            .types
+            .iter()
+            .map(|t| match &t.kind {
+                TyKind::Prim(p) => Repr::Prim(*p),
+                TyKind::Nil | TyKind::Fn { .. } => Repr::Any,
+                _ => Repr::Ref,
+            })
+            .collect();
         let mut host_slots: Vec<HostSlot> = Vec::with_capacity(prog.funcs.len());
         let mut host_keep: Vec<Box<dyn std::any::Any>> = Vec::new();
         for fc in prog.funcs.iter() {
@@ -275,7 +284,11 @@ impl Vm {
                     // the table — the unbound-thunk check below is the
                     // error that matters) reads Any, never a panic
                     let ret_is_ref = fc.ret != TY_ANY
-                        && type_repr.get(fc.ret as usize).copied().unwrap_or(Repr::Any).is_ref();
+                        && type_repr
+                            .get(fc.ret as usize)
+                            .copied()
+                            .unwrap_or(Repr::Any)
+                            .is_ref();
                     host_slots.push(HostSlot {
                         code: b.code,
                         ctx: b.ctx,
@@ -343,7 +356,9 @@ impl Vm {
         // the compiler; programs without async scan to empty
         let mut future_yield_slots: Vec<u32> = Vec::new();
         let mut cx_ty: Option<TypeId> = None;
-        let cx_name = prog.interner.lookup(rut_core::async_frame::RUN_CONTEXT_TYPE);
+        let cx_name = prog
+            .interner
+            .lookup(rut_core::async_frame::RUN_CONTEXT_TYPE);
         for (tid, t) in prog.ifaces.iter().enumerate() {
             if prog.interner.name(t.name).starts_with("Future<") {
                 if let Some(slot) = prog
@@ -373,7 +388,9 @@ impl Vm {
             .iter()
             .enumerate()
             .filter(|(_, t)| {
-                prog.interner.name(t.name).starts_with(rut_core::async_frame::HOST_FRAME_PREFIX)
+                prog.interner
+                    .name(t.name)
+                    .starts_with(rut_core::async_frame::HOST_FRAME_PREFIX)
             })
             .map(|(i, _)| i as u32)
             .collect();
@@ -463,7 +480,8 @@ impl Vm {
         }
     }
 
-    fn enter(&mut self, func: u32, regs: Vec<Slot>, ret_dst: Option<Reg>) {        // save current frame if there is one
+    fn enter(&mut self, func: u32, regs: Vec<Slot>, ret_dst: Option<Reg>) {
+        // save current frame if there is one
         if self.running {
             self.frames.push(SavedFrame {
                 func: self.cur_func,
@@ -488,7 +506,10 @@ impl Vm {
     /// re-runs the host fn from its op, the standing host-fn-trap rule).
     pub(crate) fn call_raw(&mut self, export: &str, args: &[Value]) -> Result<Value, Trap> {
         let Some(func) = self.prog.export(export) else {
-            return Err(Trap::new(TrapKind::Invalid, format!("no export `{export}`")));
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                format!("no export `{export}`"),
+            ));
         };
         let nparams = self.prog.funcs[func as usize].params.len();
         if args.len() != nparams {
@@ -501,8 +522,9 @@ impl Vm {
         let mut regs = self.take_regs(nregs);
         for (i, a) in args.iter().enumerate() {
             let pty = self.param_ty(func, i);
-            regs[i] = self.value_in(a, pty)
-                .map_err(|m| Trap::new(TrapKind::Invalid, format!("`{export}` argument {i}: {m}")))?;
+            regs[i] = self.value_in(a, pty).map_err(|m| {
+                Trap::new(TrapKind::Invalid, format!("`{export}` argument {i}: {m}"))
+            })?;
         }
         if self.running {
             // nested entry: stash the outer cursor, run the callee to its
@@ -589,7 +611,9 @@ impl Vm {
     /// this only fires when the EMBEDDER passes the wrong shape.
     pub(crate) fn value_in(&mut self, v: &Value, ty: TypeId) -> Result<Slot, String> {
         use rut_core::types::{PrimTy, TyKind};
-        let ty = if ty != u32::MAX { ty } else {
+        let ty = if ty != u32::MAX {
+            ty
+        } else {
             return Err(format!("internal: untyped parameter"));
         };
         Ok(match (v, self.prog.types.kind(ty).clone()) {
@@ -669,7 +693,13 @@ impl Vm {
     /// indirect call — no Rc, no name work, no `Value` enum, no envelope.
     /// The adapter (`HostHandler::entry`) reads the typed args itself and
     /// reports traps through the channel (§3.7 of the boundary plan).
-    pub(super) fn call_host(&mut self, func: u32, argv_off: u32, argc: u16, dst: Reg) -> Result<(), Trap> {
+    pub(super) fn call_host(
+        &mut self,
+        func: u32,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    ) -> Result<(), Trap> {
         // the join resolved the binding; the entry is a code pointer, a
         // word, a TypeId, and the ret-is-ref bit — copied out in one
         // move, no Rc traffic
@@ -829,7 +859,10 @@ impl Vm {
         match &entry.e {
             crate::heap::store::OpaqueEntry::Rut(r) => match r.val_ty {
                 TY_I8 | TY_I16 | TY_I32 | TY_I64 | TY_U8 | TY_U16 | TY_U32 | TY_U64 | TY_BOOL => {
-                    Ok(KeyPayload::Bits { val: unsafe { r.slot.i } as u64, ty: r.val_ty })
+                    Ok(KeyPayload::Bits {
+                        val: unsafe { r.slot.i } as u64,
+                        ty: r.val_ty,
+                    })
                 }
                 TY_STR | TY_BYTES => {
                     // defensive: a `str`/`bytes` payload is a cell handle;
@@ -886,7 +919,8 @@ impl Vm {
                 self.prog.interner.name(f.name) == row
                     || f.host_id.is_some_and(|h| self.prog.interner.name(h) == row)
             })
-            .ok_or_else(|| Trap::new(TrapKind::Invalid, format!("no host row `{row}`")))? as u32;
+            .ok_or_else(|| Trap::new(TrapKind::Invalid, format!("no host row `{row}`")))?
+            as u32;
         let (params, ret) = {
             let f = &self.prog.funcs[func as usize];
             (f.params.clone(), f.ret)
@@ -899,9 +933,11 @@ impl Vm {
         }
         let mut snapshot: Vec<Slot> = Vec::with_capacity(args.len());
         for (i, a) in args.iter().enumerate() {
-            snapshot.push(self.value_in(a, params[i]).map_err(|m| {
-                Trap::new(TrapKind::Invalid, format!("`{row}` argument {i}: {m}"))
-            })?);
+            snapshot.push(
+                self.value_in(a, params[i]).map_err(|m| {
+                    Trap::new(TrapKind::Invalid, format!("`{row}` argument {i}: {m}"))
+                })?,
+            );
         }
         let slot = self.host_slots[func as usize];
         let out = (slot.code)(self, &snapshot, slot.ctx);
@@ -1188,7 +1224,10 @@ impl Vm {
                 )
             })?;
         let cx_ty = self.cx_ty.ok_or_else(|| {
-            Trap::new(TrapKind::Invalid, "drive: the program has no `RunContext` cx record")
+            Trap::new(
+                TrapKind::Invalid,
+                "drive: the program has no `RunContext` cx record",
+            )
         })?;
         // the per-drive cx: one field, the frame edge (retained)
         let cx = self.heap.alloc_record_zeroed(cx_ty, 1)?;
@@ -1271,7 +1310,10 @@ impl Vm {
         // the outcome is the state field
         let cell = cell_of(fut);
         let CellData::Record { fields } = &cell.data else {
-            return Err(Trap::new(TrapKind::Invalid, "drive: future is not a record"));
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                "drive: future is not a record",
+            ));
         };
         let state = fields
             .borrow()
@@ -1286,10 +1328,9 @@ impl Vm {
                 .get(rut_core::async_frame::AWAITER_FIELD as usize)
                 .unwrap_or(Slot::null());
             if unsafe { !awaiter.r.is_null() } {
-                fields.borrow_mut().set(
-                    rut_core::async_frame::AWAITER_FIELD as usize,
-                    Slot::null(),
-                );
+                fields
+                    .borrow_mut()
+                    .set(rut_core::async_frame::AWAITER_FIELD as usize, Slot::null());
                 self.launch(awaiter);
             }
             Ok(Drive::Done)
@@ -1488,7 +1529,10 @@ mod tests {
         // floats and stack-trace cells are rut values but not native
         // keys — the user-defined-key trap's raw material
         let f = boxed(&vm, Slot::float(1.5), TY_F64);
-        assert_eq!(vm.opaque_key_payload(&f).unwrap(), KeyPayload::Unsupported(TY_F64));
+        assert_eq!(
+            vm.opaque_key_payload(&f).unwrap(),
+            KeyPayload::Unsupported(TY_F64)
+        );
         let t = boxed(&vm, Slot::null(), rut_core::types::TY_STACK_TRACE);
         assert_eq!(
             vm.opaque_key_payload(&t).unwrap(),
@@ -1559,9 +1603,17 @@ mod tests {
         let c = clone_reg0_of(&mut vm, b);
         // equal content, DIFFERENT cell — the copy escape hatch, not an
         // alias (the one `bytes.clone()` law)
-        assert_ne!(unsafe { b.r }, unsafe { c.r }, "the clone must be a fresh cell");
+        assert_ne!(
+            unsafe { b.r },
+            unsafe { c.r },
+            "the clone must be a fresh cell"
+        );
         assert_eq!(cell_of(c).bytes_copy(), vec![7, 8, 9]);
-        assert_eq!(cell_of(b).bytes_copy(), vec![7, 8, 9], "the original is untouched");
+        assert_eq!(
+            cell_of(b).bytes_copy(),
+            vec![7, 8, 9],
+            "the original is untouched"
+        );
     }
 
     #[test]
@@ -1574,7 +1626,9 @@ mod tests {
         let b = vm.heap.alloc_bytes(vec![1, 2, 3]).unwrap();
         let c = clone_reg0_of(&mut vm, b);
 
-        let CellData::Array { items, .. } = &cell_of(b).data else { panic!("not bytes") };
+        let CellData::Array { items, .. } = &cell_of(b).data else {
+            panic!("not bytes")
+        };
         items.borrow_mut().set(0, Slot::int(255));
         assert_eq!(
             cell_of(c).bytes_copy(),
@@ -1582,7 +1636,9 @@ mod tests {
             "the clone must not observe the original's mutation"
         );
 
-        let CellData::Array { items, .. } = &cell_of(c).data else { panic!("not bytes") };
+        let CellData::Array { items, .. } = &cell_of(c).data else {
+            panic!("not bytes")
+        };
         items.borrow_mut().set(1, Slot::int(254));
         assert_eq!(
             cell_of(b).bytes_copy(),

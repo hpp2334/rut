@@ -9,12 +9,16 @@ use rut_parser::Mode;
 
 use rut_core::types::TY_I64;
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -40,7 +44,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -162,14 +169,19 @@ entry fn main() -> i32 {\n\
 }\n\
 ";
     let out = compile(src);
-    assert!(out.diags.is_empty(), "i32 and str both satisfy: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "i32 and str both satisfy: {:?}",
+        out.diags
+    );
 
     let ds = diags_of(
         "fn tag<T requires i32 | str>(x: T) -> i32 { return 0; }\n\
          entry fn main() -> i32 { return tag(true); }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("does not satisfy") && d.contains("i32 | str")),
+        ds.iter()
+            .any(|d| d.contains("does not satisfy") && d.contains("i32 | str")),
         "the failure names the bound: {ds:?}"
     );
 }
@@ -204,7 +216,8 @@ entry fn main() -> i32 { let t: Token = Token::new(); return seal(t); }
          entry fn main() -> i32 { return seal(\"nope\"); }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`str` does not satisfy") && d.contains("Enc")),
+        ds.iter()
+            .any(|d| d.contains("`str` does not satisfy") && d.contains("Enc")),
         "no satisfaction for str: {ds:?}"
     );
 }
@@ -304,7 +317,10 @@ fn alias_exports_transparently_across_modules() {
     assert!(!meters.is_class && !meters.is_generic);
     // the union alias stays module-local — never exported
     assert!(
-        !surface.type_exports.iter().any(|t| surface.names.name(t.name) == "Mix"),
+        !surface
+            .type_exports
+            .iter()
+            .any(|t| surface.names.name(t.name) == "Mix"),
         "union aliases are not exported"
     );
 
@@ -317,9 +333,16 @@ fn alias_exports_transparently_across_modules() {
         Mode::Impl,
         "app",
         2,
-        &[(1, surface, "units".to_string()), (3, rut_core::binary::Surface::core(), "core".to_string())],
+        &[
+            (1, surface, "units".to_string()),
+            (3, rut_core::binary::Surface::core(), "core".to_string()),
+        ],
     );
-    assert!(root.diags.is_empty(), "cross-module transparency: {:?}", root.diags);
+    assert!(
+        root.diags.is_empty(),
+        "cross-module transparency: {:?}",
+        root.diags
+    );
 
     // ... but the union alias's name never crossed — using it diagnoses
     let ds = rut_driver::compile_program(
@@ -327,16 +350,20 @@ fn alias_exports_transparently_across_modules() {
         Mode::Impl,
         "app",
         2,
-        &[(1, {
-            let dep = rut_driver::compile_program(
-                "type Mix = i32 | str;\nentry fn main() -> i32 { return 0; }\n",
-                Mode::Impl,
-                "units",
-                1,
-                &[],
-            );
-            dep.program.expect("dep").surface.clone()
-        }, "units".to_string())],
+        &[(
+            1,
+            {
+                let dep = rut_driver::compile_program(
+                    "type Mix = i32 | str;\nentry fn main() -> i32 { return 0; }\n",
+                    Mode::Impl,
+                    "units",
+                    1,
+                    &[],
+                );
+                dep.program.expect("dep").surface.clone()
+            },
+            "units".to_string(),
+        )],
     )
     .diags
     .iter()
@@ -379,7 +406,8 @@ fn alias_head_params_are_a_parse_error_again() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("expected =") && d.contains("found `<`")),
+        ds.iter()
+            .any(|d| d.contains("expected =") && d.contains("found `<`")),
         "a generic alias head is a parse error again: {ds:?}"
     );
     // the empty head died with the same seam
@@ -420,18 +448,22 @@ fn one_name_one_decl_diagnoses_in_both_orders() {
         );
     }
     // alias-vs-alias (the row-vs-row family shape — two decls, one name)
-    let ds = diags_of(
-        "type A = i64;\n type A = str;\n entry fn main() -> i32 { return 0; }\n",
-    );
+    let ds = diags_of("type A = i64;\n type A = str;\n entry fn main() -> i32 { return 0; }\n");
     assert!(
         ds.iter().any(|d| d.contains("duplicate type name `A`")),
         "two aliases, one name: {ds:?}"
     );
     // alias-vs-enum and alias-vs-interface (the legs that never had a lift)
     let ds = diags_of("enum E { M }\n type E = i64;\n entry fn main() -> i32 { return 0; }\n");
-    assert!(ds.iter().any(|d| d.contains("duplicate type name `E`")), "{ds:?}");
+    assert!(
+        ds.iter().any(|d| d.contains("duplicate type name `E`")),
+        "{ds:?}"
+    );
     let ds = diags_of("interface T { }\n type T = i64;\n entry fn main() -> i32 { return 0; }\n");
-    assert!(ds.iter().any(|d| d.contains("duplicate type name `T`")), "{ds:?}");
+    assert!(
+        ds.iter().any(|d| d.contains("duplicate type name `T`")),
+        "{ds:?}"
+    );
 }
 
 #[test]

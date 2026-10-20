@@ -59,9 +59,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Resolve the `Iter` impl for `ty`, if any.
     pub(crate) fn slice_info(&mut self, ty: TypeId) -> Option<SliceInfo> {
         match self.ctx.types.kind(ty).clone() {
-            TyKind::Array { elem } => Some(SliceInfo { source: SliceSource::Array, elem }),
-            TyKind::Str => Some(SliceInfo { source: SliceSource::Str, elem: TY_STR }),
-            TyKind::Bytes => Some(SliceInfo { source: SliceSource::Bytes, elem: TY_U8 }),
+            TyKind::Array { elem } => Some(SliceInfo {
+                source: SliceSource::Array,
+                elem,
+            }),
+            TyKind::Str => Some(SliceInfo {
+                source: SliceSource::Str,
+                elem: TY_STR,
+            }),
+            TyKind::Bytes => Some(SliceInfo {
+                source: SliceSource::Bytes,
+                elem: TY_U8,
+            }),
             TyKind::Data { fields } => {
                 // the Vec shape: a `buf` field holding the
                 // array cell and a `len` field holding the live length.
@@ -86,7 +95,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     unreachable!("buf_field checked above")
                 };
                 Some(SliceInfo {
-                    source: SliceSource::DataBuf { buf_field, len_field },
+                    source: SliceSource::DataBuf {
+                        buf_field,
+                        len_field,
+                    },
                     elem: *elem,
                 })
             }
@@ -101,22 +113,66 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         match &info.source {
             SliceSource::Array => {
                 let dst = self.new_reg(TY_I32);
-                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: recv, argv_off, argc, dst: dst }, sp); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::ArrLen,
+                            recv: recv,
+                            argv_off,
+                            argc,
+                            dst: dst,
+                        },
+                        sp,
+                    );
+                }
                 Ok(dst)
             }
             SliceSource::Str => {
                 let dst = self.new_reg(TY_I32);
-                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::StrLen, recv: recv, argv_off, argc, dst: dst }, sp); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::StrLen,
+                            recv: recv,
+                            argv_off,
+                            argc,
+                            dst: dst,
+                        },
+                        sp,
+                    );
+                }
                 Ok(dst)
             }
             SliceSource::Bytes => {
                 let dst = self.new_reg(TY_I32);
-                { let (argv_off, argc) = self.pool_args(&(vec![])); self.emit(Op::CallNat { nat: Nat::ArrLen, recv: recv, argv_off, argc, dst: dst }, sp); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::ArrLen,
+                            recv: recv,
+                            argv_off,
+                            argc,
+                            dst: dst,
+                        },
+                        sp,
+                    );
+                }
                 Ok(dst)
             }
             SliceSource::DataBuf { len_field, .. } => {
                 let dst = self.new_reg(TY_I32);
-                self.emit(Op::GetF { dst, obj: recv, field: *len_field, repr: Repr::Prim(PrimTy::I32) }, sp);
+                self.emit(
+                    Op::GetF {
+                        dst,
+                        obj: recv,
+                        field: *len_field,
+                        repr: Repr::Prim(PrimTy::I32),
+                    },
+                    sp,
+                );
                 Ok(dst)
             }
         }
@@ -128,36 +184,93 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// element repr (the raw payload + nil-tag store): the read mints a
     /// fresh opt value (value semantics), and the deref-fold peephole may
     /// refine it to `OptPrimLoad` when the only use is the payload read.
-    pub(crate) fn emit_slice_get(&mut self, recv: u16, idx: u16, info: &SliceInfo, sp: u32) -> TcResult<u16> {
+    pub(crate) fn emit_slice_get(
+        &mut self,
+        recv: u16,
+        idx: u16,
+        info: &SliceInfo,
+        sp: u32,
+    ) -> TcResult<u16> {
         match &info.source {
             SliceSource::Array => {
                 let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
                 let dst = self.new_reg(info.elem);
-                self.emit(Op::ArrGet { dst, arr: recv, idx, repr }, sp);
+                self.emit(
+                    Op::ArrGet {
+                        dst,
+                        arr: recv,
+                        idx,
+                        repr,
+                    },
+                    sp,
+                );
                 Ok(dst)
             }
             SliceSource::Str => {
                 // StrCodeAt yields the u32 codepoint (the char exorcism's
                 // re-spell); StrFromCode mints the 1-codepoint str from it
                 let cp = self.new_reg(TY_U32);
-                self.emit(Op::StrCodeAt { dst: cp, s: recv, idx }, sp);
+                self.emit(
+                    Op::StrCodeAt {
+                        dst: cp,
+                        s: recv,
+                        idx,
+                    },
+                    sp,
+                );
                 let dst = self.new_reg(TY_STR);
-                { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: dst }, sp); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![cp]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::StrFromCode,
+                            recv: NOREG,
+                            argv_off,
+                            argc,
+                            dst: dst,
+                        },
+                        sp,
+                    );
+                }
                 Ok(dst)
             }
             SliceSource::Bytes => {
                 let repr = self.ctx.types.repr_of(TY_U8);
                 let dst = self.new_reg(TY_U8);
-                self.emit(Op::ArrGet { dst, arr: recv, idx, repr }, sp);
+                self.emit(
+                    Op::ArrGet {
+                        dst,
+                        arr: recv,
+                        idx,
+                        repr,
+                    },
+                    sp,
+                );
                 Ok(dst)
             }
             SliceSource::DataBuf { buf_field, .. } => {
                 let buf_ty = info.array_ty(self.ctx);
                 let buf = self.new_reg(buf_ty);
-                self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
+                self.emit(
+                    Op::GetF {
+                        dst: buf,
+                        obj: recv,
+                        field: *buf_field,
+                        repr: Repr::Ref,
+                    },
+                    sp,
+                );
                 let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
                 let dst = self.new_reg(info.elem);
-                self.emit(Op::ArrGet { dst, arr: buf, idx, repr }, sp);
+                self.emit(
+                    Op::ArrGet {
+                        dst,
+                        arr: buf,
+                        idx,
+                        repr,
+                    },
+                    sp,
+                );
                 Ok(dst)
             }
         }
@@ -167,23 +280,57 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// has a mutable element; `str`/`bytes` and the read-only `Iter`
     /// contract do not. A `[?prim]` backing encodes the stored `?prim`
     /// value into the raw payload + nil tag (no rc on either side).
-    pub(crate) fn emit_slice_set(&mut self, recv: u16, idx: u16, val: u16, info: &SliceInfo, sp: u32) -> TcResult<()> {
+    pub(crate) fn emit_slice_set(
+        &mut self,
+        recv: u16,
+        idx: u16,
+        val: u16,
+        info: &SliceInfo,
+        sp: u32,
+    ) -> TcResult<()> {
         match &info.source {
             SliceSource::Array => {
                 let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
-                self.emit(Op::ArrSet { arr: recv, idx, val, repr }, sp);
+                self.emit(
+                    Op::ArrSet {
+                        arr: recv,
+                        idx,
+                        val,
+                        repr,
+                    },
+                    sp,
+                );
                 Ok(())
             }
             SliceSource::Str | SliceSource::Bytes => {
-                self.ctx.err(Span::new(sp, sp + 1), "`str`/`bytes` are immutable — element assignment is not allowed");
+                self.ctx.err(
+                    Span::new(sp, sp + 1),
+                    "`str`/`bytes` are immutable — element assignment is not allowed",
+                );
                 Err(())
             }
             SliceSource::DataBuf { buf_field, .. } => {
                 let buf_ty = info.array_ty(self.ctx);
                 let buf = self.new_reg(buf_ty);
-                self.emit(Op::GetF { dst: buf, obj: recv, field: *buf_field, repr: Repr::Ref }, sp);
+                self.emit(
+                    Op::GetF {
+                        dst: buf,
+                        obj: recv,
+                        field: *buf_field,
+                        repr: Repr::Ref,
+                    },
+                    sp,
+                );
                 let repr = rut_core::types::arr_elem_repr(&self.ctx.types, info.elem);
-                self.emit(Op::ArrSet { arr: buf, idx, val, repr }, sp);
+                self.emit(
+                    Op::ArrSet {
+                        arr: buf,
+                        idx,
+                        val,
+                        repr,
+                    },
+                    sp,
+                );
                 Ok(())
             }
         }

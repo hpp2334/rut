@@ -66,8 +66,7 @@ fn main() {
         // the remote's fetch futures come back READY: one noop-waker
         // poll settles the pack lane's prefetch
         let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-        let mut pinned =
-            std::pin::pin!(rut_native::pack_dir_opts_with(dir, &opts, &remote));
+        let mut pinned = std::pin::pin!(rut_native::pack_dir_opts_with(dir, &opts, &remote));
         let (bytes, _) = loop {
             match pinned.as_mut().poll(&mut cx) {
                 std::task::Poll::Ready(v) => break v.unwrap(),

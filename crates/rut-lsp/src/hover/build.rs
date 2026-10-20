@@ -12,7 +12,9 @@ use rut_lexer::token::{Tok, Token};
 
 use super::bindings::ident_span;
 use super::infer;
-use super::types::{ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef};
+use super::types::{
+    ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef,
+};
 use crate::line_index::LineIndex;
 
 /// `line` of a byte offset, 1-based
@@ -51,7 +53,13 @@ fn doc_before(src: &str, lo: u32) -> Vec<String> {
 /// flattens `pub host fn abs(x: f64) -> f64;\npub` into `...;pub`. The
 /// ModuleLet cut below is the precedent; tokens are in source order, so
 /// the first `;` at/after the span's start is the item's own terminator.
-fn sig_src(src: &str, ast: &Ast, toks: &[Token], span: Span, body: Option<NodeHandle<BlockNode>>) -> String {
+fn sig_src(
+    src: &str,
+    ast: &Ast,
+    toks: &[Token],
+    span: Span,
+    body: Option<NodeHandle<BlockNode>>,
+) -> String {
     let hi = match body {
         Some(b) => ast.span(b.id()).lo,
         None => toks
@@ -85,7 +93,12 @@ fn member(
     }
 }
 
-fn members_of(src: &str, ast: &Ast, toks: &[Token], methods: &[NodeHandle<MethodDeclNode>]) -> Vec<MemberSrc> {
+fn members_of(
+    src: &str,
+    ast: &Ast,
+    toks: &[Token],
+    methods: &[NodeHandle<MethodDeclNode>],
+) -> Vec<MemberSrc> {
     methods
         .iter()
         .map(|m| {
@@ -146,7 +159,12 @@ fn strip_member_mods(mut s: &str) -> &str {
 
 /// field member list: the decl slice carries the modifiers (the field
 /// span starts before them) —strip, then re-render from the flags
-fn field_members(src: &str, ast: &Ast, toks: &[Token], fields: &[NodeHandle<FieldDeclNode>]) -> Vec<MemberSrc> {
+fn field_members(
+    src: &str,
+    ast: &Ast,
+    toks: &[Token],
+    fields: &[NodeHandle<FieldDeclNode>],
+) -> Vec<MemberSrc> {
     fields
         .iter()
         .map(|f| {
@@ -275,13 +293,31 @@ pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
 /// inline module of a consolidated `.d.rut` (one parse, per-module
 /// indexes, each stamped with its mod path), so a bundle group's whole
 /// surface indexes from ONE Decl parse of ONE file.
-pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<AnyItem>]) -> DefIndex {
+pub fn index_items(
+    src: &str,
+    ast: &Ast,
+    toks: &[Token],
+    items: &[NodeHandle<AnyItem>],
+) -> DefIndex {
     let mut idx = DefIndex::default();
-    let mut pending_lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis, Span)> = Vec::new();
+    let mut pending_lets: Vec<(
+        IdentId,
+        Option<NodeHandle<AnyTy>>,
+        NodeHandle<AnyExpr>,
+        Vis,
+        Span,
+    )> = Vec::new();
     for h in items {
         let span = ast.span(h.id());
         match ast.item(*h) {
-            ItemKind::Class { vis, name, generics, fields, methods, .. } => {
+            ItemKind::Class {
+                vis,
+                name,
+                generics,
+                fields,
+                methods,
+                ..
+            } => {
                 let fs = field_members(src, ast, toks, fields);
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
@@ -296,7 +332,14 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                     span,
                 ));
             }
-            ItemKind::Struct { vis, name, generics, fields, methods, .. } => {
+            ItemKind::Struct {
+                vis,
+                name,
+                generics,
+                fields,
+                methods,
+                ..
+            } => {
                 let fs = field_members(src, ast, toks, fields);
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
@@ -311,7 +354,13 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                     span,
                 ));
             }
-            ItemKind::Interface { vis, name, generics, methods, .. } => {
+            ItemKind::Interface {
+                vis,
+                name,
+                generics,
+                methods,
+                ..
+            } => {
                 let ms = members_of(src, ast, toks, methods);
                 idx.types.push(ty_def(
                     src,
@@ -325,7 +374,9 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                     span,
                 ));
             }
-            ItemKind::Enum { vis, name, members, .. } => {
+            ItemKind::Enum {
+                vis, name, members, ..
+            } => {
                 // member spans recovered by token scan inside the enum's
                 // span (the recovery the old comment deferred)
                 let ms = enum_members(src, ast, toks, span, members);
@@ -341,7 +392,9 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                     span,
                 ));
             }
-            ItemKind::Impl { target, methods, .. } => {
+            ItemKind::Impl {
+                target, methods, ..
+            } => {
                 // the inherent impl owns its methods — the owner string
                 // is the target type's name, so an impl method renders
                 // like the type's own surface (`impl I for T` is gone)
@@ -383,7 +436,13 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::SurfaceFn { vis, name, params, linkage, .. } => {
+            ItemKind::SurfaceFn {
+                vis,
+                name,
+                params,
+                linkage,
+                ..
+            } => {
                 // the import-gated builtin linkage (`pub builtin`) — the
                 // name completes only through the document's `use`
                 if matches!(linkage, Linkage::Builtin { ambient: false }) {
@@ -405,7 +464,13 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                     line: line_of(src, span.lo),
                 });
             }
-            ItemKind::BuiltinTy { name, ambient, generics, members, .. } => {
+            ItemKind::BuiltinTy {
+                name,
+                ambient,
+                generics,
+                members,
+                ..
+            } => {
                 if !ambient {
                     idx.pub_gated.push(ast.name(*name).to_string());
                 }
@@ -425,7 +490,12 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                 def.ambient = *ambient;
                 idx.types.push(def);
             }
-            ItemKind::BuiltinPrimitive { name, ambient, members, .. } => {
+            ItemKind::BuiltinPrimitive {
+                name,
+                ambient,
+                members,
+                ..
+            } => {
                 if !ambient {
                     idx.pub_gated.push(ast.name(*name).to_string());
                 }
@@ -482,7 +552,13 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
                     alias_target: Some(ty_src(ast, d.target)),
                 });
             }
-            ItemKind::ModuleLet { vis, name, ty, init, .. } => {
+            ItemKind::ModuleLet {
+                vis,
+                name,
+                ty,
+                init,
+                ..
+            } => {
                 // processed after the main walk: the initializer's
                 // inference may name THIS document's types
                 pending_lets.push((*name, *ty, *init, *vis, span));
@@ -580,9 +656,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[NodeHandle<Any
             name: text,
             name_span: ident_span(toks, span, ast.name(name)),
             ty: ty_text,
-            src: src[span.lo as usize..hi as usize]
-                .trim_end()
-                .to_string(),
+            src: src[span.lo as usize..hi as usize].trim_end().to_string(),
             doc: doc_before(src, span.lo),
             vis,
             span,

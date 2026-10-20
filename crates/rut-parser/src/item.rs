@@ -9,7 +9,7 @@ use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
 use crate::expr::{ExprFrame, ExprMode};
-use crate::frame::{pub_scope, Done, PubFrame, Frame, Step};
+use crate::frame::{pub_scope, Done, Frame, PubFrame, Step};
 use crate::stmt::BlockFrame;
 use crate::ty::TypeFrame;
 use crate::{Mode, Parser};
@@ -51,7 +51,10 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
             // identifier everywhere except directly before `builtin`
             "prelude" if p.at_kw2("builtin") => {
                 p.bump();
-                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true }, Vis::Self_)))
+                Some(Frame::Surface(SurfaceFrame::new(
+                    Linkage::Builtin { ambient: true },
+                    Vis::Self_,
+                )))
             }
             // bare `builtin` — the old spelling is gone: diagnosed, then
             // recovered as ambient so downstream diagnostics stay sane
@@ -60,7 +63,10 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
                     sp,
                     "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)",
                 );
-                Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: true }, Vis::Self_)))
+                Some(Frame::Surface(SurfaceFrame::new(
+                    Linkage::Builtin { ambient: true },
+                    Vis::Self_,
+                )))
             }
             "extern" => {
                 p.err(
@@ -112,7 +118,10 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
             // `pub builtin` — the IMPORT-GATED engine surface spelling:
             // the decl resolves only through `use <pkg>::{ .. }` (the
             // ambient twin is `prelude builtin`)
-            "builtin" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Builtin { ambient: false }, vis))),
+            "builtin" => Some(Frame::Surface(SurfaceFrame::new(
+                Linkage::Builtin { ambient: false },
+                vis,
+            ))),
             "extern" => {
                 p.err_here(
                     "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader",
@@ -150,7 +159,11 @@ pub(crate) struct UseFrame {
 
 impl UseFrame {
     pub(crate) fn new() -> Self {
-        UseFrame { lo: 0, path: Vec::new(), names: Vec::new() }
+        UseFrame {
+            lo: 0,
+            path: Vec::new(),
+            names: Vec::new(),
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -161,7 +174,9 @@ impl UseFrame {
         };
         self.path.push(pkg);
         if !p.eat_punct(Tok::Colon2) {
-            p.err_here("expected `::` after the package name — use paths spell `use <pkg>::{A, B};`");
+            p.err_here(
+                "expected `::` after the package name — use paths spell `use <pkg>::{A, B};`",
+            );
             p.sync_stmt();
             return Step::Pop(Done::Failed);
         }
@@ -208,7 +223,10 @@ impl UseFrame {
             }
         }
         p.expect(Tok::Semi);
-        let (path, names) = (std::mem::take(&mut self.path), std::mem::take(&mut self.names));
+        let (path, names) = (
+            std::mem::take(&mut self.path),
+            std::mem::take(&mut self.names),
+        );
         Step::Pop(Done::Item(p.item(
             ItemKind::Use { path, names },
             Span::new(self.lo, p.span().hi),
@@ -259,7 +277,12 @@ pub(crate) struct ModDeclFrame {
 
 impl ModDeclFrame {
     pub(crate) fn new(vis: Vis) -> Self {
-        ModDeclFrame { vis, lo: 0, name: IdentId(0), inline: false }
+        ModDeclFrame {
+            vis,
+            lo: 0,
+            name: IdentId(0),
+            inline: false,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -275,9 +298,7 @@ impl ModDeclFrame {
                 // frame stays underneath and relays its item
                 self.inline = true;
                 return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(
-                    self.vis,
-                    self.lo,
-                    self.name,
+                    self.vis, self.lo, self.name,
                 )));
             }
             p.err_here(
@@ -299,7 +320,10 @@ impl ModDeclFrame {
             p.expect(Tok::Semi);
         }
         let node = p.item(
-            ItemKind::ModDecl { vis: self.vis, name: self.name },
+            ItemKind::ModDecl {
+                vis: self.vis,
+                name: self.name,
+            },
             Span::new(self.lo, p.span().hi),
         );
         Step::Pop(Done::Item(node))
@@ -336,7 +360,13 @@ pub(crate) struct ModInlineFrame {
 impl ModInlineFrame {
     /// The `{` was already consumed by [`ModDeclFrame::step`].
     fn from_decl(vis: Vis, lo: u32, name: IdentId) -> Self {
-        ModInlineFrame { vis, lo, name, items: Vec::new(), before: 0 }
+        ModInlineFrame {
+            vis,
+            lo,
+            name,
+            items: Vec::new(),
+            before: 0,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -344,7 +374,11 @@ impl ModInlineFrame {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
                 let items = std::mem::take(&mut self.items);
                 let node = p.item(
-                    ItemKind::ModInline { vis: self.vis, name: self.name, items },
+                    ItemKind::ModInline {
+                        vis: self.vis,
+                        name: self.name,
+                        items,
+                    },
                     Span::new(self.lo, p.span().hi),
                 );
                 return Step::Pop(Done::Item(node));
@@ -394,7 +428,11 @@ pub(crate) struct TypeAliasFrame {
 
 impl TypeAliasFrame {
     pub(crate) fn new(vis: Vis) -> Self {
-        TypeAliasFrame { vis, lo: 0, name: IdentId(0) }
+        TypeAliasFrame {
+            vis,
+            lo: 0,
+            name: IdentId(0),
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -412,7 +450,11 @@ impl TypeAliasFrame {
             Done::Ty(ty) => {
                 p.expect(Tok::Semi);
                 let node = p.item(
-                    ItemKind::Alias(AliasData { vis: self.vis, name: self.name, target: ty }),
+                    ItemKind::Alias(AliasData {
+                        vis: self.vis,
+                        name: self.name,
+                        target: ty,
+                    }),
                     Span::new(self.lo, p.span().hi),
                 );
                 Step::Pop(Done::Item(node))
@@ -441,7 +483,13 @@ enum MlStage {
 
 impl ModuleLetFrame {
     pub(crate) fn new(vis: Vis) -> Self {
-        ModuleLetFrame { vis, lo: 0, stage: MlStage::Ty, name: IdentId(0), ty: None }
+        ModuleLetFrame {
+            vis,
+            lo: 0,
+            stage: MlStage::Ty,
+            name: IdentId(0),
+            ty: None,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -498,7 +546,12 @@ pub(crate) struct EnumFrame {
 
 impl EnumFrame {
     pub(crate) fn new(vis: Vis) -> Self {
-        EnumFrame { vis, lo: 0, name: IdentId(0), members: Vec::new() }
+        EnumFrame {
+            vis,
+            lo: 0,
+            name: IdentId(0),
+            members: Vec::new(),
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -537,7 +590,11 @@ impl EnumFrame {
         }
         let members = std::mem::take(&mut self.members);
         let node = p.item(
-            ItemKind::Enum { vis: self.vis, name: self.name, members },
+            ItemKind::Enum {
+                vis: self.vis,
+                name: self.name,
+                members,
+            },
             Span::new(self.lo, p.span().hi),
         );
         Step::Pop(Done::Item(node))
@@ -558,7 +615,11 @@ impl EnumFrame {
 // `generic_params_more` hands back the generic whose bound is being
 // parsed (`Some`).
 
-fn generic_params(p: &mut Parser, allow_bounds: bool, owner: &str) -> (Vec<IdentId>, Option<IdentId>) {
+fn generic_params(
+    p: &mut Parser,
+    allow_bounds: bool,
+    owner: &str,
+) -> (Vec<IdentId>, Option<IdentId>) {
     p.bump(); // < (the caller checked)
     let mut out = Vec::new();
     let pending = generic_params_more(p, allow_bounds, owner, &mut out);
@@ -567,7 +628,12 @@ fn generic_params(p: &mut Parser, allow_bounds: bool, owner: &str) -> (Vec<Ident
 
 /// Continue the list at a parameter name — after `<`, a comma, or an
 /// absorbed bound. `Some(g)` when `g requires` suspends the list.
-fn generic_params_more(p: &mut Parser, allow_bounds: bool, owner: &str, out: &mut Vec<IdentId>) -> Option<IdentId> {
+fn generic_params_more(
+    p: &mut Parser,
+    allow_bounds: bool,
+    owner: &str,
+    out: &mut Vec<IdentId>,
+) -> Option<IdentId> {
     p.eat_punct(Tok::Comma); // after an absorbed bound the separator is still ahead
     loop {
         if p.eat_punct(Tok::Gt) {
@@ -647,7 +713,11 @@ impl TyDeclFrame {
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         self.lo = p.bump().span.lo; // struct | class
-        let what = if self.is_class { "a class name" } else { "a struct name" };
+        let what = if self.is_class {
+            "a class name"
+        } else {
+            "a struct name"
+        };
         let Some(name) = p.expect_ident(what) else {
             return Step::Pop(Done::Failed);
         };
@@ -746,7 +816,8 @@ impl TyDeclFrame {
             }
             (TdStage::NewtypeTy, Done::Failed) => Step::Pop(Done::Failed),
             (TdStage::Body, Done::Body(fields, methods)) => {
-                let (vis, name, generics) = (self.vis, self.name, std::mem::take(&mut self.generics));
+                let (vis, name, generics) =
+                    (self.vis, self.name, std::mem::take(&mut self.generics));
                 let kind = if self.is_class {
                     ItemKind::Class {
                         vis,
@@ -758,7 +829,13 @@ impl TyDeclFrame {
                         methods,
                     }
                 } else {
-                    ItemKind::Struct { vis, name, generics, fields, methods }
+                    ItemKind::Struct {
+                        vis,
+                        name,
+                        generics,
+                        fields,
+                        methods,
+                    }
                 };
                 Step::Pop(Done::Item(p.item(kind, Span::new(self.lo, p.span().hi))))
             }
@@ -809,13 +886,15 @@ impl InterfaceFrame {
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match (d) {
             Done::Body(_, methods) => {
-                let (vis, name, generics) = (
-                    self.vis,
-                    self.name,
-                    std::mem::take(&mut self.generics),
-                );
+                let (vis, name, generics) =
+                    (self.vis, self.name, std::mem::take(&mut self.generics));
                 let node = p.item(
-                    ItemKind::Interface { vis, name, generics, methods },
+                    ItemKind::Interface {
+                        vis,
+                        name,
+                        generics,
+                        methods,
+                    },
                     Span::new(self.lo, p.span().hi),
                 );
                 Step::Pop(Done::Item(node))
@@ -1003,7 +1082,10 @@ impl TypeBodyFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         // v1 brace strictness: struct/class and interface bodies bail on a
         // missing `{`; impl and surface bodies had already expected it
-        let strict = matches!(self.mode, BodyMode::Class { .. } | BodyMode::HostStruct | BodyMode::Interface);
+        let strict = matches!(
+            self.mode,
+            BodyMode::Class { .. } | BodyMode::HostStruct | BodyMode::Interface
+        );
         if strict {
             if p.expect(Tok::LBrace).is_none() {
                 return Step::Pop(Done::Failed);
@@ -1027,9 +1109,14 @@ impl TypeBodyFrame {
         }
         let lo = p.span();
         p.bump(); // [
-        let word = p.expect_ident("a marker name after `[`").unwrap_or(IdentId(0));
+        let word = p
+            .expect_ident("a marker name after `[`")
+            .unwrap_or(IdentId(0));
         if p.expect(Tok::RBracket).is_none() {
-            p.err(lo, "unterminated marker — `[disposal]` / `[iterable]` / `[constructor]`");
+            p.err(
+                lo,
+                "unterminated marker — `[disposal]` / `[iterable]` / `[constructor]`",
+            );
         }
         Some(word)
     }
@@ -1049,7 +1136,10 @@ impl TypeBodyFrame {
                             "pub" => {
                                 p.bump();
                                 let _ = pub_scope(p);
-                                p.err(lo, "host struct fields carry no visibility —all fields are public");
+                                p.err(
+                                    lo,
+                                    "host struct fields carry no visibility —all fields are public",
+                                );
                             }
                             "static" | "async" => {
                                 p.bump();
@@ -1064,7 +1154,9 @@ impl TypeBodyFrame {
                         Tok::Ident(kw) if kw == "fn" => {
                             p.err(lo, "host structs declare fields only —methods live in rut wrapper classes");
                             self.stage = TbStage::Method;
-                            return Step::Push(Frame::Method(MethodFrame::new(None, false, false, false)));
+                            return Step::Push(Frame::Method(MethodFrame::new(
+                                None, false, false, false,
+                            )));
                         }
                         Tok::Ident(_) => {
                             let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
@@ -1083,7 +1175,10 @@ impl TypeBodyFrame {
                         }
                     }
                 }
-                BodyMode::Class { allow_pub, is_struct } => {
+                BodyMode::Class {
+                    allow_pub,
+                    is_struct,
+                } => {
                     let lo = p.span();
                     // members default to module-private;
                     // `pub` (+ scopes) exposes them. FIELDS ONLY in an
@@ -1136,7 +1231,9 @@ impl TypeBodyFrame {
                                 );
                             }
                             self.stage = TbStage::Method;
-                            return Step::Push(Frame::Method(MethodFrame::new(vis, false, true, true)));
+                            return Step::Push(Frame::Method(MethodFrame::new(
+                                vis, false, true, true,
+                            )));
                         }
                         Tok::Ident(_) => {
                             let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
@@ -1187,7 +1284,9 @@ impl TypeBodyFrame {
                     }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        return Step::Push(Frame::Method(MethodFrame::new(None, is_async, false, true)));
+                        return Step::Push(Frame::Method(MethodFrame::new(
+                            None, is_async, false, true,
+                        )));
                     }
                     if is_async {
                         p.err(lo, "expected `fn` after `async`");
@@ -1336,7 +1435,12 @@ enum MeStage {
 }
 
 impl MethodFrame {
-    pub(crate) fn new(vis: Option<Vis>, is_async: bool, with_body: bool, allow_bounds: bool) -> Self {
+    pub(crate) fn new(
+        vis: Option<Vis>,
+        is_async: bool,
+        with_body: bool,
+        allow_bounds: bool,
+    ) -> Self {
         MethodFrame {
             lo: 0,
             vis,
@@ -1417,7 +1521,9 @@ impl MethodFrame {
             ret: self.ret.take(),
             body,
         };
-        Step::Pop(Done::Method(p.method_decl(d, Span::new(self.lo, p.span().hi))))
+        Step::Pop(Done::Method(
+            p.method_decl(d, Span::new(self.lo, p.span().hi)),
+        ))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
@@ -1425,7 +1531,8 @@ impl MethodFrame {
             (MeStage::GenBound, Done::Ty(t)) => {
                 let g = self.pending.take().expect("bound without a parameter");
                 self.bounds.push((g, t));
-                let pending = generic_params_more(p, self.allow_bounds, "method", &mut self.generics);
+                let pending =
+                    generic_params_more(p, self.allow_bounds, "method", &mut self.generics);
                 if let Some(g) = pending {
                     self.pending = Some(g);
                     return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
@@ -1552,7 +1659,10 @@ impl FnFrame {
                 p.bump();
                 return self.pop(p);
             }
-            p.err(Span::new(self.lo, self.lo + 2), "implementation in a declaration file");
+            p.err(
+                Span::new(self.lo, self.lo + 2),
+                "implementation in a declaration file",
+            );
         }
         self.stage = FnSStage::Body;
         Step::Push(Frame::Block(BlockFrame::lax(p, self.lo)))
@@ -1773,7 +1883,9 @@ impl SurfaceFrame {
             }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn` or `struct` after `host`, found {found}"));
+                p.err_here(format!(
+                    "expected `fn` or `struct` after `host`, found {found}"
+                ));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1893,7 +2005,9 @@ impl SurfaceFrame {
             }
             _ => {
                 let found = p.peek(0).describe();
-                p.err_here(format!("expected `fn`, `primitive`, `class`, or `impl` after `builtin`, found {found}"));
+                p.err_here(format!(
+                    "expected `fn`, `primitive`, `class`, or `impl` after `builtin`, found {found}"
+                ));
                 Step::Pop(Done::Failed)
             }
         }
@@ -1906,8 +2020,7 @@ impl SurfaceFrame {
                 // the strict spelling the decl used — `prelude builtin`
                 // (ambient) vs `pub builtin` (import-gated); a bare
                 // `builtin` diagnoses and recovers as ambient
-                let ambient =
-                    matches!(self.linkage, Linkage::Builtin { ambient: true });
+                let ambient = matches!(self.linkage, Linkage::Builtin { ambient: true });
                 let node = if self.is_impl {
                     p.item(
                         ItemKind::BuiltinImpl {
@@ -1948,7 +2061,9 @@ impl SurfaceFrame {
             };
             if p.at_kw("fn") {
                 self.stage = SuStage::Members;
-                return Step::Push(Frame::Method(MethodFrame::new(None, is_async, false, false)));
+                return Step::Push(Frame::Method(MethodFrame::new(
+                    None, is_async, false, false,
+                )));
             }
             let found = p.peek(0).describe();
             p.err_here(format!("expected a method declaration, found {found}"));
@@ -2067,7 +2182,8 @@ impl ParamsFrame {
             }
             if p.at_kw("self") {
                 p.bump();
-                self.out.push(p.member(MemberKind::SelfParam(SelfParamData { is_mut }), lo));
+                self.out
+                    .push(p.member(MemberKind::SelfParam(SelfParamData { is_mut }), lo));
                 if !p.eat_punct(Tok::Comma) {
                     p.expect(Tok::RParen);
                     return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
@@ -2090,7 +2206,11 @@ impl ParamsFrame {
                 return Step::Push(Frame::Type(TypeFrame::new(p)));
             }
             self.out.push(p.member(
-                MemberKind::Param(ParamData { is_mut, name, ty: None }),
+                MemberKind::Param(ParamData {
+                    is_mut,
+                    name,
+                    ty: None,
+                }),
                 lo.to(p.span()),
             ));
             if !p.eat_punct(Tok::Comma) {
@@ -2107,7 +2227,11 @@ impl ParamsFrame {
                 self.stage = PsStage::List;
                 let (lo, is_mut, name) = (self.p_lo, self.p_mut, self.p_name);
                 self.out.push(p.member(
-                    MemberKind::Param(ParamData { is_mut, name, ty: Some(t) }),
+                    MemberKind::Param(ParamData {
+                        is_mut,
+                        name,
+                        ty: Some(t),
+                    }),
                     lo.to(p.span()),
                 ));
                 if !p.eat_punct(Tok::Comma) {

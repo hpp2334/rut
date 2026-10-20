@@ -5,15 +5,16 @@
 //! inference, no typo-shaped template parameters), the multi-binder
 //! head collects, and the inherent form follows the same law.
 
-
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -39,7 +40,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -101,7 +105,8 @@ fn undeclared_binder_without_any_declared_list() {
          entry fn main() -> i32 { return 0; }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("undeclared type parameter `T`")),
+        ds.iter()
+            .any(|d| d.contains("undeclared type parameter `T`")),
         "{ds:?}"
     );
 }
@@ -155,5 +160,8 @@ fn concrete_head_names_stay_concrete() {
              return h.coded();\n\
          }\n",
     );
-    assert!(ds.is_empty(), "a concrete generic head needs no binders: {ds:?}");
+    assert!(
+        ds.is_empty(),
+        "a concrete generic head needs no binders: {ds:?}"
+    );
 }

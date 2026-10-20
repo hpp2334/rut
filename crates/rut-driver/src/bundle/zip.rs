@@ -80,7 +80,10 @@ pub(crate) fn read_archive(data: &[u8]) -> Result<Vec<ZipEntry>, ZipLayerError> 
             // a method this build has no codec for — the id is the
             // directory's own spelling
             Err(zip::result::ZipError::CompressionMethodNotSupported(method)) => {
-                return Err(ZipLayerError::UnsupportedMethod { name: dir_name, method });
+                return Err(ZipLayerError::UnsupportedMethod {
+                    name: dir_name,
+                    method,
+                });
             }
             Err(e) => return Err(ZipLayerError::Corrupt(e.to_string())),
         };
@@ -97,7 +100,11 @@ pub(crate) fn read_archive(data: &[u8]) -> Result<Vec<ZipEntry>, ZipLayerError> 
                 ZipLayerError::Corrupt(e.to_string())
             }
         })?;
-        out.push(ZipEntry { name, method, bytes });
+        out.push(ZipEntry {
+            name,
+            method,
+            bytes,
+        });
     }
     Ok(out)
 }
@@ -110,7 +117,9 @@ fn has_eocd(data: &[u8]) -> bool {
         return false;
     }
     let start = data.len().saturating_sub(22 + 0xFFFF);
-    (start..=data.len() - 22).rev().any(|i| data[i..i + 4] == EOCD)
+    (start..=data.len() - 22)
+        .rev()
+        .any(|i| data[i..i + 4] == EOCD)
 }
 
 #[cfg(test)]
@@ -120,7 +129,10 @@ mod tests {
     fn entries() -> Vec<(String, Vec<u8>)> {
         vec![
             ("rut.json".to_string(), br#"{"name": "x"}"#.to_vec()),
-            ("x.rut".to_string(), b"fn main() -> i32 { return 7; }\n".to_vec()),
+            (
+                "x.rut".to_string(),
+                b"fn main() -> i32 { return 7; }\n".to_vec(),
+            ),
         ]
     }
 
@@ -152,7 +164,10 @@ mod tests {
 
     #[test]
     fn mechanical_failures_are_their_own_variants() {
-        assert_eq!(read_archive(b"definitely not a zip"), Err(ZipLayerError::NotAZip));
+        assert_eq!(
+            read_archive(b"definitely not a zip"),
+            Err(ZipLayerError::NotAZip)
+        );
         // flip a payload byte → the CRC law of the layer itself
         let mut bytes = write_archive(&[("x.rut".to_string(), b"hello".to_vec())]).unwrap();
         let name = b"x.rut";
@@ -164,7 +179,9 @@ mod tests {
         bytes[at] ^= 0x01;
         assert_eq!(
             read_archive(&bytes),
-            Err(ZipLayerError::Checksum { name: "x.rut".to_string() })
+            Err(ZipLayerError::Checksum {
+                name: "x.rut".to_string()
+            })
         );
     }
 }

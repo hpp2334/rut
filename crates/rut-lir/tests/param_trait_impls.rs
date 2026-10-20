@@ -14,7 +14,6 @@
 
 use rut_parser::Mode;
 
-
 /// A compile-and-run harness: core + the std surfaces mounted, the test
 /// source compiled as the root module, encoded + decoded —
 /// the same loop the example suites run.
@@ -40,8 +39,13 @@ fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .map_err(|e| format!("{e:?}"))
+    rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .map_err(|e| format!("{e:?}"))
 }
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
@@ -57,11 +61,7 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
 }
 
 fn diags_of(src: &str) -> Vec<String> {
-    compile(src)
-        .diags
-        .iter()
-        .map(|d| d.msg.clone())
-        .collect()
+    compile(src).diags.iter().map(|d| d.msg.clone()).collect()
 }
 
 // DEAD with parameterized trait impls: the template registry —
@@ -119,7 +119,10 @@ fn trait_parameter_in_the_impl_methods_signature_resolves() {
     )
     .expect("compiles");
     let r: i32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 715, "use_it(Adder)=7 and use_it(Multer)=15 — both dispatch");
+    assert_eq!(
+        r, 715,
+        "use_it(Adder)=7 and use_it(Multer)=15 — both dispatch"
+    );
 }
 
 /// the wrapper-construction inference: `let w = JsonW(t);` binds the
@@ -144,7 +147,10 @@ fn widening_dispatches_to_the_instantiated_template() {
     )
     .expect("compiles");
     let r: i64 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 43, "JsonW(t) is JsonW<i64> (41); JsonW(\"hi\") is JsonW<str> (len 2)");
+    assert_eq!(
+        r, 43,
+        "JsonW(t) is JsonW<i64> (41); JsonW(\"hi\") is JsonW<str> (len 2)"
+    );
 }
 
 /// the same inside a GENERIC fn body: one body, two monomorphizations,
@@ -170,7 +176,10 @@ fn generic_fn_body_dispatches_per_monomorphization() {
     )
     .expect("compiles");
     let r: u32 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 710, "read_of(s)=7 and read_of(d)=10 — per-instantiation dispatch");
+    assert_eq!(
+        r, 710,
+        "read_of(s)=7 and read_of(d)=10 — per-instantiation dispatch"
+    );
 }
 
 /// the itable: an interface-typed binding with TWO possible origins (a
@@ -198,7 +207,10 @@ fn vtable_row_is_filled_for_the_instantiation() {
     )
     .expect("compiles");
     let r: i64 = vm.call("main", ()).expect("runs");
-    assert_eq!(r, 112, "pick via the static bind (5) + pick2 via the itable (107)");
+    assert_eq!(
+        r, 112,
+        "pick via the static bind (5) + pick2 via the itable (107)"
+    );
 }
 
 /// The stale-frame repro, minimized: the same generic body must compute
@@ -267,7 +279,10 @@ fn method_generic_arity_mismatch_is_one_clean_diagnostic() {
          }\n",
     );
     assert_eq!(ds.len(), 1, "one diagnostic, not a cascade: {ds:?}");
-    assert!(ds[0].contains("takes 1 generic argument(s), 2 given"), "{ds:?}");
+    assert!(
+        ds[0].contains("takes 1 generic argument(s), 2 given"),
+        "{ds:?}"
+    );
 }
 
 /// deterministic generic-instance emission: the same source compiled

@@ -11,8 +11,6 @@ use rut_native::{load_bundle_session, load_dir, load_path_session, pack_dir};
 mod common;
 use common::{dep_dir, pkg_named};
 
-
-
 /// The make_dir manifest's text — also the corruption test's offset
 /// reference (the first zip entry's payload).
 
@@ -20,7 +18,12 @@ use common::{dep_dir, pkg_named};
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -46,7 +49,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -124,18 +130,16 @@ fn in_memory_bytes_load_without_a_file() {
         loaded.pkg("mod").unwrap().body,
         rut_driver::MountedBody::Compiled(_)
     ));
-    assert!(
-        loaded
-            .pkgs
-            .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .entrypoint(&loaded.root)
-            .compile()
-            .unwrap()
-            .graph
-            .program
-            .is_some()
-    );
+    assert!(loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .entrypoint(&loaded.root)
+        .compile()
+        .unwrap()
+        .graph
+        .program
+        .is_some());
     let _ = std::fs::remove_dir_all(&base);
 }
 
@@ -147,7 +151,9 @@ fn refusals() {
 
     // no rut.jsonc entry at all
     let not_a_bundle = rut_driver::bundle::write_bundle(&[("x.rut".into(), src.to_vec())]).unwrap();
-    let err = rut_driver::Mounted::from_bundle(&not_a_bundle).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&not_a_bundle)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("rut.jsonc"), "{err}");
 
     // anything outside the wire family refuses at the one-line version
@@ -165,9 +171,14 @@ fn refusals() {
             ("x.rut".into(), src.to_vec()),
         ])
         .unwrap();
-        let err = rut_driver::Mounted::from_bundle(&old).unwrap_err().to_string();
+        let err = rut_driver::Mounted::from_bundle(&old)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("format_version"), "{err}");
-        assert!(err.contains("reads bundle format_version 12 (and the old 11 lane) only"), "{err}");
+        assert!(
+            err.contains("reads bundle format_version 12 (and the old 11 lane) only"),
+            "{err}"
+        );
         assert!(err.contains("re-pack the directory"), "{err}");
     }
 
@@ -196,7 +207,9 @@ fn refusals() {
         ("x.rut".into(), src.to_vec()),
     ])
     .unwrap();
-    let err = rut_driver::Mounted::from_bundle(&no_format).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&no_format)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("rutbundle"), "{err}");
 
     // corruption: flip a payload byte, the CRC check fires (gate 1 —
@@ -205,7 +218,9 @@ fn refusals() {
     let mut bytes = pack_dir(&dir).unwrap();
     let at = 30 + make_dir_manifest().len();
     bytes[at] ^= 0x01;
-    let err = rut_driver::Mounted::from_bundle(&bytes).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&bytes)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("CRC"), "{err}");
 
     // a pack whose declared surface file is missing refuses loudly
@@ -256,11 +271,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
-    std::fs::write(
-        m.join("mod.rut"),
-        "entry fn main() -> i32 { return 7; }\n",
-    )
-    .unwrap();
+    std::fs::write(m.join("mod.rut"), "entry fn main() -> i32 { return 7; }\n").unwrap();
 
     let bytes = pack_dir(&m).unwrap();
 
@@ -313,11 +324,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
-    std::fs::write(
-        m2.join("mod.rut"),
-        "entry fn main() -> i32 { return 7; }\n",
-    )
-    .unwrap();
+    std::fs::write(m2.join("mod.rut"), "entry fn main() -> i32 { return 7; }\n").unwrap();
     let dev_bytes = pack_dir(&m2).unwrap();
     let session = rut_driver::Mounted::from_bundle(&dev_bytes).unwrap();
     let sf = pkg_named(&session, "s");
@@ -423,7 +430,11 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     );
 
     // determinism with deps too
-    assert_eq!(bytes, pack_dir(&main).unwrap(), "same dir => byte-identical bundle");
+    assert_eq!(
+        bytes,
+        pack_dir(&main).unwrap(),
+        "same dir => byte-identical bundle"
+    );
 
     // the packed form compiles like the directory form
     let bundle = base.join("main.rutbundle");
@@ -443,11 +454,21 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     // the ARCHIVE ROOT as its puller, and every archive pkg rides its
     // own in-archive manifest
     let mf = pkg_named(&session, "m");
-    assert_eq!(sf.mounted_by.as_deref(), Some("main"), "the archive root pulled its groups");
+    assert_eq!(
+        sf.mounted_by.as_deref(),
+        Some("main"),
+        "the archive root pulled its groups"
+    );
     assert_eq!(mf.mounted_by.as_deref(), Some("main"));
-    assert!(session.pkg("main").unwrap().mounted_by.is_none(), "the bundle root has no parent");
+    assert!(
+        session.pkg("main").unwrap().mounted_by.is_none(),
+        "the bundle root has no parent"
+    );
     assert_eq!(mf.manifest.name.as_deref(), Some("m"));
-    assert!(mf.manifest.deps.contains_key("s"), "the group's own dep rows ride");
+    assert!(
+        mf.manifest.deps.contains_key("s"),
+        "the group's own dep rows ride"
+    );
     let g = session
         .pkgs
         .iter()
@@ -465,7 +486,9 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         .cloned()
         .collect();
     let bytes = rut_driver::bundle::write_bundle(&stripped).unwrap();
-    let err = rut_driver::Mounted::from_bundle(&bytes).unwrap_err().to_string();
+    let err = rut_driver::Mounted::from_bundle(&bytes)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("missing its `m` dependency group"), "{err}");
 
     let _ = std::fs::remove_dir_all(&base);
@@ -488,11 +511,8 @@ fn entry_keys_admit_identities_under_deps() {
     // the traversal laws keep biting around it
     assert!(rut_driver::bundle::bundle_key("deps/../util@0123456789abcdef/mod.rutc").is_err());
     assert!(rut_driver::bundle::bundle_key("/deps/util@0123456789abcdef/mod.rutc").is_err());
-    let bytes = rut_driver::bundle::write_bundle(&[(
-        key.to_string(),
-        b"RUTC-payload".to_vec(),
-    )])
-    .expect("the container writes identity entries");
+    let bytes = rut_driver::bundle::write_bundle(&[(key.to_string(), b"RUTC-payload".to_vec())])
+        .expect("the container writes identity entries");
     let parsed = rut_driver::bundle::parse_bundle(&bytes).unwrap();
     assert_eq!(parsed.len(), 1);
     assert_eq!(parsed[0].0, key);
@@ -549,6 +569,9 @@ fn a_directory_still_holding_rut_json_gets_the_pointed_refusal() {
     let err = rut_native::load_dir(&dir).unwrap_err().to_string();
     assert!(err.contains("rut.json"), "{err}");
     assert!(err.contains("rut.jsonc"), "{err}");
-    assert!(err.contains("re-name the file or re-pack the directory"), "{err}");
+    assert!(
+        err.contains("re-name the file or re-pack the directory"),
+        "{err}"
+    );
     let _ = std::fs::remove_dir_all(&base);
 }

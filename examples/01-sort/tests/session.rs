@@ -3,10 +3,10 @@
 //! round trip, the error path, and trap cleanliness. Runs under
 //! `cargo test --workspace`.
 
+use rut_vm::OpaqueRef;
 use std::future::Future;
 use std::path::Path;
 use std::task::{Context, Poll};
-use rut_vm::OpaqueRef;
 
 /// dist/std-v12 plays the wire: the PINNED artifacts (the published
 /// std-v12 bytes the manifest rows name) prime an OFFLINE
@@ -17,13 +17,11 @@ fn warm(base: &Path) -> rut_native::HttpRemote {
     // shared root would race the prime (remove/write/rename)
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let root = std::env::temp_dir()
-        .join(format!("rut-01-sort-cache-{}-{n}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("rut-01-sort-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let remote = rut_native::HttpRemote::at(&root);
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
-    let manifest =
-        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
+    let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
     let dist = base.join("../../dist/std-v12");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
@@ -69,7 +67,13 @@ fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary emitted")).unwrap();
     let limits = rut_vm::interp::Limits {
@@ -116,7 +120,13 @@ fn sort(vm: &mut rut_vm::interp::Vm, c: &OpaqueRef, algo: &str) -> String {
 }
 
 fn json(xs: &[i32]) -> String {
-    format!("[{}]", xs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+    format!(
+        "[{}]",
+        xs.iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 #[test]
@@ -151,11 +161,7 @@ fn edge_cases_for_every_algorithm() {
             sort(&mut vm, &c, algo);
             let mut want = input.to_vec();
             want.sort_unstable();
-            assert_eq!(
-                serialize(&mut vm, &c),
-                json(&want),
-                "{algo} / {name}",
-            );
+            assert_eq!(serialize(&mut vm, &c), json(&want), "{algo} / {name}",);
             assert!(is_sorted(&mut vm, &c), "{algo} / {name}");
         }
     }
@@ -182,7 +188,8 @@ fn all_algorithms_agree_on_pseudo_random_input() {
 #[test]
 fn large_input_is_monotonic_through_get() {
     let (mut vm, c) = vm();
-    vm.call::<_, ()>("fill", (c.clone(), 500u32, 1234u32)).unwrap();
+    vm.call::<_, ()>("fill", (c.clone(), 500u32, 1234u32))
+        .unwrap();
     sort(&mut vm, &c, "quick");
     let mut prev = i32::MIN;
     for i in 0..500 {
@@ -193,8 +200,14 @@ fn large_input_is_monotonic_through_get() {
     }
     // out of range reads 0, and `has` says false — no trap
     assert_eq!(vm.call::<_, i32>("get", (c.clone(), 500i32)).unwrap(), 0);
-    assert_eq!(vm.call::<_, bool>("has", (c.clone(), 500i32)).unwrap(), false);
-    assert_eq!(vm.call::<_, bool>("has", (c.clone(), -1i32)).unwrap(), false);
+    assert_eq!(
+        vm.call::<_, bool>("has", (c.clone(), 500i32)).unwrap(),
+        false
+    );
+    assert_eq!(
+        vm.call::<_, bool>("has", (c.clone(), -1i32)).unwrap(),
+        false
+    );
 }
 
 #[test]

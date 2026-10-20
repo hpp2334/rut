@@ -21,7 +21,10 @@ pub struct Style {
 
 impl Default for Style {
     fn default() -> Self {
-        Style { indent_width: 4, max_width: 100 }
+        Style {
+            indent_width: 4,
+            max_width: 100,
+        }
     }
 }
 
@@ -34,9 +37,9 @@ pub fn from_manifest(map: &BTreeMap<String, String>) -> Result<Style, String> {
     for (k, v) in map {
         match k.as_str() {
             "indent_width" => {
-                let n: u64 = v
-                    .parse()
-                    .map_err(|_| format!("[style] `indent_width` must be an integer, found `{v}`"))?;
+                let n: u64 = v.parse().map_err(|_| {
+                    format!("[style] `indent_width` must be an integer, found `{v}`")
+                })?;
                 if !(1..=8).contains(&n) {
                     return Err(format!(
                         "[style] `indent_width` must be 1..=8 (spaces per level), found {n}"

@@ -13,8 +13,8 @@
 
 use std::collections::BTreeMap;
 
-use rut_vm::HostPkg;
 use rut_vm::interp::Vm;
+use rut_vm::HostPkg;
 
 fn mod_source(path: &str, vis: rut_ast::ast::Vis, text: &str) -> rut_driver::ModSource {
     rut_driver::ModSource {
@@ -39,16 +39,25 @@ fn myhost() -> rut_driver::Mounted {
     );
     children.insert(
         "net/tls".to_string(),
-        mod_source("net/tls", rut_ast::ast::Vis::Pub, "pub host fn handshake(c: i64) -> i64;\n"),
+        mod_source(
+            "net/tls",
+            rut_ast::ast::Vis::Pub,
+            "pub host fn handshake(c: i64) -> i64;\n",
+        ),
     );
-    rut_driver::lower_decl_module(root, &children, "myhost.d.rut").expect("lowers").named("myhost")
+    rut_driver::lower_decl_module(root, &children, "myhost.d.rut")
+        .expect("lowers")
+        .named("myhost")
 }
 
 fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver::GraphOutput {
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -112,7 +121,9 @@ fn a_flat_use_never_reaches_into_the_tree() {
         "use myhost::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`myhost` has no `connect` — unknown import")),
+        out.diags
+            .iter()
+            .any(|d| d.msg.contains("`myhost` has no `connect` — unknown import")),
         "the flat spelling of a mod row is rejected at the use line: {:?}",
         out.diags
     );
@@ -120,20 +131,26 @@ fn a_flat_use_never_reaches_into_the_tree() {
 
 #[test]
 fn a_wrong_leaf_is_diagnosed_against_the_walked_module() {
-    let out = compile(myhost(), "use myhost::net::{ nope };\n\nentry fn main() -> nil {}\n");
+    let out = compile(
+        myhost(),
+        "use myhost::net::{ nope };\n\nentry fn main() -> nil {}\n",
+    );
     assert!(
-        out.diags
-            .iter()
-            .any(|d| d.msg.contains("`nope` is not declared in `myhost`'s module `net`")),
+        out.diags.iter().any(|d| d
+            .msg
+            .contains("`nope` is not declared in `myhost`'s module `net`")),
         "the wrong leaf is named: {:?}",
         out.diags
     );
     // deep: the walked module is the child's child
-    let out = compile(myhost(), "use myhost::net::tls::{ nope };\n\nentry fn main() -> nil {}\n");
+    let out = compile(
+        myhost(),
+        "use myhost::net::tls::{ nope };\n\nentry fn main() -> nil {}\n",
+    );
     assert!(
-        out.diags
-            .iter()
-            .any(|d| d.msg.contains("`nope` is not declared in `myhost`'s module `net/tls`")),
+        out.diags.iter().any(|d| d
+            .msg
+            .contains("`nope` is not declared in `myhost`'s module `net/tls`")),
         "the deep wrong leaf names the walked module: {:?}",
         out.diags
     );
@@ -148,9 +165,15 @@ fn a_bare_host_fn_leaf_does_not_cross() {
         let mut children = BTreeMap::new();
         children.insert(
             "net".to_string(),
-            mod_source("net", rut_ast::ast::Vis::Pub, "host fn connect(url: str) -> i64;\n"),
+            mod_source(
+                "net",
+                rut_ast::ast::Vis::Pub,
+                "host fn connect(url: str) -> i64;\n",
+            ),
         );
-        rut_driver::lower_decl_module(root, &children, "myhost.d.rut").expect("lowers").named("myhost")
+        rut_driver::lower_decl_module(root, &children, "myhost.d.rut")
+            .expect("lowers")
+            .named("myhost")
     };
     let out = compile(
         host,
@@ -172,16 +195,24 @@ fn a_bare_mod_edge_is_invisible_from_outside() {
         let mut children = BTreeMap::new();
         children.insert(
             "net".to_string(),
-            mod_source("net", rut_ast::ast::Vis::Self_, "pub host fn connect(url: str) -> i64;\n"),
+            mod_source(
+                "net",
+                rut_ast::ast::Vis::Self_,
+                "pub host fn connect(url: str) -> i64;\n",
+            ),
         );
-        rut_driver::lower_decl_module(root, &children, "myhost.d.rut").expect("lowers").named("myhost")
+        rut_driver::lower_decl_module(root, &children, "myhost.d.rut")
+            .expect("lowers")
+            .named("myhost")
     };
     let out = compile(
         host,
         "use myhost::net::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n",
     );
     assert!(
-        out.diags.iter().any(|d| d.msg.contains("`net` is not visible from outside the package")
+        out.diags.iter().any(|d| d
+            .msg
+            .contains("`net` is not visible from outside the package")
             && d.msg.contains("`myhost`'s mod.d.rut")),
         "the edge gate names the surface file: {:?}",
         out.diags
@@ -195,9 +226,7 @@ fn a_qualified_host_call_runs_the_registered_body() {
     // body's answer comes back through the bound leaf
     let mut pkg = HostPkg::new("myhost");
     pkg.register::<_, (), bool, _>("legacy_ping", |_vm: &mut Vm| true);
-    pkg.register::<_, (&str,), i64, _>("net::connect", |_vm: &mut Vm, url: &str| {
-        url.len() as i64
-    });
+    pkg.register::<_, (&str,), i64, _>("net::connect", |_vm: &mut Vm, url: &str| url.len() as i64);
     pkg.register::<_, (i64,), i64, _>("net::tls::handshake", |_vm: &mut Vm, c: i64| c * 2);
     let compiled = rut_driver::RutRun::new()
         .pkg(myhost())
@@ -213,8 +242,14 @@ fn a_qualified_host_call_runs_the_registered_body() {
         .entrypoint("app")
         .compile()
         .expect("compiles");
-    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
-    let prog = std::rc::Rc::new(rut_core::link::flatten(compiled.graph.program.expect("linked")));
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
+    let prog = std::rc::Rc::new(rut_core::link::flatten(
+        compiled.graph.program.expect("linked"),
+    ));
     let mut vm = rut_vm::interp::Vm::builder()
         .program(prog)
         .limits(rut_vm::interp::Limits::default())
@@ -223,7 +258,10 @@ fn a_qualified_host_call_runs_the_registered_body() {
         .build()
         .expect("boots");
     let n: i64 = vm.call("main", ()).expect("runs");
-    assert_eq!(n, 6, "connect(\"abc\") = 3, handshake(3) = 6 — the mock bodies ran");
+    assert_eq!(
+        n, 6,
+        "connect(\"abc\") = 3, handshake(3) = 6 — the mock bodies ran"
+    );
 }
 
 #[test]
@@ -236,12 +274,20 @@ fn an_async_mod_row_binds_through_the_qualified_spelling() {
         let mut children = BTreeMap::new();
         children.insert(
             "net".to_string(),
-            mod_source("net", rut_ast::ast::Vis::Pub, "pub host async fn probe(k: str) -> i64;\n"),
+            mod_source(
+                "net",
+                rut_ast::ast::Vis::Pub,
+                "pub host async fn probe(k: str) -> i64;\n",
+            ),
         );
-        rut_driver::lower_decl_module(root, &children, "fixture.d.rut").expect("lowers").named("fixture")
+        rut_driver::lower_decl_module(root, &children, "fixture.d.rut")
+            .expect("lowers")
+            .named("fixture")
     };
     let futures = rut_native::dir_pkgs(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures").as_path(),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rut/futures")
+            .as_path(),
     )
     .expect("the futures pkg walks");
     let out = graph_of(

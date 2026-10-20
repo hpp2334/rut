@@ -26,16 +26,24 @@
 fn graph(modules: &[(&str, &str)]) -> rut_driver::GraphOutput {
     let mut chain = rut_driver::RutRun::new();
     for (spec, src) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
-        chain = chain
-            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
+        chain = chain.pkg(
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     let (root, _) = modules.last().expect("root");
     match chain.entrypoint(root).compile() {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -46,7 +54,11 @@ fn run_main(modules: &[(&str, &str)]) -> i32 {
     assert!(
         g.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = rut_core::link::flatten(g.program.expect("program"));
     rut_vm::verify::verify(&prog).expect("verify");
@@ -188,7 +200,12 @@ fn a_transitive_surface_rereads_its_reshipped_iface_ids() {
     // the stale-id misbind the initializer read as `[interface]
     // Readable<#T>` and the origin law refused the let
     assert_eq!(
-        run_main(&[("aux", RE_AUX), ("base", RE_BASE), ("mid", RE_MID), ("app", RE_APP)]),
+        run_main(&[
+            ("aux", RE_AUX),
+            ("base", RE_BASE),
+            ("mid", RE_MID),
+            ("app", RE_APP)
+        ]),
         2,
         "the mint through the re-shipping surface keeps its own interface identity"
     );

@@ -9,8 +9,8 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
 use rut_vm::interp::Vm;
+use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
 
 const SRC: &str = r#"
 use pouch::{ Vec };
@@ -89,18 +89,30 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
         .pkgs,
     );
     let expected = rut_driver::declared_host_fns(&world);
-    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
-            rut_driver::Mounted::source("app_re", SRC)
-                .manifest(rut_driver::Manifest::lib("app_re", &["pouch", "re"])),
-        )
-        .entrypoint("app_re")
-        .compile()
-        .unwrap();
+    let compiled = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .pkg(
+        rut_driver::Mounted::source("app_re", SRC)
+            .manifest(rut_driver::Manifest::lib("app_re", &["pouch", "re"])),
+    )
+    .entrypoint("app_re")
+    .compile()
+    .unwrap();
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
@@ -113,7 +125,13 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install(&mut hosts, &invocations);
     hosts.verify_against(&expected); // tests/data/re/re.d.rut ↔ the bodies
-    let vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().unwrap();
+    let vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .unwrap();
     vm
 }
 
@@ -169,7 +187,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>
 fn nested_call_returns_and_outer_locals_survive() {
     let invocations = Rc::new(Cell::new(0));
     let mut vm = session(Some(1_000_000), &invocations);
-    
+
     // boost nested-calls inner(x)=x+1 and adds 1; outer computes y*2+x
     // with its OWN x — 7*2+5
     assert_eq!(vm.call::<_, i64>("outer", (5,)).unwrap(), 19);
@@ -179,7 +197,7 @@ fn nested_call_returns_and_outer_locals_survive() {
 fn borrow_guard_blocks_rut_running_inside_with_mut() {
     let invocations = Rc::new(Cell::new(0));
     let mut vm = session(Some(1_000_000), &invocations);
-    
+
     let b: OpaqueRef = vm.call("new_widget", ()).unwrap();
     // borrow_conflict: with_mut(+1) -> nested `poke` -> borrow_try's
     // `with` fails on the guard (-100 marker) and the mutation stands (n=1)
@@ -190,7 +208,7 @@ fn borrow_guard_blocks_rut_running_inside_with_mut() {
 fn nested_trap_propagates_and_vm_stays_usable() {
     let invocations = Rc::new(Cell::new(0));
     let mut vm = session(Some(1_000_000), &invocations);
-    
+
     // boom index-OOBs inside the nested call; the trap unwinds the nested
     // frame only and surfaces at the embedder with its kind intact
     let err = vm.call::<_, i64>("trigger_boom", (0,)).unwrap_err();
@@ -207,7 +225,7 @@ fn nested_budget_trap_catch_add_fuel_retry() {
     // nested OutOfFuel, refuels, and retries — the outer frame never
     // learns the budget tripped
     let mut vm = session(Some(30_000), &invocations);
-    
+
     let n = 60_000i64;
     let want = n * (n - 1) / 2;
     assert_eq!(vm.call::<_, i64>("grind_caller", (n,)).unwrap(), want);
@@ -220,7 +238,7 @@ fn resume_reruns_the_host_op_after_propagated_out_of_fuel() {
     // the vm parks AT the host op, so resume() re-runs count_spin (its
     // invocation count proves the re-run) rather than skipping the call
     let mut vm = session(Some(20_000), &invocations);
-    
+
     let n = 50_000i64;
     let want = n * (n - 1) / 2;
     let err = vm.call::<_, i64>("watchdog", (n,)).unwrap_err();

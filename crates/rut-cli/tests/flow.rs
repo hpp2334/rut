@@ -29,7 +29,6 @@
 //! The spellings below are the target surface; when the two land, the
 //! suite goes green without further edits.
 
-
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 use std::path::PathBuf;
 
@@ -41,7 +40,9 @@ fn root() -> PathBuf {
 /// from `dist/std` (the committed artifacts), ink for the logger.
 fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
     let base = root();
-    let mut world = rut_native::dir_pkgs(&base.join("rut/ink")).expect("mount ink").pkgs;
+    let mut world = rut_native::dir_pkgs(&base.join("rut/ink"))
+        .expect("mount ink")
+        .pkgs;
     // flow's bundle carries its deps closed (the v11 `deps/` wire):
     // pouch + nmapset ride inside it, so the consumer mounts ONE bundle
     // — a second standalone pouch/nmapset would mount the same pkg
@@ -49,29 +50,54 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
     for b in ["flow"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
-        world.extend(rut_driver::Mounted::from_bundle(&bytes).unwrap_or_else(|e| panic!("mount {b}: {e:?}")).pkgs);
+        world.extend(
+            rut_driver::Mounted::from_bundle(&bytes)
+                .unwrap_or_else(|e| panic!("mount {b}: {e:?}"))
+                .pkgs,
+        );
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     // the root DECLARES its uses structurally — exactly the heads this
     // world mounts (calc, ink, pouch, nmapset, flow; the bundles ride
     // their own committed manifests)
     world.push(
-        rut_driver::Mounted::source("app", src)
-            .manifest(rut_driver::Manifest::lib("app", &["calc", "flow", "ink", "nmapset", "pouch"])),
+        rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib(
+            "app",
+            &["calc", "flow", "ink", "nmapset", "pouch"],
+        )),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags:\n{}", compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    let compiled = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags:\n{}",
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
     let lines = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
     let sink = lines.clone();
     let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink.borrow_mut().push(m.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten());
@@ -80,7 +106,13 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
+    let vm = Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     (vm, lines)
 }
 
@@ -96,8 +128,7 @@ fn vec_pipeline_map_filter_take_into_vec_sink() {
     // the README surface: spelled entry, adapters, the Vec sink
     // (adapted at landing: `count`/`for_each` are Flow's one-drive
     // consumers, not Vec's — the drain reads the sink's fields)
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
@@ -112,8 +143,7 @@ entry fn main() -> nil {
         .take(4)).collected();
     log.info(f"picked={picked.len} first={picked[0]} last={picked[picked.len-1]}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].contains("picked=4"), "{lines:?}");
     assert!(lines[0].contains("first=4"), "{lines:?}");
@@ -124,8 +154,7 @@ entry fn main() -> nil {
 fn adapters_take_skip_count_and_chain_for_of() {
     // take/skip/count over a Vec source; a chain feeding plain for..of
     // (the `[iterable]` marker desugar)
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
@@ -145,8 +174,7 @@ entry fn main() -> nil {
     }
     log.info(f"for_of n={grabbed.len} first={grabbed[0]} last={grabbed[grabbed.len-1]}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines.len(), 3, "{lines:?}");
     assert!(lines[0].contains("first=2"), "{lines:?}");
     assert!(lines[0].contains("last=4"), "{lines:?}");
@@ -161,8 +189,7 @@ fn builtin_sources_array_str_bytes() {
     // the structural targets carry no members (primitives and composites
     // never satisfy anything) — the spelled adapters are the entries:
     // `ArrFlow` / `StrFlow` / `BytesFlow`
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use flow::{ ArrFlow, StrFlow, BytesFlow, Flow, IntoFlow };
 use ink::{ Logger };
 
@@ -176,16 +203,14 @@ entry fn main() -> nil {
     let n3: i32 = BytesFlow(b).into_flow().count();
     log.info(f"array={n1} str={n2} bytes={n3}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines, vec!["array=3 str=3 bytes=3"], "{lines:?}");
 }
 
 #[test]
 fn fold_and_enumerate() {
     // fold seeds the accumulator; enumerate pairs the index
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
@@ -201,8 +226,7 @@ entry fn main() -> nil {
     });
     log.info(f"total={total} idx0={idx[0]} idx2={idx[2]}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines, vec!["total=60 idx0=0:10 idx2=2:30"], "{lines:?}");
 }
 
@@ -213,8 +237,7 @@ fn identity_row_and_user_iterable_sink() {
     // satisfaction is STRUCTURAL now: the member rides the type's
     // inherent impl (pub), the sink parameter takes the EXPLICIT
     // wrapper, and the widening is spelled at the call site
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
@@ -257,8 +280,7 @@ entry fn main() -> nil {
     let out: Vec<i32> = VecFlow<i32>::from_flow(CountUp::new(4).into_flow()).collected();
     log.info(f"countup n={out.len} last={out[out.len-1]}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines[0].contains("last=5"), "{lines:?}");
     assert!(lines[1].contains("countup n=4"), "{lines:?}");
@@ -273,8 +295,7 @@ fn consumer_satisfies_flow_generic_interface_for_local_type() {
     // crosses the flow bundle; nothing registers), and the pipeline
     // drives through it — `map`/`count` run on the returned chain
     // (flow's own rows answer downstream).
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
@@ -301,8 +322,7 @@ entry fn main() -> nil {
     let n: i32 = Tube<i32>::of(nums).into_flow().map(fn(x: i32) -> i32 { return x * 10; }).count();
     log.info(f"tube n={n}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].contains("tube n=3"), "{lines:?}");
 }
@@ -315,8 +335,7 @@ fn array_entry_empty_and_nonempty() {
     // surface, and the wrappers are the only sinks now. The case drives
     // the `[T]` ENTRY through its spelled adapter: a drained empty
     // array and a full one, one drive each.
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ ArrFlow, VecFlow, Flow, IntoFlow };
 use ink::{ Logger };
@@ -331,9 +350,12 @@ entry fn main() -> nil {
     let folded: i32 = ArrFlow<i32>(arr).into_flow().fold(0, fn(a: i32, x: i32) -> i32 { return a * 10 + x; });
     log.info(f"arr n={arr.len()} mid={arr[1]} folded={folded}");
 }
-"#,
+"#);
+    assert_eq!(
+        lines,
+        vec!["empty n=0 walked=0", "arr n=3 mid=6 folded=567"],
+        "{lines:?}"
     );
-    assert_eq!(lines, vec!["empty n=0 walked=0", "arr n=3 mid=6 folded=567"], "{lines:?}");
 }
 
 #[test]
@@ -341,8 +363,7 @@ fn hashset_sink() {
     // the mapset sink: the spelled `SetFlow` wrapper materializes the
     // flow (the key union bound admits the legal keys), `items()`
     // unwraps
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use flow::{ ArrFlow, SetFlow, Flow, FromFlow, IntoFlow };
 use nmapset::{ HashSet };
 use ink::{ Logger };
@@ -356,8 +377,7 @@ entry fn main() -> nil {
     let has_z: bool = set.has("z");
     log.info(f"set n={set.len()} has_a={has_a} has_c={has_c} has_z={has_z}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].contains("set n=3"), "{lines:?}");
     assert!(lines[0].contains("has_a=true"), "{lines:?}");
@@ -371,8 +391,7 @@ fn take_stops_the_source() {
     // local `[iterable]` member rides the same law: a for-of `break`
     // answers `false` at the emit exactly like the take stage, and the
     // counting source stops at the third drive.
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
@@ -407,8 +426,7 @@ entry fn main() -> nil {
     let out: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().take(2)).collected();
     log.info(f"out n={out.len} first={out[0]} last={out[1]}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines[0].contains("stopped n=2"), "{lines:?}");
     assert!(lines[0].contains("last=2"), "{lines:?}");
@@ -424,8 +442,7 @@ fn map_inference_fn_path_and_explicit_type_arg() {
     // argument unifies against the declared param's fn type (R := i32
     // from the helper's return); the explicit `<i32>` spelling is the
     // checked half
-    let lines = run(
-        r#"
+    let lines = run(r#"
 use pouch::{ Vec };
 use flow::{ VecFlow, Flow, IntoFlow, FromFlow };
 use ink::{ Logger };
@@ -442,8 +459,7 @@ entry fn main() -> nil {
     let b: Vec<i32> = VecFlow<i32>::from_flow(VecFlow<i32>(nums).into_flow().map<i32>(fn(x: i32) -> i32 { return x * 2; })).collected();
     log.info(f"a={a.len} b={b.len}");
 }
-"#,
-    );
+"#);
     assert_eq!(lines, vec!["a=2 b=2"], "{lines:?}");
 }
 
@@ -452,10 +468,16 @@ fn unannotated_lambda_diagnoses_with_the_fix() {
     // the inference ladder's last rung is the diagnostic: an
     // unannotated lambda cannot drive the method's inference
     let base = root();
-    let mut world = rut_native::dir_pkgs(&base.join("rut/ink")).expect("ink").pkgs;
+    let mut world = rut_native::dir_pkgs(&base.join("rut/ink"))
+        .expect("ink")
+        .pkgs;
     for b in ["pouch", "nmapset", "flow"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle"))).expect(b);
-        world.extend(rut_driver::Mounted::from_bundle(&bytes).expect("mount bundle").pkgs);
+        world.extend(
+            rut_driver::Mounted::from_bundle(&bytes)
+                .expect("mount bundle")
+                .pkgs,
+        );
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     world.push(
@@ -478,16 +500,27 @@ entry fn main() -> nil {
             &["pouch", "nmapset", "flow", "ink", "ink_host", "calc"],
         )),
     );
-    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
+    let out = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
     assert!(
         out.graph.diags.iter().any(|d| {
-            d.msg.contains("cannot infer `R` of `Flow::map` from an unannotated lambda")
+            d.msg
+                .contains("cannot infer `R` of `Flow::map` from an unannotated lambda")
                 && d.msg.contains("annotate its parameters")
         }),
         "{:?}",
-        out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>()
+        out.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
     );
 }

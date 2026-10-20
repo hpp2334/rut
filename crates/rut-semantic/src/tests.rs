@@ -50,8 +50,14 @@ fn decls_and_keywords() {
     assert_eq!(find(src, &spans, "Green"), vec![TokenType::EnumMember]);
     assert_eq!(find(src, &spans, "area"), vec![TokenType::Function]);
     // the decl is a parameter; body uses are lowercase single-seg paths
-    assert_eq!(find(src, &spans, "r"), vec![TokenType::Parameter, TokenType::Variable]);
-    assert_eq!(find(src, &spans, "f32"), vec![TokenType::Type, TokenType::Type]);
+    assert_eq!(
+        find(src, &spans, "r"),
+        vec![TokenType::Parameter, TokenType::Variable]
+    );
+    assert_eq!(
+        find(src, &spans, "f32"),
+        vec![TokenType::Type, TokenType::Type]
+    );
     assert_eq!(find(src, &spans, "2.0f32"), vec![TokenType::Number]);
     assert_eq!(find(src, &spans, "*"), vec![TokenType::Operator]);
 }
@@ -62,11 +68,24 @@ fn members_fields_and_locals() {
     let spans = classify_src(src);
     assert_eq!(find(src, &spans, "Circle"), vec![TokenType::Class]);
     // the declared field + both `self.r` path tails
-    assert_eq!(find(src, &spans, "r"), vec![TokenType::Property, TokenType::Property, TokenType::Property]);
+    assert_eq!(
+        find(src, &spans, "r"),
+        vec![
+            TokenType::Property,
+            TokenType::Property,
+            TokenType::Property
+        ]
+    );
     assert_eq!(find(src, &spans, "scale"), vec![TokenType::Method]);
-    assert_eq!(find(src, &spans, "k"), vec![TokenType::Parameter, TokenType::Variable]);
+    assert_eq!(
+        find(src, &spans, "k"),
+        vec![TokenType::Parameter, TokenType::Variable]
+    );
     // `self` stays a keyword everywhere (param + both path prefixes)
-    assert_eq!(find(src, &spans, "self"), vec![TokenType::Keyword, TokenType::Keyword, TokenType::Keyword]);
+    assert_eq!(
+        find(src, &spans, "self"),
+        vec![TokenType::Keyword, TokenType::Keyword, TokenType::Keyword]
+    );
     assert_eq!(find(src, &spans, "Self"), vec![TokenType::Type]);
 }
 
@@ -104,21 +123,50 @@ fn types_struct_literals_and_patterns() {
                }\n";
     let spans = classify_src(src);
     // decl name, param type, literal type
-    assert_eq!(find(src, &spans, "Point"), vec![TokenType::Class, TokenType::Type, TokenType::Type]);
+    assert_eq!(
+        find(src, &spans, "Point"),
+        vec![TokenType::Class, TokenType::Type, TokenType::Type]
+    );
     // field decls + literal labels
-    assert_eq!(find(src, &spans, "x"), vec![TokenType::Property, TokenType::Property]);
+    assert_eq!(
+        find(src, &spans, "x"),
+        vec![TokenType::Property, TokenType::Property]
+    );
     // enum decl name, param type, pattern type
-    assert_eq!(find(src, &spans, "Color"), vec![TokenType::Enum, TokenType::Type, TokenType::Type]);
-    assert_eq!(find(src, &spans, "Red"), vec![TokenType::EnumMember, TokenType::EnumMember]);
-    assert_eq!(find(src, &spans, "c"), vec![TokenType::Parameter, TokenType::Variable]);
-    assert_eq!(find(src, &spans, "p"), vec![TokenType::Variable, TokenType::Variable, TokenType::Variable]);
+    assert_eq!(
+        find(src, &spans, "Color"),
+        vec![TokenType::Enum, TokenType::Type, TokenType::Type]
+    );
+    assert_eq!(
+        find(src, &spans, "Red"),
+        vec![TokenType::EnumMember, TokenType::EnumMember]
+    );
+    assert_eq!(
+        find(src, &spans, "c"),
+        vec![TokenType::Parameter, TokenType::Variable]
+    );
+    assert_eq!(
+        find(src, &spans, "p"),
+        vec![
+            TokenType::Variable,
+            TokenType::Variable,
+            TokenType::Variable
+        ]
+    );
 }
 
 #[test]
 fn recovery_miss_skips_instead_of_guessing() {
     let toks: Vec<Token> = Vec::new();
     let mut out = Vec::new();
-    push_name(&toks, Span::new(0, 10), "missing", TokenType::Function, &mut out, false);
+    push_name(
+        &toks,
+        Span::new(0, 10),
+        "missing",
+        TokenType::Function,
+        &mut out,
+        false,
+    );
     assert!(out.is_empty());
 }
 
@@ -138,8 +186,14 @@ fn cast_types_keep_their_type_color() {
     // primitive after `as` stays a type, not a variable
     let src = "fn f(p: Point) -> f64 { return p.x as f64; }\n";
     let spans = classify_src(src);
-    assert_eq!(find(src, &spans, "f64"), vec![TokenType::Type, TokenType::Type]);
-    assert_eq!(find(src, &spans, "p"), vec![TokenType::Parameter, TokenType::Variable]);
+    assert_eq!(
+        find(src, &spans, "f64"),
+        vec![TokenType::Type, TokenType::Type]
+    );
+    assert_eq!(
+        find(src, &spans, "p"),
+        vec![TokenType::Parameter, TokenType::Variable]
+    );
 }
 
 #[test]
@@ -151,7 +205,14 @@ fn bare_calls_color_their_callee_as_function() {
     assert_eq!(find(src, &spans, "newCanvas"), vec![TokenType::Function]);
     assert_eq!(find(src, &spans, "blit_all"), vec![TokenType::Function]);
     assert_eq!(find(src, &spans, "length"), vec![TokenType::Function]);
-    assert_eq!(find(src, &spans, "p"), vec![TokenType::Variable, TokenType::Variable, TokenType::Variable]);
+    assert_eq!(
+        find(src, &spans, "p"),
+        vec![
+            TokenType::Variable,
+            TokenType::Variable,
+            TokenType::Variable
+        ]
+    );
 }
 
 #[test]
@@ -170,7 +231,11 @@ fn symbols_outline() {
     assert_eq!(syms[3].kind, SymKind::Function);
     // selectionRange stays inside range
     for s in &syms {
-        assert!(s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi, "{}", s.name);
+        assert!(
+            s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi,
+            "{}",
+            s.name
+        );
     }
 }
 
@@ -198,16 +263,28 @@ fn colon2_value_paths_classify_by_the_resolution_law() {
     // the member fn through the module — function, not a property
     assert_eq!(find(src, &spans, "mk"), vec![TokenType::Function]);
     // the enum head + its member — type, then enumMember (decl + use)
-    assert_eq!(find(src, &spans, "Color"), vec![TokenType::Enum, TokenType::Type]);
-    assert_eq!(find(src, &spans, "Red"), vec![TokenType::EnumMember, TokenType::EnumMember]);
+    assert_eq!(
+        find(src, &spans, "Color"),
+        vec![TokenType::Enum, TokenType::Type]
+    );
+    assert_eq!(
+        find(src, &spans, "Red"),
+        vec![TokenType::EnumMember, TokenType::EnumMember]
+    );
     // a primitive head stays a type at an interior position (the
     // token layer's class, confirmed by the path walk)
     assert_eq!(find(src, &spans, "i32"), vec![TokenType::Type]);
     assert_eq!(find(src, &spans, "abs"), vec![TokenType::Function]);
     // the lone lowercase path is still the local read (decl + use)
-    assert_eq!(find(src, &spans, "b"), vec![TokenType::Variable, TokenType::Variable]);
+    assert_eq!(
+        find(src, &spans, "b"),
+        vec![TokenType::Variable, TokenType::Variable]
+    );
     // the law: `::` never colors a property
-    assert!(!spans.iter().any(|(_, t)| *t == TokenType::Property), "{spans:?}");
+    assert!(
+        !spans.iter().any(|(_, t)| *t == TokenType::Property),
+        "{spans:?}"
+    );
 }
 
 #[test]
@@ -255,7 +332,13 @@ fn line_comments_color_exactly_and_stop_at_newline() {
         vec![TokenType::Comment],
         "the trailing line comment stops before the newline"
     );
-    assert_eq!(spans.iter().filter(|(_, t)| *t == TokenType::Comment).count(), 2);
+    assert_eq!(
+        spans
+            .iter()
+            .filter(|(_, t)| *t == TokenType::Comment)
+            .count(),
+        2
+    );
 }
 
 #[test]
@@ -287,7 +370,10 @@ fn comments_do_not_touch_adjacent_strings() {
         assert!(sp.lo >= prev_hi, "overlap at {}", sp.lo);
         prev_hi = sp.hi;
     }
-    assert_eq!(find(src, &spans, "\"// not a comment\""), vec![TokenType::String]);
+    assert_eq!(
+        find(src, &spans, "\"// not a comment\""),
+        vec![TokenType::String]
+    );
     assert_eq!(find(src, &spans, "/*c*/"), vec![TokenType::Comment]);
     assert_eq!(find(src, &spans, "// real"), vec![TokenType::Comment]);
 }
@@ -315,7 +401,10 @@ fn broken_source_still_classifies_with_comments() {
     // (`let`, `fn`) it never drops its class
     let src = "// still colored\nentry fn main( {\n  let x = ;\n";
     let spans = classify_source(src, Mode::Impl);
-    assert_eq!(find(src, &spans, "// still colored"), vec![TokenType::Comment]);
+    assert_eq!(
+        find(src, &spans, "// still colored"),
+        vec![TokenType::Comment]
+    );
     assert_eq!(find(src, &spans, "entry"), vec![TokenType::Keyword]);
     assert_eq!(find(src, &spans, "let"), vec![TokenType::Keyword]);
     assert_eq!(find(src, &spans, "fn"), vec![TokenType::Keyword]);

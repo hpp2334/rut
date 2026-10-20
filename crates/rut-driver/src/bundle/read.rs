@@ -11,8 +11,8 @@
 //! archive never reaches the run.
 
 use super::container::{parse_bundle, BundleError};
-use super::manifest::{parse_manifest_compat, Manifest};
 use super::files::read_entry;
+use super::manifest::{parse_manifest_compat, Manifest};
 use rut_core::binary::{decode, Program};
 
 use super::identity::{self, DEPS_DIR};
@@ -27,7 +27,9 @@ pub struct Bundle {
 impl Bundle {
     /// Parse and CRC-verify a `.rutbundle` from its bytes.
     pub fn parse(data: &[u8]) -> Result<Bundle, BundleError> {
-        Ok(Bundle { entries: parse_bundle(data)? })
+        Ok(Bundle {
+            entries: parse_bundle(data)?,
+        })
     }
 
     /// All entries in archive order — `rut.jsonc` first for a packed
@@ -45,7 +47,10 @@ impl Bundle {
     /// One entry's raw bytes — the binary payloads (`.rutc`); `None`
     /// when the archive does not carry the key.
     pub fn bytes(&self, key: &str) -> Option<&[u8]> {
-        self.entries.iter().find(|(n, _)| n == key).map(|(_, b)| b.as_slice())
+        self.entries
+            .iter()
+            .find(|(n, _)| n == key)
+            .map(|(_, b)| b.as_slice())
     }
 }
 
@@ -153,16 +158,21 @@ impl Layout {
         // spells the owner's content identity (`name@fp16`); the
         // explicit shape law (name + `@` + 16 lowercase hex) —
         // `valid_spec` alone no longer suffices
-        let ledger = bundle
-            .read("rut.scopes")
-            .map_err(|_| "no `rut.scopes` entry — a compiled bundle carries the scope ledger".to_string())?;
+        let ledger = bundle.read("rut.scopes").map_err(|_| {
+            "no `rut.scopes` entry — a compiled bundle carries the scope ledger".to_string()
+        })?;
         let mut scopes = Vec::new();
         for (lineno, raw) in ledger.lines().enumerate() {
             let line = raw.split('#').next().unwrap_or("").trim();
             if line.is_empty() {
                 continue;
             }
-            let bad = || format!("rut.scopes line {}: expected `<scope> = \"<identity>\"`", lineno + 1);
+            let bad = || {
+                format!(
+                    "rut.scopes line {}: expected `<scope> = \"<identity>\"`",
+                    lineno + 1
+                )
+            };
             let (l, r) = line.split_once('=').ok_or_else(bad)?;
             let scope: u16 = l.trim().parse().map_err(|_| bad())?;
             let row = r.trim();
@@ -180,11 +190,9 @@ impl Layout {
         }
         scopes.sort_by_key(|&(s, _)| s);
         // the root's compiled program — the ONE canonical name
-        let root = decode(
-            bundle
-                .bytes("mod.rutc")
-                .ok_or_else(|| "no `mod.rutc` entry — a compiled bundle's root is a `.rutc`".to_string())?,
-        )
+        let root = decode(bundle.bytes("mod.rutc").ok_or_else(|| {
+            "no `mod.rutc` entry — a compiled bundle's root is a `.rutc`".to_string()
+        })?)
         .map_err(|e| format!("mod.rutc: {e}"))?;
         // the dep groups: every group rides at `deps/<identity>/…` —
         // discovered ONLY as `deps/<comp>/rut.jsonc`; a stray
@@ -225,7 +233,10 @@ impl Layout {
             let manifest_text = bundle
                 .read(&format!("{p}/{}", super::files::MANIFEST_NAME))
                 .map_err(|_| {
-                    format!("bundle group `{p}/` has no `{}`", super::files::MANIFEST_NAME)
+                    format!(
+                        "bundle group `{p}/` has no `{}`",
+                        super::files::MANIFEST_NAME
+                    )
                 })?;
             let dm = parse_manifest_compat(&manifest_text)
                 .map_err(|e| format!("{p}/{}: {e}", super::files::MANIFEST_NAME))?;
@@ -248,14 +259,19 @@ impl Layout {
                 ));
             }
             let kind = match bundle.bytes(&format!("{p}/mod.rutc")) {
-                Some(bytes) => GroupKind::Compiled(
-                    decode(bytes).map_err(|e| format!("{p}/mod.rutc: {e}"))?,
-                ),
+                Some(bytes) => {
+                    GroupKind::Compiled(decode(bytes).map_err(|e| format!("{p}/mod.rutc: {e}"))?)
+                }
                 None => GroupKind::Source,
             };
             groups.push((p, kind));
         }
-        Ok(Layout::Compiled { manifest, root, scopes, groups })
+        Ok(Layout::Compiled {
+            manifest,
+            root,
+            scopes,
+            groups,
+        })
     }
 
     /// The decl arm: a `type = "host"` root, its surface riding as
@@ -274,7 +290,7 @@ impl Layout {
         }
         if bundle.bytes("rut.scopes").is_some() {
             return Err(
-                "a host bundle carries no programs — found a `rut.scopes` ledger entry".into()
+                "a host bundle carries no programs — found a `rut.scopes` ledger entry".into(),
             );
         }
         for (n, _) in bundle.entries() {

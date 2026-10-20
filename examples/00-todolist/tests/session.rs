@@ -1,10 +1,10 @@
 //! The example's gate: drive the rut library from the host side and
 //! assert the full CRUD session — `cargo test --workspace` runs it.
 
+use rut_vm::OpaqueRef;
 use std::future::Future;
 use std::path::Path;
 use std::task::{Context, Poll};
-use rut_vm::OpaqueRef;
 
 /// dist/std-v12 plays the wire: the PINNED artifacts (the published
 /// std-v12 bytes the manifest rows name) prime an OFFLINE
@@ -17,13 +17,12 @@ fn warm(base: &Path) -> rut_native::HttpRemote {
     // shared root would race the prime (remove/write/rename)
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let root = std::env::temp_dir()
-        .join(format!("rut-00-todolist-cache-{}-{n}", std::process::id()));
+    let root =
+        std::env::temp_dir().join(format!("rut-00-todolist-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let remote = rut_native::HttpRemote::at(&root);
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
-    let manifest =
-        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
+    let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
     let dist = base.join("../../dist/std-v12");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
@@ -86,36 +85,58 @@ fn crud_session() {
     let list: u32 = vm.call("create", (c.clone(),)).unwrap();
 
     assert_eq!(
-        vm.call::<_, i32>("add", (c.clone(), list, "write the RFC")).unwrap(),
+        vm.call::<_, i32>("add", (c.clone(), list, "write the RFC"))
+            .unwrap(),
         1
     );
     assert_eq!(
-        vm.call::<_, i32>("add", (c.clone(), list, "implement the VM")).unwrap(),
+        vm.call::<_, i32>("add", (c.clone(), list, "implement the VM"))
+            .unwrap(),
         2
     );
     assert_eq!(
-        vm.call::<_, i32>("add", (c.clone(), list, "ship the demo")).unwrap(),
+        vm.call::<_, i32>("add", (c.clone(), list, "ship the demo"))
+            .unwrap(),
         3
     );
     assert_eq!(vm.call::<_, i32>("len", (c.clone(), list)).unwrap(), 3);
 
     assert_eq!(
-        vm.call::<_, bool>("set_done", (c.clone(), list, 2i32, true)).unwrap(),
+        vm.call::<_, bool>("set_done", (c.clone(), list, 2i32, true))
+            .unwrap(),
         true
     );
     assert_eq!(
-        vm.call::<_, String>("title_of", (c.clone(), list, 2i32)).unwrap(),
+        vm.call::<_, String>("title_of", (c.clone(), list, 2i32))
+            .unwrap(),
         "implement the VM"
     );
     assert_eq!(
-        vm.call::<_, String>("title_of", (c.clone(), list, 42i32)).unwrap(),
+        vm.call::<_, String>("title_of", (c.clone(), list, 42i32))
+            .unwrap(),
         ""
     );
-    assert_eq!(vm.call::<_, bool>("has_title", (c.clone(), list, 2i32)).unwrap(), true);
-    assert_eq!(vm.call::<_, bool>("has_title", (c.clone(), list, 42i32)).unwrap(), false);
+    assert_eq!(
+        vm.call::<_, bool>("has_title", (c.clone(), list, 2i32))
+            .unwrap(),
+        true
+    );
+    assert_eq!(
+        vm.call::<_, bool>("has_title", (c.clone(), list, 42i32))
+            .unwrap(),
+        false
+    );
 
-    assert_eq!(vm.call::<_, bool>("remove", (c.clone(), list, 1i32)).unwrap(), true);
-    assert_eq!(vm.call::<_, bool>("remove", (c.clone(), list, 1i32)).unwrap(), false);
+    assert_eq!(
+        vm.call::<_, bool>("remove", (c.clone(), list, 1i32))
+            .unwrap(),
+        true
+    );
+    assert_eq!(
+        vm.call::<_, bool>("remove", (c.clone(), list, 1i32))
+            .unwrap(),
+        false
+    );
     assert_eq!(vm.call::<_, i32>("len", (c.clone(), list)).unwrap(), 2);
 
     assert_eq!(

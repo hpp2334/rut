@@ -11,12 +11,16 @@
 
 use rut_parser::Mode;
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -42,7 +46,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -106,8 +113,7 @@ impl<K, V> Box<K, V> {
     ));
     assert!(
         ds.iter()
-            .any(|d| d.contains("`str` does not satisfy `Hash`")
-                && d.contains("no member `hash`")),
+            .any(|d| d.contains("`str` does not satisfy `Hash`") && d.contains("no member `hash`")),
         "admission names the missing member: {ds:?}"
     );
 }
@@ -142,7 +148,11 @@ fn bound_proves_the_widening_inside_the_class_body() {
          \x20   return b.key_slot().hash() as i32;\n\
          }\n",
     );
-    assert!(out.diags.is_empty(), "widening inside the body: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "widening inside the body: {:?}",
+        out.diags
+    );
 }
 
 #[test]
@@ -172,7 +182,11 @@ impl<K, V> Box<K, V> {
          \x20   return b.v;\n\
          }}\n"
     ));
-    assert!(out.diags.is_empty(), "the alias bound admits Token: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "the alias bound admits Token: {:?}",
+        out.diags
+    );
 
     let ds = diags_of(&format!(
         "{shape}\
@@ -212,7 +226,11 @@ impl<K, V> Box<K, V> {
          \x20   return a.k + b.k.v;\n\
          }}\n"
     ));
-    assert!(out.diags.is_empty(), "both union members satisfy: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "both union members satisfy: {:?}",
+        out.diags
+    );
 
     let ds = diags_of(&format!(
         "{shape}\
@@ -222,7 +240,8 @@ impl<K, V> Box<K, V> {
          }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d.contains("does not satisfy `K` requires `i32 | Token`")),
+        ds.iter()
+            .any(|d| d.contains("does not satisfy `K` requires `i32 | Token`")),
         "the failure names the union: {ds:?}"
     );
 }

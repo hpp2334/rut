@@ -43,7 +43,11 @@ impl HostSig {
             a[i] = tys[i];
             i += 1;
         }
-        HostSig { tys: a, ret, n: tys.len() as u8 }
+        HostSig {
+            tys: a,
+            ret,
+            n: tys.len() as u8,
+        }
     }
 
     pub fn slice(&self) -> &[TypeId] {
@@ -126,7 +130,10 @@ impl HostPkg {
     /// Start a builder for the pkg mounted under `scope` — the
     /// registration scope (the package name; there is no override).
     pub fn new(scope: &str) -> HostPkg {
-        HostPkg { scope: scope.to_string(), rows: BTreeMap::new() }
+        HostPkg {
+            scope: scope.to_string(),
+            rows: BTreeMap::new(),
+        }
     }
 
     /// [`register!`](crate::register)'s law, scope-relative: the name
@@ -152,7 +159,12 @@ impl HostPkg {
         let ctx = &*boxed as *const F as Ctx;
         self.rows.insert(
             name.to_string(),
-            HostBinding { code: F::entry, ctx, sigs: F::SIG, keep: Some(boxed) },
+            HostBinding {
+                code: F::entry,
+                ctx,
+                sigs: F::SIG,
+                keep: Some(boxed),
+            },
         );
     }
 
@@ -197,7 +209,12 @@ impl HostRegistry {
         let ctx = &*boxed as *const F as Ctx;
         self.fns.insert(
             name.to_string(),
-            HostBinding { code: F::entry, ctx, sigs: F::SIG, keep: Some(boxed) },
+            HostBinding {
+                code: F::entry,
+                ctx,
+                sigs: F::SIG,
+                keep: Some(boxed),
+            },
         );
     }
 
@@ -299,7 +316,12 @@ impl HostRegistry {
         // of the same host fn
         let b = self.fns.get_mut(name)?;
         let keep = b.keep.take();
-        Some(HostBinding { code: b.code, ctx: b.ctx, sigs: b.sigs, keep })
+        Some(HostBinding {
+            code: b.code,
+            ctx: b.ctx,
+            sigs: b.sigs,
+            keep,
+        })
     }
 }
 
@@ -373,7 +395,11 @@ fn host_ty_name(t: TypeId) -> String {
 fn host_sig_str(params: &[TypeId], ret: TypeId) -> String {
     format!(
         "({}) -> {}",
-        params.iter().map(|&t| host_ty_name(t)).collect::<Vec<_>>().join(", "),
+        params
+            .iter()
+            .map(|&t| host_ty_name(t))
+            .collect::<Vec<_>>()
+            .join(", "),
         host_ty_name(ret)
     )
 }
@@ -495,7 +521,9 @@ mod host_pkg_tests {
     }
 
     #[test]
-    #[should_panic(expected = "host fn `calc::neg` is declared by the mounted pkg but never bound — installer `calc` must register it")]
+    #[should_panic(
+        expected = "host fn `calc::neg` is declared by the mounted pkg but never bound — installer `calc` must register it"
+    )]
     fn declared_but_unbound_panics_scoped() {
         let ctx = two_pkg_ctx();
         let mut pkg = HostPkg::new("calc");
@@ -521,7 +549,7 @@ mod host_pkg_tests {
         let ctx = two_pkg_ctx();
         let mut hosts = HostRegistry::new();
         hosts.install_host_pkg(&ctx, calc_pkg()); // `calc` not in ctx
-        // and the ctx's OWN scopes still check against what was installed
+                                                  // and the ctx's OWN scopes still check against what was installed
         let mut hosts2 = HostRegistry::new();
         hosts2.install_host_pkg(&ctx, calc_pkg());
         hosts2.verify_against(&ctx.flatten());
@@ -549,7 +577,12 @@ mod host_pkg_tests {
         let mut ctx = HostPkgContext::default();
         ctx.declare("nmap_host", "probe", vec![TY_I64], TY_I64);
         ctx.declare("nmap_host", "probe__start", vec![TY_I64], TY_OPAQUE);
-        ctx.declare("nmap_host", "probe__yield", vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+        ctx.declare(
+            "nmap_host",
+            "probe__yield",
+            vec![TY_OPAQUE, TY_OPAQUE],
+            TY_I32,
+        );
         ctx.declare("nmap_host", "probe__take", vec![TY_OPAQUE], TY_I64);
         ctx.declare("nmap_host", "probe__cancel", vec![TY_OPAQUE], TY_NIL);
 
@@ -578,7 +611,12 @@ mod host_pkg_tests {
         let mut ctx = HostPkgContext::default();
         ctx.declare("nmap_host", "probe", vec![TY_I64], TY_I64);
         ctx.declare("nmap_host", "probe__start", vec![TY_I64], TY_OPAQUE);
-        ctx.declare("nmap_host", "probe__yield", vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+        ctx.declare(
+            "nmap_host",
+            "probe__yield",
+            vec![TY_OPAQUE, TY_OPAQUE],
+            TY_I32,
+        );
         ctx.declare("nmap_host", "probe__take", vec![TY_OPAQUE], TY_I64);
         ctx.declare("nmap_host", "probe__cancel", vec![TY_OPAQUE], TY_NIL);
 
@@ -629,7 +667,12 @@ mod host_pkg_tests {
         let mut ctx = HostPkgContext::default();
         ctx.declare("myhost", "net::probe", vec![TY_I64], TY_I64);
         ctx.declare("myhost", "net::probe__start", vec![TY_I64], TY_OPAQUE);
-        ctx.declare("myhost", "net::probe__yield", vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+        ctx.declare(
+            "myhost",
+            "net::probe__yield",
+            vec![TY_OPAQUE, TY_OPAQUE],
+            TY_I32,
+        );
         ctx.declare("myhost", "net::probe__take", vec![TY_OPAQUE], TY_I64);
         ctx.declare("myhost", "net::probe__cancel", vec![TY_OPAQUE], TY_NIL);
         let mut pkg = HostPkg::new("myhost");
@@ -644,7 +687,9 @@ mod host_pkg_tests {
     }
 
     #[test]
-    #[should_panic(expected = "host pkg `myhost` registers `net::connect` twice — one row per name")]
+    #[should_panic(
+        expected = "host pkg `myhost` registers `net::connect` twice — one row per name"
+    )]
     fn a_duplicate_path_qualified_row_panics() {
         let mut pkg = HostPkg::new("myhost");
         pkg.register::<_, (i64,), i64, _>("net::connect", |_vm: &mut Vm, x: i64| x);

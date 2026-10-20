@@ -10,7 +10,7 @@
 
 mod t1_support;
 
-use t1_support::{ els_has, make_host, render, snap, Host };
+use t1_support::{els_has, make_host, render, snap, Host};
 
 fn class_of(host: &Host, hook: &str) -> String {
     snap(host, hook).attrs.get("class").unwrap().clone()
@@ -94,7 +94,10 @@ fn hooks_land_as_id_attrs_and_texts_as_text() {
         "What needs doing?"
     );
     assert_eq!(snap(&host, "title").text.as_deref(), Some("Today"));
-    assert_eq!(snap(&host, "row-1").child_tags, vec!["button", "span", "button"]);
+    assert_eq!(
+        snap(&host, "row-1").child_tags,
+        vec!["button", "span", "button"]
+    );
     assert_eq!(snap(&host, "row-1").child_texts, vec!["milk", "del"]);
 }
 
@@ -122,7 +125,10 @@ fn hooked_children_take_their_place_in_the_path_tree() {
     assert!(els_has(&mut host, &app, "kinds/card/muted-line"));
     assert!(els_has(&mut host, &app, "kinds/head/new-todo"));
     assert!(els_has(&mut host, &app, "kinds/head/add-btn"));
-    assert!(!els_has(&mut host, &app, "kinds/head/@0"), "hooks win over auto keys");
+    assert!(
+        !els_has(&mut host, &app, "kinds/head/@0"),
+        "hooks win over auto keys"
+    );
 }
 
 // ---- the fixed utility ladder ----------------------------------------
@@ -143,7 +149,8 @@ fn off_ladder_tokens_trap_loud() {
         let (mut host, app) = make_host();
         let err = host.call::<_, ()>(probe, (app,)).unwrap_err();
         assert!(
-            err.msg.contains("is off the utility ladder — 0/4/8/12/16 only"),
+            err.msg
+                .contains("is off the utility ladder — 0/4/8/12/16 only"),
             "{probe}: {}",
             err.msg
         );
@@ -156,9 +163,12 @@ fn off_ladder_tokens_trap_loud() {
 fn a_control_with_children_is_a_lowering_panic() {
     // the fat struct's one dishonesty, caught at the boundary
     let (mut host, app) = make_host();
-    let err = host.call::<_, ()>("t1p_trap_text_children", (app,)).unwrap_err();
+    let err = host
+        .call::<_, ()>("t1p_trap_text_children", (app,))
+        .unwrap_err();
     assert!(
-        err.msg.contains("t1: Text takes no children — build layout with Column/Row/Card"),
+        err.msg
+            .contains("t1: Text takes no children — build layout with Column/Row/Card"),
         "{}",
         err.msg
     );
@@ -167,9 +177,12 @@ fn a_control_with_children_is_a_lowering_panic() {
 #[test]
 fn a_text_without_a_variant_is_a_lowering_panic() {
     let (mut host, app) = make_host();
-    let err = host.call::<_, ()>("t1p_trap_text_no_variant", (app,)).unwrap_err();
+    let err = host
+        .call::<_, ()>("t1p_trap_text_no_variant", (app,))
+        .unwrap_err();
     assert!(
-        err.msg.contains("t1: Text without a variant — construct with text/done/title/pending/muted"),
+        err.msg
+            .contains("t1: Text without a variant — construct with text/done/title/pending/muted"),
         "{}",
         err.msg
     );
@@ -178,9 +191,12 @@ fn a_text_without_a_variant_is_a_lowering_panic() {
 #[test]
 fn a_listener_without_a_subject_is_a_create_panic() {
     let (mut host, app) = make_host();
-    let err = host.call::<_, ()>("t1p_trap_listener_no_mutation", (app,)).unwrap_err();
+    let err = host
+        .call::<_, ()>("t1p_trap_listener_no_mutation", (app,))
+        .unwrap_err();
     assert!(
-        err.msg.contains("listens but carries no mutation — set .on_click(...)/.on_input(...)"),
+        err.msg
+            .contains("listens but carries no mutation — set .on_click(...)/.on_input(...)"),
         "{}",
         err.msg
     );
@@ -189,9 +205,12 @@ fn a_listener_without_a_subject_is_a_create_panic() {
 #[test]
 fn a_surviving_key_that_changes_kind_traps_loud() {
     let (mut host, app) = make_host();
-    let err = host.call::<_, ()>("t1p_trap_kind_change", (app,)).unwrap_err();
+    let err = host
+        .call::<_, ()>("t1p_trap_kind_change", (app,))
+        .unwrap_err();
     assert!(
-        err.msg.contains("t1: 'x' changed kind Column -> Text — keys are identity"),
+        err.msg
+            .contains("t1: 'x' changed kind Column -> Text — keys are identity"),
         "{}",
         err.msg
     );

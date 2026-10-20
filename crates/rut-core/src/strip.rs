@@ -155,7 +155,10 @@ impl SymbolMap {
 
     /// The mangled → original lookup, built once per apply pass.
     fn restore_map(&self) -> HashMap<&str, &str> {
-        self.names.iter().map(|(m, o)| (m.as_str(), o.as_str())).collect()
+        self.names
+            .iter()
+            .map(|(m, o)| (m.as_str(), o.as_str()))
+            .collect()
     }
 }
 
@@ -235,8 +238,16 @@ pub fn strip_programs(groups: &mut [(String, &mut Program)]) -> Result<SymbolMap
             }
         }
         for ih in &prog.surface.inherents {
-            if ih.methods.iter().any(|m| m.local == 0 || !m.generics.is_empty()) {
-                keep.insert(prog.interner.name(prog.types.type_at(ih.target).name).to_string());
+            if ih
+                .methods
+                .iter()
+                .any(|m| m.local == 0 || !m.generics.is_empty())
+            {
+                keep.insert(
+                    prog.interner
+                        .name(prog.types.type_at(ih.target).name)
+                        .to_string(),
+                );
             }
         }
         for g in &prog.surface.fn_generics {
@@ -310,8 +321,10 @@ pub fn strip_programs(groups: &mut [(String, &mut Program)]) -> Result<SymbolMap
         .enumerate()
         .map(|(i, original)| (format!("%{i}"), original.clone()))
         .collect();
-    let forward: HashMap<&str, &str> =
-        names.iter().map(|(m, o)| (o.as_str(), m.as_str())).collect();
+    let forward: HashMap<&str, &str> = names
+        .iter()
+        .map(|(m, o)| (o.as_str(), m.as_str()))
+        .collect();
     // 4. rewrite each tail through the one closure-wide map, take the
     // symbolication tables out
     let mut sections: Vec<SymSection> = Vec::with_capacity(groups.len());
@@ -326,7 +339,10 @@ pub fn strip_programs(groups: &mut [(String, &mut Program)]) -> Result<SymbolMap
                 pos: std::mem::take(&mut f.pos),
             });
         }
-        sections.push(SymSection { spec: spec.clone(), fns });
+        sections.push(SymSection {
+            spec: spec.clone(),
+            fns,
+        });
     }
     sections.sort_by(|a, b| a.spec.cmp(&b.spec));
     // 5. the uniqueness assert: mangled ∪ kept must not collide. `%`
@@ -447,10 +463,17 @@ mod tests {
         let keep_cases = ["run", "rt:tick", "util"];
         let before: Vec<_> = keep_cases
             .iter()
-            .map(|k| (k.to_string(), a.interner.lookup(k).map(|id| (id, a.interner.name(id).to_string()))))
+            .map(|k| {
+                (
+                    k.to_string(),
+                    a.interner
+                        .lookup(k)
+                        .map(|id| (id, a.interner.name(id).to_string())),
+                )
+            })
             .collect();
-        let map = strip_programs(&mut [("app".into(), &mut a), ("util".into(), &mut b)])
-            .expect("strip");
+        let map =
+            strip_programs(&mut [("app".into(), &mut a), ("util".into(), &mut b)]).expect("strip");
         // keep-set verbatim, same ids
         for (k, before) in &before {
             let (id, _) = before.as_ref().expect("interned keep name");
@@ -476,11 +499,14 @@ mod tests {
         assert!(a.funcs[0].spans.is_empty() && a.funcs[0].pos.is_empty());
         // the map carries the restore rows and the sections, sorted
         assert!(map.names.iter().all(|(m, _)| m.starts_with('%')));
-        assert!(map.names.windows(2).all(|w| w[0].0 < w[1].0), "sorted by mangled");
-        assert!(map
-            .names
-            .iter()
-            .any(|(_, o)| o == "worker"), "the original rides the map");
+        assert!(
+            map.names.windows(2).all(|w| w[0].0 < w[1].0),
+            "sorted by mangled"
+        );
+        assert!(
+            map.names.iter().any(|(_, o)| o == "worker"),
+            "the original rides the map"
+        );
         assert_eq!(map.sections.len(), 2);
         assert_eq!(map.sections[0].spec, "app");
         assert_eq!(map.sections[1].spec, "util");
@@ -512,8 +538,8 @@ mod tests {
     fn sidecar_round_trips_byte_exact() {
         let mut a = synth("app", &["s1"]);
         let mut b = synth("util", &[]);
-        let map = strip_programs(&mut [("app".into(), &mut a), ("util".into(), &mut b)])
-            .expect("strip");
+        let map =
+            strip_programs(&mut [("app".into(), &mut a), ("util".into(), &mut b)]).expect("strip");
         let bytes = map.to_bytes();
         let back = SymbolMap::from_bytes(&bytes).expect("decode");
         assert_eq!(back, map, "row-for-row round trip");
@@ -530,11 +556,9 @@ mod tests {
     fn stripped_program_encodes_and_decodes_with_ids_intact() {
         let mut p = synth("app", &["quiet"]);
         let before: Vec<u32> = p.funcs.iter().map(|f| f.name.0).collect();
-        let exports_before: Vec<(u32, u32)> =
-            p.exports.iter().map(|(n, f)| (n.0, *f)).collect();
+        let exports_before: Vec<(u32, u32)> = p.exports.iter().map(|(n, f)| (n.0, *f)).collect();
         let mut b = synth("util", &[]);
-        strip_programs(&mut [("app".into(), &mut p), ("util".into(), &mut b)])
-            .expect("strip");
+        strip_programs(&mut [("app".into(), &mut p), ("util".into(), &mut b)]).expect("strip");
         let bytes = crate::binary::encode(&p);
         let q = crate::binary::decode(&bytes).expect("a stripped binary decodes");
         // ids unchanged — only the tail text behind them moved
@@ -554,8 +578,8 @@ mod tests {
         let mut a = synth("app", &["s1"]);
         let mut b = synth("util", &[]);
         let worker_id = a.interner.lookup("worker").expect("pre-strip id");
-        let map = strip_programs(&mut [("app".into(), &mut a), ("util".into(), &mut b)])
-            .expect("strip");
+        let map =
+            strip_programs(&mut [("app".into(), &mut a), ("util".into(), &mut b)]).expect("strip");
         let skipped = apply_symbols(&mut [("app".into(), &mut a), ("util".into(), &mut b)], &map);
         assert!(skipped.is_empty(), "every section found its spec");
         // names restore exactly; the id keeps its slot
@@ -565,10 +589,13 @@ mod tests {
         assert_eq!(a.funcs[0].pos, vec![(2, 5), (4, 9)]);
         // re-apply is a no-op
         let snapshot = crate::binary::encode(&a);
-        let skipped2 =
-            apply_symbols(&mut [("app".into(), &mut a), ("util".into(), &mut b)], &map);
+        let skipped2 = apply_symbols(&mut [("app".into(), &mut a), ("util".into(), &mut b)], &map);
         assert!(skipped2.is_empty());
-        assert_eq!(crate::binary::encode(&a), snapshot, "re-apply changed nothing");
+        assert_eq!(
+            crate::binary::encode(&a),
+            snapshot,
+            "re-apply changed nothing"
+        );
         // a foreign map: nothing matches, nothing errors; a section
         // whose spec is absent comes back skipped
         let mut c = synth("other", &[]);

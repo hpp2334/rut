@@ -117,8 +117,8 @@ pub fn scan_comment_runs(src: &str, toks: &[Token]) -> Vec<CommentRun> {
             // still counts (it started on the prev token's line)
             let trailing = first
                 && trailing_anchor
-                .map(|a| a == line_of(&line_starts, lo as u32))
-                .unwrap_or(false);
+                    .map(|a| a == line_of(&line_starts, lo as u32))
+                    .unwrap_or(false);
             runs.push(CommentRun {
                 lo: lo as u32,
                 hi: hi as u32,

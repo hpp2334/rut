@@ -78,12 +78,29 @@ const APP_IMPORTS: &[(&str, &[&str])] = &[
             // mint) and the handle types (the capability interfaces
             // stay ui-internal: satisfaction is structural, and the
             // bounds resolve without the names crossing)
-            "Store", "Source", "Derived", "Mutation",
+            "Store",
+            "Source",
+            "Derived",
+            "Mutation",
             // the widget type and the framework's four names
-            "Widget", "T1Root", "t1_mount", "t1_render", "t1_event",
+            "Widget",
+            "T1Root",
+            "t1_mount",
+            "t1_render",
+            "t1_event",
             // the component constructors (+ live: the reactive subtree)
-            "col", "row", "card", "field", "check",
-            "text", "done", "pending", "muted", "btn", "quiet", "live",
+            "col",
+            "row",
+            "card",
+            "field",
+            "check",
+            "text",
+            "done",
+            "pending",
+            "muted",
+            "btn",
+            "quiet",
+            "live",
         ],
     ),
     ("pouch", &["Vec"]),
@@ -147,11 +164,10 @@ fn the_app_imports_exactly_the_project_vocabulary() {
     for (pkg, names) in got {
         by_pkg.entry(pkg).or_default().extend(names);
     }
-    let want: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
-        APP_IMPORTS
-            .iter()
-            .map(|(p, ns)| (p.to_string(), ns.iter().map(|n| n.to_string()).collect()))
-            .collect();
+    let want: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> = APP_IMPORTS
+        .iter()
+        .map(|(p, ns)| (p.to_string(), ns.iter().map(|n| n.to_string()).collect()))
+        .collect();
     assert_eq!(
         by_pkg, want,
         "the app's import vocabulary changed — biz may import exactly \
@@ -232,8 +248,14 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
         BIZ.contains("t1_event("),
         "DOM events must enter through the framework's mutation resolution"
     );
-    assert!(BIZ.contains(".on_click("), "widgets CARRY their event mutations");
-    assert!(BIZ.contains("fn paint("), "the turn's ONE render has its fn");
+    assert!(
+        BIZ.contains(".on_click("),
+        "widgets CARRY their event mutations"
+    );
+    assert!(
+        BIZ.contains("fn paint("),
+        "the turn's ONE render has its fn"
+    );
     // THE FLUSH IS RETIRED (the two-package store's freshness law):
     // pull-on-read — the view's first handle get recomputes what the
     // turn's writes staled, at most once per write-set. No refresh
@@ -288,7 +310,11 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
     // the export (on_click, on_input, ...; on_timer for the clock), so
     // the kind-coded mega-entry is a tombstone: the host knows the
     // class when it enqueues; rut never re-derives it from an integer.
-    for door in ["entry fn on_click(", "entry fn on_input(", "entry fn on_timer("] {
+    for door in [
+        "entry fn on_click(",
+        "entry fn on_input(",
+        "entry fn on_timer(",
+    ] {
         assert!(
             BIZ.contains(door),
             "the app answers every event class with a named door — missing {door}"
@@ -306,7 +332,10 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
     // the view half never writes: between `fn view(` and the view
     // builders there is no set — view NEVER writes (survey §4.2)
     let view_at = BIZ.find("fn view(").expect("the view fn is in biz");
-    let views_end = BIZ[view_at..].find("fn todo_row(").expect("the views follow") + view_at;
+    let views_end = BIZ[view_at..]
+        .find("fn todo_row(")
+        .expect("the views follow")
+        + view_at;
     let views = &BIZ[view_at..views_end];
     assert!(
         !views.contains(".set("),
@@ -314,7 +343,17 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
          never writes an atom)"
     );
     // keyed rows, the framework's checkbox, the event props on the rows
-    for pin in [".key(", ".on_click(", ".on_input(", ".on_row(", ".text_of(", ".value_of(", "live(", "check(", "todo_row("] {
+    for pin in [
+        ".key(",
+        ".on_click(",
+        ".on_input(",
+        ".on_row(",
+        ".text_of(",
+        ".value_of(",
+        "live(",
+        "check(",
+        "todo_row(",
+    ] {
         assert!(
             BIZ.contains(pin),
             "biz lost `{pin}` — the widgets are the whole UI story \

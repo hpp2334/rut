@@ -20,7 +20,12 @@ impl Vm {
     /// flatten); args = [from, to, live_len]. Bounds are the caller's
     /// LIVE length, not the capacity. The result is an `ArrView` cell —
     /// the caller boxes it as `*Vec<T>`.
-    pub(super) fn nat_arr_slice(&mut self, recv: Option<Reg>, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn nat_arr_slice(
+        &mut self,
+        recv: Option<Reg>,
+        args: &[Reg],
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         let mut parent = self.reg(recv.unwrap());
         let from = unsafe { self.reg(args[0]).i };
         let to = unsafe { self.reg(args[1]).i };
@@ -30,7 +35,11 @@ impl Vm {
         let root = loop {
             let c = cell_of(parent);
             match &c.data {
-                crate::heap::CellData::ArrView { parent: p, off, len } => {
+                crate::heap::CellData::ArrView {
+                    parent: p,
+                    off,
+                    len,
+                } => {
                     base += *off;
                     live = *len as i64;
                     parent = *p;
@@ -45,7 +54,9 @@ impl Vm {
                 format!("slice {from}..{to} out of bounds (len {live})"),
             ));
         }
-        let c = self.heap.alloc_arr_view(root, base + from as u32, (to - from) as u32)?;
+        let c = self
+            .heap
+            .alloc_arr_view(root, base + from as u32, (to - from) as u32)?;
         self.store_result(dst, c)?;
         Ok(())
     }

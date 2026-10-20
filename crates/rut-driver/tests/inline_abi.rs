@@ -10,12 +10,16 @@
 use rut_core::ops::Op;
 use rut_parser::Mode;
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -41,7 +45,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -54,7 +61,10 @@ fn compile(src: &str) -> rut_driver::ProgramOutput {
         Mode::Impl,
         "test",
         1,
-        &[(2, rut_core::binary::Surface::core(), "core".to_string()), (3, collection, "collection".to_string())],
+        &[
+            (2, rut_core::binary::Surface::core(), "core".to_string()),
+            (3, collection, "collection".to_string()),
+        ],
     )
 }
 
@@ -70,8 +80,13 @@ fn run_main(src: &str) -> i32 {
         heap_limit_bytes: Some(8 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i32>("main", ()).expect("run")
 }
 
@@ -200,13 +215,7 @@ fn cross_module_member_call_binds_the_exporters_fn() {
                    class WI(i32);\n\
                    impl WI { pub fn m(self) -> i32 { return self.inner + 100; } }\n\
                    pub fn make() -> WI { return WI(5); }\n";
-    let dep = rut_driver::compile_program(
-        dep_src,
-        Mode::Impl,
-        "dep",
-        1,
-        &[],
-    );
+    let dep = rut_driver::compile_program(dep_src, Mode::Impl, "dep", 1, &[]);
     assert!(dep.diags.is_empty(), "{:?}", dep.diags);
     let dep = dep.program.expect("dep program");
     let surface = dep.surface.clone();
@@ -225,7 +234,10 @@ fn cross_module_member_call_binds_the_exporters_fn() {
     assert!(app.diags.is_empty(), "{:?}", app.diags);
     let app = app.program.expect("app program");
     assert!(
-        main_of(&app).code.iter().all(|op| !matches!(op, Op::Box { .. })),
+        main_of(&app)
+            .code
+            .iter()
+            .all(|op| !matches!(op, Op::Box { .. })),
         "cross-module member call is boxless:\n{}",
         rut_driver::ir_dump_of(&app.funcs, &app.interner)
     );
@@ -236,19 +248,31 @@ fn cross_module_member_call_binds_the_exporters_fn() {
         .iter()
         .find(|f| linked.name_of(f.name) == "main")
         .expect("main in the linked program");
-    let callee = main.code.iter().find_map(|op| match op {
-        Op::CallM { func, .. } => Some(*func as usize),
-        _ => None,
-    }).expect("app main dispatches with callm");
+    let callee = main
+        .code
+        .iter()
+        .find_map(|op| match op {
+            Op::CallM { func, .. } => Some(*func as usize),
+            _ => None,
+        })
+        .expect("app main dispatches with callm");
     let fname = linked.name_of(linked.funcs[callee].name);
-    assert!(fname.contains("m"), "the linked callee is the dep's member: {fname}");
+    assert!(
+        fname.contains("m"),
+        "the linked callee is the dep's member: {fname}"
+    );
     rut_vm::verify::verify(&linked).expect("verify");
     let limits = rut_vm::interp::Limits {
         fuel: Some(1_000_000),
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(linked)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(linked))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     assert_eq!(vm.call::<_, i32>("main", ()).expect("run"), 105);
 }

@@ -59,8 +59,12 @@ fn pack_strip_writes_and_prints_the_sidecar() {
         .args(["pack", root.join("app").to_str().unwrap(), "--strip"])
         .output()
         .expect("run rut");
-    assert!(out.status.success(), "stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     let bundle = root.join("app.rutbundle");
     let sidecar = root.join("app.rutsym");
@@ -68,10 +72,16 @@ fn pack_strip_writes_and_prints_the_sidecar() {
     assert!(sidecar.is_file(), "the sidecar lands at the sibling path");
     assert!(stdout.contains("app.rutbundle"), "{stdout}");
     assert!(stdout.contains("app.rutsym"), "both paths print: {stdout}");
-    assert!(stdout.contains("PRIVATE"), "the sidecar is labeled private: {stdout}");
+    assert!(
+        stdout.contains("PRIVATE"),
+        "the sidecar is labeled private: {stdout}"
+    );
     // the sidecar is the private half — never an entry inside the bundle
     let bytes = std::fs::read(&bundle).unwrap();
-    assert!(!bytes.windows(5).any(|w| w == b"RUTS\0"), "no RUTS magic inside the archive");
+    assert!(
+        !bytes.windows(5).any(|w| w == b"RUTS\0"),
+        "no RUTS magic inside the archive"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -125,7 +135,10 @@ fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     assert_eq!(out.status.code(), Some(1), "the panic carries the render");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("trap:"), "{stderr}");
-    assert!(stderr.contains("at %"), "mangled name in the render: {stderr}");
+    assert!(
+        stderr.contains("at %"),
+        "mangled name in the render: {stderr}"
+    );
     assert!(stderr.contains("@ pc"), "pc-only degradation: {stderr}");
 
     // with the sidecar: the real fn name and a line/col position
@@ -138,7 +151,11 @@ fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
         ])
         .output()
         .expect("run rut");
-    assert_eq!(out.status.code(), Some(1), "the panic still traps: {stderr}");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "the panic still traps: {stderr}"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("at boom ("), "restored name: {stderr}");
     assert!(!stderr.contains("@ pc"), "positions restored: {stderr}");

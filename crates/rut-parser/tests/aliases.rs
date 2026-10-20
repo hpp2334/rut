@@ -90,7 +90,12 @@ fn inline_union_bound_and_multiple_params_parse() {
     let ItemKind::Fn(f) = ast.item(items[0]) else {
         panic!("expected a fn");
     };
-    assert_eq!(f.generics.len(), 3, "A, T, B all collected: {:?}", f.generics);
+    assert_eq!(
+        f.generics.len(),
+        3,
+        "A, T, B all collected: {:?}",
+        f.generics
+    );
     assert_eq!(f.bounds.len(), 1);
     let TypeKind::TyUnion { elems } = ast.ty(f.bounds[0].1) else {
         panic!("expected a union bound");
@@ -130,7 +135,9 @@ fn stray_where_diagnoses_with_inline_replacement() {
     let src2 = "interface D { fn d(self) -> u64; }\ninterface Tr { fn m<T>(self) -> i32 where T requires D; }\n";
     let (_, diags2) = parse(src2, Mode::Impl);
     assert!(
-        diags2.iter().any(|d| d.msg.contains("`where` clauses are removed")),
+        diags2
+            .iter()
+            .any(|d| d.msg.contains("`where` clauses are removed")),
         "stray where on a method must diagnose: {diags2:?}"
     );
 }
@@ -140,11 +147,23 @@ fn misplaced_bounds_are_rejected() {
     // struct / interface / builtin generics reject `requires` — class
     // generics TAKE them (the admission bounds)
     let cases = [
-        ("struct S<T requires D> { v: T }", "`struct` generic parameters take no `requires` bounds", Mode::Impl),
-        ("interface Tr<T requires D> { }", "`interface` generic parameters take no `requires` bounds", Mode::Impl),
+        (
+            "struct S<T requires D> { v: T }",
+            "`struct` generic parameters take no `requires` bounds",
+            Mode::Impl,
+        ),
+        (
+            "interface Tr<T requires D> { }",
+            "`interface` generic parameters take no `requires` bounds",
+            Mode::Impl,
+        ),
         // the engine surface's own gate (v20: the `builtin trait` row
         // kind is gone — the builtin CLASS carries the check)
-        ("interface D { fn d(self) -> u64; }\nprelude builtin class Bt<T requires D> { }", "`builtin class` generic parameters take no `requires` bounds", Mode::Decl),
+        (
+            "interface D { fn d(self) -> u64; }\nprelude builtin class Bt<T requires D> { }",
+            "`builtin class` generic parameters take no `requires` bounds",
+            Mode::Decl,
+        ),
     ];
     for (src, want, mode) in cases {
         let full = format!("interface D {{ fn d(self) -> u64; }}\n{src}\n");
@@ -170,7 +189,10 @@ class Box<K requires D, V> {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Class { generics, requires, .. } = ast.item(items[1]) else {
+    let ItemKind::Class {
+        generics, requires, ..
+    } = ast.item(items[1])
+    else {
         panic!("expected a class");
     };
     assert_eq!(generics.len(), 2, "K, V both collected: {:?}", generics);
@@ -190,7 +212,10 @@ fn class_union_bound_and_unbounded_params_parse() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.module_items(ast.root);
-    let ItemKind::Class { generics, requires, .. } = ast.item(items[0]) else {
+    let ItemKind::Class {
+        generics, requires, ..
+    } = ast.item(items[0])
+    else {
         panic!("expected a class");
     };
     assert_eq!(generics.len(), 3, "A, T, B all collected: {:?}", generics);
@@ -208,7 +233,10 @@ fn dumper_renders_class_requires() {
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let text = dump::render_text(&dump::to_dump_tree(&ast), src);
     assert!(text.contains("Class"), "class node in the dump: {text}");
-    assert!(text.contains("bounds:"), "requires field in the dump: {text}");
+    assert!(
+        text.contains("bounds:"),
+        "requires field in the dump: {text}"
+    );
 }
 
 #[test]
@@ -217,7 +245,10 @@ fn dumper_renders_alias_bounds_and_union() {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let text = dump::render_text(&dump::to_dump_tree(&ast), src);
-    assert!(text.contains("Alias Meters"), "alias node in the dump: {text}");
+    assert!(
+        text.contains("Alias Meters"),
+        "alias node in the dump: {text}"
+    );
     assert!(text.contains("TyUnion"), "union node in the dump: {text}");
     assert!(text.contains("bounds:"), "bounds field in the dump: {text}");
     let json = dump::render_json(&dump::to_dump_tree(&ast));
@@ -247,7 +278,10 @@ pub(pkg) type P = i64;
 fn pub_mod_self_scopes_are_gone_on_type_alias() {
     // the repealed paren spellings diagnose (one diag each) but the
     // aliases still parse at the default
-    let (ast, diags) = parse("pub(mod) type B = i64;\npub(self) type D = i64;\n", Mode::Impl);
+    let (ast, diags) = parse(
+        "pub(mod) type B = i64;\npub(self) type D = i64;\n",
+        Mode::Impl,
+    );
     assert_eq!(diags.len(), 2, "one diag per repealed spelling: {diags:?}");
     assert!(
         diags.iter().all(|d| d.msg.contains("are gone")),

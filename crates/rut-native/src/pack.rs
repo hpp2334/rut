@@ -34,10 +34,7 @@ pub fn pack_dir(dir: &Path) -> Result<Vec<u8>, PackError> {
 /// fetches is a project that installed) and the url rows' pins are
 /// verified at the mount door; a url row absent from the map is the
 /// loud no-fetcher error.
-pub fn pack_dir_fetched(
-    dir: &Path,
-    map: &BTreeMap<String, Vec<u8>>,
-) -> Result<Vec<u8>, PackError> {
+pub fn pack_dir_fetched(dir: &Path, map: &BTreeMap<String, Vec<u8>>) -> Result<Vec<u8>, PackError> {
     Ok(pack_dir_opts_fetched(dir, &PackOpts::default(), map)?.0)
 }
 
@@ -46,10 +43,7 @@ pub fn pack_dir_fetched(
 /// same input dir ⇒ byte-identical bundle (mangling is sorted-union
 /// based) ⇒ byte-identical symtab. Url rows refuse here: pass a
 /// fetcher (`pack_dir_opts_with`) or pre-fetch a map.
-pub fn pack_dir_opts(
-    dir: &Path,
-    opts: &PackOpts,
-) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
+pub fn pack_dir_opts(dir: &Path, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>), PackError> {
     pack_dir_opts_fetched(dir, opts, &BTreeMap::new())
 }
 
@@ -57,7 +51,9 @@ pub fn pack_dir_opts(
 /// root's lock (it gates the prefetch), collect the url rows, await
 /// `fetch` per url sequentially, pack over the bytes map.
 pub async fn pack_dir_with(dir: &Path, fetch: &dyn DepRemote) -> Result<Vec<u8>, PackError> {
-    Ok(pack_dir_opts_with(dir, &PackOpts::default(), fetch).await?.0)
+    Ok(pack_dir_opts_with(dir, &PackOpts::default(), fetch)
+        .await?
+        .0)
 }
 
 /// [`pack_dir_opts`] with a url-dep fetcher (the CLI's `--strip` lane).
@@ -118,9 +114,10 @@ fn pack_dir_opts_locked(
         }
         Err(e) => return Err(PackError::io(manifest_path.display(), e)),
     };
-    let manifest = parse_manifest(&String::from_utf8(manifest_bytes.clone()).map_err(
-        |_| PackError::law(format!("{}: not UTF-8", manifest_path.display())),
-    )?)?;
+    let manifest = parse_manifest(
+        &String::from_utf8(manifest_bytes.clone())
+            .map_err(|_| PackError::law(format!("{}: not UTF-8", manifest_path.display())))?,
+    )?;
     let name = manifest
         .name
         .clone()
@@ -131,7 +128,8 @@ fn pack_dir_opts_locked(
     // never guess): `format_version` = the packer's FORMAT_VERSION
     // (11, always), both root kinds
     let want_version = rut_driver::pack::FORMAT_VERSION;
-    if manifest.format.as_deref() != Some("rutbundle") || manifest.format_version != Some(want_version)
+    if manifest.format.as_deref() != Some("rutbundle")
+        || manifest.format_version != Some(want_version)
     {
         return Err(PackError::law(format!(
             "{} is not bundle-shaped — add `format = \"rutbundle\"` and `format_version = {want_version}`",
@@ -154,7 +152,8 @@ fn pack_dir_opts_locked(
     let src = FsSource::at(dir);
     let dir_key = dir.to_string_lossy().into_owned();
     let mut world = World::new();
-    let root = walk_dir(&mut world, &src, &dir_key, map, lock).map_err(rut_driver::pack::PackError::from)?;
+    let root = walk_dir(&mut world, &src, &dir_key, map, lock)
+        .map_err(rut_driver::pack::PackError::from)?;
     if root != name {
         return Err(PackError::law(format!(
             "{} names itself `{root}` — expected `{name}`",
@@ -253,8 +252,8 @@ fn pack_host_root(
         }
     };
     let src_path = dir.join(&rel);
-    let src = std::fs::read_to_string(&src_path)
-        .map_err(|e| PackError::io(src_path.display(), e))?;
+    let src =
+        std::fs::read_to_string(&src_path).map_err(|e| PackError::io(src_path.display(), e))?;
     // the surface's mod tree mounts from the directory —
     // `NAME/mod.d.rut` beside the declaring file, recursively,
     // cycle-guarded (the load lane's Decl flavor, spelled identically)
@@ -266,9 +265,14 @@ fn pack_host_root(
     let mut lookup = |parent: &str, name: &str| {
         crate::walk::dir_child_lookup(dir, &mut files, parent, name, "mod.d.rut")
     };
-    let mods: BTreeMap<String, rut_driver::ModSource> =
-        rut_driver::mount_mod_children(&src, &root_canon, rut_driver::Mode::Decl, "mod.d.rut", &mut lookup)
-            .map_err(PackError::law)?;
+    let mods: BTreeMap<String, rut_driver::ModSource> = rut_driver::mount_mod_children(
+        &src,
+        &root_canon,
+        rut_driver::Mode::Decl,
+        "mod.d.rut",
+        &mut lookup,
+    )
+    .map_err(PackError::law)?;
     // the verification, half one: the surface + its tree parse and
     // lower into host rows — the exact lane a mount runs
     let tree = rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
@@ -313,7 +317,14 @@ fn collect_group_sources(
     world: &World,
 ) -> Result<BTreeMap<String, PkgSource>, PackError> {
     let mut out = BTreeMap::new();
-    collect_group_sources_walk(src, root_key, manifest, world, &mut out, &mut BTreeSet::new())?;
+    collect_group_sources_walk(
+        src,
+        root_key,
+        manifest,
+        world,
+        &mut out,
+        &mut BTreeSet::new(),
+    )?;
     Ok(out)
 }
 
@@ -339,13 +350,19 @@ fn collect_group_sources_walk(
             };
             out.insert(
                 spec.clone(),
-                PkgSource::Archive { slot, prefix: String::new() },
+                PkgSource::Archive {
+                    slot,
+                    prefix: String::new(),
+                },
             );
             for (group, (gslot, gprefix)) in world.archive_locs() {
                 if gslot == slot {
                     out.insert(
                         group.clone(),
-                        PkgSource::Archive { slot, prefix: gprefix },
+                        PkgSource::Archive {
+                            slot,
+                            prefix: gprefix,
+                        },
                     );
                 }
             }
@@ -375,9 +392,11 @@ pub(crate) fn group_manifest(
     archives: &[Archive],
 ) -> Result<Manifest, PackError> {
     let bytes = group_file(source, rut_driver::bundle::MANIFEST_NAME, archives)?;
-    parse_manifest(&String::from_utf8(bytes).map_err(|_| {
-        PackError::law(format!("{}: not UTF-8", rut_driver::bundle::MANIFEST_NAME))
-    })?)
+    parse_manifest(
+        &String::from_utf8(bytes).map_err(|_| {
+            PackError::law(format!("{}: not UTF-8", rut_driver::bundle::MANIFEST_NAME))
+        })?,
+    )
     .map_err(rut_driver::pack::PackError::from)
 }
 
@@ -398,7 +417,9 @@ pub(crate) fn group_file(
             let key = rut_driver::bundle::bundle_key(&format!("{prefix}{rel}"))
                 .map_err(PackError::law)?;
             let archive = archives.get(*slot).ok_or_else(|| {
-                PackError::law(format!("archive slot {slot} is not in this pack's archive list"))
+                PackError::law(format!(
+                    "archive slot {slot} is not in this pack's archive list"
+                ))
             })?;
             rut_driver::bundle::read_entry(&archive.entries, &key)
                 .map(|b| b.into_bytes())

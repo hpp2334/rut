@@ -335,8 +335,14 @@ impl<'a> Lexer<'a> {
 
     fn try_int_suffix(&mut self) -> Option<IntSuffix> {
         for (text, sfx) in [
-            ("u8", IntSuffix::U8), ("u16", IntSuffix::U16), ("u32", IntSuffix::U32), ("u64", IntSuffix::U64),
-            ("i8", IntSuffix::I8), ("i16", IntSuffix::I16), ("i32", IntSuffix::I32), ("i64", IntSuffix::I64),
+            ("u8", IntSuffix::U8),
+            ("u16", IntSuffix::U16),
+            ("u32", IntSuffix::U32),
+            ("u64", IntSuffix::U64),
+            ("i8", IntSuffix::I8),
+            ("i16", IntSuffix::I16),
+            ("i32", IntSuffix::I32),
+            ("i64", IntSuffix::I64),
         ] {
             if self.src[self.pos..].starts_with(text.as_bytes()) {
                 self.pos += text.len();
@@ -494,8 +500,8 @@ impl<'a> Lexer<'a> {
                     continue;
                 }
                 b'"' => {} // string literal — allowed (hole termination is
-                          // brace-based; the every-byte-literal rule stays as a
-                          // style rule, not a lexer error)
+                // brace-based; the every-byte-literal rule stays as a
+                // style rule, not a lexer error)
                 b'\'' => {} // char literal — legal in holes
                 _ => {}
             }
@@ -560,7 +566,8 @@ impl<'a> Lexer<'a> {
             }
         }
         let Some((text, tok)) = m else {
-            let bad = String::from_utf8_lossy(&rest[..utf8_len(rest[0]).min(rest.len())]).to_string();
+            let bad =
+                String::from_utf8_lossy(&rest[..utf8_len(rest[0]).min(rest.len())]).to_string();
             self.err(self.span(lo), format!("unexpected character `{bad}`"));
             self.pos += 1;
             return;
@@ -651,9 +658,7 @@ fn reserved_word_msg(w: &str) -> Option<String> {
     let repl: &str = match w {
         "void" => "rut spells the empty type `nil`",
         "in" => "`in` is not an operator; iteration is `for (let x of ...)`",
-        "private" => {
-            "members are private by default —add `pub`"
-        }
+        "private" => "members are private by default —add `pub`",
         _ => return None,
     };
     Some(repl.to_string())

@@ -16,8 +16,13 @@ fn expr_of(src: &str) -> Ast {
 fn init_of(src: &str) -> NodeHandle<AnyExpr> {
     let ast = expr_of(src);
     let items = ast.module_items(ast.root);
-    let f = items.iter().find(|i| matches!(ast.item(**i), ItemKind::Fn(_))).expect("fn");
-    let ItemKind::Fn(d) = ast.item(*f) else { unreachable!() };
+    let f = items
+        .iter()
+        .find(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
+        .expect("fn");
+    let ItemKind::Fn(d) = ast.item(*f) else {
+        unreachable!()
+    };
     let stmts = ast.block(d.body);
     let Kind::Stmt(StmtKind::LetStmt { init, .. }) = ast.kind(stmts[0].id()) else {
         panic!("let stmt");
@@ -33,7 +38,9 @@ fn relational_is_non_associative() {
     // reports the stray `<` again as a failed expression statement.
     let (_, diags) = parse("fn f() -> nil { let x = 1 < 2 < 3; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected") && d.msg.contains('<')),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected") && d.msg.contains('<')),
         "the second `<` must be left unconsumed: {diags:?}"
     );
 }
@@ -72,22 +79,39 @@ fn relational_blocked_after_tighter_op() {
 fn assignment_is_right_associative() {
     let ast = expr_of("fn f() -> nil { let mut x = 0; let mut y = 0; let mut z = 0; x = y = z; }");
     let items = ast.module_items(ast.root);
-    let f = items.iter().find(|i| matches!(ast.item(**i), ItemKind::Fn(_))).expect("fn");
-    let ItemKind::Fn(d) = ast.item(*f) else { unreachable!() };
+    let f = items
+        .iter()
+        .find(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
+        .expect("fn");
+    let ItemKind::Fn(d) = ast.item(*f) else {
+        unreachable!()
+    };
     let stmts = ast.block(d.body);
     let Kind::Stmt(StmtKind::ExprStmt(e)) = ast.kind(stmts[3].id()) else {
         panic!("expr stmt");
     };
     // outer: x = (y = z); inner must also be an Assign
-    let Kind::Expr(ExprKind::Assign { target: outer_t, value: outer_v, .. }) = ast.kind(e.id()) else {
+    let Kind::Expr(ExprKind::Assign {
+        target: outer_t,
+        value: outer_v,
+        ..
+    }) = ast.kind(e.id())
+    else {
         panic!("outer Assign, got {:?}", ast.kind(e.id()));
     };
-    let Kind::Expr(ExprKind::Assign { target: inner_t, .. }) = ast.kind(outer_v.id()) else {
+    let Kind::Expr(ExprKind::Assign {
+        target: inner_t, ..
+    }) = ast.kind(outer_v.id())
+    else {
         panic!("inner Assign, got {:?}", ast.kind(outer_v.id()));
     };
-    let Kind::Expr(ExprKind::Path { segs }) = ast.kind(outer_t.id()) else { panic!("x") };
+    let Kind::Expr(ExprKind::Path { segs }) = ast.kind(outer_t.id()) else {
+        panic!("x")
+    };
     assert_eq!(ast.name(segs[0].name), "x");
-    let Kind::Expr(ExprKind::Path { segs }) = ast.kind(inner_t.id()) else { panic!("y") };
+    let Kind::Expr(ExprKind::Path { segs }) = ast.kind(inner_t.id()) else {
+        panic!("y")
+    };
     assert_eq!(ast.name(segs[0].name), "y");
 }
 
@@ -95,7 +119,9 @@ fn assignment_is_right_associative() {
 fn invalid_assignment_target_diagnoses() {
     let (_, diags) = parse("fn f() -> nil { 1 + 2 = 3; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("invalid assignment target")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("invalid assignment target")),
         "want the target diag: {diags:?}"
     );
 }
@@ -106,7 +132,12 @@ fn precedence_shapes() {
     let src = "fn f() -> nil { let x = 1 + 2 * 3; }";
     let ast = expr_of(src);
     let e = init_of(src);
-    let Kind::Expr(ExprKind::Binary { op: BinOp::Add, rhs, .. }) = ast.kind(e.id()) else {
+    let Kind::Expr(ExprKind::Binary {
+        op: BinOp::Add,
+        rhs,
+        ..
+    }) = ast.kind(e.id())
+    else {
         panic!("Add at top, got {:?}", ast.kind(e.id()));
     };
     let Kind::Expr(ExprKind::Binary { op: BinOp::Mul, .. }) = ast.kind(rhs.id()) else {
@@ -117,7 +148,12 @@ fn precedence_shapes() {
     let src = "fn f() -> nil { let x = 1 * 2 + 3; }";
     let ast = expr_of(src);
     let e = init_of(src);
-    let Kind::Expr(ExprKind::Binary { op: BinOp::Add, lhs, .. }) = ast.kind(e.id()) else {
+    let Kind::Expr(ExprKind::Binary {
+        op: BinOp::Add,
+        lhs,
+        ..
+    }) = ast.kind(e.id())
+    else {
         panic!("Add at top, got {:?}", ast.kind(e.id()));
     };
     let Kind::Expr(ExprKind::Binary { op: BinOp::Mul, .. }) = ast.kind(lhs.id()) else {
@@ -128,7 +164,10 @@ fn precedence_shapes() {
     let src = "fn f() -> nil { let x = a || b && c; }";
     let ast = expr_of(src);
     let e = init_of(src);
-    let Kind::Expr(ExprKind::Binary { op: BinOp::Or, rhs, .. }) = ast.kind(e.id()) else {
+    let Kind::Expr(ExprKind::Binary {
+        op: BinOp::Or, rhs, ..
+    }) = ast.kind(e.id())
+    else {
         panic!("Or at top, got {:?}", ast.kind(e.id()));
     };
     let Kind::Expr(ExprKind::Binary { op: BinOp::And, .. }) = ast.kind(rhs.id()) else {
@@ -145,7 +184,12 @@ fn prefix_and_postfix_compose() {
     let src = "fn f() -> nil { let x = -a.b; }";
     let ast = expr_of(src);
     let e = init_of(src);
-    let Kind::Expr(ExprKind::Unary { op: UnOp::Neg, expr, .. }) = ast.kind(e.id()) else {
+    let Kind::Expr(ExprKind::Unary {
+        op: UnOp::Neg,
+        expr,
+        ..
+    }) = ast.kind(e.id())
+    else {
         panic!("Unary at top, got {:?}", ast.kind(e.id()));
     };
     let Kind::Expr(ExprKind::Field { .. }) = ast.kind(expr.id()) else {
@@ -156,7 +200,12 @@ fn prefix_and_postfix_compose() {
     let src = "fn f() -> nil { let x = -(x).b; }";
     let ast = expr_of(src);
     let e = init_of(src);
-    let Kind::Expr(ExprKind::Unary { op: UnOp::Neg, expr, .. }) = ast.kind(e.id()) else {
+    let Kind::Expr(ExprKind::Unary {
+        op: UnOp::Neg,
+        expr,
+        ..
+    }) = ast.kind(e.id())
+    else {
         panic!("Unary at top, got {:?}", ast.kind(e.id()));
     };
     let Kind::Expr(ExprKind::Field { .. }) = ast.kind(expr.id()) else {

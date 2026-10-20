@@ -366,7 +366,11 @@ impl<'a> P<'a> {
     // ---- marks (a rollback un-emits comments too) ------------------
 
     fn stamp(&self) -> Mark {
-        Mark { len: self.out.len(), ri: self.ri, passed: self.passed }
+        Mark {
+            len: self.out.len(),
+            ri: self.ri,
+            passed: self.passed,
+        }
     }
 
     fn rollback(&mut self, m: Mark) {
@@ -407,7 +411,9 @@ impl<'a> P<'a> {
     /// later statement-boundary drain that matches its line).
     fn begin_el(&mut self, span: Span, mode: Begin) {
         loop {
-            let Some(r) = self.runs.get(self.ri).cloned() else { break };
+            let Some(r) = self.runs.get(self.ri).cloned() else {
+                break;
+            };
             if r.lo >= span.lo {
                 break;
             }
@@ -566,9 +572,13 @@ impl<'a> P<'a> {
             return; // inline-flat context: no two-mode decision, no break
         }
         if std::env::var_os("FMT_DEBUG").is_some() {
-            eprintln!("[list] commented={} over={} col={} chunk={:?}",
-                commented, self.over_on_flat(m), self.col(),
-                self.out[m.len..].chars().take(46).collect::<String>());
+            eprintln!(
+                "[list] commented={} over={} col={} chunk={:?}",
+                commented,
+                self.over_on_flat(m),
+                self.col(),
+                self.out[m.len..].chars().take(46).collect::<String>()
+            );
         }
         if commented || self.over_on_flat(m) {
             self.rollback(m);
@@ -619,7 +629,6 @@ impl<'a> P<'a> {
         self.pending = Some(self.level);
     }
 }
-
 
 // ---- the module, items, members ----
 
@@ -683,7 +692,8 @@ impl<'a> P<'a> {
                 } else {
                     self.text("::{");
                     self.sp();
-                    let nm: Vec<String> = names.iter().map(|&n| self.a.name(n).to_string()).collect();
+                    let nm: Vec<String> =
+                        names.iter().map(|&n| self.a.name(n).to_string()).collect();
                     let dummies: Vec<Span> = std::iter::repeat(span).take(nm.len()).collect();
                     self.ident_list(&nm, &dummies, span);
                     self.sp();
@@ -701,7 +711,12 @@ impl<'a> P<'a> {
                 self.ty(d.target);
                 self.text(";");
             }
-            ItemKind::ModuleLet { vis, name, ty, init } => {
+            ItemKind::ModuleLet {
+                vis,
+                name,
+                ty,
+                init,
+            } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
@@ -735,7 +750,13 @@ impl<'a> P<'a> {
                 self.sp();
                 self.text("}");
             }
-            ItemKind::Struct { vis, name, generics, fields, methods } => {
+            ItemKind::Struct {
+                vis,
+                name,
+                generics,
+                fields,
+                methods,
+            } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
@@ -744,7 +765,15 @@ impl<'a> P<'a> {
                 self.ty_decl(name, &generics, &Vec::new());
                 self.body_of_fields_methods(fields, methods, Some(span));
             }
-            ItemKind::Class { vis, name, generics, requires, newtype, fields, methods } => {
+            ItemKind::Class {
+                vis,
+                name,
+                generics,
+                requires,
+                newtype,
+                fields,
+                methods,
+            } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
@@ -764,7 +793,12 @@ impl<'a> P<'a> {
                 }
                 self.body_of_fields_methods(fields, methods, Some(span));
             }
-            ItemKind::Interface { vis, name, generics, methods } => {
+            ItemKind::Interface {
+                vis,
+                name,
+                generics,
+                methods,
+            } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
@@ -773,13 +807,22 @@ impl<'a> P<'a> {
                 self.text(self.a.name(name));
                 if !generics.is_empty() {
                     self.text("<");
-                    let gnames = generics.iter().map(|&g| self.a.name(g).to_string()).collect::<Vec<_>>().join(", ");
+                    let gnames = generics
+                        .iter()
+                        .map(|&g| self.a.name(g).to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     self.text(&gnames);
                     self.text(">");
                 }
                 self.iface_body(methods, span);
             }
-            ItemKind::Impl { generics, target, methods, .. } => {
+            ItemKind::Impl {
+                generics,
+                target,
+                methods,
+                ..
+            } => {
                 self.text("impl");
                 if !generics.is_empty() {
                     self.gen_only(&generics);
@@ -795,7 +838,15 @@ impl<'a> P<'a> {
                 self.sp();
                 self.block(f.body);
             }
-            ItemKind::SurfaceFn { vis, linkage, is_async, name, generics, params, ret } => {
+            ItemKind::SurfaceFn {
+                vis,
+                linkage,
+                is_async,
+                name,
+                generics,
+                params,
+                ret,
+            } => {
                 if let Some(v) = vis_opt(vis) {
                     self.text(v);
                     self.sp();
@@ -824,17 +875,35 @@ impl<'a> P<'a> {
                 self.text(self.a.name(name));
                 self.fields_body(fields, Some(span));
             }
-            ItemKind::BuiltinTy { vis: _, ambient, name, generics, members } => {
+            ItemKind::BuiltinTy {
+                vis: _,
+                ambient,
+                name,
+                generics,
+                members,
+            } => {
                 // the type-shaped builtin items carry the strict spelling
                 // they were declared with (`prelude builtin` ambient /
                 // `pub builtin` import-gated)
-                self.text(if ambient { "prelude builtin class " } else { "pub builtin class " });
+                self.text(if ambient {
+                    "prelude builtin class "
+                } else {
+                    "pub builtin class "
+                });
                 self.text(self.a.name(name));
                 self.gen_only(&generics);
                 self.iface_body(members, span);
             }
-            ItemKind::BuiltinPrimitive { ambient, name, members } => {
-                self.text(if ambient { "prelude builtin primitive " } else { "pub builtin primitive " });
+            ItemKind::BuiltinPrimitive {
+                ambient,
+                name,
+                members,
+            } => {
+                self.text(if ambient {
+                    "prelude builtin primitive "
+                } else {
+                    "pub builtin primitive "
+                });
                 self.text(self.a.name(name));
                 self.iface_body(members, span);
             }
@@ -848,7 +917,12 @@ impl<'a> P<'a> {
         self.end_el(span);
     }
 
-    fn ty_decl(&mut self, name: IdentId, gens: &[IdentId], requires: &[(IdentId, NodeHandle<AnyTy>)]) {
+    fn ty_decl(
+        &mut self,
+        name: IdentId,
+        gens: &[IdentId],
+        requires: &[(IdentId, NodeHandle<AnyTy>)],
+    ) {
         self.text(self.a.name(name));
         if gens.is_empty() {
             return;
@@ -874,7 +948,11 @@ impl<'a> P<'a> {
             return;
         }
         self.text("<");
-        let gs = gens.iter().map(|&g| self.a.name(g).to_string()).collect::<Vec<_>>().join(", ");
+        let gs = gens
+            .iter()
+            .map(|&g| self.a.name(g).to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         self.text(&gs);
         self.text(">");
     }
@@ -1281,7 +1359,13 @@ impl<'a> P<'a> {
 
     fn stmt_tokens(&mut self, h: NodeHandle<AnyStmt>) {
         match self.a.stmt(h).clone() {
-            StmtKind::LetStmt { is_mut, name, destructure, ty, init } => {
+            StmtKind::LetStmt {
+                is_mut,
+                name,
+                destructure,
+                ty,
+                init,
+            } => {
                 self.text("let");
                 if is_mut {
                     self.sp();
@@ -1291,7 +1375,8 @@ impl<'a> P<'a> {
                     Some(names) => {
                         self.sp();
                         self.text("(");
-                        let ns: Vec<String> = names.iter().map(|&n| self.a.name(n).to_string()).collect();
+                        let ns: Vec<String> =
+                            names.iter().map(|&n| self.a.name(n).to_string()).collect();
                         for (i, n) in ns.iter().enumerate() {
                             if i > 0 {
                                 self.text(", ");
@@ -1322,7 +1407,12 @@ impl<'a> P<'a> {
                 self.sp();
                 self.block(body);
             }
-            StmtKind::ForOf { var, is_mut, iter, body } => {
+            StmtKind::ForOf {
+                var,
+                is_mut,
+                iter,
+                body,
+            } => {
                 self.text("for (let ");
                 if is_mut {
                     self.text("mut ");
@@ -1334,7 +1424,14 @@ impl<'a> P<'a> {
                 self.sp();
                 self.block(body);
             }
-            StmtKind::ForC { var, is_mut, init, cond, update, body } => {
+            StmtKind::ForC {
+                var,
+                is_mut,
+                init,
+                cond,
+                update,
+                body,
+            } => {
                 self.text("for (let ");
                 if is_mut {
                     self.text("mut ");
@@ -1393,7 +1490,12 @@ impl<'a> P<'a> {
             self.text("else ");
             match e {
                 ElseBranch::If(h2) => {
-                    if let StmtKind::If { cond: c2, then: t2, els: e2 } = self.a.stmt(h2.into()).clone() {
+                    if let StmtKind::If {
+                        cond: c2,
+                        then: t2,
+                        els: e2,
+                    } = self.a.stmt(h2.into()).clone()
+                    {
                         self.if_stmt(c2, t2, e2);
                     }
                 }
@@ -1713,7 +1815,12 @@ impl<'a> P<'a> {
                 self.drain_close(self.a.span(h.id()).hi);
                 self.text(")");
             }
-            ExprKind::Method { recv, name, generics, args } => {
+            ExprKind::Method {
+                recv,
+                name,
+                generics,
+                args,
+            } => {
                 self.operand(recv, L_POSTFIX, false);
                 self.text(".");
                 self.text(self.a.name(name));
@@ -1997,7 +2104,9 @@ impl<'a> P<'a> {
                     }
                     _ => format!("{}", val),
                 };
-                let s = if digits.contains('.') || digits.contains('e') || digits.contains("inf")
+                let s = if digits.contains('.')
+                    || digits.contains('e')
+                    || digits.contains("inf")
                     || digits.contains("NaN")
                 {
                     format!("{digits}{}", float_suffix(*sfx))

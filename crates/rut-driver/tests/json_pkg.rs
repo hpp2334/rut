@@ -20,14 +20,16 @@ use rut_vm::interp::{HostHooks, Vm};
 const PKG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonpkg");
 const LIGHT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonlight");
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -53,7 +55,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -77,7 +82,13 @@ fn vm_at(dir: &str) -> Vm {
     assert!(
         compiled.graph.diags.is_empty(),
         "diags: {}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let flat = rut_core::link::flatten(compiled.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -86,12 +97,19 @@ fn vm_at(dir: &str) -> Vm {
         heap_limit_bytes: Some(256 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    rut_vm::interp:: Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(compiled.hosts).build().expect("vm")
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(HostHooks::default())
+        .hosts(compiled.hosts)
+        .build()
+        .expect("vm")
 }
 
 fn dec(entry: &str, doc: &str) -> String {
     let mut vm = vm_at(PKG);
-    vm.call(entry, (doc.to_string(),)).unwrap_or_else(|e| panic!("{entry}({doc:?}): {e:?}"))
+    vm.call(entry, (doc.to_string(),))
+        .unwrap_or_else(|e| panic!("{entry}({doc:?}): {e:?}"))
 }
 
 fn dec_expect(entry: &str, doc: &str, want: &str) {
@@ -134,8 +152,14 @@ fn i64_decode_edges() {
         ("-9223372036854775808", "OK:-9223372036854775808"),
         ("9223372036854775807", "OK:9223372036854775807"),
         // the first overflow, either sign: WrongType naming the lexeme
-        ("9223372036854775808", "ERR:WrongType@0:9223372036854775808:an i64"),
-        ("-9223372036854775809", "ERR:WrongType@0:-9223372036854775809:an i64"),
+        (
+            "9223372036854775808",
+            "ERR:WrongType@0:9223372036854775808:an i64",
+        ),
+        (
+            "-9223372036854775809",
+            "ERR:WrongType@0:-9223372036854775809:an i64",
+        ),
         // a float LEXEME into i64: WrongType, the whole lexeme in `got`
         ("1.5", "ERR:WrongType@0:1.5:an i64"),
         ("1e3", "ERR:WrongType@0:1e3:an i64"),
@@ -196,8 +220,18 @@ fn f64_round_trip_stability() {
     // ±ulp — they assert STABILITY (decode∘encode∘decode fixes), never
     // bit-exactness against the literal parse.
     let docs = [
-        "0.1", "1.5", "2.5", "-0.25", "1e22", "-1e22", "3", "1e-22",
-        "9007199254740992", "3.141592653589793", "-2.5e-21", "123.456e-20",
+        "0.1",
+        "1.5",
+        "2.5",
+        "-0.25",
+        "1e22",
+        "-1e22",
+        "3",
+        "1e-22",
+        "9007199254740992",
+        "3.141592653589793",
+        "-2.5e-21",
+        "123.456e-20",
     ];
     for doc in docs {
         let mut vm = vm_at(PKG);
@@ -210,7 +244,11 @@ fn f64_round_trip_stability() {
 fn f64_tier2_edges_stable() {
     // MAX, MIN_POSITIVE: Display's full expansion re-decodes to the SAME
     // value — stability, the survey's disclosed tier-2 honesty
-    for doc in ["1.7976931348623157e308", "2.2250738585072014e-308", "-2.5e-22"] {
+    for doc in [
+        "1.7976931348623157e308",
+        "2.2250738585072014e-308",
+        "-2.5e-22",
+    ] {
         let mut vm = vm_at(PKG);
         let out: String = vm.call("f64_rt", (doc.to_string(),)).unwrap();
         assert_eq!(out, "STABLE", "f64_rt({doc:?})");
@@ -457,10 +495,7 @@ fn writer_not_finite() {
 #[test]
 fn reader_surface() {
     let cases = [
-        (
-            "{\"name\": \"rut\", \"age\": 9}",
-            "OK:rut:9",
-        ),
+        ("{\"name\": \"rut\", \"age\": 9}", "OK:rut:9"),
         (
             // unknown keys skip grammatically (containers included)
             "{\"name\": \"a\", \"age\": 1, \"unknown\": {\"deep\": [true, null]}}",
@@ -500,12 +535,19 @@ fn bytes_entry() {
 
     // an ED A0 continuation (surrogate range) — rejected
     let mut vm = vm_at(PKG);
-    let surrogate: String = vm.call("dec_bytes", (vec![b'"', 0xED, 0xA0, 0x80, b'"'],)).unwrap();
-    assert!(surrogate.starts_with("ERR:InvalidUtf8"), "ed-a0: {surrogate}");
+    let surrogate: String = vm
+        .call("dec_bytes", (vec![b'"', 0xED, 0xA0, 0x80, b'"'],))
+        .unwrap();
+    assert!(
+        surrogate.starts_with("ERR:InvalidUtf8"),
+        "ed-a0: {surrogate}"
+    );
 
     // F4 90 (beyond U+10FFFF) — rejected
     let mut vm = vm_at(PKG);
-    let beyond: String = vm.call("dec_bytes", (vec![0xF4, 0x90, 0x80, 0x80],)).unwrap();
+    let beyond: String = vm
+        .call("dec_bytes", (vec![0xF4, 0x90, 0x80, 0x80],))
+        .unwrap();
     assert!(beyond.starts_with("ERR:InvalidUtf8"), "f4-90: {beyond}");
 
     // clean multi-byte content rides the same str cursor
@@ -513,7 +555,9 @@ fn bytes_entry() {
     let world: String = vm.call("dec_bytes", ("-5".as_bytes().to_vec(),)).unwrap();
     assert_eq!(world, "OK:-5");
     let mut vm = vm_at(PKG);
-    let cjk: String = vm.call("dec_bytes_str", ("\"\u{4e16}\"".as_bytes().to_vec(),)).unwrap();
+    let cjk: String = vm
+        .call("dec_bytes_str", ("\"\u{4e16}\"".as_bytes().to_vec(),))
+        .unwrap();
     assert_eq!(cjk, "OK:世");
 }
 
@@ -593,7 +637,9 @@ fn light_consumer_base_rows() {
 #[test]
 fn user_type_satisfies_structurally() {
     let mut vm = vm_at(PKG);
-    let dec: String = vm.call("dec_row", (r#"{"id":7,"name":"seven"}"#.to_string(),)).unwrap();
+    let dec: String = vm
+        .call("dec_row", (r#"{"id":7,"name":"seven"}"#.to_string(),))
+        .unwrap();
     assert_eq!(dec, "OK:7:seven");
 }
 
@@ -704,7 +750,9 @@ fn writer_chunk_error_offsets() {
     // NotFinite after a field run: at counts the drained chunk too —
     // `{"a":1,"bad":` is 13 bytes
     let mut vm = vm_at(PKG);
-    let out: String = vm.call("writer_not_finite_after_run", (f64::INFINITY,)).unwrap();
+    let out: String = vm
+        .call("writer_not_finite_after_run", (f64::INFINITY,))
+        .unwrap();
     assert_eq!(out, "ERR:NotFinite@13:$.bad");
 
     // Depth with a pending chunk: the outer object counts toward the

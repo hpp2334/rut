@@ -55,8 +55,8 @@ pub struct BuilderBuf {
 /// engine takes a dedicated allocation rounded to 8; the mirror does
 /// the same rounding.
 const CLASSES: [usize; 24] = [
-    16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 640, 768, 896,
-    1024, 1280, 1536, 1792, 2048,
+    16, 32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 640, 768, 896, 1024,
+    1280, 1536, 1792, 2048,
 ];
 const SMALL_MAX: usize = *CLASSES.last().unwrap();
 
@@ -80,7 +80,11 @@ impl BuilderBuf {
     /// class-rounded, behavior identical for every hint).
     fn with_cap(cap: usize) -> BuilderBuf {
         let cap = class_round(cap);
-        BuilderBuf { octets: Vec::new(), chars: 0, cap }
+        BuilderBuf {
+            octets: Vec::new(),
+            chars: 0,
+            cap,
+        }
     }
 
     /// The growth a push of `extra` octets needs, charged BEFORE the
@@ -99,7 +103,12 @@ impl BuilderBuf {
     /// Append octets + their codepoint count in place, consulting
     /// `charge` first when a grow is needed. A failed charge leaves the
     /// text untouched (only spare capacity was to be reserved).
-    fn push(&mut self, extra: &[u8], extra_chars: u32, charge: impl FnOnce(u64) -> Result<(), Trap>) -> Result<(), Trap> {
+    fn push(
+        &mut self,
+        extra: &[u8],
+        extra_chars: u32,
+        charge: impl FnOnce(u64) -> Result<(), Trap>,
+    ) -> Result<(), Trap> {
         if let Some(bytes) = self.growth_charge(extra.len()) {
             charge(bytes)?;
             let need = self.octets.len() + extra.len();
@@ -141,8 +150,15 @@ pub fn pkg() -> HostPkg {
         "sb_push",
         |vm: &mut Vm, b: Opaque<RefCell<BuilderBuf>>, s: &str| -> Result<(), Trap> {
             // zero-copy: `s` borrows the block store for exactly this call
-            let chars = if s.is_ascii() { s.len() as u32 } else { s.chars().count() as u32 };
-            b.with_mut(vm, |vm, buf| buf.borrow_mut().push(s.as_bytes(), chars, |d| vm.charge_public(d)))?
+            let chars = if s.is_ascii() {
+                s.len() as u32
+            } else {
+                s.chars().count() as u32
+            };
+            b.with_mut(vm, |vm, buf| {
+                buf.borrow_mut()
+                    .push(s.as_bytes(), chars, |d| vm.charge_public(d))
+            })?
         },
     );
     pkg.register::<_, (Opaque<RefCell<BuilderBuf>>, u32), (), _>(
@@ -169,7 +185,9 @@ pub fn pkg() -> HostPkg {
             // the builder KEEPS its buffer — finish twice answers the
             // same text, immune to later appends
             b.with(|buf| String::from_utf8(buf.borrow().octets.clone()))?
-                .map_err(|_| Trap::new(TrapKind::Invalid, "sb_finish: builder octets are not UTF-8"))
+                .map_err(|_| {
+                    Trap::new(TrapKind::Invalid, "sb_finish: builder octets are not UTF-8")
+                })
         },
     );
     pkg.build()

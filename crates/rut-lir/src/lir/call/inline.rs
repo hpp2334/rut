@@ -4,7 +4,6 @@ use crate::check::TcResult;
 use crate::lir::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     /// Instance-method call on a concrete receiver. The method may be
     /// GENERIC in its own right (`store.get<T>(a)`, the two-pkg store's
     /// whole surface): its type arguments — spelled at the site or
@@ -32,7 +31,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the decl name may be a class (generics substitute) or an
         // enum (concrete — the empty substitution)
         let class_subst: Vec<(IdentId, TypeId)> = match self.ctx.find_data(dname) {
-            Some(d) => d.generics.iter().cloned().zip(class_args.iter().cloned()).collect(),
+            Some(d) => d
+                .generics
+                .iter()
+                .cloned()
+                .zip(class_args.iter().cloned())
+                .collect(),
             None => vec![],
         };
         let md = self.ctx.ast.method_decl(mnode).clone();
@@ -45,10 +49,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the method's own generics: explicit site arguments first
         let decl_generics: Vec<IdentId> = md.generics.clone();
         if generics.len() > decl_generics.len() {
-            self.ctx.err(sp, format!(
-                "`{}.{}` takes {} generic argument(s), {} given",
-                self.ctx.name(dname), self.ctx.name(mname), decl_generics.len(), generics.len()
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}.{}` takes {} generic argument(s), {} given",
+                    self.ctx.name(dname),
+                    self.ctx.name(mname),
+                    decl_generics.len(),
+                    generics.len()
+                ),
+            );
             return Err(());
         }
         let mut subst = class_subst.clone();
@@ -57,7 +67,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             subst.push((*g, t));
         }
         if args.len() != params.len() - 1 {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), params.len() - 1));
+            self.ctx.err(
+                sp,
+                format!(
+                    "call arity: {} args for {} params",
+                    args.len(),
+                    params.len() - 1
+                ),
+            );
             return Err(());
         }
         // the callee's signature may spell `Self`/`T` — resolve under the
@@ -84,7 +101,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if free.is_empty() {
                 continue;
             }
-            if let ExprKind::Lambda { params: lps, ret: lret, .. } = self.ctx.ast.expr(*a) {
+            if let ExprKind::Lambda {
+                params: lps,
+                ret: lret,
+                ..
+            } = self.ctx.ast.expr(*a)
+            {
                 // FULLY unannotated: no parameter types and no return
                 // type — nothing in the lambda's shape can bind the
                 // generic (a partially annotated one — the store's
@@ -161,7 +183,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
         for (i, tn) in param_nodes.iter().enumerate() {
             if let Some(tn) = tn {
-                self.unify_generic_val(*tn, Some(args[i]), arg_tys[i], &decl_generics, &mut subst, sp)?;
+                self.unify_generic_val(
+                    *tn,
+                    Some(args[i]),
+                    arg_tys[i],
+                    &decl_generics,
+                    &mut subst,
+                    sp,
+                )?;
             }
         }
         self.ctx.cur_mod = saved_unify_mod;
@@ -197,10 +226,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ctx.cur_mod = saved_mod;
         for (i, _) in args.iter().enumerate() {
             if !self.widens_val(args[i], arg_tys[i], ptys[i]) {
-                self.ctx.err(self.ctx.ast.span(args[i].id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(arg_tys[i]), self.ctx.type_name(ptys[i])
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(args[i].id()),
+                    format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(arg_tys[i]),
+                        self.ctx.type_name(ptys[i])
+                    ),
+                );
             }
             // a trait-typed parameter whose expected type was unknown
             // during the argument's compile (it spells a free generic —
@@ -233,13 +267,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Ok(ret_ty);
         }
         let inst = crate::check::Inst {
-            key: crate::check::FnKey::Method { data: dname, name: mname },
+            key: crate::check::FnKey::Method {
+                data: dname,
+                name: mname,
+            },
             subst,
             iface_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        { let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs)); self.emit(Op::CallM { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        let dst = if ret_ty == TY_NIL {
+            None
+        } else {
+            Some(self.new_reg(ret_ty))
+        };
+        {
+            let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs));
+            self.emit(
+                Op::CallM {
+                    func: fid,
+                    argv_off,
+                    argc,
+                    dst: opt_reg(dst),
+                },
+                sp.lo,
+            );
+        }
         Ok(ret_ty)
     }
 
@@ -271,10 +323,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         ret_ty: TypeId,
         sp: rut_lexer::span::Span,
     ) -> bool {
-        let _ = (dname, class_subst, self_ty, mnode, mname, mut_self, recv, aregs, ptys, ret_ty, sp);
+        let _ = (
+            dname,
+            class_subst,
+            self_ty,
+            mnode,
+            mname,
+            mut_self,
+            recv,
+            aregs,
+            ptys,
+            ret_ty,
+            sp,
+        );
         return false;
     }
-
 
     /// Inline a small, non-recursive free-fn body at the call site.
     /// Returns `true` when it compiled the body; `false` to emit `Call`.
@@ -304,7 +367,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // in an inline (one clone per concrete argument,
         // each binding statically) — that boundary can't splice, so the
         // call stays a call
-        if ptys.iter().any(|&t| matches!(self.ctx.types.kind(t), TyKind::IfaceObj { .. })) {
+        if ptys
+            .iter()
+            .any(|&t| matches!(self.ctx.types.kind(t), TyKind::IfaceObj { .. }))
+        {
             return false;
         }
         let fd = self.ctx.ast.fn_decl(fnode).clone();
@@ -337,8 +403,24 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let params: Vec<NodeHandle<AnyParam>> = fd.params.clone();
         let mut ai = 0usize;
         for p in &params {
-            if let MemberKind::Param(ParamData { name: pname, is_mut, ty, .. }) = self.ctx.ast.param(*p) {
-                self.locals.push(Local { name: *pname, reg: aregs[ai], ty: ptys[ai], is_mut: *is_mut, loop_var: false, loop_for_c: false, origins: Vec::new(), field: NO_FIELD, cell: None });
+            if let MemberKind::Param(ParamData {
+                name: pname,
+                is_mut,
+                ty,
+                ..
+            }) = self.ctx.ast.param(*p)
+            {
+                self.locals.push(Local {
+                    name: *pname,
+                    reg: aregs[ai],
+                    ty: ptys[ai],
+                    is_mut: *is_mut,
+                    loop_var: false,
+                    loop_for_c: false,
+                    origins: Vec::new(),
+                    field: NO_FIELD,
+                    cell: None,
+                });
                 self.note_union_binding(*pname, *ty);
                 ai += 1;
             }
@@ -384,7 +466,4 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.last_reg = res;
         true
     }
-
-
-
 }

@@ -21,9 +21,8 @@
 
 use std::rc::Rc;
 
-
-use rut_vm::OpaqueRef;
 use rut_vm::interp::Vm;
+use rut_vm::OpaqueRef;
 
 const PKG_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/nmap_host");
 
@@ -325,14 +324,26 @@ fn vm_with_nmap() -> Vm {
             .manifest(rut_driver::Manifest::lib("app", &["nmap_host"])),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
+    let compiled = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
@@ -345,7 +356,12 @@ fn vm_with_nmap() -> Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::nmap::pkg());
     hosts.verify_against(&ctx.flatten()); // tests/data/nmap_host/nmap.d.rut ↔ the bodies
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .unwrap()
 }
 
@@ -376,8 +392,9 @@ fn tables_release_at_rc0_including_through_wrapper_records() {
     // direct handles: the payload lives while the host holds the handle
     // (each box charges its shallow payload — size_of::<NativeTable>(),
     // pinned at 40 by the rut-std unit test)
-    let held: Vec<OpaqueRef> =
-        (0..4000).map(|_| vm.call::<_, OpaqueRef>("new_map", (16i64,)).unwrap()).collect();
+    let held: Vec<OpaqueRef> = (0..4000)
+        .map(|_| vm.call::<_, OpaqueRef>("new_map", (16i64,)).unwrap())
+        .collect();
     let held_usage = vm.heap_usage();
     assert!(
         held_usage > base + 4000 * 32,
@@ -388,7 +405,10 @@ fn tables_release_at_rc0_including_through_wrapper_records() {
     // payloads — NativeTable is pure Rust data, nothing leaks
     drop(held);
     let after = vm.heap_usage();
-    assert!(after <= base + 4096, "tables must free at rc-0: base {base}, after {after}");
+    assert!(
+        after <= base + 4096,
+        "tables must free at rc-0: base {base}, after {after}"
+    );
 
     // the wrapper-record path: each iteration's Bag record releases its
     // opaque field at rc-0, which drops the box and its payload
@@ -419,14 +439,18 @@ fn sv_lanes_parity_with_the_s_lanes_end_to_end() {
 fn sv_lanes_trap_mid_codepoint_and_out_of_range() {
     let mut vm = vm_with_nmap();
     let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
-    let err = vm.call::<_, i32>("sv_boundary_trap", (t.clone(),)).unwrap_err();
+    let err = vm
+        .call::<_, i32>("sv_boundary_trap", (t.clone(),))
+        .unwrap_err();
     assert_eq!(err.kind, rut_vm::TrapKind::Invalid);
     assert!(
         err.msg.contains("nmap") && err.msg.contains("not a UTF-8 boundary"),
         "{}",
         err.msg
     );
-    let err = vm.call::<_, i32>("sv_range_trap", (t.clone(),)).unwrap_err();
+    let err = vm
+        .call::<_, i32>("sv_range_trap", (t.clone(),))
+        .unwrap_err();
     assert!(
         err.msg.contains("nmap") && err.msg.contains("out of range"),
         "{}",
@@ -458,7 +482,11 @@ fn an_empty_entry_read_through_a_valued_lane_traps_loudly() {
     let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
     let err = vm.call::<_, i64>("empty_read_trap", (t,)).unwrap_err();
     assert_eq!(err.kind, rut_vm::TrapKind::Invalid);
-    assert!(err.msg.contains("Empty") && err.msg.contains("placeholder"), "{}", err.msg);
+    assert!(
+        err.msg.contains("Empty") && err.msg.contains("placeholder"),
+        "{}",
+        err.msg
+    );
 }
 
 /// The release balance of the valued lanes: str values retain their

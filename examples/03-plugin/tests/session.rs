@@ -20,7 +20,8 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     // shared root would race the prime (remove/write/rename)
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let cache = std::env::temp_dir().join(format!("rut-03-plugin-cache-{}-{n}", std::process::id()));
+    let cache =
+        std::env::temp_dir().join(format!("rut-03-plugin-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&cache);
     let remote = rut_native::HttpRemote::at(&cache);
     let manifest_text =
@@ -42,7 +43,9 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let mut pinned = std::pin::pin!(rut_native::pack_dir_opts_with(d, &opts, &remote));
     loop {
         match pinned.as_mut().poll(&mut cx) {
-            std::task::Poll::Ready(v) => break v.map(|(bytes, _)| bytes).map_err(|e| e.to_string()),
+            std::task::Poll::Ready(v) => {
+                break v.map(|(bytes, _)| bytes).map_err(|e| e.to_string())
+            }
             std::task::Poll::Pending => std::thread::yield_now(),
         }
     }
@@ -84,8 +87,9 @@ fn prime_project_cache() {
         for desc in manifest.deps.values() {
             let Some(url) = desc.get("url") else { continue };
             let artifact = url.rsplit('/').next().unwrap_or_default();
-            let bytes = std::fs::read(dist.join(artifact))
-                .unwrap_or_else(|e| panic!("the committed artifact is the cache — {artifact}: {e}"));
+            let bytes = std::fs::read(dist.join(artifact)).unwrap_or_else(|e| {
+                panic!("the committed artifact is the cache — {artifact}: {e}")
+            });
             rut_native::DepRemote::write(&remote, url, &bytes).expect("prime the cache");
         }
     });
@@ -138,7 +142,10 @@ fn moderated_session_transcript() {
 fn bundle_form_matches_the_directory() {
     // pack the same directory, load the bundle, run the same session
     let bytes = pack_seeded().unwrap();
-    let path = std::env::temp_dir().join(format!("rut-03-plugin-test-{}.rutbundle", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "rut-03-plugin-test-{}.rutbundle",
+        std::process::id()
+    ));
     std::fs::write(&path, &bytes).unwrap();
     let mut p = Plugin::load(&path, &limits()).unwrap();
     let (lines, total) = session(&mut p);
@@ -211,7 +218,10 @@ fn muted_user_cannot_rejoin() {
     p.join("bob").unwrap();
     let lines = p.transcript();
     assert_eq!(lines.len(), n + 1);
-    assert_eq!(lines.last().unwrap(), "[system] bob tried to rejoin while muted");
+    assert_eq!(
+        lines.last().unwrap(),
+        "[system] bob tried to rejoin while muted"
+    );
 }
 
 #[test]

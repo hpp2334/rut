@@ -28,14 +28,16 @@ use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 
 const PKG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/strbuildpkg");
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -61,7 +63,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -86,7 +91,12 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
     assert!(
         g.graph.diags.is_empty(),
         "diags: {}",
-        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -100,8 +110,13 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
     let ctx = rut_driver::host_pkg_ctx(&loaded.pkgs);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    let mut vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(HostHooks::default()).hosts(hosts).build()
-    .expect("vm");
+    let mut vm = Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     vm
 }
 
@@ -109,7 +124,9 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
 /// exactly which pin lied.
 fn assert_ok(entry: &str) {
     let mut vm = vm();
-    let out: String = vm.call(entry, ()).unwrap_or_else(|e| panic!("{entry}: {e:?}"));
+    let out: String = vm
+        .call(entry, ())
+        .unwrap_or_else(|e| panic!("{entry}: {e:?}"));
     assert_eq!(out, "OK", "{entry}");
 }
 

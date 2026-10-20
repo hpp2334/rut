@@ -22,7 +22,9 @@ pub(crate) fn fmt(args: &FmtArgs) {
     if p.is_dir() {
         let mut stack = vec![p.to_path_buf()];
         while let Some(dir) = stack.pop() {
-            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
             for e in entries.flatten() {
                 let ep = e.path();
                 if ep.is_dir() {
@@ -75,7 +77,10 @@ pub(crate) fn fmt(args: &FmtArgs) {
                 }
             }
             Err(diags) => {
-                eprintln!("fmt: {} refuses — the source does not parse clean:", f.display());
+                eprintln!(
+                    "fmt: {} refuses — the source does not parse clean:",
+                    f.display()
+                );
                 let label = f.display().to_string();
                 let mut sources = std::collections::BTreeMap::new();
                 sources.insert(label.clone(), src.as_str());

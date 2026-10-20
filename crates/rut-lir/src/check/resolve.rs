@@ -5,7 +5,6 @@
 use super::*;
 
 impl<'a> Ctx<'a> {
-
     /// Mint (or fetch) the CONCRETE interface instantiation of an
     /// impl's member set under a target substitution — the template
     /// re-resolution law's mint half (the dispatch half that
@@ -40,10 +39,7 @@ impl<'a> Ctx<'a> {
         if let Some(&id) = self.iface_inst.get(&(name, args.clone())) {
             return id;
         }
-        let base_id = self
-            .extern_trait(name)
-            .map(|e| e.id)
-            .unwrap_or(u32::MAX);
+        let base_id = self.extern_trait(name).map(|e| e.id).unwrap_or(u32::MAX);
         let base_text = self.interner.name(name).to_string();
         self.mint_iface_inst_from_desc(base_id, &base_text, args, Some(name))
     }
@@ -69,7 +65,10 @@ impl<'a> Ctx<'a> {
             format!(
                 "{}<{}>",
                 base_text,
-                args.iter().map(|a| self.type_name(*a).to_string()).collect::<Vec<_>>().join(", ")
+                args.iter()
+                    .map(|a| self.type_name(*a).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         };
         // the applied-NAME dedup runs FIRST for EVERY caller: the
@@ -95,7 +94,10 @@ impl<'a> Ctx<'a> {
             }
         }
         let tname = self.intern(&tname);
-        self.ifaces.push(IfaceDesc { name: tname, methods: vec![] });
+        self.ifaces.push(IfaceDesc {
+            name: tname,
+            methods: vec![],
+        });
         if let Some(name) = cache_name {
             self.iface_inst.insert((name, args.clone()), id);
         }
@@ -120,7 +122,11 @@ impl<'a> Ctx<'a> {
                 .map(|&p| self.subst_carried_sig(p, base_id, id, &env))
                 .collect();
             let ret = self.subst_carried_sig(tm.ret, base_id, id, &env);
-            methods.push(rut_core::binary::IfaceMethod { name: tm.name, params, ret });
+            methods.push(rut_core::binary::IfaceMethod {
+                name: tm.name,
+                params,
+                ret,
+            });
         }
         self.ifaces[id as usize].methods = methods;
         id
@@ -235,7 +241,6 @@ impl<'a> Ctx<'a> {
         None
     }
 
-
     /// The engine-minted `RunContext` cx record: one field —
     /// the frame edge — laid out per `rut_core::async_frame`. The NAME
     /// is the surface spelling (v20: the closed `builtin class` row),
@@ -254,7 +259,12 @@ impl<'a> Ctx<'a> {
         // the crossing re-spells at the binding instead)
         let ty = self.types.intern_own(RutType {
             name,
-            kind: TyKind::Data { fields: vec![FieldInfo { name: fname, ty: TY_OPAQUE }] },
+            kind: TyKind::Data {
+                fields: vec![FieldInfo {
+                    name: fname,
+                    ty: TY_OPAQUE,
+                }],
+            },
         });
         self.run_context_ty = Some(ty);
         ty
@@ -325,7 +335,10 @@ impl<'a> Ctx<'a> {
                 let prim = sym::primitive_ty(name);
                 if let Some(p) = prim {
                     if !seg.generics.is_empty() {
-                        self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
+                        self.err(
+                            sp,
+                            format!("`{}` takes no generic arguments", self.name(name)),
+                        );
                     }
                     return p;
                 }
@@ -389,7 +402,10 @@ impl<'a> Ctx<'a> {
                             self.mk_future(elem)
                         }
                         (rut_core::binary::NativeTy::Future, _) => {
-                            self.err(sp, "`Future<T>` takes exactly one type parameter — the answer type");
+                            self.err(
+                                sp,
+                                "`Future<T>` takes exactly one type parameter — the answer type",
+                            );
                             TY_I32
                         }
                         // the cx class: the surface name IS the
@@ -406,113 +422,138 @@ impl<'a> Ctx<'a> {
                     // user types — LOCAL decls resolve in the current
                     // module only (a bare name from another module falls
                     // through and diagnoses with the qualified spelling)
-                        if let Some(e) = self.enum_here(name) {
-                            if !seg.generics.is_empty() {
-                                self.err(sp, format!("enum `{}` takes no generic arguments", self.name(name)));
-                            }
-                            return e.ty;
+                    if let Some(e) = self.enum_here(name) {
+                        if !seg.generics.is_empty() {
+                            self.err(
+                                sp,
+                                format!("enum `{}` takes no generic arguments", self.name(name)),
+                            );
                         }
-                        if let Some(d) = self.data_here(name) {
-                            if d.generics.is_empty() {
-                                if !seg.generics.is_empty() {
-                                    self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
-                                }
-                                return d.ty;
+                        return e.ty;
+                    }
+                    if let Some(d) = self.data_here(name) {
+                        if d.generics.is_empty() {
+                            if !seg.generics.is_empty() {
+                                self.err(
+                                    sp,
+                                    format!("`{}` takes no generic arguments", self.name(name)),
+                                );
                             }
-                            if seg.generics.len() != d.generics.len() {
-                                self.err(sp, format!(
+                            return d.ty;
+                        }
+                        if seg.generics.len() != d.generics.len() {
+                            self.err(
+                                sp,
+                                format!(
                                     "`{}` takes {} generic argument(s), {} given",
                                     self.name(name),
                                     d.generics.len(),
                                     seg.generics.len()
-                                ));
-                                return TY_I32;
-                            }
-                            let args: Vec<TypeId> = seg
-                                .generics
-                                .iter()
-                                .map(|g| self.resolve_type(*g, env))
-                                .collect();
-                            return self.mk_data_inst(name, args, sp);
+                                ),
+                            );
+                            return TY_I32;
                         }
-                // an own-package use binding (the intra-package import):
-                // the name resolves through the TARGET module's decls —
-                // the same rungs the qualified leaf rides (generics and
-                // the crossing predicate included)
-                if let Some(target) = self.own_use_target(name) {
-                    let leaf = PathSeg { name, generics: seg.generics.clone() };
-                    let from = self.cur_mod.clone();
-                    return self.resolve_qualified_leaf_ty(&from, &target, &leaf, sp, env);
-                }
-                // the removed engine-contract names (v20): a spelled
-                // `Iterable`/`Disposal` in type position names its
-                // marker. (`Future`/`RunContext` resolve through the
-                // native-type match above when bound; unbound they fall
-                // to the use-gate's scope fix like any gated name.)
-                if name == sym::ITERABLE || name == sym::DISPOSAL {
-                    if let Some(msg) = self.engine_contract_head_error(name) {
-                        self.err(sp, msg);
-                        return TY_I32;
+                        let args: Vec<TypeId> = seg
+                            .generics
+                            .iter()
+                            .map(|g| self.resolve_type(*g, env))
+                            .collect();
+                        return self.mk_data_inst(name, args, sp);
                     }
-                }
-                        if let Some(t) = self.iface_here(name) {
-                            // an interface name in type position IS the
-                            // object type — the bare name spells it
-                            if seg.generics.is_empty() {
-                                if t.id == u32::MAX {
-                                    self.err(sp, format!(
+                    // an own-package use binding (the intra-package import):
+                    // the name resolves through the TARGET module's decls —
+                    // the same rungs the qualified leaf rides (generics and
+                    // the crossing predicate included)
+                    if let Some(target) = self.own_use_target(name) {
+                        let leaf = PathSeg {
+                            name,
+                            generics: seg.generics.clone(),
+                        };
+                        let from = self.cur_mod.clone();
+                        return self.resolve_qualified_leaf_ty(&from, &target, &leaf, sp, env);
+                    }
+                    // the removed engine-contract names (v20): a spelled
+                    // `Iterable`/`Disposal` in type position names its
+                    // marker. (`Future`/`RunContext` resolve through the
+                    // native-type match above when bound; unbound they fall
+                    // to the use-gate's scope fix like any gated name.)
+                    if name == sym::ITERABLE || name == sym::DISPOSAL {
+                        if let Some(msg) = self.engine_contract_head_error(name) {
+                            self.err(sp, msg);
+                            return TY_I32;
+                        }
+                    }
+                    if let Some(t) = self.iface_here(name) {
+                        // an interface name in type position IS the
+                        // object type — the bare name spells it
+                        if seg.generics.is_empty() {
+                            if t.id == u32::MAX {
+                                self.err(sp, format!(
                                         "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
                                         self.name(name),
                                         self.name(name)
                                     ));
-                                    return TY_I32;
-                                }
-                                return self.mk_iface_obj(t.id);
-                            }
-                            if seg.generics.len() != t.generics.len() {
-                                self.err(sp, format!(
-                                    "`{}` takes {} type argument(s), {} given", self.name(name),
-                                    t.generics.len(), seg.generics.len()
-                                ));
                                 return TY_I32;
                             }
-                            let args: Vec<TypeId> = seg
-                                .generics
-                                .iter()
-                                .map(|g| self.resolve_type(*g, env))
-                                .collect();
-                            let id = self.mk_iface_inst(name, args);
-                            return self.mk_iface_obj(id);
+                            return self.mk_iface_obj(t.id);
                         }
-                        // a used module's exported interface:
-                        // the object type here, exactly like a declared
-                        // one. A GENERIC head instantiates the carried
-                        // placeholder descriptor — the interface's shape
-                        // crosses the surface, so the spelling dispatches
-                        // by the existing law (single concrete origin ⇒
-                        // static, merged origins ⇒ vtable). The NAME
-                        // gate is per file (the per-file binding law):
-                        // the trait table itself stays unit-global (an
-                        // impl may live in another module), so the
-                        // strict per-file use check arms the rung.
-                        if self.use_bound_in_file(name) {
+                        if seg.generics.len() != t.generics.len() {
+                            self.err(
+                                sp,
+                                format!(
+                                    "`{}` takes {} type argument(s), {} given",
+                                    self.name(name),
+                                    t.generics.len(),
+                                    seg.generics.len()
+                                ),
+                            );
+                            return TY_I32;
+                        }
+                        let args: Vec<TypeId> = seg
+                            .generics
+                            .iter()
+                            .map(|g| self.resolve_type(*g, env))
+                            .collect();
+                        let id = self.mk_iface_inst(name, args);
+                        return self.mk_iface_obj(id);
+                    }
+                    // a used module's exported interface:
+                    // the object type here, exactly like a declared
+                    // one. A GENERIC head instantiates the carried
+                    // placeholder descriptor — the interface's shape
+                    // crosses the surface, so the spelling dispatches
+                    // by the existing law (single concrete origin ⇒
+                    // static, merged origins ⇒ vtable). The NAME
+                    // gate is per file (the per-file binding law):
+                    // the trait table itself stays unit-global (an
+                    // impl may live in another module), so the
+                    // strict per-file use check arms the rung.
+                    if self.use_bound_in_file(name) {
                         if let Some(ext) = self.extern_trait(name).cloned() {
                             if seg.generics.is_empty() && ext.generics == 0 {
                                 return self.mk_iface_obj(ext.id);
                             }
                             if seg.generics.is_empty() {
-                                self.err(sp, format!(
+                                self.err(
+                                    sp,
+                                    format!(
                                     "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
                                     self.name(name),
                                     self.name(name)
-                                ));
+                                ),
+                                );
                                 return TY_I32;
                             }
                             if seg.generics.len() != ext.generics {
-                                self.err(sp, format!(
-                                    "`{}` takes {} type argument(s), {} given", self.name(name),
-                                    ext.generics, seg.generics.len()
-                                ));
+                                self.err(
+                                    sp,
+                                    format!(
+                                        "`{}` takes {} type argument(s), {} given",
+                                        self.name(name),
+                                        ext.generics,
+                                        seg.generics.len()
+                                    ),
+                                );
                                 return TY_I32;
                             }
                             let args: Vec<TypeId> = seg
@@ -523,27 +564,30 @@ impl<'a> Ctx<'a> {
                             let id = self.mint_extern_iface_inst(name, args);
                             return self.mk_iface_obj(id);
                         }
-                        }
-                        // used type: the exporter's
-                        // scope-qualified id; link rebases it
-                        // used generic template: unit-global by law
-                        // (the impl/inst machinery reads it across
-                        // modules), so the strict per-file use check
-                        // arms the rung — the template binds for the
-                        // files whose `use` named it.
-                        if self.use_bound_in_file(name) {
+                    }
+                    // used type: the exporter's
+                    // scope-qualified id; link rebases it
+                    // used generic template: unit-global by law
+                    // (the impl/inst machinery reads it across
+                    // modules), so the strict per-file use check
+                    // arms the rung — the template binds for the
+                    // files whose `use` named it.
+                    if self.use_bound_in_file(name) {
                         if let Some(g) = self.extern_generics.get(&name).cloned() {
                             // a linked generic: the consumer spells the
                             // instantiation, the declaring package owns
                             // it — lay the mirror row out of the
                             // template and request the bodies
                             if seg.generics.len() != g.params.len() {
-                                self.err(sp, format!(
-                                    "`{}` takes {} generic argument(s), {} given",
-                                    self.name(name),
-                                    g.params.len(),
-                                    seg.generics.len()
-                                ));
+                                self.err(
+                                    sp,
+                                    format!(
+                                        "`{}` takes {} generic argument(s), {} given",
+                                        self.name(name),
+                                        g.params.len(),
+                                        seg.generics.len()
+                                    ),
+                                );
                                 return TY_I32;
                             }
                             let args: Vec<TypeId> = seg
@@ -553,50 +597,56 @@ impl<'a> Ctx<'a> {
                                 .collect();
                             return self.mk_data_inst(name, args, sp);
                         }
+                    }
+                    // used type: the exporter's scope-qualified id;
+                    // link rebases it. The per-file key IS the gate —
+                    // a file that wrote no `use` of the name misses
+                    // here and falls through.
+                    if let Some(t) = self.extern_type(name) {
+                        if !seg.generics.is_empty() {
+                            self.err(
+                                sp,
+                                format!(
+                                    "used type `{}` takes no generic arguments",
+                                    self.name(name)
+                                ),
+                            );
                         }
-                        // used type: the exporter's scope-qualified id;
-                        // link rebases it. The per-file key IS the gate —
-                        // a file that wrote no `use` of the name misses
-                        // here and falls through.
-                        if let Some(t) = self.extern_type(name) {
-                            if !seg.generics.is_empty() {
-                                self.err(sp, format!("used type `{}` takes no generic arguments", self.name(name)));
-                            }
-                            return t;
+                        return t;
+                    }
+                    // a local type alias: transparent — the
+                    // name binds the target's id. A union alias errors
+                    // here: unions are bound-only.
+                    if self.alias_here(name).is_some() {
+                        self.validate_alias(name);
+                        let idx = self.aliases.iter().position(|x| x.name == name).unwrap();
+                        if !seg.generics.is_empty() {
+                            self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic", self.name(name)));
                         }
-                        // a local type alias: transparent — the
-                        // name binds the target's id. A union alias errors
-                        // here: unions are bound-only.
-                        if self.alias_here(name).is_some() {
-                            self.validate_alias(name);
-                            let idx = self.aliases.iter().position(|x| x.name == name).unwrap();
-                            if !seg.generics.is_empty() {
-                                self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic", self.name(name)));
-                            }
-                            return match self.aliases[idx].resolved {
-                                Some(AliasTarget::Ty(t)) => t,
-                                Some(AliasTarget::Union) => {
-                                    self.err(sp, format!(
+                        return match self.aliases[idx].resolved {
+                            Some(AliasTarget::Ty(t)) => t,
+                            Some(AliasTarget::Union) => {
+                                self.err(sp, format!(
                                         "`{}` is a union alias — unions are bound-only, legal only in `requires` bounds",
                                         self.name(name)
                                     ));
-                                    TY_I32
-                                }
-                                _ => TY_I32,
-                            };
-                        }
-                        if name == sym::SELF_TY {
-                            self.err(sp, "`Self` is only valid inside a type body");
-                            return TY_I32;
-                        }
-                        let msg = self
-                            .not_in_core_scope(name)
-                            .or_else(|| self.use_elsewhere_hint(name))
-                            .or_else(|| self.elsewhere_hint(name, "type"))
-                            .unwrap_or_else(|| format!("unknown type `{}`", self.name(name)));
-                        self.err(sp, msg);
-                        TY_I32
+                                TY_I32
+                            }
+                            _ => TY_I32,
+                        };
                     }
+                    if name == sym::SELF_TY {
+                        self.err(sp, "`Self` is only valid inside a type body");
+                        return TY_I32;
+                    }
+                    let msg = self
+                        .not_in_core_scope(name)
+                        .or_else(|| self.use_elsewhere_hint(name))
+                        .or_else(|| self.elsewhere_hint(name, "type"))
+                        .unwrap_or_else(|| format!("unknown type `{}`", self.name(name)));
+                    self.err(sp, msg);
+                    TY_I32
+                }
             }
         }
     }
@@ -620,7 +670,10 @@ impl<'a> Ctx<'a> {
         env: &[(IdentId, TypeId)],
     ) -> TypeId {
         let head = segs[0].name;
-        if segs[..segs.len() - 1].iter().any(|s| !s.generics.is_empty()) {
+        if segs[..segs.len() - 1]
+            .iter()
+            .any(|s| !s.generics.is_empty())
+        {
             self.err(sp, "generic arguments are not valid on a module segment");
             return TY_I32;
         }
@@ -719,66 +772,87 @@ impl<'a> Ctx<'a> {
         } else if let Some(i) = self.iface_in(m, name) {
             (i.vis, m.to_string())
         } else {
-            (self.alias_in(m, name).expect("found above").vis, m.to_string())
+            (
+                self.alias_in(m, name).expect("found above").vis,
+                m.to_string(),
+            )
         };
         if !self.vis_crosses(from, &home, vis) {
             let n = self.name(name);
             let hint = self.vis_hint(name, from, &home, vis);
-            self.err(
-                sp,
-                format!("`{m}::{n}` — {hint}"),
-            );
+            self.err(sp, format!("`{m}::{n}` — {hint}"));
             return TY_I32;
         }
         // resolve per kind — the same arms the bare ladder runs
         if let Some(e) = self.enum_in(m, name) {
             if !generics.is_empty() {
-                self.err(sp, format!("enum `{}` takes no generic arguments", self.name(name)));
+                self.err(
+                    sp,
+                    format!("enum `{}` takes no generic arguments", self.name(name)),
+                );
             }
             return e.ty;
         }
         if let Some(d) = self.data_in(m, name) {
             if d.generics.is_empty() {
                 if !generics.is_empty() {
-                    self.err(sp, format!("`{}` takes no generic arguments", self.name(name)));
+                    self.err(
+                        sp,
+                        format!("`{}` takes no generic arguments", self.name(name)),
+                    );
                 }
                 return d.ty;
             }
             if generics.len() != d.generics.len() {
-                self.err(sp, format!(
-                    "`{}` takes {} generic argument(s), {} given",
-                    self.name(name),
-                    d.generics.len(),
-                    generics.len()
-                ));
+                self.err(
+                    sp,
+                    format!(
+                        "`{}` takes {} generic argument(s), {} given",
+                        self.name(name),
+                        d.generics.len(),
+                        generics.len()
+                    ),
+                );
                 return TY_I32;
             }
-            let args: Vec<TypeId> = generics.iter().map(|g| self.resolve_type(*g, env)).collect();
+            let args: Vec<TypeId> = generics
+                .iter()
+                .map(|g| self.resolve_type(*g, env))
+                .collect();
             return self.mk_data_inst(name, args, sp);
         }
         if let Some(t) = self.iface_in(m, name) {
             // an interface name in type position IS the object type
             if generics.is_empty() {
                 if t.id == u32::MAX {
-                    self.err(sp, format!(
-                        "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
-                        self.name(name),
-                        self.name(name)
-                    ));
+                    self.err(
+                        sp,
+                        format!(
+                            "generic interface `{}` needs type arguments (e.g. `{}<i32>`)",
+                            self.name(name),
+                            self.name(name)
+                        ),
+                    );
                     return TY_I32;
                 }
                 return self.mk_iface_obj(t.id);
             }
             if generics.len() != t.generics.len() {
-                self.err(sp, format!(
-                    "`{}` takes {} type argument(s), {} given",
-                    self.name(name),
-                    t.generics.len(),
-                    generics.len()
-                ));
+                self.err(
+                    sp,
+                    format!(
+                        "`{}` takes {} type argument(s), {} given",
+                        self.name(name),
+                        t.generics.len(),
+                        generics.len()
+                    ),
+                );
                 return TY_I32;
             }
-            let args: Vec<TypeId> = generics.iter().map(|g| self.resolve_type(*g, env)).collect();
+            let args: Vec<TypeId> = generics
+                .iter()
+                .map(|g| self.resolve_type(*g, env))
+                .collect();
             // the trait's signatures re-resolve from ITS module's AST
             let saved_mod = self.cur_mod.clone();
             self.cur_mod = m.to_string();
@@ -790,7 +864,13 @@ impl<'a> Ctx<'a> {
             self.validate_alias(name);
             let idx = self.aliases.iter().position(|a| a.name == name).unwrap();
             if !generics.is_empty() {
-                self.err(sp, format!("alias `{}` takes no generic arguments — aliases are non-generic", self.name(name)));
+                self.err(
+                    sp,
+                    format!(
+                        "alias `{}` takes no generic arguments — aliases are non-generic",
+                        self.name(name)
+                    ),
+                );
             }
             return match self.aliases[idx].resolved {
                 Some(AliasTarget::Ty(t)) => t,

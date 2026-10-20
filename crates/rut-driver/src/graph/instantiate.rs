@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-use rut_lexer::diag::Diag;
-use rut_lexer::span::Span;
 use rut_core::binary::Program;
 use rut_core::ops::Op;
+use rut_lexer::diag::Diag;
+use rut_lexer::span::Span;
 use rut_parser::{parse, Mode};
 
 use super::build_seed_groups;
@@ -94,7 +94,10 @@ impl<'a> GraphCompiler<'a> {
                 }
                 self.seeded_keys.insert(key);
                 self.fresh_owners.insert(r.owner.clone());
-                self.seed_pool.entry(r.owner.clone()).or_default().push((requester, r));
+                self.seed_pool
+                    .entry(r.owner.clone())
+                    .or_default()
+                    .push((requester, r));
             }
             // only owners that received NEW seeds this round re-resolve:
             // a reseed re-emits its own mirrors' requests, and re-running
@@ -102,16 +105,15 @@ impl<'a> GraphCompiler<'a> {
             let mut owners: Vec<String> = self.fresh_owners.drain().collect();
             owners.sort();
             for owner in owners {
-                let Some(seeds) = self.seed_pool.get(&owner).cloned() else { continue };
+                let Some(seeds) = self.seed_pool.get(&owner).cloned() else {
+                    continue;
+                };
                 match self.body_kind.get(&owner).copied() {
                     Some(0) => self.reseed_source_owner(&owner, &seeds),
                     Some(1) => self.reseed_ir_owner(&owner, &seeds),
                     _ => {
                         let first = &seeds[0].1;
-                        let decl = first
-                            .decl
-                            .0
-                            .to_string();
+                        let decl = first.decl.0.to_string();
                         self.diags.push(Diag::new(
                             Span::new(0, 0),
                             format!(
@@ -143,14 +145,15 @@ impl<'a> GraphCompiler<'a> {
     /// One seed's argument list in the OWNER's id space: the seed's args
     /// name the requester's registered block rows, which the recompile
     /// registers verbatim — the ids carry over untouched.
-    fn reseed_source_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
-
+    fn reseed_source_owner(
+        &mut self,
+        owner: &str,
+        seeds: &[(String, rut_lir::check::InstRequest)],
+    ) {
         let Some((idx, scope)) = self.done.get(owner).map(|u| (u.idx, u.scope)) else {
-
             return;
         };
         let Some(src) = self.unit_src.get(owner) else {
-
             return;
         };
         let (text, is_decl, bound) = (src.text.clone(), src.is_decl, src.bound.clone());
@@ -177,7 +180,8 @@ impl<'a> GraphCompiler<'a> {
             self.requests.push((owner.to_string(), r.clone()));
         }
         if !out.diags.is_empty() || out.program.is_none() {
-            self.diags.extend(attribute_diags(out.diags, owner, &layout));
+            self.diags
+                .extend(attribute_diags(out.diags, owner, &layout));
             return;
         }
         self.programs[idx] = out.program.expect("checked above");
@@ -199,7 +203,9 @@ impl<'a> GraphCompiler<'a> {
     /// whose ledger row names the consumer (link unifies it with the
     /// real body there — the carried-member law's direction).
     fn reseed_ir_owner(&mut self, owner: &str, seeds: &[(String, rut_lir::check::InstRequest)]) {
-        let Some(unit) = self.done.get(owner) else { return };
+        let Some(unit) = self.done.get(owner) else {
+            return;
+        };
         let idx = unit.idx;
         // the live seeds (the pack-time ledger answers the rest — link
         // unifies the mirror, zero new work)
@@ -247,9 +253,15 @@ impl<'a> GraphCompiler<'a> {
                 }
             } else {
                 for &m in &r.methods {
-                    if let Err(msg) =
-                        self.materialize_request(idx, owner, requester, false, r.decl, &r.args, Some(m))
-                    {
+                    if let Err(msg) = self.materialize_request(
+                        idx,
+                        owner,
+                        requester,
+                        false,
+                        r.decl,
+                        &r.args,
+                        Some(m),
+                    ) {
                         self.diags.push(Diag::new(Span::new(0, 0), msg));
                         return;
                     }
@@ -280,9 +292,9 @@ impl<'a> GraphCompiler<'a> {
     ) -> Result<(), String> {
         let r_idx = self.done.get(requester).map(|u| u.idx);
         let Some(r_idx) = r_idx else { return Ok(()) }; // hand-routed: nothing to stage
-        // the requester scopes that need staging: non-boot, not already
-        // carried by the owner, and not staged for this (owner,
-        // requester) pair yet
+                                                        // the requester scopes that need staging: non-boot, not already
+                                                        // carried by the owner, and not staged for this (owner,
+                                                        // requester) pair yet
         let mut to_stage: Vec<rut_core::id::ScopeId> = Vec::new();
         {
             let owner_prog = &self.programs[idx];
@@ -435,7 +447,9 @@ impl<'a> GraphCompiler<'a> {
     /// name-text canon the request side speaks (boot rows by id,
     /// everything else by the row's name text).
     fn ir_ledger_hit(&self, idx: usize, requester: &str, r: &rut_lir::check::InstRequest) -> bool {
-        let Some(unit) = self.done.get(requester) else { return false };
+        let Some(unit) = self.done.get(requester) else {
+            return false;
+        };
         let pidx = unit.idx;
         let req = &self.programs[pidx];
         let own = &self.programs[idx];
@@ -456,7 +470,12 @@ impl<'a> GraphCompiler<'a> {
                 }
             }
         };
-        let args = r.args.iter().map(|&a| canon_of(req, a)).collect::<Vec<_>>().join(",");
+        let args = r
+            .args
+            .iter()
+            .map(|&a| canon_of(req, a))
+            .collect::<Vec<_>>()
+            .join(",");
         let owner_text = r.owner.as_str();
         let decl_text = req.interner.name(r.decl).to_string();
         if r.is_fn {
@@ -465,7 +484,12 @@ impl<'a> GraphCompiler<'a> {
                     && match &row.kind {
                         rut_core::binary::InstFnKind::Free { name, subst, .. } => {
                             own.interner.name(*name) == decl_text
-                                && subst.iter().map(|&t| canon_of(own, t)).collect::<Vec<_>>().join(",") == args
+                                && subst
+                                    .iter()
+                                    .map(|&t| canon_of(own, t))
+                                    .collect::<Vec<_>>()
+                                    .join(",")
+                                    == args
                         }
                         _ => false,
                     }
@@ -474,7 +498,13 @@ impl<'a> GraphCompiler<'a> {
             own.inst_types.iter().any(|row| {
                 own.interner.name(row.owner) == owner_text
                     && own.interner.name(row.decl) == decl_text
-                    && row.args.iter().map(|&t| canon_of(own, t)).collect::<Vec<_>>().join(",") == args
+                    && row
+                        .args
+                        .iter()
+                        .map(|&t| canon_of(own, t))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                        == args
             })
         } else {
             r.methods.iter().all(|&m| {
@@ -482,10 +512,17 @@ impl<'a> GraphCompiler<'a> {
                 own.inst_fns.iter().any(|row| {
                     own.interner.name(row.owner) == owner_text
                         && match &row.kind {
-                            rut_core::binary::InstFnKind::Method { data, name, subst, .. } => {
+                            rut_core::binary::InstFnKind::Method {
+                                data, name, subst, ..
+                            } => {
                                 own.interner.name(*data) == decl_text
                                     && own.interner.name(*name) == mtext
-                                    && subst.iter().map(|&t| canon_of(own, t)).collect::<Vec<_>>().join(",") == args
+                                    && subst
+                                        .iter()
+                                        .map(|&t| canon_of(own, t))
+                                        .collect::<Vec<_>>()
+                                        .join(",")
+                                        == args
                             }
                             _ => false,
                         }
@@ -493,7 +530,6 @@ impl<'a> GraphCompiler<'a> {
             })
         }
     }
-
 
     /// Materialize one request against owner program `idx`: spell the
     /// arguments through the staged block (`stage_ir_seeds` laid it —
@@ -562,7 +598,9 @@ impl<'a> GraphCompiler<'a> {
         };
         // ---- phase B: substitute + materialize, inside the owner
         // program's borrow
-        let Self { programs, requests, .. } = self;
+        let Self {
+            programs, requests, ..
+        } = self;
         let own = &mut programs[idx];
         // the template row, matched by (kind, name text, arity) — a
         // BODY request only; a type-only request needs no template
@@ -670,7 +708,8 @@ impl<'a> GraphCompiler<'a> {
             )
             .with_ledger_owners(&ledger_rows);
             let _ = sub.run(tmpl);
-            own.inst_types.extend(std::mem::take(&mut sub.minted_inst_tys));
+            own.inst_types
+                .extend(std::mem::take(&mut sub.minted_inst_tys));
             0 // no body — the kind arm below returns early
         };
         // the request's own ledger row: the owner-anchored identity the
@@ -695,7 +734,11 @@ impl<'a> GraphCompiler<'a> {
         } else {
             return Ok(()); // a type-only request: the identity row minted above
         };
-        own.inst_fns.push(rut_core::binary::InstFn { owner: subst_owner, kind, fid });
+        own.inst_fns.push(rut_core::binary::InstFn {
+            owner: subst_owner,
+            kind,
+            fid,
+        });
         Ok(())
     }
 }
@@ -753,7 +796,11 @@ fn materialize_body(
             let mut sub = crate::compile::material::Substitution::new(
                 &mut own.types,
                 &mut own.interner,
-                parent_params.iter().cloned().zip(parent_values.iter().cloned()).collect(),
+                parent_params
+                    .iter()
+                    .cloned()
+                    .zip(parent_values.iter().cloned())
+                    .collect(),
                 owner.to_string(),
             )
             .with_ledger_owners(&ledger_rows);
@@ -777,16 +824,13 @@ fn materialize_body(
         // generic): never clone an empty body — re-mint the stub with
         // the substituted ledger row and route the request to the
         // foreign owner (the cascade)
-        let row = ledger_row
-            .ok_or_else(|| format!("`{owner}`: bodyless fn #{template_fid} carries no ledger row"))?;
+        let row = ledger_row.ok_or_else(|| {
+            format!("`{owner}`: bodyless fn #{template_fid} carries no ledger row")
+        })?;
         let owner_text = own.interner.name(row.owner).to_string();
         let (is_fn, data_ident, name_ident): (bool, _, _) = match &row.kind {
-            rut_core::binary::InstFnKind::Free { name, .. } => {
-                (true, *name, *name)
-            }
-            rut_core::binary::InstFnKind::Method { data, name, .. } => {
-                (false, *data, *name)
-            }
+            rut_core::binary::InstFnKind::Free { name, .. } => (true, *name, *name),
+            rut_core::binary::InstFnKind::Method { data, name, .. } => (false, *data, *name),
             rut_core::binary::InstFnKind::HostThunk { .. } => {
                 return Err(format!(
                     "`{owner}`: a host thunk (#{template_fid}) rode a template call — doctored"
@@ -799,7 +843,9 @@ fn materialize_body(
         // key — link binds the call to the foreign owner's served body
         let data_text = own.interner.name(data_ident).to_string();
         let name_text = own.interner.name(name_ident).to_string();
-        let stub_name = own.interner.intern(&format!("mirror#{owner_text}${data_text}${name_text}"));
+        let stub_name = own
+            .interner
+            .intern(&format!("mirror#{owner_text}${data_text}${name_text}"));
         let new_fid = own.funcs.len() as u32;
         own.funcs.push(rut_core::binary::FuncCode {
             name: stub_name,
@@ -904,7 +950,8 @@ fn materialize_body(
             &mut own.vtables,
             &source,
         )?;
-        let mut body = crate::compile::material::materialize_fn(&mut sub, &source, &mut |f| f, &iface_remaps);
+        let mut body =
+            crate::compile::material::materialize_fn(&mut sub, &source, &mut |f| f, &iface_remaps);
         // the CONST half of the template-stability law: an op may pin a
         // TYPE ID as a literal (`opaque::downcast<V>`'s want — the
         // emitter bakes `Const(TypeId(#V))`). Every type OPERAND
@@ -916,7 +963,9 @@ fn materialize_body(
         {
             let mut seen: HashMap<u32, u32> = HashMap::new();
             for op in body.code.iter_mut() {
-                let rut_core::ops::Op::Const { k, .. } = op else { continue };
+                let rut_core::ops::Op::Const { k, .. } = op else {
+                    continue;
+                };
                 if let Some(&to) = seen.get(k) {
                     *k = to;
                     continue;
@@ -927,11 +976,9 @@ fn materialize_body(
                         if nt == *t {
                             *k
                         } else {
-                            match own
-                                .consts
-                                .iter()
-                                .position(|c| matches!(c, rut_core::binary::ConstVal::TypeId(x) if *x == nt))
-                            {
+                            match own.consts.iter().position(
+                                |c| matches!(c, rut_core::binary::ConstVal::TypeId(x) if *x == nt),
+                            ) {
                                 Some(p) => p as u32,
                                 None => {
                                     own.consts.push(rut_core::binary::ConstVal::TypeId(nt));
@@ -1008,12 +1055,13 @@ fn materialize_body(
         (body, minted, iface_fills)
     };
     // fix the callee operands against the substituted world
-    let member_stubs: HashMap<u32, (rut_core::types::TypeId, rut_core::sym::IdentId)> = stubs
-        .iter()
-        .map(|s| (s.fid, (s.param, s.member)))
-        .collect();
+    let member_stubs: HashMap<u32, (rut_core::types::TypeId, rut_core::sym::IdentId)> =
+        stubs.iter().map(|s| (s.fid, (s.param, s.member))).collect();
     for op in body.code.iter_mut() {
-        let needs_fix = matches!(op, Op::Call { .. } | Op::CallM { .. } | Op::MakeClosure { .. });
+        let needs_fix = matches!(
+            op,
+            Op::Call { .. } | Op::CallM { .. } | Op::MakeClosure { .. }
+        );
         if !needs_fix {
             continue;
         }
@@ -1041,7 +1089,17 @@ fn materialize_body(
             // bases, exactly as a directory-compiled instantiation's
             // would, so it passes through untouched)
             materialize_body(
-                own, home, stubs, first_fid, f, &params, &values, owner, memo, requests, depth + 1,
+                own,
+                home,
+                stubs,
+                first_fid,
+                f,
+                &params,
+                &values,
+                owner,
+                memo,
+                requests,
+                depth + 1,
             )?
         } else {
             f
@@ -1089,8 +1147,18 @@ fn materialize_body(
                 continue; // a pack-time fill or an earlier demand — idempotent
             }
             let fid = resolve_member_stub(
-                own, home, stubs, first_fid, payload_row, mname, owner, &params, &values, memo,
-                requests, depth,
+                own,
+                home,
+                stubs,
+                first_fid,
+                payload_row,
+                mname,
+                owner,
+                &params,
+                &values,
+                memo,
+                requests,
+                depth,
             )?;
             if payload >= own.vtables.len() {
                 own.vtables.resize_with(payload + 1, Vec::new);
@@ -1187,14 +1255,17 @@ fn resolve_member_stub(
         let args_text = args_text.strip_suffix('>').unwrap_or(args_text);
         let arg_rows: Vec<rut_core::types::TypeId> = split_top_commas(args_text)
             .iter()
-            .filter_map(|t| own.interner.lookup(t).and_then(|id| own.types.dense_id_of_name(id)))
+            .filter_map(|t| {
+                own.interner
+                    .lookup(t)
+                    .and_then(|id| own.types.dense_id_of_name(id))
+            })
             .collect();
         let trow = own.templates.iter().find(|t| {
             t.param_rows.len() == arg_rows.len()
                 && match &t.kind {
                     rut_core::binary::TemplateKind::Method { data, name } => {
-                        own.interner.name(*data) == base
-                            && own.interner.name(*name) == member_text
+                        own.interner.name(*data) == base && own.interner.name(*name) == member_text
                     }
                     rut_core::binary::TemplateKind::Free { name } => {
                         own.interner.name(*name) == base
@@ -1204,7 +1275,17 @@ fn resolve_member_stub(
         if let Some(trow) = trow {
             let (f, p) = (trow.fid, trow.param_rows.clone());
             return materialize_body(
-                own, home, stubs, first_fid, f, &p, &arg_rows, owner, memo, requests, depth + 1,
+                own,
+                home,
+                stubs,
+                first_fid,
+                f,
+                &p,
+                &arg_rows,
+                owner,
+                memo,
+                requests,
+                depth + 1,
             );
         }
     }
@@ -1231,9 +1312,10 @@ fn resolve_member_stub(
                 .interner
                 .lookup(&concrete_text)
                 .unwrap_or_else(|| own.interner.intern(&concrete_text));
-            let stub_name = own
-                .interner
-                .intern(&format!("mirror#{}${}${}", home_name, concrete_text, member_text));
+            let stub_name = own.interner.intern(&format!(
+                "mirror#{}${}${}",
+                home_name, concrete_text, member_text
+            ));
             let fid = own.funcs.len() as u32;
             own.funcs.push(rut_core::binary::FuncCode {
                 name: stub_name,
@@ -1273,7 +1355,11 @@ fn resolve_member_stub(
 /// the requester's scope move into the fresh staging scope's coordinate
 /// system. Structural recursion over the type-carrying variants; the
 /// leaves and non-type payloads pass.
-fn remap_kind_scope(kind: &mut rut_core::types::TyKind, from: rut_core::id::ScopeId, to: rut_core::id::ScopeId) {
+fn remap_kind_scope(
+    kind: &mut rut_core::types::TyKind,
+    from: rut_core::id::ScopeId,
+    to: rut_core::id::ScopeId,
+) {
     if from == to {
         return;
     }

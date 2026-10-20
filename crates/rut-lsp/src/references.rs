@@ -63,8 +63,12 @@ struct Target<'a> {
 /// `textDocument/references` — every position whose definition is the
 /// declaration under `pos`. Sorted by uri then position; deduplicated.
 pub fn references(ctx: &definition::Ctx, pos: u32, include_decl: bool) -> Vec<DefLocation> {
-    let Some(t) = lookup::tok_at(ctx.toks, pos) else { return Vec::new() };
-    let Tok::Ident(name) = &t.tok else { return Vec::new() };
+    let Some(t) = lookup::tok_at(ctx.toks, pos) else {
+        return Vec::new();
+    };
+    let Tok::Ident(name) = &t.tok else {
+        return Vec::new();
+    };
     if crate::semantic::is_keyword(name) {
         return Vec::new();
     }
@@ -130,13 +134,20 @@ pub fn references(ctx: &definition::Ctx, pos: u32, include_decl: bool) -> Vec<De
         }
     }
     out.sort_by(|a, b| {
-        (&a.uri, a.range.start.line, a.range.start.character, a.range.end.line, a.range.end.character).cmp(&(
-            &b.uri,
-            b.range.start.line,
-            b.range.start.character,
-            b.range.end.line,
-            b.range.end.character,
-        ))
+        (
+            &a.uri,
+            a.range.start.line,
+            a.range.start.character,
+            a.range.end.line,
+            a.range.end.character,
+        )
+            .cmp(&(
+                &b.uri,
+                b.range.start.line,
+                b.range.start.character,
+                b.range.end.line,
+                b.range.end.character,
+            ))
     });
     out
 }
@@ -169,25 +180,49 @@ fn targets<'a>(ctx: &definition::Ctx<'a>, pos: u32, name: &str) -> Vec<Target<'a
             .iter()
             .filter(|b| b.name == name && b.decl_ident_span == q)
         {
-            return vec![Target { idx: doc, span: b.decl_ident_span, kind: Kind::Local }];
+            return vec![Target {
+                idx: doc,
+                span: b.decl_ident_span,
+                kind: Kind::Local,
+            }];
         }
-        for _l in doc.lets.iter().filter(|l| l.name == name && l.name_span == Some(q)) {
-            return vec![Target { idx: doc, span: q, kind: Kind::ModuleLet }];
+        for _l in doc
+            .lets
+            .iter()
+            .filter(|l| l.name == name && l.name_span == Some(q))
+        {
+            return vec![Target {
+                idx: doc,
+                span: q,
+                kind: Kind::ModuleLet,
+            }];
         }
         for ty in doc.types.iter().filter(|t| t.name == name) {
             if definition::ty_span(ty) == q {
-                return vec![Target { idx: doc, span: q, kind: Kind::Type }];
+                return vec![Target {
+                    idx: doc,
+                    span: q,
+                    kind: Kind::Type,
+                }];
             }
         }
         for f in doc.fns.iter().filter(|f| f.name == name) {
             if definition::fn_span(f) == q {
-                return vec![Target { idx: doc, span: q, kind: Kind::Fn }];
+                return vec![Target {
+                    idx: doc,
+                    span: q,
+                    kind: Kind::Fn,
+                }];
             }
         }
         for ty in &doc.types {
             for m in ty.fields.iter().chain(ty.methods.iter()) {
                 if m.name == name && m.name_span == Some(q) {
-                    return vec![Target { idx: doc, span: q, kind: Kind::Member }];
+                    return vec![Target {
+                        idx: doc,
+                        span: q,
+                        kind: Kind::Member,
+                    }];
                 }
             }
         }
@@ -205,35 +240,60 @@ fn targets<'a>(ctx: &definition::Ctx<'a>, pos: u32, name: &str) -> Vec<Target<'a
             let binds = bindings::collect(ctx.ast, ctx.toks, ctx.idxs);
             for b in binds.iter().filter(|b| b.name == name) {
                 if hits.contains(&definition::loc_at(ctx.doc_uri, idx, b.decl_ident_span)) {
-                    out.push(Target { idx, span: b.decl_ident_span, kind: Kind::Local });
+                    out.push(Target {
+                        idx,
+                        span: b.decl_ident_span,
+                        kind: Kind::Local,
+                    });
                 }
             }
         }
         for l in idx.lets.iter().filter(|l| l.name == name) {
             let sp = l.name_span.unwrap_or(l.span);
             if hits.contains(&definition::loc_at(ctx.doc_uri, idx, sp)) {
-                out.push(Target { idx, span: sp, kind: Kind::ModuleLet });
+                out.push(Target {
+                    idx,
+                    span: sp,
+                    kind: Kind::ModuleLet,
+                });
             }
         }
         for ty in idx.types.iter().filter(|t| t.name == name) {
             let sp = definition::ty_span(ty);
             if hits.contains(&definition::loc_at(ctx.doc_uri, idx, sp)) {
-                out.push(Target { idx, span: sp, kind: Kind::Type });
+                out.push(Target {
+                    idx,
+                    span: sp,
+                    kind: Kind::Type,
+                });
             }
         }
         for f in idx.fns.iter().filter(|f| f.name == name) {
             let sp = definition::fn_span(f);
             if hits.contains(&definition::loc_at(ctx.doc_uri, idx, sp)) {
-                out.push(Target { idx, span: sp, kind: Kind::Fn });
+                out.push(Target {
+                    idx,
+                    span: sp,
+                    kind: Kind::Fn,
+                });
             }
         }
         // fields + enum members + own-surface methods — every recorded
         // member name span of every type
         for ty in &idx.types {
-            for m in ty.fields.iter().chain(ty.methods.iter()).filter(|m| m.name == name) {
+            for m in ty
+                .fields
+                .iter()
+                .chain(ty.methods.iter())
+                .filter(|m| m.name == name)
+            {
                 if let Some(sp) = m.name_span {
                     if hits.contains(&definition::loc_at(ctx.doc_uri, idx, sp)) {
-                        out.push(Target { idx, span: sp, kind: Kind::Member });
+                        out.push(Target {
+                            idx,
+                            span: sp,
+                            kind: Kind::Member,
+                        });
                     }
                 }
             }
@@ -256,7 +316,12 @@ struct Parsed {
 /// decl layers' recorded name spans, plus the file's binding decl
 /// idents, are therefore excluded from the scan (a use-statement name
 /// span stays eligible — importing IS a reference).
-fn decl_ident_spans(idx: &DefIndex, toks: &[Token], ast: &Ast, chain: &[&DefIndex]) -> HashSet<(u32, u32)> {
+fn decl_ident_spans(
+    idx: &DefIndex,
+    toks: &[Token],
+    ast: &Ast,
+    chain: &[&DefIndex],
+) -> HashSet<(u32, u32)> {
     let mut out: HashSet<(u32, u32)> = HashSet::new();
     let put = |out: &mut HashSet<(u32, u32)>, sp: Option<Span>| {
         if let Some(sp) = sp {
@@ -273,7 +338,10 @@ fn decl_ident_spans(idx: &DefIndex, toks: &[Token], ast: &Ast, chain: &[&DefInde
         }
     }
     for f in &idx.fns {
-        out.insert((f.name_span.unwrap_or(f.span).lo, f.name_span.unwrap_or(f.span).hi));
+        out.insert((
+            f.name_span.unwrap_or(f.span).lo,
+            f.name_span.unwrap_or(f.span).hi,
+        ));
     }
     for b in bindings::collect(ast, toks, chain) {
         out.insert((b.decl_ident_span.lo, b.decl_ident_span.hi));
@@ -308,11 +376,12 @@ fn scan_files(
         chain.extend(ctx.idxs.iter().copied().filter(|x| x.origin != f.origin));
         // the doc reuses the query pipeline's tokens/AST; the other
         // files ride their per-file parse
-        let (toks, ast): (&[Token], &rut_ast::ast::Ast) = match parsed.iter().find(|(i, _)| std::ptr::eq(*i, *f)) {
-            Some(p) => (&p.1.toks, &p.1.ast),
-            None if is_doc => (ctx.toks, ctx.ast),
-            None => unreachable!("every non-doc candidate was parsed above"),
-        };
+        let (toks, ast): (&[Token], &rut_ast::ast::Ast) =
+            match parsed.iter().find(|(i, _)| std::ptr::eq(*i, *f)) {
+                Some(p) => (&p.1.toks, &p.1.ast),
+                None if is_doc => (ctx.toks, ctx.ast),
+                None => unreachable!("every non-doc candidate was parsed above"),
+            };
         // the asking doc's own-package context rides only for its own
         // tokens (the two queries cannot disagree about the doc's
         // idents); another file's context is unknown — the default
@@ -377,7 +446,12 @@ mod tests {
         let (ast, _) = parse(&src, Mode::Impl);
         let mut index = crate::hover::index(&src, &ast, &toks);
         index.origin = uri.to_string();
-        Doc { src, toks, ast, index }
+        Doc {
+            src,
+            toks,
+            ast,
+            index,
+        }
     }
 
     fn doc(src: &str) -> Doc {
@@ -409,7 +483,13 @@ mod tests {
     fn refs(d: &Doc, pos: u32, extra: &[DefIndex], include_decl: bool) -> Vec<DefLocation> {
         let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
         let dm = crate::mods::DocMods::default();
-        let ctx = definition::Ctx { doc_uri: DOC, toks: &d.toks, ast: &d.ast, idxs: &idxs, doc_mods: &dm };
+        let ctx = definition::Ctx {
+            doc_uri: DOC,
+            toks: &d.toks,
+            ast: &d.ast,
+            idxs: &idxs,
+            doc_mods: &dm,
+        };
         references(&ctx, pos, include_decl)
     }
 
@@ -451,7 +531,12 @@ mod tests {
             &[],
         );
         // the INNER v: exactly its own return — the outer's uses don't leak in
-        assert_refs(&d, at(&d.src, "v = 2;", 1), &[at(&d.src, "return v;", 1) + 7], &[]);
+        assert_refs(
+            &d,
+            at(&d.src, "v = 2;", 1),
+            &[at(&d.src, "return v;", 1) + 7],
+            &[],
+        );
         // a use site resolves to its own binding (the same set as its decl)
         assert_refs(
             &d,
@@ -521,7 +606,12 @@ mod tests {
         ]
         .join("\n");
         let d = doc(&src);
-        assert_refs(&d, at(&d.src, "w = 1;", 1), &[at(&d.src, "return w;", 1) + 7], &[]);
+        assert_refs(
+            &d,
+            at(&d.src, "w = 1;", 1),
+            &[at(&d.src, "return w;", 1) + 7],
+            &[],
+        );
     }
 
     // ---- the decl layer, reversed ----
@@ -643,7 +733,10 @@ mod tests {
         assert_refs(
             &d,
             at(&d.src, "r: f64;", 1),
-            &[at(&d.src, "c.r = k;", 1) + 2, at(&d.src, "return c.r;", 1) + 9],
+            &[
+                at(&d.src, "c.r = k;", 1) + 2,
+                at(&d.src, "return c.r;", 1) + 9,
+            ],
             &[],
         );
     }
@@ -667,9 +760,19 @@ mod tests {
         // return belong to the local (and under the landed latest-decl
         // rule, so does an initializer reading: `let TOTAL = TOTAL` is
         // the local's, definition-consistent)
-        assert_refs(&d, at(&d.src, "let TOTAL = 41;", 1) + 4, &[at(&d.src, "return TOTAL + 1;", 1) + 7], &[]);
+        assert_refs(
+            &d,
+            at(&d.src, "let TOTAL = 41;", 1) + 4,
+            &[at(&d.src, "return TOTAL + 1;", 1) + 7],
+            &[],
+        );
         // the LOCAL TOTAL: its own return only
-        assert_refs(&d, at(&d.src, "let TOTAL = 5;", 1) + 8, &[at(&d.src, "return TOTAL;", 1) + 7], &[]);
+        assert_refs(
+            &d,
+            at(&d.src, "let TOTAL = 5;", 1) + 8,
+            &[at(&d.src, "return TOTAL;", 1) + 7],
+            &[],
+        );
     }
 
     // ---- cross-file: the use graph's reverse edges ----
@@ -692,7 +795,9 @@ mod tests {
         let extra = [&lib.index];
         // references on the LIB's type — queried from the importing doc:
         // the use-statement name + the usage site, nothing else
-        let idxs: Vec<&DefIndex> = std::iter::once(&main.index).chain(extra.iter().copied()).collect();
+        let idxs: Vec<&DefIndex> = std::iter::once(&main.index)
+            .chain(extra.iter().copied())
+            .collect();
         let dm = crate::mods::DocMods::default();
         let ctx = definition::Ctx {
             doc_uri: DOC,
@@ -719,7 +824,9 @@ mod tests {
         // query from the LIB's decl ident, doc = the lib: the scan's
         // reverse edge finds the importing doc's two sites — the only
         // two entries, both carrying the DOC's uri
-        let idxs: Vec<&DefIndex> = std::iter::once(&lib.index).chain(extra.iter().copied()).collect();
+        let idxs: Vec<&DefIndex> = std::iter::once(&lib.index)
+            .chain(extra.iter().copied())
+            .collect();
         let dm = crate::mods::DocMods::default();
         let ctx = definition::Ctx {
             doc_uri: WIDGET_URI,
@@ -733,18 +840,26 @@ mod tests {
         assert!(hits.iter().all(|l| l.uri == DOC), "{hits:?}");
         let mut offs = ref_offsets(&norm, DOC, &hits);
         offs.sort();
-        assert_eq!(offs, vec![at(&norm, "Widget }", 1), at(&norm, "Widget::new", 1)]);
+        assert_eq!(
+            offs,
+            vec![at(&norm, "Widget }", 1), at(&norm, "Widget::new", 1)]
+        );
     }
 
     #[test]
     fn an_unrelated_same_named_type_does_not_leak_in() {
         let lib = widget_lib();
-        let foreign = doc_at("file:///ws/other/lib.rut", "class Widget {\n    other: i32;\n}\n");
+        let foreign = doc_at(
+            "file:///ws/other/lib.rut",
+            "class Widget {\n    other: i32;\n}\n",
+        );
         let (main, norm) = widget_user();
         let extra = [&lib.index, &foreign.index];
         // references on the gadgets Widget (via the importing doc's use
         // site): the other pkg's same-named type must contribute nothing
-        let idxs: Vec<&DefIndex> = std::iter::once(&main.index).chain(extra.iter().copied()).collect();
+        let idxs: Vec<&DefIndex> = std::iter::once(&main.index)
+            .chain(extra.iter().copied())
+            .collect();
         let dm = crate::mods::DocMods::default();
         let ctx = definition::Ctx {
             doc_uri: DOC,
@@ -762,8 +877,14 @@ mod tests {
     #[test]
     fn misses_stay_empty() {
         let d = doc("entry fn main() -> nil {\n}\n");
-        assert!(refs(&d, 0, &[], true).is_empty(), "keywords have no references");
+        assert!(
+            refs(&d, 0, &[], true).is_empty(),
+            "keywords have no references"
+        );
         let d2 = doc("entry fn main() -> nil {\n    let x = mystery();\n}\n");
-        assert!(refs(&d2, at(&d2.src, "mystery", 1), &[], true).is_empty(), "unknown names too");
+        assert!(
+            refs(&d2, at(&d2.src, "mystery", 1), &[], true).is_empty(),
+            "unknown names too"
+        );
     }
 }

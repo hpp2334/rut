@@ -1,13 +1,16 @@
 //! Builtin receivers: `bytes(n)` allocation, the `?T` erasure-box recovery, and static calls to named builtins.
 
 use crate::check::{DataDecl, TcResult};
-use rut_core::sym;
 use crate::lir::*;
+use rut_core::sym;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     /// `bytes(n)` — a zeroed immutable buffer of `n` octets.
-    pub(crate) fn compile_bytes_alloc(&mut self, args: Vec<NodeHandle<AnyExpr>>, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn compile_bytes_alloc(
+        &mut self,
+        args: Vec<NodeHandle<AnyExpr>>,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
         let len_reg = match args.len() {
             0 => {
                 let z = self.new_reg(TY_I32);
@@ -17,7 +20,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             1 => {
                 let t = self.compile_expr(args[0], Some(TY_I32))?;
                 if t != TY_I32 {
-                    self.ctx.err(sp, format!("bytes(n) takes an `i32` length, found `{}`", self.ctx.type_name(t)));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "bytes(n) takes an `i32` length, found `{}`",
+                            self.ctx.type_name(t)
+                        ),
+                    );
                 }
                 self.last_reg
             }
@@ -27,7 +36,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         };
         let dst = self.new_reg(TY_BYTES);
-        self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
+        self.emit(
+            Op::ArrNew {
+                dst,
+                ty: TY_BYTES,
+                len: len_reg,
+                repr: self.ctx.types.repr_of(TY_U8),
+            },
+            sp.lo,
+        );
         Ok(TY_BYTES)
     }
 
@@ -41,15 +58,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// bits were copied at `opaque(v)` construction, so the handoff is
     /// value semantics for free), a mismatch is the null slot (nil).
     /// The `?T` auto-deref (`GetF` field 0) reads through the box.
-    pub(crate) fn emit_opaque_downcast(&mut self, want: TypeId, orecv: u16, sp: rut_lexer::span::Span) -> TcResult<TypeId> {
+    pub(crate) fn emit_opaque_downcast(
+        &mut self,
+        want: TypeId,
+        orecv: u16,
+        sp: rut_lexer::span::Span,
+    ) -> TcResult<TypeId> {
         // refval-round2: downcast yields `?T` — nil on a mismatch (RFC
         // 0014 amended); the zero-value-on-false `(T, bool)` is gone
         let nty = self.ctx.mk_opt(want);
         let tid_reg = self.new_reg(TY_U32);
-        self.emit(Op::TidOf { dst: tid_reg, obj: orecv }, sp.lo);
+        self.emit(
+            Op::TidOf {
+                dst: tid_reg,
+                obj: orecv,
+            },
+            sp.lo,
+        );
         let want_reg = self.new_reg(TY_U32);
         let wk = self.konst(ConstVal::TypeId(want));
-        self.emit(Op::Const { dst: want_reg, k: wk as u32 }, sp.lo);
+        self.emit(
+            Op::Const {
+                dst: want_reg,
+                k: wk as u32,
+            },
+            sp.lo,
+        );
         let eq = self.new_reg(TY_BOOL);
         self.emit(cmpop(CmpOp::Eq, PrimTy::U32, eq, tid_reg, want_reg), sp.lo);
         let dst = self.new_reg(nty);
@@ -69,7 +103,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.bind(l_end);
         Ok(nty)
     }
-
 
     pub(crate) fn compile_static_call(
         &mut self,
@@ -95,10 +128,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             || self.ctx.extern_type(base).is_some()
             || self.ctx.extern_generics.contains_key(&base);
         if !base_generics.is_empty() && !is_data {
-            self.ctx.err(sp, format!(
-                "generic type paths (`{}<..>::{}`) are not supported in this build",
-                self.ctx.name(base), self.ctx.name(member)
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "generic type paths (`{}<..>::{}`) are not supported in this build",
+                    self.ctx.name(base),
+                    self.ctx.name(member)
+                ),
+            );
             return Err(());
         }
         // a used namespace's members (`Math.sqrt`) —
@@ -119,13 +156,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 match self.ctx.types.kind(at) {
                     TyKind::Array { elem } if *elem == TY_U8 => {}
                     _ => {
-                        self.ctx.err(sp, format!("bytes.from expects `Array<u8>` —found `{}`", self.ctx.type_name(at)));
+                        self.ctx.err(
+                            sp,
+                            format!(
+                                "bytes.from expects `Array<u8>` —found `{}`",
+                                self.ctx.type_name(at)
+                            ),
+                        );
                         return Err(());
                     }
                 }
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::Own { dst, src, ty: TY_BYTES }, sp.lo);
+                self.emit(
+                    Op::Own {
+                        dst,
+                        src,
+                        ty: TY_BYTES,
+                    },
+                    sp.lo,
+                );
                 return Ok(TY_BYTES);
             }
             (sym::BYTES, sym::ZEROED) => {
@@ -140,26 +190,50 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let len_reg = self.last_reg;
                 let dst = self.new_reg(TY_BYTES);
-                self.emit(Op::ArrNew { dst, ty: TY_BYTES, len: len_reg, repr: self.ctx.types.repr_of(TY_U8) }, sp.lo);
+                self.emit(
+                    Op::ArrNew {
+                        dst,
+                        ty: TY_BYTES,
+                        len: len_reg,
+                        repr: self.ctx.types.repr_of(TY_U8),
+                    },
+                    sp.lo,
+                );
                 return Ok(TY_BYTES);
             }
             (sym::STR, sym::FROM_CODE) => {
                 // str.from_code(n) -> str — the 1-codepoint str for the
                 // codepoint `n` (`char` is gone)
                 if args.len() != 1 {
-                    self.ctx.err(sp, "str.from_code(n) takes one `u32` codepoint");
+                    self.ctx
+                        .err(sp, "str.from_code(n) takes one `u32` codepoint");
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], Some(TY_U32))?;
                 if t != TY_U32 {
-                    self.ctx.err(self.ctx.ast.span(args[0].id()), format!(
-                        "str.from_code takes a `u32`, found `{}`",
-                        self.ctx.type_name(t)
-                    ));
+                    self.ctx.err(
+                        self.ctx.ast.span(args[0].id()),
+                        format!(
+                            "str.from_code takes a `u32`, found `{}`",
+                            self.ctx.type_name(t)
+                        ),
+                    );
                 }
                 let cp = self.last_reg;
                 let dst = self.new_reg(TY_STR);
-                { let (argv_off, argc) = self.pool_args(&(vec![cp])); self.emit(Op::CallNat { nat: Nat::StrFromCode, recv: NOREG, argv_off, argc, dst: dst }, sp.lo); }
+                {
+                    let (argv_off, argc) = self.pool_args(&(vec![cp]));
+                    self.emit(
+                        Op::CallNat {
+                            nat: Nat::StrFromCode,
+                            recv: NOREG,
+                            argv_off,
+                            argc,
+                            dst: dst,
+                        },
+                        sp.lo,
+                    );
+                }
                 return Ok(TY_STR);
             }
             (sym::WEAK, sym::NEW) if self.ctx.used.contains(&sym::WEAK) => {
@@ -174,21 +248,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // `is_ref` gate). The op consumes the argument's
                 // temporary (the one consuming op).
                 if args.len() != 1 {
-                    self.ctx.err(sp, "Weak::new(v) takes exactly one argument — the value to weak-reference");
+                    self.ctx.err(
+                        sp,
+                        "Weak::new(v) takes exactly one argument — the value to weak-reference",
+                    );
                     return Err(());
                 }
                 let elem = self.compile_expr(args[0], None)?;
                 if !self.ctx.types.is_ref(elem) {
-                    self.ctx.err(sp, format!(
-                        "weak needs a reference type — `{}` moves by value",
-                        self.ctx.type_name(elem)
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "weak needs a reference type — `{}` moves by value",
+                            self.ctx.type_name(elem)
+                        ),
+                    );
                     return Err(());
                 }
                 let weak_ty = self.ctx.mk_weak(elem);
                 let src = self.last_reg;
                 let dst = self.new_reg(weak_ty);
-                self.emit(Op::WeakNew { dst, src, ty: weak_ty }, sp.lo);
+                self.emit(
+                    Op::WeakNew {
+                        dst,
+                        src,
+                        ty: weak_ty,
+                    },
+                    sp.lo,
+                );
                 return Ok(weak_ty);
             }
             _ => {}
@@ -201,7 +288,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             match member {
                 sym::DOWNCAST => {
                     if args.len() != 1 || member_generics.len() != 1 {
-                        self.ctx.err(sp, "opaque.downcast<T>(o) takes one explicit type argument and one value");
+                        self.ctx.err(
+                            sp,
+                            "opaque.downcast<T>(o) takes one explicit type argument and one value",
+                        );
                         return Err(());
                     }
                     let want = self.resolve_type_now(member_generics[0]);
@@ -250,7 +340,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if self.ctx.name(member) == "to_int" {
             if let Some(e) = self.ctx.find_enum(base).cloned() {
                 let _ = e;
-                self.ctx.err(sp, "enum to_int/from_int are not supported in this build");
+                self.ctx
+                    .err(sp, "enum to_int/from_int are not supported in this build");
                 return Err(());
             }
         }
@@ -258,7 +349,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // class BY NAME first, then its member: searching for the first
         // class with a same-named method would shadow every later class
         // (two `new`s in one module made the second uncallable)
-        if let Some((dname, d)) = self.ctx.datas.iter().find(|(n, _)| *n == base).map(|(n, d)| (*n, d.clone())) {
+        if let Some((dname, d)) = self
+            .ctx
+            .datas
+            .iter()
+            .find(|(n, _)| *n == base)
+            .map(|(n, d)| (*n, d.clone()))
+        {
             if let Some((_, fmnode)) = d.methods.iter().find(|(m, _)| *m == member).cloned() {
                 // the member-visibility law: a static takes the `pub`
                 // dial like any member — the `[constructor]` sugar
@@ -276,54 +373,61 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // is repealed), so the explicit-arguments arm instanti-
                 // ates it directly and the inference arm follows the
                 // expected type's own instantiation.
-                let mint: (IdentId, DataDecl, NodeHandle<MethodDeclNode>, Vec<TypeId>) = if !base_generics.is_empty() {
-                    let args: Vec<TypeId> = base_generics.iter().map(|g| self.resolve_type_now(*g)).collect();
-                    (dname, d.clone(), fmnode, args)
-                } else if !d.generics.is_empty() {
-                    // infer from the expected type first: a method whose
-                    // return elem DIFFERS from the class's (`enumerate ->
-                    // Flow<(i32, E)>` on a `Flow<i32>` receiver)
-                    // constructs at the RETURN's arguments — the
-                    // enclosing method's class args would mint the wrong
-                    // instantiation. `Self`-shaped returns carry the
-                    // same args, so the ordinary `Flow.new` shape mints
-                    // identically; the `Self`-ish arm stays as the
-                    // fallback (`new` with no expected in sight).
-                    match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
-                        Some((ed, eargs)) if ed == dname => (dname, d.clone(), fmnode, eargs),
-                        _ if self.current_class == Some(dname) => {
-                            let args: Vec<TypeId> = d
-                                .generics
-                                .iter()
-                                .map(|g| {
-                                    self.subst
-                                        .iter()
-                                        .find(|(n, _)| n == g)
-                                        .map(|(_, t)| *t)
-                                        .unwrap_or(TY_I32)
-                                })
-                                .collect();
-                            (dname, d.clone(), fmnode, args)
-                        }
-                        _ => {
-                            self.ctx.err(sp, format!(
+                let mint: (IdentId, DataDecl, NodeHandle<MethodDeclNode>, Vec<TypeId>) =
+                    if !base_generics.is_empty() {
+                        let args: Vec<TypeId> = base_generics
+                            .iter()
+                            .map(|g| self.resolve_type_now(*g))
+                            .collect();
+                        (dname, d.clone(), fmnode, args)
+                    } else if !d.generics.is_empty() {
+                        // infer from the expected type first: a method whose
+                        // return elem DIFFERS from the class's (`enumerate ->
+                        // Flow<(i32, E)>` on a `Flow<i32>` receiver)
+                        // constructs at the RETURN's arguments — the
+                        // enclosing method's class args would mint the wrong
+                        // instantiation. `Self`-shaped returns carry the
+                        // same args, so the ordinary `Flow.new` shape mints
+                        // identically; the `Self`-ish arm stays as the
+                        // fallback (`new` with no expected in sight).
+                        match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
+                            Some((ed, eargs)) if ed == dname => (dname, d.clone(), fmnode, eargs),
+                            _ if self.current_class == Some(dname) => {
+                                let args: Vec<TypeId> = d
+                                    .generics
+                                    .iter()
+                                    .map(|g| {
+                                        self.subst
+                                            .iter()
+                                            .find(|(n, _)| n == g)
+                                            .map(|(_, t)| *t)
+                                            .unwrap_or(TY_I32)
+                                    })
+                                    .collect();
+                                (dname, d.clone(), fmnode, args)
+                            }
+                            _ => {
+                                self.ctx.err(sp, format!(
                                 "cannot infer the type arguments for `{b}` — annotate the binding (`let c: {b}<T> = {b}::{m}(..)`)",
                                 b = self.ctx.name(base), m = self.ctx.name(member)
                             ));
-                            return Err(());
+                                return Err(());
+                            }
                         }
-                    }
-                } else {
-                    (dname, d.clone(), fmnode, vec![])
-                };
+                    } else {
+                        (dname, d.clone(), fmnode, vec![])
+                    };
                 let (dname, d, mnode, class_args) = mint;
                 if !d.generics.is_empty() && class_args.len() != d.generics.len() {
-                    self.ctx.err(sp, format!(
-                        "`{}`<..> takes {} type argument(s), {} given",
-                        self.ctx.name(dname),
-                        d.generics.len(),
-                        class_args.len()
-                    ));
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}`<..> takes {} type argument(s), {} given",
+                            self.ctx.name(dname),
+                            d.generics.len(),
+                            class_args.len()
+                        ),
+                    );
                     return Err(());
                 }
                 let self_ty = if d.generics.is_empty() {
@@ -339,7 +443,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if !d.methods.iter().any(|(m, _)| *m == member) {
                 let concrete = if !d.generics.is_empty() {
                     let cargs = if !base_generics.is_empty() {
-                        base_generics.iter().map(|g| self.resolve_type_now(*g)).collect()
+                        base_generics
+                            .iter()
+                            .map(|g| self.resolve_type_now(*g))
+                            .collect()
                     } else {
                         match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
                             Some((ed, eargs)) if ed == dname => eargs,
@@ -366,10 +473,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // owner's unit compiles. (Generic classes ride `extern_types`
         // too — the template row — so the generic arm answers first.)
         if let Some(g) = self.ctx.extern_generics.get(&base).cloned() {
-            if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == g.template) {
-                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|m| !m.has_self && m.name == member) {
+            if let Some(ih) = self
+                .ctx
+                .extern_inherents
+                .iter()
+                .position(|x| x.target == g.template)
+            {
+                if let Some(midx) = self.ctx.extern_inherents[ih]
+                    .methods
+                    .iter()
+                    .position(|m| !m.has_self && m.name == member)
+                {
                     let class_args = if !base_generics.is_empty() {
-                        base_generics.iter().map(|gn| self.resolve_type_now(*gn)).collect()
+                        base_generics
+                            .iter()
+                            .map(|gn| self.resolve_type_now(*gn))
+                            .collect()
                     } else {
                         // infer from the expected type's instantiation
                         match expected.and_then(|e| self.ctx.inst_data.get(&e).cloned()) {
@@ -384,14 +503,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                     };
                     let self_ty = self.ctx.mk_data_inst(base, class_args.clone(), sp);
-                    return self.compile_extern_class_method_call(ih, midx, Some(base), class_args, Some(self_ty), args, sp);
+                    return self.compile_extern_class_method_call(
+                        ih,
+                        midx,
+                        Some(base),
+                        class_args,
+                        Some(self_ty),
+                        args,
+                        sp,
+                    );
                 }
             }
         }
         if let Some(t) = self.ctx.extern_type(base) {
             if let Some(ih) = self.ctx.extern_inherents.iter().position(|x| x.target == t) {
-                if let Some(midx) = self.ctx.extern_inherents[ih].methods.iter().position(|m| !m.has_self && m.name == member) {
-                    return self.compile_extern_class_method_call(ih, midx, None, vec![], None, args, sp);
+                if let Some(midx) = self.ctx.extern_inherents[ih]
+                    .methods
+                    .iter()
+                    .position(|m| !m.has_self && m.name == member)
+                {
+                    return self.compile_extern_class_method_call(
+                        ih,
+                        midx,
+                        None,
+                        vec![],
+                        None,
+                        args,
+                        sp,
+                    );
                 }
             }
         }
@@ -410,12 +549,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return self.compile_direct_method(base, vec![], e.ty, mnode, args, sp);
             }
         }
-        let msg = self
-            .ctx
-            .not_in_core_scope(base)
-            .unwrap_or_else(|| format!("unknown name `{}::{}`", self.ctx.name(base), self.ctx.name(member)));
+        let msg = self.ctx.not_in_core_scope(base).unwrap_or_else(|| {
+            format!(
+                "unknown name `{}::{}`",
+                self.ctx.name(base),
+                self.ctx.name(member)
+            )
+        });
         self.ctx.err(sp, msg);
         Err(())
     }
-
 }

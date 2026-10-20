@@ -31,7 +31,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_std::http::{ FixtureReply, HttpFixture };
+use rut_std::http::{FixtureReply, HttpFixture};
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
@@ -103,16 +103,24 @@ fn world_pkgs() -> Vec<rut_driver::Mounted> {
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
     let mut pkgs = Vec::new();
     for d in ["pouch", "nmapset", "json", "http_host", "http"] {
-        pkgs.extend(rut_native::dir_pkgs(&tree.join(d)).expect("mount tree pkg").pkgs);
+        pkgs.extend(
+            rut_native::dir_pkgs(&tree.join(d))
+                .expect("mount tree pkg")
+                .pkgs,
+        );
     }
     pkgs.extend(
         rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("rgh_host"))
             .expect("mount rgh_host")
             .pkgs,
     );
-    pkgs.extend(rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
+    pkgs.extend(
+        rut_native::dir_pkgs(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+        )
         .expect("the async pair walks")
-        .pkgs);
+        .pkgs,
+    );
     pkgs
 }
 
@@ -152,7 +160,13 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     compiled
 }
@@ -165,14 +179,15 @@ fn world_expected() -> rut_vm::interp::ExpectedHostFns {
     rut_driver::declared_host_fns(&world)
 }
 
-
 /// Boot the brain over the fixture lane. Mounts what the embedder
 /// mounts (std + the brain's libs + the example's own host pkg), runs
 /// the peer gate, compiles `mod.rut` (the brain) in Impl mode, verifies, binds
 /// math + nmap + the async engine + the fixture HTTP lane + the
 /// rgh_host rows over the sinks (exit RECORDS — the one-way door is
 /// the embedder's), and checks the decl ↔ bodies contract pre-boot
-fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static) -> (Vm, Sinks, HttpFixture) {
+fn boot(
+    fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 'static,
+) -> (Vm, Sinks, HttpFixture) {
     // the brain compiles over the walked world (every pkg riding its
     // manifest; calc is the embedder's host-install base offer, the
     // core prelude auto-rides) with the body installs riding the chain
@@ -203,52 +218,52 @@ fn boot(fix: impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> + 
     let hosts = &mut compiled.hosts;
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
-        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
-            out_sink.borrow_mut().push(line.to_string());
-            Ok(())
-        });
+    move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+        out_sink.borrow_mut().push(line.to_string());
+        Ok(())
+    });
     let err_sink = sinks.err.clone();
     rut_vm::register!(hosts, "rgh_host::eprint", (&str,) -> (),
-        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
-            err_sink.borrow_mut().push(line.to_string());
-            Ok(())
-        });
+    move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+        err_sink.borrow_mut().push(line.to_string());
+        Ok(())
+    });
     let files_sink = sinks.files.clone();
     let fail_sink = sinks.fail_write.clone();
     rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
-        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            let fail = fail_sink.borrow();
-            if let Some((path, text)) = fail.as_ref() {
-                if path == dest {
-                    return Ok(Some(text.clone()));
-                }
+    move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        let fail = fail_sink.borrow();
+        if let Some((path, text)) = fail.as_ref() {
+            if path == dest {
+                return Ok(Some(text.clone()));
             }
-            drop(fail);
-            files_sink.borrow_mut().push(('W', dest.to_string(), data));
-            Ok(None)
-        });
+        }
+        drop(fail);
+        files_sink.borrow_mut().push(('W', dest.to_string(), data));
+        Ok(None)
+    });
     let files_sink = sinks.files.clone();
     let fail_sink = sinks.fail_write.clone();
     rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
-        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            let fail = fail_sink.borrow();
-            if let Some((path, text)) = fail.as_ref() {
-                if path == dest {
-                    return Ok(Some(text.clone()));
-                }
+    move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        let fail = fail_sink.borrow();
+        if let Some((path, text)) = fail.as_ref() {
+            if path == dest {
+                return Ok(Some(text.clone()));
             }
-            drop(fail);
-            files_sink.borrow_mut().push(('A', dest.to_string(), data));
-            Ok(None)
-        });
+        }
+        drop(fail);
+        files_sink.borrow_mut().push(('A', dest.to_string(), data));
+        Ok(None)
+    });
     let code_sink = sinks.code.clone();
     let exited_sink = sinks.exited.clone();
     rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
-        move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
-            *code_sink.borrow_mut() = Some(code);
-            *exited_sink.borrow_mut() = true;
-            Ok(()) // the recording lane: the brain retires, the loop idles
-        });
+    move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+        *code_sink.borrow_mut() = Some(code);
+        *exited_sink.borrow_mut() = true;
+        Ok(()) // the recording lane: the brain retires, the loop idles
+    });
     // the decl ↔ the bodies
     hosts.verify_against(&expected);
     let vm = Vm::builder()
@@ -296,7 +311,9 @@ fn run(vm: &mut Vm, fx: &HttpFixture, sinks: &Sinks, args: &[&str]) -> i32 {
 /// a fixture lane keyed on (method, url): a GET the map knows answers
 /// its recorded reply; anything else is a LOUD transport failure — the
 /// fixture map's keys ARE the assertions
-fn fixmap(entries: &[(&str, FixtureReply)]) -> impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> {
+fn fixmap(
+    entries: &[(&str, FixtureReply)],
+) -> impl Fn(&str, &str, &str, &[u8]) -> Result<FixtureReply, String> {
     let map: std::collections::HashMap<String, FixtureReply> = entries
         .iter()
         .map(|(u, r)| (u.to_string(), r.clone()))
@@ -351,7 +368,11 @@ fn human(b: i64) -> String {
 fn flatten(files: &serde_json::Value, prefix: &str, out: &mut Vec<String>) {
     for f in files.as_array().expect("files array") {
         let name = f["name"].as_str().expect("entry name");
-        let path = if prefix.is_empty() { name.to_string() } else { format!("{prefix}/{name}") };
+        let path = if prefix.is_empty() {
+            name.to_string()
+        } else {
+            format!("{prefix}/{name}")
+        };
         match f.get("files").and_then(|k| k.as_array()) {
             Some(kids) => flatten(&serde_json::Value::Array(kids.clone()), &path, out),
             None => {
@@ -381,42 +402,97 @@ fn usage_errors_exit_two_with_text() {
         // no flags at all
         (&[], "missing --repo=owner/name"),
         // repo + ref but no subcommand
-        (&["--repo=o/r", "--ref=v1"], "missing a subcommand (list | download)"),
+        (
+            &["--repo=o/r", "--ref=v1"],
+            "missing a subcommand (list | download)",
+        ),
         // each flag missing
         (&["--ref=v1", "list"], "missing --repo=owner/name"),
         (&["--repo=o/r", "list"], "missing --ref=<tag|branch|sha>"),
         // bad repo shape: no slash, owner empty, name empty, two slashes
-        (&["--repo=plain", "--ref=v1", "list"], "--repo=plain is not owner/name (exactly one '/', both sides nonempty)"),
-        (&["--repo=/lead", "--ref=v1", "list"], "--repo=/lead is not owner/name (exactly one '/', both sides nonempty)"),
-        (&["--repo=trail/", "--ref=v1", "list"], "--repo=trail/ is not owner/name (exactly one '/', both sides nonempty)"),
-        (&["--repo=a/b/c", "--ref=v1", "list"], "--repo=a/b/c is not owner/name (exactly one '/', both sides nonempty)"),
+        (
+            &["--repo=plain", "--ref=v1", "list"],
+            "--repo=plain is not owner/name (exactly one '/', both sides nonempty)",
+        ),
+        (
+            &["--repo=/lead", "--ref=v1", "list"],
+            "--repo=/lead is not owner/name (exactly one '/', both sides nonempty)",
+        ),
+        (
+            &["--repo=trail/", "--ref=v1", "list"],
+            "--repo=trail/ is not owner/name (exactly one '/', both sides nonempty)",
+        ),
+        (
+            &["--repo=a/b/c", "--ref=v1", "list"],
+            "--repo=a/b/c is not owner/name (exactly one '/', both sides nonempty)",
+        ),
         // empty ref value
-        (&["--repo=o/r", "--ref=", "list"], "--ref wants a nonempty value"),
+        (
+            &["--repo=o/r", "--ref=", "list"],
+            "--ref wants a nonempty value",
+        ),
         // unknown subcommand
-        (&["--repo=o/r", "--ref=v1", "fetch"], "unknown subcommand: fetch (want list | download)"),
+        (
+            &["--repo=o/r", "--ref=v1", "fetch"],
+            "unknown subcommand: fetch (want list | download)",
+        ),
         // unknown flag, before and after the subcommand slot
-        (&["--repo=o/r", "--ref=v1", "--wat", "list"], "unknown flag: --wat"),
-        (&["--repo=o/r", "--wat", "--ref=v1", "list"], "unknown flag: --wat"),
+        (
+            &["--repo=o/r", "--ref=v1", "--wat", "list"],
+            "unknown flag: --wat",
+        ),
+        (
+            &["--repo=o/r", "--wat", "--ref=v1", "list"],
+            "unknown flag: --wat",
+        ),
         // flags repeat
-        (&["--repo=o/r", "--repo=p/q", "--ref=v1", "list"], "--repo given twice"),
-        (&["--repo=o/r", "--ref=v1", "--ref=v2", "list"], "--ref given twice"),
+        (
+            &["--repo=o/r", "--repo=p/q", "--ref=v1", "list"],
+            "--repo given twice",
+        ),
+        (
+            &["--repo=o/r", "--ref=v1", "--ref=v2", "list"],
+            "--ref given twice",
+        ),
         // list takes nothing else
-        (&["--repo=o/r", "--ref=v1", "list", "extra"], "list takes no arguments (got extra)"),
+        (
+            &["--repo=o/r", "--ref=v1", "list", "extra"],
+            "list takes no arguments (got extra)",
+        ),
         // download needs a path; a directory target is refused
-        (&["--repo=o/r", "--ref=v1", "download"], "download needs a repo path"),
-        (&["--repo=o/r", "--ref=v1", "download", "dir/"], "download: dir/ is a directory target — rgh downloads one file"),
-        (&["--repo=o/r", "--ref=v1", "download", "/"], "download: / is a directory target — rgh downloads one file"),
+        (
+            &["--repo=o/r", "--ref=v1", "download"],
+            "download needs a repo path",
+        ),
+        (
+            &["--repo=o/r", "--ref=v1", "download", "dir/"],
+            "download: dir/ is a directory target — rgh downloads one file",
+        ),
+        (
+            &["--repo=o/r", "--ref=v1", "download", "/"],
+            "download: / is a directory target — rgh downloads one file",
+        ),
         // download takes at most a dest
-        (&["--repo=o/r", "--ref=v1", "download", "x.txt", "a", "b"], "download takes a repo path and at most one dest"),
+        (
+            &["--repo=o/r", "--ref=v1", "download", "x.txt", "a", "b"],
+            "download takes a repo path and at most one dest",
+        ),
     ];
     for (args, why) in cases {
         let (mut vm, sinks, fx) = boot(fixmap(&[]));
         let code = run(&mut vm, &fx, &sinks, args);
         assert_eq!(code, 2, "{args:?}: usage exits 2");
         let err = sinks.err_lines();
-        assert_eq!(err.first().map(String::as_str), Some(format!("rgh: {why}").as_str()), "{args:?}: the reason leads stderr");
+        assert_eq!(
+            err.first().map(String::as_str),
+            Some(format!("rgh: {why}").as_str()),
+            "{args:?}: the reason leads stderr"
+        );
         assert_eq!(err.len(), 3, "{args:?}: reason + the two usage lines");
-        assert!(err[1].starts_with("usage: rgh --repo=owner/name"), "{args:?}");
+        assert!(
+            err[1].starts_with("usage: rgh --repo=owner/name"),
+            "{args:?}"
+        );
         assert!(sinks.out_lines().is_empty(), "{args:?}: nothing on stdout");
     }
 }
@@ -427,7 +503,12 @@ fn list_boundary_tree_exact() {
         BOUNDARY_URL,
         FixtureReply::ok(200, BOUNDARY_JSON.as_bytes()),
     )]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=acme/widgets", "--ref=1.0.0", "list"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=acme/widgets", "--ref=1.0.0", "list"],
+    );
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
     // the whole output, string for string: the human-size boundaries
@@ -455,20 +536,37 @@ fn list_real_tree_matches_the_rust_oracle() {
         LIST_URL,
         FixtureReply::ok(200, TREE_JSON.as_bytes()),
     )]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=3.7.1", "list"],
+    );
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
     let got = sinks.out_lines();
     let want = expected_lines(TREE_JSON);
     assert_eq!(got.len(), want.len(), "one line per file entry");
-    assert_eq!(got, want, "the brain's flatten/human/hash8 vs the Rust reference");
+    assert_eq!(
+        got, want,
+        "the brain's flatten/human/hash8 vs the Rust reference"
+    );
     // hand-checked anchors from the recorded payload (the tree's own
     // rows, byte-spelled): the 0-byte log file, the text file the
     // download tests fetch, the binary jpg
     let find = |p: &str| got.iter().find(|l| l.starts_with(p)).expect("anchor row");
-    assert_eq!(find("test/data/support/csp.log\t"), "test/data/support/csp.log\t0 B\t47DEQpj8");
-    assert_eq!(find("test/data/text.txt\t"), "test/data/text.txt\t287 B\t5KyZ6UVn");
-    assert_eq!(find("test/data/1x1.jpg\t"), "test/data/1x1.jpg\t693 B\tyg5WQThG");
+    assert_eq!(
+        find("test/data/support/csp.log\t"),
+        "test/data/support/csp.log\t0 B\t47DEQpj8"
+    );
+    assert_eq!(
+        find("test/data/text.txt\t"),
+        "test/data/text.txt\t287 B\t5KyZ6UVn"
+    );
+    assert_eq!(
+        find("test/data/1x1.jpg\t"),
+        "test/data/1x1.jpg\t693 B\tyg5WQThG"
+    );
 }
 
 #[test]
@@ -480,17 +578,34 @@ fn download_streams_binary_verbatim_in_deterministic_chunks() {
         DL_BINARY_URL,
         FixtureReply::chunked(200, vec![a.to_vec(), b.to_vec()]),
     )]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/1x1.jpg"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &[
+            "--repo=jquery/jquery",
+            "--ref=3.7.1",
+            "download",
+            "test/data/1x1.jpg",
+        ],
+    );
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
     // the default dest is the basename after the final '/'; the write
     // pair is one truncate + the appends, and the reassembly is exact
-    assert_eq!(sinks.file_bytes("1x1.jpg"), BINARY_BODY, "the bytes land VERBATIM — binary-safe");
+    assert_eq!(
+        sinks.file_bytes("1x1.jpg"),
+        BINARY_BODY,
+        "the bytes land VERBATIM — binary-safe"
+    );
     let files = sinks.files.borrow();
     let kinds: Vec<char> = files.iter().map(|(k, _, _)| *k).collect();
     assert_eq!(kinds.first().copied(), Some('W'), "truncate first");
     assert!(kinds[1..].iter().all(|k| *k == 'A'), "then appends only");
-    assert_eq!(sinks.out_lines(), ["downloaded test/data/1x1.jpg (693 bytes) -> 1x1.jpg"]);
+    assert_eq!(
+        sinks.out_lines(),
+        ["downloaded test/data/1x1.jpg (693 bytes) -> 1x1.jpg"]
+    );
 }
 
 #[test]
@@ -505,45 +620,64 @@ fn download_streams_text_to_explicit_dest_in_small_chunks() {
         at = end;
     }
     let nchunks = chunks.len();
-    let (mut vm, sinks, fx) = boot(fixmap(&[(
-        DL_TEXT_URL,
-        FixtureReply::chunked(200, chunks),
-    )]));
+    let (mut vm, sinks, fx) = boot(fixmap(&[(DL_TEXT_URL, FixtureReply::chunked(200, chunks))]));
     let code = run(
         &mut vm,
         &fx,
         &sinks,
-        &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
+        &[
+            "--repo=jquery/jquery",
+            "--ref=3.7.1",
+            "download",
+            "test/data/text.txt",
+            "/tmp/rgh-text.txt",
+        ],
     );
     assert_eq!(code, 0);
     assert!(sinks.err_lines().is_empty());
     assert_eq!(sinks.file_bytes("/tmp/rgh-text.txt"), TEXT_BODY);
     let files = sinks.files.borrow();
-    let appends = files.iter().filter(|(k, d, _)| *k == 'A' && d == "/tmp/rgh-text.txt").count();
+    let appends = files
+        .iter()
+        .filter(|(k, d, _)| *k == 'A' && d == "/tmp/rgh-text.txt")
+        .count();
     assert_eq!(appends, nchunks, "one append row per streamed chunk");
     assert_eq!(
         sinks.out_lines(),
-        [format!("downloaded test/data/text.txt (287 bytes) -> /tmp/rgh-text.txt")]
+        [format!(
+            "downloaded test/data/text.txt (287 bytes) -> /tmp/rgh-text.txt"
+        )]
     );
 }
 
 #[test]
 fn download_write_failure_is_a_message_not_a_trap() {
-    let (mut vm, sinks, fx) = boot(fixmap(&[(
-        DL_TEXT_URL,
-        FixtureReply::ok(200, TEXT_BODY),
-    )]));
-    *sinks.fail_write.borrow_mut() =
-        Some(("/tmp/rgh-text.txt".to_string(), "Permission denied (os error 13)".to_string()));
+    let (mut vm, sinks, fx) = boot(fixmap(&[(DL_TEXT_URL, FixtureReply::ok(200, TEXT_BODY))]));
+    *sinks.fail_write.borrow_mut() = Some((
+        "/tmp/rgh-text.txt".to_string(),
+        "Permission denied (os error 13)".to_string(),
+    ));
     let code = run(
         &mut vm,
         &fx,
         &sinks,
-        &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
+        &[
+            "--repo=jquery/jquery",
+            "--ref=3.7.1",
+            "download",
+            "test/data/text.txt",
+            "/tmp/rgh-text.txt",
+        ],
     );
     assert_eq!(code, 1, "a failed write is exit 1");
-    assert_eq!(sinks.err_lines(), ["rgh: /tmp/rgh-text.txt: Permission denied (os error 13)"]);
-    assert!(sinks.out_lines().is_empty(), "no confirmation line on failure");
+    assert_eq!(
+        sinks.err_lines(),
+        ["rgh: /tmp/rgh-text.txt: Permission denied (os error 13)"]
+    );
+    assert!(
+        sinks.out_lines().is_empty(),
+        "no confirmation line on failure"
+    );
 }
 
 #[test]
@@ -552,34 +686,65 @@ fn download_append_failure_mid_stream_is_a_message_not_a_trap() {
         DL_TEXT_URL,
         FixtureReply::chunked(200, vec![b"abc".to_vec(), b"def".to_vec()]),
     )]));
-    *sinks.fail_write.borrow_mut() =
-        Some(("/tmp/rgh-text.txt".to_string(), "No space left on device (os error 28)".to_string()));
+    *sinks.fail_write.borrow_mut() = Some((
+        "/tmp/rgh-text.txt".to_string(),
+        "No space left on device (os error 28)".to_string(),
+    ));
     let code = run(
         &mut vm,
         &fx,
         &sinks,
-        &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
+        &[
+            "--repo=jquery/jquery",
+            "--ref=3.7.1",
+            "download",
+            "test/data/text.txt",
+            "/tmp/rgh-text.txt",
+        ],
     );
     assert_eq!(code, 1);
-    assert_eq!(sinks.err_lines(), ["rgh: /tmp/rgh-text.txt: No space left on device (os error 28)"]);
-    assert!(sinks.out_lines().is_empty(), "no confirmation line on failure");
+    assert_eq!(
+        sinks.err_lines(),
+        ["rgh: /tmp/rgh-text.txt: No space left on device (os error 28)"]
+    );
+    assert!(
+        sinks.out_lines().is_empty(),
+        "no confirmation line on failure"
+    );
 }
 
 #[test]
 fn a_mid_read_death_is_data_exit_one_with_the_sticky_text() {
     let (mut vm, sinks, fx) = boot(fixmap(&[(
         DL_TEXT_URL,
-        FixtureReply::failing(200, vec![b"ab".to_vec(), b"cd".to_vec(), b"ef".to_vec()], 2, "connection reset by peer"),
+        FixtureReply::failing(
+            200,
+            vec![b"ab".to_vec(), b"cd".to_vec(), b"ef".to_vec()],
+            2,
+            "connection reset by peer",
+        ),
     )]));
     let code = run(
         &mut vm,
         &fx,
         &sinks,
-        &["--repo=jquery/jquery", "--ref=3.7.1", "download", "test/data/text.txt", "/tmp/rgh-text.txt"],
+        &[
+            "--repo=jquery/jquery",
+            "--ref=3.7.1",
+            "download",
+            "test/data/text.txt",
+            "/tmp/rgh-text.txt",
+        ],
     );
     assert_eq!(code, 1, "a mid-read wire death is exit 1");
-    assert_eq!(sinks.err_lines(), ["rgh: /tmp/rgh-text.txt: connection reset by peer"]);
-    assert!(sinks.out_lines().is_empty(), "no confirmation line on failure");
+    assert_eq!(
+        sinks.err_lines(),
+        ["rgh: /tmp/rgh-text.txt: connection reset by peer"]
+    );
+    assert!(
+        sinks.out_lines().is_empty(),
+        "no confirmation line on failure"
+    );
     // the arrived prefix DID land (the degrade law: the short drain is
     // the stream's past reads) — the dest holds the two chunks that
     // made it, never a trap
@@ -593,9 +758,17 @@ fn not_found_maps_for_both_subcommands() {
         LIST_URL_404,
         FixtureReply::ok(404, NOTFOUND_BODY),
     )]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=no-such-ref-xyz", "list"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=no-such-ref-xyz", "list"],
+    );
     assert_eq!(code, 1);
-    assert_eq!(sinks.err_lines(), ["rgh: no such repo or ref (checked the CDN: data.jsdelivr.com)"]);
+    assert_eq!(
+        sinks.err_lines(),
+        ["rgh: no such repo or ref (checked the CDN: data.jsdelivr.com)"]
+    );
     assert!(sinks.out_lines().is_empty());
 
     // download: the 404 also covers "no such file", naming the cdn host
@@ -603,9 +776,22 @@ fn not_found_maps_for_both_subcommands() {
         DL_404_URL,
         FixtureReply::ok(404, NOTFOUND_BODY),
     )]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "download", "no/such/file.txt"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &[
+            "--repo=jquery/jquery",
+            "--ref=3.7.1",
+            "download",
+            "no/such/file.txt",
+        ],
+    );
     assert_eq!(code, 1);
-    assert_eq!(sinks.err_lines(), ["rgh: no such file (or repo/ref) (checked the CDN: cdn.jsdelivr.net)"]);
+    assert_eq!(
+        sinks.err_lines(),
+        ["rgh: no such file (or repo/ref) (checked the CDN: cdn.jsdelivr.net)"]
+    );
     assert!(sinks.out_lines().is_empty());
 }
 
@@ -618,10 +804,18 @@ fn transport_failure_maps_to_the_network_message() {
             Err(format!("rgh-test: unexpected url: {url}"))
         }
     });
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=3.7.1", "list"],
+    );
     assert_eq!(code, 1);
     // status 0 is the RESERVED transport verdict; its text surfaces
-    assert_eq!(sinks.err_lines(), ["rgh: network error: dns: lookup data.jsdelivr.com: no such host"]);
+    assert_eq!(
+        sinks.err_lines(),
+        ["rgh: network error: dns: lookup data.jsdelivr.com: no such host"]
+    );
     assert!(sinks.out_lines().is_empty());
 }
 
@@ -629,13 +823,26 @@ fn transport_failure_maps_to_the_network_message() {
 fn rate_limit_and_other_statuses_map() {
     // 403 — the CDN's rate-limit shape
     let (mut vm, sinks, fx) = boot(fixmap(&[(LIST_URL, FixtureReply::ok(403, b""))]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=3.7.1", "list"],
+    );
     assert_eq!(code, 1);
-    assert_eq!(sinks.err_lines()[0], "rgh: rate limited by the CDN (HTTP 403) — wait and retry");
+    assert_eq!(
+        sinks.err_lines()[0],
+        "rgh: rate limited by the CDN (HTTP 403) — wait and retry"
+    );
 
     // any other non-2xx is the bare status
     let (mut vm, sinks, fx) = boot(fixmap(&[(LIST_URL, FixtureReply::ok(500, b"boom"))]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=3.7.1", "list"],
+    );
     assert_eq!(code, 1);
     assert_eq!(sinks.err_lines(), ["rgh: CDN 500"]);
 }
@@ -690,7 +897,10 @@ entry fn boot_oneshot(url: str) -> nil {
 fn the_one_shot_law_degrades_second_takers() {
     let sinks = Sinks::default();
     let (http_pkg, fx) = rut_std::http::pkg_with(|_m, _u, _h, _b| {
-        Ok(FixtureReply::chunked(200, vec![b"ab".to_vec(), b"cd".to_vec()]))
+        Ok(FixtureReply::chunked(
+            200,
+            vec![b"ab".to_vec(), b"cd".to_vec()],
+        ))
     });
     let mut compiled = compile_brain(
         ONESHOT_SRC,
@@ -716,36 +926,36 @@ fn the_one_shot_law_degrades_second_takers() {
     let hosts = &mut compiled.hosts;
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
-        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
-            out_sink.borrow_mut().push(line.to_string());
-            Ok(())
-        });
+    move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+        out_sink.borrow_mut().push(line.to_string());
+        Ok(())
+    });
     let err_sink = sinks.err.clone();
     rut_vm::register!(hosts, "rgh_host::eprint", (&str,) -> (),
-        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
-            err_sink.borrow_mut().push(line.to_string());
-            Ok(())
-        });
+    move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+        err_sink.borrow_mut().push(line.to_string());
+        Ok(())
+    });
     // the probe never touches the files or the exit row, but the decl
     // contract is TOTAL — every mounted row binds something
     let files_sink = sinks.files.clone();
     rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
-        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            files_sink.borrow_mut().push(('W', dest.to_string(), data));
-            Ok(None)
-        });
+    move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        files_sink.borrow_mut().push(('W', dest.to_string(), data));
+        Ok(None)
+    });
     let files_sink = sinks.files.clone();
     rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
-        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            files_sink.borrow_mut().push(('A', dest.to_string(), data));
-            Ok(None)
-        });
+    move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        files_sink.borrow_mut().push(('A', dest.to_string(), data));
+        Ok(None)
+    });
     let code_sink = sinks.code.clone();
     rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
-        move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
-            *code_sink.borrow_mut() = Some(code);
-            Ok(())
-        });
+    move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+        *code_sink.borrow_mut() = Some(code);
+        Ok(())
+    });
     // the decl ↔ the bodies
     hosts.verify_against(&expected);
     let mut vm = Vm::builder()
@@ -754,7 +964,8 @@ fn the_one_shot_law_degrades_second_takers() {
         .hooks(rut_vm::interp::HostHooks::default())
         .build()
         .unwrap();
-    vm.call::<_, ()>("boot_oneshot", ("fixture://oneshot",)).unwrap();
+    vm.call::<_, ()>("boot_oneshot", ("fixture://oneshot",))
+        .unwrap();
     for _ in 0..500 {
         vm.run_ready().unwrap();
         if vm.pending_tasks() == 0 && !fx.has_pending() {
@@ -763,7 +974,11 @@ fn the_one_shot_law_degrades_second_takers() {
         if fx.settle(vm.now_ms()) {
             continue;
         }
-        let next = [fx.next_due(), vm.next_deadline()].into_iter().flatten().filter(|&d| d > vm.now_ms()).min();
+        let next = [fx.next_due(), vm.next_deadline()]
+            .into_iter()
+            .flatten()
+            .filter(|&d| d > vm.now_ms())
+            .min();
         match next {
             Some(d) => vm.set_now(d),
             None => vm.set_now(vm.now_ms() + 1),
@@ -776,10 +991,10 @@ fn the_one_shot_law_degrades_second_takers() {
     assert_eq!(
         got,
         vec![
-            "body=4",           // the drain took the whole body
-            "first-next=2",     // the stream lane took chunk one
-            "late-body=0",      // the late DRAIN degrades to empty
-            "late-next=eof",    // the late MINT is a dead reader
+            "body=4",        // the drain took the whole body
+            "first-next=2",  // the stream lane took chunk one
+            "late-body=0",   // the late DRAIN degrades to empty
+            "late-next=eof", // the late MINT is a dead reader
         ],
         "body xor stream: whichever lane took first wins, the second degrades — never a trap"
     );
@@ -796,11 +1011,20 @@ fn the_real_tree_stays_inside_the_embedder_budget() {
         LIST_URL,
         FixtureReply::ok(200, TREE_JSON.as_bytes()),
     )]));
-    let code = run(&mut vm, &fx, &sinks, &["--repo=jquery/jquery", "--ref=3.7.1", "list"]);
+    let code = run(
+        &mut vm,
+        &fx,
+        &sinks,
+        &["--repo=jquery/jquery", "--ref=3.7.1", "list"],
+    );
     assert_eq!(code, 0);
     assert_eq!(sinks.out_lines().len(), 296);
     assert!(vm.fuel_used < 250_000_000, "fuel {}", vm.fuel_used);
-    assert!(vm.fuel_used < 25_000_000, "an order of magnitude of headroom (fuel {})", vm.fuel_used);
+    assert!(
+        vm.fuel_used < 25_000_000,
+        "an order of magnitude of headroom (fuel {})",
+        vm.fuel_used
+    );
     println!("list of the real 351-entry tree: {} fuel", vm.fuel_used);
 }
 
@@ -836,36 +1060,36 @@ fn live_smoke_over_the_real_cdn() {
     let hosts = &mut compiled.hosts;
     let out_sink = sinks.out.clone();
     rut_vm::register!(hosts, "rgh_host::out", (&str,) -> (),
-        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
-            out_sink.borrow_mut().push(line.to_string());
-            Ok(())
-        });
+    move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+        out_sink.borrow_mut().push(line.to_string());
+        Ok(())
+    });
     let err_sink = sinks.err.clone();
     rut_vm::register!(hosts, "rgh_host::eprint", (&str,) -> (),
-        move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
-            err_sink.borrow_mut().push(line.to_string());
-            Ok(())
-        });
+    move |_vm: &mut Vm, line: &str| -> Result<(), Trap> {
+        err_sink.borrow_mut().push(line.to_string());
+        Ok(())
+    });
     // the list smoke never touches the files, but the decl contract is
     // total
     let files_sink = sinks.files.clone();
     rut_vm::register!(hosts, "rgh_host::write_file", (&str, Vec<u8>) -> Option<String>,
-        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            files_sink.borrow_mut().push(('W', dest.to_string(), data));
-            Ok(None)
-        });
+    move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        files_sink.borrow_mut().push(('W', dest.to_string(), data));
+        Ok(None)
+    });
     let files_sink = sinks.files.clone();
     rut_vm::register!(hosts, "rgh_host::append_file", (&str, Vec<u8>) -> Option<String>,
-        move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
-            files_sink.borrow_mut().push(('A', dest.to_string(), data));
-            Ok(None)
-        });
+    move |_vm: &mut Vm, dest: &str, data: Vec<u8>| -> Result<Option<String>, Trap> {
+        files_sink.borrow_mut().push(('A', dest.to_string(), data));
+        Ok(None)
+    });
     let code_sink = sinks.code.clone();
     rut_vm::register!(hosts, "rgh_host::exit", (i32,) -> (),
-        move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
-            *code_sink.borrow_mut() = Some(code);
-            Ok(())
-        });
+    move |_vm: &mut Vm, code: i32| -> Result<(), Trap> {
+        *code_sink.borrow_mut() = Some(code);
+        Ok(())
+    });
     // the decl ↔ the bodies
     hosts.verify_against(&expected);
     let mut vm = Vm::builder()
@@ -874,7 +1098,11 @@ fn live_smoke_over_the_real_cdn() {
         .hooks(rut_vm::interp::HostHooks::default())
         .build()
         .unwrap();
-    vm.call::<_, ()>("boot", ("--repo=jquery/jquery\n--ref=3.7.1\nlist".to_string(),)).unwrap();
+    vm.call::<_, ()>(
+        "boot",
+        ("--repo=jquery/jquery\n--ref=3.7.1\nlist".to_string(),),
+    )
+    .unwrap();
     // the wall-clock pump: real workers settle the completers
     let mut ok = false;
     for _ in 0..20_000 {

@@ -67,10 +67,7 @@ pub fn render_program_entry(prog: &Program) -> String {
             },
         };
         let fields: Vec<(String, String)> = match prog.types.kind(row_id) {
-            TyKind::Data { fields } => fields
-                .iter()
-                .map(|f| (name(f.name), ty(f.ty)))
-                .collect(),
+            TyKind::Data { fields } => fields.iter().map(|f| (name(f.name), ty(f.ty))).collect(),
             _ => Vec::new(),
         };
         // a newtype renders DESUGARED — the wire's own shape (the one
@@ -92,7 +89,9 @@ pub fn render_program_entry(prog: &Program) -> String {
         }
         out.push_str("}\n");
         if t.newtype {
-            out.push_str("// constructed positional: this class is a newtype — `Name(x)` mints the inner\n");
+            out.push_str(
+                "// constructed positional: this class is a newtype — `Name(x)` mints the inner\n",
+            );
         }
     }
     // ---- the free fns (ordinary + generic), one sorted section. Host
@@ -126,7 +125,11 @@ pub fn render_program_entry(prog: &Program) -> String {
         .ifaces
         .iter()
         .map(|i| {
-            let ms: Vec<String> = i.methods.iter().map(|m| prog.interner.name(m.name).to_string()).collect();
+            let ms: Vec<String> = i
+                .methods
+                .iter()
+                .map(|m| prog.interner.name(m.name).to_string())
+                .collect();
             format!(
                 "// interface {}<{} generic params>: {}",
                 prog.interner.name(i.name).replace('#', ""),
@@ -211,9 +214,8 @@ fn ret_spelled(ty: &str) -> String {
 /// template surface renders `Flow<(i32, E)>`, the generic parameter's
 /// own spelling.
 pub fn ty_text(prog: &Program, t: TypeId) -> String {
-    let raw_name = |id: TypeId| -> String {
-        prog.interner.name(prog.types.type_at(id).name).to_string()
-    };
+    let raw_name =
+        |id: TypeId| -> String { prog.interner.name(prog.types.type_at(id).name).to_string() };
     let name = |id: TypeId| -> String {
         raw_name(id)
             .replace('#', "")
@@ -296,7 +298,11 @@ pub fn facts_of_program(prog: &Program) -> std::collections::BTreeSet<String> {
                     "method {}.{}<{}>({}{}) -> {}",
                     name(t.name),
                     name(m.name),
-                    m.generics.iter().map(|&g| name(g)).collect::<Vec<_>>().join(","),
+                    m.generics
+                        .iter()
+                        .map(|&g| name(g))
+                        .collect::<Vec<_>>()
+                        .join(","),
                     if m.has_self { "self;" } else { "" },
                     ps.join(";"),
                     ty_text(prog, m.ret)
@@ -322,7 +328,11 @@ pub fn facts_of_program(prog: &Program) -> std::collections::BTreeSet<String> {
         facts.insert(format!(
             "genfn {}<{}>({}) -> {}",
             name(g.name),
-            g.params.iter().map(|&p| name(p)).collect::<Vec<_>>().join(","),
+            g.params
+                .iter()
+                .map(|&p| name(p))
+                .collect::<Vec<_>>()
+                .join(","),
             ps.join(";"),
             ty_text(prog, g.ret)
         ));
@@ -349,7 +359,11 @@ fn ty_ast_text(ast: &Ast, h: NodeHandle<rut_ast::ast::AnyTy>) -> String {
                 if !last.generics.is_empty() {
                     s.push_str(&format!(
                         "<{}>",
-                        last.generics.iter().map(|&g| ty_ast_text(ast, g)).collect::<Vec<_>>().join(", ")
+                        last.generics
+                            .iter()
+                            .map(|&g| ty_ast_text(ast, g))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ));
                 }
             }
@@ -363,7 +377,11 @@ fn ty_ast_text(ast: &Ast, h: NodeHandle<rut_ast::ast::AnyTy>) -> String {
         TypeKind::TyArray { elem } => format!("[{}]", ty_ast_text(ast, *elem)),
         TypeKind::TyTuple { elems } => format!(
             "({})",
-            elems.iter().map(|&e| ty_ast_text(ast, e)).collect::<Vec<_>>().join(", ")
+            elems
+                .iter()
+                .map(|&e| ty_ast_text(ast, e))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         TypeKind::TyUnion { elems } => elems
             .iter()
@@ -383,20 +401,40 @@ pub fn facts_of_text(text: &str) -> Result<std::collections::BTreeSet<String>, S
     let (ast, diags) = parse(text, Mode::Decl);
     if !diags.is_empty() {
         let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
-        return Err(format!("the declaration entry does not parse: {}", msgs.join("; ")));
+        return Err(format!(
+            "the declaration entry does not parse: {}",
+            msgs.join("; ")
+        ));
     }
     let mut facts = std::collections::BTreeSet::new();
     facts_of_items(&ast, ast.module_items(ast.root), &mut facts);
     Ok(facts)
 }
 
-fn facts_of_items(ast: &Ast, items: &[NodeHandle<AnyItem>], facts: &mut std::collections::BTreeSet<String>) {
+fn facts_of_items(
+    ast: &Ast,
+    items: &[NodeHandle<AnyItem>],
+    facts: &mut std::collections::BTreeSet<String>,
+) {
     for &it in items {
         match ast.item(it) {
-            ItemKind::Class { name, generics, newtype, fields, methods, .. } => {
+            ItemKind::Class {
+                name,
+                generics,
+                newtype,
+                fields,
+                methods,
+                ..
+            } => {
                 class_facts(ast, *name, generics, *newtype, fields, methods, facts);
             }
-            ItemKind::Struct { name, generics, fields, methods, .. } => {
+            ItemKind::Struct {
+                name,
+                generics,
+                fields,
+                methods,
+                ..
+            } => {
                 class_facts(ast, *name, generics, false, fields, methods, facts);
             }
             ItemKind::Fn(d) => {
@@ -410,8 +448,15 @@ fn facts_of_items(ast: &Ast, items: &[NodeHandle<AnyItem>], facts: &mut std::col
                         _ => None,
                     })
                     .collect();
-                let ret = d.ret.map(|r| ty_ast_text(ast, r)).unwrap_or_else(|| "nil".to_string());
-                let gens: Vec<String> = d.generics.iter().map(|&g| ast.name(g).to_string()).collect();
+                let ret = d
+                    .ret
+                    .map(|r| ty_ast_text(ast, r))
+                    .unwrap_or_else(|| "nil".to_string());
+                let gens: Vec<String> = d
+                    .generics
+                    .iter()
+                    .map(|&g| ast.name(g).to_string())
+                    .collect();
                 // a generic fn spells the `genfn` kind and its parameter
                 // list — the same canonical line the program side states
                 let fact = if gens.is_empty() {
@@ -481,8 +526,15 @@ fn class_facts(
             .params
             .iter()
             .any(|&p| matches!(ast.param(p), rut_ast::ast::MemberKind::SelfParam(_)));
-        let ret = d.ret.map(|r| ty_ast_text(ast, r)).unwrap_or_else(|| "nil".to_string());
-        let mgens: Vec<String> = d.generics.iter().map(|&g| ast.name(g).to_string()).collect();
+        let ret = d
+            .ret
+            .map(|r| ty_ast_text(ast, r))
+            .unwrap_or_else(|| "nil".to_string());
+        let mgens: Vec<String> = d
+            .generics
+            .iter()
+            .map(|&g| ast.name(g).to_string())
+            .collect();
         facts.insert(format!(
             "method {}.{}<{}>({}{}) -> {}",
             ast.name(name),
@@ -533,7 +585,9 @@ fn splice_tree(
     let (toks, _) = rut_lexer::lexer::lex(text);
     let semi_hi = |span_lo: u32, span_hi: u32| -> u32 {
         toks.iter()
-            .find(|t| t.tok == rut_lexer::token::Tok::Semi && t.span.lo >= span_lo && t.span.hi <= span_hi)
+            .find(|t| {
+                t.tok == rut_lexer::token::Tok::Semi && t.span.lo >= span_lo && t.span.hi <= span_hi
+            })
             .map(|t| t.span.hi)
             .unwrap_or(span_hi)
     };
@@ -565,11 +619,7 @@ fn splice_tree(
                      // (the node starts at the `mod` keyword) and rides
                      // verbatim — the replacement starts at `mod`
         let body = splice_tree(&child.text, &child_path, mods)?;
-        edits.push((
-            span.lo,
-            end,
-            format!("mod {name} {{\n{body}\n}}"),
-        ));
+        edits.push((span.lo, end, format!("mod {name} {{\n{body}\n}}")));
     }
     // splice descending — spans stay valid
     edits.sort_by(|a, b| b.0.cmp(&a.0));

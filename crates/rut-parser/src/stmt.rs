@@ -29,13 +29,25 @@ pub(crate) struct BlockFrame {
 
 impl BlockFrame {
     pub(crate) fn strict(p: &Parser) -> Self {
-        BlockFrame { lo: p.span().lo, lax: false, stmts: Vec::new(), tail: None, before: p.pos }
+        BlockFrame {
+            lo: p.span().lo,
+            lax: false,
+            stmts: Vec::new(),
+            tail: None,
+            before: p.pos,
+        }
     }
     /// a lax block expects its own `{` but keeps the caller's `lo` for
     /// the span — v1's fn/method bodies were `parse_block_body(lo)` with
     /// the `fn` token's lo and the brace pre-expected by the caller
     pub(crate) fn lax(p: &Parser, lo: u32) -> Self {
-        BlockFrame { lo, lax: true, stmts: Vec::new(), tail: None, before: p.pos }
+        BlockFrame {
+            lo,
+            lax: true,
+            stmts: Vec::new(),
+            tail: None,
+            before: p.pos,
+        }
     }
     /// the degraded block of the NEST_MAX budget (C3): empty, so the
     /// enclosing item can still complete
@@ -58,7 +70,11 @@ impl BlockFrame {
         if p.eat_punct(Tok::RBrace) || p.at_eof() {
             let stmts = std::mem::take(&mut self.stmts);
             let tail = self.tail.take();
-            return Step::Pop(Done::Block(p.block_with_tail(stmts, tail, Span::new(self.lo, p.span().hi))));
+            return Step::Pop(Done::Block(p.block_with_tail(
+                stmts,
+                tail,
+                Span::new(self.lo, p.span().hi),
+            )));
         }
         self.before = p.pos;
         Step::Push(Frame::Stmt(StmtFrame::new()))
@@ -94,17 +110,51 @@ pub(crate) struct StmtFrame {
 enum StmtStage {
     Dispatch,
     /// `let` — waiting for the optional type
-    LetTy { is_mut: bool, name: IdentId, destructure: Option<Vec<IdentId>> },
+    LetTy {
+        is_mut: bool,
+        name: IdentId,
+        destructure: Option<Vec<IdentId>>,
+    },
     /// `let` — waiting for the initializer
-    LetInit { is_mut: bool, name: IdentId, destructure: Option<Vec<IdentId>>, ty: Option<NodeHandle<AnyTy>> },
+    LetInit {
+        is_mut: bool,
+        name: IdentId,
+        destructure: Option<Vec<IdentId>>,
+        ty: Option<NodeHandle<AnyTy>>,
+    },
     WhileCond,
     WhileBody,
-    ForIter { var: IdentId, is_mut: bool },
-    ForInit { var: IdentId, is_mut: bool },
-    ForCond { var: IdentId, is_mut: bool, init: NodeHandle<AnyExpr> },
-    ForUpdate { var: IdentId, is_mut: bool, init: NodeHandle<AnyExpr>, cond: NodeHandle<AnyExpr> },
-    ForBodyOf { var: IdentId, is_mut: bool, iter: NodeHandle<AnyExpr> },
-    ForBodyC { var: IdentId, is_mut: bool, init: NodeHandle<AnyExpr>, cond: NodeHandle<AnyExpr>, update: NodeHandle<AnyExpr> },
+    ForIter {
+        var: IdentId,
+        is_mut: bool,
+    },
+    ForInit {
+        var: IdentId,
+        is_mut: bool,
+    },
+    ForCond {
+        var: IdentId,
+        is_mut: bool,
+        init: NodeHandle<AnyExpr>,
+    },
+    ForUpdate {
+        var: IdentId,
+        is_mut: bool,
+        init: NodeHandle<AnyExpr>,
+        cond: NodeHandle<AnyExpr>,
+    },
+    ForBodyOf {
+        var: IdentId,
+        is_mut: bool,
+        iter: NodeHandle<AnyExpr>,
+    },
+    ForBodyC {
+        var: IdentId,
+        is_mut: bool,
+        init: NodeHandle<AnyExpr>,
+        cond: NodeHandle<AnyExpr>,
+        update: NodeHandle<AnyExpr>,
+    },
     /// `return` — waiting for the value
     RetVal,
     /// a bare expression statement
@@ -115,7 +165,11 @@ enum StmtStage {
 
 impl StmtFrame {
     pub(crate) fn new() -> Self {
-        StmtFrame { lo: Span::new(0, 0), stage: StmtStage::Dispatch, while_cond: None }
+        StmtFrame {
+            lo: Span::new(0, 0),
+            stage: StmtStage::Dispatch,
+            while_cond: None,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -159,7 +213,11 @@ impl StmtFrame {
                         }
                     };
                     if p.eat_punct(Tok::Colon) {
-                        self.stage = StmtStage::LetTy { is_mut, name, destructure };
+                        self.stage = StmtStage::LetTy {
+                            is_mut,
+                            name,
+                            destructure,
+                        };
                         return Step::Push(Frame::Type(TypeFrame::new(p)));
                     }
                     self.let_eq(p, is_mut, name, destructure, None)
@@ -217,7 +275,12 @@ impl StmtFrame {
         ty: Option<NodeHandle<AnyTy>>,
     ) -> Step {
         p.expect(Tok::Eq);
-        self.stage = StmtStage::LetInit { is_mut, name, destructure, ty };
+        self.stage = StmtStage::LetInit {
+            is_mut,
+            name,
+            destructure,
+            ty,
+        };
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
@@ -232,7 +295,13 @@ impl StmtFrame {
     ) -> Step {
         p.expect(Tok::Semi);
         Step::Pop(Done::Stmt(p.stmt(
-            StmtKind::LetStmt { is_mut, name, destructure, ty, init },
+            StmtKind::LetStmt {
+                is_mut,
+                name,
+                destructure,
+                ty,
+                init,
+            },
             self.lo.to(p.span()),
         )))
     }
@@ -268,12 +337,23 @@ impl StmtFrame {
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match (std::mem::replace(&mut self.stage, StmtStage::Dispatch), d) {
-            (StmtStage::LetTy { is_mut, name, destructure }, Done::Ty(t)) => {
-                self.let_eq(p, is_mut, name, destructure, Some(t))
-            }
-            (StmtStage::LetInit { is_mut, name, destructure, ty }, Done::Expr(e)) => {
-                self.let_done(p, is_mut, name, destructure, ty, e)
-            }
+            (
+                StmtStage::LetTy {
+                    is_mut,
+                    name,
+                    destructure,
+                },
+                Done::Ty(t),
+            ) => self.let_eq(p, is_mut, name, destructure, Some(t)),
+            (
+                StmtStage::LetInit {
+                    is_mut,
+                    name,
+                    destructure,
+                    ty,
+                },
+                Done::Expr(e),
+            ) => self.let_done(p, is_mut, name, destructure, ty, e),
             (StmtStage::WhileCond, Done::Expr(cond)) => {
                 p.expect(Tok::RParen);
                 self.while_cond = Some(cond);
@@ -282,10 +362,9 @@ impl StmtFrame {
             }
             (StmtStage::WhileBody, Done::Block(body)) => {
                 let cond = self.while_cond.take().expect("while without a condition");
-                Step::Pop(Done::Stmt(p.stmt(
-                    StmtKind::While { cond, body },
-                    self.lo.to(p.span()),
-                )))
+                Step::Pop(Done::Stmt(
+                    p.stmt(StmtKind::While { cond, body }, self.lo.to(p.span())),
+                ))
             }
             (StmtStage::ForIter { var, is_mut }, Done::Expr(iter)) => {
                 p.expect(Tok::RParen);
@@ -299,29 +378,69 @@ impl StmtFrame {
             }
             (StmtStage::ForCond { var, is_mut, init }, Done::Expr(cond)) => {
                 p.expect(Tok::Semi);
-                self.stage = StmtStage::ForUpdate { var, is_mut, init, cond };
+                self.stage = StmtStage::ForUpdate {
+                    var,
+                    is_mut,
+                    init,
+                    cond,
+                };
                 Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
             }
-            (StmtStage::ForUpdate { var, is_mut, init, cond }, Done::Expr(update)) => {
+            (
+                StmtStage::ForUpdate {
+                    var,
+                    is_mut,
+                    init,
+                    cond,
+                },
+                Done::Expr(update),
+            ) => {
                 p.expect(Tok::RParen);
-                self.stage = StmtStage::ForBodyC { var, is_mut, init, cond, update };
+                self.stage = StmtStage::ForBodyC {
+                    var,
+                    is_mut,
+                    init,
+                    cond,
+                    update,
+                };
                 Step::Push(Frame::Block(BlockFrame::strict(p)))
             }
-            (StmtStage::ForBodyOf { var, is_mut, iter }, Done::Block(body)) => Step::Pop(Done::Stmt(
-                p.stmt(StmtKind::ForOf { var, is_mut, iter, body }, self.lo.to(p.span())),
-            )),
-            (StmtStage::ForBodyC { var, is_mut, init, cond, update }, Done::Block(body)) => {
+            (StmtStage::ForBodyOf { var, is_mut, iter }, Done::Block(body)) => {
                 Step::Pop(Done::Stmt(p.stmt(
-                    StmtKind::ForC { var, is_mut, init, cond, update, body },
+                    StmtKind::ForOf {
+                        var,
+                        is_mut,
+                        iter,
+                        body,
+                    },
                     self.lo.to(p.span()),
                 )))
             }
+            (
+                StmtStage::ForBodyC {
+                    var,
+                    is_mut,
+                    init,
+                    cond,
+                    update,
+                },
+                Done::Block(body),
+            ) => Step::Pop(Done::Stmt(p.stmt(
+                StmtKind::ForC {
+                    var,
+                    is_mut,
+                    init,
+                    cond,
+                    update,
+                    body,
+                },
+                self.lo.to(p.span()),
+            ))),
             (StmtStage::RetVal, Done::Expr(v)) => {
                 p.expect(Tok::Semi);
-                Step::Pop(Done::Stmt(p.stmt(
-                    StmtKind::Return { value: Some(v) },
-                    self.lo.to(p.span()),
-                )))
+                Step::Pop(Done::Stmt(
+                    p.stmt(StmtKind::Return { value: Some(v) }, self.lo.to(p.span())),
+                ))
             }
             (StmtStage::Expr, Done::Expr(e)) => {
                 // the tail law: the `;` decides. A `}` IMMEDIATELY after
@@ -332,12 +451,13 @@ impl StmtFrame {
                     return Step::Pop(Done::TailExpr(e));
                 }
                 p.expect(Tok::Semi);
-                Step::Pop(Done::Stmt(p.stmt(StmtKind::ExprStmt(e), self.lo.to(p.span()))))
+                Step::Pop(Done::Stmt(
+                    p.stmt(StmtKind::ExprStmt(e), self.lo.to(p.span())),
+                ))
             }
-            (StmtStage::When, Done::WhenParts { scrut, arms }) => Step::Pop(Done::Stmt(p.stmt(
-                StmtKind::WhenStmt { scrut, arms },
-                self.lo.to(p.span()),
-            ))),
+            (StmtStage::When, Done::WhenParts { scrut, arms }) => Step::Pop(Done::Stmt(
+                p.stmt(StmtKind::WhenStmt { scrut, arms }, self.lo.to(p.span())),
+            )),
             // the `if` child (pushed from Dispatch) completes the statement.
             // The `;` decides (the expression law): a trailing `;` after
             // the statement form only ever DISCARDS — the statement form
@@ -370,7 +490,12 @@ enum IfStage {
 
 impl IfFrame {
     pub(crate) fn new() -> Self {
-        IfFrame { lo: 0, stage: IfStage::Cond, cond: None, then: None }
+        IfFrame {
+            lo: 0,
+            stage: IfStage::Cond,
+            cond: None,
+            then: None,
+        }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -425,7 +550,12 @@ impl IfFrame {
     fn finish(&mut self, p: &mut Parser, els: Option<ElseBranch>) -> Step {
         let cond = self.cond.take().expect("if without a condition");
         let then = self.then.take().expect("if without a then-block");
-        Step::Pop(Done::If(p.if_stmt(cond, then, els, Span::new(self.lo, p.span().hi))))
+        Step::Pop(Done::If(p.if_stmt(
+            cond,
+            then,
+            els,
+            Span::new(self.lo, p.span().hi),
+        )))
     }
 }
 
@@ -547,7 +677,10 @@ impl WhenFrame {
             p.err_here("expression arms must be comma-separated");
         }
         let node = p.arm(
-            ArmKind::WhenArm { pats: std::mem::take(&mut self.arm_pats), body },
+            ArmKind::WhenArm {
+                pats: std::mem::take(&mut self.arm_pats),
+                body,
+            },
             p.span(),
         );
         self.arms.push(node);
@@ -640,7 +773,10 @@ impl PatternFrame {
                 self.stage = PatStage::GenArgs { seg_name: name };
                 return self.genargs_top(p);
             }
-            self.segs.push(PathSeg { name, generics: Vec::new() });
+            self.segs.push(PathSeg {
+                name,
+                generics: Vec::new(),
+            });
             if !p.eat_punct(Tok::Colon2) {
                 return self.path_end(p);
             }
@@ -723,7 +859,10 @@ impl PatternFrame {
         };
         let generics = std::mem::take(&mut self.genargs);
         self.stage = PatStage::Path;
-        self.segs.push(PathSeg { name: seg_name, generics });
+        self.segs.push(PathSeg {
+            name: seg_name,
+            generics,
+        });
         self.path_resume(p)
     }
 

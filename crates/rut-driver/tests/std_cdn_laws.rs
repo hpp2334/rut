@@ -31,14 +31,16 @@ use common::{block_on, write_lock, Table};
 
 use rut_native::load_dir_with;
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -64,7 +66,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -107,12 +112,20 @@ fn artifact(key: &str) -> (String, Vec<u8>) {
 /// Write a consumer app over the given dep rows + source, load it
 /// through the fetcher, mount_std, compile — the CDN-consumer lane end
 /// to end. Answers the graph diags (empty = compiled).
-fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, src: &str) -> Result<Vec<String>, String> {
+fn load_and_compile(
+    dir: &Path,
+    rows: &str,
+    table: BTreeMap<String, Vec<u8>>,
+    src: &str,
+) -> Result<Vec<String>, String> {
     let app = dir.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        format!(r#"{{"name": "app", "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
+        format!(
+            r#"{{"name": "app", "deps": {{{}}}}}"#,
+            rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())
+        ),
     )
     .unwrap();
     std::fs::write(app.join("mod.rut"), src).unwrap();
@@ -133,8 +146,7 @@ fn load_and_compile(dir: &Path, rows: &str, table: BTreeMap<String, Vec<u8>>, sr
 fn every_committed_artifact_is_byte_fresh() {
     for (dir, name) in PKGS {
         let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(dir);
-        let fresh = rut_native::pack_dir(&tree)
-            .unwrap_or_else(|e| panic!("pack rut/{dir}: {e}"));
+        let fresh = rut_native::pack_dir(&tree).unwrap_or_else(|e| panic!("pack rut/{dir}: {e}"));
         let committed = std::fs::read(dist_std().join(format!("{name}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
         assert_eq!(
@@ -156,7 +168,8 @@ fn the_artifact_set_spells_the_one_wire_number() {
         let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap();
         let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
         assert_eq!(
-            m.format_version, Some(12),
+            m.format_version,
+            Some(12),
             "rut/{dir}: the manifest packs the current wire number"
         );
         if is_host {
@@ -248,8 +261,7 @@ fn a_generic_owning_bundle_without_template_bodies_refuses_at_mount() {
             }
         })
         .collect();
-    let torn_bytes =
-        rut_driver::bundle::write_bundle(&torn).expect("re-write the torn archive");
+    let torn_bytes = rut_driver::bundle::write_bundle(&torn).expect("re-write the torn archive");
     let base = std::env::temp_dir().join(format!("rut-std-cdn-wall-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let mut table = BTreeMap::new();
@@ -261,7 +273,10 @@ fn a_generic_owning_bundle_without_template_bodies_refuses_at_mount() {
         "use pouch::{ Vec };\n\nentry fn main() -> i32 {\n    let items: Vec<i64> = Vec<i64>::new();\n    items.push(7);\n    return items.len() as i32;\n}\n",
     )
     .expect_err("the torn bundle refuses at mount");
-    assert!(err.contains("`pouch` owns an open generic surface"), "{err}");
+    assert!(
+        err.contains("`pouch` owns an open generic surface"),
+        "{err}"
+    );
     assert!(err.contains("no template bodies"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
     let _ = std::fs::remove_dir_all(&base);
@@ -287,14 +302,12 @@ fn a_doctored_bundle_missing_one_template_row_refuses_loudly() {
                     rut_core::binary::decode(&b).expect("decode the pouch module binary");
                 // drop exactly one method-body template row: Vec::push
                 let before = prog.templates.len();
-                prog.templates
-                    .retain(|t| match &t.kind {
-                        rut_core::binary::TemplateKind::Method { data, name } => {
-                            !(prog.interner.name(*data) == "Vec"
-                                && prog.interner.name(*name) == "push")
-                        }
-                        _ => true,
-                    });
+                prog.templates.retain(|t| match &t.kind {
+                    rut_core::binary::TemplateKind::Method { data, name } => {
+                        !(prog.interner.name(*data) == "Vec" && prog.interner.name(*name) == "push")
+                    }
+                    _ => true,
+                });
                 assert_eq!(prog.templates.len(), before - 1, "the push row left");
                 (n, rut_core::binary::encode(&prog))
             } else {
@@ -329,12 +342,22 @@ fn load_compile_run(
     rows: &str,
     table: BTreeMap<String, Vec<u8>>,
     src: &str,
-) -> Result<(Vec<String>, Option<rut_core::binary::Program>, rut_driver::Walk), String> {
+) -> Result<
+    (
+        Vec<String>,
+        Option<rut_core::binary::Program>,
+        rut_driver::Walk,
+    ),
+    String,
+> {
     let app = dir.join("app");
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
-        format!(r#"{{"name": "app", "deps": {{{}}}}}"#, rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())),
+        format!(
+            r#"{{"name": "app", "deps": {{{}}}}}"#,
+            rows.trim_end_matches(|c: char| c == ',' || c.is_whitespace())
+        ),
     )
     .unwrap();
     std::fs::write(app.join("mod.rut"), src).unwrap();
@@ -379,8 +402,13 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     let out: i32 = vm.call("main", ()).expect("run");
     assert_eq!(out, 2, "the load-time-compiled body runs");
     let _ = std::fs::remove_dir_all(&base);
@@ -402,7 +430,10 @@ fn mixed_dir_and_archive_of_one_pkg_bind_per_row() {
         table.insert(url, bytes);
     }
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join("strbuild");
-    rows.push_str(&format!("\"strbuild\": {{\"path\": \"{}\"}},\n", tree.display()));
+    rows.push_str(&format!(
+        "\"strbuild\": {{\"path\": \"{}\"}},\n",
+        tree.display()
+    ));
     let base = std::env::temp_dir().join(format!("rut-std-cdn-mixed-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let (diags, program, session) = load_compile_run(
@@ -416,16 +447,22 @@ fn mixed_dir_and_archive_of_one_pkg_bind_per_row() {
     // the app's path row bound the DIRECTORY (its own row's body); the
     // archive's compiled group rode beside it under its identity
     assert!(
-        matches!(session.pkg("strbuild").unwrap().body, rut_driver::MountedBody::Source { .. }),
+        matches!(
+            session.pkg("strbuild").unwrap().body,
+            rut_driver::MountedBody::Source { .. }
+        ),
         "the consumer binds its own row's mount (the dir source)"
     );
     assert!(
+        session.pkgs.iter().any(
+            |p| rut_driver::bundle::parse_identity(&p.spec).map(|(n, _)| n) == Some("strbuild")
+        ),
+        "the archive's strbuild group mounted under its content identity: {:?}",
         session
             .pkgs
             .iter()
-            .any(|p| rut_driver::bundle::parse_identity(&p.spec).map(|(n, _)| n) == Some("strbuild")),
-        "the archive's strbuild group mounted under its content identity: {:?}",
-        session.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>()
+            .map(|p| p.spec.clone())
+            .collect::<Vec<_>>()
     );
     let prog = rut_core::link::flatten(program.expect("linked"));
     rut_vm::verify::verify(&prog).expect("verify");
@@ -507,7 +544,12 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     assert!(
         g.graph.diags.is_empty(),
         "{}",
-        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; ")
     );
     let prog = g.graph.program.expect("linked");
     rut_vm::verify::verify(&rut_core::link::flatten(prog.clone())).expect("verify");
@@ -516,7 +558,12 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .expect("vm");
     let out: String = vm.call("main", ()).expect("run");
     assert_eq!(out, "hello, cdn");
@@ -524,7 +571,11 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     // under its content identity (the mount key), rows registered
     // under the pkg's bare name
     let sbh = common::pkg_named(&session, "strbuild_host");
-    assert!(rut_driver::bundle::is_identity(&sbh.spec), "the group mounts under its identity: {}", sbh.spec);
+    assert!(
+        rut_driver::bundle::is_identity(&sbh.spec),
+        "the group mounts under its identity: {}",
+        sbh.spec
+    );
     assert!(matches!(&sbh.body, rut_driver::MountedBody::Host { .. }));
     let _ = std::fs::remove_dir_all(&base);
 }

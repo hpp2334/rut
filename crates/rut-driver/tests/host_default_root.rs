@@ -20,9 +20,9 @@
 
 use std::path::Path;
 
+use rut_core::types::{TY_BYTES, TY_I64, TY_STR};
 use rut_driver::{HostRow, MountedBody};
 use rut_native::{load_path_session, pack_dir};
-use rut_core::types::{TY_BYTES, TY_I64, TY_STR};
 
 /// A temp module dir from a manifest + file map (the host_pkgs
 /// fixture shape, nested paths included).
@@ -39,14 +39,19 @@ fn make_pkg(base: &Path, files: &[(&str, &str)]) -> std::path::PathBuf {
 }
 
 fn scratch(tag: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-host-default-root-{tag}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!(
+        "rut-host-default-root-{tag}-{}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
 }
 
 fn rows_of(pkg: &rut_driver::Mounted) -> Vec<HostRow> {
-    let MountedBody::Host { host_funcs, .. } = &pkg.body else { panic!("a host body") };
+    let MountedBody::Host { host_funcs, .. } = &pkg.body else {
+        panic!("a host body")
+    };
     host_funcs.clone()
 }
 
@@ -75,15 +80,24 @@ fn the_default_root_is_discovered_without_an_entry_type() {
         &scratch("tree"),
         &[
             ("rut.jsonc", r#"{"name": "myhost", "type": "host"}"#),
-            ("mod.d.rut", "pub mod net;\npub host fn legacy_ping() -> bool;\n"),
-            ("net/mod.d.rut", "pub host fn connect(url: str) -> opaque;\n"),
+            (
+                "mod.d.rut",
+                "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            ),
+            (
+                "net/mod.d.rut",
+                "pub host fn connect(url: str) -> opaque;\n",
+            ),
         ],
     );
     let loaded = load_path_session(&dir).expect("loads");
     let m = loaded.pkg("myhost").unwrap();
     assert_eq!(m.mods.keys().collect::<Vec<_>>(), vec!["net"]);
     assert_eq!(
-        rows_of(m).iter().map(|r| r.full_name("myhost")).collect::<Vec<_>>(),
+        rows_of(m)
+            .iter()
+            .map(|r| r.full_name("myhost"))
+            .collect::<Vec<_>>(),
         vec!["myhost::legacy_ping", "myhost::net::connect"],
     );
 }
@@ -129,12 +143,10 @@ fn neither_door_is_the_loud_no_entry_error() {
     // pack lane gates on the bundle keys first, so spell them)
     let dir = make_pkg(
         &scratch("neither-pack"),
-        &[
-            (
-                "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 12, "name": "h", "type": "host"}"#,
-            ),
-        ],
+        &[(
+            "rut.jsonc",
+            r#"{"format": "rutbundle", "format_version": 12, "name": "h", "type": "host"}"#,
+        )],
     );
     let err = pack_dir(&dir).unwrap_err().to_string();
     assert!(err.contains("host pkg with no entry"), "{err}");
@@ -182,7 +194,11 @@ fn the_default_root_packs_and_loads_back() {
     let bytes = pack_dir(&dir).expect("pack");
     let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(names, vec!["rut.jsonc", "mod.d.rut"], "the root rides its default key");
+    assert_eq!(
+        names,
+        vec!["rut.jsonc", "mod.d.rut"],
+        "the root rides its default key"
+    );
     assert_eq!(bytes, pack_dir(&dir).unwrap(), "deterministic");
     let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     assert_eq!(
@@ -200,7 +216,10 @@ fn the_default_root_packs_and_loads_back() {
                 "rut.jsonc",
                 r#"{"format": "rutbundle", "format_version": 12, "name": "myhost", "type": "host"}"#,
             ),
-            ("mod.d.rut", "pub mod net;\npub host fn legacy_ping() -> bool;\n"),
+            (
+                "mod.d.rut",
+                "pub mod net;\npub host fn legacy_ping() -> bool;\n",
+            ),
             ("net/mod.d.rut", "pub host fn connect(url: str) -> i64;\n"),
         ],
     );
@@ -211,14 +230,20 @@ fn the_default_root_packs_and_loads_back() {
     // the entry IS the tree: the child's declaration spliced inline
     let entry = bundle.read("mod.d.rut").unwrap();
     assert!(entry.contains("mod net {"), "the inline form: {entry}");
-    assert!(entry.contains("connect"), "the child's rows ride inside: {entry}");
+    assert!(
+        entry.contains("connect"),
+        "the child's rows ride inside: {entry}"
+    );
     assert_eq!(bytes, pack_dir(&dir).unwrap(), "deterministic");
     let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
     let m = loaded.pkg("myhost").unwrap();
     // the tree lives in the grammar now — no file modules mount
     assert!(m.mods.is_empty(), "{:?}", m.mods.keys().collect::<Vec<_>>());
     assert_eq!(
-        rows_of(m).iter().map(|r| r.full_name("myhost")).collect::<Vec<_>>(),
+        rows_of(m)
+            .iter()
+            .map(|r| r.full_name("myhost"))
+            .collect::<Vec<_>>(),
         vec!["myhost::legacy_ping", "myhost::net::connect"],
     );
 }
@@ -242,7 +267,10 @@ fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
                 "http_host.d.rut",
                 "pub mod net;\npub host fn http_send(url: str) -> bytes;\n",
             ),
-            ("net/mod.d.rut", "pub host fn http_status(r: opaque) -> i64;\n"),
+            (
+                "net/mod.d.rut",
+                "pub host fn http_status(r: opaque) -> i64;\n",
+            ),
         ],
     );
     let bytes = pack_dir(&dir).expect("pack");

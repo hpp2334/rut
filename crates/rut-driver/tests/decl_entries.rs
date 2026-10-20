@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use rut_driver::{lower_decl_module, normalize_decl_tree, MountedBody, ModSource, PackOpts};
+use rut_driver::{lower_decl_module, normalize_decl_tree, ModSource, MountedBody, PackOpts};
 use rut_native::{pack_dir, pack_dir_opts};
 
 // `pack_dir_opts_fetched` answers the pair; the tests below take the
@@ -83,7 +83,11 @@ entry fn main() -> i64 {
 fn a_compiled_group_carries_one_generated_entry() {
     let root = scratch("compiled");
     let app = root.join("app");
-    write(&app, "rut.jsonc", r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#);
+    write(
+        &app,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
+    );
     write(&app, "mod.rut", LIB_SRC);
     let bytes = pack_dir(&app).expect("pack");
 
@@ -94,7 +98,15 @@ fn a_compiled_group_carries_one_generated_entry() {
         vec!["rut.jsonc", "rut.scopes", "mod.rutc", "mod.d.rut"],
         "the root's generated entry rides beside the binary: {names:?}"
     );
-    let entry = String::from_utf8(entries.iter().find(|(n, _)| n == "mod.d.rut").unwrap().1.clone()).unwrap();
+    let entry = String::from_utf8(
+        entries
+            .iter()
+            .find(|(n, _)| n == "mod.d.rut")
+            .unwrap()
+            .1
+            .clone(),
+    )
+    .unwrap();
     // the entry is GENERATED (the header says so) and states the
     // surface: the class with its fields + bodiless methods, the
     // newtype desugared, the free + generic fns; the interface rides
@@ -103,22 +115,37 @@ fn a_compiled_group_carries_one_generated_entry() {
     assert!(entry.contains("pub class Store<T> {"), "{entry}");
     assert!(entry.contains("pub fn put(mut self, _0: T);"), "{entry}");
     assert!(entry.contains("pub fn take(mut self) -> ?T;"), "{entry}");
-    assert!(entry.contains("pub class Meter {\n    inner: i64;"), "the newtype desugared: {entry}");
+    assert!(
+        entry.contains("pub class Meter {\n    inner: i64;"),
+        "the newtype desugared: {entry}"
+    );
     assert!(entry.contains("pub fn freeze(_0: i64) -> i64;"), "{entry}");
-    assert!(entry.contains("pub fn decode_json<T>(_0: str) -> ?T;"), "{entry}");
-    assert!(entry.contains("// interface Shape<0 generic params>"), "{entry}");
+    assert!(
+        entry.contains("pub fn decode_json<T>(_0: str) -> ?T;"),
+        "{entry}"
+    );
+    assert!(
+        entry.contains("// interface Shape<0 generic params>"),
+        "{entry}"
+    );
     // the generation invariant, restated: the text parses back and
     // states the same surface (the decoded binary needs the identity
     // rebase that rebuilds the type bookkeeping — the mount's own
     // first half)
     let prog = rut_core::link::rebase(
-        rut_core::binary::decode(&entries.iter().find(|(n, _)| n == "mod.rutc").unwrap().1).unwrap(),
+        rut_core::binary::decode(&entries.iter().find(|(n, _)| n == "mod.rutc").unwrap().1)
+            .unwrap(),
         &|s| s,
     );
-    rut_driver::pack::check_round_trip("app", &prog, &entry).expect("the entry re-states the surface");
+    rut_driver::pack::check_round_trip("app", &prog, &entry)
+        .expect("the entry re-states the surface");
     // and the pack is byte-identical twice (the determinism golden
     // covers the decl text bytes too)
-    assert_eq!(bytes, pack_dir(&app).unwrap(), "deterministic incl. the entry text");
+    assert_eq!(
+        bytes,
+        pack_dir(&app).unwrap(),
+        "deterministic incl. the entry text"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -131,8 +158,16 @@ fn the_loader_never_reads_a_compiled_groups_entry() {
     // unchanged.
     let root = scratch("l2");
     let app = root.join("app");
-    write(&app, "rut.jsonc", r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#);
-    write(&app, "mod.rut", "pub fn seven() -> i64 { return 7; }\nentry fn main() -> i64 { return seven(); }\n");
+    write(
+        &app,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
+    );
+    write(
+        &app,
+        "mod.rut",
+        "pub fn seven() -> i64 { return 7; }\nentry fn main() -> i64 { return seven(); }\n",
+    );
     let bytes = pack_dir(&app).expect("pack");
 
     let mut doctored: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes).unwrap();
@@ -142,7 +177,8 @@ fn the_loader_never_reads_a_compiled_groups_entry() {
         }
     }
     let sealed = rut_driver::bundle::write_bundle(&doctored).unwrap();
-    let loaded = rut_driver::Mounted::from_bundle(&sealed).expect("the loader never reads the entry");
+    let loaded =
+        rut_driver::Mounted::from_bundle(&sealed).expect("the loader never reads the entry");
     assert_eq!(loaded.root, "app");
     let g = loaded
         .pkgs
@@ -162,7 +198,11 @@ fn strip_omits_the_declaration_entry() {
     // private sidecar's twin law: OFF the wire entirely.
     let root = scratch("strip");
     let app = root.join("app");
-    write(&app, "rut.jsonc", r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#);
+    write(
+        &app,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
+    );
     write(&app, "mod.rut", LIB_SRC);
     let (bytes, symtab) = pack_dir_opts(&app, &PackOpts { strip: true }).expect("strip-pack");
     assert!(symtab.is_some(), "the sidecar still rides");
@@ -212,8 +252,14 @@ fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
     // the tree rides INSIDE the grammar: verbatim texts, inline blocks
     assert!(entry.contains("pub mod net {"), "{entry}");
     assert!(entry.contains("mod tls {"), "{entry}");
-    assert!(entry.contains("// the request lane"), "comments survive verbatim: {entry}");
-    assert!(!entry.contains("mod net;"), "the edge is spelled inline now: {entry}");
+    assert!(
+        entry.contains("// the request lane"),
+        "comments survive verbatim: {entry}"
+    );
+    assert!(
+        !entry.contains("mod net;"),
+        "the edge is spelled inline now: {entry}"
+    );
     // deterministic
     assert_eq!(entry, normalize_decl_tree(root_text, &mods).unwrap());
     // the round-trip: the entry lowers (empty children map) to the
@@ -223,7 +269,8 @@ fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
         MountedBody::Host { host_funcs, .. } => host_funcs,
         _ => panic!("host rows"),
     };
-    let inline = lower_decl_module(&entry, &Default::default(), "inline").expect("the entry lowers");
+    let inline =
+        lower_decl_module(&entry, &Default::default(), "inline").expect("the entry lowers");
     let inline_rows = match inline.body {
         MountedBody::Host { host_funcs, .. } => host_funcs,
         _ => panic!("host rows"),
@@ -235,7 +282,11 @@ fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
     let names: Vec<String> = inline_rows.iter().map(|r| r.full_name("myhost")).collect();
     assert_eq!(
         names,
-        vec!["myhost::legacy_ping", "myhost::net::connect", "myhost::net::tls::handshake"],
+        vec![
+            "myhost::legacy_ping",
+            "myhost::net::connect",
+            "myhost::net::tls::handshake"
+        ],
         "the nesting stamps the paths"
     );
 }
@@ -285,8 +336,16 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
     // re-label its manifest 11 and re-seal — exactly the bytes a v11
     // publish shipped (the layout grammar is one; the label routes)
     let dep_dir = root.join("dep");
-    write(&dep_dir, "rut.jsonc", r#"{"format": "rutbundle", "format_version": 12, "name": "dep"}"#);
-    write(&dep_dir, "mod.rut", "pub fn tag() -> i64 { return 5; }\nentry fn main() -> i64 { return tag(); }\n");
+    write(
+        &dep_dir,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 12, "name": "dep"}"#,
+    );
+    write(
+        &dep_dir,
+        "mod.rut",
+        "pub fn tag() -> i64 { return 5; }\nentry fn main() -> i64 { return tag(); }\n",
+    );
     let fresh = pack_dir(&dep_dir).unwrap();
     let dep_bytes = {
         let mut entries = rut_driver::bundle::parse_bundle(&fresh).unwrap();
@@ -298,10 +357,21 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
         rut_driver::bundle::write_bundle(&entries).unwrap()
     };
     // the consumer: dir manifest + the dep as a URL row, pre-fetched
-    write(&root, "rut.jsonc", r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"dep": {"url": "https://cdn.test/dep.rutbundle"}}}"#);
-    write(&root, "mod.rut", "use dep::{ tag };\nentry fn main() -> i64 { return tag(); }\n");
+    write(
+        &root,
+        "rut.jsonc",
+        r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"dep": {"url": "https://cdn.test/dep.rutbundle"}}}"#,
+    );
+    write(
+        &root,
+        "mod.rut",
+        "use dep::{ tag };\nentry fn main() -> i64 { return tag(); }\n",
+    );
     let mut urls = BTreeMap::new();
-    urls.insert("https://cdn.test/dep.rutbundle".to_string(), dep_bytes.clone());
+    urls.insert(
+        "https://cdn.test/dep.rutbundle".to_string(),
+        dep_bytes.clone(),
+    );
     // the pin law: the url must have a lock row (the bytes must hash to
     // it) — `rut install` writes it; the test spells it by hand
     let lock = rut_driver::LockFile::from_rows(vec![rut_driver::LockRow {
@@ -309,13 +379,20 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
         url: "https://cdn.test/dep.rutbundle".into(),
         sha256: {
             use sha2::{Digest, Sha256};
-            let hex: String = Sha256::digest(&dep_bytes).iter().map(|b| format!("{b:02x}")).collect();
+            let hex: String = Sha256::digest(&dep_bytes)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
             hex
         },
     }]);
     write(&root, "rut.lock", &rut_driver::render_lock(&lock));
-    let (bytes, _symtab) = pack_fetched(&root, &PackOpts::default(), &urls).expect("pack over the fetched v11 bytes");
+    let (bytes, _symtab) =
+        pack_fetched(&root, &PackOpts::default(), &urls).expect("pack over the fetched v11 bytes");
     let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("the mixed-wire output loads");
-    assert!(loaded.pkgs.iter().any(|p| rut_driver::bundle::identity::mount_name(&p.spec) == "dep"));
+    assert!(loaded
+        .pkgs
+        .iter()
+        .any(|p| rut_driver::bundle::identity::mount_name(&p.spec) == "dep"));
     let _ = std::fs::remove_dir_all(&root);
 }

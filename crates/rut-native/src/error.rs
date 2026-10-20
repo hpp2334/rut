@@ -43,13 +43,8 @@ pub enum LoadError {
     },
     /// a url dep with no lock row — the pin lives in rut.lock, and a
     /// url without one is not the install law yet
-    #[error(
-        "dep `{spec}` ({url}) is not pinned — rut.lock has no row for it: run `rut install`"
-    )]
-    Unpinned {
-        spec: String,
-        url: String,
-    },
+    #[error("dep `{spec}` ({url}) is not pinned — rut.lock has no row for it: run `rut install`")]
+    Unpinned { spec: String, url: String },
     /// the remote policy failed (a fetch, a lookup, a write)
     #[error(transparent)]
     Remote(#[from] RemoteError),

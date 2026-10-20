@@ -5,7 +5,7 @@
 
 use rut_core::binary::{FuncCode, Program};
 use rut_core::ops::Op;
-use rut_core::types::{Repr, TY_U8, TyKind};
+use rut_core::types::{Repr, TyKind, TY_U8};
 
 pub fn verify(prog: &Program) -> Result<(), String> {
     let ntypes = prog.types.types.len() as u32;
@@ -31,12 +31,18 @@ pub fn verify(prog: &Program) -> Result<(), String> {
             // pooled operand spans must be in range
             if let Some((off, argc)) = op.argv_span() {
                 if off as usize + argc as usize > f.argv.len() {
-                    return Err(bad(format!("argv span {off}+{argc} out of range ({} entries)", f.argv.len())));
+                    return Err(bad(format!(
+                        "argv span {off}+{argc} out of range ({} entries)",
+                        f.argv.len()
+                    )));
                 }
             }
             if let Some((off, count)) = op.label_span() {
                 if off as usize + count as usize > f.labels.len() {
-                    return Err(bad(format!("label span {off}+{count} out of range ({} entries)", f.labels.len())));
+                    return Err(bad(format!(
+                        "label span {off}+{count} out of range ({} entries)",
+                        f.labels.len()
+                    )));
                 }
             }
             // type operands must be in the table
@@ -58,23 +64,40 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         }
                     }
                 }
-                Op::BrTable { table_off, count, default, .. } => {
-                    let arms = &f.labels[*table_off as usize..*table_off as usize + *count as usize];
+                Op::BrTable {
+                    table_off,
+                    count,
+                    default,
+                    ..
+                } => {
+                    let arms =
+                        &f.labels[*table_off as usize..*table_off as usize + *count as usize];
                     for t in arms.iter().chain(std::iter::once(default)) {
                         if *t as usize >= f.code.len() {
                             return Err(bad(format!("brtable target {t} out of range")));
                         }
                     }
                 }
-                Op::Call { func, argv_off, argc, .. } | Op::CallM { func, argv_off, argc, .. } => {
+                Op::Call {
+                    func,
+                    argv_off,
+                    argc,
+                    ..
+                }
+                | Op::CallM {
+                    func,
+                    argv_off,
+                    argc,
+                    ..
+                } => {
                     let callee = prog
                         .funcs
                         .get(*func as usize)
                         .ok_or_else(|| bad(format!("call target #{func} out of range")))?;
                     if matches!(op, Op::CallM { .. }) && !callee.is_method {
                         return Err(bad("CallM to a non-method".into()));
-                    }                    // the pool span is the callee's whole parameter list
-                    // (`CallM` folds the receiver into `argv[0]`)
+                    } // the pool span is the callee's whole parameter list
+                      // (`CallM` folds the receiver into `argv[0]`)
                     let n = *argc as usize;
                     if n != callee.params.len() {
                         return Err(bad(format!(
@@ -103,7 +126,12 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("EnumNew over a non-enum type".into()));
                     }
                 }
-                Op::GetF { obj, field, repr, .. } | Op::SetF { obj, field, repr, .. } => {
+                Op::GetF {
+                    obj, field, repr, ..
+                }
+                | Op::SetF {
+                    obj, field, repr, ..
+                } => {
                     let ty = f.regs[*obj as usize];
                     // `p.x` auto-derefs: a pointer register's
                     // field 0 is the pointee cell (a ref slot); reads
@@ -130,7 +158,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             // — a mismatch would mis-handle RC
                             if prog.types.repr_of(fi.ty) != *repr {
                                 return Err(bad(
-                                    "field access repr does not match the field type".into(),
+                                    "field access repr does not match the field type".into()
                                 ));
                             }
                         }
@@ -183,51 +211,65 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         return Err(bad("arrnew repr does not match the element type".into()));
                     }
                 }
-                Op::ArrGetF { obj, field, repr, .. } | Op::ArrSetF { obj, field, repr, .. } => {
+                Op::ArrGetF {
+                    obj, field, repr, ..
+                }
+                | Op::ArrSetF {
+                    obj, field, repr, ..
+                } => {
                     let ety = match prog.types.kind(f.regs[*obj as usize]) {
                         TyKind::Data { fields } => match fields.get(*field as usize) {
                             Some(fi) => match prog.types.kind(fi.ty) {
                                 TyKind::Array { elem } => *elem,
                                 _ => return Err(bad("field-array op on a non-array field".into())),
                             },
-                            None => return Err(bad("field-array op field index out of range".into())),
+                            None => {
+                                return Err(bad("field-array op field index out of range".into()))
+                            }
                         },
                         _ => return Err(bad("field-array op on a non-record register".into())),
                     };
                     if !elem_repr_ok(&prog.types, ety, *repr, matches!(op, Op::ArrSetF { .. })) {
-                        return Err(bad("field-array op repr does not match the element type".into()));
+                        return Err(bad(
+                            "field-array op repr does not match the element type".into()
+                        ));
                     }
                 }
-                Op::MakeRecord { ty, argv_off, argc, .. } => {
+                Op::MakeRecord {
+                    ty, argv_off, argc, ..
+                } => {
                     let vals = &f.argv[*argv_off as usize..*argv_off as usize + *argc as usize];
                     match prog.types.kind(*ty) {
-                    TyKind::Data { fields } => {
-                        if vals.len() != fields.len() {
-                            return Err(bad(
-                                "MakeRecord value count does not match the field count".into(),
-                            ));
-                        }
-                        for (i, &v) in vals.iter().enumerate() {
-                            // the register's type and the field's type may
-                            // be two units' rows for ONE instantiation (a
-                            // wrapper construction crosses: the consumer
-                            // mints the record over the owner's claimed
-                            // row) — the layout law compares the SPELLING
-                            // (name + kind), never two units' dense ids
-                            let reg_ty = f.regs[v as usize];
-                            let same = reg_ty == fields[i].ty || {
-                                let rn = |t: u32| prog.interner.name(prog.types.type_at(t).name).to_string();
-                                let kd = |t: u32| format!("{:?}", prog.types.kind(t));
-                                rn(reg_ty) == rn(fields[i].ty) && kd(reg_ty) == kd(fields[i].ty)
-                            };
-                            if !same {
+                        TyKind::Data { fields } => {
+                            if vals.len() != fields.len() {
                                 return Err(bad(
-                                    "MakeRecord value type does not match the field type".into(),
+                                    "MakeRecord value count does not match the field count".into(),
                                 ));
                             }
+                            for (i, &v) in vals.iter().enumerate() {
+                                // the register's type and the field's type may
+                                // be two units' rows for ONE instantiation (a
+                                // wrapper construction crosses: the consumer
+                                // mints the record over the owner's claimed
+                                // row) — the layout law compares the SPELLING
+                                // (name + kind), never two units' dense ids
+                                let reg_ty = f.regs[v as usize];
+                                let same = reg_ty == fields[i].ty || {
+                                    let rn = |t: u32| {
+                                        prog.interner.name(prog.types.type_at(t).name).to_string()
+                                    };
+                                    let kd = |t: u32| format!("{:?}", prog.types.kind(t));
+                                    rn(reg_ty) == rn(fields[i].ty) && kd(reg_ty) == kd(fields[i].ty)
+                                };
+                                if !same {
+                                    return Err(bad(
+                                        "MakeRecord value type does not match the field type"
+                                            .into(),
+                                    ));
+                                }
+                            }
                         }
-                    }
-                    _ => return Err(bad("MakeRecord over a non-record type".into())),
+                        _ => return Err(bad("MakeRecord over a non-record type".into())),
                     }
                 }
                 Op::IsIface { want, .. } => {
@@ -261,7 +303,9 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     match prog.types.kind(f.regs[*a as usize]) {
                         TyKind::Prim(p) if p == prim => {}
                         _ => {
-                            return Err(bad("float neg operand is not the embedded primitive".into()))
+                            return Err(bad(
+                                "float neg operand is not the embedded primitive".into()
+                            ))
                         }
                     }
                 }
@@ -300,7 +344,7 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                             TyKind::Prim(p) if p == prim => {}
                             _ => {
                                 return Err(bad(
-                                    "int op operand is not the embedded primitive".into(),
+                                    "int op operand is not the embedded primitive".into()
                                 ))
                             }
                         }
@@ -312,7 +356,9 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                     }
                     match prog.types.kind(f.regs[*a as usize]) {
                         TyKind::Prim(p) if p == prim => {}
-                        _ => return Err(bad("int neg operand is not the embedded primitive".into())),
+                        _ => {
+                            return Err(bad("int neg operand is not the embedded primitive".into()))
+                        }
                     }
                 }
                 Op::EqI { prim, a, b, .. }
@@ -335,11 +381,15 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         }
                     }
                 }
-                Op::Conv { from, to, dst, src, .. } => {
+                Op::Conv {
+                    from, to, dst, src, ..
+                } => {
                     if !matches!(prog.types.kind(f.regs[*src as usize]), TyKind::Prim(p) if p == from)
                         || !matches!(prog.types.kind(f.regs[*dst as usize]), TyKind::Prim(p) if p == to)
                     {
-                        return Err(bad("conv operand types do not match the embedded primitives".into()));
+                        return Err(bad(
+                            "conv operand types do not match the embedded primitives".into(),
+                        ));
                     }
                 }
                 _ => {}
@@ -364,9 +414,15 @@ fn elem_repr_ok(types: &rut_core::types::TypeTable, ety: u32, repr: Repr, is_sto
     if rut_core::types::arr_elem_repr(types, ety) == repr {
         return true;
     }
-    let Some(p) = repr.opt_prim() else { return false };
-    let TyKind::Opt { elem } = types.kind(ety) else { return false };
-    let TyKind::Prim(q) = types.kind(*elem) else { return false };
+    let Some(p) = repr.opt_prim() else {
+        return false;
+    };
+    let TyKind::Opt { elem } = types.kind(ety) else {
+        return false;
+    };
+    let TyKind::Prim(q) = types.kind(*elem) else {
+        return false;
+    };
     if p != *q {
         return false;
     }
@@ -390,31 +446,65 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
             push(*dst);
             push(*src);
         }
-        Op::Const { dst, .. } | Op::ConstRaw { dst, .. } | Op::NewCell { dst, .. }
-        | Op::ArrNew { dst, .. } | Op::ArrLit { dst, .. } | Op::EnumNew { dst, .. }
+        Op::Const { dst, .. }
+        | Op::ConstRaw { dst, .. }
+        | Op::NewCell { dst, .. }
+        | Op::ArrNew { dst, .. }
+        | Op::ArrLit { dst, .. }
+        | Op::EnumNew { dst, .. }
         | Op::Panic { msg: dst } => push(*dst),
         Op::MakeRecord { dst, .. } => push(*dst),
         // two-operand scalar ops
-        Op::Not { dst, a } | Op::NegF { dst, a, .. }
-        | Op::NegI { dst, a, .. } => {
+        Op::Not { dst, a } | Op::NegF { dst, a, .. } | Op::NegI { dst, a, .. } => {
             push(*dst);
             push(*a);
         }
         // three-operand ops
-        Op::StrCmp { dst, a, b, .. } | Op::RefEq { dst, a, b, .. }
+        Op::StrCmp { dst, a, b, .. }
+        | Op::RefEq { dst, a, b, .. }
         | Op::ArrayCmp { dst, a, b, .. }
-        | Op::ArrGet { dst, arr: a, idx: b, .. }
-        | Op::ArrGetF { dst, obj: a, idx: b, .. }
-        | Op::AddF { dst, a, b, .. } | Op::SubF { dst, a, b, .. } | Op::MulF { dst, a, b, .. }
-        | Op::DivF { dst, a, b, .. } | Op::ModF { dst, a, b, .. } | Op::EqF { dst, a, b, .. }
-        | Op::NeF { dst, a, b, .. } | Op::LtF { dst, a, b, .. } | Op::GtF { dst, a, b, .. }
-        | Op::LeF { dst, a, b, .. } | Op::GeF { dst, a, b, .. }
-        | Op::AddI { dst, a, b, .. } | Op::SubI { dst, a, b, .. } | Op::MulI { dst, a, b, .. }
-        | Op::DivI { dst, a, b, .. } | Op::ModI { dst, a, b, .. } | Op::WAddI { dst, a, b, .. }
-        | Op::WSubI { dst, a, b, .. } | Op::WMulI { dst, a, b, .. } | Op::AndI { dst, a, b, .. } | Op::OrI { dst, a, b, .. }
-        | Op::XorI { dst, a, b, .. } | Op::ShlI { dst, a, b, .. } | Op::ShrI { dst, a, b, .. }
-        | Op::WrapShlI { dst, a, b, .. } | Op::EqI { dst, a, b, .. } | Op::NeI { dst, a, b, .. }
-        | Op::LtI { dst, a, b, .. } | Op::GtI { dst, a, b, .. } | Op::LeI { dst, a, b, .. }
+        | Op::ArrGet {
+            dst,
+            arr: a,
+            idx: b,
+            ..
+        }
+        | Op::ArrGetF {
+            dst,
+            obj: a,
+            idx: b,
+            ..
+        }
+        | Op::AddF { dst, a, b, .. }
+        | Op::SubF { dst, a, b, .. }
+        | Op::MulF { dst, a, b, .. }
+        | Op::DivF { dst, a, b, .. }
+        | Op::ModF { dst, a, b, .. }
+        | Op::EqF { dst, a, b, .. }
+        | Op::NeF { dst, a, b, .. }
+        | Op::LtF { dst, a, b, .. }
+        | Op::GtF { dst, a, b, .. }
+        | Op::LeF { dst, a, b, .. }
+        | Op::GeF { dst, a, b, .. }
+        | Op::AddI { dst, a, b, .. }
+        | Op::SubI { dst, a, b, .. }
+        | Op::MulI { dst, a, b, .. }
+        | Op::DivI { dst, a, b, .. }
+        | Op::ModI { dst, a, b, .. }
+        | Op::WAddI { dst, a, b, .. }
+        | Op::WSubI { dst, a, b, .. }
+        | Op::WMulI { dst, a, b, .. }
+        | Op::AndI { dst, a, b, .. }
+        | Op::OrI { dst, a, b, .. }
+        | Op::XorI { dst, a, b, .. }
+        | Op::ShlI { dst, a, b, .. }
+        | Op::ShrI { dst, a, b, .. }
+        | Op::WrapShlI { dst, a, b, .. }
+        | Op::EqI { dst, a, b, .. }
+        | Op::NeI { dst, a, b, .. }
+        | Op::LtI { dst, a, b, .. }
+        | Op::GtI { dst, a, b, .. }
+        | Op::LeI { dst, a, b, .. }
         | Op::GeI { dst, a, b, .. } => {
             push(*dst);
             push(*a);
@@ -464,7 +554,10 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
         }
         Op::Br { cond, .. } => push(*cond),
         Op::BrTable { idx, .. } => push(*idx),
-        Op::Call { dst, .. } | Op::CallM { dst, .. } | Op::CallI { dst, .. } | Op::CallFn { dst, .. } => {
+        Op::Call { dst, .. }
+        | Op::CallM { dst, .. }
+        | Op::CallI { dst, .. }
+        | Op::CallFn { dst, .. } => {
             if *dst != rut_core::ops::NOREG {
                 v.push(*dst);
             }
@@ -501,11 +594,18 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
 
 fn tys_of(op: &Op) -> Vec<u32> {
     match op {
-        Op::NewCell { ty, .. } | Op::Own { ty, .. }
-        | Op::ArrNew { ty, .. } | Op::ArrLit { ty, .. } | Op::EnumNew { ty, .. }
-        | Op::IsType { want: ty, .. } | Op::Unbox { ty, .. }
-        | Op::Box { ty, .. } | Op::MakeRecord { ty, .. } | Op::MakeOpt { ty, .. }
-        | Op::WeakNew { ty, .. } | Op::WeakUpgrade { ty, .. } => vec![*ty],
+        Op::NewCell { ty, .. }
+        | Op::Own { ty, .. }
+        | Op::ArrNew { ty, .. }
+        | Op::ArrLit { ty, .. }
+        | Op::EnumNew { ty, .. }
+        | Op::IsType { want: ty, .. }
+        | Op::Unbox { ty, .. }
+        | Op::Box { ty, .. }
+        | Op::MakeRecord { ty, .. }
+        | Op::MakeOpt { ty, .. }
+        | Op::WeakNew { ty, .. }
+        | Op::WeakUpgrade { ty, .. } => vec![*ty],
         _ => Vec::new(),
     }
 }

@@ -38,7 +38,9 @@ pub(super) fn build_seed_groups<'a>(
     }
     let mut groups: Vec<crate::SeedGroup> = Vec::new();
     for (requester, rows) in &per_requester {
-        let Some((ridx, requester_scope)) = done.get(requester).map(|u| (u.idx, u.scope)) else { continue };
+        let Some((ridx, requester_scope)) = done.get(requester).map(|u| (u.idx, u.scope)) else {
+            continue;
+        };
         let prog = &programs[ridx];
         let rows: Vec<((rut_core::ScopeId, u32), rut_core::types::RutType)> =
             rows.iter().map(|(k, v)| (*k, v.clone())).collect();

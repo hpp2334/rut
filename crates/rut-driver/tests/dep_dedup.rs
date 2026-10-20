@@ -25,14 +25,16 @@ const SIBS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/sibs");
 mod common;
 use common as _;
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -58,15 +60,17 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
 }
 
 fn load(rel: &str) -> Result<rut_driver::Walk, String> {
-    rut_native::load_dir(Path::new(&format!("{SIBS}/{rel}")))
-    .map_err(|e| e.to_string())
+    rut_native::load_dir(Path::new(&format!("{SIBS}/{rel}"))).map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------
@@ -94,13 +98,7 @@ fn write_util(root: &Path, dirname: &str, version: i64, tag: &str) {
 /// One consumer pkg over a url-dep util — packs to an archive whose
 /// rode-along group rides under the util's content identity. The lock
 /// rides too (the realistic fixture: a project that fetches installed).
-fn write_consumer(
-    root: &Path,
-    name: &str,
-    url: &str,
-    bytes: &[u8],
-    fndecl: &str,
-) {
+fn write_consumer(root: &Path, name: &str, url: &str, bytes: &[u8], fndecl: &str) {
     let dir = root.join(name);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
@@ -146,8 +144,20 @@ fn same_name_two_identities_one_program() {
     let url1 = "https://fixtures.test/util-v1.rutbundle";
     let url2 = "https://fixtures.test/util-v2.rutbundle";
 
-    write_consumer(&root, "a", url1, &u1, "pub fn from_a() -> i64 { return tag(); }");
-    write_consumer(&root, "b", url2, &u2, "pub fn from_b() -> i64 { return tag(); }");
+    write_consumer(
+        &root,
+        "a",
+        url1,
+        &u1,
+        "pub fn from_a() -> i64 { return tag(); }",
+    );
+    write_consumer(
+        &root,
+        "b",
+        url2,
+        &u2,
+        "pub fn from_b() -> i64 { return tag(); }",
+    );
     let mut fetch_map = std::collections::BTreeMap::new();
     fetch_map.insert(url1.to_string(), u1.clone());
     fetch_map.insert(url2.to_string(), u2.clone());
@@ -176,7 +186,16 @@ fn same_name_two_identities_one_program() {
         .expect("the diamond loads");
     // both identities of `util` mounted
     let utils = identity_pkgs(&loaded, "util");
-    assert_eq!(utils.len(), 2, "two identities of one name: {:?}", loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>());
+    assert_eq!(
+        utils.len(),
+        2,
+        "two identities of one name: {:?}",
+        loaded
+            .pkgs
+            .iter()
+            .map(|p| p.spec.clone())
+            .collect::<Vec<_>>()
+    );
     // and the program runs over BOTH (v1 answers 7, v2 answers 9)
     let g = loaded
         .pkgs
@@ -188,7 +207,12 @@ fn same_name_two_identities_one_program() {
     assert!(
         g.graph.diags.is_empty(),
         "{}",
-        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; ")
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; ")
     );
     let flat = rut_core::link::flatten(g.graph.program.expect("linked"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -203,7 +227,11 @@ fn same_name_two_identities_one_program() {
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
-    assert_eq!(vm.call::<_, i64>("main", ()).expect("run"), 79, "v1's 7 and v2's 9 both bind");
+    assert_eq!(
+        vm.call::<_, i64>("main", ()).expect("run"),
+        79,
+        "v1's 7 and v2's 9 both bind"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -220,12 +248,27 @@ fn same_identity_via_two_routes_mounts_once() {
     write_util(&root, "util_7b", 7, "one build");
     let u1 = rut_native::pack_dir(&root.join("util_7")).expect("pack util");
     let u1b = rut_native::pack_dir(&root.join("util_7b")).expect("pack util again");
-    assert_eq!(u1, u1b, "same content ⇒ byte-identical bundle (the determinism law)");
+    assert_eq!(
+        u1, u1b,
+        "same content ⇒ byte-identical bundle (the determinism law)"
+    );
     let url1 = "https://fixtures.test/util-v1.rutbundle";
     let url2 = "https://fixtures.test/util-v1-again.rutbundle";
 
-    write_consumer(&root, "a", url1, &u1, "pub fn from_a() -> i64 { return tag(); }");
-    write_consumer(&root, "c", url2, &u1b, "pub fn from_c() -> i64 { return tag(); }");
+    write_consumer(
+        &root,
+        "a",
+        url1,
+        &u1,
+        "pub fn from_a() -> i64 { return tag(); }",
+    );
+    write_consumer(
+        &root,
+        "c",
+        url2,
+        &u1b,
+        "pub fn from_c() -> i64 { return tag(); }",
+    );
     let mut fetch_map = std::collections::BTreeMap::new();
     fetch_map.insert(url1.to_string(), u1.clone());
     fetch_map.insert(url2.to_string(), u1b.clone());
@@ -254,9 +297,14 @@ fn same_identity_via_two_routes_mounts_once() {
         .expect("the shared-dep world loads");
     let utils = identity_pkgs(&loaded, "util");
     assert_eq!(
-        utils.len(), 1,
+        utils.len(),
+        1,
         "one identity mounts once: {:?}",
-        loaded.pkgs.iter().map(|p| p.spec.clone()).collect::<Vec<_>>()
+        loaded
+            .pkgs
+            .iter()
+            .map(|p| p.spec.clone())
+            .collect::<Vec<_>>()
     );
     let g = loaded
         .pkgs
@@ -265,7 +313,16 @@ fn same_identity_via_two_routes_mounts_once() {
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile");
-    assert!(g.graph.diags.is_empty(), "{}", g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
+    assert!(
+        g.graph.diags.is_empty(),
+        "{}",
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
     let flat = rut_core::link::flatten(g.graph.program.expect("linked"));
     rut_vm::verify::verify(&flat).expect("verify");
     let mut vm = rut_vm::interp::Vm::builder()
@@ -279,7 +336,11 @@ fn same_identity_via_two_routes_mounts_once() {
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
-    assert_eq!(vm.call::<_, i64>("main", ()).expect("run"), 14, "both consumers bind the one body");
+    assert_eq!(
+        vm.call::<_, i64>("main", ()).expect("run"),
+        14,
+        "both consumers bind the one body"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -295,7 +356,12 @@ fn run_main(loaded: rut_driver::Walk) -> i64 {
     assert!(
         g.graph.diags.is_empty(),
         "{}",
-        g.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let flat = rut_core::link::flatten(g.graph.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -304,8 +370,13 @@ fn run_main(loaded: rut_driver::Walk) -> i64 {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build()
-    .expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+        .expect("vm");
     vm.call::<_, i64>("main", ()).expect("run")
 }
 
@@ -319,7 +390,11 @@ fn t10_sibling_imports_of_a_shared_inline_pkg_compile() {
     // example is another lane's property and is not touched).
     let loaded = load("cons_sibs").expect("mount");
     assert_eq!(loaded.root, "cons_sibs");
-    assert_eq!(run_main(loaded), 16, "Slot::first() + Crate::rest() = 7 + 9");
+    assert_eq!(
+        run_main(loaded),
+        16,
+        "Slot::first() + Crate::rest() = 7 + 9"
+    );
 }
 
 #[test]
@@ -335,7 +410,10 @@ fn walked_pkgs_carry_their_manifest_and_first_mount_edge() {
     let root = by_spec["cons_sibs"];
     assert!(root.mounted_by.is_none(), "the walk root has no parent");
     assert_eq!(root.manifest.name.as_deref(), Some("cons_sibs"));
-    assert!(root.manifest.deps.contains_key("sib_a"), "the root's own dep rows ride");
+    assert!(
+        root.manifest.deps.contains_key("sib_a"),
+        "the root's own dep rows ride"
+    );
     let sib_a = by_spec["sib_a"];
     assert_eq!(sib_a.mounted_by.as_deref(), Some("cons_sibs"));
     assert_eq!(sib_a.manifest.name.as_deref(), Some("sib_a"));
@@ -346,7 +424,10 @@ fn walked_pkgs_carry_their_manifest_and_first_mount_edge() {
         Some("sib_a"),
         "first mount wins — sib_a's edge, not sib_b's"
     );
-    assert!(pouch.manifest.deps.contains_key("base"), "pouch's own dep rows ride");
+    assert!(
+        pouch.manifest.deps.contains_key("base"),
+        "pouch's own dep rows ride"
+    );
 }
 
 #[test]
@@ -363,10 +444,20 @@ fn t10_the_collision_was_real() {
     // gate would preempt the duplicate error this test exists to prove —
     // the use rows err-and-continue in collect, the doubly-spliced text
     // still answers with its duplicate type definitions
-    let out = rut_driver::compile_program_resolved(&twice, Mode::Impl, "twice", 1, &[], false, &Seeds::none(), &rut_driver::ModInputs::flat(), &[], &[]);
+    let out = rut_driver::compile_program_resolved(
+        &twice,
+        Mode::Impl,
+        "twice",
+        1,
+        &[],
+        false,
+        &Seeds::none(),
+        &rut_driver::ModInputs::flat(),
+        &[],
+        &[],
+    );
     assert!(
-        out.program.is_none()
-            && out.diags.iter().any(|d| d.msg.contains("duplicate")),
+        out.program.is_none() && out.diags.iter().any(|d| d.msg.contains("duplicate")),
         "the same inline text spliced twice must be a compile error: {:?}",
         out.diags
     );
@@ -458,7 +549,11 @@ entry fn main() -> i64 {
         .filter(|r| chain.interner.name(r.owner) == "cell")
         .map(|r| match &r.kind {
             rut_core::binary::InstFnKind::Method { data, name, .. } => {
-                format!("{}${}", chain.interner.name(*data), chain.interner.name(*name))
+                format!(
+                    "{}${}",
+                    chain.interner.name(*data),
+                    chain.interner.name(*name)
+                )
             }
             _ => String::new(),
         })
@@ -576,7 +671,11 @@ entry fn main() -> i64 {
     assert!(
         g.diags.is_empty(),
         "{}",
-        g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        g.diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     // one compilation model: the multi-dep chain compiles, verifies, and
     // the two generic exports' bodies materialized once each (the
@@ -590,7 +689,11 @@ entry fn main() -> i64 {
         .filter(|r| flat.interner.name(r.owner) == "cell")
         .map(|r| match &r.kind {
             rut_core::binary::InstFnKind::Method { data, name, .. } => {
-                format!("{}${}", flat.interner.name(*data), flat.interner.name(*name))
+                format!(
+                    "{}${}",
+                    flat.interner.name(*data),
+                    flat.interner.name(*name)
+                )
             }
             _ => String::new(),
         })

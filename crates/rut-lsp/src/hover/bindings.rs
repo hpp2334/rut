@@ -83,11 +83,7 @@ impl Binding {
 /// ident at-or-before `pos` among bindings whose scope contains `pos`
 pub fn resolve<'b>(bs: &'b [Binding], pos: u32, name: &str) -> Option<&'b Binding> {
     bs.iter()
-        .filter(|b| {
-            b.name == name
-                && b.decl_ident_span.lo <= pos
-                && contains(b.scope_span, pos)
-        })
+        .filter(|b| b.name == name && b.decl_ident_span.lo <= pos && contains(b.scope_span, pos))
         .max_by_key(|b| b.decl_ident_span.lo)
 }
 
@@ -96,7 +92,13 @@ pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
     // the source end — the lexer rides an EOF token last, its hi the
     // normalized length; `scope_of` extends unterminated blocks past it
     let src_end = toks.last().map(|t| t.span.hi).unwrap_or(0);
-    let mut cx = Cx { ast, toks, idxs, src_end, out: Vec::new() };
+    let mut cx = Cx {
+        ast,
+        toks,
+        idxs,
+        src_end,
+        out: Vec::new(),
+    };
     for h in ast.module_items(ast.root) {
         match ast.item(*h) {
             ItemKind::Fn(d) => {
@@ -133,7 +135,16 @@ struct Cx<'a> {
 }
 
 impl Cx<'_> {
-    fn push(&mut self, name: &str, decl: Span, scope: Span, kind: BindKind, is_mut: bool, ty: Option<String>, inferred: bool) {
+    fn push(
+        &mut self,
+        name: &str,
+        decl: Span,
+        scope: Span,
+        kind: BindKind,
+        is_mut: bool,
+        ty: Option<String>,
+        inferred: bool,
+    ) {
         self.out.push(Binding {
             name: name.to_string(),
             decl_ident_span: decl,
@@ -157,7 +168,11 @@ impl Cx<'_> {
     /// past the source end, so the EOF position stays inside; a block
     /// that closed keeps its exact span — nothing leaks past a real `}`.
     fn scope_of(&self, span: Span) -> Span {
-        let hi = if self.open_brace_at_end(span) { self.src_end + 1 } else { span.hi };
+        let hi = if self.open_brace_at_end(span) {
+            self.src_end + 1
+        } else {
+            span.hi
+        };
         Span::new(span.lo, hi)
     }
 
@@ -171,7 +186,11 @@ impl Cx<'_> {
     /// lambda's body) is never "open" — depth zero means keep the span.
     fn open_brace_at_end(&self, span: Span) -> bool {
         let mut depth = 0i32;
-        for t in self.toks.iter().filter(|t| t.span.lo >= span.lo && t.span.hi <= span.hi) {
+        for t in self
+            .toks
+            .iter()
+            .filter(|t| t.span.lo >= span.lo && t.span.hi <= span.hi)
+        {
             match t.tok {
                 Tok::LBrace => depth += 1,
                 Tok::RBrace => {
@@ -214,7 +233,14 @@ impl Cx<'_> {
     fn walk_stmt(&mut self, s: NodeHandle<AnyStmt>, block: Span) {
         let sp = self.ast.span(s.id());
         match self.ast.kind(s.id()) {
-            Kind::Stmt(StmtKind::LetStmt { name, destructure, ty, init, is_mut, .. }) => {
+            Kind::Stmt(StmtKind::LetStmt {
+                name,
+                destructure,
+                ty,
+                init,
+                is_mut,
+                ..
+            }) => {
                 let names: Vec<IdentId> = match destructure {
                     Some(ns) => ns.clone(),
                     None => vec![*name],
@@ -237,14 +263,16 @@ impl Cx<'_> {
                     let text = self.ast.name(*n);
                     // first match = the declaration: the declaring ident
                     // precedes every use of the name inside the stmt
-                    let Some(decl) = ident_span(self.toks, sp, text) else { continue };
+                    let Some(decl) = ident_span(self.toks, sp, text) else {
+                        continue;
+                    };
                     let mut inferred = false;
                     let ty_text = anns[i].clone().or_else(|| {
                         let raw = match destructure {
                             Some(_) => match self.ast.expr(*init) {
-                                ExprKind::Tuple { elems } => {
-                                    elems.get(i).and_then(|&e| infer::expr_ty(self.ast, &self.out, self.idxs, e))
-                                }
+                                ExprKind::Tuple { elems } => elems.get(i).and_then(|&e| {
+                                    infer::expr_ty(self.ast, &self.out, self.idxs, e)
+                                }),
                                 _ => None,
                             },
                             None => infer::expr_ty(self.ast, &self.out, self.idxs, *init),
@@ -254,22 +282,51 @@ impl Cx<'_> {
                         }
                         raw
                     });
-                    self.push(text, decl, Span::new(decl.lo, block.hi), BindKind::Let, *is_mut, ty_text, inferred);
+                    self.push(
+                        text,
+                        decl,
+                        Span::new(decl.lo, block.hi),
+                        BindKind::Let,
+                        *is_mut,
+                        ty_text,
+                        inferred,
+                    );
                 }
                 self.walk_expr(*init); // lambdas in the initializer
             }
-            Kind::Stmt(StmtKind::ForOf { var, is_mut, iter, body }) => {
+            Kind::Stmt(StmtKind::ForOf {
+                var,
+                is_mut,
+                iter,
+                body,
+            }) => {
                 let body_span = self.scope_of(self.ast.span(body.id()));
                 let text = self.ast.name(*var);
                 if let Some(decl) = ident_span(self.toks, sp, text) {
-                    let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *iter).and_then(|t| elem_ty(&t));
+                    let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *iter)
+                        .and_then(|t| elem_ty(&t));
                     let inferred = raw.is_some();
-                    self.push(text, decl, Span::new(decl.lo, body_span.hi), BindKind::IterVar, *is_mut, raw, inferred);
+                    self.push(
+                        text,
+                        decl,
+                        Span::new(decl.lo, body_span.hi),
+                        BindKind::IterVar,
+                        *is_mut,
+                        raw,
+                        inferred,
+                    );
                 }
                 self.walk_expr(*iter);
                 self.walk_block(*body);
             }
-            Kind::Stmt(StmtKind::ForC { var, is_mut, init, cond, update, body }) => {
+            Kind::Stmt(StmtKind::ForC {
+                var,
+                is_mut,
+                init,
+                cond,
+                update,
+                body,
+            }) => {
                 let text = self.ast.name(*var);
                 if let Some(decl) = ident_span(self.toks, sp, text) {
                     let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *init);
@@ -278,7 +335,15 @@ impl Cx<'_> {
                     // the scope is the whole loop statement (extended
                     // through an end-of-buffer truncation, `scope_of`)
                     let scope = self.scope_of(sp);
-                    self.push(text, decl, Span::new(decl.lo, scope.hi), BindKind::IterVar, *is_mut, raw, inferred);
+                    self.push(
+                        text,
+                        decl,
+                        Span::new(decl.lo, scope.hi),
+                        BindKind::IterVar,
+                        *is_mut,
+                        raw,
+                        inferred,
+                    );
                 }
                 self.walk_expr(*init);
                 self.walk_expr(*cond);
@@ -328,7 +393,11 @@ impl Cx<'_> {
                     self.walk_expr(t);
                 }
             }
-            ExprKind::Lambda { params, body, ret: _ } => {
+            ExprKind::Lambda {
+                params,
+                body,
+                ret: _,
+            } => {
                 let span = self.scope_of(self.ast.span(body.id()));
                 self.push_params(params, span);
                 self.walk_expr(*body);
@@ -372,7 +441,9 @@ pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle
             out.push(*recv);
             out.push(*idx);
         }
-        ExprKind::Unary { expr, .. } | ExprKind::Try { expr } | ExprKind::Await { expr } => out.push(*expr),
+        ExprKind::Unary { expr, .. } | ExprKind::Try { expr } | ExprKind::Await { expr } => {
+            out.push(*expr)
+        }
         ExprKind::Binary { lhs, rhs, .. } => {
             out.push(*lhs);
             out.push(*rhs);
@@ -410,7 +481,11 @@ pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle
                         break;
                     }
                     ElseBranch::If(h) => match ast.kind(h.id()) {
-                        Kind::Stmt(StmtKind::If { cond, then, els: next }) => {
+                        Kind::Stmt(StmtKind::If {
+                            cond,
+                            then,
+                            els: next,
+                        }) => {
                             out.push(*cond);
                             out.push((*then).into());
                             link = *next;

@@ -23,7 +23,10 @@ macro_rules! unary {
 
 macro_rules! binary {
     ($pkg:expr, $name:literal, $suffix:literal, $f:ident, $t:ty) => {
-        $pkg.register::<_, ($t, $t), $t, _>(concat!($name, $suffix), |_vm: &mut Vm, a: $t, b: $t| a.$f(b));
+        $pkg.register::<_, ($t, $t), $t, _>(
+            concat!($name, $suffix),
+            |_vm: &mut Vm, a: $t, b: $t| a.$f(b),
+        );
     };
 }
 
@@ -70,32 +73,34 @@ pub fn pkg() -> HostPkg {
     // JS `Math.sign` semantics (the old intrinsic's law): ±0 stay 0,
     // NaN passes through as itself — Rust's `signum` would map +0.0
     // to 1.0. Same law at both widths.
-    pkg.register::<_, (f64,), f64, _>("signum", |_vm: &mut Vm, x: f64| if x > 0.0 {
-        1.0
-    } else if x < 0.0 {
-        -1.0
-    } else if x == 0.0 {
-        0.0
-    } else {
-        x // NaN
+    pkg.register::<_, (f64,), f64, _>("signum", |_vm: &mut Vm, x: f64| {
+        if x > 0.0 {
+            1.0
+        } else if x < 0.0 {
+            -1.0
+        } else if x == 0.0 {
+            0.0
+        } else {
+            x // NaN
+        }
     });
-    pkg.register::<_, (f32,), f32, _>("signum_f", |_vm: &mut Vm, x: f32| if x > 0.0 {
-        1.0
-    } else if x < 0.0 {
-        -1.0
-    } else if x == 0.0 {
-        0.0
-    } else {
-        x // NaN
+    pkg.register::<_, (f32,), f32, _>("signum_f", |_vm: &mut Vm, x: f32| {
+        if x > 0.0 {
+            1.0
+        } else if x < 0.0 {
+            -1.0
+        } else if x == 0.0 {
+            0.0
+        } else {
+            x // NaN
+        }
     });
 
-    pkg.register::<_, (f64, f64, f64), f64, _>(
-        "fma",
-        |_vm: &mut Vm, a: f64, b: f64, c: f64| a.mul_add(b, c),
-    );
-    pkg.register::<_, (f32, f32, f32), f32, _>(
-        "fma_f",
-        |_vm: &mut Vm, a: f32, b: f32, c: f32| a.mul_add(b, c),
-    );
+    pkg.register::<_, (f64, f64, f64), f64, _>("fma", |_vm: &mut Vm, a: f64, b: f64, c: f64| {
+        a.mul_add(b, c)
+    });
+    pkg.register::<_, (f32, f32, f32), f32, _>("fma_f", |_vm: &mut Vm, a: f32, b: f32, c: f32| {
+        a.mul_add(b, c)
+    });
     pkg.build()
 }

@@ -4,11 +4,9 @@
 //! identity, and cross back through compiled rut — the Some/nil shapes,
 //! the minted boxes, and the exact heap balance.
 
-use std::collections::BTreeMap;
 use rut_core::types::{TY_BYTES, TY_I64, TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR};
 use rut_driver::lower_decl_module;
-
-
+use std::collections::BTreeMap;
 
 /// The host-decl surface under test: one row per new answer lane.
 const DECL: &str = "\
@@ -18,12 +16,16 @@ pub host fn qopaque_pick() -> ?opaque;
 pub host fn bytes_give() -> bytes;
 ";
 
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -49,7 +51,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -91,8 +96,12 @@ fn nesting_beyond_the_answer_optionals_still_refuses() {
     let err = lower_decl_module("pub host fn f() -> ??str;", &BTreeMap::new(), "rets.d.rut")
         .expect_err("a nested optional refuses");
     assert!(err.contains("??str"), "{err}");
-    let err = lower_decl_module("pub host fn f() -> ?Vec<?str>;", &BTreeMap::new(), "rets.d.rut")
-        .expect_err("a generic optional refuses");
+    let err = lower_decl_module(
+        "pub host fn f() -> ?Vec<?str>;",
+        &BTreeMap::new(),
+        "rets.d.rut",
+    )
+    .expect_err("a generic optional refuses");
     // ty_text never renders generic args (the pre-existing house shape) —
     // the refusal names the `?` head it saw
     assert!(err.contains("?Vec"), "{err}");
@@ -105,7 +114,13 @@ fn nesting_beyond_the_answer_optionals_still_refuses() {
 fn verify_against_names_the_q_rows_on_drift() {
     // the boot join is by boot-id identity: a `-> ?str` row against
     // a `-> f64` binding panics naming BOTH shapes, the `?` spelled
-    let module = lower_decl_module("pub host fn pick() -> ?str;", &BTreeMap::new(), "rets.d.rut").unwrap().named("rets");
+    let module = lower_decl_module(
+        "pub host fn pick() -> ?str;",
+        &BTreeMap::new(),
+        "rets.d.rut",
+    )
+    .unwrap()
+    .named("rets");
     let expected = rut_driver::declared_host_fns(&[module]);
     assert_eq!(
         expected.get("rets::pick"),
@@ -129,8 +144,14 @@ fn verify_against_names_the_q_rows_on_drift() {
         .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
         .unwrap_or_default();
     assert!(msg.contains("signature drift"), "{msg}");
-    assert!(msg.contains("-> ?str"), "the pkg side names the lane: {msg}");
-    assert!(msg.contains("-> f64"), "the binding side names the drift: {msg}");
+    assert!(
+        msg.contains("-> ?str"),
+        "the pkg side names the lane: {msg}"
+    );
+    assert!(
+        msg.contains("-> f64"),
+        "the binding side names the drift: {msg}"
+    );
 }
 
 /// The registered bodies behind [`DECL`], switchable between the Some
@@ -171,7 +192,10 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
         .pkg(rets)
         // the consumer declares the host surface it names (the
         // nameability law — mounted-but-undeclared is D5)
-        .pkg(rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib("app", &["rets"])))
+        .pkg(
+            rut_driver::Mounted::source("app", src)
+                .manifest(rut_driver::Manifest::lib("app", &["rets"])),
+        )
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -191,11 +215,20 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
     let hosts = registry(std::rc::Rc::new(std::cell::Cell::new(some)));
     // the load-time contract: the lanes verify by identity (the rets
     // rows are declared by the offered pkg)
-    hosts.verify_against(&rut_driver::declared_host_fns(&[
-        lower_decl_module(DECL, &BTreeMap::new(), "rets.d.rut").expect("rows").named("rets"),
-    ]));
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-    .expect("vm");
+    hosts.verify_against(&rut_driver::declared_host_fns(&[lower_decl_module(
+        DECL,
+        &BTreeMap::new(),
+        "rets.d.rut",
+    )
+    .expect("rows")
+    .named("rets")]));
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     let base = vm.heap_usage();
     let answer: i64 = vm.call("main", ()).expect("run");
     (answer, vm.heap_usage() - base)
@@ -219,7 +252,10 @@ fn the_some_shapes_cross_back_through_compiled_rut() {
          }\n",
         true,
     );
-    assert_eq!(answer, 3, "every Some crossed back; bytes carried its octets");
+    assert_eq!(
+        answer, 3,
+        "every Some crossed back; bytes carried its octets"
+    );
     assert_eq!(delta, 0, "the answers release exactly with the frame");
 }
 

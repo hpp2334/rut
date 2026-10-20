@@ -79,15 +79,26 @@ pub(super) fn seq_get(cell: &crate::heap::CellVal, i: i64) -> Result<Slot, Trap>
         // window
         CellData::ArrView { parent, off, len } => {
             if i as u32 >= *len {
-                return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})")));
+                return Err(Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("view index {i} out of bounds (len {len})"),
+                ));
             }
             let p = cell_of(*parent);
             let items = match &p.data {
                 CellData::Array { items, .. } => items.borrow(),
-                _ => return Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")),
+                _ => {
+                    return Err(Trap::new(
+                        TrapKind::Invalid,
+                        "view over a non-array backing",
+                    ))
+                }
             };
             items.get(*off as usize + i as usize).ok_or_else(|| {
-                Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})"))
+                Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("view index {i} out of bounds (len {len})"),
+                )
             })
         }
         _ => Err(Trap::new(TrapKind::Invalid, "index on non-sequence")),
@@ -112,29 +123,44 @@ pub(super) fn seq_set(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Result<Sl
         // WRITE-THROUGH: a window write hits the parent
         CellData::ArrView { parent, off, len } => {
             if i as u32 >= *len {
-                return Err(Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})")));
+                return Err(Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("view index {i} out of bounds (len {len})"),
+                ));
             }
             let p = cell_of(*parent);
             let mut items = match &p.data {
                 CellData::Array { items, .. } => items.borrow_mut(),
-                _ => return Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")),
+                _ => {
+                    return Err(Trap::new(
+                        TrapKind::Invalid,
+                        "view over a non-array backing",
+                    ))
+                }
             };
             let idx = *off as usize + i as usize;
             items.set(idx, v).ok_or_else(|| {
-                Trap::new(TrapKind::IndexOutOfBounds, format!("view index {i} out of bounds (len {len})"))
+                Trap::new(
+                    TrapKind::IndexOutOfBounds,
+                    format!("view index {i} out of bounds (len {len})"),
+                )
             })
         }
         _ => Err(Trap::new(TrapKind::Invalid, "index-set on non-sequence")),
     }
 }
 
-
 /// The window intercept for `GetF`/`ArrGetF`: a scalar
 /// field reads the window's own length; a ref field (the `buf` read)
 /// hands out THE WINDOW itself (retained), so the element ops through
 /// it stay window-relative and bounds-checked. `None` = not a window —
 /// the caller proceeds with the record path.
-pub(super) fn window_getf(heap: &Heap, cell: &crate::heap::CellVal, obj: Slot, field_repr: Repr) -> Option<Slot> {
+pub(super) fn window_getf(
+    heap: &Heap,
+    cell: &crate::heap::CellVal,
+    obj: Slot,
+    field_repr: Repr,
+) -> Option<Slot> {
     if let CellData::ArrView { len, .. } = &cell.data {
         if field_repr.is_ref() {
             heap.retain(obj);
@@ -159,7 +185,11 @@ pub(super) fn window_setf_trap(cell: &crate::heap::CellVal) -> Option<Trap> {
 
 /// The window intercept for `ArrSetF`: writes go through —
 /// element `i` of the window is `parent[off + i]`. `None` = not a window.
-pub(super) fn window_sets(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Option<Result<Slot, Trap>> {
+pub(super) fn window_sets(
+    cell: &crate::heap::CellVal,
+    i: i64,
+    v: Slot,
+) -> Option<Result<Slot, Trap>> {
     if let CellData::ArrView { parent, off, len } = &cell.data {
         if i < 0 || i as u32 >= *len {
             return Some(Err(Trap::new(
@@ -170,7 +200,12 @@ pub(super) fn window_sets(cell: &crate::heap::CellVal, i: i64, v: Slot) -> Optio
         let p = cell_of(*parent);
         let items = match &p.data {
             CellData::Array { items, .. } => items,
-            _ => return Some(Err(Trap::new(TrapKind::Invalid, "view over a non-array backing"))),
+            _ => {
+                return Some(Err(Trap::new(
+                    TrapKind::Invalid,
+                    "view over a non-array backing",
+                )))
+            }
         };
         let idx = *off as usize + i as usize;
         return Some(match items.borrow_mut().set(idx, v) {
@@ -213,7 +248,10 @@ pub(super) fn default_slot_repr(repr: Repr) -> Slot {
 /// unsigned compare folding negative + overflow, the `seq_get` shape;
 /// window: bounds vs the window). `None` = `cell` is not an
 /// array/window at all (a miscompiled op — the caller traps).
-fn opt_lookup<'a>(cell: &'a CellVal, i: i64) -> Option<Result<(std::cell::Ref<'a, crate::heap::ArrData>, usize), Trap>> {
+fn opt_lookup<'a>(
+    cell: &'a CellVal,
+    i: i64,
+) -> Option<Result<(std::cell::Ref<'a, crate::heap::ArrData>, usize), Trap>> {
     match &cell.data {
         CellData::Array { items, .. } => {
             let d = items.borrow();
@@ -228,7 +266,10 @@ fn opt_lookup<'a>(cell: &'a CellVal, i: i64) -> Option<Result<(std::cell::Ref<'a
         CellData::ArrView { parent, off, len } => {
             let p = cell_of(*parent);
             let CellData::Array { items, .. } = &p.data else {
-                return Some(Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")));
+                return Some(Err(Trap::new(
+                    TrapKind::Invalid,
+                    "view over a non-array backing",
+                )));
             };
             let d = items.borrow();
             if i < 0 || i as u32 >= *len {
@@ -246,7 +287,12 @@ fn opt_lookup<'a>(cell: &'a CellVal, i: i64) -> Option<Result<(std::cell::Ref<'a
 /// `ArrGet{repr: OptPrim}` — decode element `i`, minting a fresh opt value
 /// for non-nil (the mint's rc=1 IS the destination's reference).
 #[inline]
-pub(super) fn opt_elem_get(heap: &Heap, cell: &CellVal, i: i64, elem: TypeId) -> Result<Slot, Trap> {
+pub(super) fn opt_elem_get(
+    heap: &Heap,
+    cell: &CellVal,
+    i: i64,
+    elem: TypeId,
+) -> Result<Slot, Trap> {
     match opt_lookup(cell, i) {
         Some(Ok((d, at))) => match d.opt_raw(at) {
             Some(raw) => heap.alloc_opt_value(elem, raw),
@@ -320,7 +366,10 @@ fn opt_lookup_mut<'a>(
         CellData::ArrView { parent, off, len } => {
             let p = cell_of(*parent);
             let CellData::Array { items, .. } = &p.data else {
-                return Some(Err(Trap::new(TrapKind::Invalid, "view over a non-array backing")));
+                return Some(Err(Trap::new(
+                    TrapKind::Invalid,
+                    "view over a non-array backing",
+                )));
             };
             let mut d = items.borrow_mut();
             if i < 0 || i as u32 >= *len {

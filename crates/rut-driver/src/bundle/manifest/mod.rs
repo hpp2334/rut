@@ -441,9 +441,15 @@ mod tests {
     #[test]
     fn pkg_type_bad_value_is_path_targeted() {
         let err = parse_manifest(r#"{"name": "x", "type": "Host"}"#).unwrap_err();
-        assert_eq!(err.to_string(), "type: expected 'lib' or 'host', found 'Host'");
+        assert_eq!(
+            err.to_string(),
+            "type: expected 'lib' or 'host', found 'Host'"
+        );
         let err = parse_manifest(r#"{"name": "x", "type": "native"}"#).unwrap_err();
-        assert_eq!(err.to_string(), "type: expected 'lib' or 'host', found 'native'");
+        assert_eq!(
+            err.to_string(),
+            "type: expected 'lib' or 'host', found 'native'"
+        );
     }
 
     #[test]
@@ -471,10 +477,8 @@ mod tests {
         assert_eq!(m.pkg_type, PkgType::Host);
         assert_eq!(m.entry.type_path, None);
         // a spelled entry still parses (and wins at the mount doors)
-        let m = parse_manifest(
-            r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
-        )
-        .unwrap();
+        let m = parse_manifest(r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#)
+            .unwrap();
         assert_eq!(m.entry.type_path.as_deref(), Some("./h.d.rut"));
     }
 
@@ -526,7 +530,10 @@ mod tests {
                 r#"{{"format": "rutbundle", "format_version": 11, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
             .unwrap_err();
-            assert!(err.to_string().contains("a host pkg is pure surface"), "[{table}]: {err}");
+            assert!(
+                err.to_string().contains("a host pkg is pure surface"),
+                "[{table}]: {err}"
+            );
         }
         let err = parse_manifest_compat(
             r#"{"format": "rutbundle", "format_version": 11, "name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
@@ -549,7 +556,10 @@ mod tests {
         // a float is not an integer either — the JSON spellings are
         // the parser's business, the law only sees u64
         let err = parse_manifest(r#"{"format_version": 1.0}"#).unwrap_err();
-        assert_eq!(err.to_string(), "format_version: expected an integer, found 1.0");
+        assert_eq!(
+            err.to_string(),
+            "format_version: expected an integer, found 1.0"
+        );
     }
 
     #[test]
@@ -658,17 +668,12 @@ mod tests {
         // an unknown scalar, object, or array at the top level refuses
         // naming the key (no forward-compat lane, never a silent
         // ignore)
-        let err = parse_manifest(
-            r#"{"name": "x", "whatever": {"a": [1, 2]}}"#,
-        )
-        .unwrap_err();
+        let err = parse_manifest(r#"{"name": "x", "whatever": {"a": [1, 2]}}"#).unwrap_err();
         assert_eq!(err.to_string(), "manifest: unknown key 'whatever'");
         // the retired `peer-deps` table refuses the same way — no
         // retired-key lane, the grammar simply no longer knows it
-        let err = parse_manifest(
-            r#"{"name": "x", "peer-deps": {"pouch": {"path": "../pouch"}}}"#,
-        )
-        .unwrap_err();
+        let err = parse_manifest(r#"{"name": "x", "peer-deps": {"pouch": {"path": "../pouch"}}}"#)
+            .unwrap_err();
         assert_eq!(err.to_string(), "manifest: unknown key 'peer-deps'");
         // and the retired `inline` flag too
         let err = parse_manifest(r#"{"name": "ink", "inline": true}"#).unwrap_err();
@@ -678,11 +683,17 @@ mod tests {
     #[test]
     fn the_known_objects_must_be_objects() {
         let err = parse_manifest(r#"{"entry": "./x.rut"}"#).unwrap_err();
-        assert_eq!(err.to_string(), "entry: expected an object, found \"./x.rut\"");
+        assert_eq!(
+            err.to_string(),
+            "entry: expected an object, found \"./x.rut\""
+        );
         let err = parse_manifest(r#"{"deps": []}"#).unwrap_err();
         assert_eq!(err.to_string(), "deps: expected an object, found []");
         let err = parse_manifest(r#"{"style": "indent=2"}"#).unwrap_err();
-        assert_eq!(err.to_string(), "style: expected an object, found \"indent=2\"");
+        assert_eq!(
+            err.to_string(),
+            "style: expected an object, found \"indent=2\""
+        );
         // and so must the whole document
         let err = parse_manifest("[1, 2]").unwrap_err();
         assert_eq!(err.to_string(), "manifest: expected a JSON object");
@@ -698,18 +709,16 @@ mod tests {
         let m = parse_manifest(r#"{"name": "rt", "entry": {"type": "./rt.d.rut"}}"#).unwrap();
         assert!(!m.type_declared, "the kind was not spelled");
         // either spelling records it
-        let m = parse_manifest(
-            r#"{"name": "rt", "type": "host", "entry": {"type": "./rt.d.rut"}}"#,
-        )
-        .unwrap();
+        let m =
+            parse_manifest(r#"{"name": "rt", "type": "host", "entry": {"type": "./rt.d.rut"}}"#)
+                .unwrap();
         assert_eq!(m.pkg_type, PkgType::Host);
         assert!(m.type_declared);
         // an EXPLICIT `type = "lib"` with a surface and no body is the
         // sanctioned surface-only dev state — spelled, so no ambiguity
-        let m = parse_manifest(
-            r#"{"name": "dev", "type": "lib", "entry": {"type": "./dev.d.rut"}}"#,
-        )
-        .unwrap();
+        let m =
+            parse_manifest(r#"{"name": "dev", "type": "lib", "entry": {"type": "./dev.d.rut"}}"#)
+                .unwrap();
         assert_eq!(m.pkg_type, PkgType::Lib);
         assert!(m.type_declared);
         // the COMPAT lane keeps the OLD spelling's ambiguity: an old
@@ -719,7 +728,8 @@ mod tests {
         let err = parse_manifest_compat(r#"{"name": "rt", "entry": {"type": "./rt.d.rut"}}"#)
             .unwrap_err();
         assert!(
-            err.to_string().contains("an `entry.type`-only pkg spells its kind"),
+            err.to_string()
+                .contains("an `entry.type`-only pkg spells its kind"),
             "{err}"
         );
         assert!(err.to_string().contains("`type = \"host\"`"), "{err}");
@@ -761,19 +771,21 @@ mod tests {
         assert_eq!(m.entry.type_path, None, "the new Entry carries type only");
         // the old array laws hold there: no libs without a base
         let err = parse_manifest_compat(r#"{"entry": {"libs": ["./a.rut"]}}"#).unwrap_err();
-        assert!(err.to_string().contains("`entry.libs` needs `entry.lib`"), "{err}");
+        assert!(
+            err.to_string().contains("`entry.libs` needs `entry.lib`"),
+            "{err}"
+        );
         // no file rides twice
-        let err = parse_manifest_compat(
-            r#"{"entry": {"lib": "./a.rut", "libs": ["./a.rut"]}}"#,
-        )
-        .unwrap_err();
+        let err = parse_manifest_compat(r#"{"entry": {"lib": "./a.rut", "libs": ["./a.rut"]}}"#)
+            .unwrap_err();
         assert!(err.to_string().contains("names `./a.rut` twice"), "{err}");
         // every lib is a `.rut` source
-        let err = parse_manifest_compat(
-            r#"{"entry": {"lib": "./a.rut", "libs": ["./a.d.rut"]}}"#,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("every lib is a `.rut` source"), "{err}");
+        let err = parse_manifest_compat(r#"{"entry": {"lib": "./a.rut", "libs": ["./a.d.rut"]}}"#)
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("every lib is a `.rut` source"),
+            "{err}"
+        );
         // the value laws are path-targeted there too
         let err = parse_manifest_compat(r#"{"entry": {"libs": []}}"#).unwrap_err();
         assert_eq!(
@@ -823,17 +835,19 @@ mod tests {
             "manifest: `_comment` — the `_`-prefixed prose lane retired; JSONC comments are the prose now (write a `//` comment above the key)"
         );
         let err = parse_manifest(r#"{"entry": {"_note": "why", "lib": "./x.rut"}}"#).unwrap_err();
-        assert!(err.to_string().starts_with("entry: `_note` — the `_`-prefixed prose lane retired"), "{err}");
-        let err = parse_manifest(r#"{"deps": {"_private": "why", "core": {"path": "p"}}}"#)
-            .unwrap_err();
+        assert!(
+            err.to_string()
+                .starts_with("entry: `_note` — the `_`-prefixed prose lane retired"),
+            "{err}"
+        );
+        let err =
+            parse_manifest(r#"{"deps": {"_private": "why", "core": {"path": "p"}}}"#).unwrap_err();
         assert!(err.to_string().starts_with("deps: `_private`"), "{err}");
-        let err = parse_manifest(r#"{"deps": {"core": {"_hint": "why", "path": "p"}}}"#)
-            .unwrap_err();
+        let err =
+            parse_manifest(r#"{"deps": {"core": {"_hint": "why", "path": "p"}}}"#).unwrap_err();
         assert!(err.to_string().starts_with("deps.core: `_hint`"), "{err}");
-        let err = parse_manifest(
-            r#"{"dev-deps": {"p": {"_hint": "why", "path": ".."}}}"#,
-        )
-        .unwrap_err();
+        let err =
+            parse_manifest(r#"{"dev-deps": {"p": {"_hint": "why", "path": ".."}}}"#).unwrap_err();
         assert!(err.to_string().starts_with("dev-deps.p: `_hint`"), "{err}");
         let err = parse_manifest(r#"{"style": {"_why": "2"}}"#).unwrap_err();
         assert!(err.to_string().starts_with("style: `_why`"), "{err}");
@@ -854,7 +868,11 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().starts_with("host_scope: retired"), "{err}");
-        assert!(err.to_string().contains("the registration scope is the package name"), "{err}");
+        assert!(
+            err.to_string()
+                .contains("the registration scope is the package name"),
+            "{err}"
+        );
         let err = parse_manifest(r#"{"name": "ink", "inline": true}"#).unwrap_err();
         assert_eq!(err.to_string(), "manifest: unknown key 'inline'");
     }
@@ -878,7 +896,10 @@ mod tests {
     fn dev_tables_parse() {
         let m = parse_manifest(JSON).unwrap();
         assert!(m.dev_deps.contains_key("pouch"));
-        assert_eq!(m.dev_deps.get("pouch").unwrap().get("path").unwrap(), "../pouch");
+        assert_eq!(
+            m.dev_deps.get("pouch").unwrap().get("path").unwrap(),
+            "../pouch"
+        );
         // the dev descriptor is `path`-only: no `optional` bool, no
         // `lib` group key — dev presence is name-based at the root
         assert_eq!(m.dev_deps.get("pouch").unwrap().len(), 1);
@@ -906,9 +927,8 @@ mod tests {
 
     #[test]
     fn t11_optional_rejected_inside_deps() {
-        let err =
-            parse_manifest(r#"{"deps": {"pouch": {"path": "../pouch", "optional": true}}}"#)
-                .unwrap_err();
+        let err = parse_manifest(r#"{"deps": {"pouch": {"path": "../pouch", "optional": true}}}"#)
+            .unwrap_err();
         assert_eq!(
             err.to_string(),
             "deps.pouch: 'optional' is not a deps-descriptor key"
@@ -917,22 +937,16 @@ mod tests {
 
     #[test]
     fn t11_unknown_descriptor_key_is_path_targeted() {
-        let err = parse_manifest(
-            r#"{"deps": {"pouch": {"path": "..", "feats": "x"}}}"#,
-        )
-        .unwrap_err();
+        let err =
+            parse_manifest(r#"{"deps": {"pouch": {"path": "..", "feats": "x"}}}"#).unwrap_err();
         assert_eq!(err.to_string(), "deps.pouch: unknown key 'feats'");
-        let err = parse_manifest(
-            r#"{"dev-deps": {"pouch": {"path": "..", "git": "x"}}}"#,
-        )
-        .unwrap_err();
+        let err =
+            parse_manifest(r#"{"dev-deps": {"pouch": {"path": "..", "git": "x"}}}"#).unwrap_err();
         assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'git'");
         // the dev descriptor keeps NO flags: the peer machinery's
         // `optional`/`lib` bits refuse as the unknown keys they now are
-        let err = parse_manifest(
-            r#"{"dev-deps": {"pouch": {"path": "..", "optional": true}}}"#,
-        )
-        .unwrap_err();
+        let err = parse_manifest(r#"{"dev-deps": {"pouch": {"path": "..", "optional": true}}}"#)
+            .unwrap_err();
         assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'optional'");
         let err = parse_manifest(
             r#"{"dev-deps": {"pouch": {"path": "..", "lib": "./serde_pouch.rut"}}}"#,
@@ -944,7 +958,10 @@ mod tests {
     #[test]
     fn t11_descriptor_must_be_an_object() {
         let err = parse_manifest(r#"{"deps": {"pouch": "../pouch"}}"#).unwrap_err();
-        assert_eq!(err.to_string(), "deps.pouch: expected an object, found \"../pouch\"");
+        assert_eq!(
+            err.to_string(),
+            "deps.pouch: expected an object, found \"../pouch\""
+        );
     }
 
     #[test]
@@ -973,7 +990,10 @@ mod tests {
         .unwrap();
         let d = m.deps.get("pouch").unwrap();
         assert_eq!(d.get("url").unwrap(), "https://example.com/pouch.rutbundle");
-        assert!(d.get("sha256").is_none(), "the pin is retired from the grammar");
+        assert!(
+            d.get("sha256").is_none(),
+            "the pin is retired from the grammar"
+        );
         // the retirement is LOUD (the host_scope treatment): the key's
         // existence is the crime, never a silent ignore
         let err = parse_manifest(
@@ -994,10 +1014,9 @@ mod tests {
             err.to_string().starts_with("deps.pouch: 'sha256' retired"),
             "{err}"
         );
-        let err = parse_manifest(
-            r#"{"deps": {"pouch": {"path": "../pouch", "sha256": "nothex"}}}"#,
-        )
-        .unwrap_err();
+        let err =
+            parse_manifest(r#"{"deps": {"pouch": {"path": "../pouch", "sha256": "nothex"}}}"#)
+                .unwrap_err();
         assert!(
             err.to_string().starts_with("deps.pouch: 'sha256' retired"),
             "{err}"
@@ -1063,10 +1082,8 @@ mod tests {
             "deps.pouch: 'url' must be an http(s) url, found 'ftp://x/p.rutbundle'"
         );
         // unknown keys keep the entry strictness
-        let err = parse_manifest(
-            r#"{"deps": {"pouch": {"url": "https://x/p", "feats": "x"}}}"#,
-        )
-        .unwrap_err();
+        let err = parse_manifest(r#"{"deps": {"pouch": {"url": "https://x/p", "feats": "x"}}}"#)
+            .unwrap_err();
         assert_eq!(err.to_string(), "deps.pouch: unknown key 'feats'");
     }
 
@@ -1074,9 +1091,8 @@ mod tests {
     fn dev_tables_refuse_the_url_kind() {
         // `dev-deps` stays path-only — its rows mount only for the
         // pkg's own self-build walk (directories, never fetches)
-        let err =
-            parse_manifest(r#"{"dev-deps": {"pouch": {"url": "https://x/p.rutbundle"}}}"#)
-                .unwrap_err();
+        let err = parse_manifest(r#"{"dev-deps": {"pouch": {"url": "https://x/p.rutbundle"}}}"#)
+            .unwrap_err();
         assert_eq!(err.to_string(), "dev-deps.pouch: unknown key 'url'");
     }
 }

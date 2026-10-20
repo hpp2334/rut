@@ -14,8 +14,8 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rut_vm::{Opaque, OpaqueRef, Trap};
 use rut_vm::interp::Vm;
+use rut_vm::{Opaque, OpaqueRef, Trap};
 
 const SRC: &str = r#"
 use boxes::{ store_new, store_set, store_get, store_size };
@@ -87,18 +87,30 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
         .pkgs,
     );
     let expected = rut_driver::declared_host_fns(&world);
-    let compiled = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
-            rut_driver::Mounted::source("app_boxes", SRC)
-                .manifest(rut_driver::Manifest::lib("app_boxes", &["boxes", "pouch"])),
-        )
-        .entrypoint("app_boxes")
-        .compile()
-        .unwrap();
+    let compiled = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .pkg(
+        rut_driver::Mounted::source("app_boxes", SRC)
+            .manifest(rut_driver::Manifest::lib("app_boxes", &["boxes", "pouch"])),
+    )
+    .entrypoint("app_boxes")
+    .compile()
+    .unwrap();
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = compiled.graph.program.expect("compile");
     rut_vm::verify::verify(&prog).unwrap();
@@ -111,7 +123,13 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     install(&mut hosts, dropped);
     hosts.verify_against(&expected); // tests/data/boxes/boxes.d.rut ↔ the bodies
-    rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().unwrap()
+    rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .unwrap()
 }
 
 /// Bind the `boxes` bodies over a real `HashMap` payload. Typed per
@@ -152,7 +170,7 @@ fn install(hosts: &mut rut_vm::interp::HostRegistry, dropped: &Rc<Cell<bool>>) {
 fn host_boxes_hold_any_rust_type() {
     let dropped = Rc::new(Cell::new(false));
     let mut vm = session(&dropped);
-    
+
     // news from the host, hold the handle across calls — the data lives
     // in the VM heap as long as either side holds a reference
     let held: OpaqueRef = vm.call("make", ()).unwrap();
@@ -160,13 +178,26 @@ fn host_boxes_hold_any_rust_type() {
     // drive it from rut, both through the wrapper class and direct — the
     // wrapper's records release the box's field retain when they die, so
     // this is the flow that needs the recursive field release to hold
-    vm.call::<_, ()>("wrap_put", (held.clone(), "via-wrapper", 1i64)).unwrap();
-    assert_eq!(vm.call::<_, i64>("wrap_get", (held.clone(), "via-wrapper")).unwrap(), 1);
-    vm.call::<_, ()>("put", (held.clone(), "key-3", 41i64)).unwrap();
-    vm.call::<_, ()>("put", (held.clone(), "key-7", 7i64)).unwrap();
-    assert_eq!(vm.call::<_, i64>("get", (held.clone(), "key-3")).unwrap(), 41);
+    vm.call::<_, ()>("wrap_put", (held.clone(), "via-wrapper", 1i64))
+        .unwrap();
+    assert_eq!(
+        vm.call::<_, i64>("wrap_get", (held.clone(), "via-wrapper"))
+            .unwrap(),
+        1
+    );
+    vm.call::<_, ()>("put", (held.clone(), "key-3", 41i64))
+        .unwrap();
+    vm.call::<_, ()>("put", (held.clone(), "key-7", 7i64))
+        .unwrap();
+    assert_eq!(
+        vm.call::<_, i64>("get", (held.clone(), "key-3")).unwrap(),
+        41
+    );
     assert_eq!(vm.call::<_, i64>("size", (held.clone(),)).unwrap(), 3);
-    assert_eq!(vm.call::<_, i64>("get", (held.clone(), "missing")).unwrap(), -1);
+    assert_eq!(
+        vm.call::<_, i64>("get", (held.clone(), "missing")).unwrap(),
+        -1
+    );
 
     // erasure laws on the rut side
     let erased: bool = vm.call("erase_laws", (held.clone(),)).unwrap();
@@ -175,28 +206,51 @@ fn host_boxes_hold_any_rust_type() {
     // own shares identity: writes through the copy are visible through
     // the original, and the handles are `==`
     let shared: OpaqueRef = vm.call("share", (held.clone(),)).unwrap();
-    vm.call::<_, ()>("put", (shared.clone(), "via-own", 9i64)).unwrap();
-    assert_eq!(vm.call::<_, i64>("get", (held.clone(), "via-own")).unwrap(), 9);
+    vm.call::<_, ()>("put", (shared.clone(), "via-own", 9i64))
+        .unwrap();
+    assert_eq!(
+        vm.call::<_, i64>("get", (held.clone(), "via-own")).unwrap(),
+        9
+    );
     assert_eq!(shared, held);
 
     // a wrong-type borrow is a checked error naming both sides
-    let err = Opaque::<Widget>::from_handle(&held).err().expect("wrong type must be rejected");
-    assert!(err.msg.contains("Store") && err.msg.contains("Widget"), "{}", err.msg);
+    let err = Opaque::<Widget>::from_handle(&held)
+        .err()
+        .expect("wrong type must be rejected");
+    assert!(
+        err.msg.contains("Store") && err.msg.contains("Widget"),
+        "{}",
+        err.msg
+    );
 
     // a non-handle is rejected too
-    let err = Opaque::<Widget>::from_handle(&held).err().expect("non-handle must be rejected");
-    assert!(err.msg.contains("host box holds") || err.msg.contains("opaque"), "{}", err.msg);
+    let err = Opaque::<Widget>::from_handle(&held)
+        .err()
+        .expect("non-handle must be rejected");
+    assert!(
+        err.msg.contains("host box holds") || err.msg.contains("opaque"),
+        "{}",
+        err.msg
+    );
 
     // the borrow guard: a nested exclusive borrow is a
     // checked trap, and a shared borrow is excluded while `&mut` is out
     let b = Opaque::<Store>::from_handle(&held).unwrap();
     b.with_mut(&mut vm, |vm, _| {
-        assert!(b.with(|_| {}).is_err(), "shared borrow must be excluded under &mut");
+        assert!(
+            b.with(|_| {}).is_err(),
+            "shared borrow must be excluded under &mut"
+        );
         let again = b.with_mut(vm, |_vm, _| {});
-        assert!(again.unwrap_err().msg.contains("borrowed by an outer host call"));
+        assert!(again
+            .unwrap_err()
+            .msg
+            .contains("borrowed by an outer host call"));
     })
     .unwrap();
-    b.with(|_| {}).expect("the guard clears when the closure returns");
+    b.with(|_| {})
+        .expect("the guard clears when the closure returns");
 
     // rc-0: the wrapper records are gone (their field
     // retains released with them), so the box's only references are the
@@ -205,7 +259,10 @@ fn host_boxes_hold_any_rust_type() {
     drop(shared);
     assert!(!dropped.get(), "b still holds");
     drop(b);
-    assert!(dropped.get(), "payload Drop must run deterministically at rc-0");
+    assert!(
+        dropped.get(),
+        "payload Drop must run deterministically at rc-0"
+    );
     drop(vm);
     assert!(dropped.get());
 }
@@ -242,18 +299,30 @@ entry fn churn(n: i64) -> nil {
     .expect("mount pouch")
     .pkgs;
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
-            rut_driver::Mounted::source("churn", src)
-                .manifest(rut_driver::Manifest::lib("churn", &["calc", "pouch"])),
-        )
-        .entrypoint("churn")
-        .compile()
-        .unwrap();
+    let compiled = rut_driver::Walk {
+        pkgs: world.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .pkg(
+        rut_driver::Mounted::source("churn", src)
+            .manifest(rut_driver::Manifest::lib("churn", &["calc", "pouch"])),
+    )
+    .entrypoint("churn")
+    .compile()
+    .unwrap();
     assert!(
         compiled.graph.diags.is_empty(),
         "{}",
-        compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let prog = compiled.graph.program.unwrap();
     rut_vm::verify::verify(&prog).unwrap();
@@ -266,8 +335,13 @@ entry fn churn(n: i64) -> nil {
     let mut hosts0 = rut_vm::interp::HostRegistry::new();
     hosts0.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
     hosts0.install_host_pkg(&ctx, rut_std::math::pkg());
-    let mut vm =
-        rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts0).build().unwrap();
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts0)
+        .build()
+        .unwrap();
 
     vm.call::<_, ()>("churn", (1i64,)).unwrap();
     let base = vm.heap_usage();
@@ -278,4 +352,3 @@ entry fn churn(n: i64) -> nil {
         "records must release their fields at rc-0: baseline {base}, after churn(2000): {after}"
     );
 }
-

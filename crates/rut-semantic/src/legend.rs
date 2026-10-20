@@ -86,8 +86,10 @@ impl TokenType {
 /// identifier `entry`, so the tradeoff costs nothing. `true`/`false` lex
 /// as `Tok::Bool` and are classified there (keyword constants).
 pub fn is_keyword(s: &str) -> bool {
-    matches!(s, "self" | "break" | "continue" | "as" | "super" | "default" | "entry")
-        || rut_parser::is_reserved_kw(s)
+    matches!(
+        s,
+        "self" | "break" | "continue" | "as" | "super" | "default" | "entry"
+    ) || rut_parser::is_reserved_kw(s)
 }
 
 pub fn is_primitive_ty(s: &str) -> bool {

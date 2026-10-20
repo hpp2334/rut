@@ -109,7 +109,11 @@ entry fn main() -> i32 {
         1,
         &[(2, rut_core::binary::Surface::core(), "core".to_string())],
     );
-    assert!(out.diags.is_empty(), "the mismatch is a runtime fact: {:?}", out.diags);
+    assert!(
+        out.diags.is_empty(),
+        "the mismatch is a runtime fact: {:?}",
+        out.diags
+    );
     let prog = rut_core::link::flatten(out.program.expect("program"));
     rut_vm::verify::verify(&prog).expect("verify");
     let mut vm = rut_vm::interp::Vm::builder()
@@ -118,10 +122,15 @@ entry fn main() -> i32 {
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
-    let err = vm.call::<_, i32>("main", ()).expect_err("the mismatch traps");
+    let err = vm
+        .call::<_, i32>("main", ())
+        .expect_err("the mismatch traps");
     let msg = format!("{err:?}");
     assert!(msg.contains("BadUnbox"), "{msg}");
-    assert!(msg.contains("i32") && msg.contains("f64"), "the trap names both types: {msg}");
+    assert!(
+        msg.contains("i32") && msg.contains("f64"),
+        "the trap names both types: {msg}"
+    );
 }
 
 #[test]
@@ -141,7 +150,8 @@ entry fn main() -> i32 {
 ";
     let ds = diags_of(src);
     assert!(
-        ds.iter().any(|d| d.contains("unopaque") && d.contains("CONCRETE")),
+        ds.iter()
+            .any(|d| d.contains("unopaque") && d.contains("CONCRETE")),
         "the seal law refuses the type argument: {ds:?}"
     );
 }
@@ -153,7 +163,8 @@ fn unopaque_takes_an_opaque_box_only() {
         "entry fn main() -> i32 {\n    let v: i32 = unopaque<i32>(7);\n    return v;\n}\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("unopaque takes an `opaque` box")),
+        ds.iter()
+            .any(|d| d.contains("unopaque takes an `opaque` box")),
         "{ds:?}"
     );
 }

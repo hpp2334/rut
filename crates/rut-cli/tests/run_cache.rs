@@ -101,7 +101,11 @@ fn an_edited_closure_keys_a_fresh_entry() {
 
     // the source is part of the key: the edit lands a SECOND entry and
     // the run still succeeds (the new closure compiles fresh)
-    write(&dir, "mod.rut", "entry fn main() -> nil {\n    let n = 6 * 7;\n    return;\n}\n");
+    write(
+        &dir,
+        "mod.rut",
+        "entry fn main() -> nil {\n    let n = 6 * 7;\n    return;\n}\n",
+    );
     let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "edited run: {err}");
     assert_eq!(cache_entries(&dir).len(), 2, "one entry per closure");
@@ -122,7 +126,11 @@ fn no_cache_forces_the_miss_but_refreshes_the_entry() {
     std::fs::write(&entry, b"garbage").unwrap();
     let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "the corrupt entry never fails a run: {err}");
-    assert_ne!(std::fs::read(&entry).unwrap(), b"garbage", "the entry rewrote");
+    assert_ne!(
+        std::fs::read(&entry).unwrap(),
+        b"garbage",
+        "the entry rewrote"
+    );
 
     // --no-cache: the miss path runs even on a valid entry, and the
     // entry STILL refreshes (one rule: the entry mirrors what the
@@ -150,7 +158,11 @@ fn a_dir_with_a_path_dep_caches_one_closed_entry() {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
     );
-    write(&hello, "mod.rut", "use calc::{ seven };\nentry fn main() -> nil {\n    let n = seven();\n    return;\n}\n");
+    write(
+        &hello,
+        "mod.rut",
+        "use calc::{ seven };\nentry fn main() -> nil {\n    let n = seven();\n    return;\n}\n",
+    );
     let calc = root.join("calc");
     write(&calc, "rut.jsonc", r#"{"name": "calc"}"#);
     write(&calc, "mod.rut", "pub fn seven() -> i64 { return 7; }\n");
@@ -175,13 +187,19 @@ fn a_dir_with_a_path_dep_caches_one_closed_entry() {
 
 #[test]
 fn the_run_help_names_the_cache_law_and_the_debug_door() {
-    let out = Command::new(rut()).args(["run", "--help"]).output().expect("rut run --help");
+    let out = Command::new(rut())
+        .args(["run", "--help"])
+        .output()
+        .expect("rut run --help");
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
     assert!(text.contains("--no-cache"), "{text}");
     assert!(text.contains("--repack"), "{text}");
     assert!(text.contains("cache"), "{text}");
     // glossary vocabulary: a packed archive, not house words
-    assert!(text.contains("archive") || text.contains(".rutbundle"), "{text}");
+    assert!(
+        text.contains("archive") || text.contains(".rutbundle"),
+        "{text}"
+    );
 }
 
 // ── the url-dep closure: the key rides the RESOLVED bytes ─────────────
@@ -225,7 +243,11 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "util"}"#,
     );
-    write(&util, "mod.rut", "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n");
+    write(
+        &util,
+        "mod.rut",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
     let bytes = rut_native::pack_dir(&util).expect("pack util");
     let port = serve(bytes.clone());
     let url = format!("http://127.0.0.1:{port}/util.rutbundle");
@@ -244,11 +266,13 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     write(
         &app,
         "rut.lock",
-        &rut_driver::render_lock(&rut_driver::LockFile::from_rows(vec![rut_driver::LockRow {
-            pkg: "util".into(),
-            url: url.clone(),
-            sha256: pin.into(),
-        }])),
+        &rut_driver::render_lock(&rut_driver::LockFile::from_rows(vec![
+            rut_driver::LockRow {
+                pkg: "util".into(),
+                url: url.clone(),
+                sha256: pin.into(),
+            },
+        ])),
     );
     write(
         &app,
@@ -266,10 +290,10 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     // `<uncached>` entry beside them.
     let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
-    let url_entry = app
-        .join(".rut")
-        .join("cache")
-        .join(format!("{}.rutbundle", rut_driver::sha256_hex(url.as_bytes())));
+    let url_entry = app.join(".rut").join("cache").join(format!(
+        "{}.rutbundle",
+        rut_driver::sha256_hex(url.as_bytes())
+    ));
     assert!(url_entry.is_file(), "the url dep's cache entry lands");
     let run_entries: Vec<PathBuf> = cache_entries(&app)
         .into_iter()
@@ -284,13 +308,19 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     // run 2: the same closure keys the same resolved bytes — the hit
     // mounts the cached archive and neither entry is rewritten (a miss
     // would rewrite through the pack lane)
-    let stamp = std::fs::metadata(&run_entries[0]).unwrap().modified().unwrap();
+    let stamp = std::fs::metadata(&run_entries[0])
+        .unwrap()
+        .modified()
+        .unwrap();
     let url_stamp = std::fs::metadata(&url_entry).unwrap().modified().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
     let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "second run: {err}");
     assert_eq!(
-        std::fs::metadata(&run_entries[0]).unwrap().modified().unwrap(),
+        std::fs::metadata(&run_entries[0])
+            .unwrap()
+            .modified()
+            .unwrap(),
         stamp,
         "a hit never rewrites the run-cache entry"
     );

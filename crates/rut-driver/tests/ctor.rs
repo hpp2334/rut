@@ -30,7 +30,12 @@ use rut_vm::interp::{HostRegistry, Limits, Vm};
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 #[allow(dead_code)]
@@ -38,7 +43,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -65,7 +73,12 @@ fn diags_of(src: &str) -> Vec<String> {
 fn run_returns(src: &str) -> Result<i64, String> {
     let out = compile(src);
     if !out.diags.is_empty() {
-        return Err(out.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
+        return Err(out
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; "));
     }
     let prog = rut_core::link::flatten(out.program.expect("linked program"));
     rut_vm::verify::verify(&prog).expect("verify");
@@ -74,9 +87,16 @@ fn run_returns(src: &str) -> Result<i64, String> {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(HostRegistry::new()).build()
-    .map_err(|e| format!("{e:?}"))?;
-    vm.call::<_, i32>("main", ()).map(|v| v as i64).map_err(|e| format!("{e:?}"))
+    let mut vm = Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(HostRegistry::new())
+        .build()
+        .map_err(|e| format!("{e:?}"))?;
+    vm.call::<_, i32>("main", ())
+        .map(|v| v as i64)
+        .map_err(|e| format!("{e:?}"))
 }
 
 /// A multi-pkg graph (the last module is the root).
@@ -87,10 +107,15 @@ fn graph(modules: &[(&str, &str)]) -> rut_driver::GraphOutput {
     // uses — a suite-wide loose table is this helper's deliberate
     // shape; the negative closure shapes mount nothing)
     for (spec, src) in modules {
-        let heads: Vec<&str> =
-            modules.iter().map(|(s, _)| *s).filter(|s| *s != *spec).collect();
-        chain = chain
-            .pkg(rut_driver::Mounted::source(spec, *src).manifest(rut_driver::Manifest::lib(spec, &heads)));
+        let heads: Vec<&str> = modules
+            .iter()
+            .map(|(s, _)| *s)
+            .filter(|s| *s != *spec)
+            .collect();
+        chain = chain.pkg(
+            rut_driver::Mounted::source(spec, *src)
+                .manifest(rut_driver::Manifest::lib(spec, &heads)),
+        );
     }
     let (root, _) = modules.last().expect("root module");
     graph_of(chain.entrypoint(root).compile())
@@ -99,7 +124,12 @@ fn graph(modules: &[(&str, &str)]) -> rut_driver::GraphOutput {
 /// run a linked graph's `main` (i64 through the typed boundary).
 fn run_graph(g: &rut_driver::GraphOutput) -> Result<i64, String> {
     if !g.diags.is_empty() {
-        return Err(g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("; "));
+        return Err(g
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("; "));
     }
     let prog = g.program.as_ref().expect("linked program").clone();
     let limits = Limits {
@@ -107,9 +137,16 @@ fn run_graph(g: &rut_driver::GraphOutput) -> Result<i64, String> {
         heap_limit_bytes: Some(4 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(HostRegistry::new()).build()
-    .map_err(|e| format!("{e:?}"))?;
-    vm.call::<_, i32>("main", ()).map(|v| v as i64).map_err(|e| format!("{e:?}"))
+    let mut vm = Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(HostRegistry::new())
+        .build()
+        .map_err(|e| format!("{e:?}"))?;
+    vm.call::<_, i32>("main", ())
+        .map(|v| v as i64)
+        .map_err(|e| format!("{e:?}"))
 }
 
 /// The IR dump of a module's `main` — the lowering-evidence text the
@@ -204,14 +241,16 @@ fn arity_mismatch_names_the_member() {
         "{POINT}\nentry fn main() {{ let p = Point(1.0); }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
+        ds.iter()
+            .any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
         "the sugar's arity refusal names the member: {ds:?}"
     );
     let ds = diags_of(&format!(
         "{POINT}\nentry fn main() {{ let p = Point::from_xy(1.0); }}\n"
     ));
     assert!(
-        ds.iter().any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
+        ds.iter()
+            .any(|d| d == "call arity: `Point::from_xy` takes 2 parameters, 1 given"),
         "the explicit spelling answers identically: {ds:?}"
     );
 }
@@ -227,7 +266,8 @@ fn duplicate_constructor_names_both_members() {
          entry fn main() { }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`origin` and `from_xy` both designate the construction surface")),
+        ds.iter()
+            .any(|d| d.contains("`origin` and `from_xy` both designate the construction surface")),
         "the duplicate names both spellings: {ds:?}"
     );
     // an earlier impl block's member counts too (the decl carries it)
@@ -242,7 +282,8 @@ fn duplicate_constructor_names_both_members() {
          entry fn main() { }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`from_xy` and `origin` both designate the construction surface")),
+        ds.iter()
+            .any(|d| d.contains("`from_xy` and `origin` both designate the construction surface")),
         "the second impl block's member names the first: {ds:?}"
     );
 }
@@ -316,7 +357,8 @@ fn an_enum_impl_marker_is_refused() {
          entry fn main() { }\n",
     );
     assert!(
-        ds.iter().any(|d| d.contains("`Color` cannot carry `[constructor]` — only a class can")),
+        ds.iter()
+            .any(|d| d.contains("`Color` cannot carry `[constructor]` — only a class can")),
         "the enum refusal: {ds:?}"
     );
 }
@@ -387,15 +429,14 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
         Mode::Impl,
     );
     assert!(
-        diags.iter().any(|d| d.msg.contains("marks an inherent impl member")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("marks an inherent impl member")),
         "an interface-body marker must diagnose: {diags:?}"
     );
     // a free fn's marker never parses either (the top level takes no
     // bracket groups)
-    let (_, diags) = rut_parser::parse(
-        "[constructor] fn make() -> i32 { return 0; }",
-        Mode::Impl,
-    );
+    let (_, diags) = rut_parser::parse("[constructor] fn make() -> i32 { return 0; }", Mode::Impl);
     assert!(
         !diags.is_empty(),
         "a free-fn marker must diagnose: {diags:?}"
@@ -409,7 +450,9 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
         Mode::Impl,
     );
     assert!(
-        diags.iter().any(|d| d.msg.contains("expected {, found `for`")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected {, found `for`")),
         "the trait-impl spelling dies at the parser: {diags:?}"
     );
 }
@@ -526,14 +569,18 @@ fn a_private_ctor_does_not_cross() {
     // the seal rides the member's `pub`: a private ctor is invisible
     // across the surface, the consumer's miss names the fix
     let g = graph(&[
-        ("geometry",
-         "pub class Point { x: f32; y: f32; }\
+        (
+            "geometry",
+            "pub class Point { x: f32; y: f32; }\
           impl Point {\
               [constructor] fn from_xy(x: f32, y: f32) -> Self { return Self { x: x, y: y }; }\
-          }\n"),
-        ("app",
-         "use geometry::{Point};\
-          entry fn main() -> i32 { let p = Point(1.0, 2.0); return 0; }\n"),
+          }\n",
+        ),
+        (
+            "app",
+            "use geometry::{Point};\
+          entry fn main() -> i32 { let p = Point(1.0, 2.0); return 0; }\n",
+        ),
     ]);
     let ds = g.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>();
     assert!(

@@ -14,11 +14,17 @@ impl Vm {
         let mut frames = Vec::with_capacity(self.frames.len() + 1);
         // frame 0: the function executing the capture — its call site is
         // this very CallNat op (both engines keep cur_pc pinned to it)
-        frames.push(TraceFrame { func: self.cur_func, pc: self.cur_pc });
+        frames.push(TraceFrame {
+            func: self.cur_func,
+            pc: self.cur_pc,
+        });
         // every saved frame's pc is the RESUME point (call op + 1), so the
         // call site is one before it
         for f in self.frames.iter().rev() {
-            frames.push(TraceFrame { func: f.func, pc: f.pc.saturating_sub(1) });
+            frames.push(TraceFrame {
+                func: f.func,
+                pc: f.pc.saturating_sub(1),
+            });
         }
         let s = self.heap.alloc_trace(frames)?;
         self.store_result(dst, s)?;
@@ -31,7 +37,10 @@ impl Vm {
         let cell = cell_of(self.reg(recv.unwrap()));
         match &cell.data {
             CellData::Trace { frames } => Ok(frames),
-            _ => Err(Trap::new(TrapKind::Invalid, "StackTrace member on a non-trace value")),
+            _ => Err(Trap::new(
+                TrapKind::Invalid,
+                "StackTrace member on a non-trace value",
+            )),
         }
     }
 
@@ -43,13 +52,20 @@ impl Vm {
         if i < 0 || i as usize >= frames.len() {
             return Err(Trap::new(
                 TrapKind::IndexOutOfBounds,
-                format!("StackTrace index {i} out of range — len is {}", frames.len()),
+                format!(
+                    "StackTrace index {i} out of range — len is {}",
+                    frames.len()
+                ),
             ));
         }
         Ok(frames[i as usize])
     }
 
-    pub(super) fn nat_trace_len(&mut self, recv: Option<Reg>, dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn nat_trace_len(
+        &mut self,
+        recv: Option<Reg>,
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         let n = self.trace_cell(recv)?.len() as i64;
         if let Some(d) = dst {
             self.cur_regs[d as usize] = Slot::int(n);
@@ -57,7 +73,12 @@ impl Vm {
         Ok(())
     }
 
-    pub(super) fn nat_trace_name(&mut self, recv: Option<Reg>, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn nat_trace_name(
+        &mut self,
+        recv: Option<Reg>,
+        args: &[Reg],
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         let f = self.trace_frame(recv, args)?;
         let name = self.prog.funcs[f.func as usize].name;
         let s = self.prog.interner.name(name).to_string();
@@ -77,7 +98,12 @@ impl Vm {
         }
     }
 
-    pub(super) fn nat_trace_line(&mut self, recv: Option<Reg>, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn nat_trace_line(
+        &mut self,
+        recv: Option<Reg>,
+        args: &[Reg],
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         let f = self.trace_frame(recv, args)?;
         if let Some(d) = dst {
             self.cur_regs[d as usize] = Slot::int(self.trace_frame_pos(f).0 as i64);
@@ -85,7 +111,12 @@ impl Vm {
         Ok(())
     }
 
-    pub(super) fn nat_trace_col(&mut self, recv: Option<Reg>, args: &[Reg], dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn nat_trace_col(
+        &mut self,
+        recv: Option<Reg>,
+        args: &[Reg],
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         let f = self.trace_frame(recv, args)?;
         if let Some(d) = dst {
             self.cur_regs[d as usize] = Slot::int(self.trace_frame_pos(f).1 as i64);
@@ -97,7 +128,11 @@ impl Vm {
     /// pass, innermost first:
     ///   `at c (app_main:12:9)`          — names + positions restored
     ///   `at c (app_main #2 @ pc 41)`    — stripped: pc-only degradation
-    pub(super) fn nat_trace_render(&mut self, recv: Option<Reg>, dst: Option<Reg>) -> Result<(), Trap> {
+    pub(super) fn nat_trace_render(
+        &mut self,
+        recv: Option<Reg>,
+        dst: Option<Reg>,
+    ) -> Result<(), Trap> {
         let frames: Vec<TraceFrame> = self.trace_cell(recv)?.to_vec();
         let prog_name = self.prog.name.clone();
         let mut out = String::new();
@@ -105,10 +140,16 @@ impl Vm {
             if i > 0 {
                 out.push('\n');
             }
-            let name = self.prog.interner.name(self.prog.funcs[f.func as usize].name);
+            let name = self
+                .prog
+                .interner
+                .name(self.prog.funcs[f.func as usize].name);
             let (line, col) = self.trace_frame_pos(*f);
             if line == 0 && col == 0 {
-                out.push_str(&format!("at {name} ({prog_name} #{} @ pc {})", f.func, f.pc));
+                out.push_str(&format!(
+                    "at {name} ({prog_name} #{} @ pc {})",
+                    f.func, f.pc
+                ));
             } else {
                 out.push_str(&format!("at {name} ({prog_name}:{line}:{col})"));
             }

@@ -136,8 +136,9 @@ impl VmBuilder {
                 hosts = Some(parts.hosts);
             }
         }
-        let program = program
-            .ok_or_else(|| VmError::new("no program — the builder needs .program(..) or .compiled(..)"))?;
+        let program = program.ok_or_else(|| {
+            VmError::new("no program — the builder needs .program(..) or .compiled(..)")
+        })?;
         Vm::new(
             program,
             &limits.unwrap_or_default(),

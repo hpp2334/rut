@@ -54,7 +54,14 @@ pub struct CompletionOut {
 impl CompletionOut {
     /// a plain item — no sort text, no edits (the keyword/local shape)
     fn plain(label: String, detail: String, doc: Vec<String>, kind: CompletionKind) -> Self {
-        CompletionOut { label, detail, doc, kind, sort_text: None, additional_text_edits: Vec::new() }
+        CompletionOut {
+            label,
+            detail,
+            doc,
+            kind,
+            sort_text: None,
+            additional_text_edits: Vec::new(),
+        }
     }
 }
 
@@ -233,7 +240,12 @@ fn member_completions(
             for m in &iface.methods {
                 push_item(
                     &mut out,
-                    CompletionOut::plain(m.name.clone(), m.src.clone(), m.doc.clone(), CompletionKind::Method),
+                    CompletionOut::plain(
+                        m.name.clone(),
+                        m.src.clone(),
+                        m.doc.clone(),
+                        CompletionKind::Method,
+                    ),
                 );
             }
         }
@@ -243,18 +255,30 @@ fn member_completions(
         out.sort_by(|a, b| a.label.cmp(&b.label));
         return out;
     }
-    let Some((_ti, ty)) = crate::hover::lookup::find_ty(idxs, &ty_name) else { return vec![] };
+    let Some((_ti, ty)) = crate::hover::lookup::find_ty(idxs, &ty_name) else {
+        return vec![];
+    };
     let mut out: Vec<CompletionOut> = Vec::new();
     for f in &ty.fields {
         push_item(
             &mut out,
-            CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Field),
+            CompletionOut::plain(
+                f.name.clone(),
+                f.src.clone(),
+                f.doc.clone(),
+                CompletionKind::Field,
+            ),
         );
     }
     for m in &ty.methods {
         push_item(
             &mut out,
-            CompletionOut::plain(m.name.clone(), m.src.clone(), m.doc.clone(), CompletionKind::Method),
+            CompletionOut::plain(
+                m.name.clone(),
+                m.src.clone(),
+                m.doc.clone(),
+                CompletionKind::Method,
+            ),
         );
     }
     // inherent impl-block methods — where methods live since type bodies
@@ -264,7 +288,12 @@ fn member_completions(
             if f.owner.as_deref() == Some(ty_name.as_str()) {
                 push_item(
                     &mut out,
-                    CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Method),
+                    CompletionOut::plain(
+                        f.name.clone(),
+                        f.src.clone(),
+                        f.doc.clone(),
+                        CompletionKind::Method,
+                    ),
                 );
             }
         }
@@ -307,7 +336,9 @@ fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<Completio
         .map(|b| {
             let kind = match b.kind {
                 crate::hover::BindKind::Param => CompletionKind::Parameter,
-                crate::hover::BindKind::Let | crate::hover::BindKind::IterVar => CompletionKind::Variable,
+                crate::hover::BindKind::Let | crate::hover::BindKind::IterVar => {
+                    CompletionKind::Variable
+                }
             };
             CompletionOut::plain(
                 b.name.clone(),
@@ -338,7 +369,12 @@ fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<Completio
 fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
     for kw in rut_parser::RESERVED_KW {
-        out.push(CompletionOut::plain((*kw).to_string(), String::new(), Vec::new(), CompletionKind::Keyword));
+        out.push(CompletionOut::plain(
+            (*kw).to_string(),
+            String::new(),
+            Vec::new(),
+            CompletionKind::Keyword,
+        ));
     }
     let doc = idxs[0];
     let imported = crate::definition::import_map(doc);
@@ -383,7 +419,12 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
             }
             push_item(
                 &mut out,
-                CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Fn),
+                CompletionOut::plain(
+                    f.name.clone(),
+                    f.src.clone(),
+                    f.doc.clone(),
+                    CompletionKind::Fn,
+                ),
             );
         }
     }
@@ -435,7 +476,9 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
         Some(b) => (&seg[..b], &seg[b + 1..]),
         None => (&seg[..], &seg[..]),
     };
-    let has_sep = path_seg.iter().any(|t| matches!(t.tok, Tok::Colon | Tok::Colon2));
+    let has_sep = path_seg
+        .iter()
+        .any(|t| matches!(t.tok, Tok::Colon | Tok::Colon2));
     let mut segments: Vec<String> = if has_sep {
         path_seg
             .iter()
@@ -451,13 +494,19 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
     // a segment to walk (`use pkg::layout::Co⏐` walks `layout` only);
     // the brace form's path never carries one (the list's partial
     // leaf is the prefix alone)
-    if let Some(Token { tok: Tok::Ident(s), .. }) = path_seg.last() {
+    if let Some(Token {
+        tok: Tok::Ident(s), ..
+    }) = path_seg.last()
+    {
         if !rut_parser::is_reserved_kw(s) {
             segments.pop();
         }
     }
     let prefix = match list_seg.last() {
-        Some(Token { tok: Tok::Ident(s), span }) if !rut_parser::is_reserved_kw(s) => {
+        Some(Token {
+            tok: Tok::Ident(s),
+            span,
+        }) if !rut_parser::is_reserved_kw(s) => {
             let end = (pos as usize).min(span.hi as usize).max(span.lo as usize);
             s.get(..end - span.lo as usize).unwrap_or(s).to_string()
         }
@@ -487,7 +536,12 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
             let Some(m) = &i.module else { continue };
             push_item(
                 &mut out,
-                CompletionOut::plain(m.clone(), i.origin.clone(), Vec::new(), CompletionKind::Module),
+                CompletionOut::plain(
+                    m.clone(),
+                    i.origin.clone(),
+                    Vec::new(),
+                    CompletionKind::Module,
+                ),
             );
         }
         out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
@@ -496,7 +550,11 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     };
     // the import is the gate-opener, so the `pub builtin` gate does
     // not bind here (this IS the use that names them)
-    let chain: Vec<&DefIndex> = idxs.iter().copied().filter(|i| crate::definition::matches_pkg(i, pkg)).collect();
+    let chain: Vec<&DefIndex> = idxs
+        .iter()
+        .copied()
+        .filter(|i| crate::definition::matches_pkg(i, pkg))
+        .collect();
     if chain.is_empty() {
         return Vec::new();
     }
@@ -517,9 +575,15 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     } else {
         mods::walk_use_mods(idxs, pkg, interior)
     };
-    let Some(path) = walked else { return Vec::new() };
+    let Some(path) = walked else {
+        return Vec::new();
+    };
     let scope: Vec<&DefIndex> = if carrying {
-        chain.iter().copied().filter(|i| mods::mod_path_of(i) == path).collect()
+        chain
+            .iter()
+            .copied()
+            .filter(|i| mods::mod_path_of(i) == path)
+            .collect()
     } else {
         chain
     };
@@ -536,7 +600,10 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
                 &mut out,
                 CompletionOut::plain(
                     m.name.clone(),
-                    format!("file module — {}", mods::display_of(idxs, Some(pkg.as_str()), &child)),
+                    format!(
+                        "file module — {}",
+                        mods::display_of(idxs, Some(pkg.as_str()), &child)
+                    ),
                     m.doc.clone(),
                     CompletionKind::Module,
                 ),
@@ -572,7 +639,12 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
             }
             push_item(
                 &mut out,
-                CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Fn),
+                CompletionOut::plain(
+                    f.name.clone(),
+                    f.src.clone(),
+                    f.doc.clone(),
+                    CompletionKind::Fn,
+                ),
             );
         }
         for l in &i.lets {
@@ -581,7 +653,12 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
             }
             push_item(
                 &mut out,
-                CompletionOut::plain(l.name.clone(), l.src.clone(), l.doc.clone(), CompletionKind::Const),
+                CompletionOut::plain(
+                    l.name.clone(),
+                    l.src.clone(),
+                    l.doc.clone(),
+                    CompletionKind::Const,
+                ),
             );
         }
     }
@@ -696,7 +773,12 @@ fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut>
     for p in rut_parser::PRIMITIVE_TYS {
         push_item(
             &mut out,
-            CompletionOut::plain((*p).to_string(), "primitive".to_string(), Vec::new(), CompletionKind::Type),
+            CompletionOut::plain(
+                (*p).to_string(),
+                "primitive".to_string(),
+                Vec::new(),
+                CompletionKind::Type,
+            ),
         );
     }
     let doc = idxs[0];
@@ -761,7 +843,12 @@ fn type_head_completions(
                 for m in &ty.fields {
                     push_item(
                         &mut out,
-                        CompletionOut::plain(m.name.clone(), m.src.clone(), m.doc.clone(), CompletionKind::EnumMember),
+                        CompletionOut::plain(
+                            m.name.clone(),
+                            m.src.clone(),
+                            m.doc.clone(),
+                            CompletionKind::EnumMember,
+                        ),
                     );
                 }
             }
@@ -771,13 +858,23 @@ fn type_head_completions(
                 for f in &ty.fields {
                     push_item(
                         &mut out,
-                        CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Const),
+                        CompletionOut::plain(
+                            f.name.clone(),
+                            f.src.clone(),
+                            f.doc.clone(),
+                            CompletionKind::Const,
+                        ),
                     );
                 }
                 for m in &ty.methods {
                     push_item(
                         &mut out,
-                        CompletionOut::plain(m.name.clone(), m.src.clone(), m.doc.clone(), CompletionKind::Fn),
+                        CompletionOut::plain(
+                            m.name.clone(),
+                            m.src.clone(),
+                            m.doc.clone(),
+                            CompletionKind::Fn,
+                        ),
                     );
                 }
             }
@@ -797,7 +894,12 @@ fn type_head_completions(
                     if bare.starts_with("static ") {
                         push_item(
                             &mut out,
-                            CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Field),
+                            CompletionOut::plain(
+                                f.name.clone(),
+                                f.src.clone(),
+                                f.doc.clone(),
+                                CompletionKind::Field,
+                            ),
                         );
                     }
                 }
@@ -806,7 +908,12 @@ fn type_head_completions(
                         if f.owner.as_deref() == Some(head.as_str()) {
                             push_item(
                                 &mut out,
-                                CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Fn),
+                                CompletionOut::plain(
+                                    f.name.clone(),
+                                    f.src.clone(),
+                                    f.doc.clone(),
+                                    CompletionKind::Fn,
+                                ),
                             );
                         }
                     }
@@ -899,7 +1006,12 @@ fn position_path_completions(
         }
         push_item(
             &mut out,
-            CompletionOut::plain(f.name.clone(), f.src.clone(), f.doc.clone(), CompletionKind::Fn),
+            CompletionOut::plain(
+                f.name.clone(),
+                f.src.clone(),
+                f.doc.clone(),
+                CompletionKind::Fn,
+            ),
         );
     }
     for l in &scope.lets {
@@ -908,7 +1020,12 @@ fn position_path_completions(
         }
         push_item(
             &mut out,
-            CompletionOut::plain(l.name.clone(), l.src.clone(), l.doc.clone(), CompletionKind::Const),
+            CompletionOut::plain(
+                l.name.clone(),
+                l.src.clone(),
+                l.doc.clone(),
+                CompletionKind::Const,
+            ),
         );
     }
     out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
@@ -1021,7 +1138,9 @@ fn bare_prefix(toks: &[Token], pos: u32) -> String {
     };
     match &t.tok {
         Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => {
-            let end = (pos as usize).min(t.span.hi as usize).max(t.span.lo as usize);
+            let end = (pos as usize)
+                .min(t.span.hi as usize)
+                .max(t.span.lo as usize);
             s.get(..end - t.span.lo as usize).unwrap_or(s).to_string()
         }
         _ => String::new(),
@@ -1046,8 +1165,14 @@ fn import_insert(src: &str, ast: &Ast, toks: &[Token]) -> (Range, bool) {
     let (line, ch) = lines.position(src, offset);
     (
         Range {
-            start: ls_types::Position { line, character: ch },
-            end: ls_types::Position { line, character: ch },
+            start: ls_types::Position {
+                line,
+                character: ch,
+            },
+            end: ls_types::Position {
+                line,
+                character: ch,
+            },
         },
         newline_first,
     )
@@ -1110,7 +1235,9 @@ fn gens(t: &TyDef) -> String {
 
 // ---- the LSP mapping ----
 
-use ls_types::{CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind, TextEdit};
+use ls_types::{
+    CompletionItem, CompletionItemKind, Documentation, MarkupContent, MarkupKind, TextEdit,
+};
 
 /// plain completion data → the LSP item (kind icons, detail, docs,
 /// the auto-import tier's sort text + additional edits) — shared by
@@ -1211,10 +1338,16 @@ return c.;
         };
 
         let gated = "fn go(g: Greeter) -> nil { g. }\n";
-        assert!(!labels(&mk(gated)).contains(&"greet"), "unused foreign interface must not complete");
+        assert!(
+            !labels(&mk(gated)).contains(&"greet"),
+            "unused foreign interface must not complete"
+        );
 
         let used = "use greets::{ Greeter };\nfn go(g: Greeter) -> nil { g. }\n";
-        assert!(labels(&mk(used)).contains(&"greet"), "used interface completes");
+        assert!(
+            labels(&mk(used)).contains(&"greet"),
+            "used interface completes"
+        );
 
         // the document's own interface is in scope natively
         let own = "interface Local {\nfn hi(self) -> nil;\n}\nfn go(l: Local) -> nil { l. }\n";
@@ -1224,7 +1357,10 @@ return c.;
         let di = crate::hover::index(&d2, &ast, &toks);
         let idxs = [&di];
         let pos = d2.rfind("l.").unwrap() as u32 + 2;
-        assert!(labels(&complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())).contains(&"hi"), "own interface completes");
+        assert!(
+            labels(&complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())).contains(&"hi"),
+            "own interface completes"
+        );
     }
 
     #[test]
@@ -1238,11 +1374,23 @@ return c.;
         }
         // `trait` retired to an ordinary identifier — the keyword table
         // must not offer it
-        assert!(!ls.contains(&"trait"), "the retired spelling must not complete: {ls:?}");
-        assert!(!ls.iter().any(|l| matches!(*l, "import" | "suspend" | "from" | "dyn")));
+        assert!(
+            !ls.contains(&"trait"),
+            "the retired spelling must not complete: {ls:?}"
+        );
+        assert!(!ls
+            .iter()
+            .any(|l| matches!(*l, "import" | "suspend" | "from" | "dyn")));
         // decls: the document's interface (as an interface) and fn
-        let shape = items.iter().find(|c| c.label == "Shape").expect("the decl completes");
-        assert!(matches!(shape.kind, CompletionKind::Interface), "{:?}", shape.kind);
+        let shape = items
+            .iter()
+            .find(|c| c.label == "Shape")
+            .expect("the decl completes");
+        assert!(
+            matches!(shape.kind, CompletionKind::Interface),
+            "{:?}",
+            shape.kind
+        );
         assert!(ls.contains(&"main"), "{ls:?}");
         // methods are reached through a receiver, not named bare
         assert!(!ls.contains(&"area"), "{ls:?}");
@@ -1282,19 +1430,47 @@ return c.;
         let bare = "entry fn main() -> nil { }\n";
         let items = mk(bare);
         let ls = labels(&items);
-        assert!(!ls.contains(&"Disposal"), "unused `pub builtin` must not complete: {ls:?}");
-        assert!(!ls.contains(&"DisposalContext"), "unused `pub builtin` must not complete: {ls:?}");
-        assert!(!ls.contains(&"Iterable"), "the gated builtin name must not complete: {ls:?}");
-        assert!(!ls.contains(&"Weak"), "the gated weak reference must not complete: {ls:?}");
-        assert!(ls.contains(&"StackTrace"), "the ambient row still completes: {ls:?}");
+        assert!(
+            !ls.contains(&"Disposal"),
+            "unused `pub builtin` must not complete: {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"DisposalContext"),
+            "unused `pub builtin` must not complete: {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"Iterable"),
+            "the gated builtin name must not complete: {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"Weak"),
+            "the gated weak reference must not complete: {ls:?}"
+        );
+        assert!(
+            ls.contains(&"StackTrace"),
+            "the ambient row still completes: {ls:?}"
+        );
 
-        let imported = "use core::{ Disposal, DisposalContext, Iterable, Weak };\nfn main() -> nil { }\n";
+        let imported =
+            "use core::{ Disposal, DisposalContext, Iterable, Weak };\nfn main() -> nil { }\n";
         let items = mk(imported);
         let ls = labels(&items);
-        assert!(ls.contains(&"Disposal"), "the imported builtin class completes: {ls:?}");
-        assert!(ls.contains(&"DisposalContext"), "the imported class completes: {ls:?}");
-        assert!(ls.contains(&"Iterable"), "the imported generic builtin class completes: {ls:?}");
-        assert!(ls.contains(&"Weak"), "the imported weak reference completes: {ls:?}");
+        assert!(
+            ls.contains(&"Disposal"),
+            "the imported builtin class completes: {ls:?}"
+        );
+        assert!(
+            ls.contains(&"DisposalContext"),
+            "the imported class completes: {ls:?}"
+        );
+        assert!(
+            ls.contains(&"Iterable"),
+            "the imported generic builtin class completes: {ls:?}"
+        );
+        assert!(
+            ls.contains(&"Weak"),
+            "the imported weak reference completes: {ls:?}"
+        );
     }
 
     // ---- the honest bare scope (A2): a foreign decl is a PLAIN bare
@@ -1327,7 +1503,14 @@ return c.;
         let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
         let di = crate::hover::index(&d2, &ast, &toks);
         let idxs = [&di, dep];
-        complete(&idxs, &toks, &ast, d2.len() as u32, &d2, &DocMods::default())
+        complete(
+            &idxs,
+            &toks,
+            &ast,
+            d2.len() as u32,
+            &d2,
+            &DocMods::default(),
+        )
     }
 
     #[test]
@@ -1337,7 +1520,9 @@ return c.;
         // the auto-import one (the `use gadgets::tag;` edit rides it)
         let items = complete_with_dep("entry fn main() -> nil { }\n", &dep);
         assert!(
-            items.iter().all(|c| c.label != "tag" || !c.additional_text_edits.is_empty()),
+            items
+                .iter()
+                .all(|c| c.label != "tag" || !c.additional_text_edits.is_empty()),
             "the dep fn must not complete plain: {:?}",
             labels(&items)
         );
@@ -1355,7 +1540,11 @@ return c.;
             plain.additional_text_edits.is_empty(),
             "the imported fn completes plain, no insert: {plain:?}"
         );
-        assert!(import_item(&items, "tag").is_none(), "never re-offered: {:?}", labels(&items));
+        assert!(
+            import_item(&items, "tag").is_none(),
+            "never re-offered: {:?}",
+            labels(&items)
+        );
     }
 
     #[test]
@@ -1387,9 +1576,17 @@ return c.;
         let dep = tag_dep();
         let items = complete_with_dep("use gadgets::{ tag };\nentry fn main() -> nil { }\n", &dep);
         let count = items.iter().filter(|c| c.label == "tag").count();
-        assert_eq!(count, 1, "one `tag` item, got {count}: {:?}", labels(&items));
+        assert_eq!(
+            count,
+            1,
+            "one `tag` item, got {count}: {:?}",
+            labels(&items)
+        );
         let the = items.iter().find(|c| c.label == "tag").unwrap();
-        assert!(the.additional_text_edits.is_empty(), "the plain (bare) item wins: {the:?}");
+        assert!(
+            the.additional_text_edits.is_empty(),
+            "the plain (bare) item wins: {the:?}"
+        );
     }
 
     // ---- the brace-form use-path shapes (A6 regression pins — the
@@ -1402,7 +1599,10 @@ return c.;
         for doc in ["use gadgets::{", "use gadgets::{ tag, "] {
             let items = complete_with_dep(doc, &dep);
             let ls = labels(&items);
-            assert!(ls.contains(&"Widget"), "exports complete in `{doc}`: {ls:?}");
+            assert!(
+                ls.contains(&"Widget"),
+                "exports complete in `{doc}`: {ls:?}"
+            );
             assert!(ls.contains(&"tag"), "{ls:?}");
         }
         // `use gadgets::{ Widget, ⏐` — still the full exports
@@ -1412,7 +1612,10 @@ return c.;
         let items = complete_with_dep("use gadgets::{ Widget, ta", &dep);
         let ls = labels(&items);
         assert!(ls.contains(&"tag"), "{ls:?}");
-        assert!(!ls.contains(&"Widget"), "the prefix filters the brace form: {ls:?}");
+        assert!(
+            !ls.contains(&"Widget"),
+            "the prefix filters the brace form: {ls:?}"
+        );
         // an unmounted head stays an honest empty
         assert!(complete_with_dep("use ghost::{", &dep).is_empty());
     }
@@ -1464,7 +1667,11 @@ return c.;
             assert!(ls.contains(&want), "module `{want}` completes: {ls:?}");
         }
         let pouch = items.iter().find(|c| c.label == "pouch").unwrap();
-        assert!(matches!(pouch.kind, CompletionKind::Module), "{:?}", pouch.kind);
+        assert!(
+            matches!(pouch.kind, CompletionKind::Module),
+            "{:?}",
+            pouch.kind
+        );
         // the partial prefix filters
         let items = complete_over_std("use po", "use po");
         let ls = labels(&items);
@@ -1517,7 +1724,11 @@ return c.;
         assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
         assert!(ls.contains(&"PI"), "the consts complete: {ls:?}");
         let math = items.iter().find(|c| c.label == "Math").unwrap();
-        assert!(matches!(math.kind, CompletionKind::Module), "{:?}", math.kind);
+        assert!(
+            matches!(math.kind, CompletionKind::Module),
+            "{:?}",
+            math.kind
+        );
         let pi = items.iter().find(|c| c.label == "PI").unwrap();
         assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
     }
@@ -1561,7 +1772,8 @@ return c.;
         chain.extend(dep.iter());
         let pos = s
             .rfind(needle)
-            .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}")) as u32
+            .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}"))
+            as u32
             + needle.len() as u32;
         complete(&chain, &toks, &ast, pos, &s, &doc_mods)
     }
@@ -1573,14 +1785,27 @@ return c.;
         // child's members live under their path (no Column leak)
         let items = complete_over_gadgets("use gadgets::", "use gadgets::", DocMods::default());
         let ls = labels(&items);
-        assert!(ls.contains(&"layout"), "the pub mod child completes: {ls:?}");
+        assert!(
+            ls.contains(&"layout"),
+            "the pub mod child completes: {ls:?}"
+        );
         assert!(ls.contains(&"tag"), "the root's fn completes: {ls:?}");
-        assert!(!ls.contains(&"secret"), "a bare `mod` edge never crosses: {ls:?}");
-        assert!(!ls.contains(&"Column"), "child members stay under their path: {ls:?}");
+        assert!(
+            !ls.contains(&"secret"),
+            "a bare `mod` edge never crosses: {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"Column"),
+            "child members stay under their path: {ls:?}"
+        );
         let layout = ls.iter().find(|l| **l == "layout").unwrap();
         let items = complete_over_gadgets("use gadgets::", "use gadgets::", DocMods::default());
         let item = items.iter().find(|c| c.label == "layout").unwrap();
-        assert!(matches!(item.kind, CompletionKind::Module), "{:?}", item.kind);
+        assert!(
+            matches!(item.kind, CompletionKind::Module),
+            "{:?}",
+            item.kind
+        );
         assert!(item.detail.contains("layout/mod.rut"), "{:?}", item.detail);
         let _ = layout;
 
@@ -1601,8 +1826,14 @@ return c.;
         let ls = labels(&items);
         assert!(ls.contains(&"Column"), "{ls:?}");
         assert!(ls.contains(&"grid"), "the nested pub mod completes: {ls:?}");
-        assert!(!ls.contains(&"for_parent"), "only `pub` leaf names cross packages: {ls:?}");
-        assert!(!ls.contains(&"internal"), "a private fn never crosses: {ls:?}");
+        assert!(
+            !ls.contains(&"for_parent"),
+            "only `pub` leaf names cross packages: {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"internal"),
+            "a private fn never crosses: {ls:?}"
+        );
 
         // deeper: `use gadgets::layout::grid::⏐`
         let items = complete_over_gadgets(
@@ -1624,8 +1855,18 @@ return c.;
         assert!(ls.contains(&"Column"), "{ls:?}");
 
         // a private edge is a dead end; a ghost is a miss — both empty
-        assert!(complete_over_gadgets("use gadgets::secret::", "use gadgets::secret::", DocMods::default()).is_empty());
-        assert!(complete_over_gadgets("use gadgets::ghost::", "use gadgets::ghost::", DocMods::default()).is_empty());
+        assert!(complete_over_gadgets(
+            "use gadgets::secret::",
+            "use gadgets::secret::",
+            DocMods::default()
+        )
+        .is_empty());
+        assert!(complete_over_gadgets(
+            "use gadgets::ghost::",
+            "use gadgets::ghost::",
+            DocMods::default()
+        )
+        .is_empty());
     }
 
     #[test]
@@ -1633,17 +1874,30 @@ return c.;
         // the open document IS the gadgets root: `mod layout;` +
         // `mod secret;` declared in it; the doc mods say so. Positions
         // qualify with `.` (`let c: layout.Column`) — the real spelling
-        let doc = DocMods { mod_path: Some(String::new()), pkg: Some("gadgets".to_string()) };
+        let doc = DocMods {
+            mod_path: Some(String::new()),
+            pkg: Some("gadgets".to_string()),
+        };
         let doc_src = "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout.\n}\n";
         let items = complete_over_gadgets(doc_src, "let c: layout.", doc.clone());
         let ls = labels(&items);
         assert!(ls.contains(&"Column"), "the pub type completes: {ls:?}");
-        assert!(ls.contains(&"grid"), "any declared edge walks intra-package: {ls:?}");
-        assert!(ls.contains(&"for_parent"), "pub(super) reaches the parent (the root): {ls:?}");
-        assert!(!ls.contains(&"internal"), "a private fn of a child stays hidden: {ls:?}");
+        assert!(
+            ls.contains(&"grid"),
+            "any declared edge walks intra-package: {ls:?}"
+        );
+        assert!(
+            ls.contains(&"for_parent"),
+            "pub(super) reaches the parent (the root): {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"internal"),
+            "a private fn of a child stays hidden: {ls:?}"
+        );
 
         // the `::` spelling rides the same tier (the plan's letter)
-        let doc_src = "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout::\n}\n";
+        let doc_src =
+            "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout::\n}\n";
         let items = complete_over_gadgets(doc_src, "let c: layout::", doc.clone());
         assert!(labels(&items).contains(&"Column"), "{:?}", labels(&items));
 
@@ -1653,7 +1907,10 @@ return c.;
         let items = complete_over_gadgets(doc_src, "let f: secret.", doc.clone());
         let ls = labels(&items);
         assert!(ls.contains(&"open"), "{ls:?}");
-        assert!(!ls.contains(&"hidden"), "a private fn of a sibling is not visible: {ls:?}");
+        assert!(
+            !ls.contains(&"hidden"),
+            "a private fn of a sibling is not visible: {ls:?}"
+        );
 
         // the own-pkg head names the root module: `gadgets.` from the
         // root offers the root's own surface + children
@@ -1665,22 +1922,32 @@ return c.;
 
         // a deeper doc (layout/grid): a sibling via the parent scope,
         // and the pkg head reaching the root's decls
-        let grid_doc = DocMods { mod_path: Some("layout/grid".into()), pkg: Some("gadgets".to_string()) };
+        let grid_doc = DocMods {
+            mod_path: Some("layout/grid".into()),
+            pkg: Some("gadgets".to_string()),
+        };
         let grid_src = "pub struct Cell {\n    x: i32;\n}\nentry fn main() -> nil {\n    let c: layout.Column\n}\n";
         let items = complete_over_gadgets(grid_src, "let c: layout.", grid_doc.clone());
         let ls = labels(&items);
-        assert!(ls.contains(&"Column"), "the sibling-of-parent resolves: {ls:?}");
+        assert!(
+            ls.contains(&"Column"),
+            "the sibling-of-parent resolves: {ls:?}"
+        );
         // grid is a descendant of layout: layout's PRIVATES are visible
         // (the declaring module + descendants law)
         let grid_src2 = "pub struct Cell {\n    x: i32;\n}\nentry fn main() -> nil {\n    let f: layout.internal\n}\n";
         let items = complete_over_gadgets(grid_src2, "let f: layout.", grid_doc);
         let ls = labels(&items);
-        assert!(ls.contains(&"internal"), "a descendant reads the parent's privates: {ls:?}");
+        assert!(
+            ls.contains(&"internal"),
+            "a descendant reads the parent's privates: {ls:?}"
+        );
 
         // no doc mods (unknown provenance): the position tier stays off
         // — a plain type receiver falls through to the member tier
         // (empty for an unknown receiver — never wrong names)
-        let flat_src = "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout.\n}\n";
+        let flat_src =
+            "mod layout;\nmod secret;\nentry fn main() -> nil {\n    let c: layout.\n}\n";
         let items = complete_over_gadgets(flat_src, "let c: layout.", DocMods::default());
         let ls = labels(&items);
         assert!(!ls.contains(&"Column"), "no doc mods, no mod tier: {ls:?}");
@@ -1692,15 +1959,25 @@ return c.;
         // rides the own lane — the position machinery's visible-members
         // gate, so `pub(super)` reaches the root where the cross-package
         // tier's pub-only crossing law stays shut
-        let doc = DocMods { mod_path: Some(String::new()), pkg: Some("gadgets".to_string()) };
-        let items = complete_over_gadgets("use gadgets::layout::", "use gadgets::layout::", doc.clone());
+        let doc = DocMods {
+            mod_path: Some(String::new()),
+            pkg: Some("gadgets".to_string()),
+        };
+        let items = complete_over_gadgets(
+            "use gadgets::layout::",
+            "use gadgets::layout::",
+            doc.clone(),
+        );
         let ls = labels(&items);
         assert!(ls.contains(&"Column"), "{ls:?}");
         assert!(
             ls.contains(&"for_parent"),
             "the own lane gates by visibility, not the pub-crossing law: {ls:?}"
         );
-        assert!(!ls.contains(&"internal"), "a private fn stays hidden: {ls:?}");
+        assert!(
+            !ls.contains(&"internal"),
+            "a private fn stays hidden: {ls:?}"
+        );
 
         // the bare own-pkg head: the doc's own rows are the scope (the
         // freshness law) — the declared children offer
@@ -1715,10 +1992,16 @@ return c.;
         let items = complete_over_gadgets(
             doc_src,
             "use layout::",
-            DocMods { mod_path: Some(String::new()), pkg: Some("gadgets".to_string()) },
+            DocMods {
+                mod_path: Some(String::new()),
+                pkg: Some("gadgets".to_string()),
+            },
         );
         let ls = labels(&items);
-        assert!(ls.contains(&"Column"), "the own mod edge head rides the same tier: {ls:?}");
+        assert!(
+            ls.contains(&"Column"),
+            "the own mod edge head rides the same tier: {ls:?}"
+        );
         assert!(ls.contains(&"grid"), "{ls:?}");
     }
 
@@ -1734,7 +2017,11 @@ return c.;
         assert!(ls.contains(&"Red"), "{ls:?}");
         assert!(ls.contains(&"Green"), "{ls:?}");
         let red = items.iter().find(|c| c.label == "Red").unwrap();
-        assert!(matches!(red.kind, CompletionKind::EnumMember), "{:?}", red.kind);
+        assert!(
+            matches!(red.kind, CompletionKind::EnumMember),
+            "{:?}",
+            red.kind
+        );
         // the typed prefix filters the member list
         let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::R\n}\n";
         let items = complete_after(src, "Color::R");
@@ -1798,8 +2085,15 @@ entry fn main() -> nil {
         assert!(ls.contains(&"mk"), "{ls:?}");
         assert!(ls.contains(&"COUNT"), "the static rides the head: {ls:?}");
         let count = items.iter().find(|c| c.label == "COUNT").unwrap();
-        assert!(matches!(count.kind, CompletionKind::Field), "{:?}", count.kind);
-        assert!(!ls.contains(&"n"), "instance fields ride a receiver: {ls:?}");
+        assert!(
+            matches!(count.kind, CompletionKind::Field),
+            "{:?}",
+            count.kind
+        );
+        assert!(
+            !ls.contains(&"n"),
+            "instance fields ride a receiver: {ls:?}"
+        );
     }
 
     #[test]
@@ -1807,12 +2101,17 @@ entry fn main() -> nil {
         // an interface head: its signatures ride receivers, never `::`
         // — the known head is FINAL (empty), never the bare tier
         let src = "interface Greeter {\nfn greet(self) -> nil;\n}\nentry fn main() -> nil {\n    let g = Greeter::\n}\n";
-        assert!(complete_after(src, "Greeter::").is_empty(), "{:?}", complete_after(src, "Greeter::"));
+        assert!(
+            complete_after(src, "Greeter::").is_empty(),
+            "{:?}",
+            complete_after(src, "Greeter::")
+        );
         // a known head with a non-matching prefix: filtered empty, final
         let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::X\n}\n";
         assert!(complete_after(src, "Color::X").is_empty());
         // a type head is not a namespace: nothing descends past a member
-        let src = "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::Red::\n}\n";
+        let src =
+            "enum Color { Red, Green }\nentry fn main() -> nil {\n    let c = Color::Red::\n}\n";
         assert!(complete_after(src, "Color::Red::").is_empty());
     }
 
@@ -1835,13 +2134,22 @@ fn go(ready: bool) -> nil {
         let items = complete_after(src, "id: u");
         let ls = labels(&items);
         for want in ["u8", "u16", "u32", "u64"] {
-            assert!(ls.contains(&want), "primitive `{want}` completes at the annotation: {ls:?}");
+            assert!(
+                ls.contains(&want),
+                "primitive `{want}` completes at the annotation: {ls:?}"
+            );
         }
         assert!(!ls.contains(&"i32"), "the prefix filters the tier: {ls:?}");
-        assert!(!ls.contains(&"use"), "no keyword tier at a type position: {ls:?}");
+        assert!(
+            !ls.contains(&"use"),
+            "no keyword tier at a type position: {ls:?}"
+        );
         assert!(!ls.contains(&"fn") && !ls.contains(&"let"), "{ls:?}");
         assert!(!ls.contains(&"go"), "no fns at a type position: {ls:?}");
-        assert!(!ls.contains(&"ready") && !ls.contains(&"count"), "no locals at a type position: {ls:?}");
+        assert!(
+            !ls.contains(&"ready") && !ls.contains(&"count"),
+            "no locals at a type position: {ls:?}"
+        );
         let u32 = items.iter().find(|c| c.label == "u32").unwrap();
         assert!(matches!(u32.kind, CompletionKind::Type), "{:?}", u32.kind);
     }
@@ -1856,9 +2164,19 @@ fn go(ready: bool) -> nil {
         for want in ["bool", "str", "f64", "i32", "nil"] {
             assert!(ls.contains(&want), "primitive `{want}` completes: {ls:?}");
         }
-        let color = items.iter().find(|c| c.label == "Color").expect("the doc's type completes");
-        assert!(matches!(color.kind, CompletionKind::Type), "{:?}", color.kind);
-        assert!(!ls.contains(&"fn") && !ls.contains(&"let"), "no keywords: {ls:?}");
+        let color = items
+            .iter()
+            .find(|c| c.label == "Color")
+            .expect("the doc's type completes");
+        assert!(
+            matches!(color.kind, CompletionKind::Type),
+            "{:?}",
+            color.kind
+        );
+        assert!(
+            !ls.contains(&"fn") && !ls.contains(&"let"),
+            "no keywords: {ls:?}"
+        );
         assert!(!ls.contains(&"main"), "no fns: {ls:?}");
     }
 
@@ -1869,13 +2187,19 @@ fn go(ready: bool) -> nil {
         let items = complete_after(src, "-> ");
         let ls = labels(&items);
         assert!(ls.contains(&"i32") && ls.contains(&"Thing"), "{ls:?}");
-        assert!(!ls.contains(&"fn") && !ls.contains(&"f"), "no keywords, no fns: {ls:?}");
+        assert!(
+            !ls.contains(&"fn") && !ls.contains(&"f"),
+            "no keywords, no fns: {ls:?}"
+        );
         // … with the partial ident prefix-filtering: `-> T⏐`
         let src = "struct Thing {\nx: i32;\n}\nfn f() -> T\n";
         let items = complete_after(src, "-> T");
         let ls = labels(&items);
         assert!(ls.contains(&"Thing"), "{ls:?}");
-        assert!(!ls.contains(&"i32"), "the prefix filters the primitives: {ls:?}");
+        assert!(
+            !ls.contains(&"i32"),
+            "the prefix filters the primitives: {ls:?}"
+        );
     }
 
     #[test]
@@ -1928,12 +2252,21 @@ fn go(ready: bool) -> nil {
 
         let items = mk("entry fn main() -> nil {\n    let e: \n}\n");
         let ls = labels(&items);
-        assert!(ls.contains(&"StackTrace"), "the ambient builtin type completes: {ls:?}");
-        assert!(!ls.contains(&"Weak"), "the gated builtin type stays off: {ls:?}");
+        assert!(
+            ls.contains(&"StackTrace"),
+            "the ambient builtin type completes: {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"Weak"),
+            "the gated builtin type stays off: {ls:?}"
+        );
 
         let items = mk("use core::{ Weak };\nentry fn main() -> nil {\n    let e: \n}\n");
         let ls = labels(&items);
-        assert!(ls.contains(&"Weak"), "the imported builtin type completes: {ls:?}");
+        assert!(
+            ls.contains(&"Weak"),
+            "the imported builtin type completes: {ls:?}"
+        );
     }
 
     // ---- the auto-import tier ----
@@ -1960,7 +2293,11 @@ fn go(ready: bool) -> nil {
         let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
         let imp = import_item(&items, "Vec").expect("Vec auto-imports from pouch");
         assert_eq!(imp.detail, "pouch::Vec — import");
-        assert_eq!(imp.sort_text.as_deref(), Some("~Vec"), "the tier sorts after the locals");
+        assert_eq!(
+            imp.sort_text.as_deref(),
+            Some("~Vec"),
+            "the tier sorts after the locals"
+        );
         // the insert: no uses, no leading comments → top of the body,
         // a fresh line, over the SAME normalized coordinates
         assert_eq!(imp.additional_text_edits.len(), 1);
@@ -2040,7 +2377,10 @@ fn go(ready: bool) -> nil {
         let items = complete_over_std(doc, "log.");
         let ls = labels(&items);
         for want in ["new", "debug", "info", "warn", "error"] {
-            assert!(ls.contains(&want), "`{want}` completes through the ctor binding: {ls:?}");
+            assert!(
+                ls.contains(&want),
+                "`{want}` completes through the ctor binding: {ls:?}"
+            );
         }
         // the bare tier's host fns never dump into a member position
         assert!(!ls.contains(&"abs"), "no host-fn dump after a dot: {ls:?}");
@@ -2085,10 +2425,22 @@ fn go(ready: bool) -> nil {
         assert!(ls.contains(&"checked"), "the local completes: {ls:?}");
         assert!(ls.contains(&"ready"), "the param completes: {ls:?}");
         let checked = items.iter().find(|c| c.label == "checked").unwrap();
-        assert!(matches!(checked.kind, CompletionKind::Variable), "{:?}", checked.kind);
-        assert!(checked.detail.contains("let binding") && checked.detail.contains("str"), "{}", checked.detail);
+        assert!(
+            matches!(checked.kind, CompletionKind::Variable),
+            "{:?}",
+            checked.kind
+        );
+        assert!(
+            checked.detail.contains("let binding") && checked.detail.contains("str"),
+            "{}",
+            checked.detail
+        );
         let ready = items.iter().find(|c| c.label == "ready").unwrap();
-        assert!(matches!(ready.kind, CompletionKind::Parameter), "{:?}", ready.kind);
+        assert!(
+            matches!(ready.kind, CompletionKind::Parameter),
+            "{:?}",
+            ready.kind
+        );
         // ahead of the keyword table
         let checked_at = items.iter().position(|c| c.label == "checked").unwrap();
         let let_kw_at = items.iter().position(|c| c.label == "let").unwrap();
@@ -2107,7 +2459,10 @@ fn go(xs: [i32]) -> nil {
 }
 ";
         let items = complete_after(src, "        vv");
-        let v = items.iter().find(|c| c.label == "v").expect("the for-of var completes");
+        let v = items
+            .iter()
+            .find(|c| c.label == "v")
+            .expect("the for-of var completes");
         assert!(matches!(v.kind, CompletionKind::Variable), "{:?}", v.kind);
         assert!(v.detail.contains("loop variable"), "{}", v.detail);
 
@@ -2123,7 +2478,10 @@ fn go(n: i32) -> nil {
         // both still in scope
         let items = complete_after(src, "i += su");
         let ls = labels(&items);
-        assert!(ls.contains(&"i"), "the counter completes in the update: {ls:?}");
+        assert!(
+            ls.contains(&"i"),
+            "the counter completes in the update: {ls:?}"
+        );
         assert!(ls.contains(&"sum"), "{ls:?}");
         assert!(ls.contains(&"n"), "the param reaches the loop: {ls:?}");
         let i = items.iter().find(|c| c.label == "i").unwrap();
@@ -2145,8 +2503,15 @@ fn go(ready: bool) -> nil {
 }
 ";
         let items = complete_after(src, "        fl");
-        let flag = items.iter().find(|c| c.label == "flag").expect("the shadow completes");
-        assert!(flag.detail.contains("i32"), "the inner shadow wins inside its scope: {}", flag.detail);
+        let flag = items
+            .iter()
+            .find(|c| c.label == "flag")
+            .expect("the shadow completes");
+        assert!(
+            flag.detail.contains("i32"),
+            "the inner shadow wins inside its scope: {}",
+            flag.detail
+        );
         // scope-exit: a binding declared INSIDE the block is gone past
         // it, while the fn-wide param rides on
         let src = "\
@@ -2159,11 +2524,20 @@ fn go(ready: bool) -> nil {
 }
 ";
         let items = complete_after(src, "        tm");
-        assert!(labels(&items).contains(&"tmp"), "inside its block the local completes");
+        assert!(
+            labels(&items).contains(&"tmp"),
+            "inside its block the local completes"
+        );
         let items = complete_after(src, "    tm\n");
         let ls = labels(&items);
-        assert!(!ls.contains(&"tmp"), "the binding does not leak past its block: {ls:?}");
-        assert!(ls.contains(&"ready"), "the fn-wide param rides past the block: {ls:?}");
+        assert!(
+            !ls.contains(&"tmp"),
+            "the binding does not leak past its block: {ls:?}"
+        );
+        assert!(
+            ls.contains(&"ready"),
+            "the fn-wide param rides past the block: {ls:?}"
+        );
     }
 
     #[test]
@@ -2172,8 +2546,15 @@ fn go(ready: bool) -> nil {
         // offers the name being typed; a use after the decl does
         let src = "fn go() -> nil {\n    let che = 1;\n}\n";
         let items = complete_after(src, "let ch");
-        assert!(!labels(&items).contains(&"che"), "the declaration's own ident stays off");
-        assert!(!labels(&items).contains(&"ch"), "the half-typed name stays off: {:?}", labels(&items));
+        assert!(
+            !labels(&items).contains(&"che"),
+            "the declaration's own ident stays off"
+        );
+        assert!(
+            !labels(&items).contains(&"ch"),
+            "the half-typed name stays off: {:?}",
+            labels(&items)
+        );
         let src = "fn go() -> nil {\n    let che = 1;\n    che\n}\n";
         let items = complete_after(src, "    che\n");
         assert!(labels(&items).contains(&"che"), "{:?}", labels(&items));
@@ -2200,7 +2581,8 @@ impl List {
     #[test]
     fn member_completion_survives_the_end_of_buffer() {
         // THE regression: the text ends EXACTLY at the incomplete stmt
-        let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.");
+        let src =
+            format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.");
         let items = complete_after(&src, "    list.");
         let ls = labels(&items);
         assert!(ls.contains(&"items"), "the field completes at EOF: {ls:?}");
@@ -2210,14 +2592,20 @@ impl List {
 
         // one trailing newline — the same hole (the block span still
         // ends at the EOF token)
-        let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.\n");
+        let src =
+            format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.\n");
         let items = complete_after(&src, "    list.");
         let ls = labels(&items);
-        assert!(ls.contains(&"items") && ls.contains(&"count"), "the member list survives the newline: {ls:?}");
+        assert!(
+            ls.contains(&"items") && ls.contains(&"count"),
+            "the member list survives the newline: {ls:?}"
+        );
 
         // last stmt before `}` — the closed-block shape guards today's
         // behavior behind the fix
-        let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.\n}}\n");
+        let src = format!(
+            "{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    list.\n}}\n"
+        );
         let items = complete_after(&src, "    list.");
         let ls = labels(&items);
         assert!(ls.contains(&"items") && ls.contains(&"count"), "{ls:?}");
@@ -2229,13 +2617,20 @@ impl List {
         let src = "fn go() -> nil {\n    let mut checked: str = \" \";\n    che";
         let items = complete_after(src, "    che");
         let ls = labels(&items);
-        assert!(ls.contains(&"checked"), "the local completes at EOF: {ls:?}");
+        assert!(
+            ls.contains(&"checked"),
+            "the local completes at EOF: {ls:?}"
+        );
 
         // the receiver itself still resolves for member completion when
         // the receiver is the LAST thing before the cursor
         let src = format!("{EOF_LIST_HEAD}fn go() -> nil {{\n    let list = List.new();\n    li");
         let items = complete_after(&src, "    li");
-        assert!(labels(&items).contains(&"list"), "the local completes at EOF: {:?}", labels(&items));
+        assert!(
+            labels(&items).contains(&"list"),
+            "the local completes at EOF: {:?}",
+            labels(&items)
+        );
     }
 
     #[test]
@@ -2244,7 +2639,10 @@ impl List {
         // it (at the source end) sees no fn-local — no leak out of the
         // closed block, with or without a trailing newline
         for (src, needle) in [
-            ("fn go() -> nil {\n    let checked: str = \" \";\n}\n", "}\n"),
+            (
+                "fn go() -> nil {\n    let checked: str = \" \";\n}\n",
+                "}\n",
+            ),
             ("fn go() -> nil {\n    let checked: str = \" \";\n}", "}"),
         ] {
             let items = complete_after(src, needle);
@@ -2258,7 +2656,13 @@ impl List {
         let src = "fn a() -> nil {\n    let alpha: i32 = 1;\n}\nfn b() -> nil {\n    let beta: i32 = 2;\n    be";
         let items = complete_after(src, "    be");
         let ls = labels(&items);
-        assert!(ls.contains(&"beta"), "the unterminated fn's local completes: {ls:?}");
-        assert!(!ls.contains(&"alpha"), "the closed fn's local stays in: {ls:?}");
+        assert!(
+            ls.contains(&"beta"),
+            "the unterminated fn's local completes: {ls:?}"
+        );
+        assert!(
+            !ls.contains(&"alpha"),
+            "the closed fn's local stays in: {ls:?}"
+        );
     }
 }

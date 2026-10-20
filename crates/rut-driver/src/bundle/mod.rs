@@ -26,11 +26,12 @@ pub mod read;
 mod zip;
 
 pub use container::{crc32, parse_bundle, write_bundle, BundleError};
-pub use files::{
-    bundle_key, entry_rel, read_entry, MANIFEST_NAME,
-};
+pub use files::{bundle_key, entry_rel, read_entry, MANIFEST_NAME};
 pub use identity::{
     fp16_of, identity, is_identity, mount_name, parse_identity, valid_mount_key, DEPS_DIR,
 };
-pub use manifest::{parse_manifest, parse_manifest_compat, valid_spec, Entry, LegacyEntry, Manifest, ManifestError, PkgType};
+pub use manifest::{
+    parse_manifest, parse_manifest_compat, valid_spec, Entry, LegacyEntry, Manifest, ManifestError,
+    PkgType,
+};
 pub use read::{Bundle, GroupKind, Layout};

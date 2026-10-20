@@ -52,7 +52,12 @@ impl Editor {
 
     /// Send a request; return its response (server notifications such as
     /// publishDiagnostics are drained and returned too, via `notifications`).
-    async fn request(&mut self, method: &str, params: Value, notifications: &mut Vec<Value>) -> Value {
+    async fn request(
+        &mut self,
+        method: &str,
+        params: Value,
+        notifications: &mut Vec<Value>,
+    ) -> Value {
         self.next_id += 1;
         let id = self.next_id;
         self.send(method, params, Some(id)).await;
@@ -94,21 +99,21 @@ async fn spawn_at(root: &str) -> Editor {
     let (server_tx, client_rx) = tokio::io::duplex(4096);
     let (service, socket) = LspService::new(|client| Backend::new(client));
     tokio::spawn(async move {
-        Server::new(server_rx, server_tx, socket).serve(service).await;
+        Server::new(server_rx, server_tx, socket)
+            .serve(service)
+            .await;
     });
-    let mut editor = Editor { tx: client_tx, rx: client_rx, next_id: 0 };
+    let mut editor = Editor {
+        tx: client_tx,
+        rx: client_rx,
+        next_id: 0,
+    };
     let mut drain = Vec::new();
     let mut init_params = json!({"capabilities": {}});
     if !root.is_empty() {
         init_params["rootUri"] = json!(root);
     }
-    let init = editor
-        .request(
-            "initialize",
-            init_params,
-            &mut drain,
-        )
-        .await;
+    let init = editor.request("initialize", init_params, &mut drain).await;
     assert!(init["result"]["capabilities"]["semanticTokensProvider"].is_object());
     assert!(init["result"]["capabilities"]["documentSymbolProvider"].is_boolean());
     assert!(init["result"]["capabilities"]["textDocumentSync"].is_object());
@@ -182,7 +187,8 @@ async fn semantic_tokens_symbols_and_diags_on_the_wire() {
 }
 
 #[tokio::test]
-async fn broken_file_publishes_error_diags() {    let mut editor = spawn().await;
+async fn broken_file_publishes_error_diags() {
+    let mut editor = spawn().await;
     let uri = "file:///w/broken.rut";
     editor
         .notify(
@@ -194,7 +200,13 @@ async fn broken_file_publishes_error_diags() {    let mut editor = spawn().await
         )
         .await;
     let mut notes = Vec::new();
-    editor.request("textDocument/documentSymbol", json!({"textDocument": {"uri": uri}}), &mut notes).await;
+    editor
+        .request(
+            "textDocument/documentSymbol",
+            json!({"textDocument": {"uri": uri}}),
+            &mut notes,
+        )
+        .await;
     let publish = match notes
         .iter()
         .rev()
@@ -229,7 +241,11 @@ async fn decl_files_parse_in_decl_mode() {
         .await;
     let mut notes = Vec::new();
     let syms = editor
-        .request("textDocument/documentSymbol", json!({"textDocument": {"uri": uri}}), &mut notes)
+        .request(
+            "textDocument/documentSymbol",
+            json!({"textDocument": {"uri": uri}}),
+            &mut notes,
+        )
         .await;
     let arr = syms["result"].as_array().expect("symbol array");
     assert_eq!(arr[0]["name"], "now_ms");
@@ -240,7 +256,6 @@ async fn decl_files_parse_in_decl_mode() {
     });
     assert!(!has_publish, "surface decls must not diagnose: {notes:?}");
 }
-
 
 /// (line, character) of the `n`-th occurrence of `needle` in `src` —
 /// chars within the line, like LSP positions
@@ -290,7 +305,9 @@ fn go(c: Circle) -> f64 { return c.area(); }
             &mut notes,
         )
         .await;
-    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    let md = h["result"]["contents"]["value"]
+        .as_str()
+        .expect("hover markdown");
     assert!(md.contains("fn area(self) -> f64"), "signature: {md}");
     assert!(md.contains("in `Circle`"), "owner: {md}");
 
@@ -303,7 +320,9 @@ fn go(c: Circle) -> f64 { return c.area(); }
             &mut notes,
         )
         .await;
-    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    let md = h["result"]["contents"]["value"]
+        .as_str()
+        .expect("hover markdown");
     assert!(md.contains("class Circle {"), "{md}");
     assert!(md.contains("pub r: f64"), "{md}");
     assert!(md.contains("a circle"), "{md}");
@@ -342,7 +361,9 @@ async fn hover_resolves_std_surface() {
             &mut notes,
         )
         .await;
-    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    let md = h["result"]["contents"]["value"]
+        .as_str()
+        .expect("hover markdown");
     assert!(md.contains("len"), "string member: {md}");
     assert!(md.contains("core"), "provenance: {md}");
 }
@@ -386,11 +407,12 @@ fn go() -> f64 {
         )
         .await;
     let hints = resp["result"].as_array().expect("hint array");
-    let labels: Vec<&str> = hints
-        .iter()
-        .map(|h| h["label"].as_str().unwrap())
-        .collect();
-    assert_eq!(labels, vec![": Circle", ": Circle", "k:"], "unannotated lets then the call arg");
+    let labels: Vec<&str> = hints.iter().map(|h| h["label"].as_str().unwrap()).collect();
+    assert_eq!(
+        labels,
+        vec![": Circle", ": Circle", "k:"],
+        "unannotated lets then the call arg"
+    );
     // kinds share the LSP numbering (1 Type, 2 Parameter)
     assert_eq!(hints[0]["kind"], 1);
     assert_eq!(hints[2]["kind"], 2);
@@ -561,7 +583,10 @@ fn go() -> i32 {
         .collect();
     assert_eq!(labels, vec!["c: str", "k: i32"], "params as written");
     assert_eq!(help["activeSignature"], 0);
-    assert_eq!(help["activeParameter"], 0, "the cursor sits on the first arg");
+    assert_eq!(
+        help["activeParameter"], 0,
+        "the cursor sits on the first arg"
+    );
     // the second arg highlights slot 1
     let resp = editor
         .request(
@@ -604,7 +629,10 @@ entry fn main() -> i32 {
             &mut notes,
         )
         .await;
-    assert!(resp["result"].is_null(), "three args for two params: {resp}");
+    assert!(
+        resp["result"].is_null(),
+        "three args for two params: {resp}"
+    );
 
     // ---- cross-file references: the reverse use-graph edge. The
     // server face indexes the workspace at initialize, so the importing
@@ -677,7 +705,10 @@ const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
 /// the same digest the server's mount door checks (the pin is law)
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 struct DepFixture {
@@ -699,11 +730,7 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     // the path dep — a module directory with its own manifest. The
     // lib spells a `pub mod layout;` edge and the child dir carries
     // its `mod.rut` — the editor walk mounts the tree like the loader
-    std::fs::write(
-        dep.join("rut.jsonc"),
-        r#"{ "name": "gadgets" }"#,
-    )
-    .unwrap();
+    std::fs::write(dep.join("rut.jsonc"), r#"{ "name": "gadgets" }"#).unwrap();
     let lib_src = "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\npub mod layout;\n";
     std::fs::write(dep.join("mod.rut"), lib_src).unwrap();
     std::fs::create_dir_all(dep.join("layout")).unwrap();
@@ -717,7 +744,8 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     // ghost pinned but primed nowhere (the miss), bare unpinned —
     // pins ride `rut.lock` (the CLI's install writes it; the manifest
     // grammar carries no sha256)
-    const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle";
+    const POUCH_URL: &str =
+        "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle";
     const GHOST_URL: &str = "https://example.invalid/ghost.rutbundle";
     const BARE_URL: &str = "https://example.invalid/bare.rutbundle";
     let pouch_cache = rut_lsp::deps::cache_path(POUCH_URL); // .rut/cache/<sha256(url)>.rutbundle
@@ -773,7 +801,12 @@ fn main() -> nil {
     )
     .unwrap();
     let main_uri = format!("file://{}/mod.rut", ws.display());
-    DepFixture { base, ws, main_src: main_src.to_string(), main_uri }
+    DepFixture {
+        base,
+        ws,
+        main_src: main_src.to_string(),
+        main_uri,
+    }
 }
 
 /// the pouch bundle's own source, only reachable through the CACHE mount
@@ -812,7 +845,8 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
         .await;
     let locs = resp["result"].as_array().expect("definition locations");
     assert!(
-        locs.iter().any(|l| l["uri"].as_str().unwrap().ends_with("/outside/mod.rut")),
+        locs.iter()
+            .any(|l| l["uri"].as_str().unwrap().ends_with("/outside/mod.rut")),
         "the outside path dep answers F12: {resp}"
     );
 
@@ -842,7 +876,9 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
             &mut notes,
         )
         .await;
-    let md = h["result"]["contents"]["value"].as_str().expect("hover markdown");
+    let md = h["result"]["contents"]["value"]
+        .as_str()
+        .expect("hover markdown");
     assert!(md.contains("push"), "the bundle member surface: {md}");
 
     // the path dep completes: `use gadgets::⏐` offers its public names
@@ -865,7 +901,10 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
         .await;
     let items = comp["result"].as_array().expect("completion items");
     let labels: Vec<&str> = items.iter().map(|i| i["label"].as_str().unwrap()).collect();
-    assert!(labels.contains(&"Widget"), "the dep type completes: {labels:?}");
+    assert!(
+        labels.contains(&"Widget"),
+        "the dep type completes: {labels:?}"
+    );
     assert!(labels.contains(&"tag"), "the dep fn completes: {labels:?}");
     let _ = remove_ws(fx.base);
 }
@@ -912,8 +951,14 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
         .await;
     let items = comp["result"].as_array().expect("completion items");
     let labels: Vec<&str> = items.iter().map(|i| i["label"].as_str().unwrap()).collect();
-    assert!(labels.contains(&"Column"), "the walked module's type completes: {labels:?}");
-    assert!(labels.contains(&"mk"), "the walked module's fn completes: {labels:?}");
+    assert!(
+        labels.contains(&"Column"),
+        "the walked module's type completes: {labels:?}"
+    );
+    assert!(
+        labels.contains(&"mk"),
+        "the walked module's fn completes: {labels:?}"
+    );
 
     // the segment hover: `layout` inside `use gadgets::layout::..`
     // renders the resolved module (mounted file + child count)
@@ -925,7 +970,9 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
             &mut notes,
         )
         .await;
-    let md = h["result"]["contents"]["value"].as_str().expect("segment hover markdown");
+    let md = h["result"]["contents"]["value"]
+        .as_str()
+        .expect("segment hover markdown");
     assert!(md.contains("file module"), "{md}");
     assert!(md.contains("layout/mod.rut"), "{md}");
 
@@ -940,7 +987,9 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
             &mut notes,
         )
         .await;
-    let md = h["result"]["contents"]["value"].as_str().expect("own segment hover markdown");
+    let md = h["result"]["contents"]["value"]
+        .as_str()
+        .expect("own segment hover markdown");
     assert!(md.contains("file module"), "{md}");
     assert!(md.contains("helpers/mod.rut"), "{md}");
 
@@ -953,7 +1002,9 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
             &mut notes,
         )
         .await;
-    let md = h["result"]["contents"]["value"].as_str().expect("mod decl hover markdown");
+    let md = h["result"]["contents"]["value"]
+        .as_str()
+        .expect("mod decl hover markdown");
     assert!(md.contains("\nmod helpers;"), "{md}");
     assert!(md.contains("file module — `helpers/mod.rut`"), "{md}");
     assert!(md.contains("no child modules"), "{md}");
@@ -970,7 +1021,10 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
     let locs = resp["result"].as_array().expect("edge click locations");
     assert_eq!(locs.len(), 1, "exactly one target: {resp}");
     assert!(
-        locs[0]["uri"].as_str().unwrap().ends_with("/helpers/mod.rut"),
+        locs[0]["uri"]
+            .as_str()
+            .unwrap()
+            .ends_with("/helpers/mod.rut"),
         "the child file: {resp}"
     );
     assert_eq!(
@@ -993,7 +1047,10 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
     let locs = resp["result"].as_array().expect("use head locations");
     assert_eq!(locs.len(), 1, "exactly one target: {resp}");
     assert!(
-        locs[0]["uri"].as_str().unwrap().ends_with("/helpers/mod.rut"),
+        locs[0]["uri"]
+            .as_str()
+            .unwrap()
+            .ends_with("/helpers/mod.rut"),
         "the head opens the module: {resp}"
     );
     assert_eq!(
@@ -1012,7 +1069,10 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
     let locs = resp["result"].as_array().expect("use leaf locations");
     assert_eq!(locs.len(), 1, "exactly one target: {resp}");
     assert!(
-        locs[0]["uri"].as_str().unwrap().ends_with("/helpers/mod.rut"),
+        locs[0]["uri"]
+            .as_str()
+            .unwrap()
+            .ends_with("/helpers/mod.rut"),
         "the leaf lands in the child: {resp}"
     );
 
@@ -1026,10 +1086,18 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
             &mut notes,
         )
         .await;
-    let items = comp["result"].as_array().expect("position completion items");
+    let items = comp["result"]
+        .as_array()
+        .expect("position completion items");
     let labels: Vec<&str> = items.iter().map(|i| i["label"].as_str().unwrap()).collect();
-    assert!(labels.contains(&"Slot"), "the module's type completes: {labels:?}");
-    assert!(labels.contains(&"mk"), "the module's fn completes: {labels:?}");
+    assert!(
+        labels.contains(&"Slot"),
+        "the module's type completes: {labels:?}"
+    );
+    assert!(
+        labels.contains(&"mk"),
+        "the module's fn completes: {labels:?}"
+    );
     let _ = remove_ws(fx.base);
 }
 
@@ -1053,12 +1121,21 @@ async fn dep_walk_hint_once_for_cache_miss_and_unpinned() {
         }
     }
     assert_eq!(hints.len(), 2, "miss + unpinned, once each: {hints:?}");
-    assert!(hints.iter().all(|h| h["params"]["type"] == 3), "info severity: {hints:?}");
+    assert!(
+        hints.iter().all(|h| h["params"]["type"] == 3),
+        "info severity: {hints:?}"
+    );
     let ghost = hints
         .iter()
         .find(|h| h["params"]["message"].as_str().unwrap().contains("ghost"))
         .expect("the cache-miss hint names the dep");
-    assert!(ghost["params"]["message"].as_str().unwrap().contains("rut fetch"), "{ghost}");
+    assert!(
+        ghost["params"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("rut fetch"),
+        "{ghost}"
+    );
     let bare = hints
         .iter()
         .find(|h| h["params"]["message"].as_str().unwrap().contains("bare"))
@@ -1104,7 +1181,10 @@ async fn completion_parity_sort_text_and_additional_edits_on_the_wire() {
         .find(|i| i["label"] == "Widget" && i["additionalTextEdits"].is_array())
         .expect("the auto-import offer for the dep's type");
     assert_eq!(imp["detail"], "gadgets::Widget — import");
-    assert_eq!(imp["sortText"], "~Widget", "the tier sorts after the locals");
+    assert_eq!(
+        imp["sortText"], "~Widget",
+        "the tier sorts after the locals"
+    );
     let edits = imp["additionalTextEdits"].as_array().unwrap();
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0]["newText"], "use gadgets::Widget;\n");
@@ -1136,8 +1216,16 @@ fn write_file_module_fixture(name: &str) -> FileModFixture {
     std::fs::create_dir_all(&ws).unwrap();
     std::fs::create_dir_all(&dep).unwrap();
     std::fs::write(dep.join("rut.jsonc"), r#"{ "name": "gadgets" }"#).unwrap();
-    std::fs::write(dep.join("mod.rut"), "pub mod layout;\npub fn tag() -> i32 { return 1; }\n").unwrap();
-    std::fs::write(dep.join("layout.rut"), "pub mod grid;\npub fn one() -> i32 { return 1; }\n").unwrap();
+    std::fs::write(
+        dep.join("mod.rut"),
+        "pub mod layout;\npub fn tag() -> i32 { return 1; }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dep.join("layout.rut"),
+        "pub mod grid;\npub fn one() -> i32 { return 1; }\n",
+    )
+    .unwrap();
     std::fs::write(
         dep.join("grid.rut"),
         "pub struct Cell {\n    w: i32;\n}\npub fn mk() -> Cell { return Cell { w: 1 }; }\n",
@@ -1158,7 +1246,12 @@ fn main() -> nil {
 ";
     std::fs::write(ws.join("mod.rut"), main_src).unwrap();
     let main_uri = format!("file://{}/mod.rut", ws.display());
-    FileModFixture { base, ws, main_src: main_src.to_string(), main_uri }
+    FileModFixture {
+        base,
+        ws,
+        main_src: main_src.to_string(),
+        main_uri,
+    }
 }
 
 /// THE file-modules regression: mod path `layout/grid` rides
@@ -1186,7 +1279,11 @@ async fn file_module_children_define_to_their_real_files() {
     // `Cell` (the annotation) and `mk()` live in `outside/grid.rut`;
     // `one()` lives in `outside/layout.rut` — each F12 lands in the
     // file that IS
-    for (needle, occurrence, file) in [("Cell", 1, "grid.rut"), ("mk", 1, "grid.rut"), ("one", 1, "layout.rut")] {
+    for (needle, occurrence, file) in [
+        ("Cell", 1, "grid.rut"),
+        ("mk", 1, "grid.rut"),
+        ("one", 1, "layout.rut"),
+    ] {
         let (l, c) = pos_of(&fx.main_src, needle, occurrence);
         let resp = editor
             .request(
@@ -1200,7 +1297,8 @@ async fn file_module_children_define_to_their_real_files() {
             .unwrap_or_else(|| panic!("{needle}: no definition locations: {resp}"));
         let uris: Vec<&str> = locs.iter().map(|l| l["uri"].as_str().unwrap()).collect();
         assert!(
-            uris.iter().any(|u| u.ends_with(&format!("/outside/{file}"))),
+            uris.iter()
+                .any(|u| u.ends_with(&format!("/outside/{file}"))),
             "{needle} must define into outside/{file}: {uris:?}"
         );
         assert!(

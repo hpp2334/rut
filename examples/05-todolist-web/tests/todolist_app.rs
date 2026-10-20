@@ -74,14 +74,19 @@ fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
 /// One element's shape, read by the hook the lowering emitted as `id`.
 fn snap(host: &WebHost<FakeDom>, hook: &str) -> Snapshot {
     host.with_dom(|d| {
-        d.snapshot_by_id(hook).unwrap_or_else(|| panic!("no element '#{hook}' in the twin's tree"))
+        d.snapshot_by_id(hook)
+            .unwrap_or_else(|| panic!("no element '#{hook}' in the twin's tree"))
     })
 }
 
 /// The class attribute — the lowered token string the twin asserts
 /// (the twin ignores CSS; the TOKENS are the styling contract, §5).
 fn class_of(host: &WebHost<FakeDom>, hook: &str) -> String {
-    snap(host, hook).attrs.get("class").cloned().unwrap_or_default()
+    snap(host, hook)
+        .attrs
+        .get("class")
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// The host listener row serving `hook`'s element (§6: hooks are the
@@ -102,7 +107,11 @@ fn listener_of(host: &WebHost<FakeDom>, hook: &str) -> i64 {
 /// The user types into the field, then the field's "input" listener
 /// fires — the value travels as the event row's detail.
 fn type_into(host: &mut WebHost<FakeDom>, text: &str) {
-    assert!(host.state.borrow_mut().dom.set_value_by_id("new-todo", text));
+    assert!(host
+        .state
+        .borrow_mut()
+        .dom
+        .set_value_by_id("new-todo", text));
     let id = listener_of(host, "new-todo");
     host.fire_listener(id).unwrap();
 }
@@ -164,7 +173,10 @@ fn an_add_is_a_request_until_the_timer_answers() {
         snap(&host, "status").text.as_deref(),
         Some("0 open | 0 done | 1 in flight — requested add 'milk'")
     );
-    assert_eq!(host.with_dom(|d| d.pending_timers()), vec![(400, "req:1".to_string())]);
+    assert_eq!(
+        host.with_dom(|d| d.pending_timers()),
+        vec![(400, "req:1".to_string())]
+    );
     // the field cleared: the draft moved into the request — the DIFF
     // cleared it (the value patch rode the framework's input crossing)
     assert_eq!(snap(&host, "new-todo").attrs.get("value").unwrap(), "");
@@ -237,7 +249,10 @@ fn input_values_are_event_carried_and_the_latest_wins() {
 fn an_empty_draft_is_gated_client_side() {
     let (mut host, _app) = make_host();
     click(&mut host, "add-btn"); // click with nothing typed
-    assert!(host.with_dom(|d| d.pending_timers()).is_empty(), "no request booked");
+    assert!(
+        host.with_dom(|d| d.pending_timers()).is_empty(),
+        "no request booked"
+    );
     assert_eq!(snap(&host, "list").child_tags, Vec::<String>::new());
     assert_eq!(
         snap(&host, "status").text.as_deref(),
@@ -276,9 +291,16 @@ fn toggle_round_trip_paints_the_flight() {
     // token patch plus one text patch, the row's other widgets untouched
     assert_eq!(class_of(&host, "lbl-1"), "t1-text t1-text--pending");
     assert_eq!(snap(&host, "lbl-1").text.as_deref(), Some("... milk"));
-    assert_eq!(class_of(&host, "mark-1"), "t1-check t1-check--off", "the flip is the commit's");
+    assert_eq!(
+        class_of(&host, "mark-1"),
+        "t1-check t1-check--off",
+        "the flip is the commit's"
+    );
     // the deadline is ABSOLUTE in the twin clock: booked at now=400
-    assert_eq!(host.with_dom(|d| d.pending_timers()), vec![(650, "req:2".to_string())]);
+    assert_eq!(
+        host.with_dom(|d| d.pending_timers()),
+        vec![(650, "req:2".to_string())]
+    );
     host.advance(250).unwrap();
     // the commit: one token patch on the check, one on the title
     assert_eq!(class_of(&host, "mark-1"), "t1-check t1-check--on");
@@ -299,7 +321,11 @@ fn remove_round_trip() {
         host.advance(400).unwrap();
     }
     click(&mut host, "del-1");
-    assert_eq!(class_of(&host, "lbl-1"), "t1-text t1-text--pending", "the flight paints");
+    assert_eq!(
+        class_of(&host, "lbl-1"),
+        "t1-text t1-text--pending",
+        "the flight paints"
+    );
     host.advance(120).unwrap();
     // the removal is fast: milk's row is gone, tea is now first
     assert_eq!(snap(&host, "list").child_tags, vec!["div"]);
@@ -323,7 +349,7 @@ fn deadline_order_across_kinds_is_visible_between_advances() {
     type_into(&mut host, "jam");
     click(&mut host, "add-btn"); // req:3 @ 400
     click(&mut host, "mark-1"); // req:4 @ 250
-    // the twin clock is absolute: booked at now=800
+                                // the twin clock is absolute: booked at now=800
     assert_eq!(
         host.with_dom(|d| d.pending_timers()),
         vec![(1050, "req:4".to_string()), (1200, "req:3".to_string())]
@@ -403,7 +429,9 @@ fn a_stale_row_listener_traps_loud() {
     // phase-1 unknown-id law, re-pointed at the registry per §4.3)
     let err = host.fire_listener(stale).unwrap_err();
     assert!(
-        err.msg.contains(&format!("t1: listener '{stale}' answers no mutation — stale or unknown")),
+        err.msg.contains(&format!(
+            "t1: listener '{stale}' answers no mutation — stale or unknown"
+        )),
         "{}",
         err.msg
     );
@@ -425,7 +453,10 @@ fn an_event_without_a_door_traps_loud() {
     // DOM event class it has no door for (the glue routing keydown at
     // a click-only page) is a MISSING EXPORT: loud at the VM
     let err = host
-        .call::<_, (Option<OpaqueRef>, String)>("on_keydown", (app, "1".to_string(), "".to_string()))
+        .call::<_, (Option<OpaqueRef>, String)>(
+            "on_keydown",
+            (app, "1".to_string(), "".to_string()),
+        )
         .unwrap_err();
     assert!(err.msg.contains("on_keydown"), "{}", err.msg);
 }
@@ -444,8 +475,7 @@ fn an_event_without_a_door_traps_loud() {
 /// module dir, `core` the only mount: no web surface, no nmap, no
 /// widgets (no crossings declared or used is the fixture's point).
 fn make_fixture() -> WebHost<FakeDom> {
-    let loaded = rut_native::load_dir(&mount::probe_dir("softfail"))
-        .expect("the fixture mounts");
+    let loaded = rut_native::load_dir(&mount::probe_dir("softfail")).expect("the fixture mounts");
     // no web surface, no nmap, no widgets (no crossings declared or
     // used is the fixture's point) — the bare walk, core riding auto
     let compiled = loaded
@@ -478,7 +508,8 @@ fn a_boom_turn_is_data_the_pump_reports_and_keeps_draining() {
     host.state.borrow_mut().push_timer("boom");
     // THE CONTAINMENT: the pump returns Ok straight through a soft
     // failure — the turn's (nil, "boom") was data, not a poison pill
-    host.pump().expect("a returned err does not poison the pump");
+    host.pump()
+        .expect("a returned err does not poison the pump");
     assert_eq!(host.state.borrow().turned_errs, vec!["boom".to_string()]);
     // the container survived the nil value channel — the NEXT event
     // works, twice, and the counter is real (the host still holds the
@@ -550,14 +581,21 @@ fn a_rejected_add_crosses_the_err_channel_and_the_page_lives() {
 #[test]
 fn events_firing_mid_turn_queue_and_run_as_the_next_turn() {
     let (mut host, _app) = make_host();
-    host.state.borrow_mut().dom.set_value_by_id("new-todo", "milk");
+    host.state
+        .borrow_mut()
+        .dom
+        .set_value_by_id("new-todo", "milk");
     let typing = listener_of(&host, "new-todo");
     let before = snap(&host, "status").text.unwrap_or_default();
     // a synchronous DOM dispatch inside a live turn (the focus() class):
     // the row can only join the queue — no nested turn runs
     host.in_sync_dom_dispatch(|h| h.state.borrow_mut().push_dom_event(typing));
     assert_eq!(host.state.borrow().queue.len(), 1);
-    assert_eq!(snap(&host, "status").text.unwrap_or_default(), before, "no turn ran mid-turn");
+    assert_eq!(
+        snap(&host, "status").text.unwrap_or_default(),
+        before,
+        "no turn ran mid-turn"
+    );
     // the next pump drains it, FIFO: the typing turn processed the carry
     host.pump().unwrap();
     assert_eq!(
@@ -622,11 +660,14 @@ fn a_long_journey_survives_many_cycles() {
     for i in 1..=40 {
         type_into(&mut host, &format!("x {i}"));
         click(&mut host, "add-btn");
-        host.advance(450).unwrap_or_else(|e| panic!("cycle {i} add: {}", e.msg));
+        host.advance(450)
+            .unwrap_or_else(|e| panic!("cycle {i} add: {}", e.msg));
         click(&mut host, &format!("mark-{i}"));
-        host.advance(300).unwrap_or_else(|e| panic!("cycle {i} toggle: {}", e.msg));
+        host.advance(300)
+            .unwrap_or_else(|e| panic!("cycle {i} toggle: {}", e.msg));
         click(&mut host, &format!("del-{i}"));
-        host.advance(450).unwrap_or_else(|e| panic!("cycle {i} remove: {}", e.msg));
+        host.advance(450)
+            .unwrap_or_else(|e| panic!("cycle {i} remove: {}", e.msg));
         println!("cycle {i}: {}", snap(&host, "status").text.unwrap());
     }
 }
@@ -637,7 +678,8 @@ fn growing_rows_stay_under_fuel() {
     for i in 1..=30 {
         type_into(&mut host, &format!("grow {i}"));
         click(&mut host, "add-btn");
-        host.advance(450).unwrap_or_else(|e| panic!("row {i}: {}", e.msg));
+        host.advance(450)
+            .unwrap_or_else(|e| panic!("row {i}: {}", e.msg));
         println!("row {i}: {}", snap(&host, "status").text.unwrap());
     }
 }
@@ -652,14 +694,12 @@ fn the_mixed_long_journey_still_completes() {
     for i in 1..=12 {
         type_into(&mut host, &format!("stress {i}"));
         click(&mut host, "add-btn");
-        host.advance(450).unwrap_or_else(|e| {
-            panic!("cycle {i} (add answer): {}", e.msg)
-        });
+        host.advance(450)
+            .unwrap_or_else(|e| panic!("cycle {i} (add answer): {}", e.msg));
         // the row is committed: toggle it done, then flush its answer
         click(&mut host, &format!("mark-{i}"));
-        host.advance(300).unwrap_or_else(|e| {
-            panic!("cycle {i} (toggle answer): {}", e.msg)
-        });
+        host.advance(300)
+            .unwrap_or_else(|e| panic!("cycle {i} (toggle answer): {}", e.msg));
         last_status = snap(&host, "status").text.unwrap();
         println!("cycle {i}: {last_status}");
     }

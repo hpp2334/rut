@@ -13,16 +13,21 @@ use rut_native::load_path_session;
 use rut_vm::OpaqueRef;
 
 const INK_HOST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/ink_host");
-const SERVER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/03-plugin/server");
-
-
-
+const SERVER_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../examples/03-plugin/server"
+);
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -48,7 +53,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -63,7 +71,9 @@ fn ink_host_loads_from_disk_with_its_name_scope() {
         matches!(m.body, rut_driver::MountedBody::Host { .. }),
         "a host pkg is a host body — no rut source"
     );
-    let rut_driver::MountedBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
+    let rut_driver::MountedBody::Host { ref host_funcs, .. } = m.body else {
+        panic!("host body")
+    };
     assert_eq!(
         *host_funcs,
         vec![
@@ -78,7 +88,9 @@ fn server_loads_from_disk() {
     let loaded = load_path_session(std::path::Path::new(SERVER_DIR)).expect("server loads");
     assert_eq!(loaded.root, "server");
     let m = loaded.pkg("server").expect("server mounted");
-    let rut_driver::MountedBody::Host { ref host_funcs, .. } = m.body else { panic!("host body") };
+    let rut_driver::MountedBody::Host { ref host_funcs, .. } = m.body else {
+        panic!("host body")
+    };
     assert_eq!(
         *host_funcs,
         vec![
@@ -126,7 +138,10 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
          }\n",
     );
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("`opaque`") || d.msg.contains("argument")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("`opaque`") || d.msg.contains("argument")),
         "the mistyped call must be diagnosed: {:?}",
         out.graph.diags
     );
@@ -155,7 +170,10 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
     let dir = make_pkg(
         &base,
         &[
-            ("rut.jsonc", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
+            (
+                "rut.jsonc",
+                r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
+            ),
             ("s.d.rut", "pub host fn ping(x: i32) -> i32;\n"),
         ],
     );
@@ -169,7 +187,10 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
     let dir = make_pkg(
         &base,
         &[
-            ("rut.jsonc", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
+            (
+                "rut.jsonc",
+                r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
+            ),
             ("s.d.rut", "this is not rut source at all <<<\n"),
         ],
     );
@@ -193,7 +214,10 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
     let dir = make_pkg(
         &base,
         &[
-            ("rut.jsonc", r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#),
+            (
+                "rut.jsonc",
+                r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
+            ),
             ("s.d.rut", "/// documented surface, no body yet.\n"),
         ],
     );
@@ -201,7 +225,10 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
     assert_eq!(loaded.root, "s");
     let m = loaded.pkg("s").unwrap();
     assert!(
-        matches!(&m.body, rut_driver::MountedBody::Source { is_decl: true, .. }),
+        matches!(
+            &m.body,
+            rut_driver::MountedBody::Source { is_decl: true, .. }
+        ),
         "the dev state is a decl unit, not a host body: {:?}",
         m.body
     );
@@ -213,8 +240,11 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
         .pkg(
             // the app DECLARES its use (the `s` surface)
-            rut_driver::Mounted::source("app", "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n")
-                .manifest(rut_driver::Manifest::lib("app", &["s"])),
+            rut_driver::Mounted::source(
+                "app",
+                "use s::{ ping };\nentry fn main() -> nil { ping(1); }\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["s"])),
         )
         .entrypoint("app")
         .compile()
@@ -247,16 +277,33 @@ fn non_crossing_signatures_refuse_at_load() {
         "the load error names the offender: {err}"
     );
 
-    let err = lower_decl_module("pub host fn takes_ptr(p: ?i32);", &BTreeMap::new(), "test.d.rut").unwrap_err();
-    assert!(err.contains("not a crossing type"), "pointer params refuse: {err}");
+    let err = lower_decl_module(
+        "pub host fn takes_ptr(p: ?i32);",
+        &BTreeMap::new(),
+        "test.d.rut",
+    )
+    .unwrap_err();
+    assert!(
+        err.contains("not a crossing type"),
+        "pointer params refuse: {err}"
+    );
 
     // a `self` receiver cannot cross
-    let err = lower_decl_module("pub host fn probe(self) -> nil;", &BTreeMap::new(), "test.d.rut").unwrap_err();
+    let err = lower_decl_module(
+        "pub host fn probe(self) -> nil;",
+        &BTreeMap::new(),
+        "test.d.rut",
+    )
+    .unwrap_err();
     assert!(err.contains("receiver"), "a self receiver refuses: {err}");
 
     // and a surface that does not parse refuses with the parse errors
-    let err = lower_decl_module("pub host fn broken(;", &BTreeMap::new(), "test.d.rut").unwrap_err();
-    assert!(err.contains("does not parse"), "parse failures refuse: {err}");
+    let err =
+        lower_decl_module("pub host fn broken(;", &BTreeMap::new(), "test.d.rut").unwrap_err();
+    assert!(
+        err.contains("does not parse"),
+        "parse failures refuse: {err}"
+    );
 }
 
 // ---- the load-time binding contract: .d.rut ↔ host impl ----
@@ -305,7 +352,11 @@ fn server_expected() -> rut_vm::interp::ExpectedHostFns {
 #[test]
 fn a_matching_binding_table_verifies() {
     let expected = server_expected();
-    assert_eq!(expected.len(), 2, "exactly the two server fns: {expected:?}");
+    assert_eq!(
+        expected.len(),
+        2,
+        "exactly the two server fns: {expected:?}"
+    );
     assert!(expected.contains_key("server::subscribe"));
     let hosts = server_registry(Some(TY_STR));
     hosts.verify_against(&expected); // no panic — the contract holds
@@ -375,7 +426,13 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
         host_id: Some(host_key),
     });
     let limits = rut_vm::interp::Limits::default();
-    let err = match rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog.clone())).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(rut_vm::interp::HostRegistry::new()).build() {
+    let err = match rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog.clone()))
+        .limits(limits.clone())
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(rut_vm::interp::HostRegistry::new())
+        .build()
+    {
         Err(t) => t,
         Ok(_) => panic!("an empty registry must not boot a program with host thunks"),
     };
@@ -387,8 +444,13 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
     // with the body registered, the same program boots
     let mut hosts = rut_vm::interp::HostRegistry::new();
     rut_vm::register!(hosts, "server::probe", (&str,) -> (), |_vm: &mut rut_vm::interp::Vm, _s: &str| ());
-    assert!(rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
-    .is_ok());
+    assert!(rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits.clone())
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .is_ok());
 }
 
 // ---- the installer lane: `host_pkg_context` + `install_host_pkg` ----
@@ -427,7 +489,10 @@ fn host_pkg_context_partitions_per_pkg_and_expands_async() {
     let engine = ctx.rows_of("engine").expect("engine partitioned");
     // the async expansion: one decl row → the five-row family
     for suffix in ["", "__start", "__yield", "__take", "__cancel"] {
-        assert!(engine.contains_key(&format!("probe{suffix}")), "probe{suffix}");
+        assert!(
+            engine.contains_key(&format!("probe{suffix}")),
+            "probe{suffix}"
+        );
     }
     assert!(ctx.is_mounted("engine"));
     assert!(!ctx.is_mounted("nmap_host"));
@@ -490,12 +555,24 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
         )
         .manifest(rut_driver::Manifest::lib("app", &["ink_host", "server"])),
     ];
-    let compiled = rut_driver::Walk { pkgs: world.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "{:?}", compiled.graph.diags);
-    let prog = std::rc::Rc::new(rut_core::link::flatten(compiled.graph.program.expect("linked")));
+    let compiled = rut_driver::Walk {
+        pkgs: world.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{:?}",
+        compiled.graph.diags
+    );
+    let prog = std::rc::Rc::new(rut_core::link::flatten(
+        compiled.graph.program.expect("linked"),
+    ));
     let limits = Limits::default();
 
     // ONE installer (ink_host's) ran; server's never did — the boot
@@ -503,7 +580,13 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_| {}));
-    let err = match Vm::builder().program(prog.clone()).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build() {
+    let err = match Vm::builder()
+        .program(prog.clone())
+        .limits(limits.clone())
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+    {
         Err(t) => t,
         Ok(_) => panic!("a missing installer must not boot the program"),
     };
@@ -520,7 +603,12 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
         (OpaqueRef, &str, &str) -> (),
         |_vm: &mut rut_vm::interp::Vm, _b: OpaqueRef, _t: &str, _h: &str| ()
     );
-    let mut vm = Vm::builder().program(prog).limits(limits.clone()).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    let mut vm = Vm::builder()
+        .program(prog)
+        .limits(limits.clone())
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .expect("the blanket install boots");
     let _: OpaqueRef = vm.call("main", ()).expect("main");
 }

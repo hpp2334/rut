@@ -76,7 +76,10 @@ impl Source for FsSource {
         } else {
             from.to_string()
         };
-        Ok(PathBuf::from(base).join(spec).to_string_lossy().into_owned())
+        Ok(PathBuf::from(base)
+            .join(spec)
+            .to_string_lossy()
+            .into_owned())
     }
 
     fn root(&self) -> &str {

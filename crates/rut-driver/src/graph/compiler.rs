@@ -4,15 +4,15 @@
 
 use std::collections::{HashMap, HashSet};
 
+use rut_core::binary::Program;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
-use rut_core::binary::Program;
 use rut_parser::{parse, Mode};
 
 use rut_ast::ast::{Ast, ItemKind, Vis};
 
-use crate::session::{MountedBody, Session};
 use crate::compile::compile_program_resolved;
+use crate::session::{MountedBody, Session};
 use crate::Seeds;
 
 /// A resolved module: the claim ticket into the walk's tables — the
@@ -61,7 +61,8 @@ pub(super) struct GraphCompiler<'a> {
     pub(super) fresh_owners: HashSet<String>,
     /// deps' per-module decl rows (phase 3): the use validation's
     /// table, parsed once per spec and shared across consumers
-    pub(super) dep_decls: HashMap<String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>>,
+    pub(super) dep_decls:
+        HashMap<String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>>,
     /// the same collection's LOUD half (mount/coherence problems), per
     /// spec — rides the dep-rows cache so `ensure_source` and the use
     /// validation share ONE parse of the pkg
@@ -114,7 +115,12 @@ impl<'a> GraphCompiler<'a> {
         Vec<Program>,
         HashMap<String, (usize, rut_core::ScopeId)>,
     ) {
-        let GraphCompiler { diags, programs, done, .. } = self;
+        let GraphCompiler {
+            diags,
+            programs,
+            done,
+            ..
+        } = self;
         let mut linked = HashMap::new();
         for (spec, unit) in done {
             linked.insert(spec, (unit.idx, unit.scope));
@@ -216,8 +222,14 @@ impl<'a> GraphCompiler<'a> {
     /// type/trait/fn names of the prelude.
     fn ensure_host(&mut self, spec: &str) -> Option<Unit> {
         let module = self.session.resolve(spec).ok()?;
-        let MountedBody::Host { host_funcs, consts, native_types, native_fns, native_impls, .. } =
-            &module.body
+        let MountedBody::Host {
+            host_funcs,
+            consts,
+            native_types,
+            native_fns,
+            native_impls,
+            ..
+        } = &module.body
         else {
             return None;
         };
@@ -238,7 +250,10 @@ impl<'a> GraphCompiler<'a> {
             // spells the fixed crossing table, never a record
             let names = rut_core::Interner::default();
             for row in host_funcs {
-                let bad = row.params.iter().any(|p| !boot_tt.crosses_boundary(&names, *p))
+                let bad = row
+                    .params
+                    .iter()
+                    .any(|p| !boot_tt.crosses_boundary(&names, *p))
                     || !boot_tt.crosses_boundary(&names, row.ret);
                 if bad {
                     self.diags.push(Diag::new(
@@ -320,7 +335,14 @@ impl<'a> GraphCompiler<'a> {
                 .map(|(t, n, i)| (*t, surface.names.intern(n), *i))
                 .collect();
             let interner = surface.names.clone();
-            let program = Program { name: spec.to_string(), scope, interner, surface, funcs, ..Default::default() };
+            let program = Program {
+                name: spec.to_string(),
+                scope,
+                interner,
+                surface,
+                funcs,
+                ..Default::default()
+            };
             let idx = self.programs.len();
             self.programs.push(program);
             let unit = Unit { idx, scope };
@@ -413,7 +435,11 @@ impl<'a> GraphCompiler<'a> {
             if s == own_pack {
                 scope
             } else {
-                mapped.iter().find(|&&(p, _)| p == s).map(|&(_, l)| l).unwrap_or(s)
+                mapped
+                    .iter()
+                    .find(|&&(p, _)| p == s)
+                    .map(|&(_, l)| l)
+                    .unwrap_or(s)
             }
         };
         let mut program = rut_core::link::rebase(prog.clone(), &map);
@@ -514,7 +540,9 @@ impl<'a> GraphCompiler<'a> {
         // spellings bind only when the module's use named them — the
         // binding loops read each row's ambient bit.
         let mut uses = uses;
-        if spec != "core" && self.session.resolve("core").is_ok() && !uses.iter().any(|u| u == "core")
+        if spec != "core"
+            && self.session.resolve("core").is_ok()
+            && !uses.iter().any(|u| u == "core")
         {
             uses.push("core".to_string());
         }
@@ -555,9 +583,10 @@ impl<'a> GraphCompiler<'a> {
         // its `pub`, a `pub async fn` the async gap. The tables ride the
         // shared cache (validate filled them); a compiled dep's decls
         // ride its binary and classify generically.
-        let dep_tables: Vec<
-            (String, std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>),
-        > = uses
+        let dep_tables: Vec<(
+            String,
+            std::collections::BTreeMap<String, Vec<crate::mods::DeclRow>>,
+        )> = uses
             .iter()
             .filter_map(|h| self.dep_mod_table(h).cloned().map(|t| (h.clone(), t)))
             .collect();
@@ -565,23 +594,24 @@ impl<'a> GraphCompiler<'a> {
         // the validation parse hands straight to the compile — one
         // parse per unit, not one per pass over it
         let out = crate::compile::compile_program_pre(
-                (ast, Vec::new()),
-                &combined,
-                if is_decl { Mode::Decl } else { Mode::Impl },
-                spec,
-                scope,
-                &bound,
-                true,
-                &Seeds::none(),
-                &layout,
-                &own_uses,
-                &dep_tables,
+            (ast, Vec::new()),
+            &combined,
+            if is_decl { Mode::Decl } else { Mode::Impl },
+            spec,
+            scope,
+            &bound,
+            true,
+            &Seeds::none(),
+            &layout,
+            &own_uses,
+            &dep_tables,
         );
         for r in &out.requests {
             self.requests.push((spec.to_string(), r.clone()));
         }
         for (decl, construct) in &out.template_failures {
-            self.template_failures.push((spec.to_string(), decl.clone(), construct.clone()));
+            self.template_failures
+                .push((spec.to_string(), decl.clone(), construct.clone()));
         }
         if !out.diags.is_empty() || out.program.is_none() {
             self.diags.extend(attribute_diags(out.diags, spec, &layout));
@@ -604,7 +634,13 @@ impl<'a> GraphCompiler<'a> {
         // — same surface bindings, same text, same module layout)
         self.unit_src.insert(
             spec.to_string(),
-            UnitSrc { text: combined, is_decl, bound, layout, own_uses },
+            UnitSrc {
+                text: combined,
+                is_decl,
+                bound,
+                layout,
+                own_uses,
+            },
         );
         let idx = self.programs.len();
         self.programs.push(program);
@@ -645,8 +681,10 @@ impl<'a> GraphCompiler<'a> {
                 continue;
             }
             let dense = prog.types.dense(id);
-            let Some(row) = prog.types.types.get(dense as usize) else { continue };
-            
+            let Some(row) = prog.types.types.get(dense as usize) else {
+                continue;
+            };
+
             out.insert((s, l), row.clone());
             match &row.kind {
                 rut_core::types::TyKind::Array { elem }
@@ -666,9 +704,7 @@ impl<'a> GraphCompiler<'a> {
         }
         out
     }
-
 }
-
 
 /// The dep heads one parsed unit's `use` statements name, in source
 /// order, deduped. `path[0]` is the package — the dep the graph
@@ -720,7 +756,6 @@ fn file_display(module: &crate::session::Mounted, path: &str) -> String {
     }
 }
 
-
 /// The file-module inputs a compilation resolves against (phase 3):
 /// the concatenated text's file ranges plus the scope tree built from
 /// the pkg's mounted module set (each child's parent segment implies
@@ -729,8 +764,10 @@ pub(crate) fn mod_inputs_of(
     module: &crate::session::Mounted,
     files: Vec<(u32, String)>,
 ) -> rut_lir::check::ModInputs {
-    let mut inputs =
-        rut_lir::check::ModInputs { files, scopes: std::collections::BTreeMap::new() };
+    let mut inputs = rut_lir::check::ModInputs {
+        files,
+        scopes: std::collections::BTreeMap::new(),
+    };
     for (path, m) in &module.mods {
         let (parent, name) = match path.rsplit_once('/') {
             Some((p, n)) => (p.to_string(), n.to_string()),
@@ -773,7 +810,8 @@ pub(super) fn attribute_diags(
                 .find(|(s, _)| *s <= d.span.lo)
                 .map(|(s, _)| *s)
                 .unwrap_or(0);
-            let rebase = |s: Span| Span::new(s.lo.saturating_sub(start), s.hi.saturating_sub(start));
+            let rebase =
+                |s: Span| Span::new(s.lo.saturating_sub(start), s.hi.saturating_sub(start));
             d.span = rebase(d.span);
             d.labels = std::mem::take(&mut d.labels)
                 .into_iter()
@@ -926,7 +964,9 @@ impl GraphCompiler<'_> {
                 };
                 let mut bad: Vec<Diag> = Vec::new();
                 {
-                    let Some(table) = self.dep_mod_table(spec) else { continue };
+                    let Some(table) = self.dep_mod_table(spec) else {
+                        continue;
+                    };
                     let Some(rows) = table.get(&at) else { continue };
                     for &n in names {
                         let text = ast.name(n);
@@ -1015,7 +1055,9 @@ impl GraphCompiler<'_> {
                     .ok()
                     .and_then(|m| m.namespace.clone());
                 let bad: Vec<Diag> = {
-                    let Some(table) = self.dep_mod_table(&dep_name) else { continue };
+                    let Some(table) = self.dep_mod_table(&dep_name) else {
+                        continue;
+                    };
                     // no root rows to read (a hand-built host surface
                     // like `core` collects no root unit) — nothing
                     // validates here
@@ -1128,7 +1170,9 @@ impl GraphCompiler<'_> {
             let rows_readable = self.dep_rows_readable(&dep_name);
             // the verdicts compute under the table borrow, then diagnose
             let verdicts: Vec<Option<String>> = {
-                let Some(table) = self.dep_mod_table(&dep_name) else { continue };
+                let Some(table) = self.dep_mod_table(&dep_name) else {
+                    continue;
+                };
                 let Some(rows) = table.get(&at) else { continue };
                 if rows.is_empty() && !rows_readable {
                     continue; // a compiled unit's decls are its binary's
@@ -1207,8 +1251,13 @@ impl GraphCompiler<'_> {
     fn dep_rows_readable(&self, spec: &str) -> bool {
         self.session
             .resolve(spec)
-            .map(|m| matches!(m.body, crate::session::MountedBody::Source { .. } | crate::session::MountedBody::Host { .. }))
+            .map(|m| {
+                matches!(
+                    m.body,
+                    crate::session::MountedBody::Source { .. }
+                        | crate::session::MountedBody::Host { .. }
+                )
+            })
             .unwrap_or(false)
     }
 }
-

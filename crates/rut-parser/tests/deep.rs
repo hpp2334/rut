@@ -17,9 +17,16 @@ fn nested_ifs(n: usize, inner: &str) -> String {
 #[test]
 fn depth_budget_is_a_diag_not_a_crash() {
     // 100k-deep parens: one clean "nesting too deep", never a host crash (C3)
-    let src = format!("fn f() -> nil {{ let x = {}1{}; }}", "(".repeat(100_000), ")".repeat(100_000));
+    let src = format!(
+        "fn f() -> nil {{ let x = {}1{}; }}",
+        "(".repeat(100_000),
+        ")".repeat(100_000)
+    );
     let (_, diags) = parse(&src, Mode::Impl);
-    assert!(diags.iter().any(|d| d.msg.contains("nesting too deep")), "want a nesting diag, got: {diags:?}");
+    assert!(
+        diags.iter().any(|d| d.msg.contains("nesting too deep")),
+        "want a nesting diag, got: {diags:?}"
+    );
 }
 
 #[test]
@@ -32,7 +39,13 @@ fn unary_chain_is_one_diag() {
         diags.iter().any(|d| d.msg.contains("nesting too deep")),
         "want one nesting diag, got: {diags:?}"
     );
-    assert!(diags.iter().filter(|d| d.msg.contains("nesting too deep")).count() <= 1);
+    assert!(
+        diags
+            .iter()
+            .filter(|d| d.msg.contains("nesting too deep"))
+            .count()
+            <= 1
+    );
 }
 
 #[test]
@@ -40,23 +53,35 @@ fn block_budget_still_1024() {
     // 1023 nested if-bodies + the fn body = 1024 block frames: in budget
     let ok = in_fn(&nested_ifs(1023, "let x = 1;"));
     let (_, diags) = parse(&ok, Mode::Impl);
-    assert!(diags.is_empty(), "1024 block frames must parse clean: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "1024 block frames must parse clean: {diags:?}"
+    );
 
     // far beyond: one "nesting too deep"
     let deep = in_fn(&nested_ifs(4_000, "let x = 1;"));
     let (_, diags) = parse(&deep, Mode::Impl);
-    assert!(diags.iter().any(|d| d.msg.contains("nesting too deep")), "want a nesting diag, got: {diags:?}");
+    assert!(
+        diags.iter().any(|d| d.msg.contains("nesting too deep")),
+        "want a nesting diag, got: {diags:?}"
+    );
 }
 
 #[test]
 fn expression_budget_is_64() {
     let ok = in_fn(&format!("let x = {}1{};", "(".repeat(63), ")".repeat(63)));
     let (_, diags) = parse(&ok, Mode::Impl);
-    assert!(diags.is_empty(), "63 nested parens must parse clean: {diags:?}");
+    assert!(
+        diags.is_empty(),
+        "63 nested parens must parse clean: {diags:?}"
+    );
 
     let deep = in_fn(&format!("let x = {}1{};", "(".repeat(100), ")".repeat(100)));
     let (_, diags) = parse(&deep, Mode::Impl);
-    assert!(diags.iter().any(|d| d.msg.contains("nesting too deep")), "want a nesting diag, got: {diags:?}");
+    assert!(
+        diags.iter().any(|d| d.msg.contains("nesting too deep")),
+        "want a nesting diag, got: {diags:?}"
+    );
 }
 
 /// C2 in the flesh: the frame machine parses nesting that is deep for a
@@ -121,7 +146,12 @@ fn malformed_input_terminates() {
         let _ = diags.len();
     }
     // a few known shapes must produce diags
-    for src in ["enum E {", "use core::{", "when (x) {", "fn f() -> nil { let "] {
+    for src in [
+        "enum E {",
+        "use core::{",
+        "when (x) {",
+        "fn f() -> nil { let ",
+    ] {
         let (_, diags) = parse(src, Mode::Impl);
         assert!(!diags.is_empty(), "`{src}` should produce diags");
     }

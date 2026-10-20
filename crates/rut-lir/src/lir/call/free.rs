@@ -4,7 +4,6 @@ use crate::check::TcResult;
 use crate::lir::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     pub(crate) fn compile_free_fn_call(
         &mut self,
         name: IdentId,
@@ -13,8 +12,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let Some(fnode) = self.ctx.fn_nodes.iter().find(|(n, _)| *n == name).map(|(_, n)| *n) else {
-            self.ctx.err(sp, format!("unknown function `{}`", self.ctx.name(name)));
+        let Some(fnode) = self
+            .ctx
+            .fn_nodes
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, n)| *n)
+        else {
+            self.ctx
+                .err(sp, format!("unknown function `{}`", self.ctx.name(name)));
             return Err(());
         };
         let fd = self.ctx.ast.fn_decl(fnode).clone();
@@ -24,17 +30,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // registered impl)
         if fd.is_async {
             if !generics.is_empty() {
-                self.ctx.err(sp, "generic async fns are not woven in this build");
+                self.ctx
+                    .err(sp, "generic async fns are not woven in this build");
                 return Err(());
             }
             return crate::lir::asyncfn::compile_async_call(self, name, &fd, &args, expected, sp);
         }
         let (decl_generics, params, ret) = (fd.generics, fd.params, fd.ret);
         if generics.len() > decl_generics.len() {
-            self.ctx.err(sp, format!(
-                "`{}` takes {} generic arguments, {} given",
-                self.ctx.name(name), decl_generics.len(), generics.len()
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{}` takes {} generic arguments, {} given",
+                    self.ctx.name(name),
+                    decl_generics.len(),
+                    generics.len()
+                ),
+            );
             return Err(());
         }
         // substitution: explicit args first, then inference from arguments
@@ -57,7 +69,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             })
             .collect();
         if args.len() != params.len() {
-            self.ctx.err(sp, format!("call arity: {} args for {} params", args.len(), params.len()));
+            self.ctx.err(
+                sp,
+                format!(
+                    "call arity: {} args for {} params",
+                    args.len(),
+                    params.len()
+                ),
+            );
             return Err(());
         }
         let mut arg_tys: Vec<TypeId> = Vec::new();
@@ -98,16 +117,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.ctx.cur_mod = callee_mod.clone();
         for (i, _) in args.iter().enumerate() {
             if let Some(tn) = param_nodes[i] {
-                self.unify_generic_val(tn, Some(args[i]), arg_tys[i], &decl_generics, &mut subst, sp)?;
+                self.unify_generic_val(
+                    tn,
+                    Some(args[i]),
+                    arg_tys[i],
+                    &decl_generics,
+                    &mut subst,
+                    sp,
+                )?;
             }
         }
         self.ctx.cur_mod = saved_mod.clone();
         for g in &decl_generics {
             if !subst.iter().any(|(n, _)| n == g) {
-                self.ctx.err(sp, format!(
-                    "cannot infer generic parameter `{}` — annotate the call: `{}<..>(..)`",
-                    self.ctx.name(*g), self.ctx.name(name)
-                ));
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "cannot infer generic parameter `{}` — annotate the call: `{}<..>(..)`",
+                        self.ctx.name(*g),
+                        self.ctx.name(name)
+                    ),
+                );
                 return Err(());
             }
         }
@@ -120,16 +150,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ptys: Vec<TypeId> = params
             .iter()
             .map(|p| match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => self.ctx.resolve_type(*t, &subst),
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                    self.ctx.resolve_type(*t, &subst)
+                }
                 _ => TY_I32,
             })
             .collect();
         for (i, a) in args.iter().enumerate() {
             if !self.widens_val(*a, arg_tys[i], ptys[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(arg_tys[i]), self.ctx.type_name(ptys[i])
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(a.id()),
+                    format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(arg_tys[i]),
+                        self.ctx.type_name(ptys[i])
+                    ),
+                );
             }
             // a trait-typed parameter whose expected type was unknown
             // during the argument's compile (it spells a free generic —
@@ -164,7 +201,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
         }
-        let ret_ty = ret.map(|r| self.ctx.resolve_type(r, &subst)).unwrap_or(TY_NIL);
+        let ret_ty = ret
+            .map(|r| self.ctx.resolve_type(r, &subst))
+            .unwrap_or(TY_NIL);
         // a small, non-recursive body inlines at the call site (P1.3):
         // `mix64`-shaped helpers flatten into the caller, every hash pays
         // no frame. Runs after all checks, so diagnostics stay put.
@@ -181,11 +220,25 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             iface_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
-        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        let dst = if ret_ty == TY_NIL {
+            None
+        } else {
+            Some(self.new_reg(ret_ty))
+        };
+        {
+            let (argv_off, argc) = self.pool_args(&(aregs));
+            self.emit(
+                Op::Call {
+                    func: fid,
+                    argv_off,
+                    argc,
+                    dst: opt_reg(dst),
+                },
+                sp.lo,
+            );
+        }
         Ok(ret_ty)
     }
-
 
     /// class-method call through the type name (`Circle.new(..)`)
     pub(crate) fn compile_direct_method(
@@ -200,7 +253,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the decl name may be a class (generics substitute) or an
         // enum (concrete — the empty substitution)
         let class_subst: Vec<(IdentId, TypeId)> = match self.ctx.find_data(dname) {
-            Some(d) => d.generics.iter().cloned().zip(class_args.iter().cloned()).collect(),
+            Some(d) => d
+                .generics
+                .iter()
+                .cloned()
+                .zip(class_args.iter().cloned())
+                .collect(),
             None => vec![],
         };
         let md = self.ctx.ast.method_decl(mnode).clone();
@@ -210,7 +268,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             params.first().map(|p| self.ctx.ast.param(*p)),
             Some(MemberKind::SelfParam(_))
         ) {
-            self.ctx.err(sp, "instance methods are called on a value, not the class");
+            self.ctx
+                .err(sp, "instance methods are called on a value, not the class");
             return Err(());
         }
         // inline bounds gate the completed substitution. The callee
@@ -227,7 +286,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.self_ty = Some(self_ty);
         for p in &params {
             match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => ptys.push(self.resolve_type_now(*t)),
+                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
+                    ptys.push(self.resolve_type_now(*t))
+                }
                 _ => ptys.push(TY_I32),
             }
         }
@@ -236,14 +297,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.subst = saved_subst;
         self.ctx.cur_mod = saved_mod;
         if args.len() != ptys.len() {
-            self.ctx.err(sp, format!(
-                "call arity: `{}::{}` takes {} parameter{}, {} given",
-                self.ctx.name(dname),
-                self.ctx.name(mname),
-                ptys.len(),
-                if ptys.len() == 1 { "" } else { "s" },
-                args.len()
-            ));
+            self.ctx.err(
+                sp,
+                format!(
+                    "call arity: `{}::{}` takes {} parameter{}, {} given",
+                    self.ctx.name(dname),
+                    self.ctx.name(mname),
+                    ptys.len(),
+                    if ptys.len() == 1 { "" } else { "s" },
+                    args.len()
+                ),
+            );
             return Err(());
         }
         let mut aregs = Vec::new();
@@ -251,10 +315,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, a) in args.iter().enumerate() {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens_val(*a, t, ptys[i]) {
-                self.ctx.err(self.ctx.ast.span(a.id()), format!(
-                    "argument {} is `{}`, `{}` expected",
-                    i + 1, self.ctx.type_name(t), self.ctx.type_name(ptys[i])
-                ));
+                self.ctx.err(
+                    self.ctx.ast.span(a.id()),
+                    format!(
+                        "argument {} is `{}`, `{}` expected",
+                        i + 1,
+                        self.ctx.type_name(t),
+                        self.ctx.type_name(ptys[i])
+                    ),
+                );
             }
             aregs.push(self.last_reg);
             arg_tys.push(t);
@@ -280,15 +349,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         let inst = crate::check::Inst {
-            key: crate::check::FnKey::Method { data: dname, name: mname },
+            key: crate::check::FnKey::Method {
+                data: dname,
+                name: mname,
+            },
             subst: class_subst,
             iface_origins,
         };
         let fid = self.ctx.ensure_inst(inst);
-        let dst = if ret_ty == TY_NIL { None } else { Some(self.new_reg(ret_ty)) };
+        let dst = if ret_ty == TY_NIL {
+            None
+        } else {
+            Some(self.new_reg(ret_ty))
+        };
         // class method: no receiver —plain Call
-        { let (argv_off, argc) = self.pool_args(&(aregs)); self.emit(Op::Call { func: fid, argv_off, argc, dst: opt_reg(dst) }, sp.lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&(aregs));
+            self.emit(
+                Op::Call {
+                    func: fid,
+                    argv_off,
+                    argc,
+                    dst: opt_reg(dst),
+                },
+                sp.lo,
+            );
+        }
         Ok(ret_ty)
     }
-
 }

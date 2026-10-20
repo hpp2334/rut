@@ -22,7 +22,9 @@ fn case_world() -> Vec<rut_driver::Mounted> {
     for d in ["rut/ink", "rut/pouch"] {
         world.extend(
             rut_native::dir_pkgs(
-                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../..")
+                    .join(d),
             )
             .expect("mount case libs")
             .pkgs,
@@ -37,7 +39,9 @@ fn case_ctx() -> rut_vm::interp::HostPkgContext {
     for d in ["rut/ink", "rut/pouch"] {
         world.extend(
             rut_native::dir_pkgs(
-                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../..")
+                    .join(d),
             )
             .expect("mount case libs")
             .pkgs,
@@ -92,16 +96,25 @@ fn run_case_keep_vm(
     // before any rut code runs
     let ctx = case_ctx();
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| {
-        if std::env::var_os("RUT_E2E_DEBUG").is_some() {
-            let bs: Vec<u32> = msg.bytes().map(|b| b as u32).collect();
-            eprintln!("SINK: {bs:?}");
-        }
-        sink.borrow_mut().push(msg.to_string());
-    }));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |msg| {
+            if std::env::var_os("RUT_E2E_DEBUG").is_some() {
+                let bs: Vec<u32> = msg.bytes().map(|b| b as u32).collect();
+                eprintln!("SINK: {bs:?}");
+            }
+            sink.borrow_mut().push(msg.to_string());
+        }),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten());
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     let trap = match vm.call::<_, ()>("main", ()) {
         Ok(_) => None,
         Err(t) => Some(t.name()),
@@ -134,7 +147,11 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
         .as_ref()
         .map(|p| rut_driver::ir_dump_of(&p.funcs, &p.interner))
         .unwrap_or_default();
-    let binary = compiled.graph.program.as_ref().map(|p| rut_core::binary::encode(p));
+    let binary = compiled
+        .graph
+        .program
+        .as_ref()
+        .map(|p| rut_core::binary::encode(p));
     rut_driver::CompileOutput {
         diags: compiled.graph.diags,
         ast_dump,
@@ -150,14 +167,15 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
 /// mounts, `Logger`'s use appended above included).
 fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = with_logger_use(src);
-    let mut chain = rut_driver::RutRun::new()
-        .pkg(
-            rut_driver::Mounted::source(module, &combined)
-                .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
-        );
+    let mut chain = rut_driver::RutRun::new().pkg(
+        rut_driver::Mounted::source(module, &combined)
+            .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
+    );
     for d in ["rut/ink", "rut/pouch"] {
         let pkgs = rut_native::dir_pkgs(
-            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join(d),
         )
         .expect("mount case libs");
         chain = pkgs.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
@@ -301,7 +319,10 @@ entry fn main() -> nil {
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec!["alias law: 9 5 5 9", "miss is nil: true", "guarded read: 9"]);
+    assert_eq!(
+        lines,
+        vec!["alias law: 9 5 5 9", "miss is nil: true", "guarded read: 9"]
+    );
 }
 
 #[test]
@@ -513,7 +534,10 @@ entry fn main() -> nil {
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(lines, vec!["x=-2147483648", "s=-2147483648", "s=0", "u=2147483648"]);
+    assert_eq!(
+        lines,
+        vec!["x=-2147483648", "s=-2147483648", "s=0", "u=2147483648"]
+    );
     assert_eq!(trap.as_deref(), Some("Overflow"));
 }
 
@@ -571,7 +595,10 @@ entry fn main() -> nil {
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(lines, vec!["a=true", "b=false", "c=false", "differs", "padded=56"]);
+    assert_eq!(
+        lines,
+        vec!["a=true", "b=false", "c=false", "differs", "padded=56"]
+    );
     assert_eq!(trap, None);
 }
 
@@ -600,7 +627,15 @@ entry fn main() -> nil {
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
-    assert_eq!(lines, vec!["a len=4 k3=0", "b k0=7 k3=9 len=4", "c len=4 j0=0 j3=1", "d 0 0"]);
+    assert_eq!(
+        lines,
+        vec![
+            "a len=4 k3=0",
+            "b k0=7 k3=9 len=4",
+            "c len=4 j0=0 j3=1",
+            "d 0 0"
+        ]
+    );
     assert_eq!(trap, None);
 }
 
@@ -630,12 +665,18 @@ entry fn main() -> nil {
     let bad = "entry fn main() -> nil { let x = Option<i32>::some(5); Logger::new(\"app\").info(f\"{x.value}\"); }";
     let out = compile_out(bad, "main");
     // explicit generics on the retired head stay a clear error
-    assert!(out.diags.iter().any(|d| d.msg.contains("generic type paths (`Option<..>::some`) are not supported")));
+    assert!(out.diags.iter().any(|d| d
+        .msg
+        .contains("generic type paths (`Option<..>::some`) are not supported")));
     // and the plain (non-generic) spelling is the same ordinary miss —
     // every retired spelling falls to the normal resolution path
-    let unused = "entry fn main() -> nil { let x = Option::some(5); Logger::new(\"app\").info(f\"{x}\"); }";
+    let unused =
+        "entry fn main() -> nil { let x = Option::some(5); Logger::new(\"app\").info(f\"{x}\"); }";
     let out = compile_out(unused, "main");
-    assert!(out.diags.iter().any(|d| d.msg.contains("unknown name `Option::some`")));
+    assert!(out
+        .diags
+        .iter()
+        .any(|d| d.msg.contains("unknown name `Option::some`")));
 }
 
 #[test]
@@ -734,7 +775,9 @@ fn serde_hint_parse(json: &str) -> KindProbe {
     let i = json.find("\"kind\":\"").expect("kind key") + 8;
     let rest = &json[i..];
     let end = rest.find('"').unwrap();
-    KindProbe { kind: rest[..end].to_string() }
+    KindProbe {
+        kind: rest[..end].to_string(),
+    }
 }
 struct KindProbe {
     kind: String,
@@ -919,7 +962,13 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
-    rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm")
+    rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm")
 }
 
 #[test]
@@ -951,11 +1000,18 @@ entry fn checked(v: i32) -> (i32, str) {
     assert_eq!(vm.call::<_, u32>("put", (c.clone(),)).unwrap(), 1);
     assert_eq!(vm.call::<_, u32>("put", (c.clone(),)).unwrap(), 2);
     assert_eq!(
-        vm.call::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],)).unwrap(),
+        vm.call::<_, Vec<u8>>("echo_bytes", (vec![1u8, 2, 250],))
+            .unwrap(),
         vec![1, 2, 250]
     );
-    assert_eq!(vm.call::<_, (i32, bool)>("maybe", (7i32,)).unwrap(), (7, true));
-    assert_eq!(vm.call::<_, (i32, bool)>("maybe", (-1i32,)).unwrap(), (0, false));
+    assert_eq!(
+        vm.call::<_, (i32, bool)>("maybe", (7i32,)).unwrap(),
+        (7, true)
+    );
+    assert_eq!(
+        vm.call::<_, (i32, bool)>("maybe", (-1i32,)).unwrap(),
+        (0, false)
+    );
     assert_eq!(
         vm.call::<_, (i32, String)>("checked", (3i32,)).unwrap(),
         (3, "".to_string())
@@ -983,7 +1039,10 @@ entry fn bad_ret() -> Vec<Row> { return Vec::new(); }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("returns `Vec<Row>`")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("returns `Vec<Row>`")),
         "{:?}",
         out.graph.diags
     );
@@ -1005,7 +1064,10 @@ entry fn get_point() -> Point { return Point { x: 1, y: 2 }; }
     // span'd source diagnostic: the span starts at the return type's
     // spelling (the parser's type-node span carries one trailing token
     // char, the start is the pin)
-    assert_eq!(&combined[d.span.lo as usize..d.span.lo as usize + 5], "Point");
+    assert_eq!(
+        &combined[d.span.lo as usize..d.span.lo as usize + 5],
+        "Point"
+    );
 
     // and the parameter side rejects the same way
     let src = r#"
@@ -1021,7 +1083,10 @@ entry fn put_point(p: Point) -> nil { }
         .find(|d| d.msg.contains("parameter `p` is `Point`"))
         .expect("the named-record param rejects");
     // the span starts at the parameter's spelling, naming it and its type
-    assert_eq!(&combined[d.span.lo as usize..d.span.lo as usize + 8], "p: Point");
+    assert_eq!(
+        &combined[d.span.lo as usize..d.span.lo as usize + 8],
+        "p: Point"
+    );
 
     // an anonymous tuple carrying a named record rejects too: the
     // recursion descends and the record's row answers
@@ -1031,7 +1096,10 @@ entry fn pair() -> (Row, i32) { return (Row { id: 1 }, 2); }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("returns `(Row, i32)`")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("returns `(Row, i32)`")),
         "{:?}",
         out.graph.diags
     );
@@ -1044,7 +1112,10 @@ entry fn old_buffer(v: Vec<u8>) -> Vec<u8> { return v; }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("parameter `v` is `Vec<u8>`")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("parameter `v` is `Vec<u8>`")),
         "{:?}",
         out.graph.diags
     );
@@ -1054,7 +1125,10 @@ entry fn generic<T>(v: T) -> T { return v; }
 "#;
     let out = compile(src, "m");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("cannot be generic")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("cannot be generic")),
         "{:?}",
         out.graph.diags
     );
@@ -1115,7 +1189,13 @@ entry fn main() -> nil {
     assert_eq!(trap, None);
     assert_eq!(
         lines,
-        vec!["z=3", "a=3 eq=true ne=true", "f=2 f0=9 f1=8", "enc=3 dec=rut", "sum=6"]
+        vec![
+            "z=3",
+            "a=3 eq=true ne=true",
+            "f=2 f0=9 f1=8",
+            "enc=3 dec=rut",
+            "sum=6"
+        ]
     );
 }
 
@@ -1219,8 +1299,16 @@ entry fn main() -> nil {
     // the AST dumps ride CompileOutput (the demo envelope lane)
     let out = compile_out(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
-    assert!(out.ast_dump.contains("vis: pub(super)"), "member vis label: {}", out.ast_dump);
-    assert!(!out.ast_dump.contains("vis: pub\n      name: n"), "unannotated stays quiet: {}", out.ast_dump);
+    assert!(
+        out.ast_dump.contains("vis: pub(super)"),
+        "member vis label: {}",
+        out.ast_dump
+    );
+    assert!(
+        !out.ast_dump.contains("vis: pub\n      name: n"),
+        "unannotated stays quiet: {}",
+        out.ast_dump
+    );
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
     assert_eq!(lines, vec!["gauge=6 secret=600 w=3"]);
@@ -1415,13 +1503,22 @@ entry fn main() -> nil {
         )
         // the root declares the heads it names (the nameability law —
         // mounted-but-undeclared is D5)
-        .manifest(rut_driver::Manifest::lib("app_main", &["pouch", "ink", "ink_host", "calc"])),
+        .manifest(rut_driver::Manifest::lib(
+            "app_main",
+            &["pouch", "ink", "ink_host", "calc"],
+        )),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app_main")
-        .compile()
-        .expect("compile the walk");
+    let out = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app_main")
+    .compile()
+    .expect("compile the walk");
     assert!(
         out.graph.diags.is_empty(),
         "diags: {:?}",
@@ -1438,10 +1535,19 @@ entry fn main() -> nil {
         interrupt_every: 1024,
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten()); // the load-time contract
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["2 30"]);
@@ -1472,13 +1578,22 @@ entry fn main() -> nil {
         )
         // the root declares the heads it names (the nameability law —
         // mounted-but-undeclared is D5; core rides free)
-        .manifest(rut_driver::Manifest::lib("app_main", &["pouch", "ink", "ink_host", "calc"])),
+        .manifest(rut_driver::Manifest::lib(
+            "app_main",
+            &["pouch", "ink", "ink_host", "calc"],
+        )),
     );
     let ctx = rut_driver::host_pkg_ctx(&world);
-    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app_main")
-        .compile()
-        .expect("compile the walk");
+    let out = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app_main")
+    .compile()
+    .expect("compile the walk");
     assert!(
         out.graph.diags.is_empty(),
         "diags: {:?}",
@@ -1495,10 +1610,19 @@ entry fn main() -> nil {
         interrupt_every: 1024,
     };
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |msg| sink.borrow_mut().push(msg.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
     hosts.verify_against(&ctx.flatten()); // the load-time contract
-    let mut vm = rut_vm::interp:: Vm::builder().program(Rc::new(prog)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build().expect("vm");
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(Rc::new(prog))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
+        .expect("vm");
     let trap = vm.call::<_, ()>("main", ()).err().map(|t| t.name());
     assert_eq!(trap, None);
     assert_eq!(*lines.borrow(), vec!["11 hello world"]);
@@ -1610,9 +1734,13 @@ entry fn main() -> nil {
         .expect("main export");
     let f = &prog.funcs[*main_fid as usize];
     let in_place = f.code.iter().any(|op| match op {
-        Op::CallNat { nat: Nat::Concat, argv_off, argc, dst, .. } if *argc >= 2 => {
-            f.argv.get(*argv_off as usize) == Some(dst)
-        }
+        Op::CallNat {
+            nat: Nat::Concat,
+            argv_off,
+            argc,
+            dst,
+            ..
+        } if *argc >= 2 => f.argv.get(*argv_off as usize) == Some(dst),
         _ => false,
     });
     assert!(
@@ -1745,7 +1873,10 @@ fn unsuffixed_int_literals_must_fit_i32() {
 
     let no_ctx = "entry fn main() -> nil { let x = 99999999999; }";
     let out = rut_driver::compile_module(no_ctx, rut_parser::Mode::Impl, "main");
-    assert!(out.diags.iter().any(|d| d.msg.contains("exceeds the `i32` default")));
+    assert!(out
+        .diags
+        .iter()
+        .any(|d| d.msg.contains("exceeds the `i32` default")));
 
     let fixed = "entry fn main() -> nil { let x: u64 = 13503953896175478587u64; }";
     let out = rut_driver::compile_module(fixed, rut_parser::Mode::Impl, "main");
@@ -1762,7 +1893,10 @@ fn unsuffixed_int_literals_must_fit_i32() {
 
     let float_bad = "entry fn main() -> nil { let x: f64 = 1.0e300; }";
     let out = rut_driver::compile_module(float_bad, rut_parser::Mode::Impl, "main");
-    assert!(out.diags.iter().any(|d| d.msg.contains("exceeds the `f32` default")));
+    assert!(out
+        .diags
+        .iter()
+        .any(|d| d.msg.contains("exceeds the `f32` default")));
 
     let float_fixed = "entry fn main() -> nil { let x: f64 = 1.0e300f64; }";
     let out = rut_driver::compile_module(float_fixed, rut_parser::Mode::Impl, "main");
@@ -1814,19 +1948,22 @@ entry fn main() -> nil {
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec![
-        "-2147483648 2147483647 0",
-        "2147483647 -2147483648 2147483647 -2147483648",
-        "false true 3 false false",
-        "-2147483648 0",
-        "0 255 false",
-        "255 0 false",
-        "-128 127 127 -128",
-        "0 18446744073709551615 false",
-        "-2147483648",
-        "2.5 1 2 -1 0 1",
-        "1.4142135623730951 3.141592653589793",
-    ]);
+    assert_eq!(
+        lines,
+        vec![
+            "-2147483648 2147483647 0",
+            "2147483647 -2147483648 2147483647 -2147483648",
+            "false true 3 false false",
+            "-2147483648 0",
+            "0 255 false",
+            "255 0 false",
+            "-128 127 127 -128",
+            "0 18446744073709551615 false",
+            "-2147483648",
+            "2.5 1 2 -1 0 1",
+            "1.4142135623730951 3.141592653589793",
+        ]
+    );
 }
 
 #[test]
@@ -1852,12 +1989,10 @@ entry fn main() -> nil {
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec![
-        "1.4142135 2.5 1 2",
-        "-1 0 1 -3",
-        "10 1024 2 5",
-        "0.1 0.1",
-    ]);
+    assert_eq!(
+        lines,
+        vec!["1.4142135 2.5 1 2", "-1 0 1 -3", "10 1024 2 5", "0.1 0.1",]
+    );
 }
 
 #[test]
@@ -2041,7 +2176,10 @@ entry fn main() -> nil {
         .map(|d| d.msg.clone())
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(msg.contains("f32") && msg.contains("f64"), "expected a width diagnostic, got:\n{msg}");
+    assert!(
+        msg.contains("f32") && msg.contains("f64"),
+        "expected a width diagnostic, got:\n{msg}"
+    );
 }
 
 #[test]
@@ -2266,12 +2404,10 @@ struct P { x: i32 = 0; }
 impl P { [disposal] fn dispose(self, cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
-    let out = compile(
-        &with_logger_use(src),
-        "main",
-    );
+    let out = compile(&with_logger_use(src), "main");
     assert!(
-        out.graph.diags
+        out.graph
+            .diags
             .iter()
             .any(|d| d.msg.contains("`[disposal]` member takes `mut self` first")),
         "{:?}",
@@ -2287,19 +2423,15 @@ class Box2<T> { v: T; }
 impl<T> Box2<T> { [disposal] fn dispose(mut self, cx: DisposalContext) { } }
 entry fn main() -> nil { }
 "#;
-    let out = compile(
-        &with_logger_use(src),
-        "main",
-    );
+    let out = compile(&with_logger_use(src), "main");
     assert!(
-        out.graph.diags
-            .iter()
-            .any(|d| d.msg.contains("cannot carry `[disposal]` through a generic target")),
+        out.graph.diags.iter().any(|d| d
+            .msg
+            .contains("cannot carry `[disposal]` through a generic target")),
         "{:?}",
         out.graph.diags
     );
 }
-
 
 #[test]
 fn a1_tuples_multi_return() {
@@ -2441,25 +2573,49 @@ fn dbg_digest() {
     for d in ["rut/pouch", "rut/json"] {
         world.extend(
             rut_native::dir_pkgs(
-                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(d),
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../..")
+                    .join(d),
             )
             .expect("mount pkg")
             .pkgs,
         );
     }
     world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
-    let out = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        // the root declares the heads it names (the nameability law —
-        // mounted-but-undeclared is D5)
-        .pkg(rut_driver::Mounted::source("digests", &src).manifest(rut_driver::Manifest::lib(
+    let out = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    // the root declares the heads it names (the nameability law —
+    // mounted-but-undeclared is D5)
+    .pkg(
+        rut_driver::Mounted::source("digests", &src).manifest(rut_driver::Manifest::lib(
             "digests",
             &["pouch", "json", "calc"],
-        )))
-        .entrypoint("digests")
-        .compile()
-        .expect("compile digests");
-    assert!(out.graph.diags.is_empty(), "{:?}", out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
-    println!("{}", rut_driver::ir_dump_of(&out.graph.program.as_ref().unwrap().funcs, &out.graph.program.as_ref().unwrap().interner));
+        )),
+    )
+    .entrypoint("digests")
+    .compile()
+    .expect("compile digests");
+    assert!(
+        out.graph.diags.is_empty(),
+        "{:?}",
+        out.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+    );
+    println!(
+        "{}",
+        rut_driver::ir_dump_of(
+            &out.graph.program.as_ref().unwrap().funcs,
+            &out.graph.program.as_ref().unwrap().interner
+        )
+    );
 }
 
 #[test]
@@ -2477,18 +2633,30 @@ entry fn put(c: opaque) -> u32 {
 "#;
     let out = compile(src, "m");
     let prog = out.graph.program.as_ref().expect("program").clone();
-    let limits = rut_vm::interp::Limits { fuel: Some(1_000_000), heap_limit_bytes: Some(8*1024*1024), interrupt_every: 1024 };
+    let limits = rut_vm::interp::Limits {
+        fuel: Some(1_000_000),
+        heap_limit_bytes: Some(8 * 1024 * 1024),
+        interrupt_every: 1024,
+    };
     let ctx = case_ctx();
     let mut hosts0 = rut_vm::interp::HostRegistry::new();
     hosts0.install_host_pkg(&ctx, rut_std::logger::pkg(|_msg| {}));
     hosts0.install_host_pkg(&ctx, rut_std::math::pkg());
-    let mut vm = rut_vm::interp:: Vm::builder().program(std::rc::Rc::new(prog.clone())).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts0).build().unwrap();
+    let mut vm = rut_vm::interp::Vm::builder()
+        .program(std::rc::Rc::new(prog.clone()))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts0)
+        .build()
+        .unwrap();
     let c: rut_vm::OpaqueRef = vm.call("make", ()).unwrap();
     for _ in 0..2 {
         for f in prog.funcs.iter() {
             if prog.name_of(f.name) == "put" {
                 for (jj, op) in f.code.iter().enumerate() {
-                    if (40..=45).contains(&jj) { println!("put op {jj}: {op:?}"); }
+                    if (40..=45).contains(&jj) {
+                        println!("put op {jj}: {op:?}");
+                    }
                 }
             }
         }
@@ -2514,11 +2682,13 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     let prog = out.graph.program.as_ref().expect("program");
-    println!("IR:\n{}", rut_driver::ir_dump_of(&prog.funcs, &prog.interner));
+    println!(
+        "IR:\n{}",
+        rut_driver::ir_dump_of(&prog.funcs, &prog.interner)
+    );
     let (lines, trap, _) = run_case(src, 100_000);
     println!("LINES {lines:?} TRAP {trap:?}");
 }
-
 
 #[test]
 fn a2_sharing_semantics() {
@@ -2542,11 +2712,14 @@ entry fn main() -> nil {
 "#;
     let (lines, trap, _) = run_case(src, 200_000);
     assert_eq!(trap, None);
-    assert_eq!(lines, vec![
-        "snap inner=99 tag=[y]",
-        "o inner=99 tag=[y] n0=7 n1=8",
-        "snap n=2",
-    ]);
+    assert_eq!(
+        lines,
+        vec![
+            "snap inner=99 tag=[y]",
+            "o inner=99 tag=[y] n0=7 n1=8",
+            "snap n=2",
+        ]
+    );
 }
 
 #[test]
@@ -2566,7 +2739,6 @@ entry fn main() -> nil {
     assert_eq!(lines, vec!["len=2 first=a"]);
 }
 
-
 #[test]
 fn dbg_freeze() {
     let src = r#"
@@ -2579,7 +2751,14 @@ entry fn f(s: str) -> (bytes, str) {
 "#;
     let out = compile(src, "m");
     println!("IR:\n{}", out.graph.diags.len()); // (debug lane: diags only)
-    println!("DIAGS: {:?}", out.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>());
+    println!(
+        "DIAGS: {:?}",
+        out.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -2587,7 +2766,11 @@ fn dbg_digest_diags() {
     let src = std::fs::read_to_string("../../examples/02-digest/mod.rut").unwrap();
     let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "digests");
     for d in &out.diags {
-        let line = src[..d.span.lo as usize].bytes().filter(|&b| b == b'\n').count() + 1;
+        let line = src[..d.span.lo as usize]
+            .bytes()
+            .filter(|&b| b == b'\n')
+            .count()
+            + 1;
         println!("DIAG line {line}: {}", d.msg);
     }
 }
@@ -2629,7 +2812,15 @@ entry fn main() -> nil {
     assert_eq!(trap, None);
     assert_eq!(
         lines,
-        vec!["[world] len=5", "[orl]", "eq", "[éllo]", "[hello][wörld]", "[hello!] base=[hello]", "n=5"]
+        vec![
+            "[world] len=5",
+            "[orl]",
+            "eq",
+            "[éllo]",
+            "[hello][wörld]",
+            "[hello!] base=[hello]",
+            "n=5"
+        ]
     );
 }
 
@@ -2679,7 +2870,13 @@ entry fn main() -> nil {
     assert_eq!(trap, None);
     assert_eq!(
         lines,
-        vec!["[2 3] len=2", "v1=20 w0=20", "v1=99", "s=102", "wlen=2 vlen=5 v1=99"]
+        vec![
+            "[2 3] len=2",
+            "v1=20 w0=20",
+            "v1=99",
+            "s=102",
+            "wlen=2 vlen=5 v1=99"
+        ]
     );
 }
 
@@ -2745,7 +2942,10 @@ fn retired_unit_name_is_an_ordinary_unknown_type() {
         rut_parser::Mode::Impl,
         "main",
     );
-    assert!(out.diags.iter().any(|d| d.msg.contains("unknown type `unit`")));
+    assert!(out
+        .diags
+        .iter()
+        .any(|d| d.msg.contains("unknown type `unit`")));
 }
 
 // ---- the capture law: primitives copy, ref-headed bindings share the slot ----
@@ -2993,7 +3193,10 @@ pub fn main() -> Point {
     assert!(
         prog.exports.is_empty(),
         "no entry fns declared — the export table is empty: {:?}",
-        prog.exports.iter().map(|(n, _)| prog.name_of(*n)).collect::<Vec<_>>()
+        prog.exports
+            .iter()
+            .map(|(n, _)| prog.name_of(*n))
+            .collect::<Vec<_>>()
     );
 
     // the same shape spelled `entry fn main` IS the host-callable door —
@@ -3010,7 +3213,10 @@ entry fn main() -> Point {
 "#;
     let out = compile(record, "main");
     assert!(
-        out.graph.diags.iter().any(|d| d.msg.contains("returns `Point`")),
+        out.graph
+            .diags
+            .iter()
+            .any(|d| d.msg.contains("returns `Point`")),
         "a named-record return rejects at the declaration: {:?}",
         out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
@@ -3027,7 +3233,10 @@ entry fn main() -> (i32, i32) {
         out.graph.diags.iter().map(|d| &d.msg).collect::<Vec<_>>()
     );
     let prog = out.graph.program.as_ref().expect("program").clone();
-    assert!(prog.export("main").is_some(), "`entry fn main` is the export");
+    assert!(
+        prog.export("main").is_some(),
+        "`entry fn main` is the export"
+    );
 }
 
 #[test]
@@ -3285,10 +3494,9 @@ entry fn main() -> nil {
 "#;
     let out = compile(src, "main");
     assert!(
-        out.graph
-            .diags
-            .iter()
-            .any(|d| d.msg.contains("mut") && d.msg.contains("binding") && d.msg.contains("the mut-binding law")),
+        out.graph.diags.iter().any(|d| d.msg.contains("mut")
+            && d.msg.contains("binding")
+            && d.msg.contains("the mut-binding law")),
         "want a mut-binding law refusal for the captured plain loop var: {:?}",
         out.graph.diags
     );

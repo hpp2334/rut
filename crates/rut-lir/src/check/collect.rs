@@ -2,12 +2,10 @@
 //! classes, ifaces), pass 2 impls/fns/lets. Record payloads are slot arrays
 //!; impl methods enter the instantiation queue eagerly.
 
-use rut_core::binary::IfaceDesc;
 use super::*;
-
+use rut_core::binary::IfaceDesc;
 
 impl<'a> Ctx<'a> {
-
     // ---- collection ----
 
     pub fn collect(&mut self) {
@@ -31,7 +29,10 @@ impl<'a> Ctx<'a> {
             // a::{y}` is fine: the NAME is the rule, not the
             // package.
             let sp = self.ast.span(it.id());
-            let head = path.first().map(|&h| self.name(h).to_string()).unwrap_or_default();
+            let head = path
+                .first()
+                .map(|&h| self.name(h).to_string())
+                .unwrap_or_default();
             for n in names {
                 let key = (self.cur_mod.clone(), *n);
                 if let Some((prev_head, _)) = self.use_first_spell.get(&key) {
@@ -84,17 +85,52 @@ impl<'a> Ctx<'a> {
             // item's span names its file
             self.cur_mod = self.mod_of(it.id()).to_string();
             match self.ast.item(*it) {
-            ItemKind::Enum { vis, name, members } => self.collect_enum(it.id(), *vis, *name, members),
-            ItemKind::Struct { vis, name, generics, methods, .. } => {
-                self.declare_data(it.id(), DataKind::Struct, *vis, *name, generics, &[], methods);
-            }
-            ItemKind::Class { vis, name, generics, requires, methods, .. } => {
-                self.declare_data(it.id(), DataKind::Class, *vis, *name, generics, requires, methods);
-            }
-            ItemKind::Interface { vis, name, generics, methods, .. } => {
-                self.declare_iface(it.id(), *vis, *name, generics, methods)
-            }
-            ItemKind::Alias(d) => self.declare_alias(it.id(), d),
+                ItemKind::Enum { vis, name, members } => {
+                    self.collect_enum(it.id(), *vis, *name, members)
+                }
+                ItemKind::Struct {
+                    vis,
+                    name,
+                    generics,
+                    methods,
+                    ..
+                } => {
+                    self.declare_data(
+                        it.id(),
+                        DataKind::Struct,
+                        *vis,
+                        *name,
+                        generics,
+                        &[],
+                        methods,
+                    );
+                }
+                ItemKind::Class {
+                    vis,
+                    name,
+                    generics,
+                    requires,
+                    methods,
+                    ..
+                } => {
+                    self.declare_data(
+                        it.id(),
+                        DataKind::Class,
+                        *vis,
+                        *name,
+                        generics,
+                        requires,
+                        methods,
+                    );
+                }
+                ItemKind::Interface {
+                    vis,
+                    name,
+                    generics,
+                    methods,
+                    ..
+                } => self.declare_iface(it.id(), *vis, *name, generics, methods),
+                ItemKind::Alias(d) => self.declare_alias(it.id(), d),
                 _ => {}
             }
         }
@@ -139,7 +175,12 @@ impl<'a> Ctx<'a> {
             self.cur_mod = self.mod_of(it.id()).to_string();
             match self.ast.item(*it) {
                 // the one impl form: inherent
-                ItemKind::Impl { generics, target, methods, .. } => {
+                ItemKind::Impl {
+                    generics,
+                    target,
+                    methods,
+                    ..
+                } => {
                     let methods = methods.clone();
                     let generics = generics.clone();
                     self.collect_impl(it.id(), &generics, *target, &methods)
@@ -173,7 +214,13 @@ impl<'a> Ctx<'a> {
                         self.exports.push((f.name, u32::MAX));
                     }
                 }
-                ItemKind::ModuleLet { name, ty, init, vis, .. } => {
+                ItemKind::ModuleLet {
+                    name,
+                    ty,
+                    init,
+                    vis,
+                    ..
+                } => {
                     self.lets.push((*name, *ty, *init, *vis));
                 }
                 _ => {}
@@ -181,20 +228,43 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    pub(crate) fn collect_enum(&mut self, node: NodeId, _vis: Vis, name: IdentId, members: &[IdentId]) {
+    pub(crate) fn collect_enum(
+        &mut self,
+        node: NodeId,
+        _vis: Vis,
+        name: IdentId,
+        members: &[IdentId],
+    ) {
         let sp = self.ast.node(node).span;
-        if self.find_enum(name).is_some() || self.find_data(name).is_some() || self.find_iface(name).is_some() || self.find_alias(name).is_some() {
+        if self.find_enum(name).is_some()
+            || self.find_data(name).is_some()
+            || self.find_iface(name).is_some()
+            || self.find_alias(name).is_some()
+        {
             self.err(sp, self.dup_type_msg(name));
             return;
         }
         // member values: sequential from 0
-        let vals: Vec<(IdentId, i64)> = members.iter().enumerate().map(|(i, m)| (*m, i as i64)).collect();
+        let vals: Vec<(IdentId, i64)> = members
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (*m, i as i64))
+            .collect();
         let ty = self.types.intern(RutType {
             name,
             kind: TyKind::Enum { members: vals },
         });
         let member_ids: Vec<IdentId> = members.to_vec();
-        self.enums.push((name, EnumDecl { ty, members: member_ids, methods: Vec::new(), node, vis: _vis }));
+        self.enums.push((
+            name,
+            EnumDecl {
+                ty,
+                members: member_ids,
+                methods: Vec::new(),
+                node,
+                vis: _vis,
+            },
+        ));
     }
 
     /// Pass 1a — intern a struct/class placeholder and register its name.
@@ -211,7 +281,11 @@ impl<'a> Ctx<'a> {
         methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
-        if self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_iface(name).is_some() || self.find_alias(name).is_some() {
+        if self.find_data(name).is_some()
+            || self.find_enum(name).is_some()
+            || self.find_iface(name).is_some()
+            || self.find_alias(name).is_some()
+        {
             self.err(sp, self.dup_type_msg(name));
             return;
         }
@@ -224,8 +298,7 @@ impl<'a> Ctx<'a> {
         // the instantiation ledger's owner anchor: this decl's bodies
         // live in this unit — every decl's origin IS its module (no
         // source crosses a boundary)
-        self.decl_owner
-            .insert(name, self.own_spec.clone());
+        self.decl_owner.insert(name, self.own_spec.clone());
         // generic records stay a template (empty fields) until instantiated;
         // `Vec<T>` and monomorphization enter at `mk_data_inst`
         let placeholder = self.types.intern(RutType {
@@ -277,7 +350,10 @@ impl<'a> Ctx<'a> {
         for f in fields {
             let fd = self.ast.field_decl(*f);
             let fty = self.resolve_type(fd.ty, &env);
-            resolved.push(FieldInfo { name: fd.name, ty: fty });
+            resolved.push(FieldInfo {
+                name: fd.name,
+                ty: fty,
+            });
         }
         let pi = self.types.dense(ty) as usize;
         self.types.types[pi].kind = TyKind::Data { fields: resolved };
@@ -289,7 +365,8 @@ impl<'a> Ctx<'a> {
         &mut self,
         name: IdentId,
         fields: &[NodeHandle<FieldDeclNode>],
-    ) {        let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
+    ) {
+        let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
             return;
         };
         let placeholder = self.datas[idx].1.ty;
@@ -311,7 +388,9 @@ impl<'a> Ctx<'a> {
         // publish the resolved field table on the descriptor (construction
         // rules for struct vs class differ; the field table does not)
         let pi = self.types.dense(placeholder) as usize;
-        self.types.types[pi].kind = TyKind::Data { fields: resolved.clone() };
+        self.types.types[pi].kind = TyKind::Data {
+            fields: resolved.clone(),
+        };
 
         // collect fields with initializers + methods for the compiler
         let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)> = Vec::new();
@@ -364,25 +443,35 @@ impl<'a> Ctx<'a> {
         _methods: &[NodeHandle<MethodDeclNode>],
     ) {
         let sp = self.ast.span(node);
-        if self.find_iface(name).is_some() || self.find_data(name).is_some() || self.find_enum(name).is_some() || self.find_alias(name).is_some() {
+        if self.find_iface(name).is_some()
+            || self.find_data(name).is_some()
+            || self.find_enum(name).is_some()
+            || self.find_alias(name).is_some()
+        {
             self.err(sp, self.dup_type_msg(name));
             return;
         }
         let id = if generics.is_empty() {
             let id = self.ifaces.len() as u32;
-            self.ifaces.push(IfaceDesc { name, methods: vec![] });
+            self.ifaces.push(IfaceDesc {
+                name,
+                methods: vec![],
+            });
             id
         } else {
             // a generic trait has no single id — `mk_iface_inst` allocates
             // one per type-argument list
             u32::MAX
         };
-        self.iface_decls.push((name, IfaceDeclInfo {
-            id,
-            node,
-            generics: generics.to_vec(),
-            vis,
-        }));
+        self.iface_decls.push((
+            name,
+            IfaceDeclInfo {
+                id,
+                node,
+                generics: generics.to_vec(),
+                vis,
+            },
+        ));
     }
 
     /// Pass 1b — resolve a declared trait's method signatures.
@@ -409,7 +498,10 @@ impl<'a> Ctx<'a> {
                         ptys.push(self.resolve_iface_sig_ty(*t, id, &[]));
                     }
                     MemberKind::Param(ParamData { ty: None, .. }) => {
-                        self.err(self.ast.span(p.id()), "interface method parameters need types");
+                        self.err(
+                            self.ast.span(p.id()),
+                            "interface method parameters need types",
+                        );
                         ptys.push(TY_I32);
                     }
                     _ => ptys.push(TY_I32),
@@ -422,7 +514,10 @@ impl<'a> Ctx<'a> {
         // members, which may spell plain parameters only (`fn yield(cx: ..)`).
         // Either way the binary desc's params exclude the receiver: the
         // compiler passes self as arg0 for receiver methods.
-        let mut desc = IfaceDesc { name, methods: vec![] };
+        let mut desc = IfaceDesc {
+            name,
+            methods: vec![],
+        };
         for (mname, ptys, rty) in tms {
             desc.methods.push(rut_core::binary::IfaceMethod {
                 name: mname,
@@ -472,20 +567,35 @@ impl<'a> Ctx<'a> {
             format!(
                 "{}<{}>",
                 self.interner.name(name),
-                args.iter().map(|a| self.type_name(*a).to_string()).collect::<Vec<_>>().join(", ")
+                args.iter()
+                    .map(|a| self.type_name(*a).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         };
         let tname = self.intern(&tname);
-        self.ifaces.push(IfaceDesc { name: tname, methods: vec![] });
+        self.ifaces.push(IfaceDesc {
+            name: tname,
+            methods: vec![],
+        });
         self.iface_inst.insert((name, args.clone()), id);
-        let Some(info) = self.find_iface(name).cloned() else { return id };
-        let subst: Vec<(IdentId, TypeId)> =
-            info.generics.iter().cloned().zip(args.iter().cloned()).collect();
+        let Some(info) = self.find_iface(name).cloned() else {
+            return id;
+        };
+        let subst: Vec<(IdentId, TypeId)> = info
+            .generics
+            .iter()
+            .cloned()
+            .zip(args.iter().cloned())
+            .collect();
         let methods = match self.ast.item(rut_ast::ast::NodeHandle::new(info.node)) {
             ItemKind::Interface { methods, .. } => methods.clone(),
             _ => Vec::new(),
         };
-        let mut desc = IfaceDesc { name: tname, methods: vec![] };
+        let mut desc = IfaceDesc {
+            name: tname,
+            methods: vec![],
+        };
         for m in &methods {
             let md = self.ast.method_decl(*m);
             let mut ptys = Vec::new();
@@ -602,8 +712,12 @@ impl<'a> Ctx<'a> {
         });
         self.type_inst.insert((data, args.clone()), ty);
         self.inst_data.insert(ty, (data, args.clone()));
-        let env: Vec<(IdentId, TypeId)> =
-            decl.generics.iter().cloned().zip(args.iter().cloned()).collect();
+        let env: Vec<(IdentId, TypeId)> = decl
+            .generics
+            .iter()
+            .cloned()
+            .zip(args.iter().cloned())
+            .collect();
         // inline bounds gate the completed substitution —
         // the cache insert above keeps a bound-triggering instantiation of
         // the same record from recursing. The decl's fields and bounds
@@ -656,7 +770,12 @@ impl<'a> Ctx<'a> {
     /// land on the rows the unit already uses. A row-kinded field
     /// (`Node<#T>` spelled inside the template) keeps the template's row —
     /// the mirror law covers the direct-argument shapes.
-    pub fn mk_extern_data_inst(&mut self, data: IdentId, g: &ExternGeneric, args: Vec<TypeId>) -> TypeId {
+    pub fn mk_extern_data_inst(
+        &mut self,
+        data: IdentId,
+        g: &ExternGeneric,
+        args: Vec<TypeId>,
+    ) -> TypeId {
         if let Some(&t) = self.type_inst.get(&(data, args.clone())) {
             return t;
         }
@@ -762,7 +881,11 @@ impl<'a> Ctx<'a> {
         Some(self.mk_iface_obj(iid))
     }
 
-    pub(crate) fn subst_template_ty(&mut self, id: TypeId, env: &std::collections::HashMap<String, TypeId>) -> TypeId {
+    pub(crate) fn subst_template_ty(
+        &mut self,
+        id: TypeId,
+        env: &std::collections::HashMap<String, TypeId>,
+    ) -> TypeId {
         let text = self.types.type_at(id).name;
         let text = self.interner.name(text).to_string();
         if let Some(&arg) = env.get(&text) {
@@ -785,16 +908,27 @@ impl<'a> Ctx<'a> {
             // TUPLE (`fn((i32, #E)) -> nil`'s element pair) rebuilds at
             // the substituted elements; the nominal `Base<..>` shapes
             // fall through to the mirror re-mint below.
-            TyKind::Data { fields } if fields.is_empty() && text.contains('#') && text.starts_with('(') => {
+            TyKind::Data { fields }
+                if fields.is_empty() && text.contains('#') && text.starts_with('(') =>
+            {
                 let inner = text.trim_start_matches('(').trim_end_matches(')');
                 let mut parts: Vec<String> = Vec::new();
                 let mut depth = 0usize;
                 let mut cur = String::new();
                 for ch in inner.chars() {
                     match ch {
-                        '<' | '(' => { depth += 1; cur.push(ch); }
-                        '>' | ')' => { depth = depth.saturating_sub(1); cur.push(ch); }
-                        ',' if depth == 0 => { parts.push(cur.trim().to_string()); cur = String::new(); }
+                        '<' | '(' => {
+                            depth += 1;
+                            cur.push(ch);
+                        }
+                        '>' | ')' => {
+                            depth = depth.saturating_sub(1);
+                            cur.push(ch);
+                        }
+                        ',' if depth == 0 => {
+                            parts.push(cur.trim().to_string());
+                            cur = String::new();
+                        }
                         _ => cur.push(ch),
                     }
                 }
@@ -808,18 +942,27 @@ impl<'a> Ctx<'a> {
                         a
                     } else if let Some(bare) = pt.strip_prefix('?') {
                         match env.get(bare).copied().or_else(|| {
-                            self.interner.lookup(bare).and_then(|bid| self.types.dense_id_of_name(bid))
+                            self.interner
+                                .lookup(bare)
+                                .and_then(|bid| self.types.dense_id_of_name(bid))
                         }) {
                             Some(t) => self.mk_opt(t),
-                            None => { ok = false; break; }
+                            None => {
+                                ok = false;
+                                break;
+                            }
                         }
                     } else {
-                        match env.get(pt.as_str())
-                            .copied()
-                            .or_else(|| self.interner.lookup(pt).and_then(|iid| self.types.dense_id_of_name(iid)))
-                        {
+                        match env.get(pt.as_str()).copied().or_else(|| {
+                            self.interner
+                                .lookup(pt)
+                                .and_then(|iid| self.types.dense_id_of_name(iid))
+                        }) {
                             Some(t) => t,
-                            None => { ok = false; break; }
+                            None => {
+                                ok = false;
+                                break;
+                            }
                         }
                     };
                     let _ = i;
@@ -829,13 +972,22 @@ impl<'a> Ctx<'a> {
                     let fs: Vec<FieldInfo> = etys
                         .iter()
                         .enumerate()
-                        .map(|(i, &t)| FieldInfo { name: self.intern(&i.to_string()), ty: t })
+                        .map(|(i, &t)| FieldInfo {
+                            name: self.intern(&i.to_string()),
+                            ty: t,
+                        })
                         .collect();
                     let name = self.intern(&format!(
                         "({})",
-                        etys.iter().map(|t| self.type_name(*t).to_string()).collect::<Vec<_>>().join(", ")
+                        etys.iter()
+                            .map(|t| self.type_name(*t).to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ));
-                    Some(self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } }))
+                    Some(self.types.intern(RutType {
+                        name,
+                        kind: TyKind::Data { fields: fs },
+                    }))
                 } else {
                     None
                 }
@@ -861,7 +1013,10 @@ impl<'a> Ctx<'a> {
             }
             TyKind::Fn { params, ret } => {
                 let r = self.subst_template_ty(ret, env);
-                let ps = params.iter().map(|&p| self.subst_template_ty(p, env)).collect();
+                let ps = params
+                    .iter()
+                    .map(|&p| self.subst_template_ty(p, env))
+                    .collect();
                 Some(self.mk_fn_ty(ps, r))
             }
             // a user trait object: the kind holds a unit-local
@@ -888,23 +1043,35 @@ impl<'a> Ctx<'a> {
             // mirror law — the owner request rides along). A row whose
             // fields substitute to themselves (a used class's own row,
             // say) passes through unchanged.
-            TyKind::Data { fields } if !fields.is_empty() => {                if text.starts_with('(') {
+            TyKind::Data { fields } if !fields.is_empty() => {
+                if text.starts_with('(') {
                     let fs: Vec<FieldInfo> = fields
                         .iter()
-                        .map(|f| FieldInfo { name: f.name, ty: self.subst_template_ty(f.ty, env) })
+                        .map(|f| FieldInfo {
+                            name: f.name,
+                            ty: self.subst_template_ty(f.ty, env),
+                        })
                         .collect();
                     let changed = fs.iter().zip(fields.iter()).any(|(n, o)| n.ty != o.ty);
                     if changed {
                         let name = self.intern(&format!(
                             "({})",
-                            fs.iter().map(|f| self.type_name(f.ty).to_string()).collect::<Vec<_>>().join(", ")
+                            fs.iter()
+                                .map(|f| self.type_name(f.ty).to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         ));
-                        Some(self.types.intern(RutType { name, kind: TyKind::Data { fields: fs } }))
+                        Some(self.types.intern(RutType {
+                            name,
+                            kind: TyKind::Data { fields: fs },
+                        }))
                     } else {
                         None
                     }
                 } else if let Some((base_text, rest)) = text.split_once('<') {
-                    let Some(args_text) = rest.strip_suffix('>') else { return id };
+                    let Some(args_text) = rest.strip_suffix('>') else {
+                        return id;
+                    };
                     let base_id = self.intern(base_text);
                     let Some(g) = self.extern_generics.get(&base_id).cloned() else {
                         return id;
@@ -935,17 +1102,27 @@ impl<'a> Ctx<'a> {
                                     t
                                 } else if let Some(bare) = p.strip_prefix('?') {
                                     match env.get(bare).copied().or_else(|| {
-                                        self.interner.lookup(bare).and_then(|bid| self.types.dense_id_of_name(bid))
+                                        self.interner
+                                            .lookup(bare)
+                                            .and_then(|bid| self.types.dense_id_of_name(bid))
                                     }) {
                                         Some(t) => self.mk_opt(t),
-                                        None => { ok = false; break; }
+                                        None => {
+                                            ok = false;
+                                            break;
+                                        }
                                     }
                                 } else {
-                                    match env.get(p.as_str()).copied()
-                                        .or_else(|| self.interner.lookup(p).and_then(|iid| self.types.dense_id_of_name(iid)))
-                                    {
+                                    match env.get(p.as_str()).copied().or_else(|| {
+                                        self.interner
+                                            .lookup(p)
+                                            .and_then(|iid| self.types.dense_id_of_name(iid))
+                                    }) {
                                         Some(t) => t,
-                                        None => { ok = false; break; }
+                                        None => {
+                                            ok = false;
+                                            break;
+                                        }
                                     }
                                 };
                                 etys.push(et);
@@ -971,7 +1148,6 @@ impl<'a> Ctx<'a> {
         };
         rebuilt.unwrap_or(id)
     }
-
 }
 
 /// Split a type-argument list at top-level commas (`Vec<Vec<i64>>, str`

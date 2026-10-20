@@ -36,14 +36,23 @@ fn bundles_the_source_file_set_in_manifest_order() {
         "json/rut.jsonc".to_string(),
         br#"{"name": "json"}"#.to_vec(),
     );
-    files.insert("json/mod.rut".to_string(), b"pub fn f() -> str { return \"j\"; }\n".to_vec());
+    files.insert(
+        "json/mod.rut".to_string(),
+        b"pub fn f() -> str { return \"j\"; }\n".to_vec(),
+    );
 
-    let manifest = parse_manifest(
-        &String::from_utf8(files["json/rut.jsonc"].clone()).unwrap(),
+    let manifest =
+        parse_manifest(&String::from_utf8(files["json/rut.jsonc"].clone()).unwrap()).unwrap();
+    let mut out = Vec::new();
+    collect_source_group(
+        "json",
+        &manifest,
+        &Default::default(),
+        "json/",
+        &map_read(&files),
+        &mut out,
     )
     .unwrap();
-    let mut out = Vec::new();
-    collect_source_group("json", &manifest, &Default::default(), "json/", &map_read(&files), &mut out).unwrap();
     let names: Vec<&str> = out.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names,
@@ -64,17 +73,28 @@ fn bundles_the_source_file_set_in_manifest_order() {
     let mut old = BTreeMap::new();
     old.insert(
         "json/rut.jsonc".to_string(),
-        br#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}}"#
-            .to_vec(),
+        br#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}}"#.to_vec(),
     );
-    old.insert("json/json.rut".to_string(), b"pub fn f() -> str { return \"j\"; }\n".to_vec());
-    old.insert("json/store.rut".to_string(), b"// the store half\n".to_vec());
-    let legacy = parse_manifest_compat(
-        &String::from_utf8(old["json/rut.jsonc"].clone()).unwrap(),
+    old.insert(
+        "json/json.rut".to_string(),
+        b"pub fn f() -> str { return \"j\"; }\n".to_vec(),
+    );
+    old.insert(
+        "json/store.rut".to_string(),
+        b"// the store half\n".to_vec(),
+    );
+    let legacy =
+        parse_manifest_compat(&String::from_utf8(old["json/rut.jsonc"].clone()).unwrap()).unwrap();
+    let mut out2 = Vec::new();
+    collect_source_group(
+        "json",
+        &legacy,
+        &Default::default(),
+        "json/",
+        &map_read(&old),
+        &mut out2,
     )
     .unwrap();
-    let mut out2 = Vec::new();
-    collect_source_group("json", &legacy, &Default::default(), "json/", &map_read(&old), &mut out2).unwrap();
     let names2: Vec<&str> = out2.iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names2,
@@ -86,15 +106,23 @@ fn bundles_the_source_file_set_in_manifest_order() {
 #[test]
 fn a_manifest_named_file_the_map_lacks_is_a_read_error() {
     let mut files = BTreeMap::new();
-    files.insert(
-        "mod/rut.jsonc".to_string(),
-        br#"{"name": "mod"}"#.to_vec(),
-    );
+    files.insert("mod/rut.jsonc".to_string(), br#"{"name": "mod"}"#.to_vec());
     let manifest = parse_manifest(r#"{"name": "mod"}"#).unwrap();
     let mut out = Vec::new();
-    let err = collect_source_group("mod", &manifest, &Default::default(), "", &map_read(&files), &mut out).unwrap_err();
+    let err = collect_source_group(
+        "mod",
+        &manifest,
+        &Default::default(),
+        "",
+        &map_read(&files),
+        &mut out,
+    )
+    .unwrap_err();
     assert!(err.contains("has no entry"), "{err}");
-    assert!(err.contains("the root module is `mod.rut` beside the manifest"), "{err}");
+    assert!(
+        err.contains("the root module is `mod.rut` beside the manifest"),
+        "{err}"
+    );
 }
 
 #[test]

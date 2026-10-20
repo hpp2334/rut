@@ -15,7 +15,10 @@
 /// property of the decoded artifact (`bundle.restore_symbols(..)`),
 /// applied before the offer, not a run step.
 pub(crate) fn compile(loaded: &rut_driver::Walk) -> rut_driver::Compiled {
-    let mut chain = loaded.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
+    let mut chain = loaded
+        .pkgs
+        .iter()
+        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
     let compiled = match chain
         .pkg(rut_std::math::pkg())
         // the nmap experiment's native key table (the mapset-host plan) — a
@@ -52,7 +55,11 @@ pub(crate) fn compile(loaded: &rut_driver::Walk) -> rut_driver::Compiled {
     if !compiled.graph.diags.is_empty() {
         eprint!(
             "{}",
-            rut_lexer::diag::render_diags_grouped(&compiled.graph.diags, &loaded_sources(loaded), None)
+            rut_lexer::diag::render_diags_grouped(
+                &compiled.graph.diags,
+                &loaded_sources(loaded),
+                None
+            )
         );
         std::process::exit(1);
     }
@@ -72,9 +79,7 @@ pub(crate) fn compile(loaded: &rut_driver::Walk) -> rut_driver::Compiled {
 /// `spec/path` — the exact labels the graph compiler stamps on
 /// attributed diags. Walked pkgs carry no filesystem paths, so the
 /// module NAME is the label there is.
-fn loaded_sources(
-    loaded: &rut_driver::Walk,
-) -> std::collections::BTreeMap<String, &str> {
+fn loaded_sources(loaded: &rut_driver::Walk) -> std::collections::BTreeMap<String, &str> {
     let mut out = std::collections::BTreeMap::new();
     for pkg in &loaded.pkgs {
         if let rut_driver::MountedBody::Source { text, .. } = &pkg.body {

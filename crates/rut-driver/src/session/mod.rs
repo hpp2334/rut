@@ -41,7 +41,6 @@
 //! native file readers are the counterparts that read files (the
 //! loader, over the [`crate::bundle::Source`] trait).
 
-
 mod error;
 mod module;
 
@@ -88,7 +87,11 @@ impl Session {
 
     /// Programmatic single-pkg mount (tests/plugins) — no file. First
     /// mount wins is the CALLER's law; this table keeps the last.
-    pub(crate) fn register_module(&mut self, spec: &str, pkg: Mounted) -> Result<(), ManifestError> {
+    pub(crate) fn register_module(
+        &mut self,
+        spec: &str,
+        pkg: Mounted,
+    ) -> Result<(), ManifestError> {
         let mut pkg = pkg;
         pkg.spec = spec.to_string();
         self.mount(pkg)
@@ -104,7 +107,9 @@ impl Session {
     /// are the loud ambiguity (coexistence never guesses).
     pub(crate) fn resolve(&self, spec: &str) -> Result<&Mounted, ResolveError> {
         if !valid_mount_key(spec) {
-            return Err(ResolveError::BadSpec { spec: spec.to_string() });
+            return Err(ResolveError::BadSpec {
+                spec: spec.to_string(),
+            });
         }
         if let Some(m) = self.modules.get(spec) {
             return Ok(m);
@@ -124,7 +129,7 @@ impl Session {
                         n,
                         list: matches
                             .iter()
-                           .map(|m| format!("`{m}`"))
+                            .map(|m| format!("`{m}`"))
                             .collect::<Vec<_>>()
                             .join(", "),
                     });
@@ -132,7 +137,9 @@ impl Session {
                 _ => {}
             }
         }
-        Err(ResolveError::NoModule { spec: spec.to_string() })
+        Err(ResolveError::NoModule {
+            spec: spec.to_string(),
+        })
     }
 
     /// Mutable exact resolution — the symbol-table apply lane's
@@ -141,12 +148,16 @@ impl Session {
     /// graph compiles). Same miss diagnostics as [`Session::resolve`].
     pub(crate) fn resolve_mut(&mut self, spec: &str) -> Result<&mut Mounted, ResolveError> {
         if !valid_mount_key(spec) {
-            return Err(ResolveError::BadSpec { spec: spec.to_string() });
+            return Err(ResolveError::BadSpec {
+                spec: spec.to_string(),
+            });
         }
         if self.modules.contains_key(spec) {
             return Ok(self.modules.get_mut(spec).unwrap());
         }
-        Err(ResolveError::NoModule { spec: spec.to_string() })
+        Err(ResolveError::NoModule {
+            spec: spec.to_string(),
+        })
     }
 
     /// The single use-door: resolve `head` FOR `consumer` under the
@@ -267,8 +278,18 @@ impl Session {
                 // yield is the resumption probe, take marshals the
                 // answer through the decl's own return type, cancel is
                 // the best-effort abort arm
-                ctx.declare(scope, &format!("{rel}__start"), row.params.clone(), TY_OPAQUE);
-                ctx.declare(scope, &format!("{rel}__yield"), vec![TY_OPAQUE, TY_OPAQUE], TY_I32);
+                ctx.declare(
+                    scope,
+                    &format!("{rel}__start"),
+                    row.params.clone(),
+                    TY_OPAQUE,
+                );
+                ctx.declare(
+                    scope,
+                    &format!("{rel}__yield"),
+                    vec![TY_OPAQUE, TY_OPAQUE],
+                    TY_I32,
+                );
                 ctx.declare(scope, &format!("{rel}__take"), vec![TY_OPAQUE], row.ret);
                 ctx.declare(scope, &format!("{rel}__cancel"), vec![TY_OPAQUE], TY_NIL);
             }
@@ -362,21 +383,33 @@ mod tests {
     fn missing_module_names_the_manifest() {
         let s = Session::new();
         let err = s.resolve("missing").unwrap_err();
-        assert_eq!(err, ResolveError::NoModule { spec: "missing".into() });
+        assert_eq!(
+            err,
+            ResolveError::NoModule {
+                spec: "missing".into()
+            }
+        );
         assert!(err.to_string().contains("`rut.jsonc` `deps`"), "{}", err);
     }
 
     #[test]
     fn malformed_specifier() {
         let s = Session::new();
-        assert!(matches!(s.resolve("just-a-name"), Err(ResolveError::BadSpec { .. })));
-        assert!(matches!(s.resolve("ink:host"), Err(ResolveError::BadSpec { .. })));
+        assert!(matches!(
+            s.resolve("just-a-name"),
+            Err(ResolveError::BadSpec { .. })
+        ));
+        assert!(matches!(
+            s.resolve("ink:host"),
+            Err(ResolveError::BadSpec { .. })
+        ));
     }
 
     #[test]
     fn programmatic_mount_sets_spec() {
         let mut s = Session::new();
-        s.register_module("my_map", Mounted::source("my_map", "...")).unwrap();
+        s.register_module("my_map", Mounted::source("my_map", "..."))
+            .unwrap();
         let m = s.resolve("my_map").unwrap();
         assert!(matches!(&m.body, MountedBody::Source { text, .. } if text == "..."));
     }

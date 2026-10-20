@@ -42,22 +42,39 @@ pub fn opt_reg(o: Option<Reg>) -> Reg {
 
 /// Sentinel → `Option<Reg>` (for consuming ops).
 pub fn reg_opt(r: Reg) -> Option<Reg> {
-    if r == NOREG { None } else { Some(r) }
+    if r == NOREG {
+        None
+    } else {
+        Some(r)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArithOp {
-    Add, Sub, Mul, Div, Mod,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CmpOp {
-    Eq, Ne, Lt, Gt, Le, Ge,
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitOp {
-    And, Or, Xor, Shl, Shr,
+    And,
+    Or,
+    Xor,
+    Shl,
+    Shr,
     /// wrapping `calc::wrapping_shl`: left shift
     /// truncated to the operand width — never traps, unlike `Shl`
     WrapShl,
@@ -71,9 +88,16 @@ pub enum BitOp {
 /// keyed off the receiver's primitive width.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Intrinsic {
-    WrappingAdd, WrappingSub, WrappingMul, WrappingShl,
-    SaturatingAdd, SaturatingSub, SaturatingMul,
-    CheckedAdd, CheckedSub, CheckedMul,
+    WrappingAdd,
+    WrappingSub,
+    WrappingMul,
+    WrappingShl,
+    SaturatingAdd,
+    SaturatingSub,
+    SaturatingMul,
+    CheckedAdd,
+    CheckedSub,
+    CheckedMul,
 }
 
 /// Internal natives reached via `CallNat` — things rut
@@ -85,8 +109,8 @@ pub enum Nat {
     Str,
     /// str.concat(parts...)
     Concat,
-    StrLen,    // s.len() — the codepoint count
-    ArrLen,    // Array<T>.len()/bytes.len() — the heap sequence's runtime length
+    StrLen, // s.len() — the codepoint count
+    ArrLen, // Array<T>.len()/bytes.len() — the heap sequence's runtime length
     /// join every element of an `Array<str>` (one sizing pass, one alloc)
     StrJoin,
     /// `s.slice(from, to)` — an O(1) view into the string's octets:
@@ -138,161 +162,492 @@ pub enum Nat {
 
 pub enum Op {
     /// untyped move (verifier: non-ref type)
-    Mov { dst: Reg, src: Reg },
+    Mov {
+        dst: Reg,
+        src: Reg,
+    },
     /// ref move: retain new, release old
-    MovRef { dst: Reg, src: Reg },
+    MovRef {
+        dst: Reg,
+        src: Reg,
+    },
     /// const-pool load
-    Const { dst: Reg, k: u32 },
+    Const {
+        dst: Reg,
+        k: u32,
+    },
     /// raw scalar const (i64 bits / f64 bits / bool / char) — folded form
-    ConstRaw { dst: Reg, bits: u64 },
+    ConstRaw {
+        dst: Reg,
+        bits: u64,
+    },
 
-    Not { dst: Reg, a: Reg },          // bool !
+    Not {
+        dst: Reg,
+        a: Reg,
+    }, // bool !
     /// Scalar arithmetic/bitwise/compare are one opcode *per operation*,
     /// with the kind (int vs float) in the opcode and the width in `prim`
     /// ("the opcode selects the type"). The VM never consults the
     /// type table, and there is no runtime `op` selector.
-    AddF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    SubF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    MulF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    DivF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    ModF { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    NegF { prim: PrimTy, dst: Reg, a: Reg },
-    EqF { dst: Reg, a: Reg, b: Reg },
-    NeF { dst: Reg, a: Reg, b: Reg },
-    LtF { dst: Reg, a: Reg, b: Reg },
-    GtF { dst: Reg, a: Reg, b: Reg },
-    LeF { dst: Reg, a: Reg, b: Reg },
-    GeF { dst: Reg, a: Reg, b: Reg },
-    AddI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    SubI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    MulI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    DivI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    ModI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    WAddI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    WSubI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    WMulI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    AndI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    OrI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    XorI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    ShlI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    ShrI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    WrapShlI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
+    AddF {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    SubF {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    MulF {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    DivF {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    ModF {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    NegF {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+    },
+    EqF {
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    NeF {
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    LtF {
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    GtF {
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    LeF {
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    GeF {
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    AddI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    SubI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    MulI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    DivI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    ModI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    WAddI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    WSubI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    WMulI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    AndI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    OrI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    XorI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    ShlI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    ShrI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    WrapShlI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
     /// int compare — `prim` selects signed vs unsigned ordering; bool/char
     /// compare through here as well (their slot is an integer)
-    EqI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    NeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    LtI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    GtI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    LeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    GeI { prim: PrimTy, dst: Reg, a: Reg, b: Reg },
-    NegI { prim: PrimTy, dst: Reg, a: Reg },
+    EqI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    NeI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    LtI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    GtI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    LeI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    GeI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
+    NegI {
+        prim: PrimTy,
+        dst: Reg,
+        a: Reg,
+    },
     /// string content compare — used for ==/!= on string
-    StrCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
+    StrCmp {
+        eq: bool,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
     /// bytes content compare — used for ==/!= on bytes
-    ArrayCmp { eq: bool, dst: Reg, a: Reg, b: Reg },
+    ArrayCmp {
+        eq: bool,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
     /// cell identity compare — used for ==/!= on ref types
-    RefEq { eq: bool, dst: Reg, a: Reg, b: Reg },
+    RefEq {
+        eq: bool,
+        dst: Reg,
+        a: Reg,
+        b: Reg,
+    },
 
-    Jmp { target: Label },
-    Br { cond: Reg, then_t: Label, else_t: Label },
+    Jmp {
+        target: Label,
+    },
+    Br {
+        cond: Reg,
+        then_t: Label,
+        else_t: Label,
+    },
     /// `when` on enums / downcast chains — arms in the
     /// function's `labels` pool: `labels[table_off..table_off + count]`
-    BrTable { idx: Reg, table_off: u32, count: u16, default: Label },
+    BrTable {
+        idx: Reg,
+        table_off: u32,
+        count: u16,
+        default: Label,
+    },
 
     /// direct call (free fns + class methods + closure-entry direct calls)
     /// — argument registers in the function's `argv` pool; `dst == NOREG`
     /// discards
-    Call { func: u32, argv_off: u32, argc: u16, dst: Reg },
+    Call {
+        func: u32,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    },
     /// direct method call — the receiver is `argv[0]`: it arrives as the
     /// callee's param 0, so the pool entry is exactly the callee's
     /// parameter list (a uniform copy loop, no special-cased slot)
-    CallM { func: u32, argv_off: u32, argc: u16, dst: Reg },
+    CallM {
+        func: u32,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    },
     /// trait vtable call — the vtable form of the two-rule dispatch law:
     /// origins multiple, the call consults the value's
     /// descriptor; `slot` is a global trait-method
     /// slot id; the receiver is `argv[0]`
-    CallI { slot: u32, argv_off: u32, argc: u16, dst: Reg },
+    CallI {
+        slot: u32,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    },
     /// native module call — `recv == NOREG` for free
     /// functions
-    CallNat { nat: Nat, recv: Reg, argv_off: u32, argc: u16, dst: Reg },
+    CallNat {
+        nat: Nat,
+        recv: Reg,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    },
     /// call through an fn-typed value (closures)
-    CallFn { fval: Reg, argv_off: u32, argc: u16, dst: Reg },
-    Ret { val: Option<Reg> },
+    CallFn {
+        fval: Reg,
+        argv_off: u32,
+        argc: u16,
+        dst: Reg,
+    },
+    Ret {
+        val: Option<Reg>,
+    },
 
     /// mint a value cell (the `Self { .. }` / struct literal)
     /// — fields follow via SetF
-    NewCell { dst: Reg, ty: TypeId },
+    NewCell {
+        dst: Reg,
+        ty: TypeId,
+    },
     /// fused record literal: allocate and initialize every field in one op
     /// (`argv[argv_off + i]` is field `i`, in declaration order). Replaces
     /// the `NewCell` + N×`SetF` + `MovRef` sequence.
-    MakeRecord { dst: Reg, ty: TypeId, argv_off: u32, argc: u16 },
+    MakeRecord {
+        dst: Reg,
+        ty: TypeId,
+        argv_off: u32,
+        argc: u16,
+    },
     /// `repr` is the field's baked representation (removes the runtime
     /// field-type lookup + `is_ref`); `field` is the declaration index.
-    GetF { dst: Reg, obj: Reg, field: u32, repr: Repr },
-    SetF { obj: Reg, field: u32, val: Reg, repr: Repr },
+    GetF {
+        dst: Reg,
+        obj: Reg,
+        field: u32,
+        repr: Repr,
+    },
+    SetF {
+        obj: Reg,
+        field: u32,
+        val: Reg,
+        repr: Repr,
+    },
     /// `own(x)` payload copy: data payload memcpy with
     /// handle-field retains; buffers clone; strings clone
-    Own { dst: Reg, src: Reg, ty: TypeId },
+    Own {
+        dst: Reg,
+        src: Reg,
+        ty: TypeId,
+    },
     /// `T → ?T`: box `v` into a fresh one-slot cell — the
     /// result is a nil-able `?T` (`ty` is the nullable's own type). The
     /// box ALIASES `v`'s cell (share, never copy); primitives copy bits.
-    MakeOpt { dst: Reg, src: Reg, ty: TypeId },
+    MakeOpt {
+        dst: Reg,
+        src: Reg,
+        ty: TypeId,
+    },
     /// `Weak.new(v)`: mint a WeakBox side cell holding an
     /// UNRETAINED slot word to `v`'s cell. `ty` is the instantiated
     /// `Weak<elem>` id (the MakeOpt law: the op carries its type — the
     /// natives' CallNat form cannot). Traps on a nil `v` ("weak on nil").
-    WeakNew { dst: Reg, src: Reg, ty: TypeId },
+    WeakNew {
+        dst: Reg,
+        src: Reg,
+        ty: TypeId,
+    },
     /// `w.upgrade()`: the live referent retained into a
     /// fresh `?elem` box (`ty` is the `?elem` id), or the NULL SLOT when
     /// the referent died — a true `nil`, never a box containing nil.
-    WeakUpgrade { recv: Reg, dst: Reg, ty: TypeId },
+    WeakUpgrade {
+        recv: Reg,
+        dst: Reg,
+        ty: TypeId,
+    },
 
-    ArrNew { dst: Reg, ty: TypeId, len: Reg, repr: Repr }, // Array<T>(n) zeroed
-    ArrLit { dst: Reg, ty: TypeId, argv_off: u32, argc: u16 }, // fixed Array<T, N>
-    ArrGet { dst: Reg, arr: Reg, idx: Reg, repr: Repr },       // bounds trap
-    ArrSet { arr: Reg, idx: Reg, val: Reg, repr: Repr },
+    ArrNew {
+        dst: Reg,
+        ty: TypeId,
+        len: Reg,
+        repr: Repr,
+    }, // Array<T>(n) zeroed
+    ArrLit {
+        dst: Reg,
+        ty: TypeId,
+        argv_off: u32,
+        argc: u16,
+    }, // fixed Array<T, N>
+    ArrGet {
+        dst: Reg,
+        arr: Reg,
+        idx: Reg,
+        repr: Repr,
+    }, // bounds trap
+    ArrSet {
+        arr: Reg,
+        idx: Reg,
+        val: Reg,
+        repr: Repr,
+    },
     /// fused `obj.field[idx]` / `obj.field[idx] = val` — `field` is a known
     /// `Array<T>` handle, read as a *borrow* (no retire/release): the owner
     /// record keeps it alive for the duration of the access. This is the
     /// `Vec<T>` class's element path (`impl Slice<T>`), so indexing a
     /// pouch sequence costs one op, not a field read per element.
-    ArrGetF { dst: Reg, obj: Reg, field: u32, idx: Reg, repr: Repr },
-    ArrSetF { obj: Reg, field: u32, idx: Reg, val: Reg, repr: Repr },
+    ArrGetF {
+        dst: Reg,
+        obj: Reg,
+        field: u32,
+        idx: Reg,
+        repr: Repr,
+    },
+    ArrSetF {
+        obj: Reg,
+        field: u32,
+        idx: Reg,
+        val: Reg,
+        repr: Repr,
+    },
 
     /// enum member value (immortal singleton cell)
-    EnumNew { dst: Reg, ty: TypeId, member: u32 },
+    EnumNew {
+        dst: Reg,
+        ty: TypeId,
+        member: u32,
+    },
 
     /// read a handle's runtime TypeId → u32 (pure load)
-    TidOf { dst: Reg, obj: Reg },
+    TidOf {
+        dst: Reg,
+        obj: Reg,
+    },
     /// `x is T` — exact test; sees through Opaque boxes
-    IsType { dst: Reg, obj: Reg, want: TypeId },
+    IsType {
+        dst: Reg,
+        obj: Reg,
+        want: TypeId,
+    },
     /// `x is I` — capability probe: descriptor impls scan
-    IsIface { dst: Reg, obj: Reg, want: u32 },
+    IsIface {
+        dst: Reg,
+        obj: Reg,
+        want: u32,
+    },
     /// extract an Opaque box's payload as the statically known T — traps
     /// on TypeId mismatch; the compiler guards
-    Unbox { dst: Reg, box_: Reg, ty: TypeId },
+    Unbox {
+        dst: Reg,
+        box_: Reg,
+        ty: TypeId,
+    },
     /// opaque(v) — box mint (internal native in RFC terms; an op here
     /// because it needs no name resolution)
-    Box { dst: Reg, val: Reg, ty: TypeId },
+    Box {
+        dst: Reg,
+        val: Reg,
+        ty: TypeId,
+    },
 
     /// closure literal: { func, captures } (v1 captures by
     /// value; by-ref capture lands with coroutine frames) —
     /// capture registers in the function's `argv` pool
-    MakeClosure { dst: Reg, func: u32, argv_off: u32, argc: u16 },
+    MakeClosure {
+        dst: Reg,
+        func: u32,
+        argv_off: u32,
+        argc: u16,
+    },
 
     /// panic(msg) — the engine abort
-    Panic { msg: Reg },
+    Panic {
+        msg: Reg,
+    },
 
     /// explicit numeric conversion `i32(x)` etc — always a call, never an
     /// operator; narrowing traps when the value doesn't fit
-    Conv { dst: Reg, src: Reg, from: PrimTy, to: PrimTy },
+    Conv {
+        dst: Reg,
+        src: Reg,
+        from: PrimTy,
+        to: PrimTy,
+    },
     /// string codepoint read (the char exorcism's re-spell of the old
     /// `StrCharAt`, which moved the wire at VERSION 12): answers the u32
     /// CODEPOINT directly — the dst register is a u32 (never a char
     /// intermediate; the slot already carried the codepoint as bits).
     /// Bounds trap (the `slice` law). Used by `s.code()`, `s.code_at(i)`,
     /// the encode walker, and str indexing.
-    StrCodeAt { dst: Reg, s: Reg, idx: Reg },
+    StrCodeAt {
+        dst: Reg,
+        s: Reg,
+        idx: Reg,
+    },
 
     /// fuel-check no-op back-edge marker (loop back-edges are
     /// natural checkpoints) — emitted at loop heads
@@ -305,7 +660,9 @@ pub enum Op {
     /// narrower than the Vec-carrying layout it replaces while staying
     /// off the collision stride. The size assert below pins it.
     #[allow(dead_code)]
-    Pad { p: [u32; 5] },
+    Pad {
+        p: [u32; 5],
+    },
 }
 
 // ---- specialized scalar-op constructors ----
@@ -430,7 +787,9 @@ impl Op {
     /// pool (`BrTable` only).
     pub fn label_span(&self) -> Option<(u32, u16)> {
         match self {
-            Op::BrTable { table_off, count, .. } => Some((*table_off, *count)),
+            Op::BrTable {
+                table_off, count, ..
+            } => Some((*table_off, *count)),
             _ => None,
         }
     }

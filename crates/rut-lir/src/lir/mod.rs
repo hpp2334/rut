@@ -3,21 +3,21 @@
 //! separate SSA-ish HIR is a later pass). Output: typed
 //! register bytecode per function, monomorphized.
 
-use rut_ast::ast::*;
 use crate::check::{Capture, Ctx, FnKey, Inst, TcResult};
-use rut_lexer::span::Span;
+use rut_ast::ast::*;
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
-use std::collections::HashMap;
 use rut_core::sym;
 use rut_core::types::*;
+use rut_lexer::span::Span;
+use std::collections::HashMap;
 
+pub(crate) mod asyncfn;
 mod call;
 mod compile;
 mod expr;
 mod generic;
 mod intrinsic;
-pub(crate) mod asyncfn;
 mod lit;
 mod ops;
 mod peephole;
@@ -44,7 +44,11 @@ pub(crate) struct Pools {
 
 impl Pools {
     fn new() -> Pools {
-        Pools { argv: Vec::new(), argv_ix: HashMap::new(), labels: Vec::new() }
+        Pools {
+            argv: Vec::new(),
+            argv_ix: HashMap::new(),
+            labels: Vec::new(),
+        }
     }
 
     /// Intern an argument list; returns its `(off, argc)` span.
@@ -52,7 +56,10 @@ impl Pools {
         if a.is_empty() {
             return (0, 0);
         }
-        debug_assert!(a.len() <= u16::MAX as usize, "operand list longer than the register file");
+        debug_assert!(
+            a.len() <= u16::MAX as usize,
+            "operand list longer than the register file"
+        );
         if let Some(&off) = self.argv_ix.get(a) {
             return (off, a.len() as u16);
         }
@@ -229,7 +236,6 @@ pub struct FnCompiler<'a, 'b> {
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
-
     // ---- infrastructure ----
 
     pub(crate) fn new_reg(&mut self, ty: TypeId) -> u16 {
@@ -250,7 +256,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let TyKind::Opt { elem } = self.ctx.types.kind(to).clone() {
                 if elem == t {
                     let dst = self.new_reg(to);
-                    self.emit(Op::MakeOpt { dst, src: reg, ty: to }, sp_lo);
+                    self.emit(
+                        Op::MakeOpt {
+                            dst,
+                            src: reg,
+                            ty: to,
+                        },
+                        sp_lo,
+                    );
                     return dst;
                 }
             }
@@ -298,7 +311,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         while let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
             let d = self.new_reg(elem);
             let repr = self.ctx.types.repr_of(elem);
-            self.emit(Op::GetF { dst: d, obj: cur, field: 0, repr }, sp_lo);
+            self.emit(
+                Op::GetF {
+                    dst: d,
+                    obj: cur,
+                    field: 0,
+                    repr,
+                },
+                sp_lo,
+            );
             ty = elem;
             cur = d;
         }
@@ -317,7 +338,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         while let TyKind::Opt { elem } = self.ctx.types.kind(ty).clone() {
             let d = self.new_reg(elem);
             let repr = self.ctx.types.repr_of(elem);
-            self.emit(Op::GetF { dst: d, obj: cur, field: 0, repr }, sp_lo);
+            self.emit(
+                Op::GetF {
+                    dst: d,
+                    obj: cur,
+                    field: 0,
+                    repr,
+                },
+                sp_lo,
+            );
             ty = elem;
             cur = d;
         }
@@ -386,10 +415,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.cell_counter += 1;
             let cty = self.ctx.types.intern(RutType {
                 name: cname,
-                kind: TyKind::Data { fields: vec![FieldInfo { name, ty }] },
+                kind: TyKind::Data {
+                    fields: vec![FieldInfo { name, ty }],
+                },
             });
             let crec = self.new_reg(cty);
-            { let (argv_off, argc) = self.pool_args(&[reg]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp_lo); }
+            {
+                let (argv_off, argc) = self.pool_args(&[reg]);
+                self.emit(
+                    Op::MakeRecord {
+                        dst: crec,
+                        ty: cty,
+                        argv_off,
+                        argc,
+                    },
+                    sp_lo,
+                );
+            }
             cell = Some(cty);
             let crec2 = crec;
             if field != NO_FIELD {
@@ -402,9 +444,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     crate::lir::asyncfn::append_frame_field(self.ctx, frame_ty, name, cty);
                 }
                 let repr = self.ctx.types.repr_of(cty);
-                self.emit(Op::SetF { obj: frame_reg, field, val: crec2, repr }, sp_lo);
+                self.emit(
+                    Op::SetF {
+                        obj: frame_reg,
+                        field,
+                        val: crec2,
+                        repr,
+                    },
+                    sp_lo,
+                );
             }
-            self.locals.push(Local { name, reg: crec2, ty, is_mut, loop_var, loop_for_c, origins, field, cell });
+            self.locals.push(Local {
+                name,
+                reg: crec2,
+                ty,
+                is_mut,
+                loop_var,
+                loop_for_c,
+                origins,
+                field,
+                cell,
+            });
             return;
         }
         if field != NO_FIELD {
@@ -417,9 +477,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 crate::lir::asyncfn::append_frame_field(self.ctx, frame_ty, name, ty);
             }
             let repr = self.ctx.types.repr_of(ty);
-            self.emit(Op::SetF { obj: frame_reg, field, val: reg, repr }, sp_lo);
+            self.emit(
+                Op::SetF {
+                    obj: frame_reg,
+                    field,
+                    val: reg,
+                    repr,
+                },
+                sp_lo,
+            );
         }
-        self.locals.push(Local { name, reg, ty, is_mut, loop_var, loop_for_c, origins, field, cell });
+        self.locals.push(Local {
+            name,
+            reg,
+            ty,
+            is_mut,
+            loop_var,
+            loop_for_c,
+            origins,
+            field,
+            cell,
+        });
     }
 
     /// The capture law's promotion for a param local already bound
@@ -442,17 +520,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         {
             return;
         }
-        let cname = self
-            .ctx
-            .intern(&format!("#cell@{}@{}", self.ctx.name(name), self.cell_counter));
+        let cname = self.ctx.intern(&format!(
+            "#cell@{}@{}",
+            self.ctx.name(name),
+            self.cell_counter
+        ));
         self.cell_counter += 1;
         let cty = self.ctx.types.intern(RutType {
             name: cname,
-            kind: TyKind::Data { fields: vec![FieldInfo { name, ty }] },
+            kind: TyKind::Data {
+                fields: vec![FieldInfo { name, ty }],
+            },
         });
         let old = self.locals[idx].reg;
         let crec = self.new_reg(cty);
-        { let (argv_off, argc) = self.pool_args(&[old]); self.emit(Op::MakeRecord { dst: crec, ty: cty, argv_off, argc }, sp_lo); }
+        {
+            let (argv_off, argc) = self.pool_args(&[old]);
+            self.emit(
+                Op::MakeRecord {
+                    dst: crec,
+                    ty: cty,
+                    argv_off,
+                    argc,
+                },
+                sp_lo,
+            );
+        }
         self.locals[idx].reg = crec;
         self.locals[idx].cell = Some(cty);
     }
@@ -481,7 +574,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(cty) = l.cell {
             let d = self.new_reg(l.ty);
             let _ = cty;
-            self.emit(Op::GetF { dst: d, obj: l.reg, field: 0, repr: self.ctx.types.repr_of(l.ty) }, sp_lo);
+            self.emit(
+                Op::GetF {
+                    dst: d,
+                    obj: l.reg,
+                    field: 0,
+                    repr: self.ctx.types.repr_of(l.ty),
+                },
+                sp_lo,
+            );
             return d;
         }
         let reg = self.new_reg(l.ty);
@@ -500,7 +601,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         if l.cell.is_some() {
             let repr = self.ctx.types.repr_of(l.ty);
-            self.emit(Op::SetF { obj: l.reg, field: 0, val, repr }, sp_lo);
+            self.emit(
+                Op::SetF {
+                    obj: l.reg,
+                    field: 0,
+                    val,
+                    repr,
+                },
+                sp_lo,
+            );
         } else {
             self.mov_slot(l.reg, val, l.ty, sp_lo);
         }
@@ -516,7 +625,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         let repr = self.ctx.types.repr_of(ty);
         let frame_reg = self.async_frame.as_ref().map(|f| f.frame_reg).unwrap_or(0);
-        self.emit(Op::SetF { obj: frame_reg, field, val: reg, repr }, sp_lo);
+        self.emit(
+            Op::SetF {
+                obj: frame_reg,
+                field,
+                val: reg,
+                repr,
+            },
+            sp_lo,
+        );
     }
 
     /// A null-slot constant in a fresh register (the DONE sentinel and
@@ -546,7 +663,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         *then_t = target;
                     }
                 }
-                Op::BrTable { table_off, count, default, .. } => {
+                Op::BrTable {
+                    table_off,
+                    count,
+                    default,
+                    ..
+                } => {
                     if is_else {
                         *default = target;
                     } else if *count > 0 {
@@ -564,14 +686,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn br(&mut self, cond: u16, then_l: u32, else_l: u32) {
         self.fixups.push((self.code.len(), then_l, false));
         self.fixups.push((self.code.len(), else_l, true));
-        self.emit(Op::Br { cond, then_t: 0, else_t: 0 }, self.span);
+        self.emit(
+            Op::Br {
+                cond,
+                then_t: 0,
+                else_t: 0,
+            },
+            self.span,
+        );
     }
 
     pub(crate) fn resolve_type_now(&mut self, node: NodeHandle<AnyTy>) -> TypeId {
         // `Self` (bare or under `?`, at any structural depth — the
         // rut-json batch phase 1) binds to the enclosing type inside
         // method bodies
-        self.ctx.resolve_sig_ty_deep(node, &self.subst, self.self_ty)
+        self.ctx
+            .resolve_sig_ty_deep(node, &self.subst, self.self_ty)
     }
 
     pub(crate) fn lookup(&self, name: IdentId) -> Option<&Local> {
@@ -622,5 +752,4 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn leave(&mut self) {
         self.depth -= 1;
     }
-
 }

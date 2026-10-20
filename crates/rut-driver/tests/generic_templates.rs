@@ -44,7 +44,9 @@ fn pkg_world_from_dirs(names: &[&str]) -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
     for d in names {
         world.extend(
-            rut_native::dir_pkgs(&base.join(format!("rut/{d}"))).expect("mount the dir pkg").pkgs,
+            rut_native::dir_pkgs(&base.join(format!("rut/{d}")))
+                .expect("mount the dir pkg")
+                .pkgs,
         );
     }
     world
@@ -58,25 +60,44 @@ fn pkg_world_from_bundles(names: &[&str]) -> Vec<rut_driver::Mounted> {
         // archive, no second mount under other specs
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
-        world.extend(rut_driver::Mounted::from_bundle(&bytes).expect("mount the bundle").pkgs);
+        world.extend(
+            rut_driver::Mounted::from_bundle(&bytes)
+                .expect("mount the bundle")
+                .pkgs,
+        );
     }
     world
 }
 
-fn compile_app(world: Vec<rut_driver::Mounted>, deps: &[&str], src: &str) -> rut_driver::GraphOutput {
-    let loaded = rut_driver::Walk { pkgs: world, root: String::new() };
+fn compile_app(
+    world: Vec<rut_driver::Mounted>,
+    deps: &[&str],
+    src: &str,
+) -> rut_driver::GraphOutput {
+    let loaded = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    };
     let c = loaded
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib("app", deps)))
+        .pkg(
+            rut_driver::Mounted::source("app", src)
+                .manifest(rut_driver::Manifest::lib("app", deps)),
+        )
         .entrypoint("app")
         .compile()
         .expect("the consumer compiles");
     assert!(
         c.graph.diags.is_empty(),
         "diags:\n{}",
-        c.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        c.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     c.graph
 }
@@ -140,7 +161,10 @@ fn bundle_served_bodies_match_the_directory_lane() {
 fn template_served_shapes_run_the_same_answer() {
     // the same consumer, both lanes, one answer — the IR lane's
     // runtime equivalence fence
-    for world in [pkg_world_from_dirs(&["pouch"]), pkg_world_from_bundles(&["pouch"])] {
+    for world in [
+        pkg_world_from_dirs(&["pouch"]),
+        pkg_world_from_bundles(&["pouch"]),
+    ] {
         let graph = compile_app(world, &["pouch"], VEC_APP);
         let prog = graph.program.expect("linked");
         let flat = rut_core::link::flatten(prog);
@@ -235,8 +259,13 @@ fn nmapset_bundle_served_shapes_match_the_directory_lane() {
             .hosts(hosts)
             .build()
             .unwrap_or_else(|e| panic!("{tag}: vm: {e:?}"));
-        let out: i32 = vm.call("main", ()).unwrap_or_else(|e| panic!("{tag}: {e:?}"));
-        assert_eq!(out, 33, "{tag}: the value-typed native dispatch through the served bodies");
+        let out: i32 = vm
+            .call("main", ())
+            .unwrap_or_else(|e| panic!("{tag}: {e:?}"));
+        assert_eq!(
+            out, 33,
+            "{tag}: the value-typed native dispatch through the served bodies"
+        );
     }
 }
 
@@ -248,8 +277,13 @@ fn committed_generic_bundles_carry_template_rows_in_surface_order() {
     for name in ["json", "flow", "pouch", "nmapset"] {
         let bytes = std::fs::read(base.join(format!("dist/std/{name}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
-        for pkg in rut_driver::Mounted::from_bundle(&bytes).expect("mount").pkgs {
-            let rut_driver::MountedBody::Compiled(p) = &pkg.body else { continue };
+        for pkg in rut_driver::Mounted::from_bundle(&bytes)
+            .expect("mount")
+            .pkgs
+        {
+            let rut_driver::MountedBody::Compiled(p) = &pkg.body else {
+                continue;
+            };
             if p.templates.is_empty() {
                 continue; // a concrete-only unit carries no window
             }
@@ -259,7 +293,10 @@ fn committed_generic_bundles_carry_template_rows_in_surface_order() {
                 assert!(
                     t.fid >= p.template_first_fid && t.fid < p.template_end_fid,
                     "{}: template fid {} outside the window [{}, {})",
-                    p.name, t.fid, p.template_first_fid, p.template_end_fid
+                    p.name,
+                    t.fid,
+                    p.template_first_fid,
+                    p.template_end_fid
                 );
                 assert!(
                     !t.param_rows.is_empty(),
@@ -283,7 +320,11 @@ fn committed_generic_bundles_carry_template_rows_in_surface_order() {
                     .iter()
                     .map(|ih| ih.methods.iter().filter(|m| m.local == 0).count())
                     .sum::<usize>()
-                + p.surface.type_exports.iter().filter(|t| t.is_generic).count();
+                + p.surface
+                    .type_exports
+                    .iter()
+                    .filter(|t| t.is_generic)
+                    .count();
             assert!(
                 surface_generics > 0,
                 "{}: templates without an exported generic surface",
@@ -313,11 +354,9 @@ fn v21_binaries_refuse_with_the_standard_version_error() {
 fn strip_with_a_generic_surface_is_legal_and_still_serves_shapes() {
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let pouch_dir = base.join("rut/pouch");
-    let (bytes, _sidecar) = rut_native::pack_dir_opts(
-        &pouch_dir,
-        &rut_driver::pack::PackOpts { strip: true },
-    )
-    .expect("the stripped pouch pack succeeds — the templates cover by construction");
+    let (bytes, _sidecar) =
+        rut_native::pack_dir_opts(&pouch_dir, &rut_driver::pack::PackOpts { strip: true })
+            .expect("the stripped pouch pack succeeds — the templates cover by construction");
     // the stripped bundle carries NO source entries (a host group's
     // `.d.rut` declaration surface is the host envelope, not source)
     let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse");
@@ -329,18 +368,32 @@ fn strip_with_a_generic_surface_is_legal_and_still_serves_shapes() {
         parsed.iter().map(|(n, _)| n).collect::<Vec<_>>()
     );
     // and it still serves a consumer-spelled shape
-    let mut world = rut_driver::Mounted::from_bundle(&bytes).expect("mount the stripped pouch").pkgs;
+    let mut world = rut_driver::Mounted::from_bundle(&bytes)
+        .expect("mount the stripped pouch")
+        .pkgs;
     world.push(
-        rut_driver::Mounted::source("app", VEC_APP).manifest(rut_driver::Manifest::lib("app", &["pouch"])),
+        rut_driver::Mounted::source("app", VEC_APP)
+            .manifest(rut_driver::Manifest::lib("app", &["pouch"])),
     );
-    let c = rut_driver::Walk { pkgs: world, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .expect("the consumer of the stripped bundle compiles");
+    let c = rut_driver::Walk {
+        pkgs: world,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .expect("the consumer of the stripped bundle compiles");
     assert!(
         c.graph.diags.is_empty(),
         "diags:\n{}",
-        c.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n")
+        c.graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     let flat = rut_core::link::flatten(c.graph.program.expect("linked"));
     rut_vm::verify::verify(&flat).expect("verify");
@@ -396,5 +449,8 @@ entry fn main() -> str {
         .build()
         .expect("vm");
     let out: String = vm.call("main", ()).unwrap_or_else(|e| panic!("run: {e:?}"));
-    assert_eq!(out, "n=3:1", "the template-served decode answers the document");
+    assert_eq!(
+        out, "n=3:1",
+        "the template-served decode answers the document"
+    );
 }

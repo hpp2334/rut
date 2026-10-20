@@ -44,7 +44,10 @@ impl Interner {
     /// A fresh interner with the well-known table pre-interned at ids
     /// `0..WELL_KNOWN.len()` — every instance agrees on those ids.
     pub fn new() -> Interner {
-        let mut i = Interner { names: Vec::new(), map: std::collections::HashMap::new() };
+        let mut i = Interner {
+            names: Vec::new(),
+            map: std::collections::HashMap::new(),
+        };
         for s in WELL_KNOWN {
             i.intern(s);
         }
@@ -114,96 +117,96 @@ impl Interner {
 /// The well-known table — **append-only, never reorder** (ids are baked
 /// into every compiled module and every `sym::` constant below).
 pub const WELL_KNOWN: &[&str] = &[
-    "self",       // SELF
-    "Self",       // SELF_TY
-    "nil",        // NIL
-    "main",       // retired row: the id stays fixed (append-only); the
-                  // MAIN const died with the main convention
-    "iterate",    // ITERATE
-    "len",        // LEN
-    "set",        // SET
-    "new",        // NEW
-    "code",       // CODE
-    "encode",     // ENCODE
-    "decode",     // DECODE
-    "slice",      // SLICE
-    "bool",       // BOOL
-    "char",       // CHAR
-    "str",        // STR
-    "bytes",      // BYTES
-    "f32",        // F32
-    "f64",        // F64
-    "i8",         // I8
-    "i16",        // I16
-    "i32",        // I32
-    "i64",        // I64
-    "u8",         // U8
-    "u16",        // U16
-    "u32",        // U32
-    "u64",        // U64
-    "Array",      // ARRAY
-    "opaque",     // OPAQUE
-    "Iterable",   // ITERABLE
-    "downcast",   // DOWNCAST
-    "assert",     // ASSERT
-    "panic",      // PANIC
-    "make_ptr",   // MAKE_PTR
-    "on_drop",    // ON_DROP
-    "string_join", // STRING_JOIN
-    "type_id",    // TYPE_ID
-    "from",       // FROM
-    "zeroed",     // ZEROED
-    "from_code",  // FROM_CODE
-    "buf",        // BUF
-    "wrapping_add",     // WRAPPING_ADD
-    "wrapping_sub",     // WRAPPING_SUB
-    "wrapping_mul",     // WRAPPING_MUL
-    "wrapping_shl",     // WRAPPING_SHL
-    "saturating_add",   // SATURATING_ADD
-    "saturating_sub",   // SATURATING_SUB
-    "saturating_mul",   // SATURATING_MUL
-    "checked_add",      // CHECKED_ADD
-    "checked_sub",      // CHECKED_SUB
-    "checked_mul",      // CHECKED_MUL
-    "NAN",        // NAN
-    "print",      // retired rows: ids stay fixed (append-only), the
-    "size_of",    // consts died with the removal diagnostics
-    "align_of",   // they served
-    "clone",      // CLONE
+    "self", // SELF
+    "Self", // SELF_TY
+    "nil",  // NIL
+    "main", // retired row: the id stays fixed (append-only); the
+    // MAIN const died with the main convention
+    "iterate",            // ITERATE
+    "len",                // LEN
+    "set",                // SET
+    "new",                // NEW
+    "code",               // CODE
+    "encode",             // ENCODE
+    "decode",             // DECODE
+    "slice",              // SLICE
+    "bool",               // BOOL
+    "char",               // CHAR
+    "str",                // STR
+    "bytes",              // BYTES
+    "f32",                // F32
+    "f64",                // F64
+    "i8",                 // I8
+    "i16",                // I16
+    "i32",                // I32
+    "i64",                // I64
+    "u8",                 // U8
+    "u16",                // U16
+    "u32",                // U32
+    "u64",                // U64
+    "Array",              // ARRAY
+    "opaque",             // OPAQUE
+    "Iterable",           // ITERABLE
+    "downcast",           // DOWNCAST
+    "assert",             // ASSERT
+    "panic",              // PANIC
+    "make_ptr",           // MAKE_PTR
+    "on_drop",            // ON_DROP
+    "string_join",        // STRING_JOIN
+    "type_id",            // TYPE_ID
+    "from",               // FROM
+    "zeroed",             // ZEROED
+    "from_code",          // FROM_CODE
+    "buf",                // BUF
+    "wrapping_add",       // WRAPPING_ADD
+    "wrapping_sub",       // WRAPPING_SUB
+    "wrapping_mul",       // WRAPPING_MUL
+    "wrapping_shl",       // WRAPPING_SHL
+    "saturating_add",     // SATURATING_ADD
+    "saturating_sub",     // SATURATING_SUB
+    "saturating_mul",     // SATURATING_MUL
+    "checked_add",        // CHECKED_ADD
+    "checked_sub",        // CHECKED_SUB
+    "checked_mul",        // CHECKED_MUL
+    "NAN",                // NAN
+    "print",              // retired rows: ids stay fixed (append-only), the
+    "size_of",            // consts died with the removal diagnostics
+    "align_of",           // they served
+    "clone",              // CLONE
     "capture_stacktrace", // CAPTURE_STACKTRACE
-    "StackTrace", // STACK_TRACE
-    "name",       // NAME
-    "line",       // LINE
-    "col",        // COL
-    "render",     // RENDER
-    "Opt",        // OPT
-    "code_at",    // CODE_AT
-    "scan",       // SCAN
-    "starts_with", // STARTS_WITH
-    "StrBuf",     // STRBUF
-    "push",       // PUSH
-    "push_code",  // PUSH_CODE
-    "finish",     // FINISH
-    "Weak",       // WEAK
-    "upgrade",    // UPGRADE
+    "StackTrace",         // STACK_TRACE
+    "name",               // NAME
+    "line",               // LINE
+    "col",                // COL
+    "render",             // RENDER
+    "Opt",                // OPT
+    "code_at",            // CODE_AT
+    "scan",               // SCAN
+    "starts_with",        // STARTS_WITH
+    "StrBuf",             // STRBUF
+    "push",               // PUSH
+    "push_code",          // PUSH_CODE
+    "finish",             // FINISH
+    "Weak",               // WEAK
+    "upgrade",            // UPGRADE
     // the Future-only vocabulary: the two
     // engine traits, the cx protocol members, and the standard host
     // set's names. Well-known so every interner agrees on the surface
     // names the weave and the driving loop share.
-    "Future",     // FUTURE
-    "RunContext", // RUN_CONTEXT
-    "yield",      // YIELD
-    "checkpoint", // CHECKPOINT
-    "next_checkpoint", // NEXT_CHECKPOINT
-    "cancelled",  // CANCELLED
-    "abort",      // ABORT
-    "sleep",      // SLEEP
-    "launch_future", // LAUNCH_FUTURE
+    "Future",               // FUTURE
+    "RunContext",           // RUN_CONTEXT
+    "yield",                // YIELD
+    "checkpoint",           // CHECKPOINT
+    "next_checkpoint",      // NEXT_CHECKPOINT
+    "cancelled",            // CANCELLED
+    "abort",                // ABORT
+    "sleep",                // SLEEP
+    "launch_future",        // LAUNCH_FUTURE
     "LaunchedFutureHandle", // LAUNCHED_FUTURE_HANDLE
-    "__launch",   // LAUNCH_RAW
-    "__abort",    // ABORT_RAW
-    "__sleep",    // SLEEP_RAW
-    "__sleep_yield", // SLEEP_YIELD
+    "__launch",             // LAUNCH_RAW
+    "__abort",              // ABORT_RAW
+    "__sleep",              // SLEEP_RAW
+    "__sleep_yield",        // SLEEP_YIELD
     // the disposal surface (the cell-death contract): the engine-woven
     // trait and the context type its one member takes. Well-known so
     // every interner agrees on the surface names.
@@ -511,7 +514,11 @@ mod tests {
         // ids 3 and 51–53) carry no consts — the ids stay fixed
         // (append-only law), the consts died with the conventions and
         // removal diagnostics they served
-        assert_eq!(WELL_KNOWN.len(), cases.len() + 4, "table and cases disagree");
+        assert_eq!(
+            WELL_KNOWN.len(),
+            cases.len() + 4,
+            "table and cases disagree"
+        );
     }
 
     #[test]
@@ -522,7 +529,10 @@ mod tests {
         let c = i.intern("other");
         assert_eq!(a, b);
         assert_ne!(a, c);
-        assert!(a.0 >= i.well_known_len(), "user names start after the table");
+        assert!(
+            a.0 >= i.well_known_len(),
+            "user names start after the table"
+        );
         assert_eq!(i.name(a), "Point");
     }
 
@@ -541,8 +551,7 @@ mod tests {
         let mut i = Interner::new();
         i.intern("Point");
         i.intern("Vec");
-        let tail: Vec<Box<str>> =
-            i.names()[i.well_known_len() as usize..].to_vec();
+        let tail: Vec<Box<str>> = i.names()[i.well_known_len() as usize..].to_vec();
         let mut j = Interner::new();
         j.extend_tail(tail);
         assert_eq!(j.lookup("Point"), i.lookup("Point"));
@@ -573,4 +582,3 @@ mod tests {
         assert!(fresh.0 > vec.0);
     }
 }
-

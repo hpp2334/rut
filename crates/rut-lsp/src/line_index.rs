@@ -15,7 +15,10 @@ impl Default for LineIndex {
     /// real index is built with `new` (this exists only so `DefIndex`
     /// can derive `Default` before its own `index` pass fills the field)
     fn default() -> Self {
-        LineIndex { line_starts: vec![0], len: 0 }
+        LineIndex {
+            line_starts: vec![0],
+            len: 0,
+        }
     }
 }
 
@@ -109,7 +112,7 @@ mod tests {
         let wide = src.find('𝕏').unwrap() as u32;
         let (l, c) = ix.position(src, wide);
         assert_eq!((l, c), (0, 9)); // `let x = "` is 9 UTF-16 units
-        // the char after the astral one sits 2 UTF-16 units later
+                                    // the char after the astral one sits 2 UTF-16 units later
         let after = wide + '𝕏'.len_utf8() as u32;
         assert_eq!(ix.position(src, after), (0, 11));
         assert_eq!(ix.byte(src, 0, 11), after);

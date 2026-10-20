@@ -47,7 +47,10 @@ pub fn analyze(src: &str, mode: Mode) -> Analysis {
     let spans = semantic::classify(&toks, &ast);
     let tokens = encode(&spans, &src, &index);
     let symbols = to_document_symbols(semantic::symbols(&toks, &ast), &src, &index);
-    let diags = diags.iter().map(|d| to_diagnostic(d, &src, &index)).collect();
+    let diags = diags
+        .iter()
+        .map(|d| to_diagnostic(d, &src, &index))
+        .collect();
     Analysis {
         diags,
         tokens,
@@ -62,8 +65,14 @@ pub fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
     let (l1, c1) = index.position(src, span.lo);
     let (l2, c2) = index.position(src, span.hi);
     Range {
-        start: Position { line: l1, character: c1 },
-        end: Position { line: l2, character: c2 },
+        start: Position {
+            line: l1,
+            character: c1,
+        },
+        end: Position {
+            line: l2,
+            character: c2,
+        },
     }
 }
 
@@ -121,7 +130,11 @@ pub(crate) fn to_diagnostic(d: &Diag, src: &str, index: &LineIndex) -> Diagnosti
         code_description: None,
         source: Some("rut".to_string()),
         message,
-        related_information: if related.is_empty() { None } else { Some(related) },
+        related_information: if related.is_empty() {
+            None
+        } else {
+            Some(related)
+        },
         tags: None,
         data: None,
     }
@@ -147,7 +160,9 @@ pub(crate) fn set_related_uri(diags: &mut [Diagnostic], uri: &Uri) {
 pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnostic> {
     let mut out = base;
     for d in extra {
-        let dup = out.iter().any(|e| e.range == d.range && e.message == d.message);
+        let dup = out
+            .iter()
+            .any(|e| e.range == d.range && e.message == d.message);
         if !dup {
             out.push(d);
         }
@@ -209,7 +224,14 @@ fn byte_at(normalized: &str, line: u32, ch: u32) -> u32 {
 /// `doc` is the open document's file-module context (the face's
 /// knowledge) — an own-package use-path segment hover resolves through
 /// it; the default keeps the cross-package lanes only.
-pub fn hover_at(uri: &str, src: &str, extra: &[hover::DefIndex], dm: &crate::mods::DocMods, line: u32, ch: u32) -> Option<Hover> {
+pub fn hover_at(
+    uri: &str,
+    src: &str,
+    extra: &[hover::DefIndex],
+    dm: &crate::mods::DocMods,
+    line: u32,
+    ch: u32,
+) -> Option<Hover> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let h = hover::hover(&idxs, &toks, &ast, dm, byte_at(&normalized, line, ch))?;
@@ -238,10 +260,17 @@ pub fn complete_at(
 ) -> Vec<CompletionItem> {
     let (normalized, toks, ast, doc_index) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc_index, extra);
-    completion::complete(&idxs, &toks, &ast, byte_at(&normalized, line, ch), &normalized, doc)
-        .into_iter()
-        .map(completion::lsp_item)
-        .collect()
+    completion::complete(
+        &idxs,
+        &toks,
+        &ast,
+        byte_at(&normalized, line, ch),
+        &normalized,
+        doc,
+    )
+    .into_iter()
+    .map(completion::lsp_item)
+    .collect()
 }
 
 /// definitions at an LSP position: the survey §3.3 layers (binding pass
@@ -252,7 +281,14 @@ pub fn complete_at(
 /// shim: the extension does). `doc` is the open document's file-module
 /// context — the mod-edge clicks and the own-package use lanes key on
 /// it; the default keeps them off.
-pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], dm: &crate::mods::DocMods, line: u32, ch: u32) -> Vec<definition::DefLocation> {
+pub fn definition_at(
+    uri: &str,
+    src: &str,
+    extra: &[hover::DefIndex],
+    dm: &crate::mods::DocMods,
+    line: u32,
+    ch: u32,
+) -> Vec<definition::DefLocation> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
@@ -267,7 +303,14 @@ pub fn definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], dm: &crate
 
 /// type definitions at an LSP position: the expression's type head →
 /// that type's declaration (the cheap shape the survey priced)
-pub fn type_definition_at(uri: &str, src: &str, extra: &[hover::DefIndex], dm: &crate::mods::DocMods, line: u32, ch: u32) -> Vec<definition::DefLocation> {
+pub fn type_definition_at(
+    uri: &str,
+    src: &str,
+    extra: &[hover::DefIndex],
+    dm: &crate::mods::DocMods,
+    line: u32,
+    ch: u32,
+) -> Vec<definition::DefLocation> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
@@ -295,7 +338,12 @@ pub(crate) fn parse_at(uri: &str, src: &str) -> (Vec<Token>, Ast) {
 /// the same text hover shows), PARAMETER hints at exact-arity call
 /// sites. Returns full LSP values; both faces hand them to their
 /// client as-is.
-pub fn inlay_hints_at(uri: &str, src: &str, extra: &[hover::DefIndex], range: Range) -> Vec<InlayHint> {
+pub fn inlay_hints_at(
+    uri: &str,
+    src: &str,
+    extra: &[hover::DefIndex],
+    range: Range,
+) -> Vec<InlayHint> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let index = LineIndex::new(&normalized);
@@ -344,7 +392,13 @@ pub fn references_at(
 /// renders verbatim, the active parameter comes from the comma/paren
 /// depth at the request position. Ambiguity or arity mismatch → no
 /// help, never wrong help.
-pub fn signature_help_at(uri: &str, src: &str, extra: &[hover::DefIndex], line: u32, ch: u32) -> Option<SignatureHelp> {
+pub fn signature_help_at(
+    uri: &str,
+    src: &str,
+    extra: &[hover::DefIndex],
+    line: u32,
+    ch: u32,
+) -> Option<SignatureHelp> {
     let (normalized, toks, ast, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = signature_help::Ctx {
@@ -366,7 +420,8 @@ fn convert(r: RawSymbol, src: &str, index: &LineIndex) -> DocumentSymbol {
     let range = range_of(index, src, r.range);
     let mut selection = range_of(index, src, r.selection);
     // selectionRange must stay inside range (LSP contract)
-    let inside = (selection.start.line, selection.start.character) >= (range.start.line, range.start.character)
+    let inside = (selection.start.line, selection.start.character)
+        >= (range.start.line, range.start.character)
         && (selection.end.line, selection.end.character) <= (range.end.line, range.end.character);
     if !inside {
         selection = range.clone();
@@ -428,7 +483,11 @@ mod tests {
         let mut ch = 0u32;
         for t in &a.tokens {
             line += t.delta_line;
-            ch = if t.delta_line == 0 { ch + t.delta_start } else { t.delta_start };
+            ch = if t.delta_line == 0 {
+                ch + t.delta_start
+            } else {
+                t.delta_start
+            };
             let byte_lo = {
                 let ix = LineIndex::new(&normalize(src));
                 ix.byte(&normalize(src), line, ch)
@@ -469,7 +528,11 @@ mod tests {
     fn group(module: &str, root: FileSrc) -> PkgFiles {
         let mut files = BTreeMap::new();
         files.insert(String::new(), root);
-        PkgFiles { module: module.to_string(), namespace: None, files }
+        PkgFiles {
+            module: module.to_string(),
+            namespace: None,
+            files,
+        }
     }
 
     #[test]
@@ -522,12 +585,26 @@ mod tests {
         assert!(parse.is_empty(), "the doc parses clean: {parse:?}");
         let dep = group(
             "kit",
-            file("file:///ws/kit/mod.rut", "pub struct Task {\n    id: u32;\n}\n"),
+            file(
+                "file:///ws/kit/mod.rut",
+                "pub struct Task {\n    id: u32;\n}\n",
+            ),
         );
         let app = group("app", file(uri, src));
-        let merged = check::merged_doc_diags(uri, src, Some("app".into()), Some(String::new()), vec![dep, app], parse);
+        let merged = check::merged_doc_diags(
+            uri,
+            src,
+            Some("app".into()),
+            Some(String::new()),
+            vec![dep, app],
+            parse,
+        );
         assert_eq!(merged.len(), 1, "{merged:?}");
-        assert!(merged[0].message.contains("assignment type mismatch"), "{}", merged[0].message);
+        assert!(
+            merged[0].message.contains("assignment type mismatch"),
+            "{}",
+            merged[0].message
+        );
         assert_eq!(merged[0].source.as_deref(), Some("rut"));
         // the range covers the offending assignment (line 3, `checked = true`)
         let norm = rut_lexer::lexer::normalize(src);
@@ -540,15 +617,30 @@ mod tests {
         assert_eq!(merged[0].range, want, "{:?}", merged[0].range);
 
         // half two: the missing record field flags at the literal
-        let src = "use taskkit::{ Task };\nfn main() -> nil {\n    let t = Task { title: \"x\" };\n}\n";
+        let src =
+            "use taskkit::{ Task };\nfn main() -> nil {\n    let t = Task { title: \"x\" };\n}\n";
         let dep = group(
             "taskkit",
-            file("file:///ws/taskkit/mod.rut", "pub struct Task {\n    id: u32;\n    title: str;\n}\n"),
+            file(
+                "file:///ws/taskkit/mod.rut",
+                "pub struct Task {\n    id: u32;\n    title: str;\n}\n",
+            ),
         );
         let app = group("app", file(uri, src));
-        let merged = check::merged_doc_diags(uri, src, Some("app".into()), Some(String::new()), vec![dep, app], Vec::new());
+        let merged = check::merged_doc_diags(
+            uri,
+            src,
+            Some("app".into()),
+            Some(String::new()),
+            vec![dep, app],
+            Vec::new(),
+        );
         assert_eq!(merged.len(), 1, "{merged:?}");
-        assert!(merged[0].message.contains("`id` is missing"), "{}", merged[0].message);
+        assert!(
+            merged[0].message.contains("`id` is missing"),
+            "{}",
+            merged[0].message
+        );
         assert_eq!(merged[0].range.start.line, 2, "the Task literal's line");
 
         // a parse error is NOT doubled: the check lane re-parses the doc,
@@ -557,8 +649,19 @@ mod tests {
         let parse = analyze(bad, Mode::Impl).diags;
         assert_eq!(parse.len(), 1);
         let app = group("app", file(uri, bad));
-        let merged = check::merged_doc_diags(uri, bad, Some("app".into()), Some(String::new()), vec![app], parse);
-        assert_eq!(merged.len(), 1, "the parse diag publishes exactly once: {merged:?}");
+        let merged = check::merged_doc_diags(
+            uri,
+            bad,
+            Some("app".into()),
+            Some(String::new()),
+            vec![app],
+            parse,
+        );
+        assert_eq!(
+            merged.len(),
+            1,
+            "the parse diag publishes exactly once: {merged:?}"
+        );
     }
 
     #[test]
@@ -567,14 +670,37 @@ mod tests {
         // span-0 refusal (`file: None`) — it must not light up anywhere:
         // the merge degrades to the parse set (clean here), never a
         // misplaced squiggle
-        let doc = "use aa::{ A };\nfn main() -> nil {\n    let a = A { x: 1 };\n    let _x = a.x;\n}\n";
+        let doc =
+            "use aa::{ A };\nfn main() -> nil {\n    let a = A { x: 1 };\n    let _x = a.x;\n}\n";
         let uri = "file:///ws/app3/mod.rut";
-        let aa = group("aa", file("file:///ws/aa/mod.rut", "use bb::{ B };\npub struct A {\n    x: i32;\n}\n"));
-        let bb = group("bb", file("file:///ws/bb/mod.rut", "use aa::{ A };\npub struct B {\n    y: i32;\n}\n"));
+        let aa = group(
+            "aa",
+            file(
+                "file:///ws/aa/mod.rut",
+                "use bb::{ B };\npub struct A {\n    x: i32;\n}\n",
+            ),
+        );
+        let bb = group(
+            "bb",
+            file(
+                "file:///ws/bb/mod.rut",
+                "use aa::{ A };\npub struct B {\n    y: i32;\n}\n",
+            ),
+        );
         let app = group("app3", file(uri, doc));
         let parse = analyze(doc, Mode::Impl).diags;
         assert!(parse.is_empty(), "{parse:?}");
-        let merged = check::merged_doc_diags(uri, doc, Some("app3".into()), Some(String::new()), vec![aa, bb, app], parse);
-        assert!(merged.is_empty(), "span-0 refusals publish nothing: {merged:?}");
+        let merged = check::merged_doc_diags(
+            uri,
+            doc,
+            Some("app3".into()),
+            Some(String::new()),
+            vec![aa, bb, app],
+            parse,
+        );
+        assert!(
+            merged.is_empty(),
+            "span-0 refusals publish nothing: {merged:?}"
+        );
     }
 }

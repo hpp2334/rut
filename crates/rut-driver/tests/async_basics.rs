@@ -6,24 +6,25 @@
 // the ink_host logger's recording native — the fmt batch's semantic-test
 // pattern; diagnostics are pinned per message.
 
-use std::collections::BTreeMap;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
-
 
 use rut_driver::lower_decl_module;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
 const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
 
-
-
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
-    graph_of(rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(spec, src)).entrypoint(spec).compile())
+    graph_of(
+        rut_driver::RutRun::new()
+            .pkg(rut_driver::Mounted::source(spec, src))
+            .entrypoint(spec)
+            .compile(),
+    )
 }
 
 /// [`compiled`] with calc offered (the old `mount_std` shape: core
@@ -49,7 +50,10 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     match c {
         Ok(c) => c.graph,
         Err(e) => rut_driver::GraphOutput {
-            diags: vec![rut_lexer::diag::Diag::new(rut_lexer::span::Span::new(0, 0), e.msg)],
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
             program: None,
         },
     }
@@ -59,9 +63,11 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
         .expect("the ink_host surface is valid")
         .named("ink_host");
-    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
+    let mut pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
     pkgs.push(ink_host);
     // the root DECLARES its uses structurally (the async pair + the
     // lowered ink_host surface)
@@ -70,11 +76,21 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
             .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host"])),
     );
     let expected = rut_driver::declared_host_fns(&pkgs);
-    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let compiled = rut_driver::Walk {
+        pkgs: pkgs.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify");
@@ -82,7 +98,10 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let sink2 = sink.clone();
     let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     hosts.verify_against(&expected);
     let limits = Limits {
@@ -90,7 +109,12 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    let vm = Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .expect("vm");
     (vm, sink)
 }
@@ -110,7 +134,10 @@ fn run_loop(vm: &mut Vm, cap: usize) {
             }
         }
     }
-    panic!("the driving loop stalled: {} task(s) pending", vm.pending_tasks());
+    panic!(
+        "the driving loop stalled: {} task(s) pending",
+        vm.pending_tasks()
+    );
 }
 
 #[allow(dead_code)] // the diag lane some scenarios re-arm
@@ -118,9 +145,11 @@ fn diags_of(src: &str) -> Vec<String> {
     let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
         .expect("ink_host")
         .named("ink_host");
-    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
+    let mut pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
     pkgs.push(ink_host);
     // the root DECLARES its uses structurally (the async pair + the
     // lowered ink_host surface)
@@ -128,15 +157,21 @@ fn diags_of(src: &str) -> Vec<String> {
         rut_driver::Mounted::source("app", src)
             .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host"])),
     );
-    rut_driver::Walk { pkgs, root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap()
-        .graph
-        .diags
-        .iter()
-        .map(|d| d.msg.clone())
-        .collect()
+    rut_driver::Walk {
+        pkgs,
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap()
+    .graph
+    .diags
+    .iter()
+    .map(|d| d.msg.clone())
+    .collect()
 }
 
 // ---- the weave runs ----
@@ -268,11 +303,7 @@ entry fn main() -> nil {
     run_loop(&mut vm, 200);
     assert_eq!(
         *sink.borrow(),
-        vec![
-            "victim:park",
-            "killer:aborted",
-            "killer:second-false",
-        ]
+        vec!["victim:park", "killer:aborted", "killer:second-false",]
     );
     // the second abort answering false IS the drop-path observation:
     // the victim's state retired at its checkpoint's drop path before
@@ -392,9 +423,18 @@ entry fn main() -> nil {{
     // releases first (reverse binding order) and the LIFO drain runs its
     // dispose first — after the victim crossed its park
     let lines = sink.borrow().clone();
-    let pa = lines.iter().position(|l| l == "drop:a").expect("drop:a ran");
-    let pb = lines.iter().position(|l| l == "drop:b").expect("drop:b ran");
-    assert!(pb < pa, "reverse declaration order: b before a, got {lines:?}");
+    let pa = lines
+        .iter()
+        .position(|l| l == "drop:a")
+        .expect("drop:a ran");
+    let pb = lines
+        .iter()
+        .position(|l| l == "drop:b")
+        .expect("drop:b ran");
+    assert!(
+        pb < pa,
+        "reverse declaration order: b before a, got {lines:?}"
+    );
     assert!(!lines.iter().any(|l| l == "unreachable"));
     assert!(lines.iter().any(|l| l == "killer:aborted"));
 }
@@ -422,7 +462,10 @@ entry fn main() -> nil {
     let task = vm_first_ready(&mut vm);
     assert!(vm.cancel(task), "abort on a fresh task answers true");
     vm.run_ready().expect("drive the flagged task");
-    assert!(sink.borrow().is_empty(), "the s0 probe saw the flag — the body never ran");
+    assert!(
+        sink.borrow().is_empty(),
+        "the s0 probe saw the flag — the body never ran"
+    );
 }
 
 /// The queued task slot — the test-side stand-in for the receipt's
@@ -525,7 +568,10 @@ entry fn main() -> nil {
     let before = vm.fuel_used;
     vm.run_ready().expect("the drive");
     let after = vm.fuel_used;
-    assert!(after > before, "a drive step charges fuel: {before} -> {after}");
+    assert!(
+        after > before,
+        "a drive step charges fuel: {before} -> {after}"
+    );
     assert_eq!(*sink.borrow(), vec!["ran"]);
 }
 
@@ -603,23 +649,38 @@ entry fn main() -> nil {
     let ink_host = lower_decl_module(INK_HOST_DECL, &BTreeMap::new(), "ink_host.d.rut")
         .expect("the ink_host surface is valid")
         .named("ink_host");
-    let mut pkgs = rut_native::dir_pkgs(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"))
-        .expect("the async pair walks")
-        .pkgs;
+    let mut pkgs = rut_native::dir_pkgs(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/futures"),
+    )
+    .expect("the async pair walks")
+    .pkgs;
     pkgs.push(
-        rut_driver::Mounted::source("kit", KIT).manifest(rut_driver::Manifest::lib("kit", &["futures"])),
+        rut_driver::Mounted::source("kit", KIT)
+            .manifest(rut_driver::Manifest::lib("kit", &["futures"])),
     );
     pkgs.push(ink_host);
     pkgs.push(
-        rut_driver::Mounted::source("app", src)
-            .manifest(rut_driver::Manifest::lib("app", &["futures", "ink_host", "kit"])),
+        rut_driver::Mounted::source("app", src).manifest(rut_driver::Manifest::lib(
+            "app",
+            &["futures", "ink_host", "kit"],
+        )),
     );
     let expected = rut_driver::declared_host_fns(&pkgs);
-    let compiled = rut_driver::Walk { pkgs: pkgs.clone(), root: String::new() }.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint("app")
-        .compile()
-        .unwrap();
-    assert!(compiled.graph.diags.is_empty(), "diags: {:?}", compiled.graph.diags);
+    let compiled = rut_driver::Walk {
+        pkgs: pkgs.clone(),
+        root: String::new(),
+    }
+    .pkgs
+    .iter()
+    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .entrypoint("app")
+    .compile()
+    .unwrap();
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "diags: {:?}",
+        compiled.graph.diags
+    );
     let prog = compiled.graph.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
     rut_vm::verify::verify(&flat).expect("verify — the crossed call's ABI is the wrapper's");
@@ -637,14 +698,19 @@ entry fn main() -> nil {
         "the driven half fills the kit frame's yield slot"
     );
     assert!(
-        flat.funcs.iter().any(|f| flat.interner.name(f.name) == "#start@fetch"),
+        flat.funcs
+            .iter()
+            .any(|f| flat.interner.name(f.name) == "#start@fetch"),
         "the start wrapper rode the kit's fn table"
     );
     let sink = Rc::new(RefCell::new(Vec::<String>::new()));
     let sink2 = sink.clone();
     let ctx = rut_driver::host_pkg_ctx(&pkgs);
     let mut hosts = HostRegistry::new();
-    hosts.install_host_pkg(&ctx, rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())));
+    hosts.install_host_pkg(
+        &ctx,
+        rut_std::logger::pkg(move |m| sink2.borrow_mut().push(m.to_string())),
+    );
     hosts.install_host_pkg(&ctx, rut_std::async_host::pkg());
     hosts.verify_against(&expected);
     let limits = Limits {
@@ -652,7 +718,12 @@ entry fn main() -> nil {
         heap_limit_bytes: Some(16 * 1024 * 1024),
         interrupt_every: 1024,
     };
-    let mut vm = Vm::builder().program(Rc::new(flat)).limits(limits).hooks(rut_vm::interp::HostHooks::default()).hosts(hosts).build()
+    let mut vm = Vm::builder()
+        .program(Rc::new(flat))
+        .limits(limits)
+        .hooks(rut_vm::interp::HostHooks::default())
+        .hosts(hosts)
+        .build()
         .expect("vm");
     vm.call::<_, ()>("main", ()).expect("main");
     run_loop(&mut vm, 100);

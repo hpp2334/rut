@@ -11,7 +11,11 @@ pub fn build_table<M: Machine>() -> Table<M> {
     Table(core::marker::PhantomData)
 }
 
-pub fn run<M: Machine>(m: &mut M, pc0: u32, _table: &Table<M>) -> Result<ThreadOut<M::Out>, M::Err> {
+pub fn run<M: Machine>(
+    m: &mut M,
+    pc0: u32,
+    _table: &Table<M>,
+) -> Result<ThreadOut<M::Out>, M::Err> {
     let st = m.thread_state();
     let (mut code, mut tags, mut regs) = (st.code, st.tags, st.regs);
     let mut pc = pc0;

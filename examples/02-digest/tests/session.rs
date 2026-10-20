@@ -23,13 +23,11 @@ fn warm(base: &Path) -> rut_native::HttpRemote {
     // shared root would race the prime (remove/write/rename)
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let root = std::env::temp_dir()
-        .join(format!("rut-02-digest-cache-{}-{n}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("rut-02-digest-cache-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let remote = rut_native::HttpRemote::at(&root);
     let manifest_text = std::fs::read_to_string(base.join("rut.jsonc")).expect("rut.jsonc");
-    let manifest =
-        rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
+    let manifest = rut_driver::bundle::parse_manifest(&manifest_text).expect("parse rut.jsonc");
     let dist = base.join("../../dist/std-v12");
     for desc in manifest.deps.values() {
         let Some(url) = desc.get("url") else { continue };
@@ -79,7 +77,17 @@ fn session(fuel: u64, heap: u64) -> rut_vm::interp::Vm {
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");
-    assert!(compiled.graph.diags.is_empty(), "{}", compiled.graph.diags.iter().map(|d| d.msg.clone()).collect::<Vec<_>>().join("\n"));
+    assert!(
+        compiled.graph.diags.is_empty(),
+        "{}",
+        compiled
+            .graph
+            .diags
+            .iter()
+            .map(|d| d.msg.clone())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
     rut_vm::verify::verify(compiled.graph.program.as_ref().expect("no binary emitted")).unwrap();
     let limits = rut_vm::interp::Limits {
         fuel: Some(fuel),
@@ -143,7 +151,11 @@ fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
 fn rut_json_roundtrip(vm: &mut rut_vm::interp::Vm, s: &str) -> Result<String, String> {
     // v1.1 error convention: `(T, err)` — position 1 carries the message
     let (out, e): (String, String) = vm.call("json_roundtrip", (s,)).unwrap();
-    if e.is_empty() { Ok(out) } else { Err(e) }
+    if e.is_empty() {
+        Ok(out)
+    } else {
+        Err(e)
+    }
 }
 fn rut_sample_doc(vm: &mut rut_vm::interp::Vm) -> OpaqueRef {
     vm.call("sample_doc", ()).unwrap()
@@ -179,23 +191,54 @@ fn official_vectors() {
         ("a", "0cc175b9c0f1b6a831c399e269772661"),
         ("abc", "900150983cd24fb0d6963f7d28e17f72"),
         ("message digest", "f96b697d7cb7938d525a2f31aaf161d0"),
-        ("abcdefghijklmnopqrstuvwxyz", "c3fcd3d76192e4007dfb496cca67e13b"),
-        ("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "d174ab98d277d9f5a5611c2c9f419d9f"),
-        ("12345678901234567890123456789012345678901234567890123456789012345678901234567890", "57edf4a22be3c955ac49da2e2107b67a"),
+        (
+            "abcdefghijklmnopqrstuvwxyz",
+            "c3fcd3d76192e4007dfb496cca67e13b",
+        ),
+        (
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+            "d174ab98d277d9f5a5611c2c9f419d9f",
+        ),
+        (
+            "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+            "57edf4a22be3c955ac49da2e2107b67a",
+        ),
     ] {
-        assert_eq!(rut_digest(&mut vm, "md5", msg.as_bytes()), want, "md5({msg:?})");
+        assert_eq!(
+            rut_digest(&mut vm, "md5", msg.as_bytes()),
+            want,
+            "md5({msg:?})"
+        );
     }
     // FIPS 180-4 examples: empty, "abc", and the classic two-block message
     let two_block = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
     let sha512_two_block = "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu";
-    assert_eq!(rut_digest(&mut vm, "sha1", b""), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
-    assert_eq!(rut_digest(&mut vm, "sha256", b""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    assert_eq!(
+        rut_digest(&mut vm, "sha1", b""),
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+    );
+    assert_eq!(
+        rut_digest(&mut vm, "sha256", b""),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
     assert_eq!(rut_digest(&mut vm, "sha512", b""), "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e");
-    assert_eq!(rut_digest(&mut vm, "sha1", b"abc"), "a9993e364706816aba3e25717850c26c9cd0d89d");
-    assert_eq!(rut_digest(&mut vm, "sha256", b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    assert_eq!(
+        rut_digest(&mut vm, "sha1", b"abc"),
+        "a9993e364706816aba3e25717850c26c9cd0d89d"
+    );
+    assert_eq!(
+        rut_digest(&mut vm, "sha256", b"abc"),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
     assert_eq!(rut_digest(&mut vm, "sha512", b"abc"), "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f");
-    assert_eq!(rut_digest(&mut vm, "sha1", two_block.as_bytes()), "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
-    assert_eq!(rut_digest(&mut vm, "sha256", two_block.as_bytes()), "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
+    assert_eq!(
+        rut_digest(&mut vm, "sha1", two_block.as_bytes()),
+        "84983e441c3bd26ebaae4aa1f95129e5e54670f1"
+    );
+    assert_eq!(
+        rut_digest(&mut vm, "sha256", two_block.as_bytes()),
+        "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+    );
     assert_eq!(rut_digest(&mut vm, "sha512", sha512_two_block.as_bytes()), "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909");
 }
 
@@ -203,13 +246,31 @@ fn official_vectors() {
 fn crate_cross_check_on_padding_edges() {
     let mut vm = session(100_000_000, 64 * 1024 * 1024);
     // every length class around the block/padding boundaries, plus randoms
-    let lens: Vec<usize> = vec![0, 1, 2, 3, 54, 55, 56, 57, 63, 64, 65, 111, 112, 113, 119, 120, 127, 128, 129, 200];
+    let lens: Vec<usize> = vec![
+        0, 1, 2, 3, 54, 55, 56, 57, 63, 64, 65, 111, 112, 113, 119, 120, 127, 128, 129, 200,
+    ];
     for (i, &n) in lens.iter().enumerate() {
         let data = lcg(n, 7 + i as u32);
-        assert_eq!(rut_digest(&mut vm, "md5", &data), md5_hex(&data), "md5 len {n}");
-        assert_eq!(rut_digest(&mut vm, "sha1", &data), sha1_hex(&data), "sha1 len {n}");
-        assert_eq!(rut_digest(&mut vm, "sha256", &data), sha256_hex(&data), "sha256 len {n}");
-        assert_eq!(rut_digest(&mut vm, "sha512", &data), sha512_hex(&data), "sha512 len {n}");
+        assert_eq!(
+            rut_digest(&mut vm, "md5", &data),
+            md5_hex(&data),
+            "md5 len {n}"
+        );
+        assert_eq!(
+            rut_digest(&mut vm, "sha1", &data),
+            sha1_hex(&data),
+            "sha1 len {n}"
+        );
+        assert_eq!(
+            rut_digest(&mut vm, "sha256", &data),
+            sha256_hex(&data),
+            "sha256 len {n}"
+        );
+        assert_eq!(
+            rut_digest(&mut vm, "sha512", &data),
+            sha512_hex(&data),
+            "sha512 len {n}"
+        );
         // base64 both directions, both alphabets
         for url in [false, true] {
             let enc = rut_b64_enc(&mut vm, &data, url);
@@ -252,7 +313,7 @@ fn base64_rfc4648_and_errors() {
     // errors
     let (_v, e): (Vec<u8>, String) = vm.call("b64_dec", ("!*", false)).unwrap();
     assert!(e.contains("invalid"));
-        let (_v, e): (Vec<u8>, String) = vm.call("b64_dec", ("Zg==Zg==", false)).unwrap();
+    let (_v, e): (Vec<u8>, String) = vm.call("b64_dec", ("Zg==Zg==", false)).unwrap();
     assert!(e.contains("after padding"));
 }
 
@@ -269,9 +330,9 @@ fn hex_roundtrip_and_errors() {
     assert_eq!(up, "deadbeef");
     let dec = rut_hex_dec(&mut vm, "DEADBEEF");
     assert_eq!(dec, b"\xde\xad\xbe\xef".to_vec());
-        let (_v, e): (Vec<u8>, String) = vm.call("hex_dec", ("zz",)).unwrap();
+    let (_v, e): (Vec<u8>, String) = vm.call("hex_dec", ("zz",)).unwrap();
     assert!(e.contains("invalid"));
-        let (_v, e): (Vec<u8>, String) = vm.call("hex_dec", ("abc",)).unwrap();
+    let (_v, e): (Vec<u8>, String) = vm.call("hex_dec", ("abc",)).unwrap();
     assert!(e.contains("odd"));
 }
 
@@ -281,7 +342,10 @@ fn hash_key_vectors_and_cross_check() {
     // catalogue anchors
     assert_eq!(rut_crc32(&mut vm, &[]), 0);
     assert_eq!(rut_crc32(&mut vm, b"123456789"), 0xCBF43926);
-    assert_eq!(rut_crc32(&mut vm, b"The quick brown fox jumps over the lazy dog"), 0x414FA339);
+    assert_eq!(
+        rut_crc32(&mut vm, b"The quick brown fox jumps over the lazy dog"),
+        0x414FA339
+    );
     assert_eq!(rut_fnv1a32(&mut vm, &[]), 0x811C9DC5);
     assert_eq!(rut_fnv1a32(&mut vm, b"a"), 0xE40C292C);
     assert_eq!(rut_fnv1a32(&mut vm, b"foobar"), 0xBF9CF968);
@@ -324,9 +388,21 @@ fn hash_key_vectors_and_cross_check() {
     };
     for i in 0..20usize {
         let data = lcg(50 * i, 100 + i as u32);
-        assert_eq!(rut_crc32(&mut vm, &data), crc32fast::hash(&data), "crc32 #{i}");
-        assert_eq!(rut_fnv1a32(&mut vm, &data), fnv32_ref(&data), "fnv1a32 #{i}");
-        assert_eq!(rut_fnv1a64(&mut vm, &data), fnv64_ref(&data), "fnv1a64 #{i}");
+        assert_eq!(
+            rut_crc32(&mut vm, &data),
+            crc32fast::hash(&data),
+            "crc32 #{i}"
+        );
+        assert_eq!(
+            rut_fnv1a32(&mut vm, &data),
+            fnv32_ref(&data),
+            "fnv1a32 #{i}"
+        );
+        assert_eq!(
+            rut_fnv1a64(&mut vm, &data),
+            fnv64_ref(&data),
+            "fnv1a64 #{i}"
+        );
         assert_eq!(rut_djb2(&mut vm, &data), djb2_ref(&data), "djb2 #{i}");
         assert_eq!(rut_sdbm(&mut vm, &data), sdbm_ref(&data), "sdbm #{i}");
     }
@@ -337,7 +413,11 @@ fn json_codec_against_serde() {
     let mut vm = session(200_000_000, 32 * 1024 * 1024);
     let roundtrip = |vm: &mut rut_vm::interp::Vm, s: &str| -> Result<String, String> {
         let (out, e): (String, String) = vm.call("json_roundtrip", (s,)).unwrap();
-        if e.is_empty() { Ok(out) } else { Err(e) }
+        if e.is_empty() {
+            Ok(out)
+        } else {
+            Err(e)
+        }
     };
     let docs = [
         r#"{}"#,
@@ -362,7 +442,8 @@ fn json_codec_against_serde() {
     ];
     for doc in docs {
         let out = roundtrip(&mut vm, doc).unwrap_or_else(|e| panic!("{doc:?}: {e}"));
-        let rut_v = serde_json::from_str::<serde_json::Value>(&out).unwrap_or_else(|e| panic!("{doc:?} -> {out:?}: {e}"));
+        let rut_v = serde_json::from_str::<serde_json::Value>(&out)
+            .unwrap_or_else(|e| panic!("{doc:?} -> {out:?}: {e}"));
         let ref_v = serde_json::from_str::<serde_json::Value>(doc).unwrap();
         assert_eq!(rut_v, ref_v, "{doc:?}");
         // canonical form is idempotent
@@ -370,13 +451,19 @@ fn json_codec_against_serde() {
         assert_eq!(again, out, "idempotence for {doc:?}");
     }
     // canonical shape: compact, insertion order, minimal escapes
-    assert_eq!(roundtrip(&mut vm, r#"{"b":1,"a":2}"#).unwrap(), r#"{"b":1,"a":2}"#);
+    assert_eq!(
+        roundtrip(&mut vm, r#"{"b":1,"a":2}"#).unwrap(),
+        r#"{"b":1,"a":2}"#
+    );
     assert_eq!(roundtrip(&mut vm, " [ 1 , 2 ] ").unwrap(), "[1,2]");
     assert_eq!(roundtrip(&mut vm, r#""""#).unwrap(), r#""""#);
     // sample_doc encodes to valid JSON
     let doc: OpaqueRef = vm.call("sample_doc", ()).unwrap();
     let enc: String = vm.call("json_enc", (doc,)).unwrap();
-    assert_eq!(enc, r#"{"name":"rut","version":0.2,"tags":["tiny","fast","verified"],"meta":{"ok":true,"lines":607}}"#);
+    assert_eq!(
+        enc,
+        r#"{"name":"rut","version":0.2,"tags":["tiny","fast","verified"],"meta":{"ok":true,"lines":607}}"#
+    );
     serde_json::from_str::<serde_json::Value>(&enc).unwrap();
     // error paths
     for (bad, needle) in [
@@ -429,7 +516,6 @@ fn stress_8k_under_raised_budgets() {
     assert_eq!(rut_digest(&mut vm, "sha256", &data), sha256_hex(&data));
     assert_eq!(rut_digest(&mut vm, "sha512", &data), sha512_hex(&data));
     assert!(vm.fuel_used < 500_000_000);
-
 }
 
 #[test]
@@ -437,6 +523,8 @@ fn wrong_kind_arguments_trap_cleanly() {
     let mut vm = session(1_000_000, 8 * 1024 * 1024);
     let err = vm.call::<_, u32>("crc32", ("not bytes",)).unwrap_err();
     assert!(err.msg.contains("argument"), "{err:?}");
-    let err = vm.call::<_, (Vec<u8>, String)>("hex_dec", (vec![1u8],)).unwrap_err();
+    let err = vm
+        .call::<_, (Vec<u8>, String)>("hex_dec", (vec![1u8],))
+        .unwrap_err();
     assert!(err.msg.contains("argument"), "{err:?}");
 }
