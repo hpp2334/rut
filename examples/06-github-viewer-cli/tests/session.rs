@@ -31,6 +31,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// The fixture file store the fake backend's cells point into.
+type Store = Rc<RefCell<Vec<(char, String, Vec<u8>)>>>;
+
 use rut_std::http::{FixtureReply, HttpFixture};
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
@@ -59,7 +62,7 @@ struct Sinks {
     /// every `eprint` line, in order
     err: Rc<RefCell<Vec<String>>>,
     /// every successful file row: ("W"/"A" for write/append, dest, bytes)
-    files: Rc<RefCell<Vec<(char, String, Vec<u8>)>>>,
+    files: Store,
     /// when set, a write/append to this dest answers this io error text
     fail_write: Rc<RefCell<Option<(String, String)>>>,
     /// the `exit` row's code (the recording lane's one-way door)
@@ -644,9 +647,7 @@ fn download_streams_text_to_explicit_dest_in_small_chunks() {
     assert_eq!(appends, nchunks, "one append row per streamed chunk");
     assert_eq!(
         sinks.out_lines(),
-        [format!(
-            "downloaded test/data/text.txt (287 bytes) -> /tmp/rgh-text.txt"
-        )]
+        ["downloaded test/data/text.txt (287 bytes) -> /tmp/rgh-text.txt".to_string()]
     );
 }
 

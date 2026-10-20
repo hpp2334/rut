@@ -146,6 +146,7 @@ impl Session {
     /// take/replace access to a mounted pkg's body (a stripped
     /// bundle's sidecar restores names + positions in place, before the
     /// graph compiles). Same miss diagnostics as [`Session::resolve`].
+    #[allow(dead_code)] // the stripped-bundle sidecar lane applies in place — not wired yet
     pub(crate) fn resolve_mut(&mut self, spec: &str) -> Result<&mut Mounted, ResolveError> {
         if !valid_mount_key(spec) {
             return Err(ResolveError::BadSpec {
@@ -336,6 +337,7 @@ impl Session {
 
     /// Take every mounted pkg out — the walk collectors' yield
     /// (`Walk`): the session dies, the pkgs travel.
+    #[allow(dead_code)] // the walk collectors' yield — not wired yet
     pub(crate) fn drain_pkgs(&mut self) -> Vec<Mounted> {
         self.modules.values().cloned().collect()
     }

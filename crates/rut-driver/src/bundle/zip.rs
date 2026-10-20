@@ -90,6 +90,10 @@ pub(crate) fn read_archive(data: &[u8]) -> Result<Vec<ZipEntry>, ZipLayerError> 
         let name = std::str::from_utf8(file.name_raw())
             .map_err(|_| ZipLayerError::Corrupt("entry name is not UTF-8".into()))?
             .to_string();
+        // the wire spells the raw method id; the zip crate deprecated
+        // the only accessor that produces it (the enum's constants
+        // don't round-trip to ids)
+        #[allow(deprecated)]
         let method = file.compression().to_u16();
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).map_err(|e| {

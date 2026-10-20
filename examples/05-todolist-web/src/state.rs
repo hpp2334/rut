@@ -208,16 +208,15 @@ pub fn drain_queue<D: DomBackend>(
     }
 }
 
+/// The weak-handle slot type: the state half of [`weak_sink_slot`].
+pub type WeakStateSlot<D> = Rc<RefCell<Option<std::rc::Weak<RefCell<WebState<D>>>>>>;
+
 /// A sink that routes through a weak handle back into the state — the
 /// weak breaks the `state → dom → sink → state` cycle, so the page
 /// state drops with its owner. The twin and the wasm32 boot both use
 /// the slot (the wasm sink wraps this one with a pump).
-pub fn weak_sink_slot<D: DomBackend>() -> (
-    Rc<RefCell<Option<std::rc::Weak<RefCell<WebState<D>>>>>>,
-    EvSink,
-) {
-    let slot: Rc<RefCell<Option<std::rc::Weak<RefCell<WebState<D>>>>>> =
-        Rc::new(RefCell::new(None));
+pub fn weak_sink_slot<D: DomBackend>() -> (WeakStateSlot<D>, EvSink) {
+    let slot: WeakStateSlot<D> = Rc::new(RefCell::new(None));
     let s = slot.clone();
     let sink: EvSink = Rc::new(move |ev: Ev| {
         if let Some(state) = s.borrow().as_ref().and_then(std::rc::Weak::upgrade) {
@@ -228,10 +227,7 @@ pub fn weak_sink_slot<D: DomBackend>() -> (
 }
 
 /// Point a weak sink at its state (call once the `Rc` exists).
-pub fn bind_weak_sink<D: DomBackend>(
-    slot: &Rc<RefCell<Option<std::rc::Weak<RefCell<WebState<D>>>>>>,
-    state: &Rc<RefCell<WebState<D>>>,
-) {
+pub fn bind_weak_sink<D: DomBackend>(slot: &WeakStateSlot<D>, state: &Rc<RefCell<WebState<D>>>) {
     *slot.borrow_mut() = Some(Rc::downgrade(state));
 }
 

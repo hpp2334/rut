@@ -135,6 +135,7 @@ struct Cx<'a> {
 }
 
 impl Cx<'_> {
+    #[allow(clippy::too_many_arguments)] // a binding row IS this many fields
     fn push(
         &mut self,
         name: &str,
@@ -371,11 +372,8 @@ impl Cx<'_> {
                     }
                 }
             }
-            Kind::Stmt(StmtKind::Return { value }) => {
-                if let Some(v) = value {
-                    self.walk_expr(*v);
-                }
-            }
+            Kind::Stmt(StmtKind::Return { value: Some(v) }) => self.walk_expr(*v),
+            Kind::Stmt(StmtKind::Return { value: None }) => {}
             Kind::Stmt(StmtKind::ExprStmt(e)) => self.walk_expr(*e),
             _ => {}
         }

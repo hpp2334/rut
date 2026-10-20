@@ -227,10 +227,10 @@ fn book_blocks_compile_and_run() {
             // tasks and advance the virtual clock — idle without launches
             if !vm.is_running() {
                 for _ in 0..1_000_000 {
-                    if vm.run_ready().is_err() || vm.next_deadline().is_none() {
-                        if vm.pending_tasks() == 0 {
-                            break;
-                        }
+                    if (vm.run_ready().is_err() || vm.next_deadline().is_none())
+                        && vm.pending_tasks() == 0
+                    {
+                        break;
                     }
                 }
             }

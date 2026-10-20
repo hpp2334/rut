@@ -67,7 +67,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 /// Compile, flatten, verify, and run `main` — the i32 checksum.
 fn run_main(src: &str) -> i32 {
-    let out = compiled("app_main", &src);
+    let out = compiled("app_main", src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let prog = out.program.expect("linked program");
     let flat = rut_core::link::flatten(prog);
@@ -89,7 +89,7 @@ fn run_main(src: &str) -> i32 {
 
 /// Compile for inspection: returns the flattened program + a ready Vm.
 fn compile_vm(src: &str) -> (rut_core::binary::Program, rut_vm::interp::Vm) {
-    let out = compiled("app_main", &src);
+    let out = compiled("app_main", src);
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let flat = rut_core::link::flatten(out.program.expect("linked program"));
     rut_vm::verify::verify(&flat).expect("verify");

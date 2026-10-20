@@ -6,9 +6,6 @@
 //! all-or-nothing), and the third-party adapter crosses modules on the
 //! surface row's flag.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use rut_parser::Mode;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 

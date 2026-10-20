@@ -208,7 +208,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     );
                     return Err(());
                 }
-                for (node, c) in arg_nodes.iter().zip(concrete.into_iter()) {
+                for (node, c) in arg_nodes.iter().zip(concrete) {
                     self.unify_generic(*node, c, decl_generics, subst, sp)?;
                 }
                 Ok(())
@@ -286,7 +286,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     );
                     return Err(());
                 }
-                for (node, c) in arg_nodes.iter().zip(concrete.into_iter()) {
+                for (node, c) in arg_nodes.iter().zip(concrete) {
                     self.unify_generic(*node, c, decl_generics, subst, sp)?;
                 }
                 Ok(())

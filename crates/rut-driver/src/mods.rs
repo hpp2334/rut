@@ -165,6 +165,7 @@ fn file_display(parent: &str, file: &str) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn mount_rec(
     parent: &str,
     parent_file: &str,
@@ -425,7 +426,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     // every DECLARED child must be mounted (the loader's law; a
     // hand-offered pkg that disagrees is named, never guessed around)
     let mut check_declared = |parent: &str, declared: &BTreeMap<String, Vis>| {
-        for (name, _) in declared {
+        for name in declared.keys() {
             let child = if parent.is_empty() {
                 name.clone()
             } else {
@@ -670,7 +671,7 @@ mod tests {
         /// map keyed by that physical shape)
         fn lookup_file_form(&mut self, parent: &str, name: &str) -> Result<ChildLookup, String> {
             let dir = if parent.is_empty() {
-                format!("{name}")
+                name.to_string()
             } else {
                 format!("{parent}/{name}")
             };

@@ -249,7 +249,7 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
     // the removed `impl Disposal for Q` spelling dies at the parser
     // (the `for` branch is deleted from the impl grammar — disposal is
     // the `[disposal]` marker on the type's own inherent impl)
-    let gone = format!("use core::{{ DisposalContext }};\nclass Q {{ }}\nimpl Disposal for Q {{ fn dispose(mut self, cx: DisposalContext) {{ }} }}\nentry fn main() -> i32 {{ return 0; }}\n");
+    let gone = "use core::{ DisposalContext };\nclass Q { }\nimpl Disposal for Q { fn dispose(mut self, cx: DisposalContext) { } }\nentry fn main() -> i32 { return 0; }\n".to_string();
     let out = rut_driver::compile_module(&gone, rut_parser::Mode::Impl, "app_main");
     assert!(
         out.diags

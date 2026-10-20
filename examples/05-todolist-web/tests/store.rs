@@ -449,7 +449,7 @@ fn the_counts_line_is_derived_and_the_status_line_reads_it() {
 
 #[test]
 fn deriveds_recompute_upstream_first_and_feed_downstream_fresh() {
-    let (mut v, c) = vm();
+    let (mut v, _c) = vm();
     let p: OpaqueRef = v.call("probes_new", ()).unwrap();
     // the first pull computes the whole chain in topo order: up, then
     // down, downstream fed the FRESH upstream
@@ -475,7 +475,7 @@ fn an_upstream_only_recompute_still_refreshes_downstream() {
     // gen, and downstream keys on THAT — so a turn whose only move is
     // upstream's recompute (here: up's formula input changed through a
     // second bump before down ever pulled) still refreshes down.
-    let (mut v, c) = vm();
+    let (mut v, _c) = vm();
     let p: OpaqueRef = v.call("probes_new", ()).unwrap();
     assert_eq!(v.call::<_, i64>("probe_lower", (p.clone(),)).unwrap(), 0);
     assert_eq!(
@@ -499,7 +499,7 @@ fn an_upstream_only_recompute_still_refreshes_downstream() {
 
 #[test]
 fn a_discovered_cycle_dies_loud() {
-    let (mut v, c) = vm();
+    let (mut v, _c) = vm();
     let p: OpaqueRef = v.call("probes_cycle_new", ()).unwrap();
     let err = v.call::<_, i64>("probe_cycle_get", (p,)).unwrap_err();
     assert!(

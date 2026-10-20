@@ -371,7 +371,7 @@ fn opt_lookup_mut<'a>(
                     "view over a non-array backing",
                 )));
             };
-            let mut d = items.borrow_mut();
+            let d = items.borrow_mut();
             if i < 0 || i as u32 >= *len {
                 return Some(Err(Trap::new(
                     TrapKind::IndexOutOfBounds,

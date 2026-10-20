@@ -144,7 +144,7 @@ mod tests {
         assert!(parse_identity("ut-il@0123456789abcdef").is_none());
         assert!(parse_identity("util").is_none());
         // the separator cannot collide with a real name
-        assert!(valid_spec("util@0123456789abcdef") == false);
+        assert!(!valid_spec("util@0123456789abcdef"));
         assert!(valid_mount_key("util"));
         assert!(valid_mount_key("util@0123456789abcdef"));
         assert!(!valid_mount_key("ut-il"));

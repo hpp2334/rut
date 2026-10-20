@@ -110,14 +110,14 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
     let ctx = rut_driver::host_pkg_ctx(&loaded.pkgs);
     let mut hosts = HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::strbuild::pkg());
-    let mut vm = Vm::builder()
+
+    Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
         .hooks(HostHooks::default())
         .hosts(hosts)
         .build()
-        .expect("vm");
-    vm
+        .expect("vm")
 }
 
 /// Every fixture entry answers `OK` or a `BAD:<claim>` string naming

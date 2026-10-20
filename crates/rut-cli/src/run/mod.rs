@@ -40,7 +40,7 @@ pub(crate) fn run(args: &RunArgs) {
     let symbols = args.symbols.clone();
     let entry = args.entry.clone();
     let p = door::admit(path, symbols.as_deref());
-    if p.extension().map_or(false, |e| e == "rutbundle") {
+    if p.extension().is_some_and(|e| e == "rutbundle") {
         // a packed archive: decode once, restore on the handle, offer
         let bytes = match std::fs::read(p) {
             Ok(b) => b,
@@ -122,22 +122,17 @@ pub(crate) fn run(args: &RunArgs) {
     // cache-only remote — the closure was just loaded offline, so
     // every url dep is cached and the wire never fires.
     let remote = cache::offline_remote_for(p);
-    match cache::block_on(rut_native::pack_dir_opts_with(
+    if let Ok((bytes, _)) = cache::block_on(rut_native::pack_dir_opts_with(
         p,
         &rut_driver::PackOpts::default(),
         &remote,
     )) {
-        Ok((bytes, _)) => {
-            // `None` = the closure cannot be cached honestly (unkeyable,
-            // or a `<uncached>` url key — dead by construction); the
-            // entry is skipped rather than written where no run can hit it
-            if let Ok(Some(cache_path)) = cache::run_cache_path(p) {
-                cache::store_run_cache(&cache_path, &bytes);
-            }
+        // `None` = the closure cannot be cached honestly (unkeyable,
+        // or a `<uncached>` url key — dead by construction); the
+        // entry is skipped rather than written where no run can hit it
+        if let Ok(Some(cache_path)) = cache::run_cache_path(p) {
+            cache::store_run_cache(&cache_path, &bytes);
         }
-        // the program ran fine; the pack lane's refusal (a url-dep
-        // closure it cannot re-emit) only costs the cache entry
-        Err(_) => {}
     }
 }
 

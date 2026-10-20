@@ -26,6 +26,7 @@
 //!    the install leaves `map_new` unbound at `Vm::new`. One
 //!    registration block in `crates/rut-std/src/nmap.rs` (the fused sv
 //!    helpers already sit beside it) unblocks every case.
+//!
 //! The spellings below are the target surface; when the two land, the
 //! suite goes green without further edits.
 
@@ -47,7 +48,8 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
     // pouch + nmapset ride inside it, so the consumer mounts ONE bundle
     // — a second standalone pouch/nmapset would mount the same pkg
     // twice under two specs and split the instantiation ledger
-    for b in ["flow"] {
+    {
+        let b = "flow";
         let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
         world.extend(

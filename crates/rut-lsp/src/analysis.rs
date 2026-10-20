@@ -424,7 +424,7 @@ fn convert(r: RawSymbol, src: &str, index: &LineIndex) -> DocumentSymbol {
         >= (range.start.line, range.start.character)
         && (selection.end.line, selection.end.character) <= (range.end.line, range.end.character);
     if !inside {
-        selection = range.clone();
+        selection = range;
     }
     DocumentSymbol {
         name: r.name,

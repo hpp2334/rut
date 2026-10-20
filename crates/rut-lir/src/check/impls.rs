@@ -67,7 +67,7 @@ impl<'a> Ctx<'a> {
         concrete: TypeId,
         iface_id: u32,
     ) -> Result<(), String> {
-        let tname = self.iface_base_name(iface_id);
+        let _tname = self.iface_base_name(iface_id);
         // the member-visibility law: satisfaction is checked where the
         // members are VISIBLE. A requester-carried type row (an
         // owner-anchored mirror body sees the consumer's seed block —
@@ -226,14 +226,10 @@ impl<'a> Ctx<'a> {
                     .unwrap_or(TY_NIL);
                 out.push(MemberReq {
                     name: md.name,
-                    self_form: md
-                        .params
-                        .first()
-                        .map(|p| match self.ast.param(*p) {
-                            MemberKind::SelfParam(sd) => Some(sd.is_mut),
-                            _ => None,
-                        })
-                        .flatten(),
+                    self_form: md.params.first().and_then(|p| match self.ast.param(*p) {
+                        MemberKind::SelfParam(sd) => Some(sd.is_mut),
+                        _ => None,
+                    }),
                     is_async: Some(md.is_async),
                     ptys,
                     ret,
@@ -389,14 +385,10 @@ impl<'a> Ctx<'a> {
                     .ret
                     .map(|r| self.resolve_sig_ty(r, env, Some(concrete)))
                     .unwrap_or(TY_NIL);
-                let sf = md
-                    .params
-                    .first()
-                    .map(|p| match self.ast.param(*p) {
-                        MemberKind::SelfParam(sd) => Some(sd.is_mut),
-                        _ => None,
-                    })
-                    .flatten();
+                let sf = md.params.first().and_then(|p| match self.ast.param(*p) {
+                    MemberKind::SelfParam(sd) => Some(sd.is_mut),
+                    _ => None,
+                });
                 (sf, Some(md.is_async), ptys, ret)
             }
             MemberSrc::Extern { row, subst, .. } => {
@@ -495,9 +487,7 @@ impl<'a> Ctx<'a> {
     /// anchor): recorded per carried row name at the seed attach.
     pub(crate) fn carried_home(&self, concrete: TypeId) -> Option<String> {
         let name = self.types.type_at(concrete).name;
-        self.carried_names
-            .get(&self.interner.name(name).to_string())
-            .cloned()
+        self.carried_names.get(self.interner.name(name)).cloned()
     }
 
     /// The interface row's BASE name text: the row itself for a
@@ -594,7 +584,7 @@ impl<'a> Ctx<'a> {
             TypeKind::TyUnion { .. } => true,
             TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => self
                 .find_alias(segs[0].name)
-                .map_or(false, |a| matches!(a.resolved, Some(AliasTarget::Union))),
+                .is_some_and(|a| matches!(a.resolved, Some(AliasTarget::Union))),
             _ => false,
         }
     }
@@ -629,7 +619,7 @@ impl<'a> Ctx<'a> {
                 let inherent = match self.inst_data.get(&ty).cloned() {
                     Some((dname, _)) => self
                         .find_data(dname)
-                        .map_or(false, |d| d.methods.iter().any(|(n, _)| *n == name)),
+                        .is_some_and(|d| d.methods.iter().any(|(n, _)| *n == name)),
                     None => self
                         .datas
                         .iter()
@@ -637,7 +627,7 @@ impl<'a> Ctx<'a> {
                             matches!(self.types.kind(d.ty), TyKind::Data { .. })
                                 && self.types.dense(d.ty) == self.types.dense(ty)
                         })
-                        .map_or(false, |(_, d)| d.methods.iter().any(|(n, _)| *n == name)),
+                        .is_some_and(|(_, d)| d.methods.iter().any(|(n, _)| *n == name)),
                 };
                 inherent || self.has_extern_method(ty, name)
             }
@@ -648,7 +638,7 @@ impl<'a> Ctx<'a> {
                     .enums
                     .iter()
                     .find(|(_, e)| self.types.dense(e.ty) == self.types.dense(ty))
-                    .map_or(false, |(_, e)| e.methods.iter().any(|(n, _)| *n == name));
+                    .is_some_and(|(_, e)| e.methods.iter().any(|(n, _)| *n == name));
                 inherent || self.has_extern_method(ty, name)
             }
             _ => false,

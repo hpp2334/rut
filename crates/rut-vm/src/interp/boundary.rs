@@ -147,7 +147,7 @@ macro_rules! int_ret {
             }
             fn from_slot(vm: &Vm, slot: Slot, declared: TypeId) -> Result<Self, Trap> {
                 expect_kind(vm, slot, declared, $name)?;
-                Ok(narrow_i64::<$t>(unsafe { slot.i }, $name)?)
+                narrow_i64::<$t>(unsafe { slot.i }, $name)
             }
             #[inline] // crossing-fastpath phase 2: hot read/into_slot impls
             fn into_slot(self, _vm: &mut Vm) -> Result<Slot, Trap> {
@@ -256,7 +256,7 @@ impl Ret for String {
     }
     #[inline] // hot lane
     fn into_slot(self, vm: &mut Vm) -> Result<Slot, Trap> {
-        vm.heap.alloc_str(self).map_err(|t| t)
+        vm.heap.alloc_str(self)
     }
 }
 
@@ -419,12 +419,15 @@ macro_rules! tuple_ret {
                         format!("boundary: tuple arity {} vs {} fields", want, fields.len()),
                     ));
                 }
-                let mut i = 0usize;
+                // the arity check above bound both sides — walk them in
+                // lockstep instead of a counter (whose last bump would
+                // be dead in every expansion)
+                let mut fts = fields.iter();
+                let mut slots_it = sb.as_slice().iter();
                 Ok(($(
                     {
-                        let fty = fields[i].ty;
-                        let s = sb.get(i).unwrap_or(Slot::null());
-                        i += 1;
+                        let fty = fts.next().expect("arity checked above").ty;
+                        let s = slots_it.next().copied().unwrap_or(Slot::null());
                         $n::from_slot(vm, s, fty)?
                     },
                 )+))
@@ -662,7 +665,7 @@ macro_rules! param_prim {
             }
             unsafe fn read_checked<'a>(vm: &Vm, slot: Slot) -> Result<Self::Repr<'a>, Trap> {
                 expect_kind(vm, slot, $ty, $name)?;
-                Ok(narrow_i64::<$t>(unsafe { slot.i }, $name)?)
+                narrow_i64::<$t>(unsafe { slot.i }, $name)
             }
         }
     };
@@ -858,7 +861,11 @@ pub enum Fallible {}
 /// shapes) whose `entry` adapter IS the `HostSlot` code pointer. The
 /// table stays uniform — `call_host` never learns what shape produced
 /// the entry (plan §3.3/§3.6).
-pub(crate) trait HostHandler<A, R, K>: 'static {
+///
+/// Public because the exported `register_async!`/`pkg_async_fn!`
+/// macros expand to `register` calls whose bounds mention it — an
+/// embedder never names or implements it directly.
+pub trait HostHandler<A, R, K>: 'static {
     /// the derived `.d.rut` row — a fixed array, no heap
     const SIG: crate::interp::host::HostSig;
     fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot;
@@ -872,16 +879,17 @@ macro_rules! handler_fallible {
         {
             const SIG: crate::interp::host::HostSig =
                 crate::interp::host::HostSig::new(&[$($n::TY,)*], R::TY);
+            #[allow(non_snake_case, unused_variables, unused_mut)] // the `let`s carry the type-param names (A1..A8)
             fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot {
                 // SAFETY: ctx is Box<F>, owned by vm.host_keep for the
                 // machine's lifetime; single thread
                 let f = unsafe { &mut *(ctx as *mut F) };
                 let mut run = || -> Result<R, Trap> {
-                    let mut i = 0usize;
                     // params through the unchecked fast lane (`read`):
                     // the join verified the sig, the checker
                     // typed the site — no per-call re-verification
-                    $( let $n = unsafe { $n::read(vm, slots[i]) }?; i += 1; )*
+                    let mut args = slots.iter();
+                    $( let $n = unsafe { $n::read(vm, args.next().copied().expect("sig arity")) }?; )*
                     f(vm, $($n,)*)
                 };
                 match run() {
@@ -904,17 +912,18 @@ macro_rules! handler_infallible {
         {
             const SIG: crate::interp::host::HostSig =
                 crate::interp::host::HostSig::new(&[$($n::TY,)*], R::TY);
+            #[allow(non_snake_case, unused_variables, unused_mut)] // the `let`s carry the type-param names (A1..A8)
             fn entry(vm: &mut Vm, slots: &[Slot], ctx: crate::interp::host::Ctx) -> Slot {
                 // SAFETY: as the fallible impl — Box<F> via host_keep
                 let f = unsafe { &mut *(ctx as *mut F) };
                 let out = {
-                    let mut i = 0usize;
                     // params through the unchecked fast lane (`read`) —
                     // as the fallible impl above
-                    $( let $n = match unsafe { $n::read(vm, slots[i]) } {
+                    let mut args = slots.iter();
+                    $( let $n = match unsafe { $n::read(vm, args.next().copied().expect("sig arity")) } {
                         Ok(a) => a,
                         Err(t) => return vm.trap_taken(t),
-                    }; i += 1; )*
+                    }; )*
                     f(vm, $($n,)*)
                 };
                 match out.into_slot(vm) {
@@ -995,8 +1004,10 @@ mod fast_lane_tests {
     /// `expect_kind` through it, which is exactly the work the fast lane
     /// skips.
     fn bare_vm() -> Vm {
-        let mut prog = rut_core::binary::Program::default();
-        prog.types = rut_core::types::TypeTable::boot();
+        let prog = rut_core::binary::Program {
+            types: rut_core::types::TypeTable::boot(),
+            ..rut_core::binary::Program::default()
+        };
         Vm::new(
             Rc::new(prog),
             &Limits::default(),
@@ -1049,10 +1060,7 @@ mod fast_lane_tests {
                 <f64 as HostParam>::read(&vm, Slot::float(-0.5)).unwrap(),
                 -0.5
             );
-            assert_eq!(
-                <bool as HostParam>::read(&vm, Slot::bool(true)).unwrap(),
-                true
-            );
+            assert!(<bool as HostParam>::read(&vm, Slot::bool(true)).unwrap());
         }
     }
 
@@ -1148,7 +1156,7 @@ mod fast_lane_tests {
 
     #[test]
     fn borrow_reads_keep_their_cell_kind_match() {
-        let mut vm = bare_vm();
+        let vm = bare_vm();
         // &[u8] over a str cell: `bytes_view`'s Str branch — the octets,
         // not UB, not a reinterpret
         let s = vm.heap.alloc_str("hello".into()).unwrap();
@@ -1169,7 +1177,7 @@ mod fast_lane_tests {
 
     #[test]
     fn owned_params_keep_their_copies() {
-        let mut vm = bare_vm();
+        let vm = bare_vm();
         let s = vm.heap.alloc_str("ada".into()).unwrap();
         let bytes = vm.heap.alloc_bytes(vec![9u8, 8, 7]).unwrap();
         unsafe {
@@ -1226,8 +1234,10 @@ mod return_lane_tests {
     /// already carries the `?str`/`?bytes`/`?opaque` rows — a ret names
     /// its CONST directly.
     fn vm_with_ret(registry: HostRegistry, caller_regs: Vec<TypeId>, ret: TypeId) -> Vm {
-        let mut prog = rut_core::binary::Program::default();
-        prog.types = rut_core::types::TypeTable::boot();
+        let mut prog = rut_core::binary::Program {
+            types: rut_core::types::TypeTable::boot(),
+            ..rut_core::binary::Program::default()
+        };
         let host_key = prog.interner.intern("t::probe");
         let mut mk = |name: &str, regs: Vec<TypeId>, host: Option<rut_core::sym::IdentId>| {
             rut_core::binary::FuncCode {

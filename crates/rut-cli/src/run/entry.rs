@@ -12,7 +12,7 @@ pub(crate) fn designate(entry: Option<String>, prog: &rut_core::binary::Program)
         .collect();
     match entry {
         Some(name) => {
-            if !entries.iter().any(|e| *e == name) {
+            if !entries.contains(&name) {
                 match entries.as_slice() {
                     [] => eprintln!(
                         "run: no `entry fn {name}` — this program declares no entry fns at all"

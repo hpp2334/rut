@@ -13,12 +13,13 @@ use rut_parser::{parse, Mode};
 
 const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
 
-/// The names core.d.rut declares: (builtin fns, builtin types, builtin
-/// traits, plain traits) + the `builtin impl` method table
-/// (prim → method names). The fn/type/trait name lists carry each
-/// decl's ambient bit (`true` — `prelude builtin`, `false` —
-/// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
-/// against `Surface::core`'s rows.
+/// The collected core-decl name surfaces, for the lockstep assertions.
+type DeclSurfaces = (
+    Vec<(String, bool)>,
+    Vec<(String, bool)>,
+    Vec<String>,
+    Vec<(String, Vec<String>)>,
+);
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
@@ -64,12 +65,13 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn declared_names() -> (
-    Vec<(String, bool)>,
-    Vec<(String, bool)>,
-    Vec<String>,
-    Vec<(String, Vec<String>)>,
-) {
+/// The names core.d.rut declares: (builtin fns, builtin types, builtin
+/// traits, plain traits) + the `builtin impl` method table
+/// (prim → method names). The fn/type/trait name lists carry each
+/// decl's ambient bit (`true` — `prelude builtin`, `false` —
+/// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
+/// against `Surface::core`'s rows.
+fn declared_names() -> DeclSurfaces {
     let (ast, diags) = parse(CORE_DECL, Mode::Decl);
     assert!(diags.is_empty(), "core.d.rut must parse cleanly: {diags:?}");
     let mut builtin_fns = Vec::new();
@@ -210,7 +212,7 @@ fn core_decl_matches_the_compilers_surface() {
             .or_default()
             .push(surface.names.name(*n).to_string());
     }
-    let mut surf_impls: Vec<(String, Vec<String>)> = by_prim
+    let surf_impls: Vec<(String, Vec<String>)> = by_prim
         .into_iter()
         .map(|(p, mut ms)| {
             ms.sort();
@@ -244,7 +246,7 @@ fn retired_names_are_ordinary_unknown_names() {
     // message, no retired-name special case anywhere.
     let out = compiled(
         "app_main",
-        "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n".into(),
+        "entry fn main() -> i32 { let x = Option.some(1); return 0; }\n",
     );
     assert!(
         out.diags
@@ -257,8 +259,7 @@ fn retired_names_are_ordinary_unknown_names() {
     let out = compiled(
         "app_main",
         "use core::{ Option };\n\
-                 entry fn main() -> i32 { let x = Option.some(1); return 0; }\n"
-            .into(),
+                 entry fn main() -> i32 { let x = Option.some(1); return 0; }\n",
     );
     assert!(
         out.diags.iter().any(|d| d

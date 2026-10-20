@@ -176,9 +176,9 @@ fn targets<'a>(ctx: &definition::Ctx<'a>, pos: u32, name: &str) -> Vec<Target<'a
     //    IS the answer (mirrors definition's decl_site + binding-decl
     //    precedence, extended to fn/type name spans)
     if let Some(q) = qspan {
-        for b in bindings::collect(ctx.ast, ctx.toks, ctx.idxs)
+        if let Some(b) = bindings::collect(ctx.ast, ctx.toks, ctx.idxs)
             .iter()
-            .filter(|b| b.name == name && b.decl_ident_span == q)
+            .find(|b| b.name == name && b.decl_ident_span == q)
         {
             return vec![Target {
                 idx: doc,
@@ -186,10 +186,10 @@ fn targets<'a>(ctx: &definition::Ctx<'a>, pos: u32, name: &str) -> Vec<Target<'a
                 kind: Kind::Local,
             }];
         }
-        for _l in doc
+        if let Some(_l) = doc
             .lets
             .iter()
-            .filter(|l| l.name == name && l.name_span == Some(q))
+            .find(|l| l.name == name && l.name_span == Some(q))
         {
             return vec![Target {
                 idx: doc,
@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn include_declaration_appends_the_declaring_ident() {
         let src = "fn go() -> i32 {\n    let c = 1;\n    return c;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let pos = at(&d.src, "let c", 1) + 4;
         let hits = refs(&d, pos, &[], false);
         assert_eq!(

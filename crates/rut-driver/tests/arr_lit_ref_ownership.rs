@@ -4,7 +4,7 @@
 //! element collection — must be real). Regression: `ArrLit` used to copy
 //! the element slots into the raw block WITHOUT retaining them, so any
 //! element read after the literal's creating frame returned resolved a
-/// recycled arena slot.
+//! recycled arena slot.
 
 /// Compile, flatten, verify, and run a single-module `main` returning i32.
 use rut_parser::Mode;

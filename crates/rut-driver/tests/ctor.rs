@@ -20,9 +20,6 @@
 //! - cross-module: the marker byte crosses the surface row, a used
 //!   class's `Point(..)` mints at a distance.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use rut_parser::Mode;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 

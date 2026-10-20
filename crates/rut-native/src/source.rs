@@ -36,7 +36,7 @@ pub trait Source {
 /// The real filesystem — the CLI's and native hosts' [`Source`]. The
 /// root is baked at construction; every key is a path string, and the
 /// `Path` math lives here and nowhere else.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct FsSource {
     root: String,
 }
@@ -51,17 +51,10 @@ impl FsSource {
     }
 
     /// The root as a path — the native lanes' own door (the walk's
-    /// cycle guard canonicalizes through it).
+    /// cycle guard canonicalizes through it). Not wired yet.
+    #[allow(dead_code)]
     pub(crate) fn root_path(&self) -> std::path::PathBuf {
         std::path::PathBuf::from(&self.root)
-    }
-}
-
-impl Default for FsSource {
-    fn default() -> FsSource {
-        FsSource {
-            root: String::new(),
-        }
     }
 }
 

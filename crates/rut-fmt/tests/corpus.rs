@@ -121,8 +121,8 @@ fn span_free(dump: &str) -> String {
             // a span opens: `[digits, digits)` — blank it
             let rest = &dump[i + 1..];
             let is_span = {
-                let mut it = rest.split_inclusive(|ch: char| ch == ')');
-                it.next().map_or(false, |head| {
+                let mut it = rest.split_inclusive(')');
+                it.next().is_some_and(|head| {
                     let inner = head.trim_end_matches(')');
                     let mut parts = inner.splitn(2, ',');
                     match (parts.next(), parts.next()) {

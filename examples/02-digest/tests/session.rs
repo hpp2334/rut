@@ -148,26 +148,6 @@ fn rut_djb2(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
 fn rut_sdbm(vm: &mut rut_vm::interp::Vm, data: &[u8]) -> u64 {
     vm.call("sdbm", (data.to_vec(),)).unwrap()
 }
-fn rut_json_roundtrip(vm: &mut rut_vm::interp::Vm, s: &str) -> Result<String, String> {
-    // v1.1 error convention: `(T, err)` — position 1 carries the message
-    let (out, e): (String, String) = vm.call("json_roundtrip", (s,)).unwrap();
-    if e.is_empty() {
-        Ok(out)
-    } else {
-        Err(e)
-    }
-}
-fn rut_sample_doc(vm: &mut rut_vm::interp::Vm) -> OpaqueRef {
-    vm.call("sample_doc", ()).unwrap()
-}
-fn rut_json_enc(vm: &mut rut_vm::interp::Vm, o: OpaqueRef) -> String {
-    vm.call("json_enc", (o,)).unwrap()
-}
-fn rut_direct(vm: &mut rut_vm::interp::Vm, algo: &str, data: &[u8]) -> String {
-    let v: Vec<u8> = vm.call(algo, (data.to_vec(),)).unwrap();
-    hex(&v)
-}
-
 // crate references
 fn md5_hex(b: &[u8]) -> String {
     hex(&md5::Md5::digest(b))

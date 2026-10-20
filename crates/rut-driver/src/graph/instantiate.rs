@@ -1219,7 +1219,6 @@ fn owner_serves_member(own: &Program, concrete: rut_core::types::TypeId, member:
 /// whose ledger row names the consumer (link unifies it with the real
 /// body there — the carried-member law's direction).
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn resolve_member_stub(
     own: &mut Program,
     home: &Homes,

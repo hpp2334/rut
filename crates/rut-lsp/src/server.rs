@@ -536,23 +536,6 @@ impl<'a> Walk<'a> {
     }
 }
 
-/// a bundle file's mod path: the rows lane's root rides as `mod.rut`
-/// (`Some("")`), a mounted child as `<path>/mod.rut` (a host tree's
-/// as `<path>/mod.d.rut`), the host default root as `mod.d.rut`
-/// (`Some("")`) — `Some(path)`; anything else is today's flat shape
-/// (`None`)
-fn mod_path_of_bundle_file(path: &str) -> Option<String> {
-    match path.strip_suffix("/mod.rut") {
-        Some(p) => Some(p.to_string()),
-        None if path == "mod.rut" => Some(String::new()),
-        None => match path.strip_suffix("/mod.d.rut") {
-            Some(p) => Some(p.to_string()),
-            None if path == "mod.d.rut" => Some(String::new()),
-            None => None,
-        },
-    }
-}
-
 /// lexical `..`/`.` resolution for dep paths — the seen-set's keys and
 /// entry uris compare consistently without touching the fs
 fn normalize_path(p: &Path) -> PathBuf {

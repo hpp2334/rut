@@ -227,7 +227,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // the pinned stability law (v22): a generic that cannot lower to an
     // instantiation-independent body refuses the pack outright — no
     // fallback lane, a published bundle carries no source
-    for (owner, decl, construct) in &units.template_failures {
+    if let Some((owner, decl, construct)) = units.template_failures.first() {
         return Err(PackError::law(format!(
             "pack: `{owner}`'s generic `{decl}` does not lower to an instantiation-independent \
              body ({construct}) — restructure the surface or share the directory; a published \

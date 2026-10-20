@@ -151,8 +151,6 @@ impl Heap {
         let block = self.arena.blocks.alloc(bytes.len());
         let cap = self.arena.blocks.cap_of(block) as u32;
         unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), block, bytes.len()) };
-        let mut d = ArrData::new(ArrKind::U8, block, cap);
-        d.len = bytes.len() as u32;
         self.mint(
             rut_core::types::TY_STR,
             CellData::Str(StrVal {
@@ -171,7 +169,7 @@ impl Heap {
     /// hit the parent (the `*T` aliasing law).
     pub fn alloc_arr_view(&self, parent: Slot, off: u32, len: u32) -> Result<Slot, Trap> {
         self.retain(parent);
-        let ty = unsafe { cell_of(parent).ty };
+        let ty = cell_of(parent).ty;
         let r = self.mint(
             ty,
             CellData::ArrView { parent, off, len },

@@ -271,7 +271,7 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
         return locs;
     }
 
-    let binds = bindings::collect(ctx.ast, ctx.toks, &idxs);
+    let binds = bindings::collect(ctx.ast, ctx.toks, idxs);
 
     // decl sites of the binding layer — the hovered ident IS a recorded
     // declaring ident (a param's, or a let the decl_site spans missed):
@@ -293,7 +293,7 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     //    use-gate law hover established), an unknown one keeps hover's
     //    bare-name fallback
     if let Some(recv) = lookup::member_context(ctx.toks, t) {
-        match lookup::member_target(&idxs, ctx.ast, &binds, pos, name, &recv) {
+        match lookup::member_target(idxs, ctx.ast, &binds, pos, name, &recv) {
             MemberHit::Found(target) => {
                 return member_locations(ctx, &target);
             }
@@ -305,7 +305,7 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     // 4. type position — capitalized / primitive names, restricted to
     //    the use graph for imported names
     if crate::hover::infer::is_cap(name) || rut_parser::is_primitive_ty(name) {
-        if let Some(locs) = ty_name_locations(ctx, &idxs, &imported, name) {
+        if let Some(locs) = ty_name_locations(ctx, idxs, &imported, name) {
             return locs;
         }
         // a primitive token with no surface decl (i32, bool …) is a
@@ -326,7 +326,7 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 
     // 6. module-let use sites — every hit (the candidate list), the
     //    body over the decl surface (`prefer_bodies`)
-    let chain = chain_for(&idxs, &imported, name);
+    let chain = chain_for(idxs, &imported, name);
     let mut lets: Vec<(&DefIndex, Span)> = Vec::new();
     for i in &chain {
         for l in i.lets.iter().filter(|l| l.name == *name) {
@@ -372,13 +372,13 @@ pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     }
     let idxs = ctx.idxs;
     let imported = import_map(ctx.doc());
-    let binds = bindings::collect(ctx.ast, ctx.toks, &idxs);
+    let binds = bindings::collect(ctx.ast, ctx.toks, idxs);
 
     // member position: the member's DECLARED type — `w.item` (a
     // `?Circle` field) jumps to the `Circle` decl; a resolved receiver
     // is final (the use-gate law)
     if let Some(recv) = lookup::member_context(ctx.toks, t) {
-        match lookup::member_target(&idxs, ctx.ast, &binds, pos, name, &recv) {
+        match lookup::member_target(idxs, ctx.ast, &binds, pos, name, &recv) {
             MemberHit::Found(target) => {
                 let ty_text = match &target {
                     MemberTarget::Member(_, _, m, _)
@@ -389,7 +389,7 @@ pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
                 return ty_text
                     .as_deref()
                     .map(head_of_ty)
-                    .and_then(|head| ty_name_locations(ctx, &idxs, &imported, &head))
+                    .and_then(|head| ty_name_locations(ctx, idxs, &imported, &head))
                     .unwrap_or_default();
             }
             MemberHit::None => return Vec::new(),
@@ -399,7 +399,7 @@ pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 
     // a type token: its own declaration (definition's answer)
     if crate::hover::infer::is_cap(name) || rut_parser::is_primitive_ty(name) {
-        if let Some(locs) = ty_name_locations(ctx, &idxs, &imported, name) {
+        if let Some(locs) = ty_name_locations(ctx, idxs, &imported, name) {
             return locs;
         }
         if rut_parser::is_primitive_ty(name) {
@@ -411,11 +411,11 @@ pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     if let Some(b) = bindings::resolve(&binds, pos, name) {
         return b
             .ty_head()
-            .and_then(|head| ty_name_locations(ctx, &idxs, &imported, &head))
+            .and_then(|head| ty_name_locations(ctx, idxs, &imported, &head))
             .unwrap_or_default();
     }
-    match crate::hover::infer::module_let_ty(&idxs, name) {
-        Some(head) => ty_name_locations(ctx, &idxs, &imported, &head).unwrap_or_default(),
+    match crate::hover::infer::module_let_ty(idxs, name) {
+        Some(head) => ty_name_locations(ctx, idxs, &imported, &head).unwrap_or_default(),
         None => Vec::new(),
     }
 }
@@ -865,7 +865,7 @@ mod tests {
     #[test]
     fn param_jumps_to_its_decl() {
         let src = "fn go(p: Point) -> f64 {\n    return p.x;\n}\nstruct Point {\n    x: f64;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let hits = def(&d, at(&d.src, "p: Point", 1), &[]); // the param decl site → itself
         assert_eq!(hits.len(), 1);
         let hits = def(&d, at(&d.src, "return p", 1) + 7, &[]); // the use site
@@ -931,7 +931,7 @@ mod tests {
     #[test]
     fn enum_member_jumps_to_its_decl_ident() {
         let src = "enum Color { Red, Blue }\nfn pick(c: Color) -> Color {\n    return c;\n}\nfn go() -> Color {\n    return Color::Red;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let hits = def(&d, at(&d.src, "Color::Red;", 1) + 7, &[]);
         assert_eq!(hits.len(), 1, "{hits:?}");
         let ix = LineIndex::new(&d.src);
@@ -972,7 +972,7 @@ mod tests {
     #[test]
     fn module_let_use_site_jumps_to_the_decl() {
         let src = "let TOTAL = 41;\nfn bump() -> i32 {\n    return TOTAL + 1;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let hits = def(&d, at(&d.src, "return TOTAL", 1) + 7, &[]);
         assert_eq!(hits.len(), 1, "{hits:?}");
         let ix = LineIndex::new(&d.src);
@@ -985,7 +985,7 @@ mod tests {
     #[test]
     fn use_name_jumps_to_the_exporting_module() {
         let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let gadgets = widget_index();
         let extra = [gadgets];
         // the use-statement name itself
@@ -1007,7 +1007,7 @@ mod tests {
     #[test]
     fn the_use_graph_restricts_the_search_to_the_imported_pkg() {
         let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let mut foreign = doc("class Widget {\n    other: i32;\n}\n").index;
         foreign.origin = "file:///ws/other/lib.rut".to_string();
         let extra = [widget_index(), foreign];
@@ -1023,7 +1023,7 @@ mod tests {
     #[test]
     fn unimported_names_keep_the_flat_chain() {
         let src = "entry fn main() -> nil {\n    let w = Widget::new();\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let extra = [widget_index()];
         let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
@@ -1416,7 +1416,7 @@ mod tests {
     #[test]
     fn std_use_jumps_to_the_true_source_path() {
         let src = "use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec::new();\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let extra = crate::std_surface::indexes();
         let hits = def(&d, at(&d.src, "= Vec::new();", 1) + 2, &extra);
         assert_eq!(hits.len(), 1, "{hits:?}");
@@ -1485,7 +1485,7 @@ mod tests {
     #[test]
     fn type_definition_on_a_type_token_is_its_own_decl() {
         let src = "class Circle {\n    r: f64;\n}\nfn go() -> f64 {\n    let c = Circle::new(1.0);\n    return c.r;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let hits = typedef(&d, at(&d.src, "Circle::new(1.0);", 1), &[]);
         assert_eq!(hits.len(), 1, "{hits:?}");
         let ix = LineIndex::new(&d.src);

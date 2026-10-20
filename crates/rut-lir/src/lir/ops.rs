@@ -4,8 +4,6 @@
 
 use super::*;
 use crate::check::TcResult;
-use rut_core::ops::*;
-use rut_core::types::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- operators (equal widths; traps by default) ----

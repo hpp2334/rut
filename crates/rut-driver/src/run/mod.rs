@@ -79,6 +79,10 @@ impl Walk {
 /// What one [`RutRun::pkg`] offer IS — the classification of the
 /// offered package, the same lib/host pair the manifest `type` field
 /// spells. Kinds as variants, not methods.
+#[allow(clippy::large_enum_variant)]
+// the payloads ARE the enum: decoded bundles move as values
+// through the graph — boxing would churn every construction/match
+// for a size win the graph never sees
 pub enum Offer<'a> {
     /// A rut package: a compiled archive (`Bundle::parse` — decoded
     /// once, relocated + mounted per world) or an in-memory source
@@ -401,7 +405,7 @@ impl RutRun {
         // rows' specs — pure data, no walk bookkeeping on the pkg (a
         // member rebases only when its body is a decoded program; a
         // shadowed name keeps its own, earlier-won body).
-        let mut roots: BTreeMap<String, Vec<(rut_core::id::ScopeId, String)>> = pkgs
+        let roots: BTreeMap<String, Vec<(rut_core::id::ScopeId, String)>> = pkgs
             .iter()
             .filter(|(_, p)| !p.bundle_scopes.is_empty())
             .map(|(n, p)| (n.clone(), p.bundle_scopes.clone()))
@@ -552,7 +556,7 @@ fn apply_symbols(pkgs: &mut BTreeMap<String, Mounted>, map: &rut_core::strip::Sy
         .iter()
         .map(|(m, o)| (m.as_str(), o.as_str()))
         .collect();
-    for (_, pkg) in pkgs.iter_mut() {
+    for pkg in pkgs.values_mut() {
         if let MountedBody::Compiled(prog) = &mut pkg.body {
             prog.interner
                 .remap_tail(|s| restore.get(s).copied().unwrap_or(s).to_string());

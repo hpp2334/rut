@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use rut_core::binary::Program;
 
 use super::compiler::{GraphCompiler, Unit};
-use crate::Seeds;
 
 /// One seed group per requester: the descriptor closure of every
 /// request's arguments, sparse at the requester's locals — the attach
@@ -38,7 +37,7 @@ pub(super) fn build_seed_groups<'a>(
     }
     let mut groups: Vec<crate::SeedGroup> = Vec::new();
     for (requester, rows) in &per_requester {
-        let Some((ridx, requester_scope)) = done.get(requester).map(|u| (u.idx, u.scope)) else {
+        let Some((ridx, _requester_scope)) = done.get(requester).map(|u| (u.idx, u.scope)) else {
             continue;
         };
         let prog = &programs[ridx];

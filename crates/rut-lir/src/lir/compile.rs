@@ -4,6 +4,7 @@ use super::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Compile one instantiation into `ctx.funcs[fid]`.
+    #[allow(clippy::result_unit_err)] // TcResult's unit marks "diag recorded"
     pub fn compile(ctx: &mut Ctx<'a>, inst: &Inst, fid: u32) -> TcResult<()> {
         // every body resolves in its DECL's module (phase 3): the key's
         // node names the file, the span names the module. Bare names
@@ -517,7 +518,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 });
             }
         }
-        for (cap) in &caps {
+        for cap in &caps {
             let Capture {
                 name: n,
                 ty: t,
@@ -713,7 +714,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 cell: None,
             });
         }
-        for (cap) in &caps {
+        for cap in &caps {
             let Capture {
                 name: n,
                 ty: t,
@@ -749,7 +750,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(cty) = var_cell {
             param_tys.push(cty);
         }
-        for (cap) in &caps {
+        for cap in &caps {
             param_tys.push(cap.cell.unwrap_or(cap.ty));
         }
         let regs = c.regs;

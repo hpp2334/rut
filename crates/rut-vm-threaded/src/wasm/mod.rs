@@ -5,7 +5,6 @@
 //! methods, bailing on [`T_SLOW`] exactly like the native backend.
 
 use crate::api::*;
-use rut_core::ops::Op;
 
 pub fn build_table<M: Machine>() -> Table<M> {
     Table(core::marker::PhantomData)

@@ -621,16 +621,16 @@ impl WhenFrame {
                     self.arm_pats.push(pat);
                     if p.eat_punct(Tok::Comma) {
                         if matches!(p.tok(), Tok::Arrow) {
-                            self.to_body(p)
+                            self.step_body(p)
                         } else {
                             Step::Push(Frame::Pattern(PatternFrame::new()))
                         }
                     } else {
-                        self.to_body(p)
+                        self.step_body(p)
                     }
                 }
                 // v1: a failed pattern breaks the pattern list
-                Done::Failed => self.to_body(p),
+                Done::Failed => self.step_body(p),
                 _ => unreachable!("when-arm patterns are patterns"),
             },
             WhenStage::Body => self.arm_body(p, d),
@@ -651,7 +651,7 @@ impl WhenFrame {
         Step::Push(Frame::Pattern(PatternFrame::new()))
     }
 
-    fn to_body(&mut self, p: &mut Parser) -> Step {
+    fn step_body(&mut self, p: &mut Parser) -> Step {
         p.expect(Tok::Arrow);
         // body: `{` ⇒ block arm (peek 1); else expr arm
         self.arm_is_block = matches!(p.tok(), Tok::LBrace);

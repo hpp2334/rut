@@ -180,14 +180,12 @@ fn mixed_world(tag: &str) -> PathBuf {
     write(
         &boxy,
         "rut.jsonc",
-        &format!(
-            "{}",
-            manifest(
-                "boxy",
-                "mod.rut",
-                r#", "deps": {"util": {"path": "../util"}}"#
-            )
-        ),
+        &manifest(
+            "boxy",
+            "mod.rut",
+            r#", "deps": {"util": {"path": "../util"}}"#,
+        )
+        .to_string(),
     );
     write(
         &boxy,

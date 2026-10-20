@@ -252,7 +252,7 @@ macro_rules! __register_async_rows {
             |_vm: &mut $crate::interp::Vm,
              state: $crate::Opaque<$crate::Completer<$ret>>,
              _cx: $crate::OpaqueRef| {
-                Ok(state.with(|c| c.poll())?)
+                state.with(|c| c.poll())
             },
         );
         $hosts.register::<_, ($crate::Opaque<$crate::Completer<$ret>>,), $ret, _>(

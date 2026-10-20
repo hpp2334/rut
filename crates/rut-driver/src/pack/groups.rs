@@ -173,20 +173,7 @@ pub fn has_generic_bodies(prog: &rut_core::binary::Program) -> bool {
                 .type_exports
                 .iter()
                 .find(|t| t.name == cname)
-                .map_or(false, |t| t.is_generic);
+                .is_some_and(|t| t.is_generic);
             class_generic || ih.methods.iter().any(|m| !m.generics.is_empty())
         })
-}
-
-/// The generic-parameter placeholder spelling (`#<param>` — the `#` is
-/// unspellable in rut source), distinguished from the async lane's
-/// engine-reserved `#frame@`/`#hframe@`/`#ckpt@` rows: a real
-/// placeholder is a bare parameter name, never one of the reserved
-/// prefixes.
-pub(super) fn is_placeholder(name: &str) -> bool {
-    use rut_core::async_frame::{CKPT_PREFIX, FRAME_PREFIX, HOST_FRAME_PREFIX};
-    name.starts_with('#')
-        && !name.starts_with(FRAME_PREFIX)
-        && !name.starts_with(HOST_FRAME_PREFIX)
-        && !name.starts_with(CKPT_PREFIX)
 }

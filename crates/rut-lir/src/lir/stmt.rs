@@ -4,9 +4,15 @@
 
 use super::*;
 use crate::check::{float_suffix_ty, int_suffix_ty, TcResult};
-use rut_core::ops::*;
+
+/// One decl's member surface: `(decl name, method rows, generic params)`.
+type DeclMemberRow = (
+    IdentId,
+    Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+    Vec<IdentId>,
+);
+
 use rut_core::sym;
-use rut_core::types::*;
 
 /// Where a for-of's designated `[iterable]` member binds (v20): the
 /// receiver's own class/enum decl (the method monomorphizes here,
@@ -1259,11 +1265,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         // LOCAL: the class's or enum's own marked member (methods attach
         // to the decl — the ordinary inherent machinery)
-        let mut locals: Vec<(
-            IdentId,
-            Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
-            Vec<IdentId>,
-        )> = Vec::new();
+        let mut locals: Vec<DeclMemberRow> = Vec::new();
         if let Some((n, d)) = self.ctx.datas.iter().find(|(n, _)| *n == dname) {
             locals.push((*n, d.methods.clone(), d.generics.clone()));
         }
@@ -1344,16 +1346,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         args: Vec<TypeId>,
     ) -> Option<(IterSource, TypeId)> {
         let rows = self.ctx.extern_inherents.clone();
-        for (_ih, row) in rows.iter().enumerate() {
+        for row in rows.iter() {
             let hits_template = self
                 .ctx
                 .extern_generics
                 .get(&dname)
-                .map_or(false, |g| g.template == row.target);
+                .is_some_and(|g| g.template == row.target);
             if !hits_template && row.target != ty {
                 continue;
             }
-            for (_midx, m) in row.methods.iter().enumerate() {
+            for m in row.methods.iter() {
                 if m.marker != rut_core::binary::MARKER_ITERABLE {
                     continue;
                 }
@@ -1425,6 +1427,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// is ONE variable reassigned per iteration (the sugar law): the
     /// outer frame mints its shared cell, the emit closure binds it
     /// cell-backed and stores the incoming element at frame entry.
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     fn compile_for_of_iterate(
         &mut self,
         var: IdentId,
@@ -1583,7 +1586,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         };
         {
-            let (argv_off, argc) = self.pool_recv_args(rreg, &(vec![clo]));
+            let (argv_off, argc) = self.pool_recv_args(rreg, &[clo]);
             self.emit(
                 Op::CallM {
                     func: mfid,
@@ -1647,9 +1650,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut all_terminate = !arms.is_empty();
         for arm in arms {
             let arm = *arm;
-            let ArmKind::WhenArm { pats, body } = self.ctx.ast.arm(arm) else {
-                continue;
-            };
+            let ArmKind::WhenArm { pats, body } = self.ctx.ast.arm(arm);
             let l_arm = self.new_label();
             let l_next_arm = self.new_label();
             // alternatives chain within the arm: `1, 2, 3 -> ..`
@@ -1767,34 +1768,33 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut has_else = false;
         let mut seen: Vec<String> = Vec::new();
         for a in arms {
-            if let ArmKind::WhenArm { pats, .. } = self.ctx.ast.arm(*a) {
-                for p in pats {
-                    let key = match self.ctx.ast.pat(*p) {
-                        PatKind::PatElse => {
-                            has_else = true;
-                            "else".to_string()
-                        }
-                        PatKind::PatLit(l) => format!("{:?}", l),
-                        PatKind::PatPath { segs } => segs
-                            .iter()
-                            .map(|s| self.ctx.name(s.name).to_string())
-                            .collect::<Vec<_>>()
-                            .join("::"),
-                        PatKind::PatCtor { segs, .. } => segs
-                            .iter()
-                            .map(|s| self.ctx.name(s.name).to_string())
-                            .collect::<Vec<_>>()
-                            .join("::"),
-                        PatKind::PatWild => "_".to_string(),
-                    };
-                    if seen.contains(&key) && key != "else" {
-                        self.ctx.err(
-                            self.ctx.ast.span(p.id()),
-                            format!("duplicate pattern `{key}`"),
-                        );
+            let ArmKind::WhenArm { pats, .. } = self.ctx.ast.arm(*a);
+            for p in pats {
+                let key = match self.ctx.ast.pat(*p) {
+                    PatKind::PatElse => {
+                        has_else = true;
+                        "else".to_string()
                     }
-                    seen.push(key);
+                    PatKind::PatLit(l) => format!("{:?}", l),
+                    PatKind::PatPath { segs } => segs
+                        .iter()
+                        .map(|s| self.ctx.name(s.name).to_string())
+                        .collect::<Vec<_>>()
+                        .join("::"),
+                    PatKind::PatCtor { segs, .. } => segs
+                        .iter()
+                        .map(|s| self.ctx.name(s.name).to_string())
+                        .collect::<Vec<_>>()
+                        .join("::"),
+                    PatKind::PatWild => "_".to_string(),
+                };
+                if seen.contains(&key) && key != "else" {
+                    self.ctx.err(
+                        self.ctx.ast.span(p.id()),
+                        format!("duplicate pattern `{key}`"),
+                    );
                 }
+                seen.push(key);
             }
         }
         if !has_else {

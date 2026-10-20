@@ -8,7 +8,7 @@
 //! the call onto the owner's compiled copy — instantiation is owned by
 //! the declaring package, consumers request.
 
-use crate::check::{collect::split_top_commas, TcResult};
+use crate::check::TcResult;
 use crate::lir::*;
 use std::collections::HashMap;
 
@@ -48,99 +48,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// compiled and bare; `subst` pairs the class's generic parameters
     /// with the receiver's concrete arguments. A plain class calls the
     /// exporter's fn; a generic class mints the mirror.
-    #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_arguments)]
-    /// The template substitution env for an extern template impl's
-    /// descriptor: the method signature's `#<name>` leaves are the
-    /// trait's own generics — the k-th DISTINCT leaf (first-appearance
-    /// order in the signature's display text) binds to the target's
-    /// k-th class argument (the v1 template law: the trait arguments
-    /// ARE the target's parameters — `impl<E> IntoFlow<E> for Vec<E>`
-    /// over `Vec<i32>` spells `#E := i32`).
-    pub(crate) fn descriptor_leaf_env(
-        &self,
-        tm: &rut_core::binary::IfaceMethod,
-        iface_id: u32,
-        class_args: &[TypeId],
-    ) -> HashMap<String, TypeId> {
-        let mut sig = String::new();
-        for &p in &tm.params {
-            // a IfaceObj param of THIS trait is the receiver slot
-            if let TyKind::IfaceObj { iface_id: t } = self.ctx.types.kind(p) {
-                if *t == iface_id {
-                    continue;
-                }
-            }
-            sig.push(' ');
-            sig.push_str(&self.ctx.type_name(p));
-        }
-        sig.push_str(" -> ");
-        sig.push_str(&self.ctx.type_name(tm.ret));
-        let mut leaves: Vec<String> = Vec::new();
-        for piece in sig.split(|c: char| !c.is_alphanumeric() && c != '#') {
-            let piece = piece.trim();
-            if piece.len() > 1 && piece.starts_with('#') && !leaves.iter().any(|l| l == piece) {
-                leaves.push(piece.to_string());
-            }
-        }
-        let mut env: HashMap<String, TypeId> = HashMap::new();
-        for (i, leaf) in leaves.iter().enumerate() {
-            if let Some(&ca) = class_args.get(i) {
-                env.insert(leaf.clone(), ca);
-            }
-        }
-        env
-    }
-
-    /// Force the template re-spell of a crossed descriptor row whose
-    /// name spells `Base<#leaf, ..>` (or a bare `#leaf`): the shared
-    /// `subst_template_ty` declines rows with empty field lists (a
-    /// template instantiation carried without its layout), but the
-    /// SIGNATURE the call sites need is the name-text shape — re-mint
-    /// from the base's extern-generic entry with the env-bound leaves.
-    fn respell_template_row(&mut self, id: TypeId, env: &HashMap<String, TypeId>) -> TypeId {
-        let text = {
-            let t = self.ctx.types.type_at(id);
-            self.ctx.interner.name(t.name).to_string()
-        };
-        if !text.contains('#') {
-            return id;
-        }
-        if let Some(&arg) = env.get(&text) {
-            return arg;
-        }
-        // (the `[trait] Iterable<#leaf>` respell lane is GONE with the
-        // trait — v20's `[iterable]` marker crosses on the inherent
-        // method row, and no parameter names the contract anymore)
-        let Some((base_text, rest)) = text.split_once('<') else {
-            return id;
-        };
-        let Some(args_text) = rest.strip_suffix('>') else {
-            return id;
-        };
-        let base_id = self.ctx.intern(base_text);
-        let Some(g) = self.ctx.extern_generics.get(&base_id).cloned() else {
-            return id;
-        };
-        let arg_texts = crate::check::collect::split_top_commas(args_text);
-        if arg_texts.len() != g.params.len() {
-            return id;
-        }
-        let mut args = Vec::with_capacity(arg_texts.len());
-        for a in &arg_texts {
-            if let Some(&t) = env.get(a.as_str()) {
-                args.push(t);
-                continue;
-            }
-            let aid = self.ctx.intern(a);
-            match self.ctx.types.dense_id_of_name(aid) {
-                Some(t) => args.push(t),
-                None => return id,
-            }
-        }
-        self.ctx.mk_extern_data_inst(base_id, &g, args)
-    }
-
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub(crate) fn compile_extern_method_call(
         &mut self,
         ih: usize,
@@ -188,7 +96,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             for (i, a) in args.iter().enumerate() {
                 let mentions_leaf = mparams
                     .get(i)
-                    .map_or(false, |&p| self.ctx.type_name(p).to_string().contains('#'));
+                    .is_some_and(|&p| self.ctx.type_name(p).to_string().contains('#'));
                 if !mentions_leaf {
                     continue;
                 }
@@ -242,7 +150,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let t = self.compile_expr(*a, hint)?;
                 arg_tys.push(t);
             }
-            for (i, a) in args.iter().enumerate() {
+            for (i, _a) in args.iter().enumerate() {
                 let mut env: HashMap<String, TypeId> = full_subst
                     .iter()
                     .map(|(g, t)| (format!("#{}", self.ctx.name(*g)), *t))
@@ -521,9 +429,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .iter()
             .any(|p| format!("#{}", self.ctx.name(*p)) == ptext)
         {
-            if !env.contains_key(&ptext) {
-                env.insert(ptext, arg);
-            }
+            env.entry(ptext).or_insert(arg);
             return Ok(());
         }
         match (

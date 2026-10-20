@@ -7,8 +7,6 @@ use super::*;
 use crate::check::TcResult;
 use rut_ast::ast::{ExprKind, Lit};
 use rut_core::binary::ConstVal;
-use rut_core::ops::*;
-use rut_core::types::*;
 
 /// A `[v; n]` fill whose value is a compile-time all-zero literal —
 /// `nil`, `0` (any int suffix), `0.0`, `false`. The array block arrives
@@ -50,7 +48,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     recv: NOREG,
                     argv_off,
                     argc,
-                    dst: dst,
+                    dst,
                 },
                 sp.lo,
             );
@@ -183,7 +181,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     } else {
                         let sreg = self.new_reg(TY_STR);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![src]));
+                            let (argv_off, argc) = self.pool_args(&[src]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::Str,
@@ -819,12 +817,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             .iter()
             .find(|(_, d)| d.ty == sty)
             .map(|(n, d)| (*n, d.clone()));
-        let (dname, kind, field_list, class_subst): (
-            IdentId,
-            crate::check::DataKind,
-            Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>)>,
-            Vec<(IdentId, TypeId)>,
-        ) = if let Some((dname, cargs)) = inst.clone() {
+        let (dname, kind, field_list, class_subst) = if let Some((dname, cargs)) = inst.clone() {
             match self.ctx.find_data(dname).cloned() {
                 Some(d) => {
                     let class_subst: Vec<(IdentId, TypeId)> = d
@@ -995,7 +988,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let (argv_off, argc) = self.pool_args(&(vals));
             self.emit(
                 Op::MakeRecord {
-                    dst: dst,
+                    dst,
                     ty: sty,
                     argv_off,
                     argc,
@@ -1091,7 +1084,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let (argv_off, argc) = self.pool_args(&(vals));
             self.emit(
                 Op::MakeRecord {
-                    dst: dst,
+                    dst,
                     ty: sty,
                     argv_off,
                     argc,
@@ -1117,7 +1110,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut eregs = Vec::new();
         let mut ety = elem_hint;
         for (i, e) in elems.iter().enumerate() {
-            let t = self.compile_expr(*e, if i == 0 { ety } else { ety })?;
+            let t = self.compile_expr(*e, ety)?;
             if i == 0 {
                 // keep the expected element when the first element widens to it
                 ety = match ety {
@@ -1144,7 +1137,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let (argv_off, argc) = self.pool_args(&(eregs));
             self.emit(
                 Op::ArrLit {
-                    dst: dst,
+                    dst,
                     ty: aty,
                     argv_off,
                     argc,
@@ -1203,7 +1196,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // a `nil` fill IS the zero-fill — ArrNew alone is the memset. Any
         // all-zero literal is too (0, 0u64, 0u8, false, 0.0): the block
         // arrives zeroed, so the fill loop would rewrite zero with zero
-        if is_zero_fill(&self.ctx.ast.expr(value)) {
+        if is_zero_fill(self.ctx.ast.expr(value)) {
             self.last_reg = dst;
             return Ok(aty);
         }
@@ -1377,7 +1370,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let (argv_off, argc) = self.pool_args(&cap_regs);
             self.emit(
                 Op::MakeClosure {
-                    dst: dst,
+                    dst,
                     func: fid,
                     argv_off,
                     argc,

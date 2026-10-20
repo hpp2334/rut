@@ -158,6 +158,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    #[allow(clippy::result_unit_err)] // TcResult's unit marks "diag recorded"
     pub fn compile_queue(&mut self, root: Inst) -> TcResult<()> {
         self.ensure_inst(root);
         self.drain_queue()
@@ -167,6 +168,7 @@ impl<'a> Ctx<'a> {
     /// shape's compile entry (a pkg may seed method bodies via owner
     /// requests and carry no `main`/`entry fn`/class-method roots of
     /// its own).
+    #[allow(clippy::result_unit_err)] // TcResult's unit marks "diag recorded"
     pub fn drain_queue(&mut self) -> TcResult<()> {
         let mut guard = 0;
         let mut failed = false;
@@ -221,6 +223,7 @@ impl<'a> Ctx<'a> {
     /// fill body that cannot compile is a unit error — the diag is
     /// already in `ctx.diags`; swallowing it here would ship the
     /// reserved empty fn and fail verification instead.
+    #[allow(clippy::result_unit_err)] // TcResult's unit marks "diag recorded"
     pub fn build_vtables(&mut self) -> TcResult<Vec<Vec<Option<u32>>>> {
         // (type, slot, inst) — collected first, compiled after, so
         // queue-driven interning cannot mutate what we walk. Generic
@@ -356,8 +359,7 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn compile_module_lets(&mut self) {
-        let entries: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> =
-            self.lets.clone();
+        let entries: Vec<LetRow> = self.lets.clone();
         for (_, ty, init, _) in entries {
             let sp = self.ast.span(init.id());
             match self.ast.expr(init) {

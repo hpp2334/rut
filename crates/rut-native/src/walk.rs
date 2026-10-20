@@ -50,7 +50,7 @@ pub use rut_driver::pack::Archive;
 /// WALK-LOCAL bookkeeping: it never rides the [`Mounted`] (pure data).
 #[derive(Clone, Debug)]
 pub(crate) enum Loc {
-    Dir(PathBuf),
+    Dir,
     Archive { slot: usize, prefix: String },
 }
 
@@ -92,7 +92,7 @@ impl World {
             .iter()
             .filter_map(|(spec, loc)| match loc {
                 Loc::Archive { slot, prefix } => Some((spec.clone(), (*slot, prefix.clone()))),
-                Loc::Dir(_) => None,
+                Loc::Dir => None,
             })
             .collect()
     }
@@ -211,9 +211,7 @@ pub(crate) const MANIFEST_RETIRED: &str = "rut.json";
 /// filesystem). A directory still holding the RETIRED `rut.json` name
 /// gets the pointed cutover refusal — no fallback lane reads it.
 pub(crate) fn read_manifest(src: &dyn Source, dir: &str) -> Result<Manifest, LoadError> {
-    let key = src
-        .resolve(dir, MANIFEST_NAME)
-        .map_err(|e| LoadError::law(e))?;
+    let key = src.resolve(dir, MANIFEST_NAME).map_err(LoadError::law)?;
     let text = match read_source_text(src, &key) {
         Ok(text) => text,
         Err(missing) => {
@@ -716,7 +714,7 @@ pub fn load_path_session(path: &Path) -> Result<Walk, RunError> {
     if path.is_dir() {
         return load_dir(path);
     }
-    if path.extension().map_or(false, |e| e == "rutbundle") {
+    if path.extension().is_some_and(|e| e == "rutbundle") {
         return load_bundle_session(path);
     }
     Err(LoadError::Shape {
@@ -732,7 +730,7 @@ pub async fn load_path_session_with(path: &Path, remote: &dyn DepRemote) -> Resu
     if path.is_dir() {
         return load_dir_with(path, remote).await;
     }
-    if path.extension().map_or(false, |e| e == "rutbundle") {
+    if path.extension().is_some_and(|e| e == "rutbundle") {
         return load_bundle_session(path);
     }
     Err(LoadError::Shape {
@@ -809,9 +807,7 @@ pub(crate) fn walk_dir(
     world.register(&root, root_module)?;
     // the root's dir rides the world, so the pack lanes can answer for
     // the root's own files
-    world
-        .locs
-        .insert(root.clone(), Loc::Dir(PathBuf::from(dir)));
+    world.locs.insert(root.clone(), Loc::Dir);
     let mut visiting = vec![canonical(dir)?];
     let mut fetched = Fetched {
         map,
@@ -960,9 +956,7 @@ fn resolve_table(
         // data — the uses diagnostic's "pulled by" clause reads it)
         dep_pkg.mounted_by = Some(parent.to_string());
         world.register(spec, dep_pkg)?;
-        world
-            .locs
-            .insert(spec.clone(), Loc::Dir(PathBuf::from(&dep_dir)));
+        world.locs.insert(spec.clone(), Loc::Dir);
         visiting.push(dep_canon);
         // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
         // consumer's world never contains another pkg's dev table
@@ -1397,7 +1391,7 @@ pub(crate) fn offer_dir(
     }
     let pkg = load_entry_module(&src, &dir_key, &manifest)?;
     world.register(&name, pkg)?;
-    world.locs.insert(name.clone(), Loc::Dir(dir.to_path_buf()));
+    world.locs.insert(name.clone(), Loc::Dir);
     let mut visiting = vec![canonical(&dir_key)?];
     let mut fetched = Fetched {
         map,

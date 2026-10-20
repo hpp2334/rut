@@ -1,7 +1,7 @@
 //! Path loading — module directories (`rut.jsonc`) and `.rutbundle`
 //! archives: a v11 bundle is the COMPILED contract (`mod.rutc` binaries
-//! + scope ledger + `deps/` identity groups), and the refusals gate it
-//! (version, corruption, missing groups).
+//! plus scope ledger plus `deps/` identity groups), and the refusals
+//! gate it (version, corruption, missing groups).
 
 use std::path::Path;
 
@@ -10,9 +10,6 @@ use rut_native::{load_bundle_session, load_dir, load_path_session, pack_dir};
 
 mod common;
 use common::{dep_dir, pkg_named};
-
-/// The make_dir manifest's text — also the corruption test's offset
-/// reference (the first zip entry's payload).
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

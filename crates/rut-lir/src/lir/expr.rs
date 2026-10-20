@@ -5,9 +5,7 @@
 use super::*;
 use crate::check::{float_suffix_ty, int_suffix_ty, numeric_prim, TcResult};
 use rut_core::binary::ConstVal;
-use rut_core::ops::*;
 use rut_core::sym;
-use rut_core::types::*;
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
     // ---- expressions ----
@@ -137,8 +135,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let (argv_off, argc) = self.pool_args(&(vals));
                     self.emit(
                         Op::MakeRecord {
-                            dst: dst,
-                            ty: ty,
+                            dst,
+                            ty,
                             argv_off,
                             argc,
                         },
@@ -666,7 +664,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // the capture law's read accessor: a promoted binding
                 // reads its shared cell, an ordinary one copies its
                 // register — ONE funnel for every read
-                let reg = self.read_local(&l, sp.lo);
+                let _reg = self.read_local(&l, sp.lo);
                 return Ok(l.ty);
             }
             // a builtin fn name in value position — point at the call form
@@ -1256,10 +1254,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let fty = self.ctx.mk_fn_ty(ptys, ret);
         let dst = self.new_reg(fty);
         {
-            let (argv_off, argc) = self.pool_args(&(vec![]));
+            let (argv_off, argc) = self.pool_args(&[]);
             self.emit(
                 Op::MakeClosure {
-                    dst: dst,
+                    dst,
                     func: fid,
                     argv_off,
                     argc,

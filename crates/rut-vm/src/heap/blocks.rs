@@ -121,7 +121,7 @@ impl Blocks {
         }
         // carve: header + payload, in whole words, bump-allocated in the
         // last page (a fresh page when it is full)
-        let words = (need + HDR + 7) / 8;
+        let words = (need + HDR).div_ceil(8);
         let mut off = self.bump.get();
         let mut pages = self.pages.borrow_mut();
         if off + words > PAGE_WORDS {
@@ -143,7 +143,7 @@ impl Blocks {
     }
 
     fn alloc_dedicated(&self, need: usize) -> *mut u8 {
-        let words = (need + HDR + 7) / 8;
+        let words = (need + HDR).div_ceil(8);
         let mut b = vec![0u64; words].into_boxed_slice();
         let payload = unsafe { (b.as_mut_ptr() as *mut u8).add(HDR) };
         unsafe { *(b.as_mut_ptr() as *mut u32) = need as u32 };

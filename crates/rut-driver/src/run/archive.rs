@@ -27,6 +27,10 @@ pub struct Bundle {
     inner: Inner,
 }
 
+#[allow(clippy::large_enum_variant)]
+// the payloads ARE the enum: decoded bundles move as values
+// through the graph — boxing would churn every construction/match
+// for a size win the graph never sees
 enum Inner {
     /// a decoded archive: the entry table (CRC-verified at parse) and
     /// the parsed layout (the manifest/version gate and every group's

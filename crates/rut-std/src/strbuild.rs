@@ -179,7 +179,7 @@ pub fn pkg() -> HostPkg {
     );
     pkg.register::<_, (Opaque<RefCell<BuilderBuf>>,), String, _>(
         "sb_finish",
-        |vm: &mut Vm, b: Opaque<RefCell<BuilderBuf>>| -> Result<String, Trap> {
+        |_vm: &mut Vm, b: Opaque<RefCell<BuilderBuf>>| -> Result<String, Trap> {
             // the ONE materialization: the octets copy out to a fresh
             // immutable str (the boundary's `String` return allocates it);
             // the builder KEEPS its buffer — finish twice answers the

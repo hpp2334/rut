@@ -5,6 +5,10 @@
 //! arrive (here: the map), the LOADER owns WHAT they are — the pin is
 //! rut.lock law, verified at the mount door on every load.
 
+// Each test binary compiles this module separately — a helper another
+// binary uses looks dead here.
+#![allow(dead_code)]
+
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::Path;

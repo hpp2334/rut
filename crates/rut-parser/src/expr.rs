@@ -6,8 +6,8 @@
 //! (9), `+ -` (10), `* / %` (11), `as` (12 — Rust placement: tighter
 //! than `*`, looser than unary), unary right, postfix — the last two
 //! structural (prefix sweep + atom), not oploop entries. Atoms (primary
-//! + postfix chains) are built by `AtomFrame`; the
-//! two §4.2 scans live in `ty.rs`.
+//! plus postfix chains) are built by `AtomFrame`; the two §4.2 scans
+//! live in `ty.rs`.
 
 use rut_ast::ast::*;
 use rut_lexer::span::Span;

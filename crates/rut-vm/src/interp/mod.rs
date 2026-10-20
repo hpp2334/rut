@@ -137,6 +137,10 @@ pub struct Vm {
     /// the boxed host bodies — `host_slots[i].ctx` points into these;
     /// owning them keeps every ctx word valid for the machine's lifetime
     /// (single thread)
+    /// (dead_code is the point: nothing reads it — owning the boxes
+    /// keeps every `host_slots[i].ctx` word valid for the machine's
+    /// lifetime)
+    #[allow(dead_code)]
     host_keep: Vec<Box<dyn std::any::Any>>,
     /// the trap channel: a host body records its trap here instead of
     /// returning `Result`; `call_host` checks the flag the moment the
@@ -292,7 +296,6 @@ impl Vm {
                     host_slots.push(HostSlot {
                         code: b.code,
                         ctx: b.ctx,
-                        ret: fc.ret,
                         ret_is_ref,
                     });
                 }
@@ -564,10 +567,7 @@ impl Vm {
     /// call skips the drain (unwinding semantics are OQ).
     fn drain_disposal(&mut self, r: Result<Value, Trap>) -> Result<Value, Trap> {
         let v = r?;
-        loop {
-            let Some((obj, fid)) = self.heap.take_pending_dispose() else {
-                break;
-            };
+        while let Some((obj, fid)) = self.heap.take_pending_dispose() {
             let done = match self.heap.alloc_disposal_context() {
                 Ok(cx) => {
                     let d = self.run_dispose(fid, obj, cx);
@@ -614,7 +614,7 @@ impl Vm {
         let ty = if ty != u32::MAX {
             ty
         } else {
-            return Err(format!("internal: untyped parameter"));
+            return Err("internal: untyped parameter".to_string());
         };
         Ok(match (v, self.prog.types.kind(ty).clone()) {
             (Value::Nil, TyKind::Nil)

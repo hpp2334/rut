@@ -147,10 +147,8 @@ fn box_answer_for_field(vm: &Vm, field_ty: u32, raw: Slot) -> Result<Slot, Trap>
     };
     let elem = *elem;
     let is_fn = matches!(vm.prog.types.kind(elem), rut_core::types::TyKind::Fn { .. });
-    if vm.prog.types.repr_of(elem).is_ref() || is_fn {
-        if !unsafe { raw.r.is_null() } {
-            vm.retain(raw);
-        }
+    if (vm.prog.types.repr_of(elem).is_ref() || is_fn) && !unsafe { raw.r.is_null() } {
+        vm.retain(raw);
     }
     vm.alloc_opt_value(field_ty, raw)
 }
@@ -228,7 +226,7 @@ fn mint_select2(vm: &Vm, a: Slot, b: Slot) -> Result<OpaqueRef, Trap> {
     vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
     vm.set_record_field(frame, af::CHILD_A_FIELD as usize, a);
     vm.set_record_field(frame, af::CHILD_B_FIELD as usize, b);
-    Ok(vm.seal_opaque(frame, fut_obj)?)
+    vm.seal_opaque(frame, fut_obj)
 }
 
 /// Build the async engine's pkg. No sink, no state: everything
@@ -277,7 +275,7 @@ pub fn pkg() -> HostPkg {
         let s0 = vm.enum_member_slot(ckpt, 0)?;
         vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
         vm.set_record_field(frame, af::LOCALS_BASE as usize, Slot::int(ms as i64));
-        Ok(vm.seal_opaque(frame, fut_obj)?)
+        vm.seal_opaque(frame, fut_obj)
     });
     // the sleep future's yield, engine-backed: the fresh arm arms the
     // timer and parks at s1; the resumed arm (or a fresh arm already
@@ -431,7 +429,7 @@ pub fn pkg() -> HostPkg {
         let s0 = vm.enum_member_slot(ckpt, 0)?;
         vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
         vm.set_record_field(frame, af::CHILD_A_FIELD as usize, cohort_slot);
-        Ok(vm.seal_opaque(frame, fut_obj)?)
+        vm.seal_opaque(frame, fut_obj)
     });
     // `__select_all_yield`: the cohort race's `Future::yield`. Same
     // shape as select2's over N members: fresh arms + launches every
@@ -518,7 +516,7 @@ pub fn pkg() -> HostPkg {
         let frame = vm.alloc_zeroed_record(frame_ty, nfields)?;
         let s0 = vm.enum_member_slot(ckpt, 0)?;
         vm.set_record_field(frame, af::STATE_FIELD as usize, s0);
-        Ok(vm.seal_opaque(frame, fut_obj)?)
+        vm.seal_opaque(frame, fut_obj)
     });
     // `__resolve`: the resolution right's engine half — store the
     // answer, retire, wake the awaiter. `__abort`-style stability:

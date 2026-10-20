@@ -9,6 +9,7 @@
 //!     (no control transfer or jump target in between),
 //!   * neither `src` nor `dst` is written before the read,
 //!   * neither the `mov` nor the read is a jump target.
+//!
 //! It rewrites the read to `src` and deletes the `mov`, then remaps all
 //! labels and spans so the code stays consistent. Ref moves (`movref`)
 //! are left alone — their retain/release is not yet provably removable.
@@ -17,6 +18,10 @@ use super::Pools;
 use rut_core::ops::*;
 use rut_core::types::Repr;
 use std::collections::HashMap;
+
+/// A pass-step's outcome: the reworked code plus its span/pos maps and
+/// whether anything changed.
+type StepOut = (Vec<Op>, Vec<(u32, u32)>, Vec<(u32, u32)>, bool);
 
 /// Run the peephole to a fixed point on one function.
 pub(crate) fn run(
@@ -122,10 +127,10 @@ pub fn refold_optprim(fc: &mut rut_core::binary::FuncCode, tt: &rut_core::types:
 fn copy_fold_once(
     code: Vec<Op>,
     spans: Vec<(u32, u32)>,
-    mut pos: Vec<(u32, u32)>,
+    pos: Vec<(u32, u32)>,
     pools: &mut Pools,
     is_prim_copy: &dyn Fn(u16) -> bool,
-) -> (Vec<Op>, Vec<(u32, u32)>, Vec<(u32, u32)>, bool) {
+) -> StepOut {
     let n = code.len();
     if n == 0 {
         return (code, spans, pos, false);
@@ -549,13 +554,10 @@ fn fuse_once(
         if !repr.is_ref() {
             continue;
         }
-        if writes.get(&f).map_or(true, |w| w.len() != 1 || w[0] != pc) {
+        if writes.get(&f).is_none_or(|w| w.len() != 1 || w[0] != pc) {
             continue;
         }
-        if reads
-            .get(&f)
-            .map_or(true, |r| r.len() != 1 || r[0] != pc + 1)
-        {
+        if reads.get(&f).is_none_or(|r| r.len() != 1 || r[0] != pc + 1) {
             continue;
         }
         let fused = match &code[pc + 1] {
@@ -664,9 +666,9 @@ fn fuse_once(
 fn opt_prim_once(
     mut code: Vec<Op>,
     spans: Vec<(u32, u32)>,
-    mut pos: Vec<(u32, u32)>,
+    pos: Vec<(u32, u32)>,
     pools: &mut Pools,
-) -> (Vec<Op>, Vec<(u32, u32)>, Vec<(u32, u32)>, bool) {
+) -> StepOut {
     let n = code.len();
     if n < 2 {
         return (code, spans, pos, false);
@@ -715,13 +717,10 @@ fn opt_prim_once(
         // 1. store elision: makeopt + adjacent optprim store
         if let Op::MakeOpt { dst, src, .. } = &code[pc] {
             let (d, s) = (*dst, *src);
-            if writes.get(&d).map_or(true, |w| w.len() != 1 || w[0] != pc) {
+            if writes.get(&d).is_none_or(|w| w.len() != 1 || w[0] != pc) {
                 continue;
             }
-            if reads
-                .get(&d)
-                .map_or(true, |r| r.len() != 1 || r[0] != pc + 1)
-            {
+            if reads.get(&d).is_none_or(|r| r.len() != 1 || r[0] != pc + 1) {
                 continue;
             }
             let folded = match &code[pc + 1] {
@@ -771,13 +770,10 @@ fn opt_prim_once(
             } => (*t, *p),
             _ => continue,
         };
-        if writes.get(&t).map_or(true, |w| w.len() != 1 || w[0] != pc) {
+        if writes.get(&t).is_none_or(|w| w.len() != 1 || w[0] != pc) {
             continue;
         }
-        if reads
-            .get(&t)
-            .map_or(true, |r| r.len() != 1 || r[0] != pc + 1)
-        {
+        if reads.get(&t).is_none_or(|r| r.len() != 1 || r[0] != pc + 1) {
             continue;
         }
         // the consumer must be the payload read (field 0, at the payload's
@@ -1254,10 +1250,6 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
             d.push(*dst);
             u.push(*src);
         }
-        Op::ArrNew { dst, len, .. } => {
-            d.push(*dst);
-            u.push(*len);
-        }
         Op::ArrGet { dst, arr, idx, .. } => {
             d.push(*dst);
             u.push(*arr);
@@ -1372,11 +1364,8 @@ fn replace_reads(op: &mut Op, pools: &mut Pools, from: u16, to: u16) {
         Op::BrTable { idx, .. } => f(idx),
         Op::CallNat { recv, .. } => f(recv),
         Op::CallFn { fval, .. } => f(fval),
-        Op::Ret { val } => {
-            if let Some(x) = val {
-                f(x);
-            }
-        }
+        Op::Ret { val: Some(x) } => f(x),
+        Op::Ret { val: None } => {}
         Op::GetF { obj, .. } => f(obj),
         Op::SetF { obj, val, .. } => {
             f(obj);

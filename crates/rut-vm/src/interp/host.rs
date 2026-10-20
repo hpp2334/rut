@@ -27,9 +27,11 @@ pub type HostCode = fn(&mut Vm, &[Slot], Ctx) -> Slot;
 
 /// A binding's signature — a fixed array, no heap: max host arity 8 is
 /// the boundary's own law (tuples cap at arity 8). DERIVED from the
-/// callable's Rust shape (`HostHandler::SIG`), never written.
+/// callable's Rust shape (`HostHandler::SIG`), never written. Public
+/// because `HostHandler` is (the exported registration macros expand
+/// to bounds and consts that mention it).
 #[derive(Clone, Copy)]
-pub(crate) struct HostSig {
+pub struct HostSig {
     pub tys: [TypeId; 8],
     pub ret: TypeId,
     pub n: u8,
@@ -72,7 +74,6 @@ pub(crate) struct HostBinding {
 pub(crate) struct HostSlot {
     pub code: HostCode,
     pub ctx: Ctx,
-    pub ret: TypeId,
     /// the join's verdict on `ret` — the `Vm::is_ref` predicate frozen
     /// once per binding (crossing-fastpath phase 2): the write-back
     /// refcount law in `call_host` reads this bit instead of doing a
@@ -92,7 +93,6 @@ impl HostSlot {
     pub const NEVER: HostSlot = HostSlot {
         code: Self::never,
         ctx: std::ptr::null(),
-        ret: 0,
         ret_is_ref: false,
     };
 }
@@ -473,7 +473,6 @@ impl HostPkgContext {
 #[cfg(test)]
 mod host_pkg_tests {
     use super::*;
-    use crate::Trap;
 
     /// The declared shape of a pkg world: one scope with two rows
     /// (every row the pkg declares MUST be bound by its installer).

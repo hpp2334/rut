@@ -622,7 +622,7 @@ fn splice_tree(
         edits.push((span.lo, end, format!("mod {name} {{\n{body}\n}}")));
     }
     // splice descending — spans stay valid
-    edits.sort_by(|a, b| b.0.cmp(&a.0));
+    edits.sort_by_key(|e| std::cmp::Reverse(e.0));
     let mut out = text.to_string();
     for (lo, hi, replacement) in edits {
         out.replace_range(lo as usize..hi as usize, &replacement);

@@ -200,14 +200,8 @@ fn large_input_is_monotonic_through_get() {
     }
     // out of range reads 0, and `has` says false — no trap
     assert_eq!(vm.call::<_, i32>("get", (c.clone(), 500i32)).unwrap(), 0);
-    assert_eq!(
-        vm.call::<_, bool>("has", (c.clone(), 500i32)).unwrap(),
-        false
-    );
-    assert_eq!(
-        vm.call::<_, bool>("has", (c.clone(), -1i32)).unwrap(),
-        false
-    );
+    assert!(!vm.call::<_, bool>("has", (c.clone(), 500i32)).unwrap());
+    assert!(!vm.call::<_, bool>("has", (c.clone(), -1i32)).unwrap());
 }
 
 #[test]

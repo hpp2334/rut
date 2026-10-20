@@ -958,12 +958,8 @@ fn position_path_completions(
     let (head, rest) = segs.split_first()?;
     let pkg = doc.pkg.as_deref();
     let doc_index = idxs[0];
-    let Some(start) = mods::resolve_position_head(doc, doc_index, idxs, head) else {
-        return None;
-    };
-    let Some(path) = mods::walk_position_mods(idxs, pkg, &start, rest) else {
-        return None;
-    };
+    let start = mods::resolve_position_head(doc, doc_index, idxs, head)?;
+    let path = mods::walk_position_mods(idxs, pkg, &start, rest)?;
     let from = doc.mod_path.as_deref().unwrap_or("");
     let Some(scope) = scope_index(idxs, doc, pkg, &path) else {
         return Some(Vec::new());
@@ -1095,7 +1091,7 @@ fn auto_import_completions(
                 doc: doc.to_vec(),
                 kind,
                 sort_text: Some(format!("~{name}")),
-                additional_text_edits: vec![(insert.0.clone(), text)],
+                additional_text_edits: vec![(insert.0, text)],
             });
         };
         for t in &i.types {
@@ -1703,7 +1699,7 @@ return c.;
         // a dep index (the calc shape: namespace Math + consts): the
         // names tier offers the minted head, the fns, and the consts
         let src = "pub host fn sqrt(x: f64) -> f64;\n";
-        let consts = vec![("PI".to_string(), 3.141592653589793f64)];
+        let consts = vec![("PI".to_string(), std::f64::consts::PI)];
         let calc = crate::deps::index_dep(
             "calc",
             "file:///deps/calc.d.rut",
@@ -2035,7 +2031,7 @@ return c.;
         // `Math::⏐` over the calc dep — the namespace head's consts
         // and fns (the mint the manifest's namespace/consts ride)
         let src = "pub host fn sqrt(x: f64) -> f64;\n";
-        let consts = vec![("PI".to_string(), 3.141592653589793f64)];
+        let consts = vec![("PI".to_string(), std::f64::consts::PI)];
         let calc = crate::deps::index_dep(
             "calc",
             "file:///deps/calc.d.rut",

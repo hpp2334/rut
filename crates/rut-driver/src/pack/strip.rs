@@ -22,6 +22,7 @@ use crate::PackError;
 // 2. the mangle itself: one closure-wide string→string map over
 //    every encoded program, symbolication tables taken into the
 //    sidecar.
+#[allow(clippy::too_many_arguments)] // the pack lane threads exactly this state
 pub(super) fn strip_arm(
     units: &mut crate::graph::Units,
     session: &crate::session::Session,
@@ -39,12 +40,12 @@ pub(super) fn strip_arm(
         if *spec == root || session.resolve(spec).is_err() {
             continue; // the root rides compiled above; unmounted names never ride
         }
-        if rides_compiled(session, spec, &units) {
+        if rides_compiled(session, spec, units) {
             continue; // a `.rutc` group — no source binds anything
         }
         let dm = group_manifest(source, archives, read).map_err(PackError::law)?;
         for dep in dm.deps.keys() {
-            let dep_compiled = rides_compiled(session, dep, &units);
+            let dep_compiled = rides_compiled(session, dep, units);
             if dep_compiled {
                 return Err(PackError::law(format!(
                     "--strip needs a fully-compiled closure: the source group \
@@ -59,11 +60,11 @@ pub(super) fn strip_arm(
     // `sources` order — gathered in ONE pass so the programs reborrow
     // disjointly
     let mut wanted: Vec<(String, usize)> = vec![(root.to_string(), root_idx)];
-    for (spec, _) in sources.iter() {
+    for spec in sources.keys() {
         if *spec == root || session.resolve(spec).is_err() {
             continue;
         }
-        if !rides_compiled(session, spec, &units) {
+        if !rides_compiled(session, spec, units) {
             continue; // the declaration file set — no binary to strip
         }
         let &(idx, _) = units.linked.get(spec).unwrap();

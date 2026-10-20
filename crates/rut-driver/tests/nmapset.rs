@@ -20,7 +20,6 @@ const NMAPSET_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut/nmapse
 
 /// Offer the `nmapset` pkg (it pulls `nmap_host` through its `[deps]`)
 /// and `app_src` as the root.
-
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.
 #[allow(dead_code)] // not every suite in this file needs both lanes

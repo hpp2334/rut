@@ -156,7 +156,7 @@ pub fn hover(
 }
 
 /// token under (or immediately before) `pos`
-pub(crate) fn tok_at<'t>(toks: &'t [Token], pos: u32) -> Option<&'t Token> {
+pub(crate) fn tok_at(toks: &[Token], pos: u32) -> Option<&Token> {
     toks.iter()
         .rev()
         .find(|t| t.span.lo <= pos && pos <= t.span.hi)
@@ -166,7 +166,7 @@ pub(crate) fn tok_at<'t>(toks: &'t [Token], pos: u32) -> Option<&'t Token> {
 /// (name resolution — enum members, namespace consts): the head's
 /// source text — an identifier, or the `str` primitive for string
 /// literals
-pub(crate) fn member_context<'t>(toks: &'t [Token], t: &Token) -> Option<String> {
+pub(crate) fn member_context(toks: &[Token], t: &Token) -> Option<String> {
     let i = toks.iter().position(|x| x.span.lo == t.span.lo)?;
     if i < 2 || !(toks[i - 1].tok == Tok::Dot || toks[i - 1].tok == Tok::Colon2) {
         return None;
@@ -216,7 +216,7 @@ fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String>
         }
         for m in &i.mods {
             if m.name == name && m.name_span == Some(span) {
-                let child = crate::mods::child_path(&crate::mods::mod_path_of(i), &m.name);
+                let child = crate::mods::child_path(crate::mods::mod_path_of(i), &m.name);
                 let mounted = mounted_child(idxs, i, &child);
                 return Some(render_mod(
                     i,
@@ -248,11 +248,13 @@ fn mounted_child<'a>(idxs: &[&'a DefIndex], owner: &DefIndex, child: &str) -> Op
 /// a use-path SEGMENT hover: the span matches one of the document's
 /// path segments — the resolved module (walked through the pub edges;
 /// the pkg head answers the root module) renders kind + mounted file
-/// + child count. An OWN package head — the doc's own pkg name, or
-/// one of its own mod edges (the ancestor-walk spelling, keyed on the
-/// doc context) — commits to the intra-package walk (any declared
-/// edge; the doc's own rows read for its own scope). A non-walking
-/// path is no hover, never wrong text.
+/// + child count.
+///
+/// An OWN package head — the doc's own pkg name, or one of its own
+/// mod edges (the ancestor-walk spelling, keyed on the doc context) —
+/// commits to the intra-package walk (any declared edge; the doc's
+/// own rows read for its own scope). A non-walking path is no hover,
+/// never wrong text.
 fn use_segment_hover(idxs: &[&DefIndex], doc: &DocMods, span: Span) -> Option<String> {
     let di = idxs[0];
     for u in &di.uses {

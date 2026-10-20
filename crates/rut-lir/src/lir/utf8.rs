@@ -121,7 +121,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.emit(Op::StrCodeAt { dst: d, s, idx }, sp);
         d
     }
-    fn to_u32(&mut self, src: u16, from: PrimTy, sp: u32) -> u16 {
+    fn conv_u32(&mut self, src: u16, from: PrimTy, sp: u32) -> u16 {
         let d = self.new_reg(TY_U32);
         self.emit(
             Op::Conv {
@@ -147,7 +147,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn emit_string_encode(&mut self, src: u16, sp: u32) -> u16 {
         let n = self.new_reg(TY_I32);
         {
-            let (argv_off, argc) = self.pool_args(&(vec![]));
+            let (argv_off, argc) = self.pool_args(&[]);
             self.emit(
                 Op::CallNat {
                     nat: Nat::StrLen,
@@ -326,7 +326,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         );
         let n = self.new_reg(TY_I32);
         {
-            let (argv_off, argc) = self.pool_args(&(vec![]));
+            let (argv_off, argc) = self.pool_args(&[]);
             self.emit(
                 Op::CallNat {
                     nat: Nat::ArrLen,
@@ -356,7 +356,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // exorcism: no Conv{U32→Char}, no char register)
         let cs = self.new_reg(TY_STR);
         {
-            let (argv_off, argc) = self.pool_args(&(vec![cp]));
+            let (argv_off, argc) = self.pool_args(&[cp]);
             self.emit(
                 Op::CallNat {
                     nat: Nat::StrFromCode,
@@ -369,7 +369,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             );
         }
         {
-            let (argv_off, argc) = self.pool_args(&(vec![out, cs]));
+            let (argv_off, argc) = self.pool_args(&[out, cs]);
             self.emit(
                 Op::CallNat {
                     nat: Nat::Concat,
@@ -392,7 +392,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Invalid input writes U+FFFD and advances one octet.
     fn emit_decode_one(&mut self, src: u16, i: u16, n: u16, cp: u16, adv: u16, sp: u32) {
         let b0 = self.arr_get_u8(src, i, sp);
-        let b0u = self.to_u32(b0, PrimTy::U8, sp);
+        let b0u = self.conv_u32(b0, PrimTy::U8, sp);
 
         let l_ascii = self.new_label();
         let l_bad = self.new_label();
@@ -482,7 +482,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.br(in_bounds, l_read, l_bad);
             self.bind(l_read);
             let bj = self.arr_get_u8(src, idx, sp);
-            let bju = self.to_u32(bj, PrimTy::U8, sp);
+            let bju = self.conv_u32(bj, PrimTy::U8, sp);
             let cont = self.is_cont(bju, sp);
             let l_ok = self.new_label();
             self.br(cont, l_ok, l_bad);

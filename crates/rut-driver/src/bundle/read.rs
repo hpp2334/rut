@@ -56,6 +56,10 @@ impl Bundle {
 
 /// A dep group's payload kind.
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
+// the payloads ARE the enum: decoded bundles move as values
+// through the graph — boxing would churn every construction/match
+// for a size win the graph never sees
 pub enum GroupKind {
     /// a source pkg's compiled group: its decoded `.rutc` (v17,
     /// decode-verified) rides `deps/<identity>/mod.rutc` — bodies +
@@ -77,6 +81,10 @@ pub enum GroupKind {
 /// every dep group rides at `deps/<name>@<fp16>/…` — the archive
 /// mirrors the manifest's `deps` table, name-free.
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
+// the payloads ARE the enum: decoded bundles move as values
+// through the graph — boxing would churn every construction/match
+// for a size win the graph never sees
 pub enum Layout {
     Compiled {
         /// the root manifest (byte-for-byte `rut.jsonc`, parsed)

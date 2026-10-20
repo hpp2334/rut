@@ -150,9 +150,9 @@ fn prim_round_trips_hold_bits_including_the_u64_high_half() {
     assert_eq!(vm.call::<_, u64>("rt_u64_shr", (1u64 << 62,)).unwrap(), 0);
     // floats/bool/char: the raw union reads
     assert_eq!(vm.call::<_, f64>("rt_f64", (1.5e300,)).unwrap(), 1.5e300);
-    assert_eq!(vm.call::<_, f64>("rt_f64", (-0.0,)).unwrap() == 0.0, true);
-    assert_eq!(vm.call::<_, bool>("rt_bool", (true,)).unwrap(), true);
-    assert_eq!(vm.call::<_, bool>("rt_bool", (false,)).unwrap(), false);
+    assert!(vm.call::<_, f64>("rt_f64", (-0.0,)).unwrap() == 0.0);
+    assert!(vm.call::<_, bool>("rt_bool", (true,)).unwrap());
+    assert!(!vm.call::<_, bool>("rt_bool", (false,)).unwrap());
 }
 
 #[test]

@@ -407,8 +407,10 @@ mod tests {
     /// instantiation row owned by pkg spec `util` — every keep-set kind
     /// present. `extra` interns additional renameable names.
     fn synth(name: &str, extra: &[&str]) -> Program {
-        let mut p = Program::default();
-        p.name = name.to_string();
+        let mut p = Program {
+            name: name.to_string(),
+            ..Program::default()
+        };
         let worker = p.interner.intern("worker");
         let run = p.interner.intern("run");
         let tick = p.interner.intern("rt:tick");

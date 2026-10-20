@@ -344,9 +344,7 @@ fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestErr
     // it.
     if compat && !m.legacy_entry.libs.is_empty() {
         if m.legacy_entry.lib.is_none() {
-            return Err(ManifestError(format!(
-                "`entry.libs` needs `entry.lib` — the multi-lib entry is a base file plus an ordered tail"
-            )));
+            return Err(ManifestError("`entry.libs` needs `entry.lib` — the multi-lib entry is a base file plus an ordered tail".to_string()));
         }
         let base = m.legacy_entry.lib.as_deref().expect("checked just above");
         let mut seen = vec![base.to_string()];

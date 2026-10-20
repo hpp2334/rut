@@ -436,6 +436,10 @@ impl<T: 'static> Opaque<T> {
     /// borrow of the entry may be live, and rut-side ops never touch host
     /// payloads — the same argument the previous raw-payload design
     /// made; the view's own handle pins the rc for the borrow's scope.
+    // The `&mut` alias is the point of this method: it is created through
+    // the entry raw pointer and only valid under the guard documented
+    // below, which the lint can't see — hence the allow.
+    #[allow(clippy::mut_from_ref)]
     unsafe fn boxed_mut(&self) -> (&mut dyn Any, &Cell<u32>) {
         let cell = unsafe { &mut *self.handle.entry_ptr() };
         let OpaqueEntry::Host(host) = &mut cell.e else {
@@ -484,8 +488,10 @@ mod tests {
 
     /// A bare Vm: the store laws here ride the boot types table only.
     fn bare_vm() -> crate::interp::Vm {
-        let mut prog = rut_core::binary::Program::default();
-        prog.types = rut_core::types::TypeTable::boot();
+        let prog = rut_core::binary::Program {
+            types: rut_core::types::TypeTable::boot(),
+            ..rut_core::binary::Program::default()
+        };
         crate::interp::Vm::new(
             Rc::new(prog),
             &crate::interp::Limits::default(),
@@ -619,7 +625,7 @@ mod tests {
 
     #[test]
     fn rut_entry_death_releases_the_held_cell() {
-        let mut vm = bare_vm();
+        let vm = bare_vm();
         let base = vm.heap_usage();
         // mint a str cell + a rut box over it — the entry holds the cell
         let s = vm.heap.alloc_str("hello".into()).unwrap();

@@ -347,9 +347,8 @@ fn locked_refuses_manifest_set_drift() {
     let root = consumer_world(
         "set consumer",
         &format!(
-            "{}, {}",
-            one_dep(&util_url),
-            format!(r#""extra": {{"url": "{extra_url}"}}"#)
+            "{}, \"extra\": {{\"url\": \"{extra_url}\"}}",
+            one_dep(&util_url)
         ),
     );
     let app = root.join("app");
@@ -367,10 +366,8 @@ fn locked_refuses_manifest_set_drift() {
         &manifest(
             "app",
             &format!(
-                "{}, {}, {}",
-                one_dep(&util_url),
-                format!(r#""extra": {{"url": "{extra_url}"}}"#),
-                format!(r#""more": {{"url": "{more_url}"}}"#)
+                "{}, \"extra\": {{\"url\": \"{extra_url}\"}}, \"more\": {{\"url\": \"{more_url}\"}}",
+                one_dep(&util_url)
             ),
         ),
     );

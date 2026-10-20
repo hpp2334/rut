@@ -193,11 +193,11 @@ fn fstring_holes_allow_string_arguments() {
 fn tuples_parse_and_destructure() {
     // tuples are records with numeric fields
     let src = "fn f() -> nil { let x = (1, 2); let (a, b) = x; let n = x.0; }";
-    let (_, diags) = parse(&src, Mode::Impl);
+    let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
     // a one-element paren is still a grouping, not a tuple
     let src = "fn f() -> nil { let x = (1); }";
-    let (_, diags) = parse(&src, Mode::Impl);
+    let (_, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "{diags:?}");
 }
 

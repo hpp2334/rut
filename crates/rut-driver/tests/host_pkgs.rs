@@ -333,7 +333,7 @@ fn server_registry(emit_second: Option<rut_core::types::TypeId>) -> rut_vm::inte
         ),
         // a fabricated runtime drift: i64 where the surface declares str
         // (a RUST-side drift cannot compile anymore — that is decision 7)
-        Some(TY_I64) => rut_vm::register!(
+        Some(rut_core::types::TY_I64) => rut_vm::register!(
             hosts,
             "server::emit",
             (OpaqueRef, i64, &str) -> (),

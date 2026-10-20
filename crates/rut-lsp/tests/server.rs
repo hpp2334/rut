@@ -97,7 +97,7 @@ async fn spawn() -> Editor {
 async fn spawn_at(root: &str) -> Editor {
     let (client_tx, server_rx) = tokio::io::duplex(4096);
     let (server_tx, client_rx) = tokio::io::duplex(4096);
-    let (service, socket) = LspService::new(|client| Backend::new(client));
+    let (service, socket) = LspService::new(Backend::new);
     tokio::spawn(async move {
         Server::new(server_rx, server_tx, socket)
             .serve(service)

@@ -28,16 +28,6 @@ fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<HoverOut> {
     hover(&idxs, &toks, &ast, &crate::mods::DocMods::default(), pos)
 }
 
-/// the whole span of the `n`-th ident `needle` — the span-first law's
-/// assertion target
-fn ident_span_of(toks: &[Token], name: &str, n: usize) -> rut_lexer::span::Span {
-    toks.iter()
-        .filter(|t| matches!(&t.tok, Tok::Ident(s) if s == name))
-        .nth(n)
-        .map(|t| t.span)
-        .unwrap()
-}
-
 fn find_ident_pos(toks: &[Token], name: &str, n: usize) -> Option<u32> {
     toks.iter()
         .filter(|t| matches!(&t.tok, Tok::Ident(s) if s == name))
@@ -662,8 +652,8 @@ fn binding_decl_span_is_byte_exact() {
     .unwrap();
     let use_span = toks
         .iter()
-        .filter(|t| matches!(&t.tok, Tok::Ident(s) if s == "total"))
-        .last()
+        .rev()
+        .find(|t| matches!(&t.tok, Tok::Ident(s) if s == "total"))
         .unwrap()
         .span;
     assert_eq!(out.span, use_span);
@@ -769,7 +759,7 @@ fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
     let (toks, _) = rut_lexer::lexer::lex(&doc2);
     let (ast, _) = rut_parser::parse(&doc2, rut_parser::Mode::Impl);
     let idx = index(&doc2, &ast, &toks);
-    let dep = vec![
+    let dep = [
         dep_index(
             "gadgets",
             "",

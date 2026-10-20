@@ -382,7 +382,7 @@ mod tests {
     #[test]
     fn zero_param_call_shows_the_signature_without_an_active_slot() {
         let src = "fn mk() -> i32 {\n    return 1;\n}\nfn main() -> i32 {\n    let v = mk();\n    return v;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let (label, slot, pieces) =
             slot_of(&help(&d, at(&d.src, "mk(", 1) + 2, &[]).expect("help"));
         assert_eq!(label, "fn mk() -> i32");
@@ -535,7 +535,7 @@ mod tests {
     #[test]
     fn unknown_callee_stays_silent() {
         let src = "entry fn main() -> nil {\n    mystery(1, 2);\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         assert!(help(&d, at(&d.src, "1, 2", 1), &[]).is_none());
     }
 

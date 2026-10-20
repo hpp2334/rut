@@ -104,6 +104,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         Ok(nty)
     }
 
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub(crate) fn compile_static_call(
         &mut self,
         base: IdentId,
@@ -222,14 +223,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let cp = self.last_reg;
                 let dst = self.new_reg(TY_STR);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![cp]));
+                    let (argv_off, argc) = self.pool_args(&[cp]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::StrFromCode,
                             recv: NOREG,
                             argv_off,
                             argc,
-                            dst: dst,
+                            dst,
                         },
                         sp.lo,
                     );
@@ -441,7 +442,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // `Vec.from_flow(it)` (the FromFlow surface). The class
             // instantiation rides the same explicit-or-expected mint.
             if !d.methods.iter().any(|(m, _)| *m == member) {
-                let concrete = if !d.generics.is_empty() {
+                let _concrete = if !d.generics.is_empty() {
                     let cargs = if !base_generics.is_empty() {
                         base_generics
                             .iter()

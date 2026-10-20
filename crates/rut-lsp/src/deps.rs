@@ -30,6 +30,12 @@ use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
 use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
 use rut_driver::bundle::{parse_bundle, Manifest};
 use rut_lexer::span::Span;
+
+/// A bundle's rows head: the owning spec plus its mounted sources.
+type ModHead = (
+    String,
+    std::collections::BTreeMap<String, rut_driver::ModSource>,
+);
 use rut_parser::Mode;
 use sha2::{Digest, Sha256};
 
@@ -285,16 +291,7 @@ pub struct BundleIndex {
 /// old flat envelope, which keeps loading byte-for-byte. The flavor
 /// rides the pkg: a host tree speaks Decl and mounts `mod.d.rut`
 /// children, a lib body's tree the Impl `mod.rut` shape.
-fn bundle_rows(
-    entries: &[(String, Vec<u8>)],
-    host: bool,
-) -> Result<
-    Option<(
-        String,
-        std::collections::BTreeMap<String, rut_driver::ModSource>,
-    )>,
-    String,
-> {
+fn bundle_rows(entries: &[(String, Vec<u8>)], host: bool) -> Result<Option<ModHead>, String> {
     let text = match read_entry(entries, rut_driver::mods::ROWS_NAME) {
         Ok(t) => t,
         Err(_) => return Ok(None),
@@ -1099,7 +1096,7 @@ mod tests {
             .iter()
             .find(|(n, _)| n == "PI")
             .expect("PI in consts");
-        assert_eq!(pi.1, 3.141592653589793);
+        assert_eq!(pi.1, std::f64::consts::PI);
         // the non-finite spelling rides as the f64 it names
         let inf = t
             .consts
@@ -1290,7 +1287,7 @@ pub host fn legacy_ping() -> bool;
         let src = "\
 pub host fn sqrt(x: f64) -> f64;
 ";
-        let consts = vec![("PI".to_string(), 3.141592653589793f64)];
+        let consts = vec![("PI".to_string(), std::f64::consts::PI)];
         let idx = index_dep(
             "calc",
             "file:///deps/calc.d.rut",

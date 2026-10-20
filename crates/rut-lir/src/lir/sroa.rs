@@ -138,7 +138,7 @@ fn one_round(
         };
         let p = *p;
         let vals: &[Reg] = &pools.argv[*argv_off as usize..*argv_off as usize + *argc as usize];
-        if is_target[pc] || defs.get(&p).map_or(true, |d| d.len() != 1) {
+        if is_target[pc] || defs.get(&p).is_none_or(|d| d.len() != 1) {
             continue;
         }
         // a `Disposal` row observes the cell's lifetime (dispose runs at
@@ -363,7 +363,7 @@ fn ret_round(
         if vals.is_empty()
             || is_target[pc]
             || vals.contains(&p)
-            || defs.get(&p).map_or(true, |d| d.len() != 1)
+            || defs.get(&p).is_none_or(|d| d.len() != 1)
         {
             continue;
         }
@@ -414,8 +414,8 @@ fn ret_round(
                     };
                     let good = si != r
                         && !visited.contains(&si)
-                        && defs.get(&si).map_or(false, |d| d.len() == 1)
-                        && uses.get(&si).map_or(false, |uu| uu.iter().all(|&u| u > j));
+                        && defs.get(&si).is_some_and(|d| d.len() == 1)
+                        && uses.get(&si).is_some_and(|uu| uu.iter().all(|&u| u > j));
                     if !good {
                         ok = false;
                         break 'walk;

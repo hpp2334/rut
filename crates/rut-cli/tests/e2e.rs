@@ -10,12 +10,11 @@ use rut_core::ops::{Nat, Op};
 /// The toolchain libs a single-file case declares by use (`ink`,
 /// `pouch`) — mounted from the tree as real packages (the driver does
 /// not know their names): mounting `ink` pulls its `ink_host` dep along.
-
 /// The mount snapshot for a case session (core+calc+libs) — what the
 /// installs answer to (`install_host_pkg`'s declared-side check) and
 /// what `verify_against` re-checks at boot.
 /// The case world: the toolchain libs a case declares by use (`ink`
-/// + `ink_host`, `pouch`) — walked from the tree as real packages —
+/// with `ink_host`, `pouch`) — walked from the tree as real packages —
 /// plus calc.
 fn case_world() -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
@@ -151,7 +150,7 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
         .graph
         .program
         .as_ref()
-        .map(|p| rut_core::binary::encode(p));
+        .map(rut_core::binary::encode);
     rut_driver::CompileOutput {
         diags: compiled.graph.diags,
         ast_dump,

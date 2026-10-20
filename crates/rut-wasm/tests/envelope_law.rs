@@ -13,8 +13,9 @@
 fn compile_envelope(src: &str, man: Option<&str>) -> String {
     let (sp, sl) = (src.as_ptr(), src.len());
     let res_ptr = match man {
-        None => rut_wasm::rut_compile(sp, sl),
-        Some(m) => rut_wasm::rut_compile_manifest(sp, sl, m.as_ptr(), m.len()),
+        // SAFETY: the pointers point at `src`/`m`, alive for the call
+        None => unsafe { rut_wasm::rut_compile(sp, sl) },
+        Some(m) => unsafe { rut_wasm::rut_compile_manifest(sp, sl, m.as_ptr(), m.len()) },
     };
     unsafe {
         // the ABI's envelope is [u32 LE length][bytes] at the returned

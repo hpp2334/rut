@@ -449,9 +449,9 @@ entry fn main() -> i32 {
         interrupt_every: 1024,
     };
     let mut hosts = HostRegistry::new();
-    struct Stamp(i64);
-    rut_vm::register!(hosts, "weak_host::make_box", (i64) -> OpaqueRef, |vm: &mut rut_vm::interp::Vm, n: i64| {
-        let b = rut_vm::Opaque::alloc(vm, Stamp(n))?;
+    struct Stamp;
+    rut_vm::register!(hosts, "weak_host::make_box", (i64) -> OpaqueRef, |vm: &mut rut_vm::interp::Vm, _n: i64| {
+        let b = rut_vm::Opaque::alloc(vm, Stamp)?;
         Ok(b.handle().clone())
     });
     hosts.verify_against(&ctx.flatten());

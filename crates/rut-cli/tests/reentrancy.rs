@@ -123,16 +123,16 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
     };
     // bindings BEFORE the Vm: install + contract + boot
     let mut hosts = rut_vm::interp::HostRegistry::new();
-    install(&mut hosts, &invocations);
+    install(&mut hosts, invocations);
     hosts.verify_against(&expected); // tests/data/re/re.d.rut ↔ the bodies
-    let vm = rut_vm::interp::Vm::builder()
+
+    rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
         .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
-        .unwrap();
-    vm
+        .unwrap()
 }
 
 fn install(hosts: &mut rut_vm::interp::HostRegistry, invocations: &Rc<Cell<u32>>) {

@@ -275,6 +275,7 @@ fn main() {
     println!("json_dec(\"{{\\\"a\\\":1}}\") = ok ({})", err.is_empty());
 
     println!("fuel used: {} of {:?}", vm.fuel_used, Some(50_000_000u64));
+    println!("all cross-checks: {}", verdict(all_ok));
 }
 
 fn verdict(ok: bool) -> &'static str {

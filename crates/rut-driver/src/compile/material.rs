@@ -235,9 +235,7 @@ impl<'a> Substitution<'a> {
                     // list — their fields are the whole story — so they
                     // stay as themselves here.)
                     let text = self.name_of(t).to_string();
-                    let Some((base, args)) = Self::split_args(&text) else {
-                        return None;
-                    };
+                    let (base, args) = Self::split_args(&text)?;
                     let mut parts = Vec::new();
                     let mut cargs = Vec::new();
                     let mut name_changed = false;
@@ -551,7 +549,7 @@ pub(crate) fn build_iface_remaps(
     sub: &mut Substitution,
     ifaces: &mut Vec<rut_core::binary::IfaceDesc>,
     iface_slots: &mut Vec<(u32, u32)>,
-    vtables: &mut Vec<Vec<Option<u32>>>,
+    vtables: &mut [Vec<Option<u32>>],
     fc: &FuncCode,
 ) -> Result<IfaceRemaps, String> {
     let mut wanted_slots: Vec<u32> = Vec::new();
@@ -618,7 +616,7 @@ fn resolve_iface_row(
     sub: &mut Substitution,
     ifaces: &mut Vec<rut_core::binary::IfaceDesc>,
     iface_slots: &mut Vec<(u32, u32)>,
-    vtables: &mut Vec<Vec<Option<u32>>>,
+    vtables: &mut [Vec<Option<u32>>],
     row: u32,
 ) -> Result<u32, String> {
     let Some(desc) = ifaces.get(row as usize) else {
@@ -680,7 +678,7 @@ fn resolve_iface_row(
 /// through `map_fid`, re-target the interface-slot operands through
 /// `ifc`, rewrite the repr bytes the substitution changed, and re-run
 /// the repr-keyed folds — the byte-equality law's engine.
-pub fn materialize_fn(
+pub(crate) fn materialize_fn(
     sub: &mut Substitution,
     fc: &FuncCode,
     map_fid: &mut dyn FnMut(u32) -> u32,

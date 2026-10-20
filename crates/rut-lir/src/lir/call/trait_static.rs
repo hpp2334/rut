@@ -387,6 +387,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// site). The receiver register holds the cell handle (only
     /// ref-repr values satisfy interfaces); the args widen to the
     /// interface's declared signature.
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub(crate) fn finish_iface_call(
         &mut self,
         slot: u32,
@@ -433,7 +434,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let (argv_off, argc) = self.pool_recv_args(rreg, &(aregs));
             self.emit(
                 Op::CallI {
-                    slot: slot,
+                    slot,
                     argv_off,
                     argc,
                     dst: opt_reg(dst),

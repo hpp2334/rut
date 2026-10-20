@@ -341,9 +341,7 @@ fn any_other_version_refuses_with_the_one_recipe() {
     // the old lane — everything else refuses)
     let dir = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
-    let v9_host = format!(
-        r#"{{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}}}"#
-    );
+    let v9_host = r#"{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#.to_string();
     let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
         .unwrap_err()
         .to_string();

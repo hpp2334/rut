@@ -7,9 +7,19 @@
 use rut_ast::dump;
 use rut_core::binary::Program;
 use rut_core::ops::Op;
-use rut_core::types::{Repr, TyKind, TypeId, TY_I32, TY_NIL};
+use rut_core::types::{TyKind, TypeId, TY_I32, TY_NIL};
 use rut_core::{sym, IdentId};
 use rut_lexer::diag::Diag;
+
+/// One use-binding's trait map: `(owning scope, its surface, member
+/// remap, dep spec, trait head)` — the cross-module trait plumbing.
+type TraitMapRow<'a> = (
+    rut_core::id::ScopeId,
+    &'a rut_core::binary::Surface,
+    std::collections::HashMap<u32, u32>,
+    String,
+    String,
+);
 use rut_lir::check::{Ctx, FnKey, Inst, AMBIENT_SITE};
 use rut_parser::{parse, Mode};
 
@@ -457,13 +467,7 @@ fn compile_program_inner(
     // different module than the trait it implements):
     // trait text -> this module's registered trait id
     let mut ext_trait: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
-    let mut trait_maps: Vec<(
-        rut_core::ScopeId,
-        &rut_core::binary::Surface,
-        std::collections::HashMap<u32, u32>,
-        String,
-        String,
-    )> = Vec::new();
+    let mut trait_maps: Vec<TraitMapRow<'_>> = Vec::new();
     for (dep_scope, surface, origin, head) in uses {
         // ---- pass 1: interface declarations from every surface. A
         // descriptor registers when its name was used (the use-both
@@ -564,7 +568,7 @@ fn compile_program_inner(
         std::collections::HashSet::new();
     let mut ambient_names: std::collections::HashSet<rut_core::IdentId> =
         std::collections::HashSet::new();
-    for (dep_scope, surface, tmap, origin, head) in trait_maps.iter() {
+    for (dep_scope, surface, _tmap, origin, head) in trait_maps.iter() {
         let dep_scope = *dep_scope;
         // the namespace head's files (`use calc::{ Math }`): the
         // namespace's MEMBER rows — the fns and consts the surface
@@ -1782,7 +1786,7 @@ fn compile_program_inner(
         let mut by_name: std::collections::HashMap<String, TypeId> =
             std::collections::HashMap::new();
         for (i, t) in ctx.types.types.iter().enumerate() {
-            if i >= ctx.types.boot_len as usize && i < seed_start as usize {
+            if i >= ctx.types.boot_len as usize && i < seed_start {
                 continue;
             }
             by_name
@@ -1806,7 +1810,7 @@ fn compile_program_inner(
             let Some(args_text) = rest.strip_suffix('>') else {
                 continue;
             };
-            let base_id = ctx.intern(&base_text);
+            let base_id = ctx.intern(base_text);
             let param_len = match ctx.extern_generics.get(&base_id) {
                 Some(g) => g.params.len(),
                 // a local generic class: the arity reads off its decl

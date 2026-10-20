@@ -388,7 +388,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 let dst = self.new_reg(TY_STACK_TRACE);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    let (argv_off, argc) = self.pool_args(&[]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::CaptureTrace,
@@ -428,14 +428,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![src]));
+                    let (argv_off, argc) = self.pool_args(&[src]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::StrJoin,
                             recv: NOREG,
                             argv_off,
                             argc,
-                            dst: dst,
+                            dst,
                         },
                         sp.lo,
                     );
@@ -472,14 +472,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![src]));
+                    let (argv_off, argc) = self.pool_args(&[src]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::Str,
                             recv: NOREG,
                             argv_off,
                             argc,
-                            dst: dst,
+                            dst,
                         },
                         sp.lo,
                     );
@@ -901,7 +901,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         };
         if let Some(fnode) = self.ctx.fn_in(&m, name) {
-            if let Some(msg) = vis_gate(&self.ctx, name, self.ctx.ast.fn_decl(fnode).vis) {
+            if let Some(msg) = vis_gate(self.ctx, name, self.ctx.ast.fn_decl(fnode).vis) {
                 self.ctx.err(sp, msg);
                 return Some(Err(()));
             }
@@ -910,7 +910,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Some(self.compile_free_fn_call(name, g, args.to_vec(), expected, sp));
         }
         if let Some(d) = self.ctx.data_in(&m, name) {
-            if let Some(msg) = vis_gate(&self.ctx, name, d.vis) {
+            if let Some(msg) = vis_gate(self.ctx, name, d.vis) {
                 self.ctx.err(sp, msg);
                 return Some(Err(()));
             }
@@ -944,7 +944,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Some(Err(()));
         }
         if let Some(e) = self.ctx.enum_in(&m, name) {
-            if let Some(msg) = vis_gate(&self.ctx, name, e.vis) {
+            if let Some(msg) = vis_gate(self.ctx, name, e.vis) {
                 self.ctx.err(sp, msg);
                 return Some(Err(()));
             }
@@ -961,7 +961,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // a module let is a constant, not a callable
         if self.ctx.let_in(&m, name).is_some() {
             if let Some((_, _, _, lvis)) = self.ctx.let_in(&m, name) {
-                if let Some(msg) = vis_gate(&self.ctx, name, lvis) {
+                if let Some(msg) = vis_gate(self.ctx, name, lvis) {
                     self.ctx.err(sp, msg);
                     return Some(Err(()));
                 }

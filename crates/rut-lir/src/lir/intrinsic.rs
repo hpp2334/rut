@@ -510,10 +510,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let tty = self.ctx.mk_tuple(vec![ty, TY_BOOL]);
         let dst = self.new_reg(tty);
         {
-            let (argv_off, argc) = self.pool_args(&(vec![r, ok]));
+            let (argv_off, argc) = self.pool_args(&[r, ok]);
             self.emit(
                 Op::MakeRecord {
-                    dst: dst,
+                    dst,
                     ty: tty,
                     argv_off,
                     argc,

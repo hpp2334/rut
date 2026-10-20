@@ -504,7 +504,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         m.inst_fns.iter().any(|r| {
             m.funcs
                 .get(r.fid as usize)
-                .map_or(false, |f| f.code.is_empty() && f.host_id.is_none())
+                .is_some_and(|f| f.code.is_empty() && f.host_id.is_none())
         })
     };
     let mut modules: Vec<Program> = modules;
@@ -599,6 +599,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
     func_base_plan.insert(crate::id::BOOT_SCOPE, 0);
     let mut func_off_plan: u32 = 0;
     let mut type_cursor = out.types.types.len() as u32;
+    #[derive(Default)]
     struct ModulePlan {
         /// packed type id in this module -> the claimed global id
         ty_redirect: std::collections::HashMap<u32, u32>,
@@ -618,19 +619,7 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
         inst_key_by_ty: std::collections::HashMap<u32, String>,
         appended: usize,
     }
-    impl Default for ModulePlan {
-        fn default() -> Self {
-            ModulePlan {
-                ty_redirect: std::collections::HashMap::new(),
-                ty_redirect_dense: std::collections::HashMap::new(),
-                fn_redirect: std::collections::HashMap::new(),
-                skip_fns: std::collections::HashSet::new(),
-                renumber: std::collections::HashMap::new(),
-                inst_key_by_ty: std::collections::HashMap::new(),
-                appended: 0,
-            }
-        }
-    }
+
     let mut plans: Vec<ModulePlan> = Vec::with_capacity(modules.len());
     let mut deferred_all: Vec<Vec<(String, u32)>> = Vec::with_capacity(modules.len());
     for m in modules.iter() {
@@ -1157,11 +1146,11 @@ pub fn link(modules: Vec<Program>) -> Result<Program, LinkError> {
             }
             out.funcs.push(FuncCode {
                 name: nm(f.name),
-                params: f.params.into_iter().map(|p| map(p)).collect(),
+                params: f.params.into_iter().map(&map).collect(),
                 ret: map(f.ret),
                 is_method: f.is_method,
                 n_captures: f.n_captures,
-                regs: f.regs.into_iter().map(|r| map(r)).collect(),
+                regs: f.regs.into_iter().map(&map).collect(),
                 // pools are function-local: spans move verbatim, untouched
                 argv: f.argv,
                 labels: f.labels,
@@ -1451,9 +1440,11 @@ mod tests {
     use crate::types::{FieldInfo, TY_I32};
 
     fn module(name: &str, with_point: bool) -> Program {
-        let mut p = Program::default();
-        p.name = name.to_string();
-        p.types = TypeTable::boot();
+        let mut p = Program {
+            name: name.to_string(),
+            types: TypeTable::boot(),
+            ..Program::default()
+        };
         if with_point {
             let point = p.interner.intern("Point");
             let x = p.interner.intern("x");
@@ -1529,9 +1520,11 @@ mod tests {
     /// an op. `slot`/`want` are module-local ids; both copies declare the
     /// "same" trait, so link must dedup them into ONE global trait.
     fn trait_module(name: &str) -> Program {
-        let mut p = Program::default();
-        p.name = name.to_string();
-        p.types = TypeTable::boot();
+        let mut p = Program {
+            name: name.to_string(),
+            types: TypeTable::boot(),
+            ..Program::default()
+        };
         let shape = p.interner.intern("Shape");
         let area = p.interner.intern("area");
         p.ifaces.push(IfaceDesc {

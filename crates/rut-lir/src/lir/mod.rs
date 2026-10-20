@@ -89,10 +89,6 @@ impl Pools {
         self.labels.extend_from_slice(t);
         (off, t.len() as u16)
     }
-
-    pub(crate) fn slice(&self, off: u32, len: u16) -> &[Reg] {
-        &self.argv[off as usize..off as usize + len as usize]
-    }
 }
 
 #[derive(Clone)]
@@ -184,6 +180,7 @@ pub struct FnCompiler<'a, 'b> {
     /// - `captured`: names referenced inside any lambda body or `for..of`
     ///   body (a flat over-approximation — shadowing only over-promotes,
     ///   which costs a cell and stays correct).
+    ///
     /// A binding promotes iff `captured ∩ assigned ∩ is_ref(ty)`, tested
     /// at `bind_local` where the type is resolved.
     assigned: std::collections::HashSet<IdentId>,
@@ -382,6 +379,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// and every later read/write routes through `read_local`/`write_local`.
     /// Primitives, `nil`, and `fn` values never promote: their capture
     /// is an immediate-slot copy, now as policy.
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub(crate) fn bind_local(
         &mut self,
         name: IdentId,

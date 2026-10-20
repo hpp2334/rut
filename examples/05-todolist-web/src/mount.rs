@@ -377,8 +377,8 @@ pub fn probe(probe: &str) -> Result<Walk, String> {
 }
 
 /// The embedder half every lane owns, as chain steps: the walk's pkgs
-/// + the `web` surface + nmap's bodies WHEN the closure declares the
-/// `nmap_host` scope (the listener table rides the val-column row
+/// and the `web` surface and nmap's bodies WHEN the closure declares
+/// the `nmap_host` scope (the listener table rides the val-column row
 /// `HashMap<str, i64>` — a mounted decl pkg's rows demand bodies;
 /// probes without the scope skip the install, the blanket law's gate).
 /// The core prelude auto-offers at `.compile()`.

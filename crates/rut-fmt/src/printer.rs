@@ -410,10 +410,7 @@ impl<'a> P<'a> {
     /// and a trailing run attaches as its own line here (there is no
     /// later statement-boundary drain that matches its line).
     fn begin_el(&mut self, span: Span, mode: Begin) {
-        loop {
-            let Some(r) = self.runs.get(self.ri).cloned() else {
-                break;
-            };
+        while let Some(r) = self.runs.get(self.ri).cloned() {
             if r.lo >= span.lo {
                 break;
             }
@@ -694,7 +691,7 @@ impl<'a> P<'a> {
                     self.sp();
                     let nm: Vec<String> =
                         names.iter().map(|&n| self.a.name(n).to_string()).collect();
-                    let dummies: Vec<Span> = std::iter::repeat(span).take(nm.len()).collect();
+                    let dummies: Vec<Span> = std::iter::repeat_n(span, nm.len()).collect();
                     self.ident_list(&nm, &dummies, span);
                     self.sp();
                     self.text("};");
@@ -744,7 +741,7 @@ impl<'a> P<'a> {
                     .collect();
                 if !names.is_empty() {
                     self.sp();
-                    let dummies: Vec<Span> = std::iter::repeat(span).take(names.len()).collect();
+                    let dummies: Vec<Span> = std::iter::repeat_n(span, names.len()).collect();
                     self.ident_list(&names, &dummies, span);
                 }
                 self.sp();
@@ -1601,7 +1598,7 @@ impl<'a> P<'a> {
         };
         let stmts = self.a.block(b).to_vec();
         let tail = self.a.block_tail(b);
-        let flat_ok = self.flat_safe(&stmts) && tail.map_or(true, |t| self.expr_flat(t));
+        let flat_ok = self.flat_safe(&stmts) && tail.is_none_or(|t| self.expr_flat(t));
         if flat_ok {
             let m = self.stamp();
             self.in_flat += 1;
@@ -1631,7 +1628,7 @@ impl<'a> P<'a> {
     /// trees, nested blocks, block-bodied lambdas)
     fn flat_safe(&self, stmts: &[NodeHandle<AnyStmt>]) -> bool {
         stmts.iter().all(|s| match self.a.stmt(*s).clone() {
-            StmtKind::Return { value } => value.map_or(true, |v| self.expr_flat(v)),
+            StmtKind::Return { value } => value.is_none_or(|v| self.expr_flat(v)),
             StmtKind::ExprStmt(e) => self.expr_flat(e),
             StmtKind::Break | StmtKind::Continue => true,
             StmtKind::LetStmt { init, .. } => self.expr_flat(init),
@@ -2064,7 +2061,7 @@ impl<'a> P<'a> {
         };
         let stmts = self.a.block(b).to_vec();
         let tail = self.a.block_tail(b);
-        let flat_ok = self.flat_safe(&stmts) && tail.map_or(true, |t| self.expr_flat(t));
+        let flat_ok = self.flat_safe(&stmts) && tail.is_none_or(|t| self.expr_flat(t));
         if flat_ok {
             let m = self.stamp();
             self.in_flat += 1;

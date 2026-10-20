@@ -1238,7 +1238,7 @@ fn header(n: &DumpNode, src: &str) -> String {
 fn node_text(n: &DumpNode, d: usize, src: &str, out: &mut String) {
     out.push_str(&format!("{}{}\n", ind(d), header(n, src)));
     for f in &n.fields {
-        val_text(&f.label, &f.val, d + 1, src, out);
+        val_text(f.label, &f.val, d + 1, src, out);
     }
 }
 

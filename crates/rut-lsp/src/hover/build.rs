@@ -7,6 +7,16 @@
 //! phase 2's definition lookup are span-exact.
 
 use rut_ast::ast::*;
+
+/// A `let` awaiting its type resolution: `(name, declared ty, init,
+/// visibility, span)`.
+type PendingLet = (
+    IdentId,
+    Option<NodeHandle<AnyTy>>,
+    NodeHandle<AnyExpr>,
+    Vis,
+    Span,
+);
 use rut_lexer::span::Span;
 use rut_lexer::token::{Tok, Token};
 
@@ -300,13 +310,7 @@ pub fn index_items(
     items: &[NodeHandle<AnyItem>],
 ) -> DefIndex {
     let mut idx = DefIndex::default();
-    let mut pending_lets: Vec<(
-        IdentId,
-        Option<NodeHandle<AnyTy>>,
-        NodeHandle<AnyExpr>,
-        Vis,
-        Span,
-    )> = Vec::new();
+    let mut pending_lets: Vec<PendingLet> = Vec::new();
     for h in items {
         let span = ast.span(h.id());
         match ast.item(*h) {

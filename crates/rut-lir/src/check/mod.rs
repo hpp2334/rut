@@ -21,6 +21,23 @@ mod resolve;
 
 pub(crate) use impls::MemberSrc;
 
+// ---- row aliases: the recurring ledger shapes, named once ----
+
+/// A let-decl ledger row: `(name, declared ty, init, visibility)`.
+pub type LetRow = (IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis);
+/// A data-decl field row: `(name, ty, default expr, visibility)`.
+pub type FieldRow = (IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>);
+/// A lambda's resolved signature: `(generic params, ret, named params)`.
+pub type LambdaSig = (Vec<TypeId>, TypeId, Vec<(IdentId, TypeId)>);
+/// An extern enum row: the minted ty plus `(variant name, discriminant)`.
+pub type ExternEnumRow = (TypeId, Vec<(IdentId, i64)>);
+/// A seed impl row: `(trait text, target ty, method names, assoc-fn names)`.
+pub type SeedImplRow = (String, TypeId, Vec<(String, u32)>, Vec<(String, u32)>);
+/// An alias-expanded impl target: `(target ty, alias spelling, owner ident)`.
+pub type AliasTargetRow = (TypeId, Option<(IdentId, Vec<IdentId>)>, IdentId);
+/// An inherent-method lookup hit: `(fn row, param list offset, params)`.
+pub type InherentRow = (usize, usize, Vec<(IdentId, TypeId)>);
+
 // ---- the per-file binding law ----
 
 /// The ambient site key: the wildcard "file" the core prelude's
@@ -63,7 +80,7 @@ pub struct DataDecl {
     pub node: NodeHandle<AnyItem>,
     /// (name, ty, initializer, member vis — None = the module-private
     /// default; checked when modules load, M2) in decl order
-    pub fields: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)>,
+    pub fields: Vec<FieldRow>,
     /// inherent methods (name → MethodDecl node)
     pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
     pub generics: Vec<IdentId>,
@@ -417,7 +434,7 @@ pub struct Ctx<'a> {
     /// carried-type law: the mirror's ledger row names the type's HOME
     /// unit, so link unifies it with the real body)
     pub pending_mirror_owner: Option<String>,
-    pub lets: Vec<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)>,
+    pub lets: Vec<LetRow>,
     // name → index maps
     pub fn_index: Vec<IdentId>,
     /// free fn decl nodes: (name, Fn node)
@@ -437,7 +454,7 @@ pub struct Ctx<'a> {
     /// fn/method resolves its annotations (and any lambda it creates)
     /// against the enclosing generics, which its own unit-local Inst
     /// key carries as the instantiation's identity.
-    pub lambda_sigs: std::collections::HashMap<u32, (Vec<TypeId>, TypeId, Vec<(IdentId, TypeId)>)>,
+    pub lambda_sigs: std::collections::HashMap<u32, LambdaSig>,
     /// `entry fn` names: the host-callable surface
     pub entries: Vec<IdentId>,
     /// used functions, bound before body compilation:
@@ -491,7 +508,7 @@ pub struct Ctx<'a> {
     /// member paths (`EncodeErrorKind.Depth`) resolve through this
     /// registry; the descriptor row itself rides the carried type
     /// block. Per-file (the binding law).
-    pub extern_enums: std::collections::HashMap<(String, IdentId), (TypeId, Vec<(IdentId, i64)>)>,
+    pub extern_enums: std::collections::HashMap<(String, IdentId), ExternEnumRow>,
     /// inherent method surfaces bound from used modules' surfaces (the
     /// linkable-classes phase): the class-method rows a consumer's
     /// `b.append(..)` / `Logger.new(..)` resolve through
@@ -667,7 +684,7 @@ pub struct Ctx<'a> {
     /// the requesters' own impl registrations (trait text, target in
     /// the requester's scope, method rows scope-qualified likewise) —
     /// registered after `collect`, when the trait table exists
-    pub seed_impls: Vec<(String, TypeId, Vec<(String, u32)>, Vec<(String, u32)>)>,
+    pub seed_impls: Vec<SeedImplRow>,
     /// the mirrored GENERIC-TARGET impl methods: `(trait text, target
     /// row in the requester's space, method text)` — the owner mints
     /// the template impl at the concrete target and compiles the body
@@ -796,6 +813,9 @@ pub(crate) fn bound_ty_str(ctx: &Ctx, node: NodeHandle<AnyTy>) -> String {
     }
 }
 
+/// The compiler-pass result: `Err(())` means a diag has already been
+/// recorded in the shared table — the unit is the contract, not a
+/// missing error type (the errors ARE the diags).
 pub type TcResult<T> = Result<T, ()>;
 
 impl<'a> Ctx<'a> {
@@ -941,18 +961,14 @@ impl<'a> Ctx<'a> {
     /// root's decls from a child — `pkg::helper` from `pkg/grid`).
     pub(crate) fn resolve_mod_head(&self, from: &str, name: IdentId) -> Option<String> {
         let mut cur = from.to_string();
-        loop {
-            if let Some(scope) = self.mods.scopes.get(&cur) {
-                if let Some((path, _vis)) = scope.children.get(self.name(name)) {
-                    return Some(path.clone());
-                }
-                if scope.parent == cur {
-                    break;
-                }
-                cur = scope.parent.clone();
-            } else {
+        while let Some(scope) = self.mods.scopes.get(&cur) {
+            if let Some((path, _vis)) = scope.children.get(self.name(name)) {
+                return Some(path.clone());
+            }
+            if scope.parent == cur {
                 break;
             }
+            cur = scope.parent.clone();
         }
         // the own-package head: the root module (a flat package has no
         // children, so this only fires where it can mean something —
@@ -1002,7 +1018,7 @@ impl<'a> Ctx<'a> {
         }
         self.use_sites
             .get(&name)
-            .map_or(false, |sites| sites.iter().any(|m| *m == self.cur_mod))
+            .is_some_and(|sites| sites.contains(&self.cur_mod))
     }
 
     /// The module an own-package `use` binding in the CURRENT file
@@ -1146,11 +1162,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// A module `let` declared in module `m`.
-    pub(crate) fn let_in(
-        &self,
-        m: &str,
-        name: IdentId,
-    ) -> Option<(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> {
+    pub(crate) fn let_in(&self, m: &str, name: IdentId) -> Option<LetRow> {
         self.lets
             .iter()
             .find(|(n, _, init, _)| *n == name && self.mod_of(init.id()) == m)
@@ -1924,10 +1936,7 @@ impl<'a> Ctx<'a> {
             .collect()
     }
 
-    pub fn find_let(
-        &self,
-        name: IdentId,
-    ) -> Option<&(IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis)> {
+    pub fn find_let(&self, name: IdentId) -> Option<&LetRow> {
         self.lets.iter().find(|(n, ..)| *n == name)
     }
     pub fn find_free_fn(&self, name: IdentId) -> bool {
@@ -2028,12 +2037,11 @@ impl<'a> Ctx<'a> {
 
     pub fn mk_array(&mut self, elem: TypeId) -> TypeId {
         let name = self.intern(&format!("Array<{}>", self.type_name(elem)));
-        let id = self.types.intern(RutType {
+
+        self.types.intern(RutType {
             name,
             kind: TyKind::Array { elem },
-        });
-
-        id
+        })
     }
     /// A trait-typed value (`i: I`) — the trait object type: a cell handle whose cell's own
     /// type reaches the vtable

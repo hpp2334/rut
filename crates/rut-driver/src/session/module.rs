@@ -16,6 +16,10 @@ use crate::mods::ModSource;
 /// a source body compiles (and may splice), a compiled body pushes as
 /// decoded, a host body synthesizes its placeholder program.
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
+// the payloads ARE the enum: decoded bundles move as values
+// through the graph — boxing would churn every construction/match
+// for a size win the graph never sees
 pub enum MountedBody {
     /// a `.rut` body — compile it. `is_decl` marks a declaration-mode
     /// pkg (a `.d.rut` surface parsed as its own unit):

@@ -321,7 +321,7 @@ impl<'a> Ctx<'a> {
             }
             TypeKind::TyPath { segs, .. } => {
                 if segs.len() > 1 {
-                    return self.resolve_qualified_ty(&segs, sp, env);
+                    return self.resolve_qualified_ty(segs, sp, env);
                 }
                 let seg = &segs[0];
                 let name = seg.name;

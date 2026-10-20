@@ -6,12 +6,22 @@ use std::collections::{HashMap, HashSet};
 
 use rut_core::binary::Program;
 use rut_lexer::diag::Diag;
+
+/// `finish`'s decomposed walk: diags, pushed programs, and the
+/// linked-units index (spec → program + scope index).
+type GraphOut = (
+    Vec<Diag>,
+    Vec<Program>,
+    HashMap<String, (usize, rut_core::ScopeId)>,
+);
+/// `validate_qualified_uses`'s ok-result: the validated own-uses
+/// triples plus any ifaces needing consumer-side respell rows.
+type IfaceRespell = (Vec<String>, Vec<(String, String, String)>);
 use rut_lexer::span::Span;
 use rut_parser::{parse, Mode};
 
 use rut_ast::ast::{Ast, ItemKind, Vis};
 
-use crate::compile::compile_program_resolved;
 use crate::session::{MountedBody, Session};
 use crate::Seeds;
 
@@ -108,13 +118,7 @@ pub(super) struct UnitSrc {
 impl<'a> GraphCompiler<'a> {
     /// Decompose the finished walk: diags, pushed programs, and the
     /// linked-units index (spec → program + scope).
-    pub(super) fn finish(
-        self,
-    ) -> (
-        Vec<Diag>,
-        Vec<Program>,
-        HashMap<String, (usize, rut_core::ScopeId)>,
-    ) {
+    pub(super) fn finish(self) -> GraphOut {
         let GraphCompiler {
             diags,
             programs,
@@ -530,10 +534,7 @@ impl<'a> GraphCompiler<'a> {
         // module; the own lane walks the consumer's own mod tree and
         // gates its leaves under the crossing predicate. The validated
         // dep heads ensure; the own bindings ride the compile.
-        let (uses, own_uses) = match self.validate_qualified_uses(spec, module, &ast, &layout) {
-            Some(uses) => uses,
-            None => return None,
-        };
+        let (uses, own_uses) = self.validate_qualified_uses(spec, module, &ast, &layout)?;
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays
         // legal but redundant for them), while the `pub builtin`
@@ -858,7 +859,7 @@ impl GraphCompiler<'_> {
         module: &crate::session::Mounted,
         ast: &Ast,
         layout: &rut_lir::check::ModInputs,
-    ) -> Option<(Vec<String>, Vec<(String, String, String)>)> {
+    ) -> Option<IfaceRespell> {
         let dep_heads = dep_use_heads(self.session, spec, &self.root, layout, ast);
         let mut ok = true;
         let mut own_uses: Vec<(String, String, String)> = Vec::new();

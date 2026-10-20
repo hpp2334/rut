@@ -14,8 +14,7 @@ fn let_init(src: &str) -> (Ast, NodeHandle<AnyExpr>) {
     let items = ast.module_items(ast.root);
     let f = items
         .iter()
-        .filter(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
-        .next_back()
+        .rfind(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
         .expect("fn");
     let body = match ast.item(*f) {
         ItemKind::Fn(d) => d.body,
@@ -29,7 +28,7 @@ fn let_init(src: &str) -> (Ast, NodeHandle<AnyExpr>) {
 }
 
 /// the (name, value) pairs of a struct literal
-fn fields<'a>(ast: &'a Ast, e: NodeHandle<AnyExpr>) -> &'a [(IdentId, NodeHandle<AnyExpr>)] {
+fn fields(ast: &Ast, e: NodeHandle<AnyExpr>) -> &[(IdentId, NodeHandle<AnyExpr>)] {
     match ast.expr(e) {
         ExprKind::Struct { fields, .. } => fields,
         other => panic!("expected a struct literal, found {other:?}"),

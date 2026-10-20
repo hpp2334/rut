@@ -260,7 +260,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
                     return;
                 }
                 g.body_taken = true;
-                if let Some(_) = g.failed {
+                if g.failed.is_some() {
                     immediate = Some(g.chunks.drain(..).flatten().collect::<Vec<u8>>()); // the short drain
                     return;
                 }
@@ -320,7 +320,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
         "net::http_status",
         (Opaque<HttpResponse>,) -> i32,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<i32, Trap> {
-            Ok(r.with(|resp| resp.status as i32)?)
+            r.with(|resp| resp.status as i32)
         },
     );
     rut_vm::pkg_fn!(
@@ -328,7 +328,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
         "net::http_err",
         (Opaque<HttpResponse>,) -> Option<String>,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
-            Ok(r.with(|resp| resp.err.clone())?)
+            r.with(|resp| resp.err.clone())
         },
     );
     rut_vm::pkg_fn!(
@@ -336,7 +336,7 @@ fn install_read_rows(pkg: &mut HostPkg) {
         "net::http_read_err",
         (Opaque<HttpResponse>,) -> Option<String>,
         |_vm: &mut Vm, r: Opaque<HttpResponse>| -> Result<Option<String>, Trap> {
-            Ok(r.with(|resp| resp.read.lock().expect("http read state").failed.clone())?)
+            r.with(|resp| resp.read.lock().expect("http read state").failed.clone())
         },
     );
     // the reader mint: instant, sync. The FIRST mint takes the stream

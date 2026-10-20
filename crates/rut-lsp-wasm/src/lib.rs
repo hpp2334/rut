@@ -198,8 +198,11 @@ pub extern "C" fn rut_legend() -> *mut u8 {
 /// names it) compiles with its dep closure and the checker's per-file
 /// diags map back through the file stamps. No package context →
 /// parse-only, exactly the pre-B1 answer.
+/// # Safety
+///
+/// `uri_ptr`/`src_ptr` must point at `uri_len`/`src_len` readable UTF-8 bytes.
 #[no_mangle]
-pub extern "C" fn rut_analyze(
+pub unsafe extern "C" fn rut_analyze(
     uri_ptr: *const u8,
     uri_len: usize,
     src_ptr: *const u8,
@@ -239,16 +242,27 @@ pub extern "C" fn rut_analyze(
 }
 
 /// close: drop the document (the workspace/std index stays)
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_forget(uri_ptr: *const u8, uri_len: usize) {
+pub unsafe extern "C" fn rut_forget(uri_ptr: *const u8, uri_len: usize) {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
     state().docs.remove(uri);
 }
 
 /// hover at an LSP position — the doc index first, then std + workspace;
 /// `null` when there's nothing to say
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_hover(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
+pub unsafe extern "C" fn rut_hover(
+    uri_ptr: *const u8,
+    uri_len: usize,
+    line: u32,
+    ch: u32,
+) -> *mut u8 {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
     let Some(src) = state().docs.get(uri).cloned() else {
         return envelope(b"null");
@@ -264,8 +278,16 @@ pub extern "C" fn rut_hover(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u
 /// completions at an LSP position (member after `.`, the use-path and
 /// qualified-position tiers) — the doc's file-module context rides
 /// from its stamped twin (see `doc_mods_of`)
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_complete(uri_ptr: *const u8, uri_len: usize, line: u32, ch: u32) -> *mut u8 {
+pub unsafe extern "C" fn rut_complete(
+    uri_ptr: *const u8,
+    uri_len: usize,
+    line: u32,
+    ch: u32,
+) -> *mut u8 {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
     complete_stored(uri, line, ch)
 }
@@ -277,8 +299,11 @@ pub extern "C" fn rut_complete(uri_ptr: *const u8, uri_len: usize, line: u32, ch
 /// while completion fires on the keystroke — the stored-only read
 /// raced that window and answered a stale tail (typing `log.` hit the
 /// bare keyword dump when the stored doc still ended at `log`).
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_complete_in(
+pub unsafe extern "C" fn rut_complete_in(
     uri_ptr: *const u8,
     uri_len: usize,
     src_ptr: *const u8,
@@ -313,8 +338,11 @@ fn complete_stored(uri: &str, line: u32, ch: u32) -> *mut u8 {
 /// resolves it against the workspace). The doc's file-module context
 /// rides from its stamped twin (see `doc_mods_of`) — the mod-edge
 /// clicks and the own-package use lanes key on it.
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_definition(
+pub unsafe extern "C" fn rut_definition(
     uri_ptr: *const u8,
     uri_len: usize,
     line: u32,
@@ -334,8 +362,11 @@ pub extern "C" fn rut_definition(
 
 /// type definitions at an LSP position (an expression -> its type's
 /// declaration) — same shape as `rut_definition`
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_type_definition(
+pub unsafe extern "C" fn rut_type_definition(
     uri_ptr: *const u8,
     uri_len: usize,
     line: u32,
@@ -369,8 +400,11 @@ fn locations_envelope(locs: &[rut_lsp::definition::DefLocation]) -> *mut u8 {
 /// call sites. `null` when the doc is unknown, `[]` when nothing
 /// resolves. The hints are full LSP values (position + label + kind +
 /// tooltip); the client renders them.
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_inlay(
+pub unsafe extern "C" fn rut_inlay(
     uri_ptr: *const u8,
     uri_len: usize,
     start_line: u32,
@@ -410,8 +444,11 @@ pub extern "C" fn rut_inlay(
 /// the LSP toggle. `null` when the doc is unknown, `[]` when nothing
 /// resolves — the same `{uri, range}` Location JSON `rut_definition`
 /// speaks.
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_references(
+pub unsafe extern "C" fn rut_references(
     uri_ptr: *const u8,
     uri_len: usize,
     line: u32,
@@ -436,8 +473,11 @@ pub extern "C" fn rut_references(
 /// signature renders verbatim, the active parameter comes from the
 /// comma/paren depth at the request position. Ambiguity or arity
 /// mismatch → `null` (never wrong help).
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_signature_help(
+pub unsafe extern "C" fn rut_signature_help(
     uri_ptr: *const u8,
     uri_len: usize,
     line: u32,
@@ -457,8 +497,11 @@ pub extern "C" fn rut_signature_help(
 /// index one workspace file (the host's stand-in for the native server's
 /// fs walk — the 500-file cap is the caller's). Re-indexing a URI
 /// replaces its entry.
+/// # Safety
+///
+/// `src_ptr` must point at `src_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_add_def(
+pub unsafe extern "C" fn rut_add_def(
     uri_ptr: *const u8,
     uri_len: usize,
     src_ptr: *const u8,
@@ -535,8 +578,11 @@ fn dep_table_json(t: &rut_lsp::deps::DepTable) -> serde_json::Value {
 /// its entry sources with the mode each indexes in, and its dep rows
 /// with the url rows' cache paths and lock-sourced pins). A malformed
 /// manifest is the error envelope — the host surfaces it as a hint.
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_parse_manifest(ptr: *const u8, len: usize) -> *mut u8 {
+pub unsafe extern "C" fn rut_parse_manifest(ptr: *const u8, len: usize) -> *mut u8 {
     let text = unsafe { read_str(ptr, len) };
     match rut_lsp::deps::dep_table_pinned(text, &state().lock_pins) {
         Ok(t) => json_envelope(dep_table_json(&t)),
@@ -551,8 +597,11 @@ pub extern "C" fn rut_parse_manifest(ptr: *const u8, len: usize) -> *mut u8 {
 /// malformed lock — the host surfaces it as a hint, and the (empty)
 /// ledger stands so url rows answer `sha256: null` (the unpinned
 /// refusal), never guessed pins.
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_set_lock(ptr: *const u8, len: usize) -> *mut u8 {
+pub unsafe extern "C" fn rut_set_lock(ptr: *const u8, len: usize) -> *mut u8 {
     let text = unsafe { read_str(ptr, len) };
     match rut_lsp::deps::lock_pins(text) {
         Ok(pins) => {
@@ -577,8 +626,11 @@ pub extern "C" fn rut_set_lock(ptr: *const u8, len: usize) -> *mut u8 {
 /// ACCUMULATE (a set — multi-folder walks and re-walks re-add the
 /// same names). Answers `{"direct": N}` (the set size), or the error
 /// envelope for malformed JSON.
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_set_direct_deps(ptr: *const u8, len: usize) -> *mut u8 {
+pub unsafe extern "C" fn rut_set_direct_deps(ptr: *const u8, len: usize) -> *mut u8 {
     let text = unsafe { read_str(ptr, len) };
     match serde_json::from_str::<Vec<String>>(text) {
         Ok(names) => {
@@ -599,8 +651,11 @@ pub extern "C" fn rut_set_direct_deps(ptr: *const u8, len: usize) -> *mut u8 {
 /// `rut_add_def`); namespace/consts have no ABI voice here — a dep
 /// needing them indexes through `rut_add_bundle`, whose manifest is in
 /// the bytes. The direct-dep marker stamps from the host's set.
+/// # Safety
+///
+/// `src_ptr` must point at `src_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_add_def_named(
+pub unsafe extern "C" fn rut_add_def_named(
     uri_ptr: *const u8,
     uri_len: usize,
     name_ptr: *const u8,
@@ -628,8 +683,11 @@ pub extern "C" fn rut_add_def_named(
 /// `{ "decls": [{ "name", "vis" }] }` — so the host's mount walk
 /// reads its next hop from the wasm's parse (JS moves bytes, the
 /// module parses; no JS-side rut parsing).
+/// # Safety
+///
+/// `src_ptr` must point at `src_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_add_def_mod(
+pub unsafe extern "C" fn rut_add_def_mod(
     uri_ptr: *const u8,
     uri_len: usize,
     name_ptr: *const u8,
@@ -699,8 +757,11 @@ unsafe fn read_bytes<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
 /// the bundle carries (origin `bundle:<module>/<path>`, replace-by-origin
 /// like every index). The envelope names the module + the entry paths
 /// indexed, or the error — a corrupt/foreign archive never lands bytes.
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes of a bundle.
 #[no_mangle]
-pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
+pub unsafe extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
     let bytes = unsafe { read_bytes(ptr, len) };
     let b = match rut_lsp::deps::bundle_sources(bytes) {
         Ok(b) => b,
@@ -779,8 +840,11 @@ pub extern "C" fn rut_add_bundle(ptr: *const u8, len: usize) -> *mut u8 {
 /// mounted child its `<path>`; a flat file stays `null`), so the host
 /// never re-derives the mount rule in TypeScript. A corrupt/foreign
 /// archive is the error envelope, never bytes.
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes of a bundle.
 #[no_mangle]
-pub extern "C" fn rut_extract_bundle(ptr: *const u8, len: usize) -> *mut u8 {
+pub unsafe extern "C" fn rut_extract_bundle(ptr: *const u8, len: usize) -> *mut u8 {
     let bytes = unsafe { read_bytes(ptr, len) };
     let b = match rut_lsp::deps::bundle_sources(bytes) {
         Ok(b) => b,
@@ -807,8 +871,11 @@ pub extern "C" fn rut_extract_bundle(ptr: *const u8, len: usize) -> *mut u8 {
 }
 
 /// an open doc's stored text — the smoke test's round-trip check
+/// # Safety
+///
+/// `uri_ptr` must point at `uri_len` readable bytes.
 #[no_mangle]
-pub extern "C" fn rut_doc_len(uri_ptr: *const u8, uri_len: usize) -> usize {
+pub unsafe extern "C" fn rut_doc_len(uri_ptr: *const u8, uri_len: usize) -> usize {
     let uri = unsafe { read_str(uri_ptr, uri_len) };
     state().docs.get(uri).map(|s| s.len()).unwrap_or(0)
 }
@@ -863,7 +930,7 @@ mod tests {
     fn set_lock(rows: Vec<rut_driver::LockRow>) -> serde_json::Value {
         let text = rut_driver::render_lock(&rut_driver::LockFile::from_rows(rows));
         rut_begin();
-        take(rut_set_lock(text.as_ptr(), text.len()))
+        take(unsafe { rut_set_lock(text.as_ptr(), text.len()) })
     }
 
     #[test]
@@ -874,10 +941,7 @@ mod tests {
         let out = set_lock(vec![]);
         assert_eq!(out["pins"], 0, "{out}");
         rut_begin();
-        let out = take(rut_parse_manifest(
-            PLUGIN_SHAPE.as_ptr(),
-            PLUGIN_SHAPE.len(),
-        ));
+        let out = take(unsafe { rut_parse_manifest(PLUGIN_SHAPE.as_ptr(), PLUGIN_SHAPE.len()) });
         assert_eq!(out["name"], "plugin");
         // the body rides the mod.rut convention (the entry keys are repealed)
         assert_eq!(
@@ -911,10 +975,7 @@ mod tests {
         }]);
         assert_eq!(out["pins"], 1, "{out}");
         rut_begin();
-        let out = take(rut_parse_manifest(
-            PLUGIN_SHAPE.as_ptr(),
-            PLUGIN_SHAPE.len(),
-        ));
+        let out = take(unsafe { rut_parse_manifest(PLUGIN_SHAPE.as_ptr(), PLUGIN_SHAPE.len()) });
         let pouch = out["deps"]
             .as_array()
             .unwrap()
@@ -932,7 +993,9 @@ mod tests {
     fn a_malformed_lock_is_the_error_envelope_and_stands_empty() {
         let _lock = TEST_SERIAL.lock().unwrap();
         rut_begin();
-        let bad = take(rut_set_lock(b"{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}".as_ptr(), b"{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}".len()));
+        let bad = take(unsafe {
+            rut_set_lock(b"{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}".as_ptr(), b"{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}".len())
+        });
         assert!(
             bad["error"].as_str().unwrap().contains("64 hex digits"),
             "{bad}"
@@ -940,10 +1003,7 @@ mod tests {
         // the empty ledger stands: the url row answers null (the host
         // shows the unpinned refusal), never half-parsed pins
         rut_begin();
-        let out = take(rut_parse_manifest(
-            PLUGIN_SHAPE.as_ptr(),
-            PLUGIN_SHAPE.len(),
-        ));
+        let out = take(unsafe { rut_parse_manifest(PLUGIN_SHAPE.as_ptr(), PLUGIN_SHAPE.len()) });
         let pouch = out["deps"]
             .as_array()
             .unwrap()
@@ -958,7 +1018,7 @@ mod tests {
         let _lock = TEST_SERIAL.lock().unwrap();
         rut_begin();
         let src = r#"{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }"#;
-        let out = take(rut_parse_manifest(src.as_ptr(), src.len()));
+        let out = take(unsafe { rut_parse_manifest(src.as_ptr(), src.len()) });
         assert_eq!(
             out["entries"],
             serde_json::json!([{ "path": "surface.d.rut", "mode": "Decl" }]),
@@ -966,10 +1026,9 @@ mod tests {
         );
         // a malformed manifest is the error envelope — the host's hint
         rut_begin();
-        let bad = take(rut_parse_manifest(
-            b"{\"name\": six}".as_ptr(),
-            b"{\"name\": six}".len(),
-        ));
+        let bad = take(unsafe {
+            rut_parse_manifest(b"{\"name\": six}".as_ptr(), b"{\"name\": six}".len())
+        });
         assert!(
             bad["error"].as_str().unwrap().starts_with("line 1: "),
             "{bad}"
@@ -991,14 +1050,9 @@ mod tests {
         let line = doc[..last].matches('\n').count() as u32;
         let ch = (doc.len() - last) as u32;
         rut_begin();
-        let items = take(rut_complete_in(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-            line,
-            ch,
-        ));
+        let items = take(unsafe {
+            rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), line, ch)
+        });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1024,14 +1078,9 @@ mod tests {
         let line = doc[..last].matches('\n').count() as u32;
         let ch = (doc.len() - last) as u32;
         rut_begin();
-        let items = take(rut_complete_in(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-            line,
-            ch,
-        ));
+        let items = take(unsafe {
+            rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), line, ch)
+        });
         let arr = items.as_array().unwrap();
         let labels: Vec<&str> = arr.iter().map(|i| i["label"].as_str().unwrap()).collect();
         assert!(
@@ -1054,14 +1103,9 @@ mod tests {
         let doc = "fn go() -> nil {\n    let v: u\n}\n";
         let uri = b"file:///ws/type-tier.rut";
         rut_begin();
-        let items = take(rut_complete_in(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-            1,
-            12,
-        ));
+        let items = take(unsafe {
+            rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), 1, 12)
+        });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1083,14 +1127,9 @@ mod tests {
         // the bare colon boundary — the full tier, no keywords
         let doc = "fn go() -> nil {\n    let v: \n}\n";
         rut_begin();
-        let items = take(rut_complete_in(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-            1,
-            11,
-        ));
+        let items = take(unsafe {
+            rut_complete_in(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len(), 1, 11)
+        });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1121,30 +1160,24 @@ mod tests {
         // a root manifest declaring ONLY the doc's own pkg — kitdep is
         // mounted but NOT direct (the transitive-only shape)
         rut_begin();
-        take(rut_set_direct_deps(
-            br#"["myapp"]"#.as_ptr(),
-            br#"["myapp"]"#.len(),
-        ));
+        take(unsafe { rut_set_direct_deps(br#"["myapp"]"#.as_ptr(), br#"["myapp"]"#.len()) });
         rut_begin();
-        rut_add_def_named(
-            u.as_ptr(),
-            u.len(),
-            n.as_ptr(),
-            n.len(),
-            s.as_ptr(),
-            s.len(),
-        );
+        unsafe {
+            rut_add_def_named(
+                u.as_ptr(),
+                u.len(),
+                n.as_ptr(),
+                n.len(),
+                s.as_ptr(),
+                s.len(),
+            )
+        };
         let doc = "fn main() -> nil {\n}\n";
         let uri = b"file:///ws/bare.rut";
         rut_begin();
-        take(rut_analyze(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        take(unsafe { rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()) });
         rut_begin();
-        let items = take(rut_complete(uri.as_ptr(), uri.len(), 1, 0));
+        let items = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 1, 0) });
         let arr = items.as_array().unwrap();
         assert!(
             arr.iter().all(|i| i["label"] != "tag"),
@@ -1155,21 +1188,25 @@ mod tests {
         // the direct-dep set gains kitdep (the root manifest's row):
         // the bare doc offers `tag` ONLY through the import edit …
         rut_begin();
-        take(rut_set_direct_deps(
-            br#"["myapp", "kitdep"]"#.as_ptr(),
-            br#"["myapp", "kitdep"]"#.len(),
-        ));
+        take(unsafe {
+            rut_set_direct_deps(
+                br#"["myapp", "kitdep"]"#.as_ptr(),
+                br#"["myapp", "kitdep"]"#.len(),
+            )
+        });
         rut_begin();
-        rut_add_def_named(
-            u.as_ptr(),
-            u.len(),
-            n.as_ptr(),
-            n.len(),
-            s.as_ptr(),
-            s.len(),
-        );
+        unsafe {
+            rut_add_def_named(
+                u.as_ptr(),
+                u.len(),
+                n.as_ptr(),
+                n.len(),
+                s.as_ptr(),
+                s.len(),
+            )
+        };
         rut_begin();
-        let items = take(rut_complete(uri.as_ptr(), uri.len(), 1, 0));
+        let items = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 1, 0) });
         let arr = items.as_array().unwrap();
         let imp = arr
             .iter()
@@ -1187,14 +1224,9 @@ mod tests {
         let doc = "use kitdep::{ tag };\nfn main() -> nil {\n}\n";
         let uri = b"file:///ws/bare-used.rut";
         rut_begin();
-        take(rut_analyze(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        take(unsafe { rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()) });
         rut_begin();
-        let items = take(rut_complete(uri.as_ptr(), uri.len(), 1, 0));
+        let items = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 1, 0) });
         let arr = items.as_array().unwrap();
         let hits: Vec<&serde_json::Value> = arr.iter().filter(|i| i["label"] == "tag").collect();
         assert_eq!(hits.len(), 1, "one `tag` item: {hits:?}");
@@ -1220,36 +1252,35 @@ mod tests {
             b"file:///ws/edgemod/helpers/mod.rut".as_slice(),
         );
         let (n, mp) = (b"edgemod".as_slice(), b"".as_slice());
-        rut_add_def_mod(
-            ru.as_ptr(),
-            ru.len(),
-            n.as_ptr(),
-            n.len(),
-            mp.as_ptr(),
-            mp.len(),
-            root.as_ptr(),
-            root.len(),
-        );
-        rut_add_def_mod(
-            cu.as_ptr(),
-            cu.len(),
-            n.as_ptr(),
-            n.len(),
-            b"helpers".as_ptr(),
-            7,
-            child.as_ptr(),
-            child.len(),
-        );
+        unsafe {
+            rut_add_def_mod(
+                ru.as_ptr(),
+                ru.len(),
+                n.as_ptr(),
+                n.len(),
+                mp.as_ptr(),
+                mp.len(),
+                root.as_ptr(),
+                root.len(),
+            )
+        };
+        unsafe {
+            rut_add_def_mod(
+                cu.as_ptr(),
+                cu.len(),
+                n.as_ptr(),
+                n.len(),
+                b"helpers".as_ptr(),
+                7,
+                child.as_ptr(),
+                child.len(),
+            )
+        };
         rut_begin();
-        take(rut_analyze(
-            ru.as_ptr(),
-            ru.len(),
-            root.as_ptr(),
-            root.len(),
-        ));
+        take(unsafe { rut_analyze(ru.as_ptr(), ru.len(), root.as_ptr(), root.len()) });
         // the edge ident starts at char 8 (`pub mod `)
         rut_begin();
-        let locs = take(rut_definition(ru.as_ptr(), ru.len(), 0, 8));
+        let locs = take(unsafe { rut_definition(ru.as_ptr(), ru.len(), 0, 8) });
         let arr = locs.as_array().unwrap();
         assert_eq!(arr.len(), 1, "exactly one target: {locs}");
         assert!(
@@ -1269,14 +1300,9 @@ mod tests {
         // keys the lane — the scratch uri carries no stamp)
         let scratch = b"file:///ws/edgemod-scratch.rut".as_slice();
         rut_begin();
-        take(rut_analyze(
-            scratch.as_ptr(),
-            scratch.len(),
-            root.as_ptr(),
-            root.len(),
-        ));
+        take(unsafe { rut_analyze(scratch.as_ptr(), scratch.len(), root.as_ptr(), root.len()) });
         rut_begin();
-        let none = take(rut_definition(scratch.as_ptr(), scratch.len(), 0, 8));
+        let none = take(unsafe { rut_definition(scratch.as_ptr(), scratch.len(), 0, 8) });
         assert!(
             none.as_array().unwrap().is_empty(),
             "unstamped miss: {none}"
@@ -1295,26 +1321,23 @@ mod tests {
             b"toolkit".as_slice(),
             &b"pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n"[..],
         );
-        rut_add_def_named(
-            u.as_ptr(),
-            u.len(),
-            n.as_ptr(),
-            n.len(),
-            s.as_ptr(),
-            s.len(),
-        );
+        unsafe {
+            rut_add_def_named(
+                u.as_ptr(),
+                u.len(),
+                n.as_ptr(),
+                n.len(),
+                s.as_ptr(),
+                s.len(),
+            )
+        };
         let doc = "use toolkit::\nfn main() -> nil {\n}\n";
         let uri = "file:///ws/main.rut";
         rut_begin();
-        take(rut_analyze(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        take(unsafe { rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()) });
         // `use toolkit::⏐` — the dep's public names
         rut_begin();
-        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 13));
+        let items = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 0, 13) });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1328,7 +1351,7 @@ mod tests {
         assert!(labels.contains(&"tag"), "the dep fn completes: {labels:?}");
         // `use ⏐` — the module-name tier sees the named index
         rut_begin();
-        let mods = take(rut_complete(uri.as_ptr(), uri.len(), 0, 4));
+        let mods = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 0, 4) });
         let names: Vec<&str> = mods
             .as_array()
             .unwrap()
@@ -1353,21 +1376,11 @@ mod tests {
         let fresh = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log.\n}\n";
         let uri = b"file:///ws/sync.rut";
         rut_begin();
-        take(rut_analyze(
-            uri.as_ptr(),
-            uri.len(),
-            stale.as_ptr(),
-            stale.len(),
-        ));
+        take(unsafe { rut_analyze(uri.as_ptr(), uri.len(), stale.as_ptr(), stale.len()) });
         rut_begin();
-        let items = take(rut_complete_in(
-            uri.as_ptr(),
-            uri.len(),
-            fresh.as_ptr(),
-            fresh.len(),
-            2,
-            8,
-        ));
+        let items = take(unsafe {
+            rut_complete_in(uri.as_ptr(), uri.len(), fresh.as_ptr(), fresh.len(), 2, 8)
+        });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1391,14 +1404,16 @@ mod tests {
         // keyword/host-fn dump
         let guarded = "fn go() -> nil {\n    let x = probe().\n}\n";
         rut_begin();
-        let none = take(rut_complete_in(
-            uri.as_ptr(),
-            uri.len(),
-            guarded.as_ptr(),
-            guarded.len(),
-            1,
-            20,
-        ));
+        let none = take(unsafe {
+            rut_complete_in(
+                uri.as_ptr(),
+                uri.len(),
+                guarded.as_ptr(),
+                guarded.len(),
+                1,
+                20,
+            )
+        });
         assert!(none.as_array().unwrap().is_empty(), "{none}");
     }
 
@@ -1406,13 +1421,13 @@ mod tests {
     fn add_bundle_indexes_the_pouch_surface() {
         let _lock = TEST_SERIAL.lock().unwrap();
         rut_begin();
-        let out = take(rut_add_bundle(POUCH_BUNDLE.as_ptr(), POUCH_BUNDLE.len()));
+        let out = take(unsafe { rut_add_bundle(POUCH_BUNDLE.as_ptr(), POUCH_BUNDLE.len()) });
         assert_eq!(out["module"], "pouch");
         assert_eq!(out["files"], serde_json::json!(["mod.d.rut"]));
         // a corrupt archive is the error envelope, never silent state
         rut_begin();
         let junk = b"definitely not a zip";
-        let err = take(rut_add_bundle(junk.as_ptr(), junk.len()));
+        let err = take(unsafe { rut_add_bundle(junk.as_ptr(), junk.len()) });
         assert!(
             err["error"].as_str().unwrap().contains("not a zip"),
             "{err}"
@@ -1423,14 +1438,9 @@ mod tests {
         let doc = "use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec::new();\n    v.push(1);\n}\n";
         let uri = "file:///ws/uses-pouch.rut";
         rut_begin();
-        take(rut_analyze(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        take(unsafe { rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()) });
         rut_begin();
-        let locs = take(rut_definition(uri.as_ptr(), uri.len(), 0, 13)); // the use-line `Vec`
+        let locs = take(unsafe { rut_definition(uri.as_ptr(), uri.len(), 0, 13) }); // the use-line `Vec`
         let uris: Vec<&str> = locs
             .as_array()
             .unwrap()
@@ -1444,7 +1454,7 @@ mod tests {
         // and the member surface hovers through the named module
         let push_ch = doc.lines().nth(3).unwrap().find("push").unwrap() as u32;
         rut_begin();
-        let h = take(rut_hover(uri.as_ptr(), uri.len(), 3, push_ch));
+        let h = take(unsafe { rut_hover(uri.as_ptr(), uri.len(), 3, push_ch) });
         assert!(
             h["contents"]["value"].as_str().unwrap().contains("push"),
             "{h}"
@@ -1466,16 +1476,18 @@ mod tests {
             &b"pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n"[..];
         let dep_uri = b"file:///ws/chk/dep/mod.rut";
         rut_begin();
-        let stamped = take(rut_add_def_mod(
-            dep_uri.as_ptr(),
-            dep_uri.len(),
-            b"chkdep".as_ptr(),
-            6,
-            b"".as_ptr(),
-            0,
-            dep_src.as_ptr(),
-            dep_src.len(),
-        ));
+        let stamped = take(unsafe {
+            rut_add_def_mod(
+                dep_uri.as_ptr(),
+                dep_uri.len(),
+                b"chkdep".as_ptr(),
+                6,
+                b"".as_ptr(),
+                0,
+                dep_src.as_ptr(),
+                dep_src.len(),
+            )
+        });
         assert!(
             stamped["decls"].as_array().unwrap().is_empty(),
             "{}",
@@ -1486,16 +1498,18 @@ mod tests {
         let doc = "use chkdep::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n    let t = Task { title: \"x\", completed: false };\n}\n";
         let app_uri = b"file:///ws/chk/app/mod.rut";
         rut_begin();
-        let stamped = take(rut_add_def_mod(
-            app_uri.as_ptr(),
-            app_uri.len(),
-            b"chkapp".as_ptr(),
-            6,
-            b"".as_ptr(),
-            0,
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        let stamped = take(unsafe {
+            rut_add_def_mod(
+                app_uri.as_ptr(),
+                app_uri.len(),
+                b"chkapp".as_ptr(),
+                6,
+                b"".as_ptr(),
+                0,
+                doc.as_ptr(),
+                doc.len(),
+            )
+        });
         assert!(
             stamped["decls"].as_array().unwrap().is_empty(),
             "{}",
@@ -1505,12 +1519,8 @@ mod tests {
         // the analyze lane returns the MERGED diags: both checker sites,
         // `source: "rut"`, each on its own line
         rut_begin();
-        let a = take(rut_analyze(
-            app_uri.as_ptr(),
-            app_uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        let a =
+            take(unsafe { rut_analyze(app_uri.as_ptr(), app_uri.len(), doc.as_ptr(), doc.len()) });
         let diags = a["diags"].as_array().unwrap();
         let mismatch = diags
             .iter()
@@ -1540,12 +1550,9 @@ mod tests {
         // clean (no package graph assembles for it)
         let plain_uri = b"file:///ws/chk/plain.rut";
         rut_begin();
-        let plain = take(rut_analyze(
-            plain_uri.as_ptr(),
-            plain_uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        let plain = take(unsafe {
+            rut_analyze(plain_uri.as_ptr(), plain_uri.len(), doc.as_ptr(), doc.len())
+        });
         assert!(
             plain["diags"].as_array().unwrap().is_empty(),
             "an unstamped doc must stay parse-only: {plain}"
@@ -1561,16 +1568,18 @@ mod tests {
         let root_src = &b"pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n"[..];
         let uri_root = b"file:///ws/gadgets/mod.rut";
         let name = b"gadgets";
-        let out = take(rut_add_def_mod(
-            uri_root.as_ptr(),
-            uri_root.len(),
-            name.as_ptr(),
-            name.len(),
-            b"".as_ptr(),
-            0,
-            root_src.as_ptr(),
-            root_src.len(),
-        ));
+        let out = take(unsafe {
+            rut_add_def_mod(
+                uri_root.as_ptr(),
+                uri_root.len(),
+                name.as_ptr(),
+                name.len(),
+                b"".as_ptr(),
+                0,
+                root_src.as_ptr(),
+                root_src.len(),
+            )
+        });
         assert_eq!(
             out["decls"],
             serde_json::json!([{ "name": "layout", "vis": "pub" }, { "name": "secret", "vis": "mod" }]),
@@ -1581,16 +1590,18 @@ mod tests {
         rut_begin();
         let layout_src = &b"pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n"[..];
         let uri_layout = b"file:///ws/gadgets/layout/mod.rut";
-        let out = take(rut_add_def_mod(
-            uri_layout.as_ptr(),
-            uri_layout.len(),
-            name.as_ptr(),
-            name.len(),
-            b"layout".as_ptr(),
-            6,
-            layout_src.as_ptr(),
-            layout_src.len(),
-        ));
+        let out = take(unsafe {
+            rut_add_def_mod(
+                uri_layout.as_ptr(),
+                uri_layout.len(),
+                name.as_ptr(),
+                name.len(),
+                b"layout".as_ptr(),
+                6,
+                layout_src.as_ptr(),
+                layout_src.len(),
+            )
+        });
         assert!(
             out["decls"].as_array().unwrap().is_empty(),
             "{}",
@@ -1602,14 +1613,9 @@ mod tests {
         let doc = "use gadgets::layout::\nfn main() -> nil {\n}\n";
         let uri = "file:///ws/main.rut";
         rut_begin();
-        take(rut_analyze(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        take(unsafe { rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()) });
         rut_begin();
-        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 21));
+        let items = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 0, 21) });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1620,7 +1626,7 @@ mod tests {
         assert!(labels.contains(&"mk"), "{labels:?}");
         // the root tier offers the pub mod child, never the private one
         rut_begin();
-        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 13));
+        let items = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 0, 13) });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1667,7 +1673,7 @@ mod tests {
         let _lock = TEST_SERIAL.lock().unwrap();
         rut_begin();
         let bytes = kit_bundle();
-        let out = take(rut_add_bundle(bytes.as_ptr(), bytes.len()));
+        let out = take(unsafe { rut_add_bundle(bytes.as_ptr(), bytes.len()) });
         assert_eq!(out["module"], "kit");
         assert_eq!(
             out["files"],
@@ -1679,14 +1685,9 @@ mod tests {
         let doc = "use kit::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n";
         let uri = "file:///ws/uses-kit.rut";
         rut_begin();
-        take(rut_analyze(
-            uri.as_ptr(),
-            uri.len(),
-            doc.as_ptr(),
-            doc.len(),
-        ));
+        take(unsafe { rut_analyze(uri.as_ptr(), uri.len(), doc.as_ptr(), doc.len()) });
         rut_begin();
-        let items = take(rut_complete(uri.as_ptr(), uri.len(), 0, 16));
+        let items = take(unsafe { rut_complete(uri.as_ptr(), uri.len(), 0, 16) });
         let labels: Vec<&str> = items
             .as_array()
             .unwrap()
@@ -1696,7 +1697,7 @@ mod tests {
         assert!(labels.contains(&"Column"), "{labels:?}");
         // and the segment hover resolves through the dep tree
         rut_begin();
-        let h = take(rut_hover(uri.as_ptr(), uri.len(), 0, 12)); // the `layout` segment
+        let h = take(unsafe { rut_hover(uri.as_ptr(), uri.len(), 0, 12) }); // the `layout` segment
         let md = h["contents"]["value"].as_str().unwrap();
         assert!(md.contains("file module"), "{md}");
         assert!(md.contains("layout/mod.rut"), "{md}");
@@ -1712,10 +1713,7 @@ mod tests {
         let origins_before: std::collections::BTreeSet<String> =
             state().defs.iter().map(|d| d.origin.clone()).collect();
         rut_begin();
-        let out = take(rut_extract_bundle(
-            POUCH_BUNDLE.as_ptr(),
-            POUCH_BUNDLE.len(),
-        ));
+        let out = take(unsafe { rut_extract_bundle(POUCH_BUNDLE.as_ptr(), POUCH_BUNDLE.len()) });
         assert_eq!(out["module"], "pouch");
         assert!(out["namespace"].is_null());
         // the file list mirrors `bundle_sources`' own unpack
@@ -1751,7 +1749,7 @@ mod tests {
         // envelope, never bytes
         let bytes = kit_bundle();
         rut_begin();
-        let out = take(rut_extract_bundle(bytes.as_ptr(), bytes.len()));
+        let out = take(unsafe { rut_extract_bundle(bytes.as_ptr(), bytes.len()) });
         let spells: Vec<(&str, &str)> = out["files"]
             .as_array()
             .unwrap()
@@ -1761,7 +1759,7 @@ mod tests {
         assert_eq!(spells, vec![("mod.rut", ""), ("layout/mod.rut", "layout")]);
         rut_begin();
         let junk = b"definitely not a zip";
-        let err = take(rut_extract_bundle(junk.as_ptr(), junk.len()));
+        let err = take(unsafe { rut_extract_bundle(junk.as_ptr(), junk.len()) });
         assert!(
             err["error"].as_str().unwrap().contains("not a zip"),
             "{err}"

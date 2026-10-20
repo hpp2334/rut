@@ -67,6 +67,17 @@ impl Slots {
             Slots::Heap(v) => v.len(),
         }
     }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    /// The slots as a contiguous slice — both variants store them
+    /// back-to-back, so iteration needs no per-variant handling.
+    pub fn as_slice(&self) -> &[Slot] {
+        match self {
+            Slots::Inline { len, data } => &data[..*len as usize],
+            Slots::Heap(v) => v,
+        }
+    }
     pub fn get(&self, i: usize) -> Option<Slot> {
         match self {
             Slots::Inline { len, data } => {
@@ -282,13 +293,13 @@ impl ArrData {
         unsafe {
             match self.kind {
                 ArrKind::Slots => std::ptr::write(p, s),
-                ArrKind::U8 => *(p as *mut u8) = unsafe { s.i } as u8,
-                ArrKind::I8 => *(p as *mut i8) = unsafe { s.i } as i8,
-                ArrKind::U16 => std::ptr::write_unaligned(p as *mut u16, unsafe { s.i } as u16),
-                ArrKind::I16 => std::ptr::write_unaligned(p as *mut i16, unsafe { s.i } as i16),
-                ArrKind::U32 => std::ptr::write_unaligned(p as *mut u32, unsafe { s.i } as u32),
-                ArrKind::I32 => std::ptr::write_unaligned(p as *mut i32, unsafe { s.i } as i32),
-                ArrKind::F32 => std::ptr::write_unaligned(p as *mut f32, unsafe { s.f } as f32),
+                ArrKind::U8 => *(p as *mut u8) = s.i as u8,
+                ArrKind::I8 => *(p as *mut i8) = s.i as i8,
+                ArrKind::U16 => std::ptr::write_unaligned(p as *mut u16, s.i as u16),
+                ArrKind::I16 => std::ptr::write_unaligned(p as *mut i16, s.i as i16),
+                ArrKind::U32 => std::ptr::write_unaligned(p as *mut u32, s.i as u32),
+                ArrKind::I32 => std::ptr::write_unaligned(p as *mut i32, s.i as i32),
+                ArrKind::F32 => std::ptr::write_unaligned(p as *mut f32, s.f as f32),
                 ArrKind::Bool => *(p as *mut u8) = s.as_bool() as u8,
                 // the primitive-optional store ENCODES the incoming proper
                 // `?prim` value (cell or null): nil stores tag 0 (payload
@@ -298,28 +309,20 @@ impl ArrData {
                 ArrKind::Opt(pt) => {
                     let w = pt.width();
                     let e = self.block.add(i * self.width());
-                    if unsafe { s.r.is_null() } {
+                    if s.r.is_null() {
                         std::ptr::write_bytes(e, 0, w + 1);
                     } else {
                         let raw = cell_of(s).record_get(0).unwrap_or(Slot::int(0));
                         let q = e as *mut Slot;
                         match pt {
-                            PrimTy::U8 => *(e) = unsafe { raw.i } as u8,
-                            PrimTy::I8 => *(e as *mut i8) = unsafe { raw.i } as i8,
-                            PrimTy::U16 => {
-                                std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16)
-                            }
-                            PrimTy::I16 => {
-                                std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16)
-                            }
-                            PrimTy::U32 => {
-                                std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32)
-                            }
-                            PrimTy::I32 => {
-                                std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32)
-                            }
+                            PrimTy::U8 => *(e) = raw.i as u8,
+                            PrimTy::I8 => *(e as *mut i8) = raw.i as i8,
+                            PrimTy::U16 => std::ptr::write_unaligned(e as *mut u16, raw.i as u16),
+                            PrimTy::I16 => std::ptr::write_unaligned(e as *mut i16, raw.i as i16),
+                            PrimTy::U32 => std::ptr::write_unaligned(e as *mut u32, raw.i as u32),
+                            PrimTy::I32 => std::ptr::write_unaligned(e as *mut i32, raw.i as i32),
                             PrimTy::U64 | PrimTy::I64 => {
-                                std::ptr::write_unaligned(q as *mut i64, unsafe { raw.i })
+                                std::ptr::write_unaligned(q as *mut i64, raw.i)
                             }
                             PrimTy::F32 => {
                                 std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32)
@@ -418,22 +421,14 @@ impl ArrData {
         let q = e as *mut Slot;
         unsafe {
             match self.kind {
-                ArrKind::Opt(PrimTy::U8) => *e = unsafe { raw.i } as u8,
-                ArrKind::Opt(PrimTy::I8) => *(e as *mut i8) = unsafe { raw.i } as i8,
-                ArrKind::Opt(PrimTy::U16) => {
-                    std::ptr::write_unaligned(e as *mut u16, unsafe { raw.i } as u16)
-                }
-                ArrKind::Opt(PrimTy::I16) => {
-                    std::ptr::write_unaligned(e as *mut i16, unsafe { raw.i } as i16)
-                }
-                ArrKind::Opt(PrimTy::U32) => {
-                    std::ptr::write_unaligned(e as *mut u32, unsafe { raw.i } as u32)
-                }
-                ArrKind::Opt(PrimTy::I32) => {
-                    std::ptr::write_unaligned(e as *mut i32, unsafe { raw.i } as i32)
-                }
+                ArrKind::Opt(PrimTy::U8) => *e = raw.i as u8,
+                ArrKind::Opt(PrimTy::I8) => *(e as *mut i8) = raw.i as i8,
+                ArrKind::Opt(PrimTy::U16) => std::ptr::write_unaligned(e as *mut u16, raw.i as u16),
+                ArrKind::Opt(PrimTy::I16) => std::ptr::write_unaligned(e as *mut i16, raw.i as i16),
+                ArrKind::Opt(PrimTy::U32) => std::ptr::write_unaligned(e as *mut u32, raw.i as u32),
+                ArrKind::Opt(PrimTy::I32) => std::ptr::write_unaligned(e as *mut i32, raw.i as i32),
                 ArrKind::Opt(PrimTy::U64) | ArrKind::Opt(PrimTy::I64) => {
-                    std::ptr::write_unaligned(q as *mut i64, unsafe { raw.i })
+                    std::ptr::write_unaligned(q as *mut i64, raw.i)
                 }
                 ArrKind::Opt(PrimTy::F32) => {
                     std::ptr::write_unaligned(e as *mut f32, raw.as_f64() as f32)
@@ -741,7 +736,7 @@ impl CellVal {
                         std::slice::from_raw_parts(b.block, b.len as usize).to_vec()
                     },
                     _ => (0..b.len())
-                        .map(|i| b.get(i as usize).map(|s| unsafe { s.i } as u8).unwrap_or(0))
+                        .map(|i| b.get(i).map(|s| unsafe { s.i } as u8).unwrap_or(0))
                         .collect(),
                 })
             }

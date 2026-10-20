@@ -237,6 +237,7 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
 /// async producer (an `async fn`'s body or an `async { }` block's).
 /// `name` is the weaved fn's spelling (the fn's name, or the block's
 /// reserved `#async@<node>`); the frame/cx pair is the yield ABI.
+#[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
 fn weave_async_body_infer(
     ctx: &mut Ctx,
     fid: u32,
@@ -1041,7 +1042,7 @@ pub(crate) fn compile_async_call(
     }
     // the weave's own legality ran above (the cx-injection law,
     // generics) — its diagnostics precede the call-shape checks
-    let layout = *c.ctx.async_layout.get(&fid).ok_or_else(|| ())?; // the weave failed (diagnostics recorded)
+    let layout = *c.ctx.async_layout.get(&fid).ok_or(())?; // the weave failed (diagnostics recorded)
     let ret_ty = answer_ty_of_layout(c.ctx, &layout);
     mint_frame(c, layout, &aregs, &atys, sp_lo);
     // the call's type IS the closed `Future<ret>` class — generic

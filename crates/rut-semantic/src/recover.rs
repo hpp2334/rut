@@ -8,7 +8,7 @@ use rut_lexer::token::{Tok, Token};
 use super::legend::{owned_by_tokens, TokenType};
 
 /// Tokens fully inside `span`, in source order.
-pub(crate) fn toks_in<'a>(toks: &'a [Token], span: Span) -> impl Iterator<Item = &'a Token> {
+pub(crate) fn toks_in(toks: &[Token], span: Span) -> impl Iterator<Item = &Token> {
     toks.iter()
         .skip_while(move |t| t.span.lo < span.lo)
         .take_while(move |t| t.span.hi <= span.hi)

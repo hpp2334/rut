@@ -5,6 +5,10 @@
 //! the host's own listener rows (§6's law: hooks become the tests'
 //! vocabulary, numeric ids stay plumbing).
 
+// Each test binary compiles this module separately — a helper another
+// binary uses looks dead here.
+#![allow(dead_code)]
+
 use std::cell::RefCell;
 use std::rc::Rc;
 

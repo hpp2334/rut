@@ -15,7 +15,7 @@
 /// property of the decoded artifact (`bundle.restore_symbols(..)`),
 /// applied before the offer, not a run step.
 pub(crate) fn compile(loaded: &rut_driver::Walk) -> rut_driver::Compiled {
-    let mut chain = loaded
+    let chain = loaded
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));

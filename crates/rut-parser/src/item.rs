@@ -639,9 +639,7 @@ fn generic_params_more(
         if p.eat_punct(Tok::Gt) {
             return None;
         }
-        let Some(n) = p.expect_ident("a generic parameter") else {
-            return None;
-        };
+        let n = p.expect_ident("a generic parameter")?;
         out.push(n);
         if p.at_kw("requires") {
             p.bump();
@@ -884,7 +882,7 @@ impl InterfaceFrame {
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
-        match (d) {
+        match d {
             Done::Body(_, methods) => {
                 let (vis, name, generics) =
                     (self.vis, self.name, std::mem::take(&mut self.generics));
@@ -929,8 +927,6 @@ pub(crate) struct ImplFrame {
 
 #[derive(Clone, Copy)]
 enum ImStage {
-    /// the declared `<..>` list (when the head spells one)
-    Generics,
     /// the bound of a suspended generic — a child Type frame
     GenBound,
     /// the target type

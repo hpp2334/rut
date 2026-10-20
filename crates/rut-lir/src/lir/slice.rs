@@ -114,14 +114,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             SliceSource::Array => {
                 let dst = self.new_reg(TY_I32);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    let (argv_off, argc) = self.pool_args(&[]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::ArrLen,
-                            recv: recv,
+                            recv,
                             argv_off,
                             argc,
-                            dst: dst,
+                            dst,
                         },
                         sp,
                     );
@@ -131,14 +131,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             SliceSource::Str => {
                 let dst = self.new_reg(TY_I32);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    let (argv_off, argc) = self.pool_args(&[]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::StrLen,
-                            recv: recv,
+                            recv,
                             argv_off,
                             argc,
-                            dst: dst,
+                            dst,
                         },
                         sp,
                     );
@@ -148,14 +148,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             SliceSource::Bytes => {
                 let dst = self.new_reg(TY_I32);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![]));
+                    let (argv_off, argc) = self.pool_args(&[]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::ArrLen,
-                            recv: recv,
+                            recv,
                             argv_off,
                             argc,
-                            dst: dst,
+                            dst,
                         },
                         sp,
                     );
@@ -220,14 +220,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 let dst = self.new_reg(TY_STR);
                 {
-                    let (argv_off, argc) = self.pool_args(&(vec![cp]));
+                    let (argv_off, argc) = self.pool_args(&[cp]);
                     self.emit(
                         Op::CallNat {
                             nat: Nat::StrFromCode,
                             recv: NOREG,
                             argv_off,
                             argc,
-                            dst: dst,
+                            dst,
                         },
                         sp,
                     );

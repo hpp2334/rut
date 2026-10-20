@@ -577,11 +577,9 @@ impl<'a> Lexer<'a> {
         match tok {
             Tok::LParen | Tok::LBrace | Tok::LBracket => {
                 self.depth += 1;
-                if self.depth > NEST_MAX {
-                    if !self.depth_reported {
-                        self.depth_reported = true;
-                        self.err(self.span(lo), "nesting too deep");
-                    }
+                if self.depth > NEST_MAX && !self.depth_reported {
+                    self.depth_reported = true;
+                    self.err(self.span(lo), "nesting too deep");
                 }
             }
             Tok::RParen | Tok::RBrace | Tok::RBracket => {

@@ -1,6 +1,11 @@
 //! Method dispatch on a value receiver: resolution through inherent and registered trait impls, plus the missing-method diagnostic and receiver naming.
 
 use crate::check::{MemberSrc, TcResult};
+
+/// `find_extern_inherent`'s hit row: `(surface row, method index,
+/// class substitution args, decl name when the class is generic)`.
+type ExternInherentHit = (usize, usize, Vec<(IdentId, TypeId)>, Option<IdentId>);
+
 use crate::lir::slice::SliceSource;
 use crate::lir::*;
 use rut_core::sym;
@@ -57,7 +62,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             },
             None => None,
         };
-        if let Some((ty, reg)) = recv_opt_raw {}
+        if let Some((_ty, _reg)) = recv_opt_raw {}
         let (rt, rreg) = match recv_raw {
             Some((ty, reg)) => self.deref_for_use(ty, reg, sp.lo),
             None => {
@@ -140,14 +145,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let tr = self.last_reg;
                     let dst = self.new_reg(TY_STR);
                     {
-                        let (argv_off, argc) = self.pool_args(&(vec![fr, tr]));
+                        let (argv_off, argc) = self.pool_args(&[fr, tr]);
                         self.emit(
                             Op::CallNat {
                                 nat: Nat::StrSlice,
                                 recv: rreg,
                                 argv_off,
                                 argc,
-                                dst: dst,
+                                dst,
                             },
                             sp.lo,
                         );
@@ -210,14 +215,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let sr = self.last_reg;
                     let dst = self.new_reg(TY_I64);
                     {
-                        let (argv_off, argc) = self.pool_args(&(vec![fr, sr]));
+                        let (argv_off, argc) = self.pool_args(&[fr, sr]);
                         self.emit(
                             Op::CallNat {
                                 nat: Nat::StrScan,
                                 recv: rreg,
                                 argv_off,
                                 argc,
-                                dst: dst,
+                                dst,
                             },
                             sp.lo,
                         );
@@ -244,14 +249,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let hr = self.last_reg;
                     let dst = self.new_reg(TY_BOOL);
                     {
-                        let (argv_off, argc) = self.pool_args(&(vec![fr, hr]));
+                        let (argv_off, argc) = self.pool_args(&[fr, hr]);
                         self.emit(
                             Op::CallNat {
                                 nat: Nat::StrStartsWith,
                                 recv: rreg,
                                 argv_off,
                                 argc,
-                                dst: dst,
+                                dst,
                             },
                             sp.lo,
                         );
@@ -263,7 +268,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // concrete and slot ABIs coincide for ref targets (P1.1),
                 // so the raw register crosses as-is (`k.hash()` /
                 // `k.hash_eq(..)` in a monomorphized map body, P4)
-                let who = recv_name(&self.ctx, recv);
+                let who = recv_name(self.ctx, recv);
                 self.ctx.err(sp, format!(
                     "`str` has no method `{}` — its members are `len`/`slice`/`code`/`code_at`/`scan`/`starts_with`/`encode` (`string_len({who})` is the free-fn spelling)",
                     self.ctx.name(name)
@@ -289,7 +294,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // shares its cell; this member mints a fresh one.
                     let dst = self.new_reg(TY_BYTES);
                     {
-                        let (argv_off, argc) = self.pool_args(&(vec![]));
+                        let (argv_off, argc) = self.pool_args(&[]);
                         self.emit(
                             Op::CallNat {
                                 nat: Nat::BytesClone,
@@ -307,7 +312,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // a registered trait impl on the ref target dispatches
                 // statically on the bare receiver (same law as `str`
                 // above — one ABI variant, the raw register crosses)
-                let who = recv_name(&self.ctx, recv);
+                let who = recv_name(self.ctx, recv);
                 self.ctx.err(sp, format!(
                     "`bytes` has no method `{}` — its members are `len`/`decode`/`clone` (`bytes_len({who})` is the free-fn spelling)",
                     self.ctx.name(name)
@@ -323,7 +328,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     (sym::LEN, 0) => {
                         let dst = self.new_reg(TY_I32);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            let (argv_off, argc) = self.pool_args(&[]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::TraceLen,
@@ -346,7 +351,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let ir = self.last_reg;
                         let dst = self.new_reg(TY_STR);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![ir]));
+                            let (argv_off, argc) = self.pool_args(&[ir]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::TraceName,
@@ -369,7 +374,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let ir = self.last_reg;
                         let dst = self.new_reg(TY_I32);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![ir]));
+                            let (argv_off, argc) = self.pool_args(&[ir]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::TraceLine,
@@ -392,7 +397,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let ir = self.last_reg;
                         let dst = self.new_reg(TY_I32);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![ir]));
+                            let (argv_off, argc) = self.pool_args(&[ir]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::TraceCol,
@@ -409,7 +414,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     (sym::RENDER, 0) => {
                         let dst = self.new_reg(TY_STR);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            let (argv_off, argc) = self.pool_args(&[]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::TraceRender,
@@ -443,7 +448,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let opt_ty = self.ctx.mk_opt(*elem);
                         let dst = self.new_reg(opt_ty);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            let (_argv_off, _argc) = self.pool_args(&[]);
                             self.emit(
                                 Op::WeakUpgrade {
                                     recv: rreg,
@@ -530,7 +535,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let tr = self.last_reg;
                         let view = self.new_reg(arr_ty);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live]));
+                            let (argv_off, argc) = self.pool_args(&[fr, tr, live]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::ArrSlice,
@@ -569,7 +574,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let tr = self.last_reg;
                         let live = self.new_reg(TY_I32);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![]));
+                            let (argv_off, argc) = self.pool_args(&[]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::ArrLen,
@@ -583,7 +588,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         let view = self.new_reg(rt);
                         {
-                            let (argv_off, argc) = self.pool_args(&(vec![fr, tr, live]));
+                            let (argv_off, argc) = self.pool_args(&[fr, tr, live]);
                             self.emit(
                                 Op::CallNat {
                                     nat: Nat::ArrSlice,
@@ -617,15 +622,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // builtin members: `opaque` rejects methods — its one member is
         // the engine's downcast static
-        match self.ctx.types.kind(rt).clone() {
-            TyKind::Opaque => {
-                self.ctx.err(
-                    sp,
-                    "`opaque` has no methods in this build —recover with `opaque::downcast<T>(o)`",
-                );
-                return Err(());
-            }
-            _ => {}
+        if self.ctx.types.kind(rt).clone() == TyKind::Opaque {
+            self.ctx.err(
+                sp,
+                "`opaque` has no methods in this build —recover with `opaque::downcast<T>(o)`",
+            );
+            return Err(());
         }
         // user types: inherent methods first (direct), then trait impls
         // — statically bound for this concrete receiver (nominal, RFC
@@ -969,14 +971,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &self,
         rt: TypeId,
         name: IdentId,
-    ) -> Option<(usize, usize, Vec<(IdentId, TypeId)>, Option<IdentId>)> {
+    ) -> Option<ExternInherentHit> {
         let (dname, cargs) = match self.ctx.inst_data.get(&rt) {
             Some((d, args)) => (Some(*d), args.clone()),
             None => (None, vec![]),
         };
         for (i, ih) in self.ctx.extern_inherents.iter().enumerate() {
             let generic = dname.and_then(|d| self.ctx.extern_generics.get(&d));
-            let hit = ih.target == rt || generic.map_or(false, |g| g.template == ih.target);
+            let hit = ih.target == rt || generic.is_some_and(|g| g.template == ih.target);
             if !hit {
                 continue;
             }
@@ -996,7 +998,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 i,
                 midx,
                 subst,
-                generic.map(|g| dname.expect("generic implies decl name")),
+                generic.map(|_g| dname.expect("generic implies decl name")),
             ));
         }
         None

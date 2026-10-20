@@ -550,6 +550,11 @@ impl NativeTable {
         self.map.len() as i32
     }
 
+    /// True when no entries are live.
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
     /// Kind admission: homogeneous per table by construction; a mismatch
     /// is a host/wrapper bug and traps instead of silently missing.
     fn admit(&self, kind: KeyKind) -> Result<(), Trap> {
@@ -688,7 +693,7 @@ pub fn hash_payload(k: &KeyVal) -> u64 {
 /// overflow the check), and BOTH ends must sit on UTF-8 codepoint
 /// boundaries — a mid-codepoint window is a caller bug, trapped with
 /// the house `Invalid` shape, never a silent mis-read.
-fn sv_range<'a>(parent: &'a str, off: i32, len: i32) -> Result<&'a str, Trap> {
+fn sv_range(parent: &str, off: i32, len: i32) -> Result<&str, Trap> {
     // the end offset in i64 — the trap messages name it, so the i32
     // corners must not overflow the naming arithmetic
     let end = off as i64 + len as i64;
@@ -779,16 +784,19 @@ fn fused_remove(vm: &Vm, t: &mut NativeTable, key: &KeyVal) -> Result<i32, Trap>
 
 /// The s lane's fused put: BORROWED (nmap-borrow-probe — the window
 /// itself probes; the owned copy happens inside, a fresh insert only).
+#[cfg(test)] // the borrow-probe's fused lanes: exercised by the tests below
 fn fused_put_s(t: &mut NativeTable, k: &str) -> Result<i64, Trap> {
     t.hput_ref(KeyRef::Str(k))
 }
 
 /// The s lane's fused find: zero-copy.
+#[cfg(test)] // the borrow-probe's fused lanes: exercised by the tests below
 fn fused_find_s(t: &NativeTable, k: &str) -> Result<i32, Trap> {
     t.hfind_ref(KeyRef::Str(k))
 }
 
 /// The s lane's fused remove: zero-copy.
+#[cfg(test)] // the borrow-probe's fused lanes: exercised by the tests below
 fn fused_remove_s(vm: &Vm, t: &mut NativeTable, k: &str) -> Result<i32, Trap> {
     t.hremove_ref(vm, KeyRef::Str(k))
 }
@@ -798,18 +806,21 @@ fn fused_remove_s(vm: &Vm, t: &mut NativeTable, k: &str) -> Result<i32, Trap> {
 /// s lane. Same entry and same HANDLE as the s lane on the same
 /// content (the parity law) — an sv key and the equal-content `str`
 /// key are one key with one identity.
+#[cfg(test)] // the borrow-probe's fused lanes: exercised by the tests below
 fn fused_put_sv(t: &mut NativeTable, parent: &str, off: i32, len: i32) -> Result<i64, Trap> {
     let range = sv_range(parent, off, len)?;
     fused_put_s(t, range)
 }
 
 /// The sv lane's fused find.
+#[cfg(test)] // the borrow-probe's fused lanes: exercised by the tests below
 fn fused_find_sv(t: &NativeTable, parent: &str, off: i32, len: i32) -> Result<i32, Trap> {
     let range = sv_range(parent, off, len)?;
     fused_find_s(t, range)
 }
 
 /// The sv lane's fused remove.
+#[cfg(test)] // the borrow-probe's fused lanes: exercised by the tests below
 fn fused_remove_sv(
     vm: &Vm,
     t: &mut NativeTable,
@@ -821,6 +832,7 @@ fn fused_remove_sv(
     fused_remove_s(vm, t, range)
 }
 
+/// Install the `nmap_host` bodies under the `nmap_host` scope (the `calc`
 /// Install the `nmap_host` bodies under the `nmap_host` scope (the `calc`
 /// pattern): the callable's Rust shape IS the `.d.rut`
 /// row, so the surface declares exactly these signatures. `map_new`'s
@@ -1031,7 +1043,7 @@ pub fn pkg() -> HostPkg {
         pkg,
         "map_hfind_sv",
         (Opaque<NativeTable>, &str, i32, i32) -> i32,
-        |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
+        |_vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             let key = KeyVal::Str(sv_range(parent, off, len)?.to_owned());
             b.with(|t| {
                 t.check_kind(key.kind())?;
@@ -1099,8 +1111,10 @@ mod tests {
     /// paths take, and the heap accounting (`heap_usage`) reads back the
     /// balance.
     fn bare_vm() -> Vm {
-        let mut prog = rut_core::binary::Program::default();
-        prog.types = rut_core::types::TypeTable::boot();
+        let prog = rut_core::binary::Program {
+            types: rut_core::types::TypeTable::boot(),
+            ..rut_core::binary::Program::default()
+        };
         rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(rut_vm::interp::Limits::default())
@@ -1351,7 +1365,7 @@ mod tests {
         let mut reference: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
         let mut handles: std::collections::HashMap<u64, i32> = std::collections::HashMap::new();
         let val_of = |k: u64| -> u64 {
-            if k % 7 == 0 {
+            if k.is_multiple_of(7) {
                 (-(k as f64)).to_bits()
             } else {
                 k * 7 + 1
@@ -1459,7 +1473,7 @@ mod tests {
         let b1 = Opaque::alloc(&mut vm, 9i64).unwrap();
         let sealed1 = seal_transfer(b1.handle().clone(), &mut vm).unwrap();
         drop(b1);
-        let before_replace = vm.heap_usage();
+        let _before_replace = vm.heap_usage();
         let ans = t.hvput(&vm, KeyKind::Bits, bits(0), sealed1).unwrap();
         assert_eq!(ans, pack_answer(0, false), "replace");
         assert_eq!(

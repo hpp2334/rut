@@ -15,8 +15,7 @@ fn first_for(src: &str) -> (Ast, NodeHandle<AnyStmt>) {
     let items = ast.module_items(ast.root);
     let f = items
         .iter()
-        .filter(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
-        .next_back()
+        .rfind(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
         .expect("fn");
     let body = match ast.item(*f) {
         ItemKind::Fn(d) => d.body,

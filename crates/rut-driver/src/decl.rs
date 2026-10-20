@@ -283,7 +283,7 @@ fn lower_module(
                          (one declaration per name, the one-name-one-decl law)"
                     ));
                 }
-                lower_inline(ast, items, &child_path, &display, origin, rows, lowered)?;
+                lower_inline(ast, items, &child_path, &display, rows, lowered)?;
             }
             _ => continue,
         }
@@ -300,7 +300,6 @@ fn lower_inline(
     items: &[NodeHandle<AnyItem>],
     path: &str,
     display: &str,
-    origin: &str,
     rows: &mut Vec<HostRow>,
     lowered: &mut BTreeSet<String>,
 ) -> Result<(), String> {
@@ -322,7 +321,7 @@ fn lower_inline(
                  (one declaration per name, the one-name-one-decl law)"
             ));
         }
-        lower_inline(ast, nested, &child_path, display, origin, rows, lowered)?;
+        lower_inline(ast, nested, &child_path, display, rows, lowered)?;
     }
     Ok(())
 }

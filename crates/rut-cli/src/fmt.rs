@@ -29,7 +29,7 @@ pub(crate) fn fmt(args: &FmtArgs) {
                 let ep = e.path();
                 if ep.is_dir() {
                     stack.push(ep);
-                } else if ep.extension().map_or(false, |x| x == "rut") {
+                } else if ep.extension().is_some_and(|x| x == "rut") {
                     files.push(ep);
                 }
             }

@@ -288,8 +288,8 @@ fn pub_mod_self_scopes_are_gone_on_type_alias() {
         "each diag names the fix: {diags:?}"
     );
     let items = ast.module_items(ast.root);
-    for i in 0..2 {
-        match ast.item(items[i]) {
+    for item in items.iter().take(2) {
+        match ast.item(*item) {
             ItemKind::Alias(d) => assert_eq!(d.vis, Vis::Self_, "the default survives recovery"),
             _ => panic!("expected an alias"),
         }

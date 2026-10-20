@@ -11,6 +11,7 @@ impl<'a> Ctx<'a> {
     /// `host` carries the row's registration name (`<scope>::<name>`)
     /// when the exporter is a decl/native module — the minted row
     /// family's host ids derive from it.
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub fn add_extern_fn(
         &mut self,
         site: &str,
@@ -135,6 +136,7 @@ impl<'a> Ctx<'a> {
     /// live in a different module than its type), while the NEWTYPE
     /// arming row — the call-construction flag, keyed by the site's
     /// name binding — binds per file.
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub fn add_extern_generic(
         &mut self,
         site: &str,
@@ -533,11 +535,7 @@ impl<'a> Ctx<'a> {
     /// the class, `extern_generics` its template). The substitution
     /// pairs the template's parameter names with the receiver's
     /// concrete arguments, in the row's own order.
-    pub fn find_extern_method(
-        &self,
-        rt: TypeId,
-        name: IdentId,
-    ) -> Option<(usize, usize, Vec<(IdentId, TypeId)>)> {
+    pub fn find_extern_method(&self, rt: TypeId, name: IdentId) -> Option<InherentRow> {
         for (i, ih) in self.extern_inherents.iter().enumerate() {
             // the receiver names the class: either directly (the plain
             // extern row) or through its instantiation's decl name
@@ -548,7 +546,7 @@ impl<'a> Ctx<'a> {
             let hit = ih.target == rt
                 || dname
                     .and_then(|d| self.extern_generics.get(&d))
-                    .map_or(false, |g| g.template == ih.target);
+                    .is_some_and(|g| g.template == ih.target);
             if !hit {
                 continue;
             }
@@ -589,7 +587,7 @@ impl<'a> Ctx<'a> {
     /// descriptor so a mint substitutes every signature at once).
     pub fn carried_trait_leaves(&self, base: &IfaceDesc) -> Vec<String> {
         let mut leaves: Vec<String> = Vec::new();
-        let mut scan = |text: &str, leaves: &mut Vec<String>| {
+        let scan = |text: &str, leaves: &mut Vec<String>| {
             for piece in text.split(|c: char| !c.is_alphanumeric() && c != '#') {
                 let piece = piece.trim();
                 if piece.len() > 1 && piece.starts_with('#') && !leaves.iter().any(|l| l == piece) {
@@ -599,9 +597,9 @@ impl<'a> Ctx<'a> {
         };
         for tm in &base.methods {
             for &p in &tm.params {
-                scan(&self.type_name(p).to_string(), &mut leaves);
+                scan(self.type_name(p), &mut leaves);
             }
-            scan(&self.type_name(tm.ret).to_string(), &mut leaves);
+            scan(self.type_name(tm.ret), &mut leaves);
         }
         leaves
     }

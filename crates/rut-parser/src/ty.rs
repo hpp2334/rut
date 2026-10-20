@@ -245,7 +245,7 @@ impl TypeFrame {
 
     fn fnparams_top(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::RParen) {
-            return self.to_fn_ret(p);
+            return self.step_fn_ret(p);
         }
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
@@ -275,7 +275,7 @@ impl TypeFrame {
 
     /// the parameter list closed (or failed): optional `->` then the
     /// return type — an omitted return is `nil`
-    fn to_fn_ret(&mut self, p: &mut Parser) -> Step {
+    fn step_fn_ret(&mut self, p: &mut Parser) -> Step {
         let params = match &mut self.stage {
             TyStage::FnParams { params } => std::mem::take(params),
             _ => unreachable!(),
@@ -340,7 +340,7 @@ impl TypeFrame {
                         self.fnparams_top(p)
                     } else {
                         p.expect(Tok::RParen);
-                        self.to_fn_ret(p)
+                        self.step_fn_ret(p)
                     }
                 }
                 TyStage::FnRet { params } => {
@@ -376,7 +376,7 @@ impl TypeFrame {
             }
             Done::Failed => match self.stage {
                 // v1: a failed parameter type breaks to the arrow
-                TyStage::FnParams { .. } => self.to_fn_ret(p),
+                TyStage::FnParams { .. } => self.step_fn_ret(p),
                 _ => Step::Pop(Done::Failed),
             },
             _ => unreachable!("type frame receives types or const expressions"),

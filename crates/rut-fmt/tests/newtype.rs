@@ -6,8 +6,7 @@ use rut_fmt::format;
 use rut_parser::Mode;
 
 fn fmt(src: &str) -> String {
-    let out = format(src, Mode::Impl, &rut_fmt::Style::default()).expect("formats");
-    out
+    format(src, Mode::Impl, &rut_fmt::Style::default()).expect("formats")
 }
 
 #[test]

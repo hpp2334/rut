@@ -2858,14 +2858,16 @@ mod tests {
     use crate::types::{TY_F64, TY_I32, TY_NIL, TY_STR};
 
     fn sample() -> Program {
-        let mut p = Program::default();
-        p.name = "app:demo".into();
-        p.scope = 7;
+        let mut p = Program {
+            name: "app:demo".into(),
+            scope: 7,
+            types: TypeTable::boot(),
+            ..Program::default()
+        };
         let point = p.interner.intern("Point");
         let x = p.interner.intern("x");
         let vid = p.interner.intern("Vec");
         let main = p.interner.intern("main");
-        p.types = TypeTable::boot();
         p.types.types.push(RutType {
             name: point,
             kind: TyKind::Data {
@@ -2916,7 +2918,7 @@ mod tests {
         assert_eq!(q.name_of(q.funcs[0].name), "main");
         assert_eq!(q.name_of(q.exports[0].0), "main");
         assert_eq!(q.type_name(TY_STR), "str");
-        let data = &q.types.types[q.types.dense(boot_len() as u32) as usize];
+        let data = &q.types.types[q.types.dense(boot_len()) as usize];
         assert_eq!(q.name_of(data.name), "Point");
         if let TyKind::Data { fields } = &data.kind {
             assert_eq!(q.name_of(fields[0].name), "x");

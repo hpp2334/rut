@@ -17,7 +17,8 @@ use std::rc::Rc;
 /// and these cases need no Vec (plain arrays carry the element views).
 fn world() -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
-    for d in ["rut/ink"] {
+    {
+        let d = "rut/ink";
         world.extend(
             rut_native::dir_pkgs(
                 &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

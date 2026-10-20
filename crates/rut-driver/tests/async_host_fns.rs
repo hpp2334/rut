@@ -383,12 +383,9 @@ entry fn main() -> nil {
     vm.call::<_, ()>("main", ()).expect("main");
     let mut trapped = None;
     for _ in 0..100 {
-        match vm.run_ready() {
-            Err(t) => {
-                trapped = Some(t);
-                break;
-            }
-            Ok(_) => {}
+        if let Err(t) = vm.run_ready() {
+            trapped = Some(t);
+            break;
         }
         fx.complete_due(vm.now_ms());
         match fx.next_due() {
@@ -628,8 +625,7 @@ entry fn main() -> nil {
     // the decl row itself never runs — the weave mints the future
     let err = vm
         .call_host_row("fixture::probe", &[Value::Str("k".into())])
-        .err()
-        .expect("the decl row traps");
+        .expect_err("the decl row traps");
     assert!(
         err.msg.contains("called through its decl row"),
         "the decl row is the teaching trap: {}",

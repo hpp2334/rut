@@ -137,18 +137,6 @@ fn mixed_world(tag: &str) -> PathBuf {
     root
 }
 
-fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
-    let g = loaded
-        .pkgs
-        .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .entrypoint(&loaded.root)
-        .compile()
-        .expect("compile the walk");
-    assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
-    rut_core::binary::encode(&g.graph.program.expect("linked program"))
-}
-
 fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R {
     let g = loaded
         .pkgs

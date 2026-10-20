@@ -73,13 +73,13 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     };
     // the bindings, BEFORE the Vm — offer = declare, the install rides
     // the chain's registry
-    let vm = rut_vm::interp::Vm::builder()
+
+    rut_vm::interp::Vm::builder()
         .compiled(out)
         .limits(limits)
         .hooks(rut_vm::interp::HostHooks::default())
         .build()
-        .expect("vm");
-    vm
+        .expect("vm")
 }
 
 const SRC: &str = r#"
@@ -110,7 +110,7 @@ fn typed_prims_and_tuples() {
     let mut vm = entry_vm(SRC);
     assert_eq!(vm.call::<_, i64>("num", ()).unwrap(), 42);
     assert_eq!(vm.call::<_, f64>("half", ()).unwrap(), 1.5);
-    assert_eq!(vm.call::<_, bool>("flag", ()).unwrap(), true);
+    assert!(vm.call::<_, bool>("flag", ()).unwrap());
     assert_eq!(vm.call::<_, ()>("nothing", ()).unwrap(), ());
     assert_eq!(
         vm.call::<_, (i32, bool)>("pair", (7i32,)).unwrap(),

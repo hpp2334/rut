@@ -223,11 +223,8 @@ impl CallCx<'_> {
                     }
                 }
             }
-            Kind::Stmt(StmtKind::Return { value }) => {
-                if let Some(v) = value {
-                    self.walk_expr(*v);
-                }
-            }
+            Kind::Stmt(StmtKind::Return { value: Some(v) }) => self.walk_expr(*v),
+            Kind::Stmt(StmtKind::Return { value: None }) => {}
             Kind::Stmt(StmtKind::ExprStmt(e)) => self.walk_expr(*e),
             _ => {}
         }
@@ -491,7 +488,7 @@ mod tests {
     #[test]
     fn annotated_lets_are_never_restated() {
         let src = "class Circle {\n    r: f64;\n}\nfn go() -> nil {\n    let c: Circle = Circle::new(1.0);\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         assert!(w(&d, &[]).all().is_empty());
     }
 
@@ -583,11 +580,11 @@ mod tests {
     #[test]
     fn module_let_gets_a_hint_at_its_decl() {
         let src = "let TOTAL = 41;\nfn bump() -> i32 {\n    return TOTAL + 1;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let hs = w(&d, &[]).all();
         assert_eq!(hs.len(), 1, "{hs:?}");
         assert_eq!(label(&hs[0]), ": i32");
-        assert_eq!(pos(&hs[0]), end_of(&src, "let TOTAL", 1));
+        assert_eq!(pos(&hs[0]), end_of(src, "let TOTAL", 1));
         assert!(
             tooltip(&hs[0]).contains("let TOTAL = 41;"),
             "{:?}",
@@ -604,11 +601,11 @@ mod tests {
         // the binding pass infers destructured names from a literal
         // tuple (the shape its records price)
         let src = "fn go() -> f64 {\n    let (a, b) = (1, 2.0);\n    return b;\n}\n";
-        let d = doc(&src);
+        let d = doc(src);
         let hs = w(&d, &[]).all();
         assert_eq!(labels(&hs), [": i32", ": f32"], "{hs:?}");
-        assert_eq!(pos(&hs[0]), end_of(&src, "(a", 1));
-        let (bl, bc) = at(&src, "b)", 1); // end of the `b` ident
+        assert_eq!(pos(&hs[0]), end_of(src, "(a", 1));
+        let (bl, bc) = at(src, "b)", 1); // end of the `b` ident
         assert_eq!(pos(&hs[1]), (bl, bc + 1));
     }
 
@@ -791,7 +788,7 @@ mod tests {
     #[test]
     fn module_let_initializer_calls_get_param_hints() {
         let src = "fn mk(n: i32) -> i32 {\n    return n;\n}\nlet N = mk(3);\n";
-        let d = doc(&src);
+        let d = doc(src);
         let hs = w(&d, &[]).all();
         assert_eq!(labels(&hs), [": i32", "n:"], "{hs:?}");
     }

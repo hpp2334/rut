@@ -8,6 +8,9 @@
 
 use std::collections::BTreeMap;
 
+/// A resolved mod head: the owning spec plus its mounted sources.
+type ModHead = (String, BTreeMap<String, ModSource>);
+
 use rut_core::id::ScopeId;
 
 use crate::bundle::{
@@ -411,10 +414,7 @@ pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Walk, RunError> {
 /// flat envelope (every published bundle to date), which loads
 /// unchanged. The mounted children ride the same declaration-driven
 /// mount a directory would; a carried-but-undeclared row is refused.
-fn rows_body(
-    entries: &[(String, Vec<u8>)],
-    prefix: &str,
-) -> Result<Option<(String, BTreeMap<String, ModSource>)>, String> {
+fn rows_body(entries: &[(String, Vec<u8>)], prefix: &str) -> Result<Option<ModHead>, String> {
     let key = bundle_key(&format!("{prefix}{ROWS_NAME}"))?;
     let text = match read_entry(entries, &key) {
         Ok(t) => t,
@@ -431,10 +431,7 @@ fn rows_body(
 /// read back as the mounted tree the lowering takes. `Ok(None)` when
 /// the archive carries no rows entry — a flat host bundle (the shape
 /// every pre-`mod` host pack has), which loads exactly as it did.
-fn decl_rows_body(
-    entries: &[(String, Vec<u8>)],
-    prefix: &str,
-) -> Result<Option<(String, BTreeMap<String, ModSource>)>, String> {
+fn decl_rows_body(entries: &[(String, Vec<u8>)], prefix: &str) -> Result<Option<ModHead>, String> {
     let key = bundle_key(&format!("{prefix}{ROWS_NAME}"))?;
     let text = match read_entry(entries, &key) {
         Ok(t) => t,
@@ -545,7 +542,7 @@ pub fn bundle_entry_pkg(
     // no declared kind, no body anywhere — refuses, naming both fixes.
     // The surface read is the ONE canonical name (`mod.d.rut`, wire
     // v11): the directory grammar's spelling never rides the archive.
-    let pkg = if let Some(_) = &manifest.entry.type_path {
+    let pkg = if manifest.entry.type_path.is_some() {
         let origin = format!("{prefix}{}", crate::decl::DECL_CHILD_FILE);
         let src = read(crate::decl::DECL_CHILD_FILE)?;
         crate::decl::refuse_host_rows(&src, &origin)?;

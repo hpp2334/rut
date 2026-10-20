@@ -270,6 +270,7 @@ impl<'a> Ctx<'a> {
     /// Pass 1a — intern a struct/class placeholder and register its name.
     /// Fields are resolved later (pass 1b), so a field may name this type or
     /// any type declared later in the module (recursive shapes).
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub(crate) fn declare_data(
         &mut self,
         node: NodeId,
@@ -393,7 +394,7 @@ impl<'a> Ctx<'a> {
         };
 
         // collect fields with initializers + methods for the compiler
-        let mut flds: Vec<(IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>)> = Vec::new();
+        let mut flds: Vec<FieldRow> = Vec::new();
         for f in fields {
             let fd = self.ast.field_decl(*f);
             let fty = resolved
@@ -600,11 +601,8 @@ impl<'a> Ctx<'a> {
             let md = self.ast.method_decl(*m);
             let mut ptys = Vec::new();
             for p in md.params.iter() {
-                match self.ast.param(*p) {
-                    MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_iface_sig_ty(*t, id, &subst));
-                    }
-                    _ => {}
+                if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ast.param(*p) {
+                    ptys.push(self.resolve_iface_sig_ty(*t, id, &subst));
                 }
             }
             let rty = md.ret.map(|r| self.resolve_iface_sig_ty(r, id, &subst));
@@ -652,29 +650,6 @@ impl<'a> Ctx<'a> {
             name,
             kind: TyKind::Data { fields: vec![] },
         })
-    }
-
-    /// Does this type node mention any of `params` at any depth? The v1
-    /// guard's nested-parameter test: `Readable<Vec<T>>` over a target
-    /// parameter `T` is exactly the shape the template registration
-    /// cannot carry yet, while a fully concrete nest (`Vec<i32>`) is not.
-    pub(crate) fn ty_mentions_any(&self, node: NodeHandle<AnyTy>, params: &[IdentId]) -> bool {
-        match self.ast.ty(node) {
-            TypeKind::TyPath { segs } => {
-                segs.iter().any(|s| params.contains(&s.name))
-                    || segs
-                        .iter()
-                        .any(|s| s.generics.iter().any(|g| self.ty_mentions_any(*g, params)))
-            }
-            TypeKind::TyFn { params: ps, ret } => {
-                ps.iter().any(|p| self.ty_mentions_any(*p, params))
-                    || self.ty_mentions_any(*ret, params)
-            }
-            TypeKind::TyOpt { inner } => self.ty_mentions_any(*inner, params),
-            TypeKind::TyArray { elem } => self.ty_mentions_any(*elem, params),
-            TypeKind::TyTuple { elems } => elems.iter().any(|e| self.ty_mentions_any(*e, params)),
-            _ => false,
-        }
     }
 
     /// Instantiate a generic record for concrete type arguments (monomorphization). The id is interned and cached before fields resolve
@@ -868,13 +843,12 @@ impl<'a> Ctx<'a> {
                 args.push(t);
                 continue;
             }
-            match self
-                .interner
-                .lookup(leaf.as_str())
-                .and_then(|iid| self.types.dense_id_of_name(iid))
             {
-                Some(t) => args.push(t),
-                None => return None,
+                let t = self
+                    .interner
+                    .lookup(leaf.as_str())
+                    .and_then(|iid| self.types.dense_id_of_name(iid))?;
+                args.push(t)
             }
         }
         let iid = self.mint_iface_inst_from_desc(iface_id, &base_text, args, None);

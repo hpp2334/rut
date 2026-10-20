@@ -297,9 +297,10 @@ fn pack_host_root(
     // entries = rut.jsonc + the ONE consolidated entry — the exact shape
     // the container lane reads back at load (the canonical `mod.d.rut`
     // name; wire v12 carries no rows envelope for host roots)
-    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
-    entries.push((rut_driver::bundle::MANIFEST_NAME.into(), manifest_bytes));
-    entries.push((rut_driver::decl::DECL_CHILD_FILE.into(), entry.into_bytes()));
+    let entries: Vec<(String, Vec<u8>)> = vec![
+        (rut_driver::bundle::MANIFEST_NAME.into(), manifest_bytes),
+        (rut_driver::decl::DECL_CHILD_FILE.into(), entry.into_bytes()),
+    ];
     write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))
 }
 

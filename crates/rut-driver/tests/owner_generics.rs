@@ -307,7 +307,7 @@ where
 {
     type Item = I::Item;
     fn next(&mut self) -> Option<I::Item> {
-        while let Some(x) = self.inner.next() {
+        for x in self.inner.by_ref() {
             if self.seen.contains(&x) {
                 return Some(x);
             }

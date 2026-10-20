@@ -101,11 +101,9 @@ fn crud_session() {
     );
     assert_eq!(vm.call::<_, i32>("len", (c.clone(), list)).unwrap(), 3);
 
-    assert_eq!(
-        vm.call::<_, bool>("set_done", (c.clone(), list, 2i32, true))
-            .unwrap(),
-        true
-    );
+    assert!(vm
+        .call::<_, bool>("set_done", (c.clone(), list, 2i32, true))
+        .unwrap());
     assert_eq!(
         vm.call::<_, String>("title_of", (c.clone(), list, 2i32))
             .unwrap(),
@@ -116,27 +114,19 @@ fn crud_session() {
             .unwrap(),
         ""
     );
-    assert_eq!(
-        vm.call::<_, bool>("has_title", (c.clone(), list, 2i32))
-            .unwrap(),
-        true
-    );
-    assert_eq!(
-        vm.call::<_, bool>("has_title", (c.clone(), list, 42i32))
-            .unwrap(),
-        false
-    );
+    assert!(vm
+        .call::<_, bool>("has_title", (c.clone(), list, 2i32))
+        .unwrap());
+    assert!(!vm
+        .call::<_, bool>("has_title", (c.clone(), list, 42i32))
+        .unwrap());
 
-    assert_eq!(
-        vm.call::<_, bool>("remove", (c.clone(), list, 1i32))
-            .unwrap(),
-        true
-    );
-    assert_eq!(
-        vm.call::<_, bool>("remove", (c.clone(), list, 1i32))
-            .unwrap(),
-        false
-    );
+    assert!(vm
+        .call::<_, bool>("remove", (c.clone(), list, 1i32))
+        .unwrap());
+    assert!(!vm
+        .call::<_, bool>("remove", (c.clone(), list, 1i32))
+        .unwrap());
     assert_eq!(vm.call::<_, i32>("len", (c.clone(), list)).unwrap(), 2);
 
     assert_eq!(

@@ -71,7 +71,7 @@ fn json_escape(s: &str, out: &mut String) {
 
 fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
         let b = [
             chunk[0],
@@ -377,8 +377,12 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     }
 }
 
+/// # Safety
+///
+/// `src_ptr` must point at `src_len` readable bytes for the call's
+/// duration (the page owns that memory).
 #[no_mangle]
-pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
+pub unsafe extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
     let src = unsafe { read_str(src_ptr, src_len) };
     // no manifest passed: the offered-libs default applies host-side
     compile_envelope(compile_playground(src, None))
@@ -389,8 +393,12 @@ pub extern "C" fn rut_compile(src_ptr: *const u8, src_len: usize) -> *mut u8 {
 /// into the structural form and stamped on the `main` pkg. A manifest
 /// that does not parse comes back as a span-0 diagnostic (the loud
 /// door); the plain `rut_compile` keeps the offered-libs default.
+/// # Safety
+///
+/// `src_ptr`/`man_ptr` must point at `src_len`/`man_len` readable
+/// bytes for the call's duration.
 #[no_mangle]
-pub extern "C" fn rut_compile_manifest(
+pub unsafe extern "C" fn rut_compile_manifest(
     src_ptr: *const u8,
     src_len: usize,
     man_ptr: *const u8,
@@ -538,8 +546,12 @@ fn err_of_value(v: &rut_vm::Value) -> Option<String> {
     None
 }
 
+/// # Safety
+///
+/// `bin_ptr` must point at `bin_len` readable bytes of a rut binary
+/// for the call's duration.
 #[no_mangle]
-pub extern "C" fn rut_run(
+pub unsafe extern "C" fn rut_run(
     bin_ptr: *const u8,
     bin_len: usize,
     fuel: u64,
@@ -659,8 +671,12 @@ pub extern "C" fn rut_run(
 }
 
 /// demo utilities (base64 in/out keeps the ABI tiny)
+/// # Safety
+///
+/// `bin_b64_ptr` must point at `bin_b64_len` readable bytes for the
+/// call's duration.
 #[no_mangle]
-pub extern "C" fn rut_run_b64(
+pub unsafe extern "C" fn rut_run_b64(
     bin_b64_ptr: *const u8,
     bin_b64_len: usize,
     fuel: u64,
@@ -668,7 +684,7 @@ pub extern "C" fn rut_run_b64(
 ) -> *mut u8 {
     let s = unsafe { read_str(bin_b64_ptr, bin_b64_len) };
     match base64_decode(s) {
-        Some(b) => rut_run(b.as_ptr(), b.len(), fuel, heap),
+        Some(b) => unsafe { rut_run(b.as_ptr(), b.len(), fuel, heap) },
         None => envelope(
             b"{\"output\":[],\"trap\":\"bad base64\",\"err\":null,\"fuelUsed\":0,\"heapBytes\":0}",
         ),
@@ -793,7 +809,8 @@ entry fn main() {
         let ptr = rut_alloc(bin.len());
         assert!(!ptr.is_null(), "arena exhausted");
         unsafe { core::ptr::copy_nonoverlapping(bin.as_ptr(), ptr, bin.len()) };
-        let res = rut_run(ptr, bin.len(), fuel, heap);
+        // SAFETY: ptr holds the bytes copied above, alive for the call
+        let res = unsafe { rut_run(ptr, bin.len(), fuel, heap) };
         read_envelope(res)
     }
 
@@ -890,7 +907,7 @@ entry fn main() {
         assert_eq!(field(&j, "trap"), "null", "{j}");
         assert_eq!(field(&j, "parked"), "false", "{j}");
         assert_eq!(field(&j, "output"), "[\"hello\"]", "{j}");
-        assert_eq!(unsafe { PARKED.is_some() }, false);
+        assert!(!unsafe { PARKED.is_some() });
         assert_eq!(rut_drop_frame(), 0, "nothing was parked");
     }
 
@@ -938,8 +955,7 @@ entry fn main() {
         let err = std::panic::catch_unwind(|| {
             host_surface("broken", "pub mod gone;\n", "broken.d.rut", &[])
         })
-        .err()
-        .expect("the missing child must panic at the mount");
+        .expect_err("the missing child must panic at the mount");
         let msg = err.downcast_ref::<String>().cloned().unwrap_or_default();
         assert!(msg.contains("`mod gone;`"), "{msg}");
     }

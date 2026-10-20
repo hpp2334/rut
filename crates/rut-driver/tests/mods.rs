@@ -540,7 +540,7 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).expect("dist/std") {
         let path = entry.unwrap().path();
-        if path.extension().map_or(false, |e| e == "rutbundle") {
+        if path.extension().is_some_and(|e| e == "rutbundle") {
             names.push(path.clone());
         }
     }
@@ -993,7 +993,7 @@ fn pub_pkg_stays_inside_its_package() {
             "pub(pkg) fn inside() -> i32 { return 44; }\n",
         )],
     );
-    assert_eq!(run_main_pkgs(&[dep.clone()], "dep"), 44);
+    assert_eq!(run_main_pkgs(std::slice::from_ref(&dep), "dep"), 44);
     // across the use door: refused — pub(pkg) does not cross packages
     let consumer = modpkg(
         "pkg",

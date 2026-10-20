@@ -1,18 +1,7 @@
-//! The pass-2 impl-block walk (`collect_impl`): `impl T { .. }` inherent / trait-impl registration with coverage checks, plus `TraitReq` — what a trait requires of an implementing method.
+//! The pass-2 impl-block walk (`collect_impl`): `impl T { .. }` inherent /
+//! trait-impl registration with coverage checks.
 
 use super::*;
-
-/// What a trait requires of an implementing method:
-/// name, `async`, receiver form, and the resolved signature.
-struct TraitReq {
-    name: IdentId,
-    is_async: bool,
-    /// `Some(is_mut)` — a `self`/`mut self` receiver; `None` — no `self`
-    self_form: Option<bool>,
-    /// parameter types (after `self` when there is one)
-    ptys: Vec<TypeId>,
-    ret: TypeId,
-}
 
 impl<'a> Ctx<'a> {
     /// Pass 2 — an `impl` block: `impl T { .. }` attaches
@@ -112,18 +101,12 @@ impl<'a> Ctx<'a> {
         declared: &[IdentId],
         name: IdentId,
         generics: Vec<NodeHandle<AnyTy>>,
-    ) -> Option<(TypeId, Option<(IdentId, Vec<IdentId>)>, IdentId)> {
+    ) -> Option<AliasTargetRow> {
         // a PLAIN alias expands in impl-target position: the alias
         // spells the target's type.
         if generics.is_empty() {
             if let Some(t) = self.plain_alias_target(name) {
-                if let Some((dname, d)) = self
-                    .datas
-                    .iter()
-                    .find(|(_, d)| d.ty == t)
-                    .cloned()
-                    .map(|(n, d)| (n, d))
-                {
+                if let Some((dname, d)) = self.datas.iter().find(|(_, d)| d.ty == t).cloned() {
                     return Some((d.ty, None, dname));
                 }
             }
@@ -197,9 +180,7 @@ impl<'a> Ctx<'a> {
     /// `Some(target TypeId)` when `name` is a declared alias whose
     /// single target resolved to a type.
     fn plain_alias_target(&mut self, name: IdentId) -> Option<TypeId> {
-        if self.find_alias(name).is_none() {
-            return None;
-        }
+        self.find_alias(name)?;
         self.validate_alias(name);
         let resolved = self.find_alias(name).and_then(|a| a.resolved);
         match resolved {

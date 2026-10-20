@@ -63,8 +63,6 @@ impl Vm {
                 if let Some(d) = dst {
                     let target = self.reg(d);
                     let tref = unsafe { target.r };
-                    let target = self.reg(d);
-                    let tref = unsafe { target.r };
                     if d == args[0]
                         && !tref.is_null()
                         && cell_of(target).refs.get() == 1
@@ -166,8 +164,8 @@ impl Vm {
                     }
                 } else {
                     let text = scell.as_str();
-                    let mut i: i64 = 0;
-                    for ch in text.chars() {
+                    for (i, ch) in text.chars().enumerate() {
+                        let i = i as i64;
                         if i >= from {
                             let cls = class_of(ch as usize);
                             if cls != 0 {
@@ -175,7 +173,6 @@ impl Vm {
                                 break;
                             }
                         }
-                        i += 1;
                     }
                 }
                 if let Some(d) = dst {
@@ -255,7 +252,6 @@ impl Vm {
                     }
                 };
                 // codepoint bounds -> byte offsets within the window
-                let vbytes = cell.as_bytes();
                 let (bfrom, bto) = if cell.str_ascii() {
                     (from as usize, to as usize)
                 } else {

@@ -213,7 +213,7 @@ pub fn display(path: &str) -> String {
 /// origin basename is the flavor's `mod.rut`/`mod.d.rut`).
 pub(crate) fn display_of(idxs: &[&DefIndex], pkg: Option<&str>, child: &str) -> String {
     let mounted = idxs.iter().copied().find(|i| {
-        mod_path_of(i) == child && pkg.map_or(true, |p| crate::definition::matches_pkg(i, p))
+        mod_path_of(i) == child && pkg.is_none_or(|p| crate::definition::matches_pkg(i, p))
     });
     match mounted.and_then(|i| origin_file_name(&i.origin)) {
         Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
@@ -238,8 +238,10 @@ mod tests {
 
     /// a named index standing at `mod_path` with the given mod edges
     fn mod_index(pkg: &str, mod_path: &str, edges: &[(&str, Vis)]) -> DefIndex {
-        let mut i = DefIndex::default();
-        i.module = Some(pkg.to_string());
+        let mut i = DefIndex {
+            module: Some(pkg.to_string()),
+            ..DefIndex::default()
+        };
         if !mod_path.is_empty() || !edges.is_empty() {
             i.mod_path = Some(mod_path.to_string());
         }

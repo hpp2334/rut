@@ -16,6 +16,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// v1's class-instantiation-only typing is what left a generic
     /// method's `Readable<T>` parameter unresolved (the stale-wrong-value
     /// frames the spike0 e-cluster died of).
+    #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub(crate) fn compile_inherent_call(
         &mut self,
         dname: IdentId,
@@ -336,7 +337,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             ret_ty,
             sp,
         );
-        return false;
+        false
     }
 
     /// Inline a small, non-recursive free-fn body at the call site.

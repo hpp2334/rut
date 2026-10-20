@@ -72,7 +72,7 @@ fn run_dir_writes_the_cache_and_the_second_run_hits_it() {
     assert_eq!(code, 0, "first run: {err}");
     let entries = cache_entries(&dir);
     assert_eq!(entries.len(), 1, "one cache entry after the miss");
-    assert!(entries[0].extension().map_or(false, |e| e == "rutbundle"));
+    assert!(entries[0].extension().is_some_and(|e| e == "rutbundle"));
 
     // hit: the same closure mounts the cached archive — the entry is
     // untouched (a miss would rewrite it through the pack lane)
@@ -270,7 +270,7 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
             rut_driver::LockRow {
                 pkg: "util".into(),
                 url: url.clone(),
-                sha256: pin.into(),
+                sha256: pin,
             },
         ])),
     );

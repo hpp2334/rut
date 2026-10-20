@@ -283,9 +283,7 @@ mod tests {
 
     #[test]
     fn hex_must_be_64_digits_and_the_error_is_path_targeted() {
-        let text = format!(
-            r#"{{"format": "rutlock", "format_version": 1, "deps": [{{ "pkg": "pouch", "url": "https://x/p.rutbundle", "sha256": "nothex" }}]}}"#
-        );
+        let text = r#"{"format": "rutlock", "format_version": 1, "deps": [{ "pkg": "pouch", "url": "https://x/p.rutbundle", "sha256": "nothex" }]}"#.to_string();
         let err = parse_lock(&text).unwrap_err();
         assert_eq!(
             err.to_string(),

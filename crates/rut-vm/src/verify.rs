@@ -383,14 +383,12 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                 }
                 Op::Conv {
                     from, to, dst, src, ..
-                } => {
-                    if !matches!(prog.types.kind(f.regs[*src as usize]), TyKind::Prim(p) if p == from)
-                        || !matches!(prog.types.kind(f.regs[*dst as usize]), TyKind::Prim(p) if p == to)
-                    {
-                        return Err(bad(
-                            "conv operand types do not match the embedded primitives".into(),
-                        ));
-                    }
+                } if !matches!(prog.types.kind(f.regs[*src as usize]), TyKind::Prim(p) if p == from)
+                    || !matches!(prog.types.kind(f.regs[*dst as usize]), TyKind::Prim(p) if p == to) =>
+                {
+                    return Err(bad(
+                        "conv operand types do not match the embedded primitives".into(),
+                    ));
                 }
                 _ => {}
             }
@@ -570,7 +568,7 @@ fn regs_of(op: &Op, f: &FuncCode) -> Vec<u16> {
                 v.push(*dst);
             }
         }
-        Op::Ret { val } => val.into_iter().for_each(|r| v.push(*r)),
+        Op::Ret { val } => val.iter().for_each(|r| v.push(*r)),
         Op::GetF { dst, obj, .. } => {
             push(*dst);
             push(*obj);
