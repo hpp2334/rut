@@ -4,10 +4,9 @@
 //! `dist/std-v11` snapshot, and the offline end-to-end — the
 //! full-deps manifest mounts clean and the ink-only hello runs.
 //!
-//! One deliberate restatement: `mod.rut`'s bytes are mirrored here
-//! (a `[[bin]]`'s internals cannot be imported by an integration
-//! test); every other law is checked through the SCAFFOLDED files, so
-//! the lock — not a duplicate table — carries the pins.
+//! The templates are real files (`../template/`), so every byte law
+//! here reads the SAME files the binary embeds — no restatement, the
+//! template dir is the single carrier.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -15,10 +14,13 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-/// The scaffolded `mod.rut` — byte-for-byte the book's first program
-/// (docs/src/quick-start/first-program.md); keep in step with
-/// `src/new.rs`'s template.
-const MOD_RUT: &str = "use ink::{ Logger };\n\nentry fn main() {\n    let log = Logger(\"hello\");\n    let name = \"rut\";\n    log.info(f\"hello, {name}!\");\n}\n";
+/// The scaffold's three templates — the exact files `src/new.rs`
+/// embeds; the scaffolded bytes must equal these (the manifest with
+/// `__NAME__` substituted), so a template edit and its law move
+/// together.
+const MOD_RUT: &str = include_str!("../template/mod.rut");
+const MANIFEST_TEMPLATE: &str = include_str!("../template/rut.jsonc");
+const LOCK_TEMPLATE: &str = include_str!("../template/rut.lock");
 
 /// The nine dep keys the template declares — the swappable std set
 /// (no `core`, no `*_host`, no `bench_cross`).
@@ -104,6 +106,51 @@ fn scaffold_creates_the_manifest_and_root_module() {
         MOD_RUT,
         "the root module is the book's hello, byte-for-byte"
     );
+}
+
+#[test]
+fn the_template_files_are_the_carrier() {
+    let (_root, dir) = scaffold("carrier", "hello");
+    // the scaffold writes the template bytes verbatim — the manifest
+    // with the name substituted, the lock and the root module as-is
+    let manifest = std::fs::read_to_string(dir.join("rut.jsonc")).unwrap();
+    assert_eq!(
+        manifest,
+        MANIFEST_TEMPLATE.replace("__NAME__", "hello"),
+        "the scaffolded manifest is the template, name substituted"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("rut.lock")).unwrap(),
+        LOCK_TEMPLATE,
+        "the scaffolded lock is the template, byte-for-byte"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("mod.rut")).unwrap(),
+        MOD_RUT,
+        "the scaffolded root module is the template, byte-for-byte"
+    );
+    // the lock template is CANONICAL: parse ∘ render is the identity —
+    // a hand edit that breaks the sorted, aligned render is caught here
+    let lock = rut_driver::parse_lock(LOCK_TEMPLATE).expect("the template lock parses");
+    assert_eq!(
+        rut_driver::render_lock(&lock),
+        LOCK_TEMPLATE,
+        "the template lock is exactly what `rut install` would write"
+    );
+    // the two templates tell the same story: every manifest url has
+    // its lock row (the pins law's shape, held over the files themselves)
+    let m = rut_driver::parse_manifest(&manifest).unwrap();
+    assert_eq!(
+        m.deps.len(),
+        lock.deps().len(),
+        "one lock row per manifest url row"
+    );
+    for (pkg, dep) in &m.deps {
+        assert!(
+            lock.deps().iter().any(|r| &r.pkg == pkg && r.url == dep["url"]),
+            "the template lock pins `{pkg}`'s url"
+        );
+    }
 }
 
 #[test]

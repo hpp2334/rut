@@ -1,0 +1,7 @@
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("hello");
+    let name = "rut";
+    log.info(f"hello, {name}!");
+}
