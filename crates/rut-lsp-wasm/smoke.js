@@ -69,11 +69,20 @@ fn go(g: Greeter) -> str {
   assert.ok(labels.includes("greet"), `methods complete: ${labels}`);
   assert.ok(labels.includes("name"), `fields complete: ${labels}`);
 
-  // a workspace file's decls complete bare (rut_add_def = the host's fs walk)
+  // a workspace file's decls complete once the doc `use`s them — the
+  // bare tier stays honest (own decls + ambient builtins + the names
+  // the document already uses; a foreign plain offer the compile
+  // would reject is a trap, so an unused foreign name never offers)
   e.rut_begin();
-  e.rut_add_def(...put("file:///ws/lib.rut"), ...put("class Widget {\n    id: i32;\n}\n"));
+  e.rut_add_def(...put("file:///ws/gadgets/lib.rut"), ...put("class Widget {\n    id: i32;\n}\n"));
+  e.rut_begin();
+  const honest = take(e.rut_complete(...put(URI), 0, 0));
+  assert.ok(!honest.map((i) => i.label).includes("Widget"), "bare tier stays honest without a use");
+  e.rut_begin();
+  take(e.rut_analyze(...put(URI), ...put("use gadgets::{ Widget };\n" + SRC)));
+  e.rut_begin();
   const bare = take(e.rut_complete(...put(URI), 0, 0));
-  assert.ok(bare.map((i) => i.label).includes("Widget"), "workspace def completes");
+  assert.ok(bare.map((i) => i.label).includes("Widget"), "used workspace name completes");
 
   // a broken doc publishes rut-sourced errors
   e.rut_begin();

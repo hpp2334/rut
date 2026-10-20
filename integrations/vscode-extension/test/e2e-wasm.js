@@ -1185,9 +1185,11 @@ async function main() {
     assert.deepStrictEqual(host.entries, [{ path: 'surface.d.rut', mode: 'Decl' }],
       `decl entry: ${JSON.stringify(host.entries)}`);
     // a malformed manifest is the ERROR envelope — the host's hint
+    // (named `manifestErr`, NOT `bad` — that name is the lane's
+    // error collector and a shadow here silences every later push)
     e.rut_begin();
-    const bad = take(e.rut_parse_manifest(...put('{"name": six}')));
-    assert.ok(bad.error && bad.error.startsWith('line 1: '), `error envelope: ${JSON.stringify(bad)}`);
+    const manifestErr = take(e.rut_parse_manifest(...put('{"name": six}')));
+    assert.ok(manifestErr.error && manifestErr.error.startsWith('line 1: '), `error envelope: ${JSON.stringify(manifestErr)}`);
     smokes++;
 
     // rut_add_def_named: a dep indexed under its module NAME feeds the
@@ -1221,15 +1223,20 @@ async function main() {
     e.rut_begin();
     const bundle = take(e.rut_add_bundle(...putBytes(bundleBytes)));
     assert.strictEqual(bundle.module, 'pouch', `bundle envelope: ${JSON.stringify(bundle)}`);
-    assert.deepStrictEqual(bundle.files, ['mod.rut']);
+    // wire v12: the compiled group ships its GENERATED declaration
+    // entry as the editing surface (the .d.ts pattern) — the envelope
+    // names the entry, never the compiled mod.rutc body
+    assert.deepStrictEqual(bundle.files, ['mod.d.rut']);
     e.rut_begin();
     const junk = Buffer.from('definitely not a zip');
     const bundleErr = take(e.rut_add_bundle(...putBytes(junk)));
     assert.ok(bundleErr.error && bundleErr.error.includes('not a zip'),
       `bundle error envelope: ${JSON.stringify(bundleErr)}`);
-    // the indexed surface resolves: the use name jumps to BOTH pouch
-    // indexes — the std surface's true source path AND the bundle's —
-    // and a member hover answers through the named module
+    // the indexed surface resolves: the MOUNTED bundle outranks the
+    // ambient std embed (prefer_bodies — the embed is the zero-fetch
+    // fallback, never the answer when the real thing is mounted), so
+    // the use name jumps to the bundle's declaration entry — exactly
+    // one target — and a member hover answers through the named module
     const pouchDoc = 'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n';
     const pouchUri = 'file:///ws/e2e-bundle.rut';
     e.rut_begin();
@@ -1237,9 +1244,8 @@ async function main() {
     e.rut_begin();
     const vecLocs = take(e.rut_definition(...put(pouchUri), 0, pouchDoc.indexOf('Vec')));
     const targetUris = vecLocs.map((l) => l.uri);
-    if (!targetUris.includes('rut/pouch/mod.rut') || !targetUris.includes('bundle:pouch/mod.rut')) {
-      bad.push(`bundle go-to-definition targets: ${JSON.stringify(targetUris)}`);
-    }
+    assert.deepStrictEqual(targetUris, ['bundle:pouch/mod.d.rut'],
+      `bundle go-to-definition targets: ${JSON.stringify(targetUris)}`);
     const pushCh = pouchDoc.split('\n')[3].indexOf('push');
     e.rut_begin();
     const pushHover = take(e.rut_hover(...put(pouchUri), 3, pushCh));
@@ -1264,8 +1270,8 @@ async function main() {
       assert.strictEqual(extracted.module, 'pouch', `extracted module: ${JSON.stringify(extracted.module)}`);
       assert.strictEqual(extracted.files.length, 1, `extracted files: ${JSON.stringify(extracted.files.map((f) => f.path))}`);
       const [ef] = extracted.files;
-      assert.strictEqual(ef.path, 'mod.rut');
-      assert.strictEqual(ef.mode, 'Impl');
+      assert.strictEqual(ef.path, 'mod.d.rut');
+      assert.strictEqual(ef.mode, 'Decl');
       assert.strictEqual(ef.mod_path, '', `the root rides mod path '': ${JSON.stringify(ef.mod_path)}`);
       assert.ok(ef.src.includes('pub class Vec'), `the body rides the src: ${ef.src.slice(0, 60)}`);
       // a corrupt archive is the error envelope — never a partial tree
@@ -1306,7 +1312,7 @@ async function main() {
         // the PKG-HEAD click: the same extracted root file, top
         const headLocs = rut.definition(puri, ...posOf(pdoc, 'pouch'));
         assert.strictEqual(headLocs.length, 1, `pkg head targets: ${JSON.stringify(headLocs)}`);
-        assert.ok(headLocs[0].uri.includes('.rut/deps/pouch-') && headLocs[0].uri.endsWith('/mod.rut'),
+        assert.ok(headLocs[0].uri.includes('.rut/deps/pouch-') && headLocs[0].uri.endsWith('/mod.d.rut'),
           `pkg head lands in the extracted tree: ${headLocs[0].uri}`);
         assert.deepStrictEqual(headLocs[0].range,
           { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
