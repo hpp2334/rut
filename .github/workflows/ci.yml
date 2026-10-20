@@ -1,0 +1,56 @@
+# The lint + test gates. The workspace denies warnings through
+# `[workspace.lints]`, so `cargo clippy` alone is the lint gate — a
+# warn-level rustc/clippy lint anywhere in a member crate fails the
+# build. The toolchain comes from `rust-toolchain.toml` (pinned
+# nightly); the wasm lane compiles the two playground crates the book
+# embeds, since their cfg'd code paths differ from the native build.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: fmt + clippy (native + wasm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-07-15
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+      - name: cargo clippy (native, all targets)
+        run: cargo clippy --workspace --all-targets
+      - name: cargo clippy (wasm32)
+        run: cargo clippy -p rut-wasm -p rut-lsp-wasm --target wasm32-unknown-unknown
+
+  test:
+    name: nextest + wasm build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-07-15
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: cargo nextest
+        run: cargo nextest run --workspace
+      - name: book code blocks compile and run
+        run: cargo nextest run -p rut-cli --test book_blocks
+      - name: wasm32 release build (the book's rut.wasm artifact lane)
+        run: cargo build -p rut-wasm -p rut-lsp-wasm --target wasm32-unknown-unknown --release

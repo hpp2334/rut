@@ -1,5 +1,19 @@
 # AGENTS.md — notes for coding agents working in this repo
 
+## Lint gate: warnings are errors; keep clippy and fmt green
+
+The workspace denies every warn-level rustc/clippy lint
+(`[workspace.lints] warnings = "deny"` in the root `Cargo.toml`,
+reaching all members through `[lints] workspace = true`), and CI
+(`.github/workflows/ci.yml`) gates on `cargo fmt --all --check`,
+`cargo clippy --workspace --all-targets`, clippy on the wasm32 target,
+and `cargo nextest run`. Practical consequences:
+
+- A new warning anywhere in a member crate fails the build — fix the
+  cause; if a lint is genuinely wrong for a site, a scoped
+  `#[allow(...)]` with a one-line reason is the house style (grep for
+  existing examples before inventing wording).
+
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 
 When a task needs a REAL browser (driving the demo playground, the
