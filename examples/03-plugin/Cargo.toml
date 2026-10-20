@@ -20,3 +20,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "plugin"
 path = "src/main.rs"
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

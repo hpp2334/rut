@@ -42,3 +42,7 @@ rut-driver = { path = "../rut-driver" }
 rut-native = { path = "../rut-native" }
 rut-parser = { path = "../rut-parser" }
 rut-lexer = { path = "../rut-lexer" }
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

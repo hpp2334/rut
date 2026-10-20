@@ -26,6 +26,13 @@ members = [
     "benches/probe",
 ]
 
+# The lint gate: every warn-level rustc/clippy lint is an error inside
+# the workspace (third-party deps unaffected — this table only reaches
+# members through their `[lints] workspace = true`). The toolchain is
+# pinned, so new-lint surprises arrive only with an explicit bump.
+[workspace.lints.rust]
+warnings = "deny"
+
 [workspace.package]
 version = "0.2.0"
 edition = "2021"

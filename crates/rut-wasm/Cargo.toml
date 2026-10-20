@@ -26,3 +26,7 @@ rut-lexer = { path = "../rut-lexer" }
 # HOST-ONLY (cargo test never builds for wasm32): the pack lane that
 # builds the test bundle and the tree-pkg offer
 rut-native = { path = "../rut-native" }
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

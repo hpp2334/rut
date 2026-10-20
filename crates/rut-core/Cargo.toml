@@ -8,3 +8,7 @@ description = "rut core vocabulary — RutType table, typed bytecode ops, module
 [lib]
 name = "rut_core"
 path = "src/lib.rs"
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

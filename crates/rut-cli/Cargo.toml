@@ -32,3 +32,7 @@ rut-ast = { path = "../rut-ast" }
 # entry); the CLI names the cache root (`RUT_CACHE_DIR` override /
 # project-local) and block_on's the READY fetch futures with a noop
 # waker.
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

@@ -17,3 +17,7 @@ rut-std = { path = "../../crates/rut-std" }
 [[bin]]
 name = "sort"
 path = "src/main.rs"
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

@@ -14,3 +14,7 @@ rut-core = { path = "../rut-core" }
 
 [dev-dependencies]
 rut-core = { path = "../rut-core" }
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

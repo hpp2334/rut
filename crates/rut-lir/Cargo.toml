@@ -18,3 +18,7 @@ rut-ast = { path = "../rut-ast" }
 rut-parser = { path = "../rut-parser" }
 rut-driver = { path = "../rut-driver" }
 rut-vm = { path = "../rut-vm" }
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

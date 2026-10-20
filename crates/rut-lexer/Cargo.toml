@@ -8,3 +8,7 @@ description = "rut frontend base — the mode-stack lexer, tokens, plus the shar
 [lib]
 name = "rut_lexer"
 path = "src/lib.rs"
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

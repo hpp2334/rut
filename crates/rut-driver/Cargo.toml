@@ -33,3 +33,7 @@ sha2 = "0.10"
 # the walk moved out — its gates load real directories through it
 rut-native = { path = "../rut-native" }
 rut-std = { path = "../rut-std" }
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

@@ -29,3 +29,7 @@ serde_json = "1" # user-approved: serializes the ls-types values over the ABI
 # the mod-carrying bundle fixture is packed through the same writer the
 # CLI uses (wasm32-clean — it rides the main graph already)
 rut-driver = { path = "../rut-driver" }
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true
