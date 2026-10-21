@@ -1170,8 +1170,17 @@ pub(crate) fn def_use(op: &Op, argv: &[Reg]) -> (Vec<u16>, Vec<u16>) {
         Op::Const { dst, .. }
         | Op::ConstRaw { dst, .. }
         | Op::NewCell { dst, .. }
-        | Op::ArrNew { dst, .. }
         | Op::EnumNew { dst, .. } => d.push(*dst),
+        // `len` IS a read: recording it lets the copy fold eliminate the
+        // mov that materializes a constant/propagated length (the fresh
+        // compile's shape). The pack must be fresher than this change —
+        // bundles packed by an older compiler carry the unfolded mov and
+        // fail the dir/bundle parity gate until repacked
+        // (scripts/pack-std.cjs).
+        Op::ArrNew { dst, len, .. } => {
+            d.push(*dst);
+            u.push(*len);
+        }
         Op::ArrLit { dst, .. } | Op::MakeRecord { dst, .. } => d.push(*dst),
         Op::StrCmp { dst, a, b, .. }
         | Op::ArrayCmp { dst, a, b, .. }
