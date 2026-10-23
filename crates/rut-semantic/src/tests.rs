@@ -28,7 +28,7 @@ fn find(src: &str, spans: &[(Span, TokenType)], text: &str) -> Vec<TokenType> {
 #[test]
 fn output_is_sorted_and_disjoint() {
     let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../demo/src/examples/literals/mod.rut");
+        .join("../../demo/src/examples/literals/src/mod.rut");
     let src = std::fs::read_to_string(&p).unwrap();
     let spans = classify_src(&src);
     let mut prev_hi = 0;
@@ -250,6 +250,35 @@ fn comment_is_appended_to_the_legend() {
 }
 
 #[test]
+fn mod_decl_names_classify_as_namespace() {
+    // `mod NAME;` declares a name-resolution head — the name reads
+    // namespace, the same class the `::` path law gives the head at
+    // its uses. `pub` rides (its ident never matches the name), and
+    // the introducer word itself stays un-classed by the semantic
+    // layer: a contextual introducer, owned by the anchored TextMate
+    // rule (the `type` law) — never blanket-keyworded, a path may
+    // legally carry the name (`use mod::{ .. }`).
+    let src = "mod state;\npub mod theme;\nentry fn main() -> nil {}\n";
+    let spans = classify_src(src);
+    assert_eq!(find(src, &spans, "state"), vec![TokenType::Namespace]);
+    assert_eq!(find(src, &spans, "theme"), vec![TokenType::Namespace]);
+    assert!(
+        !spans
+            .iter()
+            .any(|(sp, t)| *t == TokenType::Keyword && span_text(src, *sp) == "mod"),
+        "the introducer is not a semantic keyword: {spans:?}"
+    );
+
+    // the DECL-mode inline form: a `.d.rut`'s nested `mod` blocks (and
+    // their file-form edges) classify the same — the consolidated
+    // declaration entry parses to exactly this shape
+    let src = "mod net {\n    mod stream;\n}\n";
+    let spans = classify_source(src, Mode::Decl);
+    assert_eq!(find(src, &spans, "net"), vec![TokenType::Namespace]);
+    assert_eq!(find(src, &spans, "stream"), vec![TokenType::Namespace]);
+}
+
+#[test]
 fn colon2_value_paths_classify_by_the_resolution_law() {
     // `::` spells name resolution: interior segments are heads (a
     // lowercase head is a module → namespace, a capitalized one a
@@ -258,8 +287,13 @@ fn colon2_value_paths_classify_by_the_resolution_law() {
     // a property never appears — `.` spells value access
     let src = "mod layout;\nenum Color { Red }\nentry fn main() -> nil {\n    let a = layout::mk();\n    let b = Color::Red;\n    let c = i32::abs(-1);\n    let d = b;\n}\n";
     let spans = classify_src(src);
-    // the module head — namespace, not a local variable
-    assert_eq!(find(src, &spans, "layout"), vec![TokenType::Namespace]);
+    // the module head — namespace, not a local variable. The DECL's own
+    // name classifies the same way: the declared head and the path
+    // head are the same kind of thing, so both read namespace
+    assert_eq!(
+        find(src, &spans, "layout"),
+        vec![TokenType::Namespace, TokenType::Namespace]
+    );
     // the member fn through the module — function, not a property
     assert_eq!(find(src, &spans, "mk"), vec![TokenType::Function]);
     // the enum head + its member — type, then enumMember (decl + use)

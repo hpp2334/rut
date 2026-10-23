@@ -89,14 +89,20 @@ fn classify_item(
         // `builtin impl i32 { .. }` declares no new name — the primitive
         // is already in scope; only its methods classify (via Member nodes)
         ItemKind::BuiltinImpl { .. } => {}
-        // methods classify via their own Member nodes; mod decls are
-        // namespaces, their names classify in a later phase (the
-        // inline form's nested items classify through the same
-        // Member/Type nodes)
-        ItemKind::Impl { .. }
-        | ItemKind::ModDecl { .. }
-        | ItemKind::ModInline { .. }
-        | ItemKind::Module { .. } => {}
+        // methods classify via their own Member nodes; mod decls (file
+        // and inline) ARE namespaces — their names classify here (the
+        // declared head reads like the `layout` in `layout::mk`, which
+        // the path law colors too). The inline form's nested items
+        // classify through the same Member/Type nodes.
+        ItemKind::ModDecl { name, .. } | ItemKind::ModInline { name, .. } => push_name(
+            toks,
+            span,
+            ast.name(*name),
+            TokenType::Namespace,
+            out,
+            false,
+        ),
+        ItemKind::Impl { .. } | ItemKind::Module { .. } => {}
         // use names classify best-effort by the capitalization law until
         // real resolution (M2): the path segments read as their heads
         // (lowercase = a module → namespace, capitalized = a type), the

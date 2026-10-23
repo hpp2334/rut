@@ -15,6 +15,7 @@
     { "include": "#primitive-type" },
     { "include": "#builtin-type" },
     { "include": "#type-alias" },
+    { "include": "#mod-decl" },
     { "include": "#control-keyword" },
     { "include": "#use-line" },
     { "include": "#keyword" },
@@ -129,6 +130,12 @@
       "match": "^\\s*(type)(?=\\s+[A-Za-z_<])",
       "captures": {
         "1": { "name": "keyword.other.rut" }
+      }
+    },
+    "mod-decl": {
+      "match": "^\\s*(pub\\s+)?(mod)(?=\\s+[A-Za-z_])",
+      "captures": {
+        "2": { "name": "keyword.other.rut" }
       }
     },
     "control-keyword": {

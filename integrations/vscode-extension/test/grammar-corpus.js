@@ -136,6 +136,11 @@ const SNIPPETS = [
   { name: 'M5 type alias introducer', src: 'type Meters = i64;', text: 'type', scope: 'keyword.other.rut' },
   // M5 negative: `type` as an identifier stays plain.
   { name: 'M5 type identifier stays plain', src: 'let type = 3;', text: 'type', notScope: 'keyword' },
+  // M5: contextual `mod` introducer (anchored like `type`) — a decl
+  // head colors, an identifier spelled `mod` stays plain.
+  { name: 'M5 mod introducer', src: 'mod state;', text: 'mod', scope: 'keyword.other.rut' },
+  { name: 'M5 pub mod introducer', src: 'pub mod theme;', text: 'mod', scope: 'keyword.other.rut' },
+  { name: 'M5 mod identifier stays plain', src: 'let mod = 3;', text: 'mod', notScope: 'keyword' },
   // M6: `..` is operator-classed the day range/slice syntax lands;
   // a single `.` stays punctuation.
   { name: 'M6 dotdot operator', src: 'let r = 0..10;', text: '..', scope: 'keyword.operator.rut' },
