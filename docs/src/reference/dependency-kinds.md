@@ -35,8 +35,9 @@ unknown key it now is — `manifest: unknown key 'peer-deps'`.
 - Keys are bare package names — the same `[a-zA-Z0-9_]+` law as `name`;
   a dep-table key outside it is a path-targeted manifest error.
 - A `deps` descriptor accepts exactly one source: `path` (a directory,
-  relative to this manifest) or `url` (a remote `.rutbundle`,
-  http(s)) — both set, or neither, is the one-descriptor-one-source
+  relative to this manifest) or `url` (a remote artifact — a `.zip`
+  source archive or a `.rutbundle` compiled bundle, http(s)) — both
+  set, or neither, is the one-descriptor-one-source
   manifest error. Any other key is the strict-manifest error naming
   the path (`deps.pouch: unknown key 'feats'`).
 - A `dev-deps` descriptor is **`path`-only** — dev rows mount only for
@@ -50,13 +51,15 @@ unknown key it now is — `manifest: unknown key 'peer-deps'`.
 
 ## Url dependencies — the second source kind
 
-A `deps` descriptor may name a remote `.rutbundle` instead of a
-directory:
+A `deps` descriptor may name a remote artifact instead of a directory.
+The url's extension is the kind: a `.zip` source archive (the SOURCE
+transport — the book's recommendation) or a `.rutbundle` compiled
+bundle (the compiled wire):
 
 ```jsonc
 {
   "deps": {
-    "pouch": { "url": "https://example.com/pouch.rutbundle" }
+    "pouch": { "url": "https://example.com/pouch.zip" }
   }
 }
 ```
@@ -88,11 +91,14 @@ directory:
   site could skip; only the mount point holds both the pin and the
   bytes, so only the mount point can enforce it.
 - **Url deps are leaves.** The `deps` walk never follows them: one
-  fetch brings the whole closure, because **bundles stay closed** —
-  every dep a bundle's manifest declares must be satisfied by an
-  in-archive group, and a bundle that does not satisfy one is refused
-  at the mount door. A url row inside an already-packed bundle is
-  inert metadata; loading a bundle never fetches.
+  fetch brings the whole closure, because **packed artifacts stay
+  closed** — every dep the manifest inside declares rides embedded (an
+  in-archive group for a `.rutbundle`; an embedded tree, or a
+  `.rutbundle` file, under `deps/<name>@<fp16>/` for a `.zip`), and an
+  artifact that does not satisfy one is refused at the mount door.
+  `rut install` never walks into a fetched zip: the lock keeps direct
+  rows only. A url row inside an already-packed artifact is inert
+  metadata; loading it never fetches.
 - **The lock is the pin lane.** A url the lock has no row for refuses
   at the mount door, naming the fix: ``dep `pouch` (https://…) is not
   pinned — rut.lock has no row for it: run `rut install` ``; fetched
@@ -120,24 +126,38 @@ project's `rut.lock`** from this CDN — that is the recommended import
 for everything the toolchain ships. A `path` row is for **your own
 local packages**: a sibling directory in the same project (the modules
 tutorial's `greet` app mounting `../pkg` is the shape). The tag
-advances with format changes (`std-v12` today) and is never re-pointed,
+advances with format changes (`std-v14` today) and is never re-pointed,
 so a lock pin at a tag stays honest forever.
 
-The std tree ships as committed per-package bundles —
-`https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.rutbundle`.
+**Publish your own packages as source zips.** The same recommendation
+runs in both directions: `rut pack <dir>` (the default `--mode
+source`) emits the `.zip`, and the zip compiles with the CONSUMER's
+toolchain — so it never goes stale the way compiled IR does. A
+`.rutbundle`'s IR is version-unstable across rut toolchains (it stays
+loadable forever — the reader keeps every old lane — but it is the
+compiled wire, not a source contract), which is why a source zip is
+the publication lane and the bundle the compiled-delivery lane
+([Module bundles](bundles.md)).
+
+The std tree ships as committed per-package source zips —
+`https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.zip`
+(the old `.rutbundle` files sit beside them, still loadable).
 The manifests here keep placeholder tags; the worked manifests in the
 quick-start, the tutorial, and the examples carry the real urls, and
 their committed `rut.lock`s carry the real pins (a pin at an immutable
 tag cannot rot). Tags advance (`std-vNN`) and are never re-pointed —
 jsDelivr caches aggressively; the artifacts are committed at
-`dist/std/`, packed by `scripts/pack-std::cjs` (whose `--check` gate
-is a pure byte-equality repack — CI never touches the network).
+`dist/std/`, and the tag push plus jsDelivr's propagation is the
+maintainer's manual step.
 
 **What a url row can deliver** is the engine's instantiation law, read
-from the CDN side: a compiled bundle carries the generic instantiations
-its own pack closure spelled **in its ledger**, and — by instantiation
-independence — its exported generic decls ride **as templates inside
-the binary**:
+from the CDN side. A source zip delivers by compiling: the consumer's
+toolchain compiles the embedded trees in its own closure, so generics
+monomorphize from source — every shape the consumer spells works,
+current toolchain semantics throughout. A compiled bundle carries the
+generic instantiations its own pack closure spelled **in its ledger**,
+and — by instantiation independence — its exported generic decls ride
+**as templates inside the binary**:
 
 - **host surfaces and concrete-class libs deliver** — a `type = "host"`
   bundle is a declaration surface (no generics), and a lib of concrete
@@ -173,9 +193,11 @@ The tables decide mounting; what a mounted head lets its consumer
 All loader-owned; the run stays I/O-free.
 
 1. **The `deps` walk.** Recursive, name order, first-mount-wins,
-   cycle guard, name-mismatch error. A dep mounted from a url bundle
-   brings its whole closure with it: the archive's groups mount under
-   their content identities (`name@<16 hex>`) — first-mount-wins
+   cycle guard, name-mismatch error. A dep mounted from a url artifact
+   brings its whole closure with it: a `.rutbundle`'s groups mount
+   under their content identities (`name@<16 hex>`), and a `.zip`
+   mounts as an ordinary directory package after one content-addressed
+   unpack — first-mount-wins
    becomes per-identity exact dedup ([Module
    bundles](bundles.md), [Coexistence](#coexistence)).
 2. **The dev pass — root only.** The program root's `dev-deps` mount
@@ -273,7 +295,10 @@ fixed order, absent files skipped). Same source ⇒ same identity, and
 the same identity mounts once (exact dedup); two identities of one
 name mount side by side — two builds of `util` in one program without
 colliding. `@` sits outside the `[a-zA-Z0-9_]+` name alphabet, so an
-identity can never collide with a bare package name.
+identity can never collide with a bare package name. Source zips use
+the same shape with the **tree flavor** as the input set — the
+rewritten manifest + the `src/**.rut` sources — and the two flavors
+never cross-compare ([Module bundles](bundles.md)).
 
 A bare `use` head stays exact while one identity spells the name;
 under several, it refuses naming them all:
@@ -302,19 +327,20 @@ through the bundle's scope ledger ([Module bundles](bundles.md)).
   declaration-scoped filter and raises no D5. Recorded as accepted:
   the LSP is advisory; the compiler is the law.
 
-## Consuming a compiled package
+## Consuming a toolchain package
 
 ```jsonc
 // an app that wants json's whole surface
 {
   "deps": {
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/json.rutbundle" }
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/json.zip" }
   }
 }
 ```
 
-One row is the whole story: the bundle is closed, and json's own
-`deps` — `strbuild`, `pouch`, `nmapset` — ride inside it as groups, so
-every wrapper family resolves wherever json travels. The same shape
-works with `path` rows into your own tree; the walk pulls the
-declared table transitively either way.
+One row is the whole story: the zip is closed, and json's own
+`deps` — `strbuild`, `pouch`, `nmapset` — ride inside it as embedded
+trees, so every wrapper family resolves wherever json travels. The
+same shape works with `path` rows into your own tree, and with a
+`.rutbundle` url when the compiled wire is what you want; the walk
+pulls the declared table transitively either way.

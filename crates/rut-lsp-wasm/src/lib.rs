@@ -870,6 +870,52 @@ pub unsafe extern "C" fn rut_extract_bundle(ptr: *const u8, len: usize) -> *mut 
     }))
 }
 
+/// A SOURCE-ZIP cache entry's extract — the source transport's editor
+/// face: the zip's own package files (`src/**`) as the editable tree,
+/// each with its mod path derived from the `src/` shell (`src/mod.rut`
+/// → `""` the root, `src/a/mod.rut` → `"a"`, `src/a.rut` → `"a"`).
+/// The embedded `deps/<identity>/` trees belong to other pkgs and stay
+/// out (the consumer's own dep rows cover them).
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rut_extract_srczip(ptr: *const u8, len: usize) -> *mut u8 {
+    let bytes = unsafe { read_bytes(ptr, len) };
+    let b = match rut_lsp::deps::srczip_sources(bytes) {
+        Ok(b) => b,
+        Err(e) => return json_envelope(serde_json::json!({ "error": e })),
+    };
+    let files: Vec<serde_json::Value> = b
+        .files
+        .iter()
+        .map(|f| {
+            let rel = f.path.strip_prefix("src/").unwrap_or(&f.path);
+            let mod_path = if rel == "mod.rut" || rel == "mod.d.rut" {
+                Some(String::new())
+            } else if let Some(p) = rel.strip_suffix("/mod.rut") {
+                Some(p.to_string())
+            } else if let Some(p) = rel.strip_suffix("/mod.d.rut") {
+                Some(p.to_string())
+            } else {
+                rel.strip_suffix(".rut").map(|p| p.to_string())
+            };
+            serde_json::json!({
+                "path": f.path,
+                "src": f.src,
+                "mode": mode_str(f.mode),
+                "mod_path": mod_path,
+            })
+        })
+        .collect();
+    json_envelope(serde_json::json!({
+        "module": b.module,
+        "namespace": b.namespace,
+        "consts": b.consts,
+        "files": files,
+    }))
+}
+
 /// an open doc's stored text — the smoke test's round-trip check
 /// # Safety
 ///
@@ -943,10 +989,10 @@ mod tests {
         rut_begin();
         let out = take(unsafe { rut_parse_manifest(PLUGIN_SHAPE.as_ptr(), PLUGIN_SHAPE.len()) });
         assert_eq!(out["name"], "plugin");
-        // the body rides the mod.rut convention (the entry keys are repealed)
+        // the body rides the src/mod.rut convention (the entry keys are repealed)
         assert_eq!(
             out["entries"],
-            serde_json::json!([{ "path": "mod.rut", "mode": "Impl" }]),
+            serde_json::json!([{ "path": "src/mod.rut", "mode": "Impl" }]),
             "the entry carries its mode: {}",
             out["entries"]
         );
@@ -1021,7 +1067,7 @@ mod tests {
         let out = take(unsafe { rut_parse_manifest(src.as_ptr(), src.len()) });
         assert_eq!(
             out["entries"],
-            serde_json::json!([{ "path": "surface.d.rut", "mode": "Decl" }]),
+            serde_json::json!([{ "path": "src/surface.d.rut", "mode": "Decl" }]),
             "entry.type indexes in Decl mode"
         );
         // a malformed manifest is the error envelope — the host's hint

@@ -269,7 +269,7 @@ it constantly.
 
 Put this in a module directory and run it: `literals/rut.jsonc` names
 the two packages the program uses, and the program is
-`literals/mod.rut`:
+`literals/src/mod.rut`:
 
 ```jsonc
 // literals/rut.jsonc
@@ -278,13 +278,13 @@ the two packages the program uses, and the program is
 
   "deps": {
     // the pins live in literals/rut.lock — `rut install` writes it
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip" }
   }
 }
 ```
 
-Save the program as `literals/mod.rut`, then `rut install literals`
+Save the program as `literals/src/mod.rut`, then `rut install literals`
 (fetches the two url deps and writes `rut.lock`) and
 `rut run literals`:
 

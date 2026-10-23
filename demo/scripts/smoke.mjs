@@ -7,7 +7,7 @@
 //   1. the runner law: a missing/invalid artifact boots to mode
 //      "error" naming the exact `npm run build:wasm` command; the
 //      error runner has no working methods — no silent anything;
-//   2. every prepared case (9 inline + 17 classics) REALLY compiles
+//   2. every prepared case (9 inline + 18 classics) REALLY compiles
 //      and runs through the wasm engine at the shipped default budget
 //      (fuel off — uncapped; fuel-demo's infinite-loop source is
 //      covered by the resume lane's explicit budgets); the only trap
@@ -134,7 +134,7 @@ check(runner.state.mode === 'wasm', 'the artifact boots to wasm mode', runner.st
 check(runner.isLive, 'the wasm runner is live');
 
 const all = [...api.CASES, ...api.EXAMPLES];
-check(all.length === 26, 'the full corpus is present (9 inline + 17 classics)', String(all.length));
+check(all.length === 27, 'the full corpus is present (9 inline + 18 classics)', String(all.length));
 
 // the trap the corpus teaches BY DESIGN (the case's blurb says so) —
 // the only trap admitted in the uncapped default lane. fuel-demo is

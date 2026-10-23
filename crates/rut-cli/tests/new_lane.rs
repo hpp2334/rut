@@ -1,7 +1,7 @@
 //! The `rut new` lane through the binary: the scaffold's three files
 //! (manifest + lock + root module), the refusals (clobber, illegal
 //! name), the born-formatted template, the pins against the committed
-//! `dist/std-v12` snapshot, and the offline end-to-end — the
+//! `dist/std-v14` snapshot, and the offline end-to-end — the
 //! full-deps manifest mounts clean and the ink-only hello runs.
 //!
 //! The templates are real files (`../template/`), so every byte law
@@ -18,7 +18,7 @@ use std::process::{Command, Output};
 /// embeds; the scaffolded bytes must equal these (the manifest with
 /// `__NAME__` substituted), so a template edit and its law move
 /// together.
-const MOD_RUT: &str = include_str!("../template/mod.rut");
+const MOD_RUT: &str = include_str!("../template/src/mod.rut");
 const MANIFEST_TEMPLATE: &str = include_str!("../template/rut.jsonc");
 const LOCK_TEMPLATE: &str = include_str!("../template/rut.lock");
 
@@ -87,7 +87,7 @@ fn scaffold_creates_the_manifest_and_root_module() {
             .unwrap_or_else(|| panic!("the manifest declares `{pkg}`"));
         let url = &dep["url"];
         assert!(
-            url.ends_with(&format!("/dist/std/{pkg}.rutbundle")),
+            url.ends_with(&format!("/dist/std/{pkg}.zip")),
             "`{pkg}` rides the std tag: {url}"
         );
         assert!(
@@ -97,7 +97,7 @@ fn scaffold_creates_the_manifest_and_root_module() {
     }
 
     assert_eq!(
-        std::fs::read_to_string(dir.join("mod.rut")).unwrap(),
+        std::fs::read_to_string(dir.join("src/mod.rut")).unwrap(),
         MOD_RUT,
         "the root module is the book's hello, byte-for-byte"
     );
@@ -120,7 +120,7 @@ fn the_template_files_are_the_carrier() {
         "the scaffolded lock is the template, byte-for-byte"
     );
     assert_eq!(
-        std::fs::read_to_string(dir.join("mod.rut")).unwrap(),
+        std::fs::read_to_string(dir.join("src/mod.rut")).unwrap(),
         MOD_RUT,
         "the scaffolded root module is the template, byte-for-byte"
     );
@@ -152,11 +152,11 @@ fn the_template_files_are_the_carrier() {
 
 #[test]
 fn scaffold_refuses_to_clobber() {
-    for seeded in ["rut.jsonc", "mod.rut", "rut.lock"] {
+    for seeded in ["rut.jsonc", "src/mod.rut", "rut.lock"] {
         let root = scratch(&format!("clobber-{seeded}"));
         let dir = root.join("hello");
-        std::fs::create_dir_all(&dir).unwrap();
         let seeded_path = dir.join(seeded);
+        std::fs::create_dir_all(seeded_path.parent().unwrap()).unwrap();
         std::fs::write(&seeded_path, "// precious\n").unwrap();
 
         let out = rut_cmd(&root.join("cache"), &["new", dir.to_str().unwrap()]);
@@ -214,17 +214,16 @@ fn pins_match_the_frozen_std_snapshot() {
     let lock_text = std::fs::read_to_string(dir.join("rut.lock")).unwrap();
     let lock = rut_driver::parse_lock(&lock_text).expect("the scaffolded rut.lock parses");
     assert_eq!(lock.deps().len(), 9, "the lock pins exactly the nine");
-    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v12");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v14");
     for row in lock.deps() {
         assert!(
-            row.url
-                .ends_with(&format!("/dist/std/{}.rutbundle", row.pkg)),
+            row.url.ends_with(&format!("/dist/std/{}.zip", row.pkg)),
             "`{}` rides the std tag: {}",
             row.pkg,
             row.url
         );
-        let bytes = std::fs::read(frozen.join(format!("{}.rutbundle", row.pkg)))
-            .unwrap_or_else(|e| panic!("the frozen dist/std-v12/{}.rutbundle: {e}", row.pkg));
+        let bytes = std::fs::read(frozen.join(format!("{}.zip", row.pkg)))
+            .unwrap_or_else(|e| panic!("the frozen dist/std-v14/{}.zip: {e}", row.pkg));
         assert_eq!(
             row.sha256,
             rut_driver::sha256_hex(&bytes),
@@ -302,11 +301,12 @@ fn scaffolded_project_runs_against_a_local_server() {
     // the wire: the whole frozen snapshot — the nine the manifest
     // names, plus the host surfaces they can pull (bundles are closed,
     // but the server answers whatever the graph asks)
-    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v12");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v14");
     let mut payloads = BTreeMap::new();
     for e in std::fs::read_dir(&frozen).unwrap() {
         let e = e.unwrap();
-        if e.file_name().to_string_lossy().ends_with(".rutbundle") {
+        let n = e.file_name().to_string_lossy().into_owned();
+        if n.ends_with(".rutbundle") || n.ends_with(".zip") {
             payloads.insert(
                 e.file_name().to_string_lossy().into_owned(),
                 std::fs::read(e.path()).unwrap(),
@@ -325,7 +325,7 @@ fn scaffolded_project_runs_against_a_local_server() {
         std::fs::write(
             &path,
             text.replace(
-                "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/",
+                "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/",
                 &format!("http://127.0.0.1:{}/", server.port),
             ),
         )

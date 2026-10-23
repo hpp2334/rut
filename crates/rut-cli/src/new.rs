@@ -12,7 +12,7 @@
 //! - `template/rut.lock` — the pins, written verbatim: byte-identical
 //!   to what `rut install` writes for that manifest (canonical — rows
 //!   sorted by url, columns aligned; `render_lock` is the normalizer).
-//! - `template/mod.rut` — the root module, the book's first program
+//! - `template/src/mod.rut` — the root module, the book's first program
 //!   byte-for-byte (docs/src/quick-start/first-program.md).
 //!
 //! LOCKSTEP: the lock's shas are the sha256 of the frozen
@@ -28,7 +28,7 @@ const MANIFEST_TEMPLATE: &str = include_str!("../template/rut.jsonc");
 const LOCK_TEMPLATE: &str = include_str!("../template/rut.lock");
 
 /// The scaffolded root module — the book's hello.
-const MOD_RUT: &str = include_str!("../template/mod.rut");
+const MOD_RUT: &str = include_str!("../template/src/mod.rut");
 
 /// the `new` arg surface.
 #[derive(clap::Args)]
@@ -41,10 +41,10 @@ pub(crate) struct NewArgs {
 /// `rut.jsonc` (the derived name + the whole swappable std set as
 /// UNPINNED url deps — the pins live in rut.lock), a `rut.lock` (the
 /// std set's pins, exactly what `rut install` would write), and a
-/// `mod.rut` (the ink hello). The name comes from the target's
+/// `src/mod.rut` (the ink hello). The name comes from the target's
 /// basename and obeys the manifest law — refused, never sanitized; an
-/// existing `rut.jsonc`, `mod.rut`, or `rut.lock` is never clobbered;
-/// other pre-existing files are left alone.
+/// existing `rut.jsonc`, `src/mod.rut`, or `rut.lock` is never
+/// clobbered; other pre-existing files are left alone.
 pub(crate) fn new(args: &NewArgs) {
     let dir = args.dir.as_str();
     let p = std::path::Path::new(dir);
@@ -60,7 +60,7 @@ pub(crate) fn new(args: &NewArgs) {
     }
     // refuse to clobber: a dir that already carries any file of the
     // trio keeps it — other pre-existing files are fine
-    for file in ["rut.jsonc", "mod.rut", "rut.lock"] {
+    for file in ["rut.jsonc", "src/mod.rut", "rut.lock"] {
         if p.join(file).exists() {
             eprintln!("new: `{dir}` already has a `{file}` — refusing to overwrite");
             std::process::exit(2);
@@ -73,15 +73,21 @@ pub(crate) fn new(args: &NewArgs) {
     for (file, text) in [
         ("rut.jsonc", manifest_text(&name)),
         ("rut.lock", LOCK_TEMPLATE.to_string()),
-        ("mod.rut", MOD_RUT.to_string()),
+        ("src/mod.rut", MOD_RUT.to_string()),
     ] {
         let path = p.join(file);
+        if let Some(parent) = path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                eprintln!("new: cannot create {}: {e}", parent.display());
+                std::process::exit(2);
+            }
+        }
         if let Err(e) = std::fs::write(&path, text) {
             eprintln!("new: cannot write {}: {e}", path.display());
             std::process::exit(2);
         }
     }
-    println!("created {dir} — rut.jsonc + rut.lock + mod.rut (the std set as deps, pinned by the lock, the ink hello)");
+    println!("created {dir} — rut.jsonc + rut.lock + src/mod.rut (the std set as deps, pinned by the lock, the ink hello)");
     println!("install first: rut install {dir} — fetches the 9 std bundles into {dir}/.rut/cache (run and pack never download)");
     println!("then run it: rut run {dir} — after a dep edit, rut install re-pins rut.lock; rut fetch {dir} pre-warms the same set");
 }

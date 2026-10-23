@@ -253,10 +253,13 @@ fn hash_closure(
             field(buf, url.as_bytes());
             // the resolved bytes: the cache entry's content keys the
             // run (absent = uncached — the key differs until the fetch
-            // lands, and the run itself does the fetching)
+            // lands, and the run itself does the fetching); the
+            // entry's extension follows the url's artifact kind, the
+            // remote's own naming law
             let entry = cache_root.join(format!(
-                "{}.rutbundle",
-                rut_driver::sha256_hex(url.as_bytes())
+                "{}{}",
+                rut_driver::sha256_hex(url.as_bytes()),
+                rut_native::cache_ext(url)
             ));
             match std::fs::read(&entry) {
                 Ok(bytes) => field(buf, &bytes),

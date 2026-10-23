@@ -52,10 +52,10 @@ const enc = new TextEncoder();
 // manifest's `mod` declarations, the same duty src/mount.rs's mirror
 // lane carries natively.
 const BIZ_TREE = {
-  "": "./rut/biz/mod.rut",
-  domain: "./rut/biz/domain/mod.rut",
-  world: "./rut/biz/world/mod.rut",
-  app: "./rut/biz/app/mod.rut",
+  "": "./rut/biz/src/mod.rut",
+  domain: "./rut/biz/src/domain/mod.rut",
+  world: "./rut/biz/src/world/mod.rut",
+  app: "./rut/biz/src/app/mod.rut",
 };
 const rows = {};
 for (const [path, rel] of Object.entries(BIZ_TREE)) {

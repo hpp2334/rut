@@ -57,10 +57,10 @@ const WASM = path.join(ROOT, "target", "wasm32-unknown-unknown", "release", "tod
 // the two-package law retired the single app.rut this file used to
 // read, the multi-lib splice the phase before that)
 const BIZ_TREE = {
-  "": "rut/biz/mod.rut",
-  domain: "rut/biz/domain/mod.rut",
-  world: "rut/biz/world/mod.rut",
-  app: "rut/biz/app/mod.rut",
+  "": "rut/biz/src/mod.rut",
+  domain: "rut/biz/src/domain/mod.rut",
+  world: "rut/biz/src/world/mod.rut",
+  app: "rut/biz/src/app/mod.rut",
 };
 const APP_ROWS = JSON.stringify(
   Object.fromEntries(

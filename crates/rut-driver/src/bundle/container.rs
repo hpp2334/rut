@@ -89,9 +89,20 @@ pub fn parse_bundle(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>, BundleError> 
     if n == 0xFFFF || cd_size == u32::MAX || cd_offset == u32::MAX {
         return Err(BundleError("zip64 bundles are not supported in v1".into()));
     }
-    zip::read_archive(data)
-        .map_err(policy)
-        .map(|entries| entries.into_iter().map(|e| (e.name, e.bytes)).collect())
+    // the STORE-only law is POLICY here, not codec absence: the crate
+    // may carry the deflate codec (the source-zip reader needs it for
+    // user-made zips), so the bundle lane checks the method itself —
+    // BEFORE any payload decodes, so a refused method names its entry
+    // instead of masquerading as corruption
+    for (name, method) in zip::entry_methods(data).map_err(policy)? {
+        if method != 0 {
+            return Err(BundleError(format!(
+                "bundle entry `{name}` uses compression method {method} — v1 bundles are STORE-only"
+            )));
+        }
+    }
+    let entries = zip::read_archive(data).map_err(policy)?;
+    Ok(entries.into_iter().map(|e| (e.name, e.bytes)).collect())
 }
 
 /// The mechanical layer's failures become the format's diagnostics.

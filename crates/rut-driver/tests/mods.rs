@@ -14,10 +14,10 @@
 //! - the collection: every mounted file's declarations gathered with
 //!   the mod path attached (the plumbing phase 3 gates on) — and a
 //!   mounted module nothing declares is named at compile;
-//! - the entry repeal: the root module is `mod.rut` beside the
-//!   manifest — the body keys refuse in a directory, the surface-only
-//!   dev state stands when no `mod.rut` exists, and the ambiguity
-//!   (`entry.type`, no kind, no body) names both fixes;
+//! - the entry repeal: the root module is `src/mod.rut` in the
+//!   package's `src/` shell — the body keys refuse in a directory, the
+//!   surface-only dev state stands when no `mod.rut` exists, and the
+//!   ambiguity (`entry.type`, no kind, no body) names both fixes;
 //! - bundles: a mod package packs its tree as the `rut.mods` rows
 //!   section and loads mounting the same tree; the PUBLISHED std-v8
 //!   artifacts (the OLD flat envelope, committed at `dist/std-v8/`)
@@ -49,9 +49,9 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-/// The two-level fixture: `pkg/mod.rut` declares `layout`; `layout`
-/// declares `pub mod grid`. `bundle` spells the bundle keys (for the
-/// pack lanes) or not (plain directory pkg).
+/// The two-level fixture: `pkg/src/mod.rut` declares `layout`;
+/// `layout` declares `pub mod grid`. `bundle` spells the bundle keys
+/// (for the pack lanes) or not (plain directory pkg).
 fn world(tag: &str, bundle: bool) -> PathBuf {
     let root = scratch(tag);
     let pkg = root.join("pkg");
@@ -63,17 +63,17 @@ fn world(tag: &str, bundle: bool) -> PathBuf {
     write(&pkg, "rut.jsonc", &format!("{{{keys}\"name\": \"pkg\"}}"));
     write(
         &pkg,
-        "mod.rut",
+        "src/mod.rut",
         "// pkg root — the root module\nmod layout;\nentry fn main() -> i32 { return 7; }\n",
     );
     write(
         &pkg,
-        "layout/mod.rut",
+        "src/layout/mod.rut",
         "// layout — declares the grandchild\npub mod grid;\npub fn span() -> i32 { return 1; }\n",
     );
     write(
         &pkg,
-        "layout/grid/mod.rut",
+        "src/layout/grid/mod.rut",
         "// grid\npub fn cell() -> i32 { return 2; }\n",
     );
     root
@@ -146,12 +146,12 @@ fn a_file_module_mounts_and_runs() {
     write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
     write(
         &pkg,
-        "mod.rut",
+        "src/mod.rut",
         "use imp::{ span };\nmod imp;\nentry fn main() -> i32 { return span() + imp::plus(2); }\n",
     );
     write(
         &pkg,
-        "imp.rut",
+        "src/imp.rut",
         "pub fn span() -> i32 { return 5; }\npub fn plus(v: i32) -> i32 { return v + 40; }\n",
     );
     let loaded = load(&pkg);
@@ -176,20 +176,24 @@ fn a_mixed_tree_mounts_both_forms_at_every_level() {
     write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
     write(
         &pkg,
-        "mod.rut",
+        "src/mod.rut",
         "mod layout;\nmod helper;\nentry fn main() -> i32 { return layout::span() + helper::two() + layout::grid::cell(); }\n",
     );
     write(
         &pkg,
-        "layout/mod.rut",
+        "src/layout/mod.rut",
         "mod grid;\npub fn span() -> i32 { return 1; }\n",
     );
     write(
         &pkg,
-        "layout/grid.rut",
+        "src/layout/grid.rut",
         "pub fn cell() -> i32 { return 2; }\n",
     );
-    write(&pkg, "helper.rut", "pub fn two() -> i32 { return 20; }\n");
+    write(
+        &pkg,
+        "src/helper.rut",
+        "pub fn two() -> i32 { return 20; }\n",
+    );
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
     let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
@@ -205,7 +209,7 @@ fn both_forms_are_the_loud_ambiguity() {
     let pkg = root.join("pkg");
     write(
         &pkg,
-        "layout/grid.rut",
+        "src/layout/grid.rut",
         "pub fn cell() -> i32 { return 2; }\n",
     );
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
@@ -226,12 +230,19 @@ fn a_cycle_through_a_file_child_is_the_loud_cyclic_mod_error() {
     write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
     write(
         &pkg,
-        "mod.rut",
+        "src/mod.rut",
         "mod a;\nentry fn main() -> i32 { return 7; }\n",
     );
-    write(&pkg, "a.rut", "mod b;\npub fn one() -> i32 { return 1; }\n");
-    std::os::unix::fs::symlink(pkg.join("a.rut").canonicalize().unwrap(), pkg.join("b.rut"))
-        .unwrap();
+    write(
+        &pkg,
+        "src/a.rut",
+        "mod b;\npub fn one() -> i32 { return 1; }\n",
+    );
+    std::os::unix::fs::symlink(
+        pkg.join("src/a.rut").canonicalize().unwrap(),
+        pkg.join("src/b.rut"),
+    )
+    .unwrap();
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("cyclic mod:"), "{err}");
     assert!(err.contains("`b` (a/b/b.rut)"), "{err}");
@@ -241,7 +252,7 @@ fn a_cycle_through_a_file_child_is_the_loud_cyclic_mod_error() {
 fn missing_child_names_both_spellings() {
     let root = world("missing", false);
     let pkg = root.join("pkg");
-    std::fs::remove_dir_all(pkg.join("layout/grid")).unwrap();
+    std::fs::remove_dir_all(pkg.join("src/layout/grid")).unwrap();
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(
         err.contains("`mod grid;` in layout/mod.rut — no `grid/mod.rut` beside it"),
@@ -253,8 +264,8 @@ fn missing_child_names_both_spellings() {
 fn a_directory_without_mod_rut_is_loud() {
     let root = world("nomodrut", false);
     let pkg = root.join("pkg");
-    std::fs::remove_file(pkg.join("layout/grid/mod.rut")).unwrap();
-    write(&pkg, "layout/grid/helpers.rut", "// no mod.rut here\n");
+    std::fs::remove_file(pkg.join("src/layout/grid/mod.rut")).unwrap();
+    write(&pkg, "src/layout/grid/helpers.rut", "// no mod.rut here\n");
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(
         err.contains("`mod grid;` in layout/mod.rut — `grid/` has no `mod.rut`"),
@@ -271,15 +282,19 @@ fn a_symlinked_cycle_is_the_loud_cyclic_mod_error() {
     // inside the mount chain
     write(
         &pkg,
-        "mod.rut",
+        "src/mod.rut",
         "mod a;\nentry fn main() -> i32 { return 7; }\n",
     );
     write(
         &pkg,
-        "a/mod.rut",
+        "src/a/mod.rut",
         "mod b;\npub fn one() -> i32 { return 1; }\n",
     );
-    std::os::unix::fs::symlink(pkg.join("a").canonicalize().unwrap(), pkg.join("a/b")).unwrap();
+    std::os::unix::fs::symlink(
+        pkg.join("src/a").canonicalize().unwrap(),
+        pkg.join("src/a/b"),
+    )
+    .unwrap();
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("cyclic mod:"), "{err}");
     assert!(err.contains("`b`"), "{err}");
@@ -358,7 +373,7 @@ fn a_mod_files_uses_join_the_closure_check() {
     let pkg = root.join("pkg");
     write(
         &pkg,
-        "layout/mod.rut",
+        "src/layout/mod.rut",
         "use nosuch::{Thing};\npub fn span() -> i32 { return 1; }\n",
     );
     let err = load(&pkg)
@@ -374,7 +389,7 @@ fn a_mod_files_uses_join_the_closure_check() {
 }
 
 // ---------------------------------------------------------------------
-// the entry repeal (the root module is `mod.rut`; the keys refuse)
+// the entry repeal (the root module is `src/mod.rut`; the keys refuse)
 // ----------------------------------------------------------------------
 
 #[test]
@@ -388,7 +403,11 @@ fn entry_lib_manifests_refuse_loudly_naming_the_fix() {
         "rut.jsonc",
         r#"{"name": "pkg", "entry": {"lib": "./lib.rut"}}"#,
     );
-    write(&pkg, "lib.rut", "entry fn main() -> i32 { return 7; }\n");
+    write(
+        &pkg,
+        "src/lib.rut",
+        "entry fn main() -> i32 { return 7; }\n",
+    );
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("entry.lib: repealed"), "{err}");
     assert!(
@@ -404,7 +423,7 @@ fn entry_lib_manifests_refuse_loudly_naming_the_fix() {
         "rut.jsonc",
         r#"{"name": "pkg", "entry": {"libs": ["./tail.rut"]}}"#,
     );
-    write(&pkg2, "tail.rut", "// the splice tail\n");
+    write(&pkg2, "src/tail.rut", "// the splice tail\n");
     let err = rut_native::load_dir(&pkg2).unwrap_err().to_string();
     assert!(err.contains("entry.libs: repealed"), "{err}");
     assert!(
@@ -424,8 +443,16 @@ fn mod_rut_beside_an_entry_type_surface_is_the_root() {
         "rut.jsonc",
         r#"{"name": "pkg", "type": "lib", "entry": {"type": "./pkg.d.rut"}}"#,
     );
-    write(&pkg, "pkg.d.rut", "/// documented surface, no body yet.\n");
-    write(&pkg, "mod.rut", "entry fn main() -> i32 { return 7; }\n");
+    write(
+        &pkg,
+        "src/pkg.d.rut",
+        "/// documented surface, no body yet.\n",
+    );
+    write(
+        &pkg,
+        "src/mod.rut",
+        "entry fn main() -> i32 { return 7; }\n",
+    );
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
     let MountedBody::Source { text, is_decl } = &pkg.body else {
@@ -445,7 +472,11 @@ fn entry_type_only_without_mod_rut_is_still_the_dev_state() {
         "rut.jsonc",
         r#"{"name": "pkg", "type": "lib", "entry": {"type": "./pkg.d.rut"}}"#,
     );
-    write(&pkg, "pkg.d.rut", "/// documented surface, no body yet.\n");
+    write(
+        &pkg,
+        "src/pkg.d.rut",
+        "/// documented surface, no body yet.\n",
+    );
     let loaded = load(&pkg);
     let pkg = loaded.pkg("pkg").expect("pkg mounted");
     let MountedBody::Source { is_decl, .. } = &pkg.body else {
@@ -465,7 +496,7 @@ fn no_entry_at_all_names_the_mod_rut_recipe() {
     write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
     let err = rut_native::load_dir(&pkg).unwrap_err().to_string();
     assert!(err.contains("has no entry"), "{err}");
-    assert!(err.contains("`mod.rut`"), "{err}");
+    assert!(err.contains("`src/mod.rut`"), "{err}");
 }
 
 // ---------------------------------------------------------------------
@@ -510,7 +541,11 @@ fn flat_packages_pack_without_a_rows_entry() {
         "rut.jsonc",
         r#"{"name": "pkg", "format": "rutbundle", "format_version": 12}"#,
     );
-    write(&pkg, "mod.rut", "entry fn main() -> i32 { return 7; }\n");
+    write(
+        &pkg,
+        "src/mod.rut",
+        "entry fn main() -> i32 { return 7; }\n",
+    );
     let bytes = rut_native::pack_dir(&pkg).expect("pack");
     let names: Vec<String> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
@@ -635,13 +670,13 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use pkg::{who};\nentry fn main() -> str { return who(); }\n",
     );
     // pkg needs a pub fn the app imports — add it to the root module
     write(
         &root.join("pkg"),
-        "mod.rut",
+        "src/mod.rut",
         "mod layout;\npub fn who() -> str { return \"pkg\"; }\nentry fn main() -> i32 { return 7; }\n",
     );
     let bytes = rut_native::pack_dir(&app).expect("pack");
@@ -678,7 +713,7 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
     .expect("pack the tree pouch");
     let pouch_src = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../rut/pouch/mod.rut"
+        "/../../rut/pouch/src/mod.rut"
     ))
     .unwrap();
     let legacy = r#"{"format": "rutbundle", "format_version": 12, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;

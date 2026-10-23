@@ -128,7 +128,8 @@ fn load_and_compile(
         ),
     )
     .unwrap();
-    std::fs::write(app.join("mod.rut"), src).unwrap();
+    std::fs::create_dir_all(app.join("src")).unwrap();
+    std::fs::write(app.join("src/mod.rut"), src).unwrap();
     write_lock(&app, &table);
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = loaded
@@ -360,7 +361,8 @@ fn load_compile_run(
         ),
     )
     .unwrap();
-    std::fs::write(app.join("mod.rut"), src).unwrap();
+    std::fs::create_dir_all(app.join("src")).unwrap();
+    std::fs::write(app.join("src/mod.rut"), src).unwrap();
     write_lock(&app, &table);
     let loaded = block_on(load_dir_with(&app, &Table::from(table))).map_err(|e| e.to_string())?;
     let g = loaded
@@ -516,8 +518,10 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
         format!(r#"{{"name": "app", "deps": {{"strbuild": {{"url": "{url}"}}}}}}"#),
     )
     .unwrap();
+
+    std::fs::create_dir_all(app.join("src")).unwrap();
     std::fs::write(
-        app.join("mod.rut"),
+        app.join("src/mod.rut"),
         "use strbuild::{ StringBuilder };\n\nentry fn main() -> str {\n    let mut b = StringBuilder::new();\n    b.append(\"hello, \");\n    b.append(\"cdn\");\n    return b.build();\n}\n",
     )
     .unwrap();

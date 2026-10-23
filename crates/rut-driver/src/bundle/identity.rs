@@ -57,6 +57,34 @@ pub fn fp16_of(entries: &[(String, Vec<u8>)], prefix: &str) -> String {
     fp16_of_parts([pick(a), pick(b), pick(c), pick(d)])
 }
 
+/// The fingerprint over a TREE package's source set — the source-zip
+/// flavor's identity input: `rut.jsonc` bytes first, then every `.rut`
+/// file under the tree's `src/` shell, each length-framed (path, then
+/// bytes — the framing kills boundary ambiguity), the sort the paths'
+/// own. Same width and shape as the wire flavor (`name@<16 hex>`), the
+/// same `identity`/`parse_identity` machinery — only the input set
+/// differs, so the two flavors never cross-compare. The manifest is
+/// the REWRITTEN one when the caller stages a publication (the fp
+/// fingerprints what rides).
+pub fn fp16_of_tree(files: &[(String, Vec<u8>)]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut sorted: Vec<&(String, Vec<u8>)> = files.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut digest = Sha256::new();
+    for (rel, bytes) in sorted {
+        digest.update((rel.len() as u64).to_le_bytes());
+        digest.update(rel.as_bytes());
+        digest.update((bytes.len() as u64).to_le_bytes());
+        digest.update(bytes);
+    }
+    let out = digest.finalize();
+    let mut s = String::with_capacity(16);
+    for b in out.iter().take(8) {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
+
 /// The identity string: `name@fp16`.
 pub fn identity(name: &str, fp16: &str) -> String {
     format!("{name}@{fp16}")

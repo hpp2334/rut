@@ -1,4 +1,4 @@
-// spectral-norm.js — the JS twin of spectral-norm/main.rut.
+// spectral-norm.js — the JS twin of spectral-norm/src/mod.rut.
 function fsqrt(x) {
   if (x <= 0) return 0;
   let r = x;

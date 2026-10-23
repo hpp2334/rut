@@ -1,8 +1,8 @@
 //! The host `.d.rut` MOD TREE (the host-mod-tree plan, phase 1): a
 //! `type = "host"` pkg organizes its surface as a module tree —
-//! `pub mod net;` in the root `.d.rut`, the children in
-//! `NAME/mod.d.rut` beside the declaring file, recursively,
-//! cycle-guarded. Every row carries the mod path it lives under
+//! `pub mod net;` in the root `.d.rut` (under the package's `src/`
+//! shell), the children in `NAME/mod.d.rut` beside the declaring
+//! file, recursively, cycle-guarded. Every row carries the mod path it lives under
 //! ([`rut_driver::HostRow`]); the registration string is
 //! `pkg::path::name` through `full_name` (flat rows are the
 //! `path = ""` case and spell today's shape). The phase-1 gates:
@@ -62,15 +62,15 @@ fn tree_world(tag: &str) -> std::path::PathBuf {
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
-                "myhost.d.rut",
+                "src/myhost.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
             (
-                "net/mod.d.rut",
+                "src/net/mod.d.rut",
                 "pub mod tls;\npub host fn connect(url: str) -> opaque;\n",
             ),
             (
-                "net/tls/mod.d.rut",
+                "src/net/tls/mod.d.rut",
                 "pub host fn handshake(c: opaque) -> opaque;\n",
             ),
         ],
@@ -141,7 +141,7 @@ fn a_declared_child_without_its_file_is_the_loud_error() {
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
-                "myhost.d.rut",
+                "src/myhost.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
         ],
@@ -157,11 +157,11 @@ fn a_declared_child_without_its_file_is_the_loud_error() {
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
-                "myhost.d.rut",
+                "src/myhost.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
             (
-                "net/mod.d.rut",
+                "src/net/mod.d.rut",
                 "pub mod tls;\npub host fn connect(url: str) -> opaque;\n",
             ),
         ],
@@ -190,10 +190,10 @@ fn a_child_that_does_not_parse_is_loud_too() {
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
-                "myhost.d.rut",
+                "src/myhost.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
-            ("net/mod.d.rut", "pub host fn broken( {{\n"),
+            ("src/net/mod.d.rut", "pub host fn broken( {{\n"),
         ],
     );
     let err = load_path_session(&dir).unwrap_err().to_string();
@@ -210,10 +210,10 @@ fn first_mount_wins_and_flat_rows_stay_in_declaration_order() {
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
-                "myhost.d.rut",
+                "src/myhost.d.rut",
                 "pub mod net;\npub mod net;\npub host fn legacy_ping() -> bool;\npub host fn second(x: str);\n",
             ),
-            ("net/mod.d.rut", "pub host fn connect(url: str) -> opaque;\n"),
+            ("src/net/mod.d.rut", "pub host fn connect(url: str) -> opaque;\n"),
         ],
     );
     let loaded = load_path_session(&dir).expect("loads");
@@ -242,10 +242,13 @@ fn an_async_row_family_expands_path_qualified() {
         &[
             ("rut.jsonc", &host_manifest("fixture", "fixture.d.rut")),
             (
-                "fixture.d.rut",
+                "src/fixture.d.rut",
                 "pub mod net;\npub host fn sync_row(x: str) -> nil;\n",
             ),
-            ("net/mod.d.rut", "pub host async fn probe(k: str) -> i64;\n"),
+            (
+                "src/net/mod.d.rut",
+                "pub host async fn probe(k: str) -> i64;\n",
+            ),
         ],
     );
     let loaded = load_path_session(&dir).expect("loads");
@@ -283,15 +286,15 @@ fn the_registration_contract_speaks_the_path_spelling() {
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
-                "myhost.d.rut",
+                "src/myhost.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
             (
-                "net/mod.d.rut",
+                "src/net/mod.d.rut",
                 "pub mod tls;\npub host fn connect(url: str) -> i64;\n",
             ),
             (
-                "net/tls/mod.d.rut",
+                "src/net/tls/mod.d.rut",
                 "pub host fn handshake(c: i64) -> i64;\n",
             ),
         ],
@@ -333,7 +336,7 @@ fn flat_host_pkgs_pack_byte_identically() {
         &scratch("flat"),
         &[
             ("rut.jsonc", &host_manifest("flat_host", "flat_host.d.rut")),
-            ("flat_host.d.rut", "pub host fn ping() -> bool;\n"),
+            ("src/flat_host.d.rut", "pub host fn ping() -> bool;\n"),
         ],
     );
     let bytes = pack_dir(&dir).expect("pack");
@@ -414,9 +417,9 @@ fn the_same_leaf_name_in_two_mods_is_legal() {
         &scratch("same-leaf"),
         &[
             ("rut.jsonc", &host_manifest("duo", "duo.d.rut")),
-            ("duo.d.rut", "pub mod a;\npub mod b;\n"),
-            ("a/mod.d.rut", "pub host fn probe(x: str) -> i64;\n"),
-            ("b/mod.d.rut", "pub host fn probe(k: i64) -> i64;\n"),
+            ("src/duo.d.rut", "pub mod a;\npub mod b;\n"),
+            ("src/a/mod.d.rut", "pub host fn probe(x: str) -> i64;\n"),
+            ("src/b/mod.d.rut", "pub host fn probe(k: i64) -> i64;\n"),
         ],
     );
     let loaded = load_path_session(Path::new(&dir)).expect("loads");
@@ -518,27 +521,36 @@ fn ensure_host_synthesizes_the_path_qualified_surface() {
 }
 
 #[test]
-fn the_host_tree_mount_refuses_a_body_beside_the_manifest() {
-    // the host pkg has no body: a `mod.rut` beside the manifest still
-    // refuses, and the message points at the tree's `mod.d.rut` home
+fn a_stray_body_beside_a_host_manifest_is_inert() {
+    // the stray-body refusal is REPEALED (the `src/` shell cutover): a
+    // `mod.rut` beside a host manifest is an inert unread file — the
+    // spelled surface wins and the tree mounts exactly as if the
+    // stray were not there
     let dir = make_pkg(
         &scratch("body"),
         &[
             ("rut.jsonc", &host_manifest("myhost", "myhost.d.rut")),
             (
-                "myhost.d.rut",
+                "src/myhost.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
             (
-                "net/mod.d.rut",
+                "src/net/mod.d.rut",
                 "pub host fn connect(url: str) -> opaque;\n",
             ),
             ("mod.rut", "entry fn main() {}\n"),
         ],
     );
-    let err = load_path_session(&dir).unwrap_err().to_string();
-    assert!(err.contains("pure surface"), "{err}");
-    assert!(err.contains("mod.d.rut"), "{err}");
+    let loaded = load_path_session(&dir).expect("the stray body is unread, the pkg loads");
+    let m = loaded.pkg("myhost").unwrap();
+    assert_eq!(
+        rows_of(m)
+            .iter()
+            .map(|r| r.full_name("myhost"))
+            .collect::<Vec<_>>(),
+        vec!["myhost::legacy_ping", "myhost::net::connect"],
+        "the spelled surface's tree mounted; the stray body is inert"
+    );
 }
 
 #[test]
@@ -553,7 +565,7 @@ fn the_lib_surface_law_still_refuses_root_host_rows() {
                 "rut.jsonc",
                 r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
             ),
-            ("s.d.rut", "pub host fn ping() -> bool;\n"),
+            ("src/s.d.rut", "pub host fn ping() -> bool;\n"),
         ],
     );
     let err = load_path_session(&dir).unwrap_err().to_string();

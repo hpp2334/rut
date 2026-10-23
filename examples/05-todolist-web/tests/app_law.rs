@@ -46,11 +46,11 @@
 /// app's ABI is `main` plus the event doors, nothing else.
 static BIZ: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     tree(
-        include_str!("../rut/biz/mod.rut"),
+        include_str!("../rut/biz/src/mod.rut"),
         &[
-            include_str!("../rut/biz/app/mod.rut"),
-            include_str!("../rut/biz/domain/mod.rut"),
-            include_str!("../rut/biz/world/mod.rut"),
+            include_str!("../rut/biz/src/app/mod.rut"),
+            include_str!("../rut/biz/src/domain/mod.rut"),
+            include_str!("../rut/biz/src/world/mod.rut"),
         ],
     )
 });

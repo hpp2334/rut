@@ -13,18 +13,22 @@ fn pack_world() -> Vec<u8> {
     let base = std::env::temp_dir().join(format!("rut-wasm-v5-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let lib = base.join("lib");
-    std::fs::create_dir_all(&lib).unwrap();
+    std::fs::create_dir_all(lib.join("src")).unwrap();
     std::fs::write(lib.join("rut.jsonc"), r#"{"name": "lib"}"#).unwrap();
-    std::fs::write(lib.join("mod.rut"), "pub fn four() -> i64 { return 4; }\n").unwrap();
+    std::fs::write(
+        lib.join("src/mod.rut"),
+        "pub fn four() -> i64 { return 4; }\n",
+    )
+    .unwrap();
     let app = base.join("app");
-    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(app.join("src")).unwrap();
     std::fs::write(
         app.join("rut.jsonc"),
         r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"lib": {"path": "../lib"}}}"#,
     )
     .unwrap();
     std::fs::write(
-        app.join("mod.rut"),
+        app.join("src/mod.rut"),
         "use lib::{ four };\nentry fn main() -> i64 { return four(); }\n",
     )
     .unwrap();

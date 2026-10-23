@@ -426,7 +426,7 @@ entry fn main() -> nil {
 
 // ---- the async lane's harness (the async_basics shape) ----
 
-const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
+const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/src/ink_host.d.rut");
 
 fn async_pkgs(src: &str) -> Vec<rut_driver::Mounted> {
     let ink_host = rut_driver::lower_decl_module(

@@ -232,7 +232,7 @@ fn a_user_launcher_over_the_same_future_surface() {
     // engine's standard set is untouched, the receipt is a user class,
     // and the driving API is the engine half the user's row binds to
     let engine = rut_driver::lower_decl_module(
-        include_str!("../../../rut/async_host/engine.d.rut"),
+        include_str!("../../../rut/async_host/src/engine.d.rut"),
         &BTreeMap::new(),
         "engine.d.rut",
     )

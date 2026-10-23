@@ -38,14 +38,14 @@ fn util_world(tag: &str) -> std::path::PathBuf {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{ twice };\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
     let util = root.join("util");
     write(&util, "rut.jsonc", r#"{"name": "util"}"#);
     write(
         &util,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
     );
     root

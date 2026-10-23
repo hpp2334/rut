@@ -1,4 +1,4 @@
-//! Playground classics gate — every `demo/src/examples/*/mod.rut`
+//! Playground classics gate — every `demo/src/examples/*/src/mod.rut`
 //! compiles AND runs clean through the full pipeline: the demo reads the
 //! same sources raw, so what the page offers to run is exactly what the
 //! native engine accepts and executes — never a hand-written guess.
@@ -12,14 +12,14 @@ fn examples_dir() -> std::path::PathBuf {
 #[test]
 fn classics_run_clean() {
     let dir = examples_dir();
-    // the dir-shaped classics: one module dir (rut.jsonc + mod.rut) per
+    // the dir-shaped classics: one module dir (rut.jsonc + src/mod.rut) per
     // name — the snippet identity is the DIRECTORY name
     let mut files: Vec<_> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.is_dir())
-        .map(|d| d.join("mod.rut"))
+        .map(|d| d.join("src/mod.rut"))
         .collect();
     files.sort();
     assert!(
@@ -31,13 +31,10 @@ fn classics_run_clean() {
 
     let mut failures: Vec<String> = Vec::new();
     for path in &files {
-        let name = path
-            .parent()
-            .unwrap()
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .into_owned();
+        // the snippet identity is the EXAMPLE dir — `src/mod.rut`'s
+        // grandparent, not the `src/` shell
+        let pkg = path.parent().unwrap().parent().unwrap();
+        let name = pkg.file_name().unwrap().to_string_lossy().into_owned();
         let src = std::fs::read_to_string(path).unwrap();
 
         // the classics use the toolchain libs (`ink`+`ink_host`, `pouch`) —
@@ -51,7 +48,7 @@ fn classics_run_clean() {
         // is the manifest (the same file the page's manifest-honoring
         // lane reads), parsed at the door.
         let manifest = rut_driver::parse_manifest(
-            &std::fs::read_to_string(path.parent().unwrap().join("rut.jsonc"))
+            &std::fs::read_to_string(pkg.join("rut.jsonc"))
                 .unwrap_or_else(|e| panic!("{name}: read its rut.jsonc: {e}")),
         )
         .unwrap_or_else(|e| panic!("{name}: {e}"));

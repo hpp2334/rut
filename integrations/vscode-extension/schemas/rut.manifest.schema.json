@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "rut manifest (rut.jsonc)",
-  "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card. The root module is `mod.rut` beside the manifest (file modules: `mod NAME;` in the root declares each `NAME/mod.rut` child); the repealed `entry.lib`/`entry.libs` keys are refused — rename the lib to `mod.rut` and drop the keys.",
+  "description": "A rut module manifest: the module's identity, its entry sources, and its dependency rows. The file is JSONC — `//` and `/* */` comments and trailing commas are legal. One directory is one module; the manifest is the directory's identity card. The root module is `src/mod.rut` (the package's `src/` shell; file modules: `mod NAME;` in the root declares each `src/NAME/mod.rut` child); the repealed `entry.lib`/`entry.libs` keys are refused — rename the lib to `src/mod.rut` and drop the keys.",
   "type": "object",
   "properties": {
     "name": {
@@ -26,7 +26,7 @@
     },
     "entry": {
       "type": "object",
-      "description": "Where the module's `.d.rut` declaration surface lives — relative to this manifest's directory. The body is `mod.rut` beside the manifest (the root module; `mod NAME;` declares each `NAME/mod.rut` child). The repealed `entry.lib`/`entry.libs` keys are refused — rename the lib to `mod.rut` and drop the keys.",
+      "description": "Where the module's `.d.rut` declaration surface lives — relative to this manifest's directory, resolving under the `src/` shell. The body is `src/mod.rut` (the root module; `mod NAME;` declares each `src/NAME/mod.rut` child). The repealed `entry.lib`/`entry.libs` keys are refused — rename the lib to `src/mod.rut` and drop the keys.",
       "properties": {
         "type": {
           "type": "string",

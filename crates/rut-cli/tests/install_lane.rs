@@ -147,7 +147,7 @@ fn leaf_bundle(tag: &str, name: &str, body: &str) -> Vec<u8> {
     let root = scratch(tag);
     let dir = root.join(name);
     write(&dir, "rut.jsonc", &manifest(name, ""));
-    write(&dir, "mod.rut", body);
+    write(&dir, "src/mod.rut", body);
     rut_native::pack_dir(&dir).expect("pack the leaf")
 }
 
@@ -160,7 +160,7 @@ fn consumer_world(tag: &str, deps: &str) -> PathBuf {
     write(&app, "rut.jsonc", &manifest("app", deps));
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{twice};\n\nentry fn main() {\n    let x = twice(21);\n}\n",
     );
     root

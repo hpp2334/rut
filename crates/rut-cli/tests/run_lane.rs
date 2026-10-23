@@ -37,7 +37,7 @@ fn hello_world(tag: &str) -> PathBuf {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
-    write(&dir, "mod.rut", "entry fn main() -> nil { return; }\n");
+    write(&dir, "src/mod.rut", "entry fn main() -> nil { return; }\n");
     root
 }
 
@@ -57,7 +57,7 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
     );
 
     let out = Command::new(rut())
-        .args(["pack", dir.to_str().unwrap()])
+        .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
     assert!(
@@ -131,9 +131,9 @@ fn a_loose_file_is_not_a_runnable_unit() {
 #[test]
 fn a_declaration_surface_is_refused_with_its_own_message() {
     let root = scratch("decl");
-    write(&root, "surf.d.rut", "pub host fn log(line: str);\n");
+    write(&root, "src/surf.d.rut", "pub host fn log(line: str);\n");
     let out = Command::new(rut())
-        .args(["run", root.join("surf.d.rut").to_str().unwrap()])
+        .args(["run", root.join("src/surf.d.rut").to_str().unwrap()])
         .output()
         .expect("run rut run <file.d.rut>");
     assert_eq!(out.status.code(), Some(2));
@@ -173,7 +173,7 @@ fn two_entries(tag: &str) -> PathBuf {
     );
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn main() -> nil { return; }\nentry fn other() -> nil { return; }\n",
     );
     root
@@ -217,7 +217,7 @@ fn entry_naming_a_non_entry_fn_is_loud() {
     let dir = root.join("hello");
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "fn plain() -> nil { return; }\nentry fn main() -> nil { return; }\n",
     );
     let out = Command::new(rut())
@@ -242,7 +242,11 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
     );
     // a pure library shape compiles clean — the designation is where
     // the run stops, never a source diagnostic
-    write(&dir, "mod.rut", "pub fn helper() -> i32 { return 7; }\n");
+    write(
+        &dir,
+        "src/mod.rut",
+        "pub fn helper() -> i32 { return 7; }\n",
+    );
     let out = Command::new(rut())
         .args(["run", dir.to_str().unwrap()])
         .output()
@@ -284,7 +288,7 @@ fn a_root_parse_error_names_the_file_line_and_column() {
     );
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn main() -> nil {\n    let x = @@;\n    return;\n}\n",
     );
     let out = Command::new(rut())
@@ -316,12 +320,12 @@ fn an_error_in_a_mod_child_names_the_spec_path_label() {
     );
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "mod layout;\nentry fn main() -> nil { return; }\n",
     );
     write(
         &dir,
-        "layout/mod.rut",
+        "src/layout/mod.rut",
         "pub fn cell() -> i32 {\n    let = 7;\n}\n",
     );
     let out = Command::new(rut())
@@ -348,7 +352,7 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
     );
     write(
         &hello,
-        "mod.rut",
+        "src/mod.rut",
         "use calc::{pi};\nentry fn main() -> nil { return; }\n",
     );
     let calc = root.join("calc");
@@ -357,7 +361,11 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "calc"}"#,
     );
-    write(&calc, "mod.rut", "pub fn pi() -> f64 {\n    let = 7;\n}\n");
+    write(
+        &calc,
+        "src/mod.rut",
+        "pub fn pi() -> f64 {\n    let = 7;\n}\n",
+    );
     let out = Command::new(rut())
         .args(["run", hello.to_str().unwrap()])
         .output()
@@ -384,7 +392,7 @@ fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
     );
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "fn f() -> str {\n    let x = 1;\n}\nentry fn main() -> str {\n    return f();\n}\n",
     );
     let out = Command::new(rut())

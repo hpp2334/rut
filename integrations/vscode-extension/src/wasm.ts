@@ -174,6 +174,10 @@ export interface BundleExtracted {
   files: BundleExtractedFile[];
 }
 
+/// `rut_extract_srczip`'s success envelope — the same shape, over a
+/// source zip's own package files (`src/**` at zip-relative paths)
+export type SrczipExtracted = BundleExtracted;
+
 interface RutExports {
   memory: WebAssembly.Memory;
   rut_begin(): void;
@@ -226,6 +230,7 @@ interface RutExports {
   ): number;
   rut_add_bundle(ptr: number, len: number): number;
   rut_extract_bundle(ptr: number, len: number): number;
+  rut_extract_srczip(ptr: number, len: number): number;
 }
 
 /// everything the module exports (the ABI surface + its linear memory)
@@ -427,6 +432,17 @@ export class RutWasm {
     return this.call(() => {
       const [p, l] = this.putBytes(bytes);
       return this.e.rut_extract_bundle(p, l);
+    });
+  }
+
+  /// unpack one SOURCE ZIP without indexing — the source transport's
+  /// extract twin: the zip's own `src/**` files out, mod paths derived
+  /// from the `src/` shell. The error envelope on a corrupt/foreign
+  /// archive.
+  extractSrczip(bytes: Uint8Array): SrczipExtracted | Envelope {
+    return this.call(() => {
+      const [p, l] = this.putBytes(bytes);
+      return this.e.rut_extract_srczip(p, l);
     });
   }
 

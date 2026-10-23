@@ -155,7 +155,9 @@ fn make_pkg(base: &Path, files: &[(&str, &str)]) -> std::path::PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     for (name, text) in files {
-        std::fs::write(dir.join(name), text).unwrap();
+        let p = dir.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
     }
     dir
 }
@@ -174,7 +176,7 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
                 "rut.jsonc",
                 r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
             ),
-            ("s.d.rut", "pub host fn ping(x: i32) -> i32;\n"),
+            ("src/s.d.rut", "pub host fn ping(x: i32) -> i32;\n"),
         ],
     );
     let err = load_path_session(&dir).unwrap_err().to_string();
@@ -191,7 +193,7 @@ fn a_lib_surfaces_host_fns_are_refused_with_the_fix() {
                 "rut.jsonc",
                 r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
             ),
-            ("s.d.rut", "this is not rut source at all <<<\n"),
+            ("src/s.d.rut", "this is not rut source at all <<<\n"),
         ],
     );
     let loaded = load_path_session(&dir).unwrap();
@@ -218,7 +220,7 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
                 "rut.jsonc",
                 r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
             ),
-            ("s.d.rut", "/// documented surface, no body yet.\n"),
+            ("src/s.d.rut", "/// documented surface, no body yet.\n"),
         ],
     );
     let loaded = load_path_session(&dir).unwrap();
@@ -463,7 +465,7 @@ fn host_pkg_context_partitions_per_pkg_and_expands_async() {
     use rut_core::types::{TY_BOOL, TY_STR};
 
     let ink_host = lower_decl_module(
-        include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        include_str!("../../../rut/ink_host/src/ink_host.d.rut"),
         &BTreeMap::new(),
         "ink_host.d.rut",
     )
@@ -532,7 +534,7 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
     use rut_vm::interp::{HostRegistry, Limits, Vm};
 
     let ink_host = lower_decl_module(
-        include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        include_str!("../../../rut/ink_host/src/ink_host.d.rut"),
         &BTreeMap::new(),
         "ink_host.d.rut",
     )

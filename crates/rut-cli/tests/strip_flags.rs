@@ -48,7 +48,7 @@ fn panic_world(tag: &str) -> PathBuf {
     src.push_str("entry fn main() -> nil {\n");
     src.push_str("    panic(boom());\n");
     src.push_str("}\n");
-    write(&app, "mod.rut", &src);
+    write(&app, "src/mod.rut", &src);
     root
 }
 
@@ -56,7 +56,13 @@ fn panic_world(tag: &str) -> PathBuf {
 fn pack_strip_writes_and_prints_the_sidecar() {
     let root = panic_world("packflag");
     let out = Command::new(rut())
-        .args(["pack", root.join("app").to_str().unwrap(), "--strip"])
+        .args([
+            "pack",
+            root.join("app").to_str().unwrap(),
+            "--mode",
+            "bin",
+            "--strip",
+        ])
         .output()
         .expect("run rut");
     assert!(
@@ -122,7 +128,13 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
 fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     let root = panic_world("e2e");
     let out = Command::new(rut())
-        .args(["pack", root.join("app").to_str().unwrap(), "--strip"])
+        .args([
+            "pack",
+            root.join("app").to_str().unwrap(),
+            "--mode",
+            "bin",
+            "--strip",
+        ])
         .output()
         .expect("run rut");
     assert!(out.status.success());

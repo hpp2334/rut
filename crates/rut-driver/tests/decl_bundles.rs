@@ -92,7 +92,7 @@ fn host_world(tag: &str, name: &str, surface: &str, decls: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join(name);
     write(&dir, "rut.jsonc", &host_manifest(name, surface));
-    write(&dir, surface, decls);
+    write(&dir, &format!("src/{surface}"), decls);
     dir
 }
 
@@ -194,7 +194,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use logger_host::{log};\n\nentry fn main() -> nil {\n    log(\"hello from the CDN surface\");\n}\n",
     );
 
@@ -241,8 +241,8 @@ fn shim_tree_host(tag: &str, name: &str, surface: &str) -> PathBuf {
     write(&dir, "rut.jsonc", &toml);
     write(
         &dir,
-        surface,
-        &std::fs::read_to_string(tree.join(surface)).unwrap(),
+        &format!("src/{surface}"),
+        &std::fs::read_to_string(tree.join("src").join(surface)).unwrap(),
     );
     dir
 }
@@ -300,7 +300,7 @@ fn a_lib_root_packs_the_one_wire_number_too() {
     );
     write(
         &lib,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
     );
     let bytes = pack_dir(&lib).expect("pack the lib");
@@ -438,7 +438,7 @@ fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
             r#"{{"name": "app", "deps": {{"logger_host": {{"url": "{url}", "sha256": "{wrong}"}}}}}}"#
         ),
     );
-    write(&app, "mod.rut", "entry fn main() -> nil {}\n");
+    write(&app, "src/mod.rut", "entry fn main() -> nil {}\n");
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes.clone());
     let err = block_on(load_dir_with(&app, &common::Table::from(table.clone())))
@@ -454,7 +454,7 @@ fn the_retired_manifest_pin_refuses_and_the_name_key_holds_for_host_bundles() {
         "rut.jsonc",
         &format!(r#"{{"name": "app2", "deps": {{"not_logger": {{"url": "{url}"}}}}}}"#),
     );
-    write(&app2, "mod.rut", "entry fn main() -> nil {}\n");
+    write(&app2, "src/mod.rut", "entry fn main() -> nil {}\n");
     write_lock(&app2, &table);
     let err = block_on(load_dir_with(&app2, &common::Table::from(table)))
         .unwrap_err()
@@ -489,7 +489,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
             r#"{{"name": "app", "deps": {{"pouch": {{"path": "../pouch"}}, "logger_host": {{"url": "{url}"}}}}}}"#
         ),
     );
-    write(&app, "mod.rut", "entry fn main() -> nil {}\n");
+    write(&app, "src/mod.rut", "entry fn main() -> nil {}\n");
     // the path dep needs its dir to exist (never fetched — only the
     // url row goes through the fetcher)
     let pouch = root_dir.join("pouch");
@@ -497,7 +497,7 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
     write(&pouch, "rut.jsonc", r#"{"name": "pouch"}"#);
     write(
         &pouch,
-        "mod.rut",
+        "src/mod.rut",
         "pub class Vec<T> {\n    items: [T];\n}\n",
     );
 
@@ -548,7 +548,7 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use logger_host::{log};\n\nentry fn main() -> i32 {\n    log(\"hi\");\n    return 7;\n}\n",
     );
     let mut table = BTreeMap::new();

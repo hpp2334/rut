@@ -99,10 +99,14 @@ pub fn pack_inline_pkg(name: &str, text: impl Into<String>) -> crate::run::Bundl
 /// Where a group's files ride from — the emission's read dispatch. The
 /// `Dir` arm carries the DIRECTORY KEY (an opaque string; the FS math
 /// is the caller reader's), the `Archive` arm the walked archive's
-/// slot and the group's in-archive prefix.
+/// slot and the group's in-archive prefix. `Unpacked` is a
+/// source-zip dep's tree (read like a `Dir`, but its identity dirs are
+/// TREE-flavored — the staged group's wire fingerprint never has to
+/// match them).
 #[derive(Clone, Debug)]
 pub enum PkgSource {
     Dir(String),
+    Unpacked(String),
     Archive { slot: usize, prefix: String },
 }
 
@@ -426,7 +430,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             }
         } else {
             match source {
-                PkgSource::Dir(gdir) => {
+                PkgSource::Dir(gdir) | PkgSource::Unpacked(gdir) => {
                     let mods = session
                         .resolve(spec)
                         .map(|m| m.mods.clone())
@@ -505,13 +509,21 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         let fp = crate::bundle::identity::fp16_of(&files, "");
         let ident = crate::bundle::identity::identity(gname, &fp);
         // a source the walk mounted under its identity must stage to
-        // exactly that identity — a mismatch is a law bug, refused
-        if let Some((_, key_fp)) = crate::bundle::parse_identity(spec) {
-            if key_fp != fp {
-                return Err(PackError::law(format!(
-                    "dep `{spec}`'s mounted identity disagrees with its staged file set \
-                     (`{key_fp}` vs `{fp}`) — refuse, never guess"
-                )));
+        // exactly that identity — a mismatch is a law bug, refused.
+        // UNPACKED sources (a source-zip dep's tree) are exempt: their
+        // identity dirs are TREE-flavored (rewritten manifest + `src/`
+        // sources), a different input set from this wire fingerprint
+        // by law — the staged group lands at its own wire identity and
+        // the loader matches it by name half.
+        let from_zip = matches!(w.sources.get(spec), Some(PkgSource::Unpacked(_)));
+        if !from_zip {
+            if let Some((_, key_fp)) = crate::bundle::parse_identity(spec) {
+                if key_fp != fp {
+                    return Err(PackError::law(format!(
+                        "dep `{spec}`'s mounted identity disagrees with its staged file set \
+                         (`{key_fp}` vs `{fp}`) — refuse, never guess"
+                    )));
+                }
             }
         }
         if let Some(prev) = staged.get(&ident) {
@@ -538,8 +550,20 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         .linked
         .iter()
         .map(|(spec, &(_, scope))| {
+            // a SOURCE-ZIP dep mounts under its TREE-flavored identity
+            // (rewritten manifest + `src/` sources) but stages as a
+            // wire group — the row spells the identity the group
+            // actually stages under
+            let spec = staged_by_spec
+                .get(spec)
+                .map(|_| spec)
+                .map(|s| s.as_str())
+                .unwrap_or(spec);
             let row = if let Some((n, f)) = crate::bundle::parse_identity(spec) {
-                let ident = crate::bundle::identity::identity(n, f);
+                let ident = match staged_by_spec.get(spec) {
+                    Some(staged) => staged.clone(),
+                    None => crate::bundle::identity::identity(n, f),
+                };
                 if !staged.contains_key(&ident) {
                     return Err(PackError::law(format!(
                         "the ledger names `{ident}`, but no group staged under that identity — \
@@ -553,7 +577,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 // stages under — the load-side resolution binds the
                 // identity-mounted group
                 ident.clone()
-            } else if spec == &root {
+            } else if spec == root {
                 crate::bundle::identity::identity(&root, &root_fp)
             } else {
                 // no rode file set (an engine mount, a dev-table pkg):

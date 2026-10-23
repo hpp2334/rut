@@ -50,7 +50,7 @@ fn pkg(tag: &str, src: &str) -> PathBuf {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
-    write(&dir, "mod.rut", src);
+    write(&dir, "src/mod.rut", src);
     dir
 }
 

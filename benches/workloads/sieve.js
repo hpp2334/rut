@@ -1,4 +1,4 @@
-// sieve.js — the JS twin of sieve/main.rut.
+// sieve.js — the JS twin of sieve/src/mod.rut.
 const LIMIT = 500000;
 
 function sieve(limit) {

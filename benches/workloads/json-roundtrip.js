@@ -1,4 +1,4 @@
-// json-roundtrip.js — the JS twin of json-roundtrip/main.rut (the std
+// json-roundtrip.js — the JS twin of json-roundtrip/src/mod.rut (the std
 // json pkg's row, rut-json batch phase 2, survey §2.11): the identical
 // generated document (json-decode's genDoc — the knucleotide LCG, seed
 // 42, same draws, same order), decoded by the engine's own `JSON.parse`

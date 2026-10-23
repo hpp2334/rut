@@ -86,17 +86,20 @@ later in the file. Order never matters.
 
 ## Packages: `rut.jsonc`
 
-A package is a directory with a manifest. The small but complete case —
+A package is a directory with a manifest; the package's module tree
+lives under its `src/` shell. The small but complete case —
 one library package and one app:
 
 ```text
 greet/
 ├── pkg/
 │   ├── rut.jsonc
-│   └── mod.rut            # the package's root module
+│   └── src/
+│       └── mod.rut        # the package's root module
 └── app/
     ├── rut.jsonc
-    └── mod.rut            # the app's root module
+    └── src/
+        └── mod.rut        # the app's root module
 ```
 
 ```jsonc
@@ -107,13 +110,13 @@ greet/
   "deps": {
     // the toolchain's pouch package, from jsDelivr — the pin lives in
     // the app's rut.lock (one lock per walk root)
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip" }
   }
 }
 ```
 
 ```rut
-// greet/pkg/mod.rut
+// greet/pkg/src/mod.rut
 use pouch::{ Vec };
 
 pub struct Greeting {
@@ -163,13 +166,13 @@ to *your* `rut.jsonc` `deps`):
     "greet": { "path": "../pkg" },
     // the toolchain's ink package, from jsDelivr — the pin lives in
     // this app's rut.lock
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip" }
   }
 }
 ```
 
 ```rut
-// greet/app/mod.rut
+// greet/app/src/mod.rut
 use greet::{ Greeting };
 use ink::{ Logger };
 
@@ -210,16 +213,18 @@ mount edge and the row to add
 ## One package, several files
 
 A package's body can be split across files — **file modules**. The
-root module is `mod.rut` beside the manifest, and a `mod NAME;`
-declaration in it mounts the sibling `NAME/mod.rut` as a child module:
+root module is `src/mod.rut` under the manifest, and a `mod NAME;`
+declaration in it mounts `NAME/mod.rut` beside it (under `src/`) as a
+child module:
 
 ```text
 app/
-├── rut.jsonc        # { "name": "app" } — no entry keys
-├── mod.rut          # the root module: `mod domain; pub mod world;`
-├── domain/mod.rut   # app's `domain` module
-├── world/mod.rut    # app's `world` module
-└── app/mod.rut      # the shell
+├── rut.jsonc            # { "name": "app" } — no entry keys
+└── src/
+    ├── mod.rut          # the root module: `mod domain; pub mod world;`
+    ├── domain/mod.rut   # app's `domain` module
+    ├── world/mod.rut    # app's `world` module
+    └── app/mod.rut      # the `app` module
 ```
 
 Each file is its own module. Cross-file references are **qualified**
@@ -228,7 +233,7 @@ intra-package import, so a file may bind another module's `pub` names
 as bare names, per file:
 
 ```rut
-// app/mod.rut — beside `mod domain;` and `mod world;`
+// app/src/mod.rut — beside `mod domain;` and `mod world;`
 use domain::{ Todo };
 use world::{ World };
 ```

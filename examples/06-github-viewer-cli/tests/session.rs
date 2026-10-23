@@ -38,7 +38,7 @@ use rut_std::http::{FixtureReply, HttpFixture};
 use rut_vm::interp::Vm;
 use rut_vm::Trap;
 
-const SRC: &str = include_str!("../mod.rut");
+const SRC: &str = include_str!("../src/mod.rut");
 const TREE_JSON: &str = include_str!("fixtures/tree.json");
 const BOUNDARY_JSON: &str = include_str!("fixtures/tree-boundaries.json");
 const TEXT_BODY: &[u8] = include_bytes!("fixtures/text.txt");

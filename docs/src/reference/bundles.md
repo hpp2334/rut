@@ -1,14 +1,24 @@
 # Module bundles
 
-`rut pack mod/` reads a module directory and emits **one file** —
-`mod.rutbundle` — a zip archive carrying the module in one of two root
-kinds, routed by the manifest's `type` key: a **lib** pkg packs
-**compiled** (the root's `mod.rutc` binary, its scope ledger, and each
-dependency as a group under `deps/<name>@<fp16>/`), and a
+`rut pack mod/ --mode bin` reads a module directory and emits **one
+file** — `mod.rutbundle` — a zip archive carrying the module in one of
+two root kinds, routed by the manifest's `type` key: a **lib** pkg
+packs **compiled** (the root's `mod.rutc` binary, its scope ledger,
+and each dependency as a group under `deps/<name>@<fp16>/`), and a
 `type = "host"` pkg packs as a **decl** root (its `.d.rut` surface
 rides as source; single-package). A bundle is the same contract as the
 directory it was packed from, in one file: the loader mounts it
 exactly like the directory, and the two compile to identical programs.
+
+That is the **compiled wire** — one of two transport kinds a url dep
+(or `rut pack`) can name. The second is the **source zip** (`.zip`),
+the directory grammar packed for travel: manifest + `src/` + the
+closure embedded as source. It compiles with the **consumer's**
+toolchain, so it never goes stale the way compiled IR does — which is
+why the book recommends the zip as the publication lane
+([the source zip](#the-source-zip--the-source-transport)); the
+`.rutbundle` stays the compiled-delivery lane, and a published bundle
+is forever old yet loadable forever ([the wire version](#the-wire-version)).
 
 ## Layout rules
 
@@ -24,7 +34,10 @@ exactly like the directory, and the two compile to identical programs.
 - **Entry names are canonical** — `mod.rutc`, `mod.d.rut`, `mod.rut`,
   `rut.mods` at both levels. The archive is name-free: whatever a
   directory grammar spelled (`<pkg>.rutc`, a custom `entry.type`
-  surface), the wire spelling is the canonical one.
+  surface), the wire spelling is the canonical one. The `src/` shell is
+  directory grammar too — it never rides the wire; the archive's flat
+  canonical entries ARE the module tree, whatever directories the
+  package was authored under.
 - The manifest's `name` is the package name the bundle answers to — a
   bare `[a-zA-Z0-9_]+` name, the same law as directory manifests. A
   group's manifest `name` must equal its dirname's name half (the
@@ -49,9 +62,11 @@ deps/<name>@<fp16>/      one directory per dep group, keyed by the group's
                            CONTENT IDENTITY — fp16 is the first 16 hex chars of
                            the sha256 over the group's own rode source set
                            (rut.jsonc + mod.rut + mod.d.rut + rut.mods, fixed
-                           order, absent files skipped); same source ⇒ same
-                           dirname, two identities of one name coexist side by
-                           side
+                           order, absent files skipped) — the WIRE flavor
+                           (the source zip's tree flavor is a different
+                           input set; the two never cross-compare); same
+                           source ⇒ same dirname, two identities of one
+                           name coexist side by side
 deps/<name>@<fp16>/rut.jsonc   the group's manifest, byte-for-byte
 deps/<name>@<fp16>/mod.rutc    a compiled group (the ordinary case: a source
                            body the graph linked) — bodies + surface, the
@@ -203,21 +218,28 @@ and rut.jsonc](project-structure.md); the dependency semantics are
 
 ## Url deps — bundles by reference
 
-A consumer may mount a bundle by url instead of vendoring it:
+A consumer may mount a package by url instead of vendoring it — the
+url names the artifact kind, and each kind has its own lane:
 
 ```jsonc
 {
   "deps": {
-    "server": { "url": "https://example.com/server.rutbundle" }
+    "server": { "url": "https://example.com/server.rutbundle" },  // the compiled wire
+    "util":   { "url": "https://example.com/util.zip" }           // the source transport
   }
 }
 ```
 
 The pin lives beside the manifest, in the walk root's `rut.lock`
 (`rut install` writes it — [the rut CLI](cli.md)): the manifest row
-names the url, the lock pins its bytes.
+names the url, the lock pins its bytes. The url's kind routes the
+mount: a `.zip` url dep is unpacked once — content-addressed at
+`<project>/.rut/unpacked/<sha-of-bytes>/` — and mounted as an ordinary
+directory package ([Loading](loading.md)); a `.rutbundle` url dep runs
+the bundle mount below. Both are **closed**: the walk never follows a
+dep's own url rows, and the lock keeps direct rows only.
 
-The mount is the bundle mount, one gate earlier: the embedder's
+The compiled lane, in detail: the embedder's
 remote produces the bytes (`DepRemote` — the standard
 `rut_native::HttpRemote` is cache-first), then the loader runs the same container/layout/name checks and —
 before all of them — the **pin law**: the url must have a lock row
@@ -259,8 +281,11 @@ contract, no exceptions — the generic bodies ride INSIDE the
 binary as templates (instantiation independence, above), so
 consumer-spelled
 shapes stay servable and a published bundle never carries source.
-Source sharing as the general contract stays a directory
-(`rut run <dir>`), as it always was outside bundles.
+This version-unstability is exactly why source sharing over the wire
+moved to the source zip ([below](#the-source-zip--the-source-transport)):
+a `.rutbundle`'s IR is not stable across rut toolchains — it stays
+LOADABLE forever (the reader keeps every old lane), but a freshly
+published toolchain compiles from source, not from old IR.
 
 **The groups mirror the manifest.** The archive root is the root's own
 files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the
@@ -282,6 +307,65 @@ ledger row must still be the scope its own binary carries (refuse,
 never guess — that check is per archive). The CDN lane below is the
 reason this exists: per-package bundles are packed independently, each
 numbering its own closure.
+
+## The source zip — the source transport
+
+The `.zip` source archive is the directory grammar packed for travel —
+the SOURCE counterpart of the compiled wire above, and the book's
+recommendation for publication. A source zip is a package directory
+with every dep embedded:
+
+```text
+rut.jsonc                the manifest, REWRITTEN for publication (below)
+src/…                    the module tree, exactly as authored
+deps/<name>@<fp16>/      every dep embedded — a SOURCE dep (a `path` row
+                           or a `.zip` url row) as its own tree
+                           (`rut.jsonc` + `src/…`), a COMPILED dep (a
+                           `.rutbundle` url row) as its `.rutbundle`
+                           file verbatim
+README, LICENSE, …       inert files at a package root — nothing reads
+                           them; hand-made zips may carry them
+```
+
+**The published manifest.** Every `[deps]` row's descriptor becomes
+`{ "path": "deps/<name>@<fp16>" }` — the `url` fields and the external
+`path` values drop (everything embeds), the row keys stay, and every
+comment outside the replaced descriptor blocks rides. The
+`format`/`format_version` rows drop too: a source zip's manifest does
+not claim the compiled wire. The surgery is textual and comment-aware,
+and the result is re-parsed and gated against the original — any drift
+refuses at pack (`normalize the manifest's dep rows and re-pack`).
+
+**The identity is the TREE flavor.** A dep dirname's `name@<fp16>` is
+the first 16 lowercase hex of sha256 over that package's own
+**rewritten** manifest and its `src/**.rut` sources (path-framed,
+path-sorted) — the tree flavor. The wire flavor above fingerprints the
+four canonical ride files instead; same width, same
+`name@<16 hex>` shape, and the two NEVER cross-compare. Same source ⇒
+same dirname, and two identities of one name coexist side by side —
+different versions of one package travel in one closure.
+
+**The grammar is enforced at both doors.** Exactly one `rut.jsonc`, at
+a package root (the archive root or `deps/<identity>/`); rut code ONLY
+under a `src/` shell — a `.rut` entry outside one refuses
+(``rut code rides only under a `src/` shell``); a `.rutbundle` only as
+a dep's IR file; no absolute paths, no `..`, no dot components
+(zip-slip-guarded). `rut pack --mode source` runs the same gates on
+the tree it packs: a `.rut` outside `src/` refuses, and an undeclared
+`.rut` under `src/` refuses (``nothing declares this module``).
+
+**Deterministic.** STORE entries, fixed order, the DOS epoch — the
+bundle writer's knobs, shared: same input ⇒ byte-identical zip, so
+published zips are cacheable and pin-stable (`rut.lock` pins their
+sha256 exactly like a bundle's).
+
+**Why the book recommends the zip.** A source zip compiles with the
+CONSUMER's toolchain, so it never goes stale the way compiled IR does:
+a `.rutbundle`'s IR is version-unstable across rut toolchains (it
+stays loadable forever — [the wire version](#the-wire-version) — but a
+zip keeps a package publishable across engine releases without
+re-publishing). The zip is also the whole-closure lane: a consumer's
+`rut install` fetches it once, and every dep rides inside.
 
 ## The `bundle` module
 
@@ -365,16 +449,18 @@ and version, then every group's decode, then the mount.
 
 ## The std tree on a CDN — the per-package delivery
 
-The std tree (`rut/`) ships as **committed** per-package bundles at
-`dist/std/<pkg>.rutbundle` — one bundle per package a `deps` row can
-spell (16 today). jsDelivr's gh lane serves repo files at a ref, so the
-artifacts ARE the delivery and the publish act is a git tag:
+The std tree (`rut/`) ships as **committed** per-package source zips
+at `dist/std/<pkg>.zip` — one zip per std package a `deps` row can
+spell (the old `.rutbundle` files sit beside them and stay loadable).
+jsDelivr's gh lane serves repo files at a ref, so the artifacts ARE
+the delivery and the publish act is a git tag (the tag push and
+jsDelivr's propagation are the maintainer's manual step):
 
 ```jsonc
 {
   "deps": {
     "http": {
-      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/http.rutbundle"
+      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/http.zip"
     }
   }
 }
@@ -385,28 +471,33 @@ the real pins live in each project's committed `rut.lock` (the
 in-repo examples' locks are the reference; anti-rot: docs never rot
 pins). The laws:
 
-- **Committed artifacts, immutable tags.** `scripts/pack-std::cjs`
-  packs all 16 (deterministic — same input ⇒ byte-identical, so
-  freshness is a pure equality gate: `--check` repacks and
-  byte-compiles, no network; the retired `--pins` flag is gone — the
-  pins live in `rut.lock` now, written by `rut install`, and no
-  manifest tool rewrites them anymore). Tags advance
+- **Committed artifacts, immutable tags.** The zips are packed by
+  `rut pack --mode source`'s lane (deterministic — same input ⇒
+  byte-identical, so freshness is a pure equality gate). Tags advance
   (`std-vNN`) and are never re-pointed — jsDelivr caches aggressively.
-- **What a compiled bundle serves.** Instantiation is owner-anchored:
-  a compiled owner carries the generic instantiations its own pack
-  closure spelled in its ledger — and its generic BODIES as templates
-  inside the binary (instantiation independence): at the consumer's link a
-  request the ledger lacks monomorphizes from the template under the
-  declaring pkg's spec (one row program-wide, nothing persisted). So
-  the CDN lane delivers **host surfaces** (decl bundles),
-  **concrete-class libs** (`http`, `ink`, `strbuild` — methods cross
-  on the surface's inherent rows), **and the generic owners**
-  (`pouch`, `flow`, `nmapset`, `json`, `futures` — `Vec<Todo>`,
-  `Flow<i32>`, `decodeJson<T>` compile at the link from the
-  templates). The law binds this lane too: a pkg that owns an open
-  generic surface but whose binary carries no template bodies refuses
-  at the mount (corrupt or doctored — re-pack the directory). And
-  every bundle is **closed** —
+- **What the source zip delivers — everything, current.** A zip
+  compiles with the CONSUMER's toolchain, so the std set moves to
+  zips as the primary lane: a pinned zip never goes stale the way
+  compiled IR does, generics monomorphize at the consumer's link from
+  the source itself (no templates needed), and every dep rides
+  embedded — `json`'s zip carries its `strbuild` + `pouch` + `nmapset`
+  trees inside, so its wrappers' `use` heads resolve wherever it
+  travels (the ordinary closure law; zips are closed —
+  [`install`](cli.md) never walks into one, the lock keeps direct rows
+  only).
+- **The compiled lane keeps serving.** The `.rutbundle` files stay
+  for consumers of the compiled wire: **host surfaces** (decl
+  bundles), **concrete-class libs** (`http`, `ink`, `strbuild` —
+  methods cross on the surface's inherent rows), **and the generic
+  owners** (`pouch`, `flow`, `nmapset`, `json`, `futures` —
+  `Vec<Todo>`, `Flow<i32>`, `decodeJson<T>` compile at the link from
+  the templates). Instantiation is owner-anchored: a compiled owner
+  carries the generic instantiations its own pack closure spelled in
+  its ledger — and its generic BODIES as templates inside the binary
+  (instantiation independence). The law binds this lane too: a pkg
+  that owns an open generic surface but whose binary carries no
+  template bodies refuses at the mount (corrupt or doctored — re-pack
+  the directory). And every bundle is **closed** —
   a bundle-mounted json carries its `strbuild` + `pouch` + `nmapset`
   groups inside, so its wrappers' `use` heads resolve wherever it
   travels (the ordinary closure law).
@@ -443,7 +534,8 @@ packages them, nothing requires it.
 ## CLI
 
 ```sh
-rut pack <dir> [-o <dir>.rutbundle] [--strip]   # default output: a sibling of the dir
+rut pack <dir> [--mode source]      # the default: the source zip, <dir>.zip
+rut pack <dir> --mode bin [-o <dir>.rutbundle] [--strip]   # the compiled wire
 rut run <dir | mod.rutbundle> [--symbols <file.rutsym>]
 ```
 

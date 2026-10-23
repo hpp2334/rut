@@ -88,7 +88,7 @@ fn a_compiled_group_carries_one_generated_entry() {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
     );
-    write(&app, "mod.rut", LIB_SRC);
+    write(&app, "src/mod.rut", LIB_SRC);
     let bytes = pack_dir(&app).expect("pack");
 
     let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
@@ -165,7 +165,7 @@ fn the_loader_never_reads_a_compiled_groups_entry() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn seven() -> i64 { return 7; }\nentry fn main() -> i64 { return seven(); }\n",
     );
     let bytes = pack_dir(&app).expect("pack");
@@ -203,7 +203,7 @@ fn strip_omits_the_declaration_entry() {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
     );
-    write(&app, "mod.rut", LIB_SRC);
+    write(&app, "src/mod.rut", LIB_SRC);
     let (bytes, symtab) = pack_dir_opts(&app, &PackOpts { strip: true }).expect("strip-pack");
     assert!(symtab.is_some(), "the sidecar still rides");
     let entries = rut_driver::bundle::parse_bundle(&bytes).unwrap();
@@ -343,7 +343,7 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
     );
     write(
         &dep_dir,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn tag() -> i64 { return 5; }\nentry fn main() -> i64 { return tag(); }\n",
     );
     let fresh = pack_dir(&dep_dir).unwrap();
@@ -364,7 +364,7 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
     );
     write(
         &root,
-        "mod.rut",
+        "src/mod.rut",
         "use dep::{ tag };\nentry fn main() -> i64 { return tag(); }\n",
     );
     let mut urls = BTreeMap::new();

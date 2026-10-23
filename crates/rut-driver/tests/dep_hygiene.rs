@@ -51,8 +51,8 @@ fn manifest(name: &str, deps: &[(&str, &str)]) -> String {
 
 /// A three-pkg walked world: `app` (the root: `[deps]` = `app_deps`,
 /// `[dev-deps]` = `dev`), `a` (deps = `a_deps`), `b` (a leaf exporting
-/// `pub fn x()`). Tests overwrite `app/mod.rut` (and sometimes `a`'s)
-/// before compiling.
+/// `pub fn x()`). Tests overwrite `app/src/mod.rut` (and sometimes
+/// `a`'s) before compiling.
 fn world(
     tag: &str,
     app_deps: &[(&str, &str)],
@@ -73,13 +73,17 @@ fn world(
         );
     }
     write(&app, "rut.jsonc", &m);
-    write(&app, "mod.rut", "entry fn main() -> i32 { return 1; }\n");
+    write(
+        &app,
+        "src/mod.rut",
+        "entry fn main() -> i32 { return 1; }\n",
+    );
     let a = root.join("a");
     write(&a, "rut.jsonc", &manifest("a", a_deps));
-    write(&a, "mod.rut", "pub fn mid() -> i32 { return 2; }\n");
+    write(&a, "src/mod.rut", "pub fn mid() -> i32 { return 2; }\n");
     let b = root.join("b");
     write(&b, "rut.jsonc", &manifest("b", &[]));
-    write(&b, "mod.rut", "pub fn x() -> i32 { return 3; }\n");
+    write(&b, "src/mod.rut", "pub fn x() -> i32 { return 3; }\n");
     root
 }
 
@@ -88,9 +92,9 @@ fn load(dir: &Path) -> rut_driver::Walk {
 }
 
 /// Compile the world's `app` root AS WRITTEN (tests overwrite
-/// `app/mod.rut` before this) — the run chain's verdict.
+/// `app/src/mod.rut` before this) — the run chain's verdict.
 fn compile_root(dir: &Path, src: &str) -> Result<rut_driver::GraphOutput, String> {
-    write(&dir.join("app"), "mod.rut", src);
+    write(&dir.join("app"), "src/mod.rut", src);
     let loaded = load(&dir.join("app"));
     loaded
         .pkgs
@@ -169,7 +173,7 @@ fn the_use_law_is_the_consumers_own_word_at_every_depth() {
     let root = world("d5-mid", &[("a", "../a"), ("b", "../b")], &[], &[]);
     write(
         &root.join("a"),
-        "mod.rut",
+        "src/mod.rut",
         "use b::{x};\npub fn mid() -> i32 { return x(); }\n",
     );
     let err = refuse_root(
@@ -234,7 +238,7 @@ fn the_same_dev_name_used_by_a_non_root_is_d5() {
     let root = world("dev-nonroot", &[("a", "../a")], &[], &[("b", "../b")]);
     write(
         &root.join("a"),
-        "mod.rut",
+        "src/mod.rut",
         "use b::{x};\npub fn mid() -> i32 { return x(); }\n",
     );
     let err = refuse_root(
@@ -264,12 +268,12 @@ fn bundle_world(tag: &str) -> (PathBuf, Vec<u8>) {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use u::{leaf};\nentry fn go() -> i32 { return leaf(); }\n",
     );
     let u = root.join("u");
     write(&u, "rut.jsonc", r#"{"name": "u"}"#);
-    write(&u, "mod.rut", "pub fn leaf() -> i32 { return 5; }\n");
+    write(&u, "src/mod.rut", "pub fn leaf() -> i32 { return 5; }\n");
     let g = root.join("g");
     write(
         &g,
@@ -278,7 +282,7 @@ fn bundle_world(tag: &str) -> (PathBuf, Vec<u8>) {
     );
     write(
         &g,
-        "mod.rut",
+        "src/mod.rut",
         "use u::{leaf};\npub fn twice() -> i32 { return leaf() * 2; }\n",
     );
     let bytes = rut_native::pack_dir(&app).expect("pack");
@@ -348,7 +352,7 @@ fn the_pack_lane_refuses_through_the_same_resolver() {
     let root = world("pack-d5", &[("a", "../a")], &[("b", "../b")], &[]);
     write(
         &root.join("app"),
-        "mod.rut",
+        "src/mod.rut",
         "use b::{x};\nentry fn main() -> i32 { return x(); }\n",
     );
     // bundle keys: the pack lane needs them

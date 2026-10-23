@@ -19,6 +19,7 @@ pub mod files;
 pub mod identity;
 pub mod manifest;
 pub mod read;
+pub mod srczip;
 
 /// The archive mechanics layer — pure zip plumbing over the `zip`
 /// crate, no rut knowledge. Private: the public surface of this
@@ -26,12 +27,17 @@ pub mod read;
 mod zip;
 
 pub use container::{crc32, parse_bundle, write_bundle, BundleError};
-pub use files::{bundle_key, entry_rel, read_entry, MANIFEST_NAME};
+pub use files::{
+    bundle_key, cache_ext, entry_rel, read_entry, src_rel, DECL_ROOT_MODULE, MANIFEST_NAME,
+    ROOT_MODULE,
+};
 pub use identity::{
-    fp16_of, identity, is_identity, mount_name, parse_identity, valid_mount_key, DEPS_DIR,
+    fp16_of, fp16_of_tree, identity, is_identity, mount_name, parse_identity, valid_mount_key,
+    DEPS_DIR,
 };
 pub use manifest::{
     parse_manifest, parse_manifest_compat, valid_spec, Entry, LegacyEntry, Manifest, ManifestError,
     PkgType,
 };
 pub use read::{Bundle, GroupKind, Layout};
+pub use srczip::{read_srczip, rewrite_for_zip, write_srczip, SrcZipError};

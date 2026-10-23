@@ -40,9 +40,10 @@ mod walk;
 pub use error::{LoadError, RemoteError};
 pub use pack::{
     default_out_path, pack_dir, pack_dir_fetched, pack_dir_opts, pack_dir_opts_fetched,
-    pack_dir_opts_with, pack_dir_with,
+    pack_dir_opts_with, pack_dir_zip, pack_dir_zip_fetched, pack_dir_zip_with, PackMode,
 };
 pub use remote::{DepRemote, HttpRemote};
+pub use rut_driver::bundle::cache_ext;
 pub use source::{FsSource, Source};
 pub use walk::{
     dir_pkgs, dir_pkgs_with, load_bundle_session, load_dir, load_dir_fetched, load_dir_resolved,

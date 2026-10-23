@@ -1,4 +1,4 @@
-// nmap-knucleotide.js — the JS twin of nmap-knucleotide/main.rut (and
+// nmap-knucleotide.js — the JS twin of nmap-knucleotide/src/mod.rut (and
 // the same algorithm as the removed knucleotide.js mapset twin): the
 // identical k-mer counting
 // on `new Map()` with string keys. The rut side swaps the removed

@@ -30,7 +30,7 @@ pkg** — pure surface, no rut source:
 ```
 
 ```rut
-// server/server.d.rut
+// server/src/server.d.rut
 pub host fn subscribe(bus: opaque, topic: str, handler: str) -> nil;
 pub host fn emit(bus: opaque, topic: str, payload: str) -> nil;
 ```
@@ -245,7 +245,7 @@ that place.
 ## Async host fns
 
 ```rut
-// http_host/net/mod.d.rut — an async row expands into a five-row
+// http_host/src/net/mod.d.rut — an async row expands into a five-row
 // family on the path-qualified name
 pub host async fn http_send(c: opaque, method: str, url: str,
                             headers: str, body: bytes) -> opaque;

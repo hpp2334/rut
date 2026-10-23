@@ -87,9 +87,10 @@ fn main() {
     .expect("the async pair walks")
     .pkgs;
 
-    let src =
-        std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("mod.rut"))
-            .expect("read mod.rut");
+    let src = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/mod.rut"),
+    )
+    .expect("read mod.rut");
     let mut chain = loaded
         .pkgs
         .iter()

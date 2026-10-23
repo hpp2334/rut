@@ -1,4 +1,4 @@
-// json-decode.js — the JS twin of json-decode/main.rut: the identical
+// json-decode.js — the JS twin of json-decode/src/mod.rut: the identical
 // generated document, decoded by the engine's own `JSON.parse` (this
 // workload's JS-side is native-JSON-shaped, the way a qjs/node program
 // does actual JSON work — the rut side chews the same text through the

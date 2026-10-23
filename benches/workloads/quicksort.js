@@ -1,4 +1,4 @@
-// quicksort.js — the JS twin of quicksort/main.rut.
+// quicksort.js — the JS twin of quicksort/src/mod.rut.
 const N = 10000;
 
 function quicksort(xs, lo, hi) {

@@ -61,7 +61,7 @@ const EXT = path.join(__dirname, '..');
 const REPO = path.join(EXT, '..', '..');
 const WASM_PATH = path.join(EXT, 'bin', 'rut-lsp.wasm');
 const BINDING_PATH = path.join(EXT, 'out', 'wasm.js');
-const FIXTURE = path.join(__dirname, 'fixtures', 'symbols', 'mod.rut');
+const FIXTURE = path.join(__dirname, 'fixtures', 'symbols', 'src', 'mod.rut');
 
 // corpus roots, mirroring crates/rut-lsp/tests/corpus.rs and
 // test/grammar-corpus.js
@@ -688,8 +688,8 @@ async function main() {
     if (a.diags.length !== 0) {
       bad.push(`def-std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`);
     }
-    const real = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'mod.rut'), 'utf8');
-    const wantUri = path.join('rut', 'pouch', 'mod.rut');
+    const real = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'src', 'mod.rut'), 'utf8');
+    const wantUri = path.join('rut', 'pouch', 'src', 'mod.rut');
     const want = { uri: wantUri, range: identAt(real, /^pub class Vec/, 'Vec'), len: 3 };
     let locs = rut.definition(uri, ...identAt(src, /^use pouch::\{ Vec \};/, 'Vec'));
     if (!locs.length || locs[0].uri !== wantUri) {
@@ -735,7 +735,7 @@ async function main() {
   // against the source's own decl lines (an annotation elsewhere in the
   // file, the callee's ret, or the stdlib's true pouch decl). ----
   {
-    const digestPath = path.join(REPO, 'examples', '02-digest', 'mod.rut');
+    const digestPath = path.join(REPO, 'examples', '02-digest', 'src', 'mod.rut');
     const digestSrc = fs.readFileSync(digestPath, 'utf8');
     const digestUri = `file://${digestPath}`;
     const a = rut.analyze(digestUri, digestSrc);
@@ -792,10 +792,10 @@ async function main() {
       /^fn hex_val\(c: str\) -> i32 \{/m, 'digest free-call param');
     // PARAMETER hint through the CROSS-FILE method: `d.push(f"{c}")` →
     // `v:` — GT: the TRUE stdlib decl `pub fn push(mut self, v: T)`
-    const pouchSrc = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'mod.rut'), 'utf8');
+    const pouchSrc = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'src', 'mod.rut'), 'utf8');
     hintAt(digestSrc, /d\.push\(f"\{c\}"\);/, 'f', 'v:', 2, null, 'digest push param');
     if (!/pub fn push\(mut self, v: T\) -> nil/.test(pouchSrc)) {
-      bad.push('digest push param: ground-truth push decl missing from pouch mod.rut');
+      bad.push('digest push param: ground-truth push decl missing from pouch src/mod.rut');
     }
     // the hover-consistency law, gated through the artifact: the
     // hint's type text IS what hover shows for the same binding
@@ -812,9 +812,9 @@ async function main() {
 
   // ---- phase 3: for-of corpus ground truth — the element of an
   // ANNOTATED Vec<i32> types the loop variable, in a second corpus
-  // file (demo/src/examples/closures-generics/main.rut) ----
+  // file (demo/src/examples/closures-generics/src/mod.rut) ----
   {
-    const cgPath = path.join(REPO, 'demo', 'src', 'examples', 'closures-generics', 'mod.rut');
+    const cgPath = path.join(REPO, 'demo', 'src', 'examples', 'closures-generics', 'src', 'mod.rut');
     const cgSrc = fs.readFileSync(cgPath, 'utf8');
     const cgUri = `file://${cgPath}`;
     const a = rut.analyze(cgUri, cgSrc);
@@ -1124,9 +1124,10 @@ async function main() {
     e.rut_begin();
     const table = take(e.rut_parse_manifest(...put(manifest)));
     assert.strictEqual(table.name, 'plugin', `manifest name: ${JSON.stringify(table)}`);
-    // the body rides the mod.rut convention (the entry keys are
-    // repealed — the root module is a file, never a manifest key)
-    assert.deepStrictEqual(table.entries, [{ path: 'mod.rut', mode: 'Impl' }],
+    // the body rides the src/mod.rut convention (the entry keys are
+    // repealed — the root module is a file under the `src/` shell,
+    // never a manifest key)
+    assert.deepStrictEqual(table.entries, [{ path: 'src/mod.rut', mode: 'Impl' }],
       `entry modes: ${JSON.stringify(table.entries)}`);
     const row = (name) => table.deps.find((r) => r.name === name);
     assert.deepStrictEqual(row('server'), {
@@ -1182,7 +1183,7 @@ async function main() {
     const hostManifest = '{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }';
     e.rut_begin();
     const host = take(e.rut_parse_manifest(...put(hostManifest)));
-    assert.deepStrictEqual(host.entries, [{ path: 'surface.d.rut', mode: 'Decl' }],
+    assert.deepStrictEqual(host.entries, [{ path: 'src/surface.d.rut', mode: 'Decl' }],
       `decl entry: ${JSON.stringify(host.entries)}`);
     // a malformed manifest is the ERROR envelope — the host's hint
     // (named `manifestErr`, NOT `bad` — that name is the lane's
@@ -1325,12 +1326,12 @@ async function main() {
         const toolsDir = path.join(wsRoot, 'tools2');
         const rootSrc = 'pub mod layout;\npub fn tag() -> i32 { return 1; }\n';
         const childSrc = 'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\nmod grid;\n';
-        fs.mkdirSync(path.join(toolsDir, 'layout'), { recursive: true });
-        fs.writeFileSync(path.join(toolsDir, 'mod.rut'), rootSrc);
-        fs.writeFileSync(path.join(toolsDir, 'layout', 'mod.rut'), childSrc);
-        let ts = rut.addDefMod(`file://${path.join(toolsDir, 'mod.rut')}`, 'tools2', '', rootSrc);
+        fs.mkdirSync(path.join(toolsDir, 'src', 'layout'), { recursive: true });
+        fs.writeFileSync(path.join(toolsDir, 'src', 'mod.rut'), rootSrc);
+        fs.writeFileSync(path.join(toolsDir, 'src', 'layout', 'mod.rut'), childSrc);
+        let ts = rut.addDefMod(`file://${path.join(toolsDir, 'src', 'mod.rut')}`, 'tools2', '', rootSrc);
         assert.ok(!ts.error, `tools2 root indexes: ${JSON.stringify(ts)}`);
-        ts = rut.addDefMod(`file://${path.join(toolsDir, 'layout', 'mod.rut')}`, 'tools2', 'layout', childSrc);
+        ts = rut.addDefMod(`file://${path.join(toolsDir, 'src', 'layout', 'mod.rut')}`, 'tools2', 'layout', childSrc);
         assert.ok(!ts.error, `tools2 child indexes: ${JSON.stringify(ts)}`);
 
         const mdoc = 'use tools2::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n';
@@ -1340,18 +1341,18 @@ async function main() {
         // the MIDDLE segment: the mounting edge in the root file
         const midLocs = rut.definition(muri, 0, 'use tools2::'.length);
         assert.strictEqual(midLocs.length, 1, `middle segment targets: ${JSON.stringify(midLocs)}`);
-        assert.ok(midLocs[0].uri.endsWith('/tools2/mod.rut'), `middle segment lands in the root: ${midLocs[0].uri}`);
+        assert.ok(midLocs[0].uri.endsWith('/tools2/src/mod.rut'), `middle segment lands in the root: ${midLocs[0].uri}`);
         eqRange(midLocs, { uri: midLocs[0].uri, range: identAt(rootSrc, /^pub mod layout;/, 'layout'), len: 6 },
           'path-dep middle segment');
         // the LEAF: the decl in the child file
         const leafLocs = rut.definition(muri, ...posOf(mdoc, 'Column'));
         assert.strictEqual(leafLocs.length, 1, `leaf targets: ${JSON.stringify(leafLocs)}`);
-        assert.ok(leafLocs[0].uri.endsWith('/tools2/layout/mod.rut'), `leaf lands in the child: ${leafLocs[0].uri}`);
+        assert.ok(leafLocs[0].uri.endsWith('/tools2/src/layout/mod.rut'), `leaf lands in the child: ${leafLocs[0].uri}`);
         eqRange(leafLocs, { uri: leafLocs[0].uri, range: identAt(childSrc, /^pub struct Column/, 'Column'), len: 6 },
           'path-dep leaf');
         // and the usage site rides the same edge into the child
         const usageLocs = rut.definition(muri, ...posOf(mdoc, 'Column { w: 1 }'));
-        assert.ok(usageLocs.some((l) => l.uri.endsWith('/tools2/layout/mod.rut')),
+        assert.ok(usageLocs.some((l) => l.uri.endsWith('/tools2/src/layout/mod.rut')),
           `usage into the child: ${JSON.stringify(usageLocs)}`);
 
         // ---- the editor-agreement lane: the doc IS a package file —
@@ -1359,25 +1360,25 @@ async function main() {
         // and a file-form child clicks to its REAL file (never a
         // re-derived grid/mod.rut) ----
         const gridSrc = 'pub fn dig() -> i32 { return 1; }\n';
-        fs.writeFileSync(path.join(toolsDir, 'layout', 'grid.rut'), gridSrc);
-        ts = rut.addDefMod(`file://${path.join(toolsDir, 'layout', 'grid.rut')}`, 'tools2', 'layout/grid', gridSrc);
+        fs.writeFileSync(path.join(toolsDir, 'src', 'layout', 'grid.rut'), gridSrc);
+        ts = rut.addDefMod(`file://${path.join(toolsDir, 'src', 'layout', 'grid.rut')}`, 'tools2', 'layout/grid', gridSrc);
         assert.ok(!ts.error, `tools2 grid.rut indexes: ${JSON.stringify(ts)}`);
 
-        const rootUri = `file://${path.join(toolsDir, 'mod.rut')}`;
+        const rootUri = `file://${path.join(toolsDir, 'src', 'mod.rut')}`;
         rut.analyze(rootUri, rootSrc); // the doc's stamp rides its indexed twin
         const edgeLocs = rut.definition(rootUri, 0, 'pub mod '.length);
         assert.strictEqual(edgeLocs.length, 1, `edge click targets: ${JSON.stringify(edgeLocs)}`);
-        assert.ok(edgeLocs[0].uri.endsWith('/tools2/layout/mod.rut'),
+        assert.ok(edgeLocs[0].uri.endsWith('/tools2/src/layout/mod.rut'),
           `edge click lands in the child: ${edgeLocs[0].uri}`);
         assert.deepStrictEqual(edgeLocs[0].range,
           { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
           `edge click opens the file top: ${JSON.stringify(edgeLocs[0].range)}`);
 
-        const layoutUri = `file://${path.join(toolsDir, 'layout', 'mod.rut')}`;
+        const layoutUri = `file://${path.join(toolsDir, 'src', 'layout', 'mod.rut')}`;
         rut.analyze(layoutUri, childSrc);
         const gridLocs = rut.definition(layoutUri, ...posOf(childSrc, 'grid'));
         assert.strictEqual(gridLocs.length, 1, `file-form child targets: ${JSON.stringify(gridLocs)}`);
-        assert.ok(gridLocs[0].uri.endsWith('/tools2/layout/grid.rut'),
+        assert.ok(gridLocs[0].uri.endsWith('/tools2/src/layout/grid.rut'),
           `file-form child lands in grid.rut: ${gridLocs[0].uri}`);
         assert.deepStrictEqual(gridLocs[0].range,
           { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
@@ -1398,7 +1399,7 @@ async function main() {
     e.rut_begin();
     const mRoot = 'pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n';
     const rootOut = take(e.rut_add_def_mod(
-      ...put('file:///ws/tools/mod.rut'), ...put('tools'), ...put(''), ...put(mRoot)
+      ...put('file:///ws/tools/src/mod.rut'), ...put('tools'), ...put(''), ...put(mRoot)
     ));
     assert.deepStrictEqual(rootOut.decls, [
       { name: 'layout', vis: 'pub' },
@@ -1407,7 +1408,7 @@ async function main() {
     e.rut_begin();
     const mChild = 'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n';
     const childOut = take(e.rut_add_def_mod(
-      ...put('file:///ws/tools/layout/mod.rut'), ...put('tools'), ...put('layout'), ...put(mChild)
+      ...put('file:///ws/tools/src/layout/mod.rut'), ...put('tools'), ...put('layout'), ...put(mChild)
     ));
     assert.deepStrictEqual(childOut.decls, [], `leaf mod decls: ${JSON.stringify(childOut.decls)}`);
 
@@ -1478,7 +1479,7 @@ async function main() {
         'pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n';
       e.rut_begin();
       const chkDep = take(
-        e.rut_add_def_mod(...put('file:///ws/chk/dep/mod.rut'), ...put('chkdep'), ...put(''), ...put(chkDepSrc))
+        e.rut_add_def_mod(...put('file:///ws/chk/dep/src/mod.rut'), ...put('chkdep'), ...put(''), ...put(chkDepSrc))
       );
       assert.ok(Array.isArray(chkDep.decls), `chkdep stamps: ${JSON.stringify(chkDep)}`);
       const chkAppSrc = [
@@ -1490,7 +1491,7 @@ async function main() {
         '}',
         '',
       ].join('\n');
-      const chkAppUri = 'file:///ws/chk/app/mod.rut';
+      const chkAppUri = 'file:///ws/chk/app/src/mod.rut';
       e.rut_begin();
       const chkApp = take(
         e.rut_add_def_mod(...put(chkAppUri), ...put('chkapp'), ...put(''), ...put(chkAppSrc))

@@ -74,7 +74,10 @@ source text by design; a partially translated book is a valid book.
 | delivery law (v22, RETIRED) | 交付法则（v22，已废止） | the branded law name is retired from user-facing prose — sweep it（用户可见文本一律改用规范名）：the concept is now instantiation independence（实例化独立）+ templates（模板） |
 | instantiation independence | 实例化独立 | the separate-compilation contract → 分离编译契约；the same substitution ⇒ the same body, one row program-wide → 同一替换必得同一代码体，全程序一行；consumer spelling picks shapes, never changes bodies → 消费方拼写挑选形状，绝不改变代码体；no standard word — describe, don't brand → 无标准词——描述而不造词 |
 | deterministic reference mode | 确定性参考模式 | whole-program compilation → 全程序编译；the contract, not a fallback → 是契约，不是退路；byte-identical everywhere → 任何机器、任何日期都字节一致 |
-| archive | 归档 | the `.rutbundle`（stays code）；uber-jar / Go `.a` semantics → uber-jar / Go `.a` 语义；the sole publication unit → 唯一的发布单元；shade the closure → 收纳闭包 |
+| archive | 归档 | the `.rutbundle`（stays code）；uber-jar / Go `.a` semantics → uber-jar / Go `.a` 语义；the compiled wire's publication unit → 编译线的发布单元；shade the closure → 收纳闭包 |
+| source zip | 源码压缩包 | the `.zip` source transport（stays code 的部分：`.zip`、`rut.jsonc`、`src/`、`deps/<name>@<fp16>/`）；a package directory packed for travel → 为旅行打包的包目录；compiles with the consumer's toolchain → 用消费方的工具链编译；never goes stale the way compiled IR does → 绝不像编译后 IR 那样过时；the publication lane → 发布车道 |
+| source transport / compiled wire | 源码传输 / 编译线 | the two url-dep kinds——url 的扩展名即种类；zips are closed → 压缩包是封闭的（`rut install` 绝不走进去，锁只保留直接行） |
+| tree flavor / wire flavor | 树风味 / 线风味 | the content identity's two input sets：树风味 = 被改写的清单 + `src/**.rut` 源码；线风味 = 四个规范搭乘文件；the two never cross-compare → 两种风味绝不互比 |
 | object file | 目标文件 | `mod.rutc` stays code；linking truth → 链接的真相 |
 | declaration entry | 声明条目 | generated at pack, never hand-maintained → 打包期生成，绝不手工维护；editing truth → 编辑的真相；the `.d.ts` pattern → `.d.ts` 模式（stays code） |
 | linking truth | 链接的真相 | the object; a consumer binds exports from the binary alone → 消费方仅凭二进制绑定导出 |
@@ -167,7 +170,8 @@ context; after that, use the zh-CN rendering alone.
 | directory form | 目录形式 | the `NAME/mod.rut` child spelling — probed first |
 | single-file form | 单文件形式 | the `NAME.rut` child spelling beside the declaring file; mounts at the logical mod path `NAME` exactly as the directory would |
 | both spellings | 两种拼法 | both forms present is the loud ambiguity — keep one |
-| root module | 根模块 | the package's `mod.rut` beside its manifest |
+| root module | 根模块 | the package's `src/mod.rut` under its `src/` shell (the manifest stays at the package root) |
+| src shell | `src/` 壳 | a package's module tree lives under `src/` beside the manifest: root `src/mod.rut` (host default `src/mod.d.rut`), children beside the declaring file inside the shell; directory grammar only — the wire keeps the canonical `mod.rut` names |
 | module tree | 模块树 | the mounted file-module set of a package |
 | qualified position | 限定位置 | the `::`-spelled intra-package reference（`layout::Column` stays code）；dot → 点号（`.` 只拼值访问） |
 | use path | use 路径 | the `::`-spelled import path（`use` 为代码） |

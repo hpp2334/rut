@@ -25,20 +25,20 @@
 
 use crate::hover::{self, DefIndex};
 
-pub const CORE: &str = include_str!("../../../rut/core/core.d.rut");
-pub const CALC: &str = include_str!("../../../rut/calc/calc.d.rut");
-pub const NMAP_HOST: &str = include_str!("../../../rut/nmap_host/nmap.d.rut");
-pub const INK_HOST: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
-pub const BENCH_CROSS: &str = include_str!("../../../rut/bench-cross/bench_cross.d.rut");
-pub const STRBUILD_HOST: &str = include_str!("../../../rut/strbuild_host/strbuild_host.d.rut");
-pub const POUCH: &str = include_str!("../../../rut/pouch/mod.rut");
-pub const NMAPSET: &str = include_str!("../../../rut/nmapset/mod.rut");
-pub const JSON: &str = include_str!("../../../rut/json/mod.rut");
-pub const INK: &str = include_str!("../../../rut/ink/mod.rut");
-pub const STRBUILD: &str = include_str!("../../../rut/strbuild/mod.rut");
-pub const MYHOST: &str = include_str!("../../../rut/myhost/myhost.d.rut");
-pub const MYHOST_NET: &str = include_str!("../../../rut/myhost/net/mod.d.rut");
-pub const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/net/tls/mod.d.rut");
+pub const CORE: &str = include_str!("../../../rut/core/src/core.d.rut");
+pub const CALC: &str = include_str!("../../../rut/calc/src/calc.d.rut");
+pub const NMAP_HOST: &str = include_str!("../../../rut/nmap_host/src/nmap.d.rut");
+pub const INK_HOST: &str = include_str!("../../../rut/ink_host/src/ink_host.d.rut");
+pub const BENCH_CROSS: &str = include_str!("../../../rut/bench-cross/src/bench_cross.d.rut");
+pub const STRBUILD_HOST: &str = include_str!("../../../rut/strbuild_host/src/strbuild_host.d.rut");
+pub const POUCH: &str = include_str!("../../../rut/pouch/src/mod.rut");
+pub const NMAPSET: &str = include_str!("../../../rut/nmapset/src/mod.rut");
+pub const JSON: &str = include_str!("../../../rut/json/src/mod.rut");
+pub const INK: &str = include_str!("../../../rut/ink/src/mod.rut");
+pub const STRBUILD: &str = include_str!("../../../rut/strbuild/src/mod.rut");
+pub const MYHOST: &str = include_str!("../../../rut/myhost/src/myhost.d.rut");
+pub const MYHOST_NET: &str = include_str!("../../../rut/myhost/src/net/mod.d.rut");
+pub const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/src/net/tls/mod.d.rut");
 
 /// The embedded std pkgs' manifest namespaces — the qualified-access
 /// heads the surface grammar cannot say (`"namespace": "Math"` lives in
@@ -71,71 +71,77 @@ pub fn indexes() -> Vec<DefIndex> {
             CORE_LABEL,
             CORE,
             rut_parser::Mode::Decl,
-            "rut/core/core.d.rut",
+            "rut/core/src/core.d.rut",
             &[] as &[StdFile],
         ),
         (
             "calc",
             CALC,
             rut_parser::Mode::Decl,
-            "rut/calc/calc.d.rut",
+            "rut/calc/src/calc.d.rut",
             &[],
         ),
         (
             "nmap_host",
             NMAP_HOST,
             rut_parser::Mode::Decl,
-            "rut/nmap_host/nmap.d.rut",
+            "rut/nmap_host/src/nmap.d.rut",
             &[],
         ),
         (
             "ink_host",
             INK_HOST,
             rut_parser::Mode::Decl,
-            "rut/ink_host/ink_host.d.rut",
+            "rut/ink_host/src/ink_host.d.rut",
             &[],
         ),
         (
             "bench_cross",
             BENCH_CROSS,
             rut_parser::Mode::Decl,
-            "rut/bench-cross/bench_cross.d.rut",
+            "rut/bench-cross/src/bench_cross.d.rut",
             &[],
         ),
         (
             "strbuild_host",
             STRBUILD_HOST,
             rut_parser::Mode::Decl,
-            "rut/strbuild_host/strbuild_host.d.rut",
+            "rut/strbuild_host/src/strbuild_host.d.rut",
             &[],
         ),
         (
             "pouch",
             POUCH,
             rut_parser::Mode::Impl,
-            "rut/pouch/mod.rut",
+            "rut/pouch/src/mod.rut",
             &[],
         ),
         (
             "nmapset",
             NMAPSET,
             rut_parser::Mode::Impl,
-            "rut/nmapset/mod.rut",
+            "rut/nmapset/src/mod.rut",
             &[],
         ),
         (
             "json",
             JSON,
             rut_parser::Mode::Impl,
-            "rut/json/mod.rut",
+            "rut/json/src/mod.rut",
             &[],
         ),
-        ("ink", INK, rut_parser::Mode::Impl, "rut/ink/mod.rut", &[]),
+        (
+            "ink",
+            INK,
+            rut_parser::Mode::Impl,
+            "rut/ink/src/mod.rut",
+            &[],
+        ),
         (
             "strbuild",
             STRBUILD,
             rut_parser::Mode::Impl,
-            "rut/strbuild/mod.rut",
+            "rut/strbuild/src/mod.rut",
             &[],
         ),
         // the host-surface mod tree: root + each child Decl file
@@ -143,17 +149,17 @@ pub fn indexes() -> Vec<DefIndex> {
             "myhost",
             MYHOST,
             rut_parser::Mode::Decl,
-            "rut/myhost/myhost.d.rut",
+            "rut/myhost/src/myhost.d.rut",
             &[
                 StdFile {
                     mod_path: "net",
                     src: MYHOST_NET,
-                    src_path: "rut/myhost/net/mod.d.rut",
+                    src_path: "rut/myhost/src/net/mod.d.rut",
                 },
                 StdFile {
                     mod_path: "net/tls",
                     src: MYHOST_NET_TLS,
-                    src_path: "rut/myhost/net/tls/mod.d.rut",
+                    src_path: "rut/myhost/src/net/tls/mod.d.rut",
                 },
             ],
         ),
@@ -278,11 +284,14 @@ mod tests {
             mine.iter().map(|i| &i.mod_path).collect::<Vec<_>>()
         );
         assert_eq!(mine[0].mod_path, None, "the root file answers the root");
-        assert_eq!(mine[0].src_path.as_deref(), Some("rut/myhost/myhost.d.rut"));
+        assert_eq!(
+            mine[0].src_path.as_deref(),
+            Some("rut/myhost/src/myhost.d.rut")
+        );
         assert_eq!(mine[1].mod_path.as_deref(), Some("net"));
         assert_eq!(
             mine[1].src_path.as_deref(),
-            Some("rut/myhost/net/mod.d.rut")
+            Some("rut/myhost/src/net/mod.d.rut")
         );
         assert_eq!(mine[2].mod_path.as_deref(), Some("net/tls"));
         // the root carries the `pub mod net;` edge and its flat row;
@@ -320,12 +329,18 @@ mod tests {
         let leaf = normalized.find("connect").expect("the leaf") as u32;
         let hits = crate::definition::definition(&ctx, leaf);
         assert_eq!(hits.len(), 1, "{hits:?}");
-        assert_eq!(hits[0].uri, "rut/myhost/net/mod.d.rut", "the leaf's file");
+        assert_eq!(
+            hits[0].uri, "rut/myhost/src/net/mod.d.rut",
+            "the leaf's file"
+        );
         // the segment: `net` in the use path — the declaring edge
         let seg = normalized.find("net").expect("the segment") as u32;
         let hits = crate::definition::definition(&ctx, seg);
         assert_eq!(hits.len(), 1, "{hits:?}");
-        assert_eq!(hits[0].uri, "rut/myhost/myhost.d.rut", "the edge's file");
+        assert_eq!(
+            hits[0].uri, "rut/myhost/src/myhost.d.rut",
+            "the edge's file"
+        );
     }
 
     #[test]

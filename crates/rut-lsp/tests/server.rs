@@ -729,13 +729,14 @@ fn write_dep_fixture(name: &str) -> DepFixture {
 
     // the path dep — a module directory with its own manifest. The
     // lib spells a `pub mod layout;` edge and the child dir carries
-    // its `mod.rut` — the editor walk mounts the tree like the loader
+    // its `src/layout/mod.rut` — the editor walk mounts the tree like
+    // the loader
     std::fs::write(dep.join("rut.jsonc"), r#"{ "name": "gadgets" }"#).unwrap();
     let lib_src = "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\npub mod layout;\n";
-    std::fs::write(dep.join("mod.rut"), lib_src).unwrap();
-    std::fs::create_dir_all(dep.join("layout")).unwrap();
+    std::fs::create_dir_all(dep.join("src/layout")).unwrap();
+    std::fs::write(dep.join("src/mod.rut"), lib_src).unwrap();
     std::fs::write(
-        dep.join("layout/mod.rut"),
+        dep.join("src/layout/mod.rut"),
         "pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n",
     )
     .unwrap();
@@ -753,7 +754,7 @@ fn write_dep_fixture(name: &str) -> DepFixture {
     let manifest = format!(
         r#"{{
   // the editor rides the same grammar the CLI parses — the root
-  // module is `mod.rut`, never a manifest key; the pins ride rut.lock
+  // module is `src/mod.rut`, never a manifest key; the pins ride rut.lock
   "name": "wsapp",
   "deps": {{
     "gadgets": {{ "path": "../outside" }},
@@ -793,14 +794,14 @@ fn main() -> nil {
     v.push(1);
 }
 ";
-    std::fs::write(ws.join("mod.rut"), main_src).unwrap();
-    std::fs::create_dir_all(ws.join("helpers")).unwrap();
+    std::fs::create_dir_all(ws.join("src/helpers")).unwrap();
+    std::fs::write(ws.join("src/mod.rut"), main_src).unwrap();
     std::fs::write(
-        ws.join("helpers/mod.rut"),
+        ws.join("src/helpers/mod.rut"),
         "pub struct Slot {\n    n: i32;\n}\npub fn mk(n: i32) -> Slot { return Slot { n: n }; }\n",
     )
     .unwrap();
-    let main_uri = format!("file://{}/mod.rut", ws.display());
+    let main_uri = format!("file://{}/src/mod.rut", ws.display());
     DepFixture {
         base,
         ws,
@@ -810,7 +811,7 @@ fn main() -> nil {
 }
 
 /// the pouch bundle's own source, only reachable through the CACHE mount
-/// — the std surface's pouch index carries the relative `rut/pouch/mod.rut`
+/// — the std surface's pouch index carries the relative `rut/pouch/src/mod.rut`
 /// origin instead, so this uri on the wire PROVES the cached bytes
 /// mounted
 const BUNDLE_POUCH_ORIGIN: &str = "bundle:pouch/mod.d.rut";
@@ -846,7 +847,7 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
     let locs = resp["result"].as_array().expect("definition locations");
     assert!(
         locs.iter()
-            .any(|l| l["uri"].as_str().unwrap().ends_with("/outside/mod.rut")),
+            .any(|l| l["uri"].as_str().unwrap().ends_with("/outside/src/mod.rut")),
         "the outside path dep answers F12: {resp}"
     );
 
@@ -910,8 +911,8 @@ async fn dep_walk_resolves_path_and_cached_url_deps() {
 }
 
 /// the dep walk's mod dimension: the path dep's `pub mod layout;`
-/// mounts `layout/mod.rut`, the root package's own `mod helpers;`
-/// mounts `helpers/mod.rut` — use-through-mods completion, the
+/// mounts `src/layout/mod.rut`, the root package's own `mod helpers;`
+/// mounts `src/helpers/mod.rut` — use-through-mods completion, the
 /// segment hover, the `mod` decl hover, and the position-path tier
 /// all answer on the wire
 #[tokio::test]
@@ -1024,7 +1025,7 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
         locs[0]["uri"]
             .as_str()
             .unwrap()
-            .ends_with("/helpers/mod.rut"),
+            .ends_with("/src/helpers/mod.rut"),
         "the child file: {resp}"
     );
     assert_eq!(
@@ -1050,7 +1051,7 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
         locs[0]["uri"]
             .as_str()
             .unwrap()
-            .ends_with("/helpers/mod.rut"),
+            .ends_with("/src/helpers/mod.rut"),
         "the head opens the module: {resp}"
     );
     assert_eq!(
@@ -1072,7 +1073,7 @@ async fn mod_walk_completion_and_hover_on_the_wire() {
         locs[0]["uri"]
             .as_str()
             .unwrap()
-            .ends_with("/helpers/mod.rut"),
+            .ends_with("/src/helpers/mod.rut"),
         "the leaf lands in the child: {resp}"
     );
 
@@ -1205,9 +1206,9 @@ struct FileModFixture {
 }
 
 /// the single-file-module dep tree: the dep's `pub mod layout;` mounts
-/// the FILE `layout.rut` (no `layout/` directory), and layout's own
-/// `pub mod grid;` mounts `grid.rut` BESIDE it — mod path
-/// `layout/grid`, physical file `grid.rut`, never `layout/grid.rut`.
+/// the FILE `src/layout.rut` (no `layout/` directory), and layout's own
+/// `pub mod grid;` mounts `src/grid.rut` BESIDE it — mod path
+/// `layout/grid`, physical file `src/grid.rut`, never `layout/grid.rut`.
 fn write_file_module_fixture(name: &str) -> FileModFixture {
     let base = std::env::temp_dir().join(format!("rut-lsp-filemod-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
@@ -1215,19 +1216,20 @@ fn write_file_module_fixture(name: &str) -> FileModFixture {
     let dep = base.join("outside"); // a SIBLING of ws — outside the scan root
     std::fs::create_dir_all(&ws).unwrap();
     std::fs::create_dir_all(&dep).unwrap();
+    std::fs::create_dir_all(dep.join("src")).unwrap();
     std::fs::write(dep.join("rut.jsonc"), r#"{ "name": "gadgets" }"#).unwrap();
     std::fs::write(
-        dep.join("mod.rut"),
+        dep.join("src/mod.rut"),
         "pub mod layout;\npub fn tag() -> i32 { return 1; }\n",
     )
     .unwrap();
     std::fs::write(
-        dep.join("layout.rut"),
+        dep.join("src/layout.rut"),
         "pub mod grid;\npub fn one() -> i32 { return 1; }\n",
     )
     .unwrap();
     std::fs::write(
-        dep.join("grid.rut"),
+        dep.join("src/grid.rut"),
         "pub struct Cell {\n    w: i32;\n}\npub fn mk() -> Cell { return Cell { w: 1 }; }\n",
     )
     .unwrap();
@@ -1244,8 +1246,9 @@ fn main() -> nil {
     let _ = c.w + one();
 }
 ";
-    std::fs::write(ws.join("mod.rut"), main_src).unwrap();
-    let main_uri = format!("file://{}/mod.rut", ws.display());
+    std::fs::create_dir_all(ws.join("src")).unwrap();
+    std::fs::write(ws.join("src/mod.rut"), main_src).unwrap();
+    let main_uri = format!("file://{}/src/mod.rut", ws.display());
     FileModFixture {
         base,
         ws,
@@ -1276,8 +1279,8 @@ async fn file_module_children_define_to_their_real_files() {
         )
         .await;
 
-    // `Cell` (the annotation) and `mk()` live in `outside/grid.rut`;
-    // `one()` lives in `outside/layout.rut` — each F12 lands in the
+    // `Cell` (the annotation) and `mk()` live in `outside/src/grid.rut`;
+    // `one()` lives in `outside/src/layout.rut` — each F12 lands in the
     // file that IS
     for (needle, occurrence, file) in [
         ("Cell", 1, "grid.rut"),
@@ -1298,8 +1301,8 @@ async fn file_module_children_define_to_their_real_files() {
         let uris: Vec<&str> = locs.iter().map(|l| l["uri"].as_str().unwrap()).collect();
         assert!(
             uris.iter()
-                .any(|u| u.ends_with(&format!("/outside/{file}"))),
-            "{needle} must define into outside/{file}: {uris:?}"
+                .any(|u| u.ends_with(&format!("/outside/src/{file}"))),
+            "{needle} must define into outside/src/{file}: {uris:?}"
         );
         assert!(
             !uris.iter().any(|u| u.ends_with("layout/grid.rut")),

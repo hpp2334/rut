@@ -12,6 +12,42 @@
 /// `rut.json` gets the pointed refusal (rut-native's reader).
 pub const MANIFEST_NAME: &str = "rut.jsonc";
 
+/// The lib pkg's root module file — under the package's `src/` shell.
+/// Children mount beside the root file, so the whole module tree lives
+/// under `src/`.
+pub const ROOT_MODULE: &str = "src/mod.rut";
+
+/// The host pkg's default root surface file — the lib root d-flavored
+/// ([`crate::decl::DECL_CHILD_FILE`] remains the child file name and
+/// the archive's canonical root name).
+pub const DECL_ROOT_MODULE: &str = "src/mod.d.rut";
+
+/// A spelled surface's manifest-relative path under the package's
+/// `src/` shell: `entry.type` resolves inside the module directory
+/// (`./calc.d.rut` → `src/calc.d.rut`). The archive keeps the ONE
+/// canonical wire names — this shell lives in the directory grammar
+/// only.
+pub fn src_rel(rel: &str) -> String {
+    format!("src/{}", rel.strip_prefix("./").unwrap_or(rel))
+}
+
+/// The cache filename's extension for one url — the artifact kind the
+/// url's own spelling declares (`.zip` = source transport,
+/// `.rutbundle` = compiled). The bytes behind a url are pinned by
+/// sha256 either way; the suffix only keeps the two transports honest
+/// at a glance.
+pub fn cache_ext(url: &str) -> &'static str {
+    if url
+        .rsplit('.')
+        .next()
+        .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+    {
+        ".zip"
+    } else {
+        ".rutbundle"
+    }
+}
+
 /// Bundle entry normalization: `./x.rut` → `x.rut`; anything reaching
 /// outside the archive root is refused (entries are archive-relative).
 pub fn bundle_key(rel: &str) -> Result<String, String> {

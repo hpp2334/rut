@@ -121,7 +121,7 @@ fn consumer_world(tag: &str, url: &str, pin: &str) -> PathBuf {
     write(&app, "rut.lock", &rut_driver::render_lock(&lock));
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{twice};\n\nentry fn main() {\n    let x = twice(21);\n}\n",
     );
     root
@@ -133,7 +133,7 @@ fn leaf_bundle(tag: &str) -> Vec<u8> {
     write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
     write(
         &util,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
     );
     rut_native::pack_dir(&util).expect("pack util")
@@ -229,7 +229,7 @@ fn cold_run_names_every_missing_dep_at_once() {
         },
     ]);
     write(&app, "rut.lock", &rut_driver::render_lock(&lock));
-    write(&app, "mod.rut", "entry fn main() -> nil { return; }\n");
+    write(&app, "src/mod.rut", "entry fn main() -> nil { return; }\n");
 
     server.set_up(false);
     let (code, err) = rut(&root.join("cache"), &["run", app.to_str().unwrap()]);

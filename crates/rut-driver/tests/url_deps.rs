@@ -84,8 +84,9 @@ fn write(dir: &Path, rel: &str, text: &str) {
 
 fn manifest(name: &str, _entry: &str, extra: &str) -> String {
     // `extra` is the fragment after the name row (`, "deps": { … }`) —
-    // the entry keys are repealed: the body is `mod.rut` beside the
-    // manifest (the `_entry` arg names the file the caller writes)
+    // the entry keys are repealed: the body is `src/mod.rut` in the
+    // package's `src/` shell (the `_entry` arg names the file the
+    // caller writes)
     format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}"{extra}}}"#)
 }
 
@@ -94,7 +95,7 @@ fn leaf_world(tag: &str, name: &str, body: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join(name);
     write(&dir, "rut.jsonc", &manifest(name, "mod.rut", ""));
-    write(&dir, "mod.rut", body);
+    write(&dir, "src/mod.rut", body);
     root
 }
 
@@ -191,7 +192,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
 
@@ -222,7 +223,7 @@ fn url_dep_mounts_compiles_and_equals_the_dir_twin() {
     );
     write(
         &twin,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
     let dir_loaded = load_dir(&twin).expect("dir load");
@@ -263,7 +264,7 @@ fn the_manifest_pin_retires_loudly_even_with_a_fetcher() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
 
@@ -301,7 +302,7 @@ fn name_vs_key_refuses() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
 
@@ -360,7 +361,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
     let mut table = BTreeMap::new();
@@ -395,7 +396,7 @@ fn embedder_mount_outranks_the_url_dep() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
 
@@ -430,7 +431,7 @@ fn codec_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     );
     write(
         &root.join("pouch"),
-        "mod.rut",
+        "src/mod.rut",
         "pub class Vec<T> {\n    items: [T];\n}\n\nimpl<T> Vec<T> {\n    pub fn filled(v: T, n: i32) -> Self {\n        let mut items: [T] = [v; n];\n        return Self { items: items };\n    }\n\n    pub fn first(self) -> T {\n        return self.items[0];\n    }\n}\n",
     );
     // codec — the json shape: the interface and public names in the
@@ -446,7 +447,7 @@ fn codec_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     );
     write(
         &root.join("codec"),
-        "mod.rut",
+        "src/mod.rut",
         "pub interface Coded {\n    fn coded(self) -> str;\n}\n\npub class CodedStr(str);\n\nimpl CodedStr {\n    pub fn coded(self) -> str {\n        return self.inner;\n    }\n}\n\npub fn encode(s: str) -> str {\n    return CodedStr(s).coded();\n}\n",
     );
     // zeta — packs codec as a declared-but-unused (source) group
@@ -461,7 +462,7 @@ fn codec_world(tag: &str) -> (PathBuf, Vec<u8>, String) {
     );
     write(
         &root.join("zeta"),
-        "mod.rut",
+        "src/mod.rut",
         "pub fn ping() -> i32 {\n    return 7;\n}\n",
     );
     let bytes = pack_dir(&root.join("zeta")).expect("pack zeta");
@@ -499,7 +500,7 @@ fn colliding_pack_numberings_namespace_per_archive() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util_a::{twice};\nuse util_b::{thrice};\n\nentry fn go() -> i64 {\n    return twice(1) + thrice(2);\n}\n",
     );
 
@@ -539,7 +540,7 @@ fn sync_wrapper_refuses_url_dep_loudly() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
 
@@ -568,7 +569,7 @@ fn pack_url_dep_rode_along_and_deterministic() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
 
@@ -613,7 +614,13 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert_eq!(run_entry::<i64>(session, "go"), 42);
 
     // the async lane settles identically through the noop-waker driver
-    let via_with = block_on(rut_native::pack_dir_with(&app, &Table::from(map))).expect("pack_with");
+    let via_with = block_on(rut_native::pack_dir_opts_with(
+        &app,
+        &rut_driver::PackOpts::default(),
+        &Table::from(map),
+    ))
+    .expect("pack_with")
+    .0;
     assert_eq!(packed, via_with);
 }
 
@@ -646,7 +653,7 @@ fn pack_refuses_archive_source_group_with_dev_deps() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use codec::{encode};\n\nentry fn go() -> str {\n    return encode(\"x\");\n}\n",
     );
 
@@ -686,7 +693,7 @@ fn pack_refuses_unused_compiled_url_dep() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
 
@@ -725,7 +732,7 @@ fn an_unpinned_url_row_refuses_with_the_install_recipe() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
 
@@ -774,7 +781,7 @@ fn a_lock_pin_mismatch_names_both_hashes() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
 
@@ -818,7 +825,7 @@ fn a_malformed_lock_refuses_loudly_naming_the_file() {
     write(&app, "rut.jsonc", &manifest("app", "mod.rut", ""));
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
     write(
@@ -855,7 +862,7 @@ fn the_resolved_lane_validates_computed_pins_without_a_lock_file() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{twice};\n\nentry fn go() -> i64 {\n    return twice(21);\n}\n",
     );
 
@@ -901,7 +908,7 @@ fn url_dep_rows_collect_the_closure_deduped_by_url() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn go() -> i64 {\n    return 1;\n}\n",
     );
     write(

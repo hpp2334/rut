@@ -45,23 +45,26 @@ The **native `rut-lsp` binary remains the face for other editors**
 [`../README.md`](../README.md)); both faces run the same queries from
 `crates/rut-lsp`, so they cannot drift.
 
-## File modules — mod.rut
+## File modules — src/mod.rut
 
-A rut package is a module tree: `mod.rut` beside the manifest is the
-root module, and each `mod NAME;` it declares mounts `NAME/mod.rut`
+A rut package is a module tree: `src/mod.rut` (under the package's
+`src/` shell) is the root module, and each `mod NAME;` it declares
+mounts `NAME/mod.rut`
 beside it — or the single-file `NAME.rut` when there is no such
 directory (both spellings is the loader's loud ambiguity, mirrored as
 a one-time hint) (`pub mod` marks the edge visible across packages).
 The extension rides the same model:
 
 - The **workspace scan** stamps every `mod.rut` under a folder-level
-  package with its mod path (the wasm indexes it via `rut_add_def_mod`)
+  package's `src/` shell with its mod path (the wasm indexes it via
+  `rut_add_def_mod`)
   — a nested package's own manifest keeps it out of the parent's tree —
   then follows each stamped file's `mod` decls to stamp the
   single-file `NAME.rut` children at their child paths.
 - The **dep walk** mounts each path dep's tree from its root module's
   declarations (the wasm parses; the walk only reads the files the
-  decls name, probing `NAME/mod.rut` then `NAME.rut` per edge), so
+  decls name, probing `NAME/mod.rut` then `NAME.rut` per edge, inside
+  the package's `src/` shell), so
   hover/completion see mod-carrying deps.
 - **Completion** walks the tree: after `pkg::` the dep's `pub mod`
   children ride along (never a bare `mod`), deeper `::` segments walk
@@ -83,7 +86,8 @@ Diagnostics are two lanes merged (both faces, one engine —
   type errors surface in the editor — `checked = true;` (bool into a
   `str` binding), a record literal missing a field, an arity mistake —
   at the same site `rut run` reports them. The document's package is
-  known from its stamps: a `mod.rut` under a folder-level package (the
+  known from its stamps: a `mod.rut` under a folder-level package's
+  `src/` shell (the
   workspace scan) or a dep file opened for editing (the dep walk).
   Diags map back through the graph's file stamps — each squiggle
   lands in the file that owns it, and a span that names no open
@@ -91,7 +95,8 @@ Diagnostics are two lanes merged (both faces, one engine —
   dedupes true duplicates only; a distinct site is never collapsed.
 
 No package context — a stray file under no manifest, a non-`mod.rut`
-file — keeps today's parse-only diagnostics. The check lane never
+file outside a package's `src/` shell — keeps today's parse-only
+diagnostics. The check lane never
 makes an editor worse than the compiler-less lane it extends.
 
 ## Deps — the extension reads rut.jsonc
@@ -119,9 +124,10 @@ manifests, JS only moves bytes) and walks its dependency rows:
   only with their `sha256` verified. An unpinned url row never mounts
   from the editor — one error hint, no silent unpinned bytes.
 - **File modules mount like the loader runs**: a dep package's root
-  module (`mod.rut` beside the manifest; the entry lib while the
+  module (`src/mod.rut`; the entry lib while the
   transitional key stands) mounts its `mod NAME;` tree recursively —
-  `NAME/mod.rut` beside the declaring file — so `use
+  `NAME/mod.rut` beside the declaring file, inside the package's
+  `src/` shell — so `use
   gadgets::layout::{ Column }` completes, hovers its segments
   (`layout` shows the mounted file and child count), and jumps; a
   `pub? mod NAME;` decl hovers its kind, mounted file, and child

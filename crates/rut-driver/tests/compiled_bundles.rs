@@ -75,8 +75,9 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, _entry: &str, extra: &str) -> String {
-    // the entry keys are repealed: the body is `mod.rut` beside the
-    // manifest (the `_entry` arg names the file the caller writes)
+    // the entry keys are repealed: the body is `src/mod.rut` in the
+    // package's `src/` shell (the `_entry` arg names the file the
+    // caller writes)
     format!(r#"{{"name": "{name}"{extra}}}"#)
 }
 
@@ -106,7 +107,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{ twice };\n\n\
          entry fn go() -> i64 {\n\
          \x20   return twice(21);\n\
@@ -116,7 +117,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
     write(
         &util,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn twice(v: i64) -> i64 {\n\
          \x20   return v * 2;\n\
          }\n",
@@ -125,7 +126,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     write(&boxy, "rut.jsonc", &manifest("boxy", "mod.rut", ""));
     write(
         &boxy,
-        "mod.rut",
+        "src/mod.rut",
         "pub class Holder<T> {\n\
          \x20   v: T;\n\
          }\n\n\
@@ -319,7 +320,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -359,7 +360,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "pub interface Shape { fn area(self) -> i32; }\n\
          pub fn draw(s: Shape) -> i32 { return s.area(); }\n\n\
          entry fn go() -> i32 {\n\
@@ -1033,7 +1034,7 @@ fn staged_and_reference_lanes_agree_across_the_substitution_matrix() {
         // the consumer's instantiation from the templates
         let dir = scratch(cell.tag);
         write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
-        write(&dir, "mod.rut", &lib_text);
+        write(&dir, "src/mod.rut", &lib_text);
         let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("{}: pack: {e:?}", cell.tag));
         let _ = std::fs::remove_dir_all(&dir);
         let archive = rut_driver::Mounted::from_bundle(&bytes)
@@ -1290,7 +1291,7 @@ fn staged_and_reference_lanes_agree_across_the_interface_dispatch_matrix() {
         // serve the consumer's instantiation from the templates
         let dir = scratch(cell.tag);
         write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
-        write(&dir, "mod.rut", &lib_text);
+        write(&dir, "src/mod.rut", &lib_text);
         let bytes = pack_dir(&dir).unwrap_or_else(|e| panic!("{}: pack: {e:?}", cell.tag));
         let _ = std::fs::remove_dir_all(&dir);
         let archive = rut_driver::Mounted::from_bundle(&bytes)
@@ -1353,7 +1354,7 @@ entry fn main() -> i32 {
 "#;
     let dir = scratch("iface-det");
     write(&dir, "rut.jsonc", &bundle_manifest("lib", "mod.rut", ""));
-    write(&dir, "mod.rut", &lib_text);
+    write(&dir, "src/mod.rut", &lib_text);
     let bytes = pack_dir(&dir).expect("pack");
     let _ = std::fs::remove_dir_all(&dir);
 

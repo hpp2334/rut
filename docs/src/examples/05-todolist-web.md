@@ -50,7 +50,7 @@ ever.
 
 ### The ABI is the page: `main` plus the doors
 
-`rut/biz/app/mod.rut` — the boot turn builds the app container and
+`rut/biz/src/app/mod.rut` — the boot turn builds the app container and
 returns it as an `opaque` (rut has no mutable module state, so the
 host holds the state and re-passes it every turn — the
 [00 — Todolist](00-todolist.md) pattern at page scale):
@@ -119,7 +119,7 @@ rows, unchanged.
 
 ### The store: jotai's shape over private interfaces
 
-`rut/ui/store/mod.rut` is the kernel. Handles are keys, not objects —
+`rut/ui/src/store/mod.rut` is the kernel. Handles are keys, not objects —
 `Source<T>`, `Derived<T>`, `Mutation<A, R>` carry ids and have no
 logic of their own beyond routing through their store. The machinery
 interfaces are **module-private** — the domain package cannot name
@@ -152,7 +152,7 @@ Freshness is **pull-on-read**: a write bumps a generation, and a
 no flush step anywhere. Dependencies are **discovered, never
 declared** — the `ctx.get` calls inside a derive closure ARE the
 dependency list, re-recorded on every recompute. The domain's counts
-line is the worked example (`rut/biz/world/mod.rut`):
+line is the worked example (`rut/biz/src/world/mod.rut`):
 
 ```rut
 let counts$ = store::derive(fn (ctx) -> str {
@@ -225,8 +225,9 @@ privacy boundary, which is why there are exactly two
 ```
 
 Each package's body is a **file module tree**: the root module is
-`mod.rut` beside the manifest, `mod NAME;` declarations mount the
-children (`biz/` is `mod.rut` + `domain/` + `world/` + `app/`; `ui/`
+`src/mod.rut` under the manifest, `mod NAME;` declarations mount the
+children under `src/` (`biz/src/` is `mod.rut` + `domain/` + `world/` +
+`app/`; `ui/src/`
 is `mod.rut` + five framework modules). The privacy tiers are honest
 now: the store's plumbing stays private to `store/mod.rut` (not even
 ui's own components can spell it), `pub(pkg)` shares inside the

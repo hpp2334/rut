@@ -98,7 +98,7 @@ fn fc_world(tag: &str) -> PathBuf {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{ twice };\n\n\
          entry fn go() -> i64 {\n\
          \x20   return twice(21);\n\
@@ -108,7 +108,7 @@ fn fc_world(tag: &str) -> PathBuf {
     write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
     write(
         &util,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn twice(v: i64) -> i64 {\n\
          \x20   return v * 2;\n\
          }\n",
@@ -142,7 +142,7 @@ fn trace_world(tag: &str) -> PathBuf {
     src.push_str("    return boom();\n");
     src.push_str("}\n");
     src.push_str("entry fn go() -> i64 { return 7; }\n");
-    write(&app, "mod.rut", &src);
+    write(&app, "src/mod.rut", &src);
     root
 }
 
@@ -163,7 +163,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{ twice };\n\n\
          entry fn go() -> i64 {\n\
          \x20   return twice(21);\n\
@@ -173,7 +173,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     write(&util, "rut.jsonc", &manifest("util", "mod.rut", ""));
     write(
         &util,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn twice(v: i64) -> i64 { return v * 2; }\n",
     );
     let boxy = root.join("boxy");
@@ -189,7 +189,7 @@ fn mixed_world(tag: &str) -> PathBuf {
     );
     write(
         &boxy,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{ twice };\n\n\
          pub fn boxed(v: i64) -> i64 {\n\
          \x20   return twice(v) + 1;\n\
@@ -341,7 +341,7 @@ fn strip_serves_a_generic_owning_closure() {
     write(&lib, "rut.jsonc", &bundle_manifest("pairz", "mod.rut", ""));
     write(
         &lib,
-        "mod.rut",
+        "src/mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -359,7 +359,7 @@ fn strip_serves_a_generic_owning_closure() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use pairz::{ Pair };\n\n\
          entry fn go() -> i64 {\n\
          \x20   let p = Pair<i64, str> { fst: 1, snd: \"x\" };\n\

@@ -135,12 +135,17 @@ impl HttpRemote {
             .expect("http client")
     }
 
-    /// The cache path for a url: `<root>/<sha256(url)>.rutbundle` —
-    /// concrete, so a host (or the CLI's eviction lane) can inspect or
+    /// The cache path for a url: `<root>/<sha256(url)>.<ext>` — the
+    /// extension follows the url's own artifact kind (`.zip` for
+    /// source zips, `.rutbundle` otherwise), the hash the identity.
+    /// Concrete, so a host (or the CLI's eviction lane) can inspect or
     /// delete one entry.
     pub fn path_for(&self, url: &str) -> PathBuf {
-        self.root
-            .join(format!("{}.rutbundle", sha256_hex(url.as_bytes())))
+        self.root.join(format!(
+            "{}{}",
+            sha256_hex(url.as_bytes()),
+            rut_driver::bundle::cache_ext(url)
+        ))
     }
 
     /// Delete a poisoned entry (a pin mismatch poisons by definition —

@@ -34,7 +34,11 @@ fn host_world(tag: &str) -> PathBuf {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "logger_host", "type": "host", "entry": {"type": "./logger_host.d.rut"}}"#,
     );
-    write(&dir, "logger_host.d.rut", "pub host fn log(line: str);\n");
+    write(
+        &dir,
+        "src/logger_host.d.rut",
+        "pub host fn log(line: str);\n",
+    );
     root
 }
 
@@ -45,7 +49,7 @@ fn pack_a_host_dir_and_run_refuses_it() {
 
     // pack works, prints the output path
     let out = Command::new(rut())
-        .args(["pack", dir.to_str().unwrap()])
+        .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
     assert!(
@@ -77,6 +81,8 @@ fn pack_strip_refuses_on_a_host_root() {
         .args([
             "pack",
             root.join("logger_host").to_str().unwrap(),
+            "--mode",
+            "bin",
             "--strip",
         ])
         .output()

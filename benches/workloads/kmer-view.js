@@ -1,4 +1,4 @@
-// kmer-view.js — the JS twin of kmer-view/main.rut (the strings-round1
+// kmer-view.js — the JS twin of kmer-view/src/mod.rut (the strings-round1
 // phase-2 row): the identical k-mer counting on `new Map()` with
 // string keys. The rut row changes only the KEY SPELLING (the sv
 // range path — keys cross as borrowed `(seq, i, k)` byte windows, no

@@ -24,23 +24,24 @@ entry fn main() {
 ```
 
 Every rut program is a **module directory**: a `rut.jsonc` naming the
-package and its dependencies, plus the root module — `mod.rut`, the
-file the loader mounts. Create it, install the deps, run the directory:
+package and its dependencies, plus the module tree under `src/` — the
+root module `src/mod.rut`, the file the loader mounts. Create it,
+install the deps, run the directory:
 
 ```sh
-mkdir hello
+mkdir -p hello/src
 cat > hello/rut.jsonc <<'EOF'
 // hello/rut.jsonc — the manifest IS the program's door
 {
   "name": "hello",
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
-    // std-v12 tag; the pin lives in rut.lock, one install below
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" }
+    // std-v14 tag; the pin lives in rut.lock, one install below
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip" }
   }
 }
 EOF
-cat > hello/mod.rut <<'EOF'
+cat > hello/src/mod.rut <<'EOF'
 use ink::{ Logger };
 
 entry fn main() {
@@ -53,9 +54,9 @@ rut run hello
 ```
 
 ```text
-install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle
-install: ink — downloaded (4193 bytes)
-install: 1 url deps resolved — 1 downloaded, 0 cache hits (4193 bytes total)
+install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip
+install: ink — downloaded (2883 bytes)
+install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes total)
 rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)
 hello, rut!
 ```
@@ -73,7 +74,7 @@ the cache without running anything.
 Three things to notice:
 
 - **One directory with a `rut.jsonc` is one program.** The manifest is
-  the runnable unit — `rut run <dir>` (or a packed `.rutbundle`) is the
+  the runnable unit — `rut run <dir>` (or a packed artifact) is the
   only run lane. Inside the package, one file is one module; cross-module
   code is reached through `use` paths (see the
   [modules tutorial](../tutorial/modules.md)).
@@ -94,12 +95,12 @@ program's door, and now you have written one. For the next directory,
 the CLI scaffolds it in one step: `rut new <dir>` writes exactly those
 three files — the manifest with the derived name (and, unlike the
 walkthrough above, the whole swappable std set as url deps), the
-matching `rut.lock` (the std set's pins), and the same `mod.rut`.
+matching `rut.lock` (the std set's pins), and the same `src/mod.rut`.
 `rut install <dir>` warms the cache once (run never downloads —
 [the rut CLI](../reference/cli.md)), then `rut run <dir>` runs it:
 
 ```sh
-rut new hello      # hello/rut.jsonc (the std set) + hello/rut.lock + hello/mod.rut
+rut new hello      # hello/rut.jsonc (the std set) + hello/rut.lock + hello/src/mod.rut
 rut install hello  # fetch the std set into hello/.rut/cache (with progress)
 rut run hello
 ```
@@ -139,8 +140,8 @@ and the exact rules live in
 The formatter is the style — there is no configuration:
 
 ```sh
-rut fmt hello/mod.rut         # rewrite in place
-rut fmt hello/mod.rut --check # verify only (note: --check goes AFTER the path)
+rut fmt hello/src/mod.rut         # rewrite in place
+rut fmt hello/src/mod.rut --check # verify only (note: --check goes AFTER the path)
 rut fmt .                     # walk a directory tree, every *.rut file
 ```
 
@@ -154,7 +155,7 @@ refused loudly rather than half-formatted.
 a snippet behaves differently than you expect:
 
 ```sh
-rut dump hello/mod.rut
+rut dump hello/src/mod.rut
 ```
 
 `dump` runs the lone module through the frontend *without* mounting the

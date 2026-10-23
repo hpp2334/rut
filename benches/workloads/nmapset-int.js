@@ -1,4 +1,4 @@
-// nmapset-int.js — the JS twin of nmapset-int/main.rut (and the same
+// nmapset-int.js — the JS twin of nmapset-int/src/mod.rut (and the same
 // algorithm as the removed hashmap-int.js mapset twin): the identical
 // i32 churn on `new Map()`
 // with integer keys. The rut side swaps the removed pure-rut `mapset`

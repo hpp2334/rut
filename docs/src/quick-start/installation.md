@@ -176,11 +176,11 @@ the rut toolchain's temporary-run lane: run, scaffold, install, format, pack, fe
 Usage: rut <COMMAND>
 
 Commands:
-  run      compile and run a module directory or a packed `.rutbundle`
+  run      compile and run a package directory or a packed archive (`.rutbundle`)
   new      scaffold a hello-world module directory (the std set as deps)
   install  resolve the url deps and pin them in rut.lock
   fmt      the source formatter — canonical house layout, rewrite in place
-  pack     pack a module directory into a deterministic `.rutbundle`
+  pack     pack a package directory into a deterministic `.rutbundle` archive
   fetch    pre-warm the bundle cache for offline runs
   dump     the AST + IR readbacks for one file
   help     Print this message or the help of the given subcommand(s)
@@ -192,8 +192,10 @@ Options:
 
 The binary embeds the whole engine: lexer, parser, compiler, typed
 bytecode, and the VM. The toolchain's standard packages (`core`,
-`pouch`, `ink`, `json`, …) ship as compiled `.rutbundle`s on jsDelivr —
-a program says `use ink::{ Logger };` and its manifest's `deps` row
+`pouch`, `ink`, `json`, …) ship as source zips on jsDelivr —
+source compiles with YOUR toolchain, so a pinned zip never goes stale
+the way compiled IR can. A program says `use ink::{ Logger };` and its
+manifest's `deps` row
 mounts the package from the CDN, pinned by the project's `rut.lock`
 ([dependency kinds](../reference/dependency-kinds.md)), since every rut
 program is a module directory ([your first rut
@@ -202,19 +204,19 @@ program](first-program.md)).
 Try it:
 
 ```sh
-mkdir hello
+mkdir -p hello/src
 cat > hello/rut.jsonc <<'EOF'
 // hello/rut.jsonc — the manifest IS the program's door
 {
   "name": "hello",
   "deps": {
     // ink — the toolchain's logger package, served by jsDelivr at the
-    // std-v12 tag; the pin lives in rut.lock, one install below
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" }
+    // std-v14 tag; the pin lives in rut.lock, one install below
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip" }
   }
 }
 EOF
-cat > hello/mod.rut <<'EOF'
+cat > hello/src/mod.rut <<'EOF'
 use ink::{ Logger };
 
 entry fn main() {
@@ -227,9 +229,9 @@ rut run hello
 ```
 
 ```text
-install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle
-install: ink — downloaded (4193 bytes)
-install: 1 url deps resolved — 1 downloaded, 0 cache hits (4193 bytes total)
+install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip
+install: ink — downloaded (2883 bytes)
+install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes total)
 rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)
 hello, rut!
 ```
@@ -244,8 +246,8 @@ re-warms the cache without running anything.
 The hand-typed walkthrough is the lesson — the manifest is what you
 are learning. When it is routine, `rut new hello` is the one-step
 equivalent: it scaffolds the directory in three files (`rut.jsonc`
-plus the matching `rut.lock` plus the hello `mod.rut`), with the whole
-swappable std set as url deps and the std pins already in the lock
+plus the matching `rut.lock` plus the hello `src/mod.rut`), with the
+whole swappable std set as url deps and the std pins already in the lock
 ([the rut CLI](../reference/cli.md)).
 
 If that printed, the CLI is ready. Continue to

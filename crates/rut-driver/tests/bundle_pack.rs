@@ -37,7 +37,7 @@ fn bundles_the_source_file_set_in_manifest_order() {
         br#"{"name": "json"}"#.to_vec(),
     );
     files.insert(
-        "json/mod.rut".to_string(),
+        "json/src/mod.rut".to_string(),
         b"pub fn f() -> str { return \"j\"; }\n".to_vec(),
     );
 
@@ -119,10 +119,7 @@ fn a_manifest_named_file_the_map_lacks_is_a_read_error() {
     )
     .unwrap_err();
     assert!(err.contains("has no entry"), "{err}");
-    assert!(
-        err.contains("the root module is `mod.rut` beside the manifest"),
-        "{err}"
-    );
+    assert!(err.contains("the root module is `src/mod.rut`"), "{err}");
 }
 
 #[test]
@@ -136,6 +133,8 @@ fn entry_names_normalize_and_escape_refuses() {
 
 #[test]
 fn default_out_path_is_a_sibling() {
-    let p = default_out_path(Path::new("demo/mod"));
+    let p = default_out_path(Path::new("demo/mod"), rut_native::PackMode::Bin);
     assert_eq!(p, PathBuf::from("demo/mod.rutbundle"));
+    let z = default_out_path(Path::new("demo/mod"), rut_native::PackMode::Source);
+    assert_eq!(z, PathBuf::from("demo/mod.zip"));
 }

@@ -1,4 +1,4 @@
-// strview.js — the JS twin of strview/main.rut (the strings-round1
+// strview.js — the JS twin of strview/src/mod.rut (the strings-round1
 // phase-2 row): the nmapset-str six-phase churn with keys carved as
 // fixed-width 6-char windows of ONE generated parent string, on
 // `new Map()` keyed by `substring` — the materialized computation the

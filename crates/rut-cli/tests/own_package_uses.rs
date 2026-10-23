@@ -38,7 +38,7 @@ fn todolist(tag: &str) -> PathBuf {
     );
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         r#"use imp::{ TodoList, Task };
 
 mod imp;
@@ -59,7 +59,7 @@ entry fn main() {
     );
     write(
         &dir,
-        "imp/mod.rut",
+        "src/imp/mod.rut",
         r#"pub struct Task {
     id: i64;
     title: str;
@@ -98,7 +98,7 @@ fn the_todolist_shape_runs_and_packs() {
     );
 
     let out = Command::new(rut())
-        .args(["pack", dir.to_str().unwrap()])
+        .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
     assert!(
@@ -130,12 +130,12 @@ fn a_private_own_member_refuses_at_the_use_line() {
     let dir = root.join("todolist");
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "use imp::{ Task };\n\
          mod imp;\n\
          entry fn main() {}\n",
     );
-    write(&dir, "imp/mod.rut", "struct Task { id: i64; }\n");
+    write(&dir, "src/imp/mod.rut", "struct Task { id: i64; }\n");
     let out = Command::new(rut())
         .args(["run", dir.to_str().unwrap()])
         .output()
@@ -166,12 +166,12 @@ fn the_single_file_private_refusal_spells_the_file() {
     );
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "use imp::{ Task };\n\
          mod imp;\n\
          entry fn main() {}\n",
     );
-    write(&dir, "imp.rut", "struct Task { id: i64; }\n");
+    write(&dir, "src/imp.rut", "struct Task { id: i64; }\n");
     let out = Command::new(rut())
         .args(["run", dir.to_str().unwrap()])
         .output()
@@ -201,7 +201,7 @@ fn the_single_file_module_shape_runs() {
     );
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         r#"use imp::{ Task };
 
 mod imp;
@@ -214,7 +214,7 @@ entry fn main() {
     );
     write(
         &dir,
-        "imp.rut",
+        "src/imp.rut",
         r#"pub struct Task {
     id: i64;
     title: str;
@@ -240,9 +240,13 @@ fn both_child_spellings_are_the_loud_ambiguity() {
     let root = scratch("ambiguous");
     let dir = root.join("todolist");
     write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
-    write(&dir, "mod.rut", "mod imp;\nentry fn main() {}\n");
-    write(&dir, "imp/mod.rut", "pub fn one() -> i64 { return 1; }\n");
-    write(&dir, "imp.rut", "pub fn two() -> i64 { return 2; }\n");
+    write(&dir, "src/mod.rut", "mod imp;\nentry fn main() {}\n");
+    write(
+        &dir,
+        "src/imp/mod.rut",
+        "pub fn one() -> i64 { return 1; }\n",
+    );
+    write(&dir, "src/imp.rut", "pub fn two() -> i64 { return 2; }\n");
     let out = Command::new(rut())
         .args(["run", dir.to_str().unwrap()])
         .output()

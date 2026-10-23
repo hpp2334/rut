@@ -312,8 +312,9 @@ fn graph_threads_a_type_through_a_chain() {
 
 #[test]
 fn pouch_module_source_compiles() {
-    // rut/pouch/mod.rut — one file, one module unit
-    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch/mod.rut");
+    // rut/pouch/src/mod.rut — one file, one module unit
+    let pouch =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch/src/mod.rut");
     let merged = rut_native::load_module_source(&pouch).expect("read");
     assert!(merged.contains("class Vec<T>"), "Vec is here");
     let src = format!(
@@ -358,13 +359,20 @@ fn loads_a_directory_graph() {
         r#"{"name": "app_main", "deps": {"math": {"path": "../lib"}}}"#,
     )
     .unwrap();
+
+    std::fs::create_dir_all(app.join("src")).unwrap();
     std::fs::write(
-        app.join("mod.rut"),
+        app.join("src/mod.rut"),
         "use math::{seven};\nentry fn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
     std::fs::write(lib.join("rut.jsonc"), r#"{"name": "math"}"#).unwrap();
-    std::fs::write(lib.join("mod.rut"), "pub fn seven() -> i32 { return 7; }\n").unwrap();
+    std::fs::create_dir_all(lib.join("src")).unwrap();
+    std::fs::write(
+        lib.join("src/mod.rut"),
+        "pub fn seven() -> i32 { return 7; }\n",
+    )
+    .unwrap();
 
     let loaded = rut_native::load_dir(&app).expect("load_dir");
     let out = loaded
@@ -395,7 +403,8 @@ fn consumer_uses_pouch_vec() {
     // `Vec<i32>` instantiates as a mirror row and requests the bodies
     // from pouch's unit (owner-anchored generics); the methods bind
     // through the surface's inherent rows
-    let pouch = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch/mod.rut");
+    let pouch =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut/pouch/src/mod.rut");
     let coll_src = rut_native::load_module_source(&pouch).expect("read");
     let out = graph_of(
         rut_driver::RutRun::new()

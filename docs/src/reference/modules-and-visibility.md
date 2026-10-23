@@ -31,7 +31,9 @@ as executable bodies in `.rut`.
 ### File modules (`mod`)
 
 A `mod NAME;` declaration mounts a **file module**. The child has two
-spellings, probed beside the declaring file in order:
+spellings, probed beside the declaring file in order (the whole tree
+under the package's `src/` shell — [Project
+structure](project-structure.md)):
 
 1. the **directory form** — `NAME/mod.rut` (or `NAME/mod.d.rut` on a
    host surface tree);
@@ -41,10 +43,11 @@ Both spellings present is a loud ambiguity error naming both — the
 mount is undecidable until you delete one. In an implementation file
 there are no inline `mod X { .. }` blocks — files are the one
 mechanism. The package's
-root module is `mod.rut` beside its manifest ([Project
+root module is `src/mod.rut` under its manifest ([Project
 structure](project-structure.md)); a child's own declarations may
 declare grandchildren (`layout/mod.rut` declaring `pub mod grid;`
-mounts `layout/grid/mod.rut`), recursively. Mounting follows
+mounts `layout/grid/mod.rut`), recursively — the whole tree under
+`src/`. Mounting follows
 declarations in source order, cycle-guarded by file identity; a
 repeated name mounts once. A missing child (under both spellings) or
 a directory without its `mod.rut` is a loud error naming the

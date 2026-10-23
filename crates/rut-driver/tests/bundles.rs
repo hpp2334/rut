@@ -69,8 +69,10 @@ fn make_dir(base: &Path) -> std::path::PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("rut.jsonc"), make_dir_manifest()).unwrap();
+
+    std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(
-        dir.join("mod.rut"),
+        dir.join("src/mod.rut"),
         "pub fn seven() -> i32 { return 7; }\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
@@ -224,13 +226,18 @@ fn refusals() {
     // (the surface is a lib pkg's declared `entry.type` — a doc surface;
     // no host rows: those live only in `type = "host"` pkgs)
     let dir = make_dir(&base);
-    std::fs::write(dir.join("surface.d.rut"), "/// the pkg's surface doc.\n").unwrap();
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("src/surface.d.rut"),
+        "/// the pkg's surface doc.\n",
+    )
+    .unwrap();
     std::fs::write(
         dir.join("rut.jsonc"),
         r#"{"format": "rutbundle", "format_version": 12, "name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
     )
     .unwrap();
-    std::fs::remove_file(dir.join("surface.d.rut")).unwrap();
+    std::fs::remove_file(dir.join("src/surface.d.rut")).unwrap();
     let err = pack_dir(&dir).unwrap_err().to_string();
     assert!(err.contains("surface.d.rut"), "{err}");
 
@@ -259,7 +266,8 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"name": "s", "type": "host", "entry": {"type": "./s.d.rut"}}"#,
     )
     .unwrap();
-    std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
+    std::fs::create_dir_all(s.join("src")).unwrap();
+    std::fs::write(s.join("src/s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
     // the consumer: m (+ transitively s)
     let m = base.join("m");
     std::fs::create_dir_all(&m).unwrap();
@@ -268,7 +276,12 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
-    std::fs::write(m.join("mod.rut"), "entry fn main() -> i32 { return 7; }\n").unwrap();
+    std::fs::create_dir_all(m.join("src")).unwrap();
+    std::fs::write(
+        m.join("src/mod.rut"),
+        "entry fn main() -> i32 { return 7; }\n",
+    )
+    .unwrap();
 
     let bytes = pack_dir(&m).unwrap();
 
@@ -285,7 +298,12 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
     )
     .unwrap();
-    std::fs::write(s_lib.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
+    std::fs::create_dir_all(s_lib.join("src")).unwrap();
+    std::fs::write(
+        s_lib.join("src/s.d.rut"),
+        "pub host fn ping(x: i32) -> i32;\n",
+    )
+    .unwrap();
     let m_lib = base.join("m_lib");
     std::fs::create_dir_all(&m_lib).unwrap();
     std::fs::write(
@@ -293,8 +311,10 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s_lib"}}}"#,
     )
     .unwrap();
+
+    std::fs::create_dir_all(m_lib.join("src")).unwrap();
     std::fs::write(
-        m_lib.join("mod.rut"),
+        m_lib.join("src/mod.rut"),
         "entry fn main() -> i32 { return 7; }\n",
     )
     .unwrap();
@@ -313,7 +333,12 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"name": "s", "type": "lib", "entry": {"type": "./s.d.rut"}}"#,
     )
     .unwrap();
-    std::fs::write(s2.join("s.d.rut"), "/// documented surface, no body yet.\n").unwrap();
+    std::fs::create_dir_all(s2.join("src")).unwrap();
+    std::fs::write(
+        s2.join("src/s.d.rut"),
+        "/// documented surface, no body yet.\n",
+    )
+    .unwrap();
     let m2 = base.join("m2");
     std::fs::create_dir_all(&m2).unwrap();
     std::fs::write(
@@ -321,7 +346,12 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
         r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
-    std::fs::write(m2.join("mod.rut"), "entry fn main() -> i32 { return 7; }\n").unwrap();
+    std::fs::create_dir_all(m2.join("src")).unwrap();
+    std::fs::write(
+        m2.join("src/mod.rut"),
+        "entry fn main() -> i32 { return 7; }\n",
+    )
+    .unwrap();
     let dev_bytes = pack_dir(&m2).unwrap();
     let session = rut_driver::Mounted::from_bundle(&dev_bytes).unwrap();
     let sf = pkg_named(&session, "s");
@@ -367,7 +397,12 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     let m = base.join("m");
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(m.join("rut.jsonc"), r#"{"name": "m"}"#).unwrap();
-    std::fs::write(m.join("mod.rut"), "pub fn four() -> i32 { return 4; }\n").unwrap();
+    std::fs::create_dir_all(m.join("src")).unwrap();
+    std::fs::write(
+        m.join("src/mod.rut"),
+        "pub fn four() -> i32 { return 4; }\n",
+    )
+    .unwrap();
     // the dep's dep: a host pkg (declaration-only surface) → source
     let s = base.join("s");
     std::fs::create_dir_all(&s).unwrap();
@@ -376,7 +411,8 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         r#"{"name": "s", "type": "host", "entry": {"type": "./s.d.rut"}}"#,
     )
     .unwrap();
-    std::fs::write(s.join("s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
+    std::fs::create_dir_all(s.join("src")).unwrap();
+    std::fs::write(s.join("src/s.d.rut"), "pub host fn ping(x: i32) -> i32;\n").unwrap();
     // m uses s
     std::fs::write(
         m.join("rut.jsonc"),
@@ -392,8 +428,10 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
         r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"m": {"path": "../m"}}}"#,
     )
     .unwrap();
+
+    std::fs::create_dir_all(main.join("src")).unwrap();
     std::fs::write(
-        main.join("mod.rut"),
+        main.join("src/mod.rut"),
         "use m::{ four };\nentry fn main() -> i32 { return four(); }\n",
     )
     .unwrap();
@@ -538,8 +576,10 @@ fn the_directory_manifest_speaks_jsonc() {
 "#,
     )
     .unwrap();
+
+    std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(
-        dir.join("mod.rut"),
+        dir.join("src/mod.rut"),
         "pub fn seven() -> i32 { return 7; }\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();
@@ -558,8 +598,10 @@ fn a_directory_still_holding_rut_json_gets_the_pointed_refusal() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("rut.json"), make_dir_manifest()).unwrap();
+
+    std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(
-        dir.join("mod.rut"),
+        dir.join("src/mod.rut"),
         "pub fn seven() -> i32 { return 7; }\nfn main() -> i32 { return seven(); }\n",
     )
     .unwrap();

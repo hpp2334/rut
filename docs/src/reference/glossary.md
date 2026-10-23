@@ -10,7 +10,8 @@ community's word and documents only the delta — there are exactly two.
 |---|---|
 | deterministic reference mode | whole-program compilation over a declared closure — byte-identical everywhere; the contract every other lane is measured against, not a fallback ([The compilation model](compilation-model.md)) |
 | object file | a package's compiled binary (`mod.rutc`): bodies + surface — the linking truth ([Module binary and verification](module-binary.md)) |
-| archive | the published `.rutbundle` — objects and their symbol tables, shaded to the closure; uber-jar / Go `.a` semantics; the sole publication unit ([Module bundles](bundles.md)) |
+| archive | the published `.rutbundle` — objects and their symbol tables, shaded to the closure; uber-jar / Go `.a` semantics; the compiled wire's publication unit ([Module bundles](bundles.md)) |
+| source zip | the `.zip` source transport — a package directory packed for travel (`rut.jsonc` at the root, `src/`, every dep embedded under `deps/<name>@<fp16>/`); compiles with the consumer's toolchain, so it never goes stale the way compiled IR does — the book's publication lane ([Module bundles](bundles.md)) |
 | declaration entry | the generated surface text (`mod.d.rut`) a compiled group carries for humans and tooling — the editing truth; generated at pack, never hand-maintained |
 | symbol table | the archive's scope ledger (`rut.scopes`): one row per linked module, spelling the content identity the loader relocates through ([Module bundles](bundles.md)) |
 | templates | instantiation-independent bodies: exported generic decls compiled once against `#<param>` placeholder rows and carried in the binary, so any consumer-spelled shape can materialize at the consumer |

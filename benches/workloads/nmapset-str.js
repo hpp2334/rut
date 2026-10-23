@@ -1,4 +1,4 @@
-// nmapset-str.js — the JS twin of nmapset-str/main.rut (and the same
+// nmapset-str.js — the JS twin of nmapset-str/src/mod.rut (and the same
 // algorithm as the removed hashmap-str.js mapset twin): the identical
 // str-keyed churn on
 // `new Map()` with string keys. The rut side swaps the removed

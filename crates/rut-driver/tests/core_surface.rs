@@ -11,7 +11,7 @@
 use rut_ast::ast::{ItemKind, Linkage};
 use rut_parser::{parse, Mode};
 
-const CORE_DECL: &str = include_str!("../../../rut/core/core.d.rut");
+const CORE_DECL: &str = include_str!("../../../rut/core/src/core.d.rut");
 
 /// The collected core-decl name surfaces, for the lockstep assertions.
 type DeclSurfaces = (

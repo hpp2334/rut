@@ -13,7 +13,7 @@ use std::rc::Rc;
 use rut_driver::lower_decl_module;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
-const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
+const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/src/ink_host.d.rut");
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

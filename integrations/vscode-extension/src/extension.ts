@@ -372,7 +372,7 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
   // the mod tree (file modules): the root module's `mod NAME;` edges
   // mount `NAME/mod.rut` recursively — the wasm parses every file
   // (`addDefMod` answers the declared children), JS only moves bytes.
-  // The root is `mod.rut` beside the manifest (the dep table spells
+  // The root is `src/mod.rut` under the shell (the dep table spells
   // it as the Impl entry, indexed by the entries loop at mod path '')
   const entryPaths = table.entries.filter((e) => e.mode === 'Impl').map((e) => e.path);
   await mountModTree(ctx, dir, module, entryPaths, depth);
@@ -425,7 +425,7 @@ async function mountModTree(
   let text: string;
   let decls: Array<{ name: string; vis: 'pub' | 'mod' }>;
   if (entryPaths.length > 0) {
-    // the root-module lane: `mod.rut` is the root (already indexed by
+    // the root-module lane: `src/mod.rut` is the root (already indexed by
     // the entries loop — its text is re-read for the walk; the
     // re-stamp at mod path '' is the same answer `None` spelled)
     rootUri = vscode.Uri.joinPath(pkgDir, entryPaths[0]);
@@ -441,11 +441,11 @@ async function mountModTree(
     }
     decls = stamped.decls;
   } else {
-    // a host pkg (or surface-only dev state): no body row — `mod.rut`
-    // beside the manifest is probed anyway; a read miss mounts nothing
+    // a host pkg (or surface-only dev state): no body row — `src/mod.rut`
+    // under the shell is probed anyway; a read miss mounts nothing
     // (the ROOT is always the directory form — only child edges carry
     // the `NAME.rut` spelling)
-    rootUri = vscode.Uri.joinPath(pkgDir, 'mod.rut');
+    rootUri = vscode.Uri.joinPath(pkgDir, 'src/mod.rut');
     const bytes = await readFileNullable(rootUri);
     if (bytes === null) {
       return; // no root module — nothing mounts (surface-only dev state)
@@ -459,17 +459,22 @@ async function mountModTree(
     }
     decls = stamped.decls;
   }
+  // the children mount BESIDE THE ROOT FILE — inside the package's
+  // `src/` shell
+  const rootDir = vscode.Uri.file(path.dirname(rootUri.fsPath));
   for (const decl of decls) {
     if (ctx.files <= 0) {
       ctx.truncated = true;
       return;
     }
-    await mountChildMod(ctx, pkgDir, module, decl.name, depth);
+    await mountChildMod(ctx, rootDir, module, decl.name, depth);
   }
 }
 
 // one `mod NAME;` edge: `NAME/mod.rut` beside the declaring file
-// first, then the single-file spelling `NAME.rut`; BOTH is the loader's
+// first, then the single-file spelling `NAME.rut` — both INSIDE the
+// declaring package's `src/` shell (the root's children probe beside
+// the root file); BOTH present is the loader's
 // loud ambiguity (hinted once, mirrored). The found child stamps under
 // the module and its own decls recurse from its physical directory
 // (a file-form child's children mount beside it, not under `NAME/`).
@@ -599,7 +604,11 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
       return;
     }
   }
-  const extracted = ctx.rut.extractBundle(bytes);
+  // the artifact kind the url's own spelling declares — a `.zip` is
+  // the source transport (its `src/**` tree extracts like a bundle's
+  // ride-along set), anything else the compiled wire
+  const isZip = /\.zip$/.test(cache_path);
+  const extracted = isZip ? ctx.rut.extractSrczip(bytes) : ctx.rut.extractBundle(bytes);
   if (isEnvelope(extracted)) {
     hintOnce(
       `bundle:${url}`,
@@ -653,7 +662,7 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 // a reader never sees a partial entry
 async function atomicCacheWrite(target: vscode.Uri, bytes: Uint8Array): Promise<void> {
   await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(target, '..'));
-  const tmp = target.with({ path: target.path.replace(/\.rutbundle$/, '.part') });
+  const tmp = target.with({ path: `${target.path}.part` });
   await vscode.workspace.fs.writeFile(tmp, bytes);
   await vscode.workspace.fs.rename(tmp, target, { overwrite: true });
 }
@@ -862,6 +871,22 @@ function nestedManifest(folderFs: string, fileFs: string): boolean {
   return false;
 }
 
+// a package file's dir relative to the manifest, minus the leading
+// `src` component, is its mod path (`src` → `''` the root,
+// `src/layout` → `layout`) — the package's module tree lives under its
+// `src/` shell. Anything outside the shell (the old
+// root-beside-manifest spelling included) is not a module file: `null`.
+function stripSrcShell(rel: string): string | null {
+  const norm = rel.split(path.sep).join('/');
+  if (norm === 'src') {
+    return '';
+  }
+  if (norm.startsWith('src/')) {
+    return norm.slice('src/'.length);
+  }
+  return null;
+}
+
 async function indexWorkspace(rut: RutWasm): Promise<void> {
   const files = await vscode.workspace.findFiles(
     '**/*.rut',
@@ -887,9 +912,10 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
     const folder = vscode.workspace.getWorkspaceFolder(file)?.uri;
     const pkg = folder ? pkgs.get(folder.fsPath) ?? null : null;
     // a `mod.rut` under a folder-level package stamps its mod path
-    // (the dir relative to the folder; the folder root is '') — the
-    // position-path tier's data. Anything else keeps today's plain
-    // shape (the dep walk re-stamps the deps it mounts anyway)
+    // (the dir relative to the folder, minus the `src/` shell —
+    // `src/mod.rut` is the root `''`) — the position-path tier's data.
+    // A file outside the shell keeps today's plain shape (the dep walk
+    // re-stamps the deps it mounts anyway)
     if (
       pkg &&
       folder &&
@@ -897,7 +923,11 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
       !nestedManifest(folder.fsPath, file.fsPath)
     ) {
       const rel = path.relative(folder.fsPath, path.dirname(file.fsPath));
-      const modPath = rel === '' ? '' : rel.split(path.sep).join('/');
+      const modPath = stripSrcShell(rel);
+      if (modPath === null) {
+        rut.addDef(file.toString(), dec.decode(bytes));
+        continue;
+      }
       const stamped = rut.addDefMod(file.toString(), pkg, modPath, dec.decode(bytes));
       if (!isEnvelope(stamped) && stamped.decls.length > 0) {
         frontier.push({
@@ -947,11 +977,10 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
       if (!hasFile) {
         // the directory form is the path-shape stamp's business —
         // EXCEPT under a file-form parent, whose child's bare
-        // relative dir is not its mod path; only that correction
-        // spends the budget here
+        // relative dir (minus the `src/` shell) is not its mod path;
+        // only that correction spends the budget here
         const bareRel = path.relative(folder.fsPath, path.dirname(childUri.fsPath));
-        const bare = bareRel === '' ? '' : bareRel.split(path.sep).join('/');
-        if (bare === childPath) {
+        if (stripSrcShell(bareRel) === childPath) {
           continue;
         }
       }
@@ -987,7 +1016,7 @@ function analyzeDoc(rut: RutWasm, doc: vscode.TextDocument): Analysis {
 
 // a definition target -> a vscode Location. A target with a scheme
 // parses as-is; a repo-relative path (the embedded std surface's true
-// source, e.g. `rut/pouch/mod.rut`) resolves against the workspace
+// source, e.g. `rut/pouch/src/mod.rut`) resolves against the workspace
 // folders — a workspace that is the rut repo gets a real jump into the
 // stdlib. Nowhere to resolve: dropped (never a wrong jump). A FULLY
 // dropped answer — the wasm resolved the symbol but every target is

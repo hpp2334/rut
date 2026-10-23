@@ -113,6 +113,32 @@ pub(crate) fn read_archive(data: &[u8]) -> Result<Vec<ZipEntry>, ZipLayerError> 
     Ok(out)
 }
 
+/// Each entry's `(name, compression method)` off the central
+/// directory — WITHOUT decoding any payload. The policy layers read
+/// this FIRST: a method the format refuses names its entry before any
+/// bytes stream (a corrupt payload behind a refused method is the
+/// method's refusal, not a corruption report).
+pub(crate) fn entry_methods(data: &[u8]) -> Result<Vec<(String, u16)>, ZipLayerError> {
+    if !has_eocd(data) {
+        return Err(ZipLayerError::NotAZip);
+    }
+    let mut archive = zip::ZipArchive::new(Cursor::new(data))
+        .map_err(|e| ZipLayerError::Corrupt(e.to_string()))?;
+    let mut out = Vec::new();
+    for i in 0..archive.len() {
+        let name = archive.name_for_index(i).unwrap_or_default().to_string();
+        // the raw handle skips decompression — the directory's method
+        // spelling is the point here
+        #[allow(deprecated)]
+        let method = match archive.by_index_raw(i) {
+            Ok(file) => file.compression().to_u16(),
+            Err(e) => return Err(ZipLayerError::Corrupt(e.to_string())),
+        };
+        out.push((name, method));
+    }
+    Ok(out)
+}
+
 /// Does the tail of the data carry an end-of-central-directory
 /// signature? (Scans back over a possible zip comment, ≤ 64 KiB.)
 fn has_eocd(data: &[u8]) -> bool {

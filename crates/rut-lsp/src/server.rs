@@ -367,7 +367,19 @@ impl<'a> Walk<'a> {
                 return;
             }
         };
-        match deps::bundle_sources(&bytes) {
+        // the artifact kind the url's own spelling declares: a `.zip`
+        // is the source transport (its files index at their
+        // zip-relative paths), anything else the compiled wire
+        let indexed = if url
+            .rsplit('.')
+            .next()
+            .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+        {
+            deps::srczip_sources(&bytes)
+        } else {
+            deps::bundle_sources(&bytes)
+        };
+        match indexed {
             Ok(b) => {
                 for f in &b.files {
                     let uri = format!("bundle:{}/{}", b.module, f.path);
@@ -425,16 +437,16 @@ impl<'a> Walk<'a> {
     }
 
     /// the pkg's mod tree (the editor face of the loader's mount): the
-    /// root module is `mod.rut` beside the manifest — indexed under the
-    /// pkg name with mod path `""` unless the entries loop above
-    /// already indexed it — and the root text's `mod` declarations
-    /// mount the child tree from the directory, recursively,
-    /// cycle-guarded. An entry-less manifest with no `mod.rut` (the
-    /// surface-only dev state) mounts nothing. A mount failure is ONE
-    /// loud error hint (the loader's diagnostics, mirrored), never
+    /// root module is `src/mod.rut` — indexed under the pkg name with
+    /// mod path `""` unless the entries loop above already indexed it —
+    /// and the root text's `mod` declarations mount the child tree from
+    /// the directory, recursively, cycle-guarded (children beside the
+    /// root file, under `src/`). An entry-less manifest with no root
+    /// (the surface-only dev state) mounts nothing. A mount failure is
+    /// ONE loud error hint (the loader's diagnostics, mirrored), never
     /// silent bytes.
     fn mount_mod_tree(&mut self, dir: &Path, module: &str, root_indexed: bool, direct: bool) {
-        let p = dir.join("mod.rut");
+        let p = dir.join(rut_driver::bundle::ROOT_MODULE);
         let Ok(root_text) = std::fs::read_to_string(&p) else {
             return; // no root module — the surface-only dev state; nothing mounts
         };
@@ -445,6 +457,7 @@ impl<'a> Walk<'a> {
             self.insert(Self::mark(idx, direct));
         }
         let mut files = std::collections::BTreeMap::new();
+        files.insert(String::new(), p.clone());
         let mut read =
             |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
                 Ok(fs_child_lookup(dir, &mut files, parent, name, "mod.rut"))
@@ -463,7 +476,7 @@ impl<'a> Walk<'a> {
                     let child = files
                         .get(&path)
                         .cloned()
-                        .unwrap_or_else(|| dir.join(&path).join("mod.rut"));
+                        .unwrap_or_else(|| dir.join("src").join(&path).join("mod.rut"));
                     let uri = child.to_string_lossy().into_owned();
                     let idx =
                         deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Impl, None, &[]);
@@ -499,6 +512,7 @@ impl<'a> Walk<'a> {
         };
         let child_file = rut_driver::decl::DECL_CHILD_FILE;
         let mut files = std::collections::BTreeMap::new();
+        files.insert(String::new(), root_path.clone());
         let mut read =
             |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
                 Ok(fs_child_lookup(dir, &mut files, parent, name, child_file))
@@ -518,7 +532,7 @@ impl<'a> Walk<'a> {
                     let child = files
                         .get(&path)
                         .cloned()
-                        .unwrap_or_else(|| dir.join(&path).join(child_file));
+                        .unwrap_or_else(|| dir.join("src").join(&path).join(child_file));
                     let uri = child.to_string_lossy().into_owned();
                     let idx =
                         deps::index_dep_mod(module, &uri, &path, &m.text, Mode::Decl, None, &[]);
@@ -560,34 +574,59 @@ fn hex_sha256(bytes: &[u8]) -> String {
 }
 
 /// the fs walk behind `Backend::doc_mods`: the nearest ancestor
-/// `rut.jsonc` names the package; the file's dir relative to it is
-/// the mod path — the manifest dir's own files are the root module,
-/// a `NAME/mod.rut` below it the `NAME` module (any other file shape
-/// is not a module file — the default). Bounded like every walk here.
+/// `rut.jsonc` names the package; the file's dir relative to it, minus
+/// the `src/` shell, is the mod path — `src/mod.rut` is the root
+/// module, a `src/NAME/mod.rut` below it the `NAME` module (any other
+/// file shape is not a module file — the default). Bounded like every
+/// walk here.
 fn resolve_doc_mods(file: &Path) -> DocMods {
     resolve_doc_mods_at(file).1
 }
 
 /// [`resolve_doc_mods`] with the nearest manifest dir attached — the
 /// check lane's B1 assembly reads the package's files off it (`None`
-/// = no manifest above the file: not a package file at all).
+/// = no manifest above the file: not a package file at all). The
+/// package's module tree lives under its `src/` shell: the shell
+/// component strips off the file's dir relative to the manifest, so
+/// `src/mod.rut` is the root (`""`), `src/layout/mod.rut` the
+/// `layout` module — anything outside the shell is not a package
+/// module file.
 fn resolve_doc_mods_at(file: &Path) -> (Option<PathBuf>, DocMods) {
     let file_dir = match file.parent() {
         Some(d) => d.to_path_buf(),
         None => return (None, DocMods::default()),
     };
-    let is_mod_rut = file.file_name().map(|n| n == "mod.rut").unwrap_or(false);
+    let is_mod_rut = file
+        .file_name()
+        .map(|n| n == "mod.rut" || n == "mod.d.rut")
+        .unwrap_or(false);
     let mut dir: &Path = &file_dir;
     for _ in 0..MAX_DEP_DEPTH * 2 {
         if dir.join(MANIFEST_NAME).is_file() {
             if let Ok(text) = std::fs::read_to_string(dir.join(MANIFEST_NAME)) {
                 if let Ok(t) = deps::dep_table(&text) {
                     if let Some(name) = t.name {
-                        if !is_mod_rut && file_dir != dir {
-                            return (None, DocMods::default()); // a stray file in a child dir
+                        // the `src/` shell: files outside it (the old
+                        // root-at-the-manifest spelling included) are
+                        // not package module files
+                        let rel = match file_dir.strip_prefix(dir) {
+                            Ok(rel) => rel,
+                            Err(_) => return (None, DocMods::default()),
+                        };
+                        let mut comps = rel.components();
+                        let in_shell = matches!(comps.next(), Some(c) if c.as_os_str() == "src");
+                        if !in_shell {
+                            return (None, DocMods::default());
                         }
-                        let rel = file_dir.strip_prefix(dir).unwrap_or(&file_dir);
-                        let mod_path = rel
+                        let inner: PathBuf = comps.collect();
+                        // one level in, only module files (the shell's
+                        // own files ride as the root) — a deeper stray
+                        // (`src/layout/grid.rut`, not a declared mount)
+                        // is not a module file
+                        if !is_mod_rut && !inner.as_os_str().is_empty() {
+                            return (None, DocMods::default());
+                        }
+                        let mod_path = inner
                             .components()
                             .map(|c| c.as_os_str().to_string_lossy().into_owned())
                             .collect::<Vec<_>>()
@@ -622,7 +661,9 @@ fn resolve_doc_mods_at(file: &Path) -> (Option<PathBuf>, DocMods) {
 /// child, keyed by mod path — the index stamps read their URIs from it
 /// (a definition target points at the file that IS), and a file-form
 /// parent's children probe beside it, never under a dir named after
-/// the mod path. Seeded empty; the root's dir is `dir` itself.
+/// the mod path. Seeded with the root's physical file at mod path
+/// `""` — the root's children probe beside it, inside the package's
+/// `src/` shell.
 fn fs_child_lookup(
     dir: &Path,
     files: &mut std::collections::BTreeMap<String, PathBuf>,
@@ -785,11 +826,12 @@ impl Backend {
 }
 
 /// The doc's own package, assembled over the fs (the B1 "workspace /
-/// manifest context"): the manifest dir's `mod.rut` is the root module,
-/// the root's `mod` tree mounts through the same walk the dep lane
-/// rides, and the LIVE buffer rides the doc's own mod path. `None` = the
-/// package cannot assemble (a host manifest's tree is Decl-flavored, no
-/// readable root) — the caller falls back to parse-only.
+/// manifest context"): the manifest dir's `src/mod.rut` is the root
+/// module, the root's `mod` tree mounts through the same walk the dep
+/// lane rides, and the LIVE buffer rides the doc's own mod path.
+/// `None` = the package cannot assemble (a host manifest's tree is
+/// Decl-flavored, no readable root) — the caller falls back to
+/// parse-only.
 fn fs_pkg_group(
     dir: &Path,
     pkg: &str,
@@ -803,7 +845,7 @@ fn fs_pkg_group(
         return None; // a host surface's tree is Decl-flavored — not a source world
     }
     let file_uri = |p: &Path| format!("file://{}", p.to_string_lossy());
-    let root_path = dir.join("mod.rut");
+    let root_path = dir.join(rut_driver::bundle::ROOT_MODULE);
     let (root_text, root_uri) = if doc_path.is_empty() {
         (doc_text.to_string(), doc_uri.to_string())
     } else {
@@ -823,6 +865,7 @@ fn fs_pkg_group(
         },
     );
     let mut found = std::collections::BTreeMap::new();
+    found.insert(String::new(), root_path.clone());
     let mut read =
         |parent: &str, name: &str| -> std::result::Result<rut_driver::ChildLookup, String> {
             Ok(fs_child_lookup(dir, &mut found, parent, name, "mod.rut"))
@@ -840,7 +883,7 @@ fn fs_pkg_group(
                 let child = found
                     .get(&path)
                     .cloned()
-                    .unwrap_or_else(|| dir.join(&path).join("mod.rut"));
+                    .unwrap_or_else(|| dir.join("src").join(&path).join("mod.rut"));
                 (m.text.clone(), file_uri(&child))
             };
             files.insert(

@@ -1,4 +1,4 @@
-// fannkuch.js — the JS twin of fannkuch/main.rut.
+// fannkuch.js — the JS twin of fannkuch/src/mod.rut.
 const N = 7;
 
 function fannkuch(n) {

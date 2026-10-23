@@ -45,26 +45,32 @@ use crate::source::{FsSource, Source};
 pub use rut_driver::pack::Archive;
 
 /// Where a walked pkg's files live — the D3 checks and the pack lanes'
-/// group reads dispatch on it: a `Dir` pkg reads from its directory, an
-/// `Archive` pkg from the fetched archive's entries at its prefix.
+/// group reads dispatch on it: a `Dir` pkg reads from its directory,
+/// an `Unpacked` pkg from the content-addressed directory a source-zip
+/// url dep unpacked to (the pack lanes read its tree like any dir's),
+/// an `Archive` pkg from the fetched archive's entries at its prefix.
 /// WALK-LOCAL bookkeeping: it never rides the [`Mounted`] (pure data).
 #[derive(Clone, Debug)]
 pub(crate) enum Loc {
     Dir,
+    Unpacked(PathBuf),
     Archive { slot: usize, prefix: String },
 }
 
 /// The walk's world: the mounted table (first mount wins — enforced by
 /// the callers), where each pkg's files live, the pack-time scope
 /// ledger (per-archive namespacing shifts rows above everything
-/// recorded so far), and the archives the url deps opened
-/// (slot-ordered).
+/// recorded so far), the archives the url deps opened (slot-ordered),
+/// and the root source-zip url deps unpack under
+/// (`<project>/.rut/unpacked`, seeded by the walk entry from the
+/// project dir).
 #[derive(Default)]
 pub(crate) struct World {
     pub(crate) pkgs: BTreeMap<String, Mounted>,
     pub(crate) locs: BTreeMap<String, Loc>,
     ledger: BTreeMap<ScopeId, String>,
     pub(crate) archives: Vec<Archive>,
+    pub(crate) unpack_root: PathBuf,
 }
 
 impl World {
@@ -86,13 +92,22 @@ impl World {
         }
     }
 
+    /// The unpacked directory a source-zip url dep mounted from — the
+    /// pack lanes read its tree like any dir dep's.
+    pub(crate) fn unpacked_of(&self, spec: &str) -> Option<&Path> {
+        match self.locs.get(spec) {
+            Some(Loc::Unpacked(p)) => Some(p.as_path()),
+            _ => None,
+        }
+    }
+
     /// Every archive-mounted spec: `(slot, prefix)`, spec order.
     pub(crate) fn archive_locs(&self) -> BTreeMap<String, (usize, String)> {
         self.locs
             .iter()
             .filter_map(|(spec, loc)| match loc {
                 Loc::Archive { slot, prefix } => Some((spec.clone(), (*slot, prefix.clone()))),
-                Loc::Dir => None,
+                Loc::Dir | Loc::Unpacked(_) => None,
             })
             .collect()
     }
@@ -408,14 +423,25 @@ struct Fetched<'a> {
 // entry modules (dir flavor)
 // ---------------------------------------------------------------------
 
-/// The `mod.rut` probe: `mod.rut` beside the manifest —
-/// `Ok(Some(text))` when the directory carries one (it is the root
-/// module), `Ok(None)` when absent. A `mod.rut` that exists but cannot
-/// be read is the loud read error, never a silent fallback.
-fn read_root_module(dir: &str) -> Result<Option<String>, LoadError> {
-    let path = PathBuf::from(dir).join("mod.rut");
+/// The lib body's root file — `src/mod.rut`, inside the package's
+/// `src/` shell beside the manifest. Children mount beside the root
+/// file, so the whole module tree lives under `src/`. The spelled-
+/// surface helper and the d-flavored default root ride the driver's
+/// shared spellings.
+pub(crate) use rut_driver::bundle::src_rel;
+pub(crate) use rut_driver::bundle::DECL_ROOT_MODULE as DECL_ROOT_FILE;
+pub(crate) use rut_driver::bundle::ROOT_MODULE as ROOT_FILE;
+
+/// The root-file probe: `rel` (a manifest-relative path) —
+/// `Ok(Some((text, path)))` when the package carries it (it is the
+/// root module / root surface), `Ok(None)` when absent. A file that
+/// exists but cannot be read is the loud read error, never a silent
+/// fallback. The path rides back: the caller seeds the mod mount's
+/// child base with it (children probe beside the root file).
+fn read_root_file(dir: &str, rel: &str) -> Result<Option<(String, PathBuf)>, LoadError> {
+    let path = PathBuf::from(dir).join(rel);
     match std::fs::read_to_string(&path) {
-        Ok(text) => Ok(Some(text)),
+        Ok(text) => Ok(Some((text, path))),
         Err(e) if path.is_file() => Err(LoadError::law(format!(
             "cannot read {}: {e}",
             path.display()
@@ -424,25 +450,20 @@ fn read_root_module(dir: &str) -> Result<Option<String>, LoadError> {
     }
 }
 
-/// The host pkg's default root file — `mod.d.rut` beside the manifest,
-/// the lib body tree's `mod.rut` probe d-flavored (the Decl flavor's
-/// spelling; [`rut_driver::decl::DECL_CHILD_FILE`] is the same string).
-pub(crate) const DECL_ROOT_FILE: &str = "mod.d.rut";
+/// The `src/mod.rut` probe: the lib body's root module.
+fn read_root_module(dir: &str) -> Result<Option<(String, PathBuf)>, LoadError> {
+    read_root_file(dir, ROOT_FILE)
+}
 
-/// The `mod.d.rut` probe: the host arm's default root, [`read_root_module`]
-/// d-flavored — `Ok(Some(text))` when the directory carries one (it is
-/// the root surface), `Ok(None)` when absent. A file that exists but
-/// cannot be read is the loud read error, never a silent fallback.
-fn read_decl_root_module(dir: &str) -> Result<Option<String>, LoadError> {
-    let path = PathBuf::from(dir).join(DECL_ROOT_FILE);
-    match std::fs::read_to_string(&path) {
-        Ok(text) => Ok(Some(text)),
-        Err(e) if path.is_file() => Err(LoadError::law(format!(
-            "cannot read {}: {e}",
-            path.display()
-        ))),
-        Err(_) => Ok(None),
-    }
+/// The host pkg's default root file — `src/mod.d.rut`, the lib body
+/// tree's `src/mod.rut` probe d-flavored (the Decl flavor's spelling;
+/// [`rut_driver::decl::DECL_CHILD_FILE`] remains the child file name).
+/// Re-exported from the driver above as [`DECL_ROOT_FILE`].
+///
+/// The `src/mod.d.rut` probe: the host arm's default root, [`read_root_module`]
+/// d-flavored.
+fn read_decl_root_module(dir: &str) -> Result<Option<(String, PathBuf)>, LoadError> {
+    read_root_file(dir, DECL_ROOT_FILE)
 }
 
 /// The dir lane's child lookup for the mod mount — the same case law
@@ -461,7 +482,9 @@ fn read_decl_root_module(dir: &str) -> Result<Option<String>, LoadError> {
 /// mod path: a file-form parent (`a.rut`) lives in its own directory —
 /// its children mount beside it, never under a dir named after the mod
 /// path (the parent's file dir IS the probe base, both forms). Seeded
-/// empty; the root's dir is `dir` itself.
+/// with the root's physical file at mod path `""`, so the root's
+/// children probe beside the root file — inside the package's `src/`
+/// shell.
 pub(crate) fn dir_child_lookup(
     dir: &Path,
     files: &mut BTreeMap<String, PathBuf>,
@@ -521,18 +544,20 @@ pub(crate) fn dir_child_lookup(
 /// declarations mount the child tree from the directory —
 /// `NAME/mod.rut` beside the declaring file, else the single-file
 /// `NAME.rut`, recursively, cycle-guarded by canonical file identity.
-/// The root's own file identity (`root_file`) opens the guard's chain.
+/// The root's own file (`root_file` — `src/mod.rut`) opens the guard's
+/// chain and seeds the child base, so the tree mounts inside `src/`.
 fn lib_pkg(
     dir: &str,
     root_text: String,
-    root_file: &str,
+    root_file: &Path,
     manifest: &Manifest,
 ) -> Result<Mounted, LoadError> {
     let root_canon = std::fs::canonicalize(root_file)
-        .unwrap_or_else(|_| PathBuf::from(root_file))
+        .unwrap_or_else(|_| root_file.to_path_buf())
         .to_string_lossy()
         .into_owned();
     let mut files = BTreeMap::new();
+    files.insert(String::new(), root_file.to_path_buf());
     let mut lookup = |parent: &str, name: &str| {
         dir_child_lookup(Path::new(dir), &mut files, parent, name, "mod.rut")
     };
@@ -559,24 +584,24 @@ fn lib_pkg(
 ///   beside the declaring file, recursively, cycle-guarded) and every
 ///   row carries the path it lives under. No body exists — the
 ///   embedding Rust binds it at run time. The root surface is the
-///   spelled `entry.type` when the manifest carries one, else
-///   `mod.d.rut` beside the manifest — the default root, lib parity
-///   with a body's `mod.rut`; neither present is the loud no-entry
-///   error naming both spellings. A `mod.rut` beside the manifest is a
-///   body: refused (a host pkg is pure surface).
-/// - a `type = "lib"` pkg (the default) — a source module: `mod.rut`
-///   beside the manifest IS the body (the root module); the surface
-///   derives from its exports. A declared surface with no `mod.rut` is
-///   the surface-only dev state (a decl unit) — but only with the kind
-///   spelled; the ambiguity refuses, naming both fixes. `host fn` text
-///   is refused in either file — the lib-surface law.
+///   spelled `entry.type` (resolved under `src/`) when the manifest
+///   carries one, else `src/mod.d.rut` — the default root, lib parity
+///   with a body's `src/mod.rut`; neither present is the loud no-entry
+///   error naming both spellings.
+/// - a `type = "lib"` pkg (the default) — a source module: `src/mod.rut`
+///   IS the body (the root module); the surface derives from its
+///   exports. No `src/mod.rut` with a spelled surface (also under
+///   `src/`) and the kind declared is the surface-only dev state (a
+///   decl unit); the ambiguity (surface spelled, kind missing, no body)
+///   refuses, naming both fixes. `host fn` text is refused in either
+///   file — the lib-surface law.
 ///
 /// The root's `mod` declarations mount the child tree —
 /// `NAME/mod.rut` beside the declaring file (else the single-file
-/// `NAME.rut`), recursively, cycle-guarded. The repealed
-/// `entry.lib`/`entry.libs` keys refused at parse (the manifest walk);
-/// a published BUNDLE's old manifest rides the reader's compat lane
-/// instead (a loading law).
+/// `NAME.rut`), recursively, cycle-guarded — the tree living under the
+/// package's `src/` shell. The repealed `entry.lib`/`entry.libs` keys
+/// refused at parse (the manifest walk); a published BUNDLE's old
+/// manifest rides the reader's compat lane instead (a loading law).
 ///
 /// The manifest's `namespace` row (when present) rides the pkg as the
 /// qualified-access head (`calc`'s `Math`), and its `consts` rows ride
@@ -589,27 +614,21 @@ fn load_entry_module(
 ) -> Result<Mounted, LoadError> {
     match manifest.pkg_type {
         PkgType::Host => {
-            if dir_has_root_module(dir) {
-                return Err(LoadError::law(format!(
-                    "module in {dir} is a `type = \"host\"` pkg but a `mod.rut` sits beside the \
-                     manifest — a host pkg is pure surface (its mod tree rides `NAME/mod.d.rut` \
-                     files); drop the file or declare `type = \"lib\"`"
-                )));
-            }
-            // the root surface: a spelled `entry.type` WINS (existing
-            // flat pkgs keep their `calc.d.rut`-style roots); absent,
-            // `mod.d.rut` beside the manifest is the default root —
-            // neither present is the loud no-entry error naming both
-            // doors (the lib arm's ambiguity refusal, d-flavored)
+            // the root surface: a spelled `entry.type` WINS, resolved
+            // under `src/` (existing flat pkgs keep their
+            // `calc.d.rut`-style roots — moved under the shell);
+            // absent, `src/mod.d.rut` is the default root — neither
+            // present is the loud no-entry error naming both doors
+            // (the lib arm's ambiguity refusal, d-flavored)
             let rel = match manifest.entry.type_path.as_ref() {
-                Some(rel) => rel.clone(),
+                Some(rel) => src_rel(rel),
                 None => match read_decl_root_module(dir)? {
                     Some(_) => DECL_ROOT_FILE.to_string(),
                     None => {
                         return Err(LoadError::law(format!(
                             "module in {dir} is a host pkg with no entry — spell \
                              `\"entry\": {{ \"type\": \"<surface>.d.rut\" }}` or add a \
-                             `mod.d.rut` beside the manifest"
+                             `src/mod.d.rut` beside the manifest"
                         )));
                     }
                 },
@@ -618,12 +637,14 @@ fn load_entry_module(
             let src_text = read_source_text(src, &key)?;
             // the surface's mod tree mounts beside it — `NAME/mod.d.rut`
             // next to the declaring file, recursively, cycle-guarded;
-            // the root file's identity opens the guard's chain
+            // the root file's identity opens the guard's chain and
+            // seeds the child base
             let root_canon = std::fs::canonicalize(&key)
                 .unwrap_or_else(|_| PathBuf::from(&key))
                 .to_string_lossy()
                 .into_owned();
             let mut files = BTreeMap::new();
+            files.insert(String::new(), PathBuf::from(&key));
             let mut lookup = |parent: &str, name: &str| {
                 dir_child_lookup(Path::new(dir), &mut files, parent, name, "mod.d.rut")
             };
@@ -644,24 +665,22 @@ fn load_entry_module(
             Ok(m)
         }
         PkgType::Lib => {
-            // the surface read + the lib-surface law (kept from today)
+            // the surface read + the lib-surface law (kept from today);
+            // a spelled surface resolves under the `src/` shell
             let mut surface_only: Option<String> = None;
             if let Some(rel) = &manifest.entry.type_path {
-                let key = src.resolve(dir, rel).map_err(LoadError::law)?;
+                let key = src.resolve(dir, &src_rel(rel)).map_err(LoadError::law)?;
                 let src_text = read_source_text(src, &key)?;
                 rut_driver::decl::refuse_host_rows(&src_text, &key).map_err(LoadError::law)?;
                 surface_only = Some(src_text);
             }
-            // the body: `mod.rut` beside the manifest — the root
-            // module, always. Without one, the surface-only dev state
-            // stands (a decl unit) — but the AMBIGUITY refuses: an
-            // `entry.type` spelled with no declared kind and no body
-            // names neither host nor lib.
+            // the body: `src/mod.rut` — the root module, always.
+            // Without one, the surface-only dev state stands (a decl
+            // unit) — but the AMBIGUITY refuses: an `entry.type`
+            // spelled with no declared kind and no body names neither
+            // host nor lib.
             match read_root_module(dir)? {
-                Some(root) => {
-                    let root_file = PathBuf::from(dir).join("mod.rut");
-                    lib_pkg(dir, root, &root_file.to_string_lossy(), manifest)
-                }
+                Some((root, root_file)) => lib_pkg(dir, root, &root_file, manifest),
                 None => match surface_only {
                     Some(surface) if manifest.type_declared => Ok(Mounted {
                         body: MountedBody::Source {
@@ -677,19 +696,12 @@ fn load_entry_module(
                          for a host pkg, or `\"type\": \"lib\"` for the surface-only dev state"
                     ))),
                     None => Err(LoadError::law(format!(
-                        "module in {dir} has no entry — the root module is `mod.rut` beside \
-                         the manifest"
+                        "module in {dir} has no entry — the root module is `src/mod.rut`"
                     ))),
                 },
             }
         }
     }
-}
-
-/// Does a `mod.rut` sit beside this manifest? The host arm's body
-/// probe (a body on a host pkg is a packaging error, named loudly).
-fn dir_has_root_module(dir: &str) -> bool {
-    PathBuf::from(dir).join("mod.rut").is_file()
 }
 
 /// The manifest's `consts` rows as the host body's constant table:
@@ -803,6 +815,12 @@ pub(crate) fn walk_dir(
     let root = manifest.name.clone().ok_or_else(|| {
         LoadError::law(format!("{}{MANIFEST_NAME} has no `name`", dir_key_dir(dir),))
     })?;
+    // the source-zip unpack root: `<project>/.rut/unpacked` — seeded
+    // once from the project dir (the cache's sibling convention); a
+    // walk that never meets a `.zip` url dep never touches it
+    if world.unpack_root.as_os_str().is_empty() {
+        world.unpack_root = Path::new(dir).join(".rut").join("unpacked");
+    }
     let root_module = load_entry_module(src, dir, &manifest)?;
     world.register(&root, root_module)?;
     // the root's dir rides the world, so the pack lanes can answer for
@@ -837,6 +855,37 @@ pub(crate) fn walk_dir(
     Ok(root)
 }
 
+/// The dep dir's IR file, if it carries one instead of a package
+/// tree: exactly one `.rutbundle` entry and no manifest. `None` when
+/// the dir is an ordinary package (or empty — the manifest read
+/// diagnoses that).
+fn ir_bundle_file(dep_dir: &Path) -> Result<Option<PathBuf>, LoadError> {
+    let entries = match std::fs::read_dir(dep_dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(None),
+    };
+    let mut bundles = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| LoadError::law(format!("{}: {e}", dep_dir.display())))?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy().into_owned();
+        if name == rut_driver::bundle::MANIFEST_NAME {
+            return Ok(None); // an ordinary package tree
+        }
+        if name.ends_with(".rutbundle") && entry.path().is_file() {
+            bundles.push(entry.path());
+        }
+    }
+    match bundles.len() {
+        0 => Ok(None),
+        1 => Ok(Some(bundles.remove(0))),
+        _ => Err(LoadError::law(format!(
+            "{}: more than one `.rutbundle` — a dep dir carries exactly one IR file",
+            dep_dir.display()
+        ))),
+    }
+}
+
 /// The dir prefix in manifest error texts: today's messages spell
 /// `<dir>/rut.jsonc`; a key already ends without the separator.
 fn dir_key_dir(dir: &str) -> String {
@@ -846,6 +895,23 @@ fn dir_key_dir(dir: &str) -> String {
         dir.to_string()
     } else {
         format!("{dir}/")
+    }
+}
+
+/// The mount key a dep directory mounts under — the shared derivation
+/// the walk and the pack lanes agree on: a directory named
+/// `<name>@<fp16>` (an identity dir — the wire group loop's law,
+/// dir-flavored) mounts under its identity, a plain name under the
+/// row's bare key.
+pub(crate) fn mount_key_for(dep_dir: &str, spec: &str) -> String {
+    let base = Path::new(dep_dir)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if rut_driver::bundle::is_identity(&base) {
+        base
+    } else {
+        spec.to_string()
     }
 }
 
@@ -929,7 +995,7 @@ fn resolve_table(
                     "cyclic use: `{spec}` ({url}) is already being loaded"
                 )));
             }
-            mount_url_dep(world, spec, url, parent, fetched.lock, bytes)?;
+            mount_url_dep(world, spec, url, parent, fetched, bytes)?;
             fetched.visiting_urls.remove(url);
             continue;
         }
@@ -943,8 +1009,46 @@ fn resolve_table(
                 "cyclic use: `{spec}` ({dep_dir}) is already being loaded"
             )));
         }
+        // the mount key: a dep directory named `<name>@<fp16>` — an
+        // IDENTITY dir, the wire group loop's law, dir-flavored —
+        // mounts under its identity (two versions of one name coexist
+        // side by side); a plain name mounts bare. The name-vs-key
+        // gate reads the identity's name half either way.
+        let mount_key = mount_key_for(&dep_dir, spec);
+        if world.pkgs.contains_key(&mount_key) {
+            continue; // first mount wins — per-identity exact dedup
+        }
+        // an embedded IR dep: a dep directory carrying a `.rutbundle`
+        // file instead of a package tree — the dirname's identity is
+        // the bundle's own root fingerprint (the packer wrote it; a
+        // doctored dirname refuses), and the bytes mount through the
+        // wire lane verbatim (its format_version gates apply: a
+        // too-old bundle refuses loudly on a newer toolchain, by
+        // design)
+        if let Some(ir) = ir_bundle_file(Path::new(&dep_dir))? {
+            let bytes = std::fs::read(&ir)
+                .map_err(|e| LoadError::law(format!("cannot read {}: {e}", ir.display())))?;
+            let parsed = rut_driver::bundle::parse_bundle(&bytes)
+                .map_err(|e| LoadError::law(format!("{}: {e}", ir.display())))?;
+            let got_fp = rut_driver::bundle::fp16_of(&parsed, "");
+            let (iname, ifp) = rut_driver::bundle::parse_identity(&mount_key)
+                .ok_or_else(|| LoadError::law(format!("{}: not an identity dir", ir.display())))?;
+            if got_fp != ifp {
+                return Err(LoadError::law(format!(
+                    "`{iname}@{ifp}/` spells fingerprint `{ifp}`, but its bundle hashes to \
+                     `{got_fp}` — the dirname and the content disagree"
+                )));
+            }
+            return mount_bundle_bytes(
+                world,
+                &mount_key,
+                &ir.display().to_string(),
+                parent,
+                &bytes,
+            );
+        }
         let dm = read_manifest(src, &dep_dir)?;
-        if dm.name.as_deref() != Some(spec.as_str()) {
+        if dm.name.as_deref() != Some(rut_driver::bundle::mount_name(&mount_key)) {
             return Err(LoadError::DepName {
                 spec: spec.clone(),
                 location: dep_dir.clone(),
@@ -955,15 +1059,120 @@ fn resolve_table(
         // the first-mount edge: the declaring pkg's spec (diagnostic
         // data — the uses diagnostic's "pulled by" clause reads it)
         dep_pkg.mounted_by = Some(parent.to_string());
-        world.register(spec, dep_pkg)?;
-        world.locs.insert(spec.clone(), Loc::Dir);
+        world.register(&mount_key, dep_pkg)?;
+        world.locs.insert(mount_key.clone(), Loc::Dir);
         visiting.push(dep_canon);
         // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
         // consumer's world never contains another pkg's dev table
-        resolve_deps(world, src, &dep_dir, spec, &dm, visiting, fetched)?;
+        resolve_deps(world, src, &dep_dir, &mount_key, &dm, visiting, fetched)?;
         visiting.pop();
     }
     Ok(())
+}
+
+/// Mount a `.zip` url dep — the SOURCE transport's lane: gate 0 (the
+/// pin) ran at the caller; the bytes are a source zip ([`read_srczip`]
+/// — CRC, grammar, zip64 all enforced), which unpacks ONCE into a
+/// content-addressed directory (`<project>/.rut/unpacked/<sha-of-bytes>/`,
+/// temp-dir + rename atomic, so a reader never sees a partial tree)
+/// and mounts as the directory package it carries — the ordinary dir
+/// lane from there (its rewritten rows resolve inside; an open url row
+/// resolves from the fetched closure, loudly absent otherwise).
+fn mount_zip_dep(
+    world: &mut World,
+    spec: &str,
+    url: &str,
+    parent: &str,
+    sha_hex: &str,
+    fetched: &mut Fetched<'_>,
+    bytes: &[u8],
+) -> Result<(), LoadError> {
+    let entries = rut_driver::bundle::read_srczip(bytes)
+        .map_err(|e| LoadError::law(format!("{url}: {e}")))?;
+    if world.unpack_root.as_os_str().is_empty() {
+        return Err(LoadError::law(format!(
+            "{url}: no unpack root — the walk entry seeds `<project>/.rut/unpacked`"
+        )));
+    }
+    let dir = world.unpack_root.join(sha_hex);
+    unpack_once(&dir, &entries).map_err(|e| LoadError::law(format!("{url}: {e}")))?;
+    // the directory lane over the unpacked tree — the manifest, the
+    // name-vs-key gate, the entry mount, then the dep recursion (the
+    // rewritten rows resolve inside; the first-mount edge records the
+    // declaring pkg's spec)
+    let dir_key = dir.to_string_lossy().into_owned();
+    let src = FsSource::at(&dir);
+    let manifest = read_manifest(&src, &dir_key)?;
+    let root_name = manifest
+        .name
+        .clone()
+        .ok_or_else(|| LoadError::law(format!("{url}: rut.jsonc has no `name`")))?;
+    if root_name != rut_driver::bundle::mount_name(spec) {
+        return Err(LoadError::law(format!(
+            "dep `{spec}` points at {url} — the zip names itself `{root_name}`"
+        )));
+    }
+    if world.pkgs.contains_key(spec) {
+        return Ok(()); // first mount wins — an earlier dep of the same name
+    }
+    let mut root_module = load_entry_module(&src, &dir_key, &manifest)?;
+    root_module.mounted_by = Some(parent.to_string());
+    world.register(spec, root_module)?;
+    world
+        .locs
+        .insert(spec.to_string(), Loc::Unpacked(dir.clone()));
+    let mut visiting = vec![canonical(&dir_key)?];
+    resolve_deps(
+        world,
+        &src,
+        &dir_key,
+        spec,
+        &manifest,
+        &mut visiting,
+        fetched,
+    )?;
+    Ok(())
+}
+
+/// Lay a source zip's entries down under `dir` — atomic: a temp
+/// sibling fills first, then one rename publishes the tree, so a
+/// reader never sees a partial unpack (the cache entry law). The
+/// entries are grammar-validated (no `..`, no absolute, no dot
+/// components), so every path is a safe join.
+fn unpack_once(dir: &Path, entries: &[(String, Vec<u8>)]) -> Result<(), String> {
+    if dir.is_dir() {
+        return Ok(()); // content-addressed: present ⇒ whole
+    }
+    let parent = dir
+        .parent()
+        .ok_or_else(|| format!("{}: no parent", dir.display()))?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    let stem = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "pkg".to_string());
+    let tmp = parent.join(format!(".{stem}.tmp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    for (name, bytes) in entries {
+        let p = tmp.join(name);
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        std::fs::write(&p, bytes).map_err(|e| format!("{}: {e}", p.display()))?;
+    }
+    match std::fs::rename(&tmp, dir) {
+        Ok(()) => Ok(()),
+        // a concurrent unpack won the rename — its tree is whole too
+        Err(_) if dir.is_dir() => {
+            let _ = std::fs::remove_dir_all(&tmp);
+            Ok(())
+        }
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&tmp);
+            Err(format!("{}: {e}", dir.display()))
+        }
+    }
 }
 
 /// Mount a url dep's fetched bytes — the mount door where the pin is
@@ -999,7 +1208,7 @@ fn mount_url_dep(
     spec: &str,
     url: &str,
     parent: &str,
-    lock: &BTreeMap<String, String>,
+    fetched: &mut Fetched<'_>,
     bytes: &[u8],
 ) -> Result<(), LoadError> {
     if world.pkgs.contains_key(spec) {
@@ -1008,7 +1217,7 @@ fn mount_url_dep(
     // gate 0 — the pin law: the LOCK pins the url (the manifest row
     // lost its `sha256`); no row is the loud install recipe, a row
     // that disagrees names both hashes
-    let pin = lock.get(url).ok_or_else(|| LoadError::Unpinned {
+    let pin = fetched.lock.get(url).ok_or_else(|| LoadError::Unpinned {
         spec: spec.to_string(),
         url: url.to_string(),
     })?;
@@ -1020,6 +1229,35 @@ fn mount_url_dep(
             pin: pin.clone(),
             got,
         });
+    }
+    // gate 1 — the container, by the row's own spelling: a `.zip` url
+    // is SOURCE transport — unzipped, unpacked once (content-addressed
+    // by the pin's hash), and mounted as the directory package it
+    // carries; anything else rides the compiled-bundle lane below
+    if url
+        .rsplit('.')
+        .next()
+        .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+    {
+        return mount_zip_dep(world, spec, url, parent, &got, fetched, bytes);
+    }
+    mount_bundle_bytes(world, spec, url, parent, bytes)
+}
+
+/// Mount a fetched `.rutbundle` — the COMPILED transport's lane, gates
+/// 1-7 of the url-dep mount door (the pin, gate 0, ran at the caller;
+/// an embedded IR FILE rides this same lane from the dir-lane path
+/// resolution, its "origin" the file path the diagnostics spell).
+/// Gate order mirrors the driver's bundle walk:
+fn mount_bundle_bytes(
+    world: &mut World,
+    spec: &str,
+    url: &str,
+    parent: &str,
+    bytes: &[u8],
+) -> Result<(), LoadError> {
+    if world.pkgs.contains_key(spec) {
+        return Ok(()); // first mount wins — the embedder's (or an earlier) mount
     }
     // gate 1 — the container
     let bundle = match rut_driver::bundle::Bundle::parse(bytes) {

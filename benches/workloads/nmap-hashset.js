@@ -1,4 +1,4 @@
-// nmap-hashset.js — the JS twin of nmap-hashset/main.rut (and the same
+// nmap-hashset.js — the JS twin of nmap-hashset/src/mod.rut (and the same
 // algorithm as the removed hashset.js mapset twin): the identical
 // HashSet<i32> churn on
 // `new Set()`. The rut side swaps the removed pure-rut `mapset` for

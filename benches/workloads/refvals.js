@@ -1,4 +1,4 @@
-// refvals.js — the JS twin of refvals/main.rut: the identical
+// refvals.js — the JS twin of refvals/src/mod.rut: the identical
 // record-valued churn with JS objects as the values. This is the
 // natural twin shape for the row: property mutation through a retrieved
 // reference IS JS's own semantics — `p.x += 1` on the object a Map.get

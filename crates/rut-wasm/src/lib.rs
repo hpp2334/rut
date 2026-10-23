@@ -178,7 +178,7 @@ macro_rules! std_pkg {
     ($name:literal) => {
         rut_driver::Mounted::source(
             $name,
-            include_str!(concat!("../../../rut/", $name, "/mod.rut")),
+            include_str!(concat!("../../../rut/", $name, "/src/mod.rut")),
         )
         .manifest(
             rut_driver::parse_manifest(include_str!(concat!("../../../rut/", $name, "/rut.jsonc")))
@@ -222,7 +222,7 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     // boots with it — the ctx ceremony is gone, the registry travels
     let ink_host = host_surface(
         "ink_host",
-        include_str!("../../../rut/ink_host/ink_host.d.rut"),
+        include_str!("../../../rut/ink_host/src/ink_host.d.rut"),
         "ink_host.d.rut",
         &[],
     );
@@ -231,7 +231,7 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     // spec `nmap_host`), the scope `rut_std::nmap::pkg()` installs under
     let nmap_host = host_surface(
         "nmap_host",
-        include_str!("../../../rut/nmap_host/nmap.d.rut"),
+        include_str!("../../../rut/nmap_host/src/nmap.d.rut"),
         "nmap.d.rut",
         &[],
     );
@@ -240,7 +240,7 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     // `rut_std::async_host::pkg()` binds the crossings in `rut_run`
     let async_host = host_surface(
         "async_host",
-        include_str!("../../../rut/async_host/engine.d.rut"),
+        include_str!("../../../rut/async_host/src/engine.d.rut"),
         "engine.d.rut",
         &[],
     );
@@ -256,7 +256,7 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
     // above; the bodies bind in `rut_run` (`rut_std::strbuild::pkg()`)
     let strbuild_host = host_surface(
         "strbuild_host",
-        include_str!("../../../rut/strbuild_host/strbuild_host.d.rut"),
+        include_str!("../../../rut/strbuild_host/src/strbuild_host.d.rut"),
         "strbuild_host.d.rut",
         &[],
     );
@@ -269,7 +269,7 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
         .expect("the calc manifest is valid");
     let mut calc = host_surface(
         "calc",
-        include_str!("../../../rut/calc/calc.d.rut"),
+        include_str!("../../../rut/calc/src/calc.d.rut"),
         "calc.d.rut",
         &[],
     )

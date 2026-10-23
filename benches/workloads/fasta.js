@@ -1,4 +1,4 @@
-// fasta.js — the JS twin of fasta/main.rut.
+// fasta.js — the JS twin of fasta/src/mod.rut.
 function fasta(n) {
   const parts = [];
   const letters = "ACGT";

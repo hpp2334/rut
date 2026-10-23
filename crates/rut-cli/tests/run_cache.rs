@@ -50,7 +50,7 @@ fn hello_world(tag: &str) -> PathBuf {
         "rut.jsonc",
         r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
     );
-    write(&dir, "mod.rut", "entry fn main() -> nil { return; }\n");
+    write(&dir, "src/mod.rut", "entry fn main() -> nil { return; }\n");
     root
 }
 
@@ -103,7 +103,7 @@ fn an_edited_closure_keys_a_fresh_entry() {
     // the run still succeeds (the new closure compiles fresh)
     write(
         &dir,
-        "mod.rut",
+        "src/mod.rut",
         "entry fn main() -> nil {\n    let n = 6 * 7;\n    return;\n}\n",
     );
     let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
@@ -160,12 +160,16 @@ fn a_dir_with_a_path_dep_caches_one_closed_entry() {
     );
     write(
         &hello,
-        "mod.rut",
+        "src/mod.rut",
         "use calc::{ seven };\nentry fn main() -> nil {\n    let n = seven();\n    return;\n}\n",
     );
     let calc = root.join("calc");
     write(&calc, "rut.jsonc", r#"{"name": "calc"}"#);
-    write(&calc, "mod.rut", "pub fn seven() -> i64 { return 7; }\n");
+    write(
+        &calc,
+        "src/mod.rut",
+        "pub fn seven() -> i64 { return 7; }\n",
+    );
 
     let (code, err) = rut_run(&["run", hello.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
@@ -245,7 +249,7 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     );
     write(
         &util,
-        "mod.rut",
+        "src/mod.rut",
         "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
     );
     let bytes = rut_native::pack_dir(&util).expect("pack util");
@@ -276,7 +280,7 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use util::{twice};\nentry fn main() {\n    let x = twice(21);\n    return;\n}\n",
     );
 

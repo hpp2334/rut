@@ -55,7 +55,7 @@ use std::collections::BTreeMap;
 // both lanes, the ink/pouch precedent.
 
 /// The `web` pkg's surface, verbatim — the contract the bodies bind.
-pub const WEB_D_RUT: &str = include_str!("../web/web.d.rut");
+pub const WEB_D_RUT: &str = include_str!("../web/src/web.d.rut");
 
 // the url-dep mounts, from the COMMITTED CDN artifacts (the v11
 // bundles, sha256-pinned by the pins gate). THE BUNDLE LAW: the
@@ -77,16 +77,16 @@ const NMAPSET_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v12/nmapset.rutb
 // the module trees, verbatim: root + every mounted child — the
 // mirror's whole job is an independent embedder spelling what the
 // manifest's `mod` declarations say (mount_lane pins the two together)
-const UI_ROOT: &str = include_str!("../rut/ui/mod.rut");
-const UI_STORE: &str = include_str!("../rut/ui/store/mod.rut");
-const UI_WIDGET: &str = include_str!("../rut/ui/widget/mod.rut");
-const UI_LOWERING: &str = include_str!("../rut/ui/lowering/mod.rut");
-const UI_DIFF: &str = include_str!("../rut/ui/diff/mod.rut");
-const UI_COMPONENTS: &str = include_str!("../rut/ui/components/mod.rut");
-const BIZ_ROOT: &str = include_str!("../rut/biz/mod.rut");
-const BIZ_DOMAIN: &str = include_str!("../rut/biz/domain/mod.rut");
-const BIZ_WORLD: &str = include_str!("../rut/biz/world/mod.rut");
-const BIZ_APP: &str = include_str!("../rut/biz/app/mod.rut");
+const UI_ROOT: &str = include_str!("../rut/ui/src/mod.rut");
+const UI_STORE: &str = include_str!("../rut/ui/src/store/mod.rut");
+const UI_WIDGET: &str = include_str!("../rut/ui/src/widget/mod.rut");
+const UI_LOWERING: &str = include_str!("../rut/ui/src/lowering/mod.rut");
+const UI_DIFF: &str = include_str!("../rut/ui/src/diff/mod.rut");
+const UI_COMPONENTS: &str = include_str!("../rut/ui/src/components/mod.rut");
+const BIZ_ROOT: &str = include_str!("../rut/biz/src/mod.rut");
+const BIZ_DOMAIN: &str = include_str!("../rut/biz/src/domain/mod.rut");
+const BIZ_WORLD: &str = include_str!("../rut/biz/src/world/mod.rut");
+const BIZ_APP: &str = include_str!("../rut/biz/src/app/mod.rut");
 
 /// One mounted child module — the mirror's `mod NAME;` edge, spelled
 /// as the loader would mount it (the vis carried faithfully).

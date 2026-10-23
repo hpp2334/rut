@@ -361,7 +361,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
     );
     write(
         &pairz,
-        "mod.rut",
+        "src/mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -373,13 +373,13 @@ fn packaged_generic_owner_serves_consumer_requests() {
         "rut.jsonc",
         &bundle_manifest(
             "app",
-            "mod.rut",
+            "src/mod.rut",
             r#", "deps": {"pairz": {"path": "../pairz"}}"#,
         ),
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use pairz::{ Pair };\n\n\
          pub fn make() -> Pair<i64, str> {\n\
          \x20   return Pair { fst: 5, snd: \"x\" };\n\
@@ -499,7 +499,7 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
     write(&pairz, "rut.jsonc", &manifest("pairz", "mod.rut", ""));
     write(
         &pairz,
-        "mod.rut",
+        "src/mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -511,13 +511,13 @@ fn request_order_is_canonical_and_the_pack_is_byte_deterministic() {
         "rut.jsonc",
         &bundle_manifest(
             "app",
-            "mod.rut",
+            "src/mod.rut",
             r#", "deps": {"pairz": {"path": "../pairz"}}"#,
         ),
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use pairz::{ Pair };\n\n\
          entry fn go() -> i64 {\n\
          \x20   let b = Pair<str, i64> { fst: \"x\", snd: 1 };\n\
@@ -543,7 +543,7 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
     write(&pairz, "rut.jsonc", &manifest("pairz", "mod.rut", ""));
     write(
         &pairz,
-        "mod.rut",
+        "src/mod.rut",
         "pub struct Pair<A, B> {\n\
          \x20   fst: A;\n\
          \x20   snd: B;\n\
@@ -555,13 +555,13 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
         "rut.jsonc",
         &bundle_manifest(
             "app",
-            "mod.rut",
+            "src/mod.rut",
             r#", "deps": {"pairz": {"path": "../pairz"}}"#,
         ),
     );
     write(
         &app,
-        "mod.rut",
+        "src/mod.rut",
         "use pairz::{ Pair };\n\n\
          entry fn go() -> i64 {\n\
          \x20   let p = Pair<i64, str> { fst: 21, snd: \"x\" };\n\

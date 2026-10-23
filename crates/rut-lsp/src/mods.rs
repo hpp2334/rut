@@ -222,7 +222,7 @@ pub(crate) fn display_of(idxs: &[&DefIndex], pkg: Option<&str>, child: &str) -> 
 }
 
 /// the origin's `.rut` file name (its last path segment when it spells
-/// one) — `file:///…/imp.rut`, `rut/pouch/mod.rut`, a bundle key;
+/// one) — `file:///…/imp.rut`, `rut/pouch/src/mod.rut`, a bundle key;
 /// `core` (and any non-file origin) answers `None`.
 fn origin_file_name(origin: &str) -> Option<String> {
     let name = origin.rsplit('/').next()?;

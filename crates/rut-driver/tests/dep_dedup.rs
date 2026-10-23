@@ -87,8 +87,10 @@ fn write_util(root: &Path, dirname: &str, version: i64, tag: &str) {
         format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "util"}} // {tag}"#),
     )
     .unwrap();
+
+    std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(
-        dir.join("mod.rut"),
+        dir.join("src/mod.rut"),
         format!("pub fn tag() -> i64 {{ return {version}; }}\n"),
     )
     .unwrap();
@@ -107,8 +109,10 @@ fn write_consumer(root: &Path, name: &str, url: &str, bytes: &[u8], fndecl: &str
         ),
     )
     .unwrap();
+
+    std::fs::create_dir_all(dir.join("src")).unwrap();
     std::fs::write(
-        dir.join("mod.rut"),
+        dir.join("src/mod.rut"),
         format!("use util::{{tag}};\n{fndecl}\n"),
     )
     .unwrap();
@@ -172,8 +176,10 @@ fn same_name_two_identities_one_program() {
         ),
     )
     .unwrap();
+
+    std::fs::create_dir_all(app.join("src")).unwrap();
     std::fs::write(
-        app.join("mod.rut"),
+        app.join("src/mod.rut"),
         "use a::{from_a};\nuse b::{from_b};\nentry fn main() -> i64 { return from_a() * 10 + from_b(); }\n",
     )
     .unwrap();
@@ -283,8 +289,10 @@ fn same_identity_via_two_routes_mounts_once() {
         ),
     )
     .unwrap();
+
+    std::fs::create_dir_all(app.join("src")).unwrap();
     std::fs::write(
-        app.join("mod.rut"),
+        app.join("src/mod.rut"),
         "use a::{from_a};\nuse c::{from_c};\nentry fn main() -> i64 { return from_a() + from_c(); }\n",
     )
     .unwrap();
@@ -435,7 +443,7 @@ fn t10_the_collision_was_real() {
     // twice into one unit — and a doubly-spliced text does not compile
     // (duplicate type definitions). The fixture only goes green because
     // the dedup removed the second splice.
-    let pouch_src = std::fs::read_to_string(Path::new(&format!("{SIBS}/pouch/mod.rut")))
+    let pouch_src = std::fs::read_to_string(Path::new(&format!("{SIBS}/pouch/src/mod.rut")))
         .expect("pouch fixture source");
     let twice = format!("{pouch_src}\n\n{pouch_src}");
     // loading is OFF here: the spliced text's `use` statements name deps

@@ -1,17 +1,19 @@
-//! `mod.d.rut` as the host ROOT — lib-parity discovery (the
-//! host-root amendment, phase 7): `mod.d.rut` beside the manifest is
-//! the auto-discovered default root for a `type = "host"` pkg, the
-//! twin of a body pkg's `mod.rut`. The gates:
+//! `src/mod.d.rut` as the host ROOT — lib-parity discovery (the
+//! host-root amendment, phase 7): `src/mod.d.rut` in the package's
+//! `src/` shell is the auto-discovered default root for a
+//! `type = "host"` pkg, the twin of a body pkg's `src/mod.rut`. The
+//! gates:
 //!
 //! - default-root discovery: no `entry.type`, a `mod.d.rut` root
 //!   loads (flat and tree shapes), from the directory AND from a
 //!   packed bundle;
-//! - precedence: a spelled `entry.type` still wins when both sit
-//!   beside the manifest (existing flat pkgs keep their
-//!   `calc.d.rut`-style roots byte-identically);
+//! - precedence: a spelled `entry.type` still wins when both sit in
+//!   the shell (existing flat pkgs keep their `calc.d.rut`-style
+//!   roots byte-identically);
 //! - neither present is the loud no-entry error naming BOTH doors;
-//! - a `mod.rut` beside a host manifest stays refused — a host pkg is
-//!   pure surface, with or without a spelled entry;
+//! - a `mod.rut` beside a host manifest is an inert unread file (the
+//!   stray-body refusal is repealed) — a host pkg is pure surface,
+//!   with or without a spelled entry;
 //! - reader compat: an OLD host bundle (manifest `entry.type` + the
 //!   custom root key — the pre-amendment pack shape) loads unchanged
 //!   through the override lane;
@@ -57,13 +59,13 @@ fn rows_of(pkg: &rut_driver::Mounted) -> Vec<HostRow> {
 
 #[test]
 fn the_default_root_is_discovered_without_an_entry_type() {
-    // the lib-parity law: `mod.d.rut` beside the manifest is the root
+    // the lib-parity law: `src/mod.d.rut` in the shell is the root
     // surface — flat first
     let dir = make_pkg(
         &scratch("flat"),
         &[
             ("rut.jsonc", r#"{"name": "flat_host", "type": "host"}"#),
-            ("mod.d.rut", "pub host fn ping() -> bool;\n"),
+            ("src/mod.d.rut", "pub host fn ping() -> bool;\n"),
         ],
     );
     let loaded = load_path_session(&dir).expect("loads");
@@ -81,11 +83,11 @@ fn the_default_root_is_discovered_without_an_entry_type() {
         &[
             ("rut.jsonc", r#"{"name": "myhost", "type": "host"}"#),
             (
-                "mod.d.rut",
+                "src/mod.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
             (
-                "net/mod.d.rut",
+                "src/net/mod.d.rut",
                 "pub host fn connect(url: str) -> opaque;\n",
             ),
         ],
@@ -114,8 +116,8 @@ fn a_spelled_entry_type_wins_over_the_default_root() {
                 "rut.jsonc",
                 r#"{"name": "duo", "type": "host", "entry": {"type": "./duo.d.rut"}}"#,
             ),
-            ("duo.d.rut", "pub host fn spelled() -> bool;\n"),
-            ("mod.d.rut", "pub host fn default_root() -> bool;\n"),
+            ("src/duo.d.rut", "pub host fn spelled() -> bool;\n"),
+            ("src/mod.d.rut", "pub host fn default_root() -> bool;\n"),
         ],
     );
     let loaded = load_path_session(&dir).expect("loads");
@@ -154,26 +156,33 @@ fn neither_door_is_the_loud_no_entry_error() {
 }
 
 #[test]
-fn a_body_beside_a_host_manifest_stays_refused() {
-    // the body refusal predates the amendment and rides unchanged —
-    // a `mod.rut` beside a host manifest refuses whether the entry is
-    // spelled or the default root sits there
-    for manifest in [
-        r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
-        r#"{"name": "h", "type": "host"}"#,
+fn a_stray_body_beside_a_host_manifest_is_inert() {
+    // the stray-body refusal is REPEALED (the `src/` shell cutover): a
+    // `mod.rut` beside a host manifest is an inert unread file — the
+    // pkg loads whether the entry is spelled (the spelled surface
+    // wins) or the default root sits in the shell
+    for (manifest, want) in [
+        (
+            r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
+            vec!["h::ping"],
+        ),
+        (r#"{"name": "h", "type": "host"}"#, vec!["h::root_row"]),
     ] {
         let dir = make_pkg(
             &scratch("body"),
             &[
                 ("rut.jsonc", manifest),
-                ("h.d.rut", "pub host fn ping() -> bool;\n"),
-                ("mod.d.rut", "pub host fn root_row() -> bool;\n"),
+                ("src/h.d.rut", "pub host fn ping() -> bool;\n"),
+                ("src/mod.d.rut", "pub host fn root_row() -> bool;\n"),
                 ("mod.rut", "entry fn main() {}\n"),
             ],
         );
-        let err = load_path_session(&dir).unwrap_err().to_string();
-        assert!(err.contains("pure surface"), "{err}");
-        assert!(err.contains("mod.d.rut"), "{err}");
+        let loaded = load_path_session(&dir).expect("the stray body is unread, the pkg loads");
+        let names: Vec<String> = rows_of(loaded.pkg("h").unwrap())
+            .iter()
+            .map(|r| r.full_name("h"))
+            .collect();
+        assert_eq!(names, want, "the entry law holds; the stray is inert");
     }
 }
 
@@ -188,7 +197,7 @@ fn the_default_root_packs_and_loads_back() {
                 "rut.jsonc",
                 r#"{"format": "rutbundle", "format_version": 12, "name": "flat_host", "type": "host"}"#,
             ),
-            ("mod.d.rut", "pub host fn ping() -> bool;\n"),
+            ("src/mod.d.rut", "pub host fn ping() -> bool;\n"),
         ],
     );
     let bytes = pack_dir(&dir).expect("pack");
@@ -217,10 +226,13 @@ fn the_default_root_packs_and_loads_back() {
                 r#"{"format": "rutbundle", "format_version": 12, "name": "myhost", "type": "host"}"#,
             ),
             (
-                "mod.d.rut",
+                "src/mod.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
             ),
-            ("net/mod.d.rut", "pub host fn connect(url: str) -> i64;\n"),
+            (
+                "src/net/mod.d.rut",
+                "pub host fn connect(url: str) -> i64;\n",
+            ),
         ],
     );
     let bytes = pack_dir(&dir).expect("pack");
@@ -264,11 +276,11 @@ fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
                 r#"{"format": "rutbundle", "format_version": 12, "name": "http_host", "type": "host", "entry": {"type": "./http_host.d.rut"}}"#,
             ),
             (
-                "http_host.d.rut",
+                "src/http_host.d.rut",
                 "pub mod net;\npub host fn http_send(url: str) -> bytes;\n",
             ),
             (
-                "net/mod.d.rut",
+                "src/net/mod.d.rut",
                 "pub host fn http_status(r: opaque) -> i64;\n",
             ),
         ],

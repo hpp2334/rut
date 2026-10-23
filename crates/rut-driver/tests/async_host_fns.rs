@@ -15,7 +15,7 @@ use rut_driver::lower_decl_module;
 use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 use rut_vm::Completer;
 
-const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/ink_host.d.rut");
+const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/src/ink_host.d.rut");
 
 // The fixture surface: three async rows whose virtual behavior is
 // spelled in the argument — `key:ms` completes at +ms (`probe`),

@@ -2,46 +2,54 @@
 
 One directory is one module; its `rut.jsonc` names the exact package it
 answers to and how to reach its surface. The body is a **file module
-tree**: the root module is `mod.rut` beside the manifest, and `mod
-NAME;` declarations in it mount child modules (`NAME/mod.rut` beside
-the declaring file, or the single-file `NAME.rut`). The manifest is
+tree** under the package's `src/` shell: the root module is
+`src/mod.rut`, and `mod NAME;` declarations in it mount child modules
+(`src/NAME/mod.rut` beside the declaring file, or the single-file
+`NAME.rut` next to it) — recursively, so the whole module tree lives
+under `src/`, and only the module tree does: the manifest, `rut.lock`,
+and `rut.scopes` stay at the package root. The shell is law, not
+convention — a `.rut` outside `src/` refuses at the pack door and in
+the source-zip grammar alike ([Module bundles](bundles.md)). The manifest is
 what makes the directory **the runnable unit**: `rut run <dir>` (or its
-packed `.rutbundle`) is the only run lane — a loose `.rut` file is not
+packed artifact — the source `.zip` or the compiled `.rutbundle`) is
+the only run lane — a loose `.rut` file is not
 a program ([the rut CLI](cli.md)). This page is the manifest grammar,
 the resolution laws, and where everything lives in the toolchain tree.
 
 ## The manifest
 
 ```jsonc
-// rut/pouch/rut.jsonc — a body package (the body is mod.rut beside it)
+// rut/pouch/rut.jsonc — a body package (the body is src/mod.rut)
 {
   "name": "pouch"
 }
 
-// rut/calc/rut.jsonc — a pure declaration surface (a host pkg)
+// rut/calc/rut.jsonc — a pure declaration surface (a host pkg); the
+// spelled surface resolves under src/ (the file is src/calc.d.rut)
 {
   "name": "calc",
   "type": "host",
   "entry": { "type": "./calc.d.rut" }
 }
 
-// the same surface, the default-root spelling: mod.d.rut beside the
-// manifest IS the root — entry.type is optional on a host pkg
+// the same surface, the default-root spelling: src/mod.d.rut IS the
+// root — entry.type is optional on a host pkg
 {
   "name": "calc",
   "type": "host"
 }
 
 // a consumer (an app directory): a `path` row for a sibling package
-// of your own, url rows for the toolchain's packages — the pins live
+// of your own, url rows for the toolchain's packages (source zips;
+// a `.rutbundle` url names the compiled wire) — the pins live
 // in the app's rut.lock (`rut install` writes it)
 {
   "name": "app",
 
   "deps": {
     "greet": { "path": "../greet" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" },
-    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/ink.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip" },
+    "ink":   { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip" }
   }
 }
 ```
@@ -51,11 +59,11 @@ The keys, all of them:
 | key | meaning |
 |---|---|
 | `name` | the package's use-path name: bare `[a-zA-Z0-9_]+` only. A scoped or quoted spelling is a manifest error. |
-| `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. OPTIONAL on a host pkg: when absent, `mod.d.rut` beside the manifest is the root surface (lib parity with a body's `mod.rut`), and when spelled it wins. Neither present is the loud no-entry error naming both spellings. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
-| `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `mod.rut` is an error naming both fixes |
-| `deps` | the transitively mounted dependencies — and the declaration table: a pkg may `use` exactly the heads its manifest names (`deps` ∪ `core`, plus `dev-deps` at the program root), so a head riding someone else's `deps` is mounted but not nameable ([Nameability](dependency-kinds.md#nameability)). One source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote `.rutbundle`) — never both, never neither. Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
+| `entry.type` | the declaration surface: one `.d.rut` file — the ONLY entry key left. OPTIONAL on a host pkg: when absent, `src/mod.d.rut` is the root surface (lib parity with a body's `src/mod.rut`), and when spelled it wins — the path resolves under `src/`. Neither present is the loud no-entry error naming both spellings. On a lib pkg it is documentation surface (a surface-only dev state mounts as a declaration unit; `host fn` text there is refused) |
+| `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files under `src/`, rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `src/mod.rut` is an error naming both fixes |
+| `deps` | the transitively mounted dependencies — and the declaration table: a pkg may `use` exactly the heads its manifest names (`deps` ∪ `core`, plus `dev-deps` at the program root), so a head riding someone else's `deps` is mounted but not nameable ([Nameability](dependency-kinds.md#nameability)). One source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote artifact — a `.zip` source archive or a `.rutbundle` compiled bundle; the extension is the kind) — never both, never neither. Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
 | `dev-deps` | mounted only while building/testing this pkg itself — never in a consumer's world. Descriptors are **`path`-only**: a dev row is directory-time metadata for the declarer's own build, nothing to fetch ([Dependency kinds](dependency-kinds.md)) |
-| `format`, `format_version` | bundle keys — ignored by directory loading, required by `rut pack` ([Module bundles](bundles.md)) |
+| `format`, `format_version` | bundle keys — ignored by directory loading; `rut pack --mode bin` writes them into the packed manifest when this one omits them, and the source-zip pack drops them ([Module bundles](bundles.md)) |
 | `style` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
 
 The **grammar is strict at the top level**: the keys above are all of
@@ -67,8 +75,8 @@ keeps its dedicated retirement refusal — the registration scope is
 the package name.
 
 The **body keys are repealed**: `entry.lib` and `entry.libs` refuse
-loudly, each error naming the fix — the root module is `mod.rut` beside
-the manifest, structure lives in `mod` directories. (Inside a
+loudly, each error naming the fix — the root module is `src/mod.rut`,
+structure lives in `mod` directories under `src/`. (Inside a
 *published* bundle the old keys still load — the reader's compat lane;
 see [Module bundles](bundles.md).)
 
@@ -113,18 +121,19 @@ A package's body is authored as a **file module tree** — the
 
 ```
 tur_kit/
-├── rut.jsonc        # no entry keys — mod.rut IS the lib
-├── mod.rut          # the root module
-├── layout/
-│   └── mod.rut      # tur_kit::layout
-└── widget/
-    └── mod.rut      # tur_kit::widget
+├── rut.jsonc        # no entry keys — src/mod.rut IS the lib
+└── src/
+    ├── mod.rut      # the root module
+    ├── layout/
+    │   └── mod.rut  # tur_kit::layout
+    └── widget/
+        └── mod.rut  # tur_kit::widget
 ```
 
 The root module declares its children:
 
 ```rut
-// tur_kit/mod.rut
+// tur_kit/src/mod.rut
 pub mod layout;
 pub mod widget;
 ```
@@ -132,10 +141,10 @@ pub mod widget;
 Mounting is **declared, not discovered**: `mod NAME;` (or `pub mod
 NAME;`) in a file resolves against the sibling `NAME/mod.rut`
 directory — or, when there is no such directory, the single-file
-spelling `NAME.rut` in the same directory (both present is a loud
-ambiguity naming both spellings; a single-file child mounts at the
-logical mod path `NAME` exactly as the directory would). The loader
-never reads a directory listing — an undeclared directory is
+spelling `NAME.rut` beside it (both spellings under `src/`; both
+present is a loud ambiguity naming both spellings; a single-file child
+mounts at the logical mod path `NAME` exactly as the directory would).
+The loader never reads a directory listing — an undeclared directory is
 invisible, a declared child that is missing under both spellings (or
 whose directory carries no `mod.rut`) is a loud error naming the
 spellings. Mounting is recursive and cycle-guarded by file identity; a
@@ -153,10 +162,11 @@ the `::` spelling); `use` statements stay the only cross-package door
 
 A `type = "host"` package has no body — but its `.d.rut` surface
 organizes as the same kind of tree. The **root surface** follows the
-same discovery law a body's `mod.rut` does: `mod.d.rut` beside the
-manifest is the default root (lib parity), and a spelled `entry.type`
-still wins — `calc.d.rut`, `engine.d.rut` and every other flat host
-pkg keep their custom root names. Neither present is the loud no-entry
+same discovery law a body's `src/mod.rut` does: `src/mod.d.rut` is the
+default root (lib parity), and a spelled `entry.type` still wins,
+resolved under `src/` — `calc.d.rut`, `engine.d.rut` and every other
+flat host pkg keep their custom root names, moved under the shell.
+Neither present is the loud no-entry
 error naming both spellings. `mod NAME;` in the surface file mounts
 `NAME/mod.d.rut` **beside the declaring file** — or the single-file
 `NAME.rut` when there is no such directory — recursively and
@@ -165,17 +175,19 @@ file (both spellings present is the loud ambiguity):
 
 ```
 http_host/
-├── rut.jsonc           # type = "host" — no entry keys: mod.d.rut IS the root
-├── mod.d.rut           # the root surface: pub mod net;  pub mod stream;
-├── net/
-│   └── mod.d.rut       # http_host::net — the request lane + readbacks
-└── stream/
-    └── mod.d.rut       # http_host::stream — the body lanes
+├── rut.jsonc           # type = "host" — no entry keys: src/mod.d.rut IS the root
+└── src/
+    ├── mod.d.rut       # the root surface: pub mod net;  pub mod stream;
+    ├── net/
+    │   └── mod.d.rut   # http_host::net — the request lane + readbacks
+    └── stream/
+        └── mod.d.rut   # http_host::stream — the body lanes
 ```
 
 The tree is **declaration-lawed like everything else**: a declared
-child with no `NAME/mod.d.rut` beside it is a loud error naming the
-declaring file, a `mod.rut` beside a host manifest still refuses (the
+child with no `NAME/mod.d.rut` beside it (the whole tree under `src/`)
+is a loud error naming the
+declaring file, a `src/mod.rut` beside a host manifest still refuses (the
 pkg is a pure surface — the message points at `mod.d.rut`), and the
 `pub` on both the `mod` edge and the `host fn` row is what a
 consumer's `use` crosses.
@@ -246,7 +258,7 @@ demand:
 | `core` | the only standard package — the builtin surface, auto-offered by every run's `.compile()` |
 | `calc` | host pkg: the math surface — offer `rut_native::tree_pkg("calc")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
 | `ink_host`, `nmap_host`, `async_host`, `bench_cross` | host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std` |
-| `http_host` | host pkg, the surface-tree pilot — the default `mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std` |
+| `http_host` | host pkg, the surface-tree pilot — the default `src/mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std` |
 | `ink`, `http`, `strbuild`, `futures` | rut classes over host rows (published compiled — methods cross on the surface's inherent rows) |
 | `pouch` | the growable sequence `Vec<T>` (plain linked package) |
 | `flow` | the push pipeline (`Flow<E>`; its `VecFlow`/`SetFlow` wrappers over `pouch`/`nmapset`) |

@@ -105,14 +105,16 @@ pub struct DepTable {
     pub dev_deps: Vec<DepRow>,
 }
 
-/// The cache path for a url dep — `.rut/cache/<sha256(url)>.rutbundle`,
-/// relative to the workspace root both faces share with the CLI.
+/// The cache path for a url dep — `.rut/cache/<sha256(url)>.<ext>`,
+/// relative to the workspace root both faces share with the CLI; the
+/// extension follows the url's own artifact kind (`.zip` = source
+/// transport, `.rutbundle` = compiled) — the remote's naming law.
 pub fn cache_path(url: &str) -> String {
     let hex: String = Sha256::digest(url.as_bytes())
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    format!(".rut/cache/{hex}.rutbundle")
+    format!(".rut/cache/{hex}{}", rut_driver::bundle::cache_ext(url))
 }
 
 /// One dep row from a parsed descriptor map. `deps` rows may be path-
@@ -216,30 +218,30 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     let mut entries = Vec::new();
     // the decl surface indexes in Decl mode; the body in Impl mode —
     // the same split `analysis::mode_of` speaks for open documents.
-    // On a host pkg with no spelled surface, `mod.d.rut` beside the
-    // manifest IS the root (the loader's default-root discovery
+    // On a host pkg with no spelled surface, `src/mod.d.rut` under the
+    // shell IS the root (the loader's default-root discovery
     // mirrored) — an unreadable row simply indexes nothing.
     match &m.entry.type_path {
         Some(ty) => entries.push(EntrySource {
-            path: bundle_key(ty)?,
+            path: rut_driver::bundle::src_rel(ty),
             mode: Mode::Decl,
         }),
         None if m.pkg_type == rut_driver::bundle::PkgType::Host => {
             entries.push(EntrySource {
-                path: rut_driver::decl::DECL_CHILD_FILE.to_string(),
+                path: rut_driver::bundle::DECL_ROOT_MODULE.to_string(),
                 mode: Mode::Decl,
             });
         }
         None => {}
     }
-    // the body is the ROOT MODULE — `mod.rut` beside the manifest, the
-    // convention every lane reads. A surface-only dev state (or a host
-    // pkg) names no body: a Lib pkg with an entry.type spelled has its
-    // mod.rut probed by the callers, and an unreadable row simply
-    // indexes nothing (what exists is what mounts).
+    // the body is the ROOT MODULE — `src/mod.rut`, the convention every
+    // lane reads. A surface-only dev state (or a host pkg) names no
+    // body: a Lib pkg with an entry.type spelled has its root probed by
+    // the callers, and an unreadable row simply indexes nothing (what
+    // exists is what mounts).
     if m.pkg_type == rut_driver::bundle::PkgType::Lib {
         entries.push(EntrySource {
-            path: "mod.rut".to_string(),
+            path: rut_driver::bundle::ROOT_MODULE.to_string(),
             mode: Mode::Impl,
         });
     }
@@ -362,6 +364,49 @@ fn entry_child_lookup(
 /// did not ride) is skipped, not an error: the editor indexes what
 /// exists. A declared child whose file is missing is the loud mount
 /// error — declarations are the graph.
+/// A SOURCE-ZIP cache entry's index — the source transport's editor
+/// face: the zip's own package (`rut.jsonc` + `src/**`) indexes as
+/// Impl files at their zip-relative paths; the embedded `deps/` trees
+/// belong to other pkgs and stay out of this index (a consumer's own
+/// dep rows cover them). The zip64/grammar/CRC laws ride
+/// [`rut_driver::bundle::read_srczip`].
+pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
+    let entries = rut_driver::bundle::read_srczip(bytes).map_err(|e| e.to_string())?;
+    let manifest_text = entries
+        .iter()
+        .find(|(n, _)| n == MANIFEST_NAME)
+        .map(|(_, b)| String::from_utf8_lossy(b).into_owned())
+        .ok_or_else(|| {
+            format!("no `{MANIFEST_NAME}` at the archive root — not a rut source zip")
+        })?;
+    let table = dep_table(&manifest_text)?;
+    let module = table
+        .name
+        .clone()
+        .ok_or_else(|| format!("`{MANIFEST_NAME}` has no `name`"))?;
+    let mut files = Vec::new();
+    for (name, bytes) in &entries {
+        if !name.starts_with("src/") || !name.ends_with(".rut") {
+            continue; // the manifest, the embedded deps, inert files — not this pkg's code
+        }
+        let src = String::from_utf8(bytes.clone()).map_err(|_| format!("{name}: not UTF-8"))?;
+        files.push(BundleFile {
+            path: name.clone(),
+            src,
+            mode: Mode::Impl,
+        });
+    }
+    if files.is_empty() {
+        return Err("the source zip carries no `src/**.rut` files".to_string());
+    }
+    Ok(BundleIndex {
+        module,
+        namespace: table.namespace,
+        consts: table.consts,
+        files,
+    })
+}
+
 pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let entries = parse_bundle(bytes).map_err(|e| e.to_string())?;
     let manifest_text = read_entry(&entries, MANIFEST_NAME)
@@ -441,16 +486,28 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
             None => {
                 // the source lane: root = the `mod.rut` entry (the
                 // post-repeal convention), or the OLD envelope's legacy
-                // lib — dep_table_compat mapped it onto the Impl entries
+                // lib — dep_table_compat mapped it onto the Impl entries.
+                // The table row spells the DIRECTORY path (`src/mod.rut`);
+                // the archive keeps the ONE canonical root name — the
+                // miss translates (a compat row rides its legacy key and
+                // reads directly)
                 let root = match table.entries.iter().find(|e| e.mode == Mode::Impl) {
-                    Some(e) => match read_entry(&entries, &e.path) {
-                        Ok(src) => Some(BundleFile {
-                            path: e.path.clone(),
-                            src,
-                            mode: e.mode,
-                        }),
-                        Err(_) => None,
-                    },
+                    Some(e) => {
+                        let read = read_entry(&entries, &e.path)
+                            .map(|src| (e.path.clone(), src))
+                            .or_else(|_| {
+                                read_entry(&entries, "mod.rut")
+                                    .map(|src| ("mod.rut".to_string(), src))
+                            });
+                        match read {
+                            Ok((path, src)) => Some(BundleFile {
+                                path,
+                                src,
+                                mode: e.mode,
+                            }),
+                            Err(_) => None,
+                        }
+                    }
                     None => match read_entry(&entries, "mod.rut") {
                         Ok(src) => Some(BundleFile {
                             path: "mod.rut".to_string(),
@@ -975,11 +1032,11 @@ mod tests {
         let t = dep_table(PLUGIN_SHAPE).expect("the plugin-shape manifest parses");
         assert_eq!(t.name.as_deref(), Some("plugin"));
         // the entry: one lib source, Impl mode
-        // the body rides the mod.rut convention (the entry keys are repealed)
+        // the body rides the src/mod.rut convention (the entry keys are repealed)
         assert_eq!(
             t.entries,
             vec![EntrySource {
-                path: "mod.rut".into(),
+                path: "src/mod.rut".into(),
                 mode: Mode::Impl
             }]
         );
@@ -1082,11 +1139,12 @@ mod tests {
     fn calc_manifest_carries_namespace_and_consts() {
         let t = dep_table(CALC_MANIFEST).expect("the real calc manifest parses");
         assert_eq!(t.name.as_deref(), Some("calc"));
-        // the host surface: decl mode, no body
+        // the host surface: decl mode, no body — the spelled surface
+        // resolves under the `src/` shell
         assert_eq!(
             t.entries,
             vec![EntrySource {
-                path: "calc.d.rut".into(),
+                path: "src/calc.d.rut".into(),
                 mode: Mode::Decl
             }]
         );
@@ -1477,25 +1535,25 @@ pub host fn sqrt(x: f64) -> f64;
 
     #[test]
     fn a_host_manifest_without_entry_type_discovers_the_default_root() {
-        // the lib-parity amendment: `mod.d.rut` beside the manifest is
-        // the auto-discovered root — the editor's dep table carries it
-        // as the Decl entry exactly like a spelled surface
+        // the lib-parity amendment: `src/mod.d.rut` under the `src/`
+        // shell is the auto-discovered root — the editor's dep table
+        // carries it as the Decl entry exactly like a spelled surface
         let t = dep_table(r#"{ "name": "h", "type": "host" }"#).expect("parses");
         assert!(t.host);
         assert_eq!(
             t.entries,
             vec![EntrySource {
-                path: "mod.d.rut".into(),
+                path: "src/mod.d.rut".into(),
                 mode: Mode::Decl
             }]
         );
-        // a spelled surface still wins
+        // a spelled surface still wins — under the shell as well
         let t = dep_table(r#"{ "name": "h", "type": "host", "entry": { "type": "./h.d.rut" } }"#)
             .expect("parses");
         assert_eq!(
             t.entries,
             vec![EntrySource {
-                path: "h.d.rut".into(),
+                path: "src/h.d.rut".into(),
                 mode: Mode::Decl
             }]
         );
@@ -1536,8 +1594,10 @@ pub host fn sqrt(x: f64) -> f64;
                 br#"{ "name": "myhost", "type": "host", "entry": { "type": "./myhost.d.rut" } }"#
                     .to_vec(),
             ),
+            // the spelled surface rides the ONE canonical wire name —
+            // the archive is name-free (the pack writer's shape)
             (
-                "myhost.d.rut".into(),
+                rut_driver::decl::DECL_CHILD_FILE.into(),
                 b"pub mod net;\npub host fn legacy_ping() -> bool;\n".to_vec(),
             ),
             (rut_driver::mods::ROWS_NAME.into(), rows.into_bytes()),
@@ -1555,7 +1615,7 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(
             files,
             vec![
-                ("myhost.d.rut", Mode::Decl),
+                ("mod.d.rut", Mode::Decl),
                 ("net/mod.d.rut", Mode::Decl),
                 ("net/tls/mod.d.rut", Mode::Decl),
             ],
@@ -1576,7 +1636,7 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(
             t.entries,
             vec![EntrySource {
-                path: "myhost.d.rut".into(),
+                path: "src/myhost.d.rut".into(),
                 mode: Mode::Decl
             }],
             "the surface indexes in Decl mode; no lib body row"

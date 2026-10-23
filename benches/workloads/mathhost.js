@@ -1,4 +1,4 @@
-// mathhost.js — the JS twin of mathhost/main.rut.
+// mathhost.js — the JS twin of mathhost/src/mod.rut.
 let acc = 0.0;
 let x = 1.5;
 let y = 0.25;

@@ -2,7 +2,7 @@
 
 The byte-level example, in the shape of
 [00 — Todolist](00-todolist.md) and [01 — Sort](01-sort.md) — with a
-twist: this time the embedder is also the **oracle**. `mod.rut` is
+twist: this time the embedder is also the **oracle**. `src/mod.rut` is
 a byte-level library written in pure rut:
 
 - **encodings** — hex (encode/decode, case-insensitive) and base64
