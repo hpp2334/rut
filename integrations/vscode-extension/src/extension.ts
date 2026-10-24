@@ -606,8 +606,23 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
   }
   // the artifact kind the url's own spelling declares — a `.zip` is
   // the source transport (its `src/**` tree extracts like a bundle's
-  // ride-along set), anything else the compiled wire
+  // ride-along set), anything else the compiled wire. The capability
+  // seam sits BEFORE the extract: the bytes verified against the pin,
+  // then the loaded wasm turns out to predate the transport (a
+  // same-version install older than the lane — the exact stale-0.3.1
+  // shape that dead-ended every std ctrl+click in a scaffold). One hint
+  // names the extension reinstall; the binding's synthetic error
+  // envelope backstops the same way.
   const isZip = /\.zip$/.test(cache_path);
+  if (isZip && !ctx.rut.hasSrczip) {
+    hintOnce(
+      `srczip-cap:${row.name}`,
+      `rut: dep '${row.name}' — this dep is a source zip and the loaded rut-lsp.wasm ` +
+        `predates source-zip deps; rebuild and reinstall the extension, then reload the window`,
+      true
+    );
+    return;
+  }
   const extracted = isZip ? ctx.rut.extractSrczip(bytes) : ctx.rut.extractBundle(bytes);
   if (isEnvelope(extracted)) {
     hintOnce(
@@ -767,6 +782,7 @@ function registerDefinition(rut: RutWasm): vscode.Disposable {
       position: vscode.Position
     ): vscode.Location[] {
       return resolveLocations(
+        rut,
         rut.definition(doc.uri.toString(), position.line, position.character),
         doc.uri.toString()
       );
@@ -781,6 +797,7 @@ function registerTypeDefinition(rut: RutWasm): vscode.Disposable {
       position: vscode.Position
     ): vscode.Location[] {
       return resolveLocations(
+        rut,
         rut.typeDefinition(doc.uri.toString(), position.line, position.character),
         doc.uri.toString()
       );
@@ -813,6 +830,7 @@ function registerReferences(rut: RutWasm): vscode.Disposable {
       context: vscode.ReferenceContext
     ): vscode.Location[] {
       return resolveLocations(
+        rut,
         rut.references(doc.uri.toString(), position.line, position.character, context.includeDeclaration),
         doc.uri.toString()
       );
@@ -1023,7 +1041,7 @@ function analyzeDoc(rut: RutWasm, doc: vscode.TextDocument): Analysis {
 // unopenable (a url dep not extracted yet, mostly) — hints once per
 // document instead of a silent dead ctrl+click; an empty input stays
 // silent (an honest miss — nothing resolved at all).
-function resolveLocations(locs: LspLocation[], srcUri: string): vscode.Location[] {
+function resolveLocations(rut: RutWasm, locs: LspLocation[], srcUri: string): vscode.Location[] {
   const out: vscode.Location[] = [];
   for (const l of locs) {
     const uri = toTargetUri(l.uri);
@@ -1032,14 +1050,42 @@ function resolveLocations(locs: LspLocation[], srcUri: string): vscode.Location[
     }
   }
   if (locs.length > 0 && out.length === 0) {
-    hintOnce(
-      `def-dropped:${srcUri}`,
-      'rut: definition target not openable — a dep may not be extracted yet; ' +
-        'run `rut install`, then reload the window',
-      false
-    );
+    hintOnce(`def-dropped:${srcUri}`, defDropHint(rut, locs), false);
   }
   return out;
+}
+
+// the drop hint names the LIKELIEST cause, not just the generic one.
+// A relative `rut/…` target is the embedded std surface answering for a
+// dep that never mounted; when the workspace's cache carries source
+// zips AND the loaded wasm predates the source-zip transport, `rut
+// install` already ran and reloading cannot help — the extension is the
+// stale piece, so the hint says so.
+function defDropHint(rut: RutWasm, locs: LspLocation[]): string {
+  if (!rut.hasSrczip && locs.some((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
+    return 'rut: definition target not openable — the dep is a source zip and the loaded ' +
+      'rut-lsp.wasm predates source-zip deps; rebuild and reinstall the extension, then reload the window';
+  }
+  return 'rut: definition target not openable — a dep may not be extracted yet; ' +
+    'run `rut install`, then reload the window';
+}
+
+// any workspace folder's `.rut/cache/` holding a `.zip` entry — proof
+// the source-zip transport is in play here (`rut install` fetched it)
+function workspaceHasZipCache(): boolean {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const cacheDir = path.join(folder.uri.fsPath, '.rut', 'cache');
+    try {
+      for (const name of fs.readdirSync(cacheDir)) {
+        if (name.endsWith('.zip')) {
+          return true;
+        }
+      }
+    } catch {
+      // no cache dir (or unreadable) in this folder — the next one decides
+    }
+  }
+  return false;
 }
 
 function toTargetUri(raw: string): vscode.Uri | undefined {

@@ -120,6 +120,18 @@ async function main() {
   const bad = [];
   let smokes = 0;
 
+  // ---- the capability probe (the stale-install seam): the extract
+  // exports an artifact must carry for the source-zip dep lane to
+  // mount. A same-version-but-older install without them dead-ended
+  // every std ctrl+click in a scaffold (the wasm answered the ambient
+  // std embed's repo-relative path, the extension dropped it) — the
+  // binding now answers a synthetic error envelope and the walk hints
+  // the reinstall. The SHIPPED artifact must have both.
+  if (rut.hasSrczip !== true || rut.hasBundleExtract !== true) {
+    bad.push(`capability probe: hasSrczip=${rut.hasSrczip} hasBundleExtract=${rut.hasBundleExtract} — stale artifact, rebuild (npm run build:wasm)`);
+  }
+  smokes++;
+
   // ---- the semantic-token legend (16 types, the extension's map —
   // comments joined the classes, phase 5 added the namespace class) ----
   const legend = rut.legend();
@@ -1279,6 +1291,29 @@ async function main() {
       const badExtract = rut.extractBundle(new TextEncoder().encode('definitely not a zip'));
       assert.ok(badExtract.error && badExtract.error.includes('not a zip'),
         `extract error envelope: ${JSON.stringify(badExtract)}`);
+
+      // ---- the source-zip transport's extract, through the SAME
+      // binding mountUrlDep drives (the std set ships as source zips —
+      // `src/` shells + source-zip deps): `rut_extract_srczip` unpacks
+      // the package's own `src/**` files with their mod paths, the
+      // embedded `deps/` trees of OTHER pkgs stay out, and the Logger
+      // class the scaffold's `use ink::{ Logger }` jumps to rides the
+      // body. (The capability seam above guarantees the export exists;
+      // this proves the round trip.)
+      const inkZip = fs.readFileSync(path.join(REPO, 'dist', 'std', 'ink.zip'));
+      const srczip = rut.extractSrczip(new Uint8Array(inkZip));
+      assert.ok(!srczip.error, `srczip extract envelope: ${JSON.stringify(srczip)}`);
+      assert.strictEqual(srczip.module, 'ink', `srczip module: ${JSON.stringify(srczip)}`);
+      const inkRoot = srczip.files.find((f) => f.path === 'src/mod.rut');
+      assert.ok(inkRoot, `srczip files: ${JSON.stringify(srczip.files.map((f) => f.path))}`);
+      assert.strictEqual(inkRoot.mode, 'Impl', 'the source body indexes in Impl mode');
+      assert.strictEqual(inkRoot.mod_path, '', `the src/ shell root answers mod path '': ${JSON.stringify(inkRoot.mod_path)}`);
+      assert.ok(inkRoot.src.includes('pub class Logger'), 'the Logger class rides the srczip body');
+      assert.ok(
+        !srczip.files.some((f) => f.path.startsWith('deps/')),
+        `other pkgs' embedded dep trees stay out: ${JSON.stringify(srczip.files.map((f) => f.path))}`
+      );
+      smokes++;
 
       // the mount: <tmp>/.rut/deps/pouch-<pin12>/ — the pin prefix IS
       // the content address (same bytes ⇒ same dir, a bump ⇒ a sibling)

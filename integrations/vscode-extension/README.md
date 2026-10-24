@@ -163,7 +163,12 @@ manifests, JS only moves bytes) and walks its dependency rows:
   under it is re-fetchable and re-extractable.
 - **Offline / failure** shows one info hint per dep naming the CLI
   alternative (`rut fetch` warms the cache) — never spam, never silent
-  wrong results.
+  wrong results. The mount door also carries a **capability seam**: a
+  dep whose cache entry is a source zip mounting against a wasm that
+  predates the source-zip transport (a same-version install older than
+  the lane) is one hint naming the extension reinstall — and a dead
+  ctrl+click whose only target is the embedded std surface says the
+  same when that signature holds — never a silent dead dep.
 - The manifest and its dep tables re-walk on change
   (`**/rut.jsonc` and `.rut/cache/**` watchers, debounced), and a
   workspace-folder change restarts the whole index.

@@ -236,8 +236,27 @@ interface RutExports {
 /// everything the module exports (the ABI surface + its linear memory)
 type WasmExports = RutExports;
 
+/// the synthetic error envelope an OLDER artifact's missing extract
+/// export answers with — the host surfaces it as the one hint, and the
+/// dep walk survives a stale install instead of dying on a TypeError
+const STALE_ARTIFACT =
+  'the loaded rut-lsp.wasm predates this dep transport — rebuild and reinstall the ' +
+  'extension (`npm run build:wasm`, `npm run package`, install the vsix), then reload the window';
+
 export class RutWasm {
-  private constructor(private e: WasmExports) {}
+  /// feature probe — exports an older artifact may lack, checked once at
+  /// load (`complete` probes `rut_complete_in` per call, the same
+  /// backward-compat law). `rut_extract_srczip` is the source-zip dep
+  /// transport's extract; a same-version-but-older install (the version
+  /// number outlived the lane) would otherwise crash the dep walk the
+  /// moment a `.zip` cache entry mounts.
+  readonly hasSrczip: boolean;
+  readonly hasBundleExtract: boolean;
+
+  private constructor(private e: WasmExports) {
+    this.hasSrczip = typeof e.rut_extract_srczip === 'function';
+    this.hasBundleExtract = typeof e.rut_extract_bundle === 'function';
+  }
 
   static async load(wasmPath: string): Promise<RutWasm> {
     const { readFile } = await import('node:fs/promises');
@@ -429,6 +448,9 @@ export class RutWasm {
   /// face), so this lane has no index side effect. The error envelope
   /// on a corrupt/foreign archive.
   extractBundle(bytes: Uint8Array): BundleExtracted | Envelope {
+    if (!this.hasBundleExtract) {
+      return { error: STALE_ARTIFACT };
+    }
     return this.call(() => {
       const [p, l] = this.putBytes(bytes);
       return this.e.rut_extract_bundle(p, l);
@@ -440,6 +462,9 @@ export class RutWasm {
   /// from the `src/` shell. The error envelope on a corrupt/foreign
   /// archive.
   extractSrczip(bytes: Uint8Array): SrczipExtracted | Envelope {
+    if (!this.hasSrczip) {
+      return { error: STALE_ARTIFACT };
+    }
     return this.call(() => {
       const [p, l] = this.putBytes(bytes);
       return this.e.rut_extract_srczip(p, l);
