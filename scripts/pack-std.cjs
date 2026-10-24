@@ -251,6 +251,10 @@ function packAll(outDir) {
     run("cargo", [
       "run", "-q", "-p", "rut-cli", "--",
       "pack", path.join("rut", dir), "-o", path.relative(ROOT, path.join(outDir, `${name}.rutbundle`)),
+      // the committed artifacts are the COMPILED wire (the delivery
+      // law: a .rutbundle names the bin lane — the byte-fresh gate
+      // packs through the same lane)
+      "--mode", "bin",
     ]);
   }
 }
