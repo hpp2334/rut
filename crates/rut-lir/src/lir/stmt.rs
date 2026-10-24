@@ -159,6 +159,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.terminated = false;
         self.compile_expr(cond, Some(TY_BOOL))?;
         let cond_reg = self.last_reg;
+        // the folded law (see compile_stmt's if): a constant condition
+        // selects its arm at compile time — the live arm is the value
+        // and the verdict, no branch emitted
+        if let Some(bits) = self.folded_cond(cond_reg) {
+            let (value, term) = if bits != 0 {
+                let t = self.compile_block_value(then, expected)?;
+                (t, self.terminated)
+            } else {
+                match els {
+                    ElseBranch::Block(b) => {
+                        let t = self.compile_block_value(b, expected)?;
+                        (t, self.terminated)
+                    }
+                    ElseBranch::If(h) => match self.ctx.ast.stmt(h.into()).clone() {
+                        StmtKind::If { cond, then, els } => {
+                            let t = self.compile_if_value(h.into(), cond, then, els, expected)?;
+                            (t, self.terminated)
+                        }
+                        _ => unreachable!("ElseBranch::If is an if statement"),
+                    },
+                }
+            };
+            self.terminated = saved || term;
+            return Ok(value);
+        }
         let l_then = self.new_label();
         let l_else = self.new_label();
         let l_end = self.new_label();
@@ -277,6 +302,42 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ) -> TcResult<Option<TypeId>> {
         self.compile_expr(cond, Some(TY_BOOL))?;
         let cond_reg = self.last_reg;
+        // the folded law (see compile_stmt's if): a constant condition
+        // selects its arm at compile time. The expression form never
+        // writes the definite-return flag — the entry value restores
+        // after the live arm's compile.
+        if let Some(bits) = self.folded_cond(cond_reg) {
+            let saved = self.terminated;
+            self.terminated = false;
+            let value = if bits != 0 {
+                let raw = self.compile_expr(then.into(), expected)?;
+                if self.terminated {
+                    None
+                } else {
+                    Some(raw)
+                }
+            } else {
+                match els {
+                    Some(ElseBranch::Block(b)) => {
+                        let raw = self.compile_expr(b.into(), expected)?;
+                        if self.terminated {
+                            None
+                        } else {
+                            Some(raw)
+                        }
+                    }
+                    Some(ElseBranch::If(h)) => match self.ctx.ast.stmt(h.into()).clone() {
+                        StmtKind::If { cond, then, els } => {
+                            self.compile_if_expr(cond, then, els, expected, sp)?
+                        }
+                        _ => unreachable!("ElseBranch::If is an if statement"),
+                    },
+                    None => None,
+                }
+            };
+            self.terminated = saved;
+            return Ok(value);
+        }
         let l_then = self.new_label();
         let l_else = self.new_label();
         let l_end = self.new_label();
@@ -664,6 +725,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = false;
                 self.compile_expr(cond, Some(TY_BOOL))?;
                 let cond_reg = self.last_reg;
+                // the folded law: a compile-time-constant condition (the
+                // `is` exact-fold's per-member dispatch) selects its arm
+                // HERE — the dead arm neither compiles nor typechecks, so
+                // the live arm may name members the dead one could not
+                // (calc's `sqrt<T>` shape: the f32 member's body calls
+                // the f32 row only). No branch is emitted — the live arm
+                // is straight-line.
+                if let Some(bits) = self.folded_cond(cond_reg) {
+                    let mut term = false;
+                    if bits != 0 {
+                        self.compile_block(then)?;
+                        term = self.terminated;
+                    } else if let Some(e) = els {
+                        match e {
+                            ElseBranch::If(h) => self.compile_stmt(h.into())?,
+                            ElseBranch::Block(b) => self.compile_block(b)?,
+                        }
+                        term = self.terminated;
+                    }
+                    self.terminated = saved || term;
+                    return Ok(());
+                }
                 let l_then = self.new_label();
                 let l_end = self.new_label();
                 let has_else = els.is_some();

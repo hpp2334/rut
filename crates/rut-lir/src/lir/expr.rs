@@ -342,6 +342,40 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         // itself (`v is Vec<i64>` resolves through the
                         // same instantiation the spelling mints)
                         let want = self.resolve_type_now(ty);
+                        // a primitive RHS folds — prims carry no
+                        // identity bits, so the test is compile-time:
+                        // true iff the receiver's (monomorphized) type
+                        // names the same prim. The closed-union
+                        // generic's `x is f32` is the per-width
+                        // dispatch (`calc::sqrt<T>`'s shape): bodies
+                        // compile per member, so the fold decides the
+                        // arm per instantiation and the if's dead-arm
+                        // pruning (the folded-constant tail) drops the
+                        // other one. A placeholder receiver diagnoses —
+                        // the pack-time template window compiles the
+                        // body ONCE for every T, and a baked fold would
+                        // lie for all but one width.
+                        if let TyKind::Prim(_) = self.ctx.types.kind(want) {
+                            if self.ctx.is_template_param(rt) {
+                                self.ctx.err(
+                                    sp,
+                                    "`is <prim>` needs the parameter's bound to be a closed \
+                                     union — the body compiles once per union member there, \
+                                     and the test folds per member",
+                                );
+                                return Err(());
+                            }
+                            let same = self.same_ty(rt, want);
+                            self.emit(
+                                Op::ConstRaw {
+                                    dst,
+                                    bits: same as u64,
+                                },
+                                sp.lo,
+                            );
+                            self.mark_is_fold(dst, same);
+                            return Ok(TY_BOOL);
+                        }
                         if !self.ctx.types.is_ref(want) && want != TY_STR {
                             self.ctx.err(
                                 sp,

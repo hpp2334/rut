@@ -256,6 +256,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             async_infer: false,
             async_founds: Vec::new(),
             terminated: false,
+            is_fold_tail: None,
         };
         // the capture law's pre-pass: names first (a fn-level walk over
         // the body), promotion at each `bind_local` once types resolve
@@ -460,6 +461,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             async_infer: false,
             async_founds: Vec::new(),
             terminated: false,
+            is_fold_tail: None,
         };
         // NOTE: lambda param/ret types were recorded... re-derive:
         // annotations resolve here; unannotated ones took the expected type
@@ -664,6 +666,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             async_infer: false,
             async_founds: Vec::new(),
             terminated: false,
+            is_fold_tail: None,
         };
         // the emit closure's own pre-pass: its frame promotes its own
         // bindings (nested lambdas / for-of bodies under the loop body)

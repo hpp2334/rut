@@ -230,6 +230,15 @@ pub struct FnCompiler<'a, 'b> {
     /// design: statements after a terminating one are dead code that
     /// still compiles, and the flag never flips back on their account.
     terminated: bool,
+    /// The code tail's `is` fold: `Some((reg, bits))` when the LAST
+    /// emitted op is the `is` exact-fold's `ConstRaw` producing `reg`
+    /// (any other op clears it). ONLY the prim fold marks the tail —
+    /// the closed-union dispatch (`x is f32` in a per-member body): the
+    /// if lowerings read it through [`FnCompiler::folded_cond`] to
+    /// prune the dead arm, which then neither compiles nor typechecks.
+    /// Literal-true conditions and the interface folds keep today's
+    /// both-arms compile (the agreement diagnostic stays).
+    is_fold_tail: Option<(u16, u64)>,
 }
 
 impl<'a, 'b> FnCompiler<'a, 'b> {
@@ -362,7 +371,28 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn emit(&mut self, op: Op, span_lo: u32) {
         self.spans.push((self.code.len() as u32, span_lo));
+        // any op ends the `is`-fold tail: the fold's ConstRaw must be
+        // the condition's DEFINING op for the pruning to fire
+        self.is_fold_tail = None;
         self.code.push(op);
+    }
+
+    /// Mark the just-emitted `ConstRaw` as the `is` exact-fold's
+    /// constant — the pruning signal the if lowerings read.
+    fn mark_is_fold(&mut self, dst: u16, bits: bool) {
+        self.is_fold_tail = Some((dst, bits as u64));
+    }
+
+    /// The folded value of a condition register: `Some(bits)` when the
+    /// condition's compile ENDED on the `is` exact-fold's `ConstRaw`
+    /// producing `cond_reg` — the if lowerings prune the dead arm (it
+    /// neither compiles nor typechecks). Anything compiled after the
+    /// fold clears the tail, so the answer is conservative.
+    pub(crate) fn folded_cond(&self, cond_reg: u16) -> Option<u64> {
+        match self.is_fold_tail {
+            Some((dst, bits)) if dst == cond_reg => Some(bits),
+            _ => None,
+        }
     }
 
     /// Bind a local, mirroring it into the async frame cell when the
