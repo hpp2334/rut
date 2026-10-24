@@ -205,11 +205,12 @@ Two offer lanes walk a directory **for someone else's program**:
 | `rut_native::dir_pkgs(dir)` / `dir_pkgs_with(dir, &remote)` | offer one package directory — and, recursively, its `[deps]` — as walked pkgs. No dev-deps pass: the closure is the program's own `.compile()` law. |
 | `rut_native::tree_pkg(name)` | one toolchain-tree package (`rut/calc`, `rut/futures`, …). A pkg whose `[deps]` pull a closure is refused — offer the whole walk (`load_dir`) instead, never a silently-truncated world. |
 
-`core` is never offered — `.compile()` auto-rides it. `calc` and the
-async pair are ordinary tree packages: the host offers
-`rut_native::tree_pkg("calc")` when the program's surface needs it and
-binds `rut_std::math::pkg()` for the bodies ([core and the swappable
-packages](stdlib.md)).
+`core` is never offered — `.compile()` auto-rides it. `calc_host` and
+the async pair are ordinary tree packages: the host offers
+`rut_native::tree_pkg("calc_host")` when the program's surface needs it
+(the `calc` lib beside it mounts through `dir_pkgs` — its `deps` pull
+the host pkg) and binds `rut_std::math::pkg()` for the bodies
+([core and the swappable packages](stdlib.md)).
 
 ### Hand mounts carry a manifest
 

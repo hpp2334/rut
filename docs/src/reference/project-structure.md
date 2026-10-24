@@ -24,10 +24,10 @@ the resolution laws, and where everything lives in the toolchain tree.
   "name": "pouch"
 }
 
-// rut/calc/rut.jsonc — a pure declaration surface (a host pkg); the
-// spelled surface resolves under src/ (the file is src/calc.d.rut)
+// rut/calc_host/rut.jsonc — a pure declaration surface (a host pkg);
+// the spelled surface resolves under src/ (the file is src/calc.d.rut)
 {
-  "name": "calc",
+  "name": "calc_host",
   "type": "host",
   "entry": { "type": "./calc.d.rut" }
 }
@@ -35,7 +35,7 @@ the resolution laws, and where everything lives in the toolchain tree.
 // the same surface, the default-root spelling: src/mod.d.rut IS the
 // root — entry.type is optional on a host pkg
 {
-  "name": "calc",
+  "name": "calc_host",
   "type": "host"
 }
 
@@ -256,7 +256,8 @@ demand:
 | package | shape |
 |---|---|
 | `core` | the only standard package — the builtin surface, auto-offered by every run's `.compile()` |
-| `calc` | host pkg: the math surface — offer `rut_native::tree_pkg("calc")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
+| `calc` | the math surface as a normal lib — generic fns over `calc_host`; a `deps`-carrying dir mounts through `load_dir`/`dir_pkgs`, never `tree_pkg` ([stdlib](stdlib.md)) |
+| `calc_host` | host pkg: the math rows + the `Math::` constants — offer `rut_native::tree_pkg("calc_host")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
 | `ink_host`, `nmap_host`, `async_host`, `bench_cross` | host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std` |
 | `http_host` | host pkg, the surface-tree pilot — the default `src/mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std` |
 | `ink`, `http`, `strbuild`, `futures` | rut classes over host rows (published compiled — methods cross on the surface's inherent rows) |

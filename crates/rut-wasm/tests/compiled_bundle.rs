@@ -62,7 +62,7 @@ fn compiled_bundle_mounts_from_bytes_and_runs() {
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");

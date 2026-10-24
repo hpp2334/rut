@@ -133,6 +133,8 @@ fn book_blocks_compile_and_run() {
                 ("futures", "rut/futures"),
                 ("http_host", "rut/http_host"),
                 ("http", "rut/http"),
+                ("calc", "rut/calc"),
+                ("calc_host", "rut/calc_host"),
             ] {
                 if body.contains(&format!("use {name}::")) {
                     world.extend(
@@ -143,8 +145,6 @@ fn book_blocks_compile_and_run() {
                     heads.push(name);
                 }
             }
-            heads.push("calc");
-            world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
             // the rows snapshot the installs answer to
             let ctx = rut_driver::host_pkg_ctx(&world);
 

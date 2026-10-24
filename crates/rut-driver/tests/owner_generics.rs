@@ -35,9 +35,9 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // offer stays the walked tree pkg)
             .pkg(
                 rut_driver::Mounted::source(spec, src)
-                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -112,7 +112,7 @@ fn run_entry<R: rut_vm::interp::Ret>(world: &rut_driver::Walk, root: &str, entry
             .pkgs
             .iter()
             .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(root)
             .compile(),
     );
@@ -210,7 +210,7 @@ entry fn go2() -> i64 {
         s.pkgs
             .iter()
             .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint("app")
             .compile(),
     );
@@ -477,7 +477,7 @@ fn packaged_generic_owner_serves_consumer_requests() {
         lone.pkgs
             .iter()
             .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint("late")
             .compile(),
     );
@@ -575,7 +575,7 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
                 .pkgs
                 .iter()
                 .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-                .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+                .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
                 .entrypoint(&dir_loaded.root)
                 .compile(),
         );
@@ -589,7 +589,7 @@ fn compiled_bundle_matches_the_directory_with_a_generic_lib() {
             .pkgs
             .iter()
             .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(&session.root)
             .compile(),
     );

@@ -37,9 +37,9 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // offer stays the walked tree pkg)
             .pkg(
                 rut_driver::Mounted::source(spec, src)
-                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -143,7 +143,7 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -270,7 +270,7 @@ fn a_source_group_splices_into_a_consumer_session() {
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint("consumer")
         .compile()
         .unwrap();

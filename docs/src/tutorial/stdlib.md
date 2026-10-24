@@ -303,7 +303,8 @@ the builder appends into one growable cell and copies once, at
 ## `calc` — float math
 
 ```rut
-use calc::{ Math };
+use calc::{ sqrt, max, signum, abs, min };
+use calc_host::{ Math };
 use ink::{ Logger };
 
 entry fn main() {
@@ -311,12 +312,12 @@ entry fn main() {
     let x: f64 = -2.0;
     let a: f64 = 3.0;
     let b: f64 = 7.0;
-    let d = Math::sqrt(2.0);        // f64 host fns: sin, pow, atan2, fma, ...
-    let f = Math::sqrt_f(2.0f32);   // f32 twins under a `_f` suffix
-    let mx = Math::max(a, b);
-    let sg = Math::signum(x);
+    let d = sqrt(2.0f64);      // f64 members: sin, pow, atan2, fma, ...
+    let f = sqrt(2.0);         // f32 — the width falls out of the argument
+    let mx = max(a, b);
+    let sg = signum(x);
     log.info(f"sqrt={d} sqrt_f={f} pi={Math::PI}");
-    log.info(f"abs={Math::abs(x)} min={Math::min(a, b)} max={mx} signum={sg}");
+    log.info(f"abs={abs(x)} min={min(a, b)} max={mx} signum={sg}");
 }
 ```
 
@@ -325,8 +326,11 @@ sqrt=1.4142135623730951 sqrt_f=1.4142135 pi=3.141592653589793
 abs=2 min=3 max=7 signum=-1
 ```
 
-rut has no overloading, so the width lives in the name. The integer
-ladder is *not* here — those are core's, always available.
+Every member is a closed-union generic (`sqrt<T requires f32 | f64>`) —
+the width falls out of the argument, or an explicit `sqrt<f32>(x)`
+spells it. The constants keep the `Math::` head on `calc_host` (the
+host package behind `calc`). The integer ladder is *not* here — those
+are core's, always available.
 
 ## `json` — encode and decode
 
@@ -403,7 +407,8 @@ byte streams — in [async: futures and await](async.md).
 ```rut
 use pouch::{ Vec };
 use strbuild::{ StringBuilder };
-use calc::{ Math };
+use calc::{ sqrt };
+use calc_host::{ Math };
 use ink::{ Logger };
 
 // assert is plain rut code now: the helper a package writes over panic
@@ -432,9 +437,10 @@ entry fn main() {
     let s = b.build();
     log.info(s);
 
-    // calc's Math namespace (f64) and its f32 twins (_f)
-    let d = Math::sqrt(2.0);
-    let f = Math::sqrt_f(2.0);
+    // calc's generic float surface (the width falls out of the
+    // argument); the constants ride calc_host's Math head
+    let d = sqrt(2.0f64);
+    let f = sqrt(2.0);
     log.info(f"sqrt2 f64~{d} f32~{f} pi={Math::PI}");
 
     // assert: the bug-catcher this file wrote itself

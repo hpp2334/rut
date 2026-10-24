@@ -103,7 +103,9 @@ fn main() {
         .pkgs
         .iter()
         .fold(
-            chain.pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc")),
+            chain.pkg(
+                rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"),
+            ),
             |r, p| r.pkg(p.clone()),
         )
         .pkg(rut_std::math::pkg())

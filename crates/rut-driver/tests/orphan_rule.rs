@@ -70,9 +70,9 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // offer stays the walked tree pkg)
             .pkg(
                 rut_driver::Mounted::source(spec, src)
-                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -323,7 +323,7 @@ fn consumer_proves_jsonserialize_on_its_own_type() {
     }
     let g = graph_of(
         chain
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .pkg(
                 rut_driver::Mounted::source(
                     "main",

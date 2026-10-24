@@ -1,5 +1,4 @@
 use pouch::{ Vec, freeze_bytes };
-use calc::{ Math };
 use json::{ EncodeJsonError, JsonWriter };
 // digest.rut — 02-digest: byte-level encodings, hashes, and JSON in rut.
 //

@@ -187,7 +187,7 @@ let rgh_host = rut_native::dir_pkgs(&base::join("rgh_host"))?;   // example-loca
 
 let mut chain = loaded.pkgs.iter().fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
 chain = chain
-    .pkg(rut_native::tree_pkg("calc")?)
+    .pkg(rut_native::tree_pkg("calc_host")?)
     .pkg(rut_std::math::pkg())
     .pkg(rut_std::nmap::pkg())
     .pkg(rut_std::async_host::pkg())

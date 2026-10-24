@@ -1004,7 +1004,7 @@ fn mint_pkg_rows(idx: &mut DefIndex, namespace: Option<&str>, consts: &[(String,
 mod tests {
     use super::*;
 
-    const CALC_MANIFEST: &str = include_str!("../../../rut/calc/rut.jsonc");
+    const CALC_HOST_MANIFEST: &str = include_str!("../../../rut/calc_host/rut.jsonc");
     const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
 
     /// The plugin manifest's dep shape, INLINE and unpinned: the real
@@ -1137,8 +1137,10 @@ mod tests {
 
     #[test]
     fn calc_manifest_carries_namespace_and_consts() {
-        let t = dep_table(CALC_MANIFEST).expect("the real calc manifest parses");
-        assert_eq!(t.name.as_deref(), Some("calc"));
+        // the namespace + consts live on the HOST pkg's manifest
+        // (calc_host); `calc` beside it is the generic lib
+        let t = dep_table(CALC_HOST_MANIFEST).expect("the real calc_host manifest parses");
+        assert_eq!(t.name.as_deref(), Some("calc_host"));
         // the host surface: decl mode, no body — the spelled surface
         // resolves under the `src/` shell
         assert_eq!(

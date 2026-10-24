@@ -35,9 +35,9 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // offer stays the walked tree pkg)
             .pkg(
                 rut_driver::Mounted::source(spec, src)
-                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -65,7 +65,7 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .pkg(
             // the root DECLARES its uses structurally (ink + calc, the
             // world this helper mounts; the logger use is appended above)
@@ -85,7 +85,7 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = lines.clone();
     let mut world = ink.pkgs.clone();
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(

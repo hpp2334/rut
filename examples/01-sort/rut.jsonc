@@ -14,14 +14,8 @@
   // networks on the miss, a warm start is pure cache; the TESTS prime an
   // offline remote from the committed artifacts (dist/std plays the
   // wire), so the gates never touch the network.
-  //
-  // THE CALC ROW: `calc` is a declared head like every other — a path
-  // row into the toolchain tree. The walk mounts exactly the declared
-  // closure (`rut run` has no ambient tier), and the chain's blanket
-  // host-pkg install binds the `Math` bodies to whatever mounted.
   "name": "sort",
     "deps": {
-    "calc": { "path": "../../rut/calc" },
     "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" }
   }
 }

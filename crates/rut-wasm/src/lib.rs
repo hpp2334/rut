@@ -260,23 +260,26 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
         "strbuild_host.d.rut",
         &[],
     );
-    // calc rides as a lowered surface + the manifest's namespace/consts
-    // rows — the same shape a `tree_pkg("calc")` walk yields (the wasm
-    // host has no filesystem, so the files ride `include_str!`; the
-    // core prelude auto-offers in `.compile()`). The whole parsed
-    // manifest rides the pkg like every other offer's does.
-    let calc_manifest = rut_driver::parse_manifest(include_str!("../../../rut/calc/rut.jsonc"))
-        .expect("the calc manifest is valid");
-    let mut calc = host_surface(
-        "calc",
-        include_str!("../../../rut/calc/src/calc.d.rut"),
+    // calc_host rides as a lowered surface + the manifest's
+    // namespace/consts rows — the same shape a `tree_pkg("calc_host")`
+    // walk yields (the wasm host has no filesystem, so the files ride
+    // `include_str!`; the core prelude auto-offers in `.compile()`).
+    // The whole parsed manifest rides the pkg like every other offer's
+    // does. `calc` (the generic lib beside it) mounts through
+    // `std_pkg!` below — its `deps` row names this host surface.
+    let calc_host_manifest =
+        rut_driver::parse_manifest(include_str!("../../../rut/calc_host/rut.jsonc"))
+            .expect("the calc_host manifest is valid");
+    let mut calc_host = host_surface(
+        "calc_host",
+        include_str!("../../../rut/calc_host/src/calc.d.rut"),
         "calc.d.rut",
         &[],
     )
-    .manifest(calc_manifest);
-    calc.namespace = calc.manifest.namespace.clone();
-    if let rut_driver::MountedBody::Host { consts, .. } = &mut calc.body {
-        *consts = calc
+    .manifest(calc_host_manifest);
+    calc_host.namespace = calc_host.manifest.namespace.clone();
+    if let rut_driver::MountedBody::Host { consts, .. } = &mut calc_host.body {
+        *consts = calc_host
             .manifest
             .consts
             .iter()
@@ -303,7 +306,8 @@ fn compile_playground(src: &str, manifest_text: Option<&str>) -> rut_driver::Com
         strbuild_host,
         std_pkg!("strbuild"),
         std_pkg!("json"),
-        calc,
+        calc_host,
+        std_pkg!("calc"),
     ];
     // the rows snapshot `rut_run`'s installs answer to (owned; the
     // compile-time world dies here, the table travels)

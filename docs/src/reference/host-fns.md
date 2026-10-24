@@ -81,7 +81,7 @@ Rules:
   Seal polymorphic values with `opaque(v)` / `opaque::downcast<T>(v)`
   ([opaque](opaque.md)).
 - **`builtin` is the engine's reservation** — spelled only in the
-  toolchain's own decl files (`core`, `calc`). A `builtin` in an embedder
+  toolchain's own decl files (`core`, `calc_host`). A `builtin` in an embedder
   decl is a compile error. The engine's contracts are spellings on
   types: the bracket markers on inherent impl members and the
   closed `builtin class` pair; library polymorphism stays plain

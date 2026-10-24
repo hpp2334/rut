@@ -4,7 +4,7 @@
 //! faces: the stdio server (`server`, native) and the wasm shim
 //! (`rut-lsp-wasm`) — one index, no drift.
 //!
-//! All TWELVE stdlib packages are embedded (the `rut.jsonc` `name`
+//! All THIRTEEN stdlib packages are embedded (the `rut.jsonc` `name`
 //! fields — what a `use` path spells): the six `entry.type` declaration
 //! surfaces (`core`, `calc`, `nmap_host`, `ink_host`, `bench_cross`,
 //! `strbuild_host`), the five root-module sources (`pouch`,
@@ -26,7 +26,8 @@
 use crate::hover::{self, DefIndex};
 
 pub const CORE: &str = include_str!("../../../rut/core/src/core.d.rut");
-pub const CALC: &str = include_str!("../../../rut/calc/src/calc.d.rut");
+pub const CALC_HOST: &str = include_str!("../../../rut/calc_host/src/calc.d.rut");
+pub const CALC: &str = include_str!("../../../rut/calc/src/mod.rut");
 pub const NMAP_HOST: &str = include_str!("../../../rut/nmap_host/src/nmap.d.rut");
 pub const INK_HOST: &str = include_str!("../../../rut/ink_host/src/ink_host.d.rut");
 pub const BENCH_CROSS: &str = include_str!("../../../rut/bench-cross/src/bench_cross.d.rut");
@@ -42,12 +43,12 @@ pub const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/src/net/tls/m
 
 /// The embedded std pkgs' manifest namespaces — the qualified-access
 /// heads the surface grammar cannot say (`"namespace": "Math"` lives in
-/// `rut/calc/rut.jsonc`, not in `calc.d.rut`). The embedded surface
+/// `rut/calc_host/rut.jsonc`, not in `calc.d.rut`). The embedded surface
 /// mirrors the manifest truth so a stamped document's
-/// `use calc::{ Math }` + `Math.sqrt(x)` binds and type-checks in the
-/// check lane's world assembly (`check::groups_from_defs` reads the
+/// `use calc_host::{ Math }` + `Math.sqrt(x)` binds and type-checks in
+/// the check lane's world assembly (`check::groups_from_defs` reads the
 /// head off here) instead of false-flagging the use line.
-pub const NAMESPACES: &[(&str, &str)] = &[("calc", "Math")];
+pub const NAMESPACES: &[(&str, &str)] = &[("calc_host", "Math")];
 
 const CORE_LABEL: &str = "core";
 
@@ -75,10 +76,17 @@ pub fn indexes() -> Vec<DefIndex> {
             &[] as &[StdFile],
         ),
         (
+            "calc_host",
+            CALC_HOST,
+            rut_parser::Mode::Decl,
+            "rut/calc_host/src/calc.d.rut",
+            &[],
+        ),
+        (
             "calc",
             CALC,
-            rut_parser::Mode::Decl,
-            "rut/calc/src/calc.d.rut",
+            rut_parser::Mode::Impl,
+            "rut/calc/src/mod.rut",
             &[],
         ),
         (
@@ -234,14 +242,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_twelve_packages_embed_and_index() {
+    fn all_thirteen_packages_embed_and_index() {
         let idxs = indexes();
         // myhost's tree yields three indexes (root + net + net/tls);
-        // the named ORIGINS stay twelve
+        // the named ORIGINS stay thirteen
         let mut origins: Vec<String> = idxs.iter().map(|i| i.origin.clone()).collect();
         origins.sort();
         origins.dedup();
-        assert_eq!(origins.len(), 12, "origins: {origins:?}");
+        assert_eq!(origins.len(), 13, "origins: {origins:?}");
         for i in &idxs {
             assert!(
                 !i.types.is_empty() || !i.fns.is_empty(),

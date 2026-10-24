@@ -1,0 +1,154 @@
+// calc/mod.rut — the float math surface: one closed-union generic per
+// libm member. The width falls out of the argument
+// (`sqrt(2.0f32)` is the f32 row, `sqrt(2.0f64)` the f64 one; an
+// explicit `sqrt<f32>(x)` spells it). The body is the `is` dispatch —
+// `x is f32` folds per member, the if's dead-arm pruning drops the
+// other row, and the member's body compiles to ONE host call.
+//
+// The integer numeric methods (`wrapping_*`, `saturating_*`,
+// `checked_*`) are core's; the constants are `calc_host`'s
+// (`use calc_host::{ Math }` — `Math::PI`).
+
+use calc_host::{ sqrt_f64, sqrt_f32,
+            floor_f64, floor_f32,
+            ceil_f64, ceil_f32,
+            round_f64, round_f32,
+            trunc_f64, trunc_f32,
+            exp_f64, exp_f32,
+            ln_f64, ln_f32,
+            log2_f64, log2_f32,
+            log10_f64, log10_f32,
+            sin_f64, sin_f32,
+            cos_f64, cos_f32,
+            tan_f64, tan_f32,
+            asin_f64, asin_f32,
+            acos_f64, acos_f32,
+            atan_f64, atan_f32,
+            sinh_f64, sinh_f32,
+            cosh_f64, cosh_f32,
+            tanh_f64, tanh_f32,
+            pow_f64, pow_f32,
+            atan2_f64, atan2_f32,
+            hypot_f64, hypot_f32,
+            copysign_f64, copysign_f32,
+            fma_f64, fma_f32,
+            abs_f64, abs_f32,
+            min_f64, min_f32,
+            max_f64, max_f32,
+            signum_f64, signum_f32 };
+
+// ---- the unary libm members ----
+
+pub fn sqrt<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { sqrt_f32(x) } else { sqrt_f64(x) }
+}
+
+pub fn floor<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { floor_f32(x) } else { floor_f64(x) }
+}
+
+pub fn ceil<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { ceil_f32(x) } else { ceil_f64(x) }
+}
+
+pub fn round<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { round_f32(x) } else { round_f64(x) }
+}
+
+pub fn trunc<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { trunc_f32(x) } else { trunc_f64(x) }
+}
+
+pub fn exp<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { exp_f32(x) } else { exp_f64(x) }
+}
+
+pub fn ln<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { ln_f32(x) } else { ln_f64(x) }
+}
+
+pub fn log2<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { log2_f32(x) } else { log2_f64(x) }
+}
+
+pub fn log10<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { log10_f32(x) } else { log10_f64(x) }
+}
+
+pub fn sin<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { sin_f32(x) } else { sin_f64(x) }
+}
+
+pub fn cos<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { cos_f32(x) } else { cos_f64(x) }
+}
+
+pub fn tan<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { tan_f32(x) } else { tan_f64(x) }
+}
+
+pub fn asin<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { asin_f32(x) } else { asin_f64(x) }
+}
+
+pub fn acos<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { acos_f32(x) } else { acos_f64(x) }
+}
+
+pub fn atan<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { atan_f32(x) } else { atan_f64(x) }
+}
+
+pub fn sinh<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { sinh_f32(x) } else { sinh_f64(x) }
+}
+
+pub fn cosh<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { cosh_f32(x) } else { cosh_f64(x) }
+}
+
+pub fn tanh<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { tanh_f32(x) } else { tanh_f64(x) }
+}
+
+// ---- the float helpers ----
+
+pub fn abs<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { abs_f32(x) } else { abs_f64(x) }
+}
+
+pub fn signum<T requires f32 | f64>(x: T) -> T {
+    if (x is f32) { signum_f32(x) } else { signum_f64(x) }
+}
+
+// ---- the binary members ----
+
+pub fn pow<T requires f32 | f64>(x: T, y: T) -> T {
+    if (x is f32) { pow_f32(x, y) } else { pow_f64(x, y) }
+}
+
+pub fn atan2<T requires f32 | f64>(y: T, x: T) -> T {
+    if (y is f32) { atan2_f32(y, x) } else { atan2_f64(y, x) }
+}
+
+pub fn hypot<T requires f32 | f64>(x: T, y: T) -> T {
+    if (x is f32) { hypot_f32(x, y) } else { hypot_f64(x, y) }
+}
+
+pub fn copysign<T requires f32 | f64>(x: T, y: T) -> T {
+    if (x is f32) { copysign_f32(x, y) } else { copysign_f64(x, y) }
+}
+
+pub fn min<T requires f32 | f64>(x: T, y: T) -> T {
+    if (x is f32) { min_f32(x, y) } else { min_f64(x, y) }
+}
+
+pub fn max<T requires f32 | f64>(x: T, y: T) -> T {
+    if (x is f32) { max_f32(x, y) } else { max_f64(x, y) }
+}
+
+// ---- the ternary member ----
+
+pub fn fma<T requires f32 | f64>(x: T, y: T, z: T) -> T {
+    if (x is f32) { fma_f32(x, y, z) } else { fma_f64(x, y, z) }
+}

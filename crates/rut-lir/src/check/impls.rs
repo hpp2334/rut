@@ -511,6 +511,26 @@ impl<'a> Ctx<'a> {
         self.resolve_bound_members_in(node, subst, false)
     }
 
+    /// The bound node's closed concrete member list — `Some([f32, f64])`
+    /// for `f32 | f64` (deduped, declaration order), `None` when any
+    /// member is an interface (infinitely many satisfiers). The
+    /// closed-union export enumeration's question (the driver's pack
+    /// pass): which instantiations of this generic fn exist?
+    pub fn bound_concrete_members(&mut self, node: NodeHandle<AnyTy>) -> Option<Vec<TypeId>> {
+        let mut out: Vec<TypeId> = Vec::new();
+        for m in self.resolve_bound_members(node, &[]) {
+            match m {
+                BoundMember::Concrete(t) => {
+                    if !out.contains(&t) {
+                        out.push(t);
+                    }
+                }
+                BoundMember::Trait(_) => return None,
+            }
+        }
+        Some(out)
+    }
+
     /// The recursive resolver. `in_union` marks members resolved THROUGH a
     /// union spelling — a `TyUnion` bound node, or a union alias in bound
     /// position. Type-union bounds:

@@ -155,7 +155,7 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
         chain = chain.pkg(hp);
     }
     let compiled = chain
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .pkg(brain(src))
         .entrypoint("rgh")
         .compile()
@@ -178,7 +178,7 @@ fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Co
 /// surfaces included) — the raw rows' contract check reads it.
 fn world_expected() -> rut_vm::interp::ExpectedHostFns {
     let mut world = world_pkgs();
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     rut_driver::declared_host_fns(&world)
 }
 

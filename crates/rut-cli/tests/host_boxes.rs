@@ -298,7 +298,7 @@ entry fn churn(n: i64) -> nil {
     )
     .expect("mount pouch")
     .pkgs;
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     let compiled = rut_driver::Walk {
         pkgs: world.clone(),
         root: String::new(),

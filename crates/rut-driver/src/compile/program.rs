@@ -2010,6 +2010,93 @@ fn compile_program_inner(
             iface_slots.push((i as u32, m as u32));
         }
     }
+    // ---- the closed-union export enumeration ----
+    //
+    // An exported generic fn whose EVERY parameter carries a closed
+    // union bound has finitely many instantiations: the pack compiles
+    // each member HERE (concrete substitution — the bodies are
+    // ordinary fns, below the template window) and the delivery law's
+    // FIRST lane answers every consumer request from the pack-time
+    // ledger. No template row, no placeholder compile — which is the
+    // point: a closed-union body may branch on the member (`x is f32`,
+    // the `calc::sqrt<T>` dispatch), and a fold baked into a
+    // placeholder template would lie for all but one width. The union
+    // bound's admission at every call site keeps the request set
+    // inside the enumeration, so a ledger miss for these names is
+    // impossible in a sound bundle (an out-of-union request is the
+    // loud refusal).
+    let mut enumerated: std::collections::HashSet<IdentId> = std::collections::HashSet::new();
+    let mut enum_roots: Vec<(rut_lir::check::Inst, u32)> = Vec::new();
+    if !surface.fn_generics.is_empty() {
+        let mut seeds: Vec<rut_lir::check::Inst> = Vec::new();
+        for g in &surface.fn_generics {
+            let Some(node) = ctx
+                .fn_nodes
+                .iter()
+                .find(|(n, _)| *n == g.name)
+                .map(|(_, n)| *n)
+            else {
+                continue;
+            };
+            let bounds = ctx.ast.fn_decl(node).bounds.clone();
+            // every parameter must carry a bound whose members are ALL
+            // concrete (a trait member admits infinitely many
+            // satisfiers — that decl stays on the template lane)
+            let mut per_param: Vec<Vec<TypeId>> = Vec::new();
+            let mut closed = true;
+            for p in &g.params {
+                let Some((_, bnode)) = bounds.iter().find(|(b, _)| b == p) else {
+                    closed = false;
+                    break;
+                };
+                let Some(members) = ctx.bound_concrete_members(*bnode) else {
+                    closed = false;
+                    break;
+                };
+                if members.is_empty() {
+                    closed = false;
+                    break;
+                }
+                per_param.push(members);
+            }
+            if !closed {
+                continue;
+            }
+            // the cartesian product over the members (calc's shape is
+            // one union-bound param — the product is its member list)
+            let mut combos: Vec<Vec<TypeId>> = vec![Vec::new()];
+            for members in &per_param {
+                let mut next = Vec::new();
+                for combo in &combos {
+                    for &m in members {
+                        let mut c = combo.clone();
+                        c.push(m);
+                        next.push(c);
+                    }
+                }
+                combos = next;
+            }
+            for combo in combos {
+                let subst: Vec<(IdentId, TypeId)> = g.params.iter().copied().zip(combo).collect();
+                seeds.push(rut_lir::check::Inst {
+                    key: rut_lir::check::FnKey::Free(g.name),
+                    subst,
+                    iface_origins: vec![],
+                });
+            }
+            enumerated.insert(g.name);
+        }
+        if !seeds.is_empty() {
+            for inst in seeds {
+                let fid = ctx.ensure_inst(inst.clone());
+                enum_roots.push((inst, fid));
+            }
+            if ctx.drain_queue().is_err() {
+                diags.append(&mut ctx.diags);
+                return fail(diags, ast_dump, ast_json);
+            }
+        }
+    }
     // ---- the template pass (v22): generic bodies ride the binary ----
     //
     // Every exported generic decl compiles ONCE here, against its
@@ -2058,6 +2145,11 @@ fn compile_program_inner(
         }
         let mut decls: Vec<Decl> = Vec::new();
         for g in &surface.fn_generics {
+            // a closed-union fn rides the ledger (the enumeration
+            // above) — no template row, no placeholder compile
+            if enumerated.contains(&g.name) {
+                continue;
+            }
             let node = ctx
                 .fn_nodes
                 .iter()
@@ -2175,6 +2267,25 @@ fn compile_program_inner(
                     param_rows,
                     bounds,
                     fid,
+                });
+            }
+            // the closed-union exports' member rows: their bodies ride
+            // the LEDGER (compiled concretely in the enumeration — no
+            // placeholder window fid), but the rows still ship, one per
+            // member. The wire's surface cannot spell a bound, so these
+            // rows ARE the closed-surface evidence the
+            // templates-must-emit gate reads — and an out-of-union
+            // request (never a sound consumer's shape) materializes a
+            // mismatched body the verifier refuses loudly.
+            for (inst, fid) in &enum_roots {
+                let rut_lir::check::FnKey::Free(name) = inst.key else {
+                    continue;
+                };
+                templates.push(rut_core::binary::TemplateRow {
+                    kind: rut_core::binary::TemplateKind::Free { name },
+                    param_rows: inst.subst.iter().map(|(_, t)| *t).collect(),
+                    bounds: Vec::new(),
+                    fid: *fid,
                 });
             }
             // the window's end: every body + stub the drain appended —

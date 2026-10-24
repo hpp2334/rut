@@ -58,7 +58,7 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
                 .pkgs,
         );
     }
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     // the root DECLARES its uses structurally — exactly the heads this
     // world mounts (calc, ink, pouch, nmapset, flow; the bundles ride
     // their own committed manifests)
@@ -481,7 +481,7 @@ fn unannotated_lambda_diagnoses_with_the_fix() {
                 .pkgs,
         );
     }
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     world.push(
         rut_driver::Mounted::source(
             "app",

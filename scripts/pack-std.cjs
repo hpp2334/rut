@@ -154,6 +154,7 @@ const PKGS = [
   { dir: "ink" },
   { dir: "http" },
   { dir: "futures" },
+  { dir: "calc" },
   // host pkgs — decl roots, single-package
   { dir: "ink_host" },
   { dir: "http_host" },
@@ -161,7 +162,7 @@ const PKGS = [
   { dir: "strbuild_host" },
   { dir: "async_host" },
   { dir: "core" },
-  { dir: "calc" },
+  { dir: "calc_host" },
   { dir: "bench-cross" },
 ];
 

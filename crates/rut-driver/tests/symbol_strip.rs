@@ -36,9 +36,9 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // offer stays the walked tree pkg)
             .pkg(
                 rut_driver::Mounted::source(spec, src)
-                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -218,7 +218,7 @@ fn load_and_run<R: rut_vm::interp::Ret>(bytes: &[u8], entry: &str, symtab: Optio
     let root = archive.walk().expect("walk").root;
     let g = rut_driver::RutRun::new()
         .pkg(&archive)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&root)
         .compile()
         .expect("compile the walk");
@@ -305,7 +305,7 @@ fn sidecar_restores_names_and_positions_for_the_trace() {
     archive.restore_symbols(&map);
     let g = rut_driver::RutRun::new()
         .pkg(&archive)
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint("app")
         .compile()
         .expect("compile the walk");

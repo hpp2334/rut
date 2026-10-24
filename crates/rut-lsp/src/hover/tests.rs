@@ -866,9 +866,11 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
 
 #[test]
 fn host_fn_hover_via_the_calc_surface_has_no_next_decl_artifact() {
-    // the embedded calc surface's `pub host fn abs(x: f64) -> f64;`
-    // used to render `...f64;pub` (the span ran into the next decl's
-    // `pub`) — the hover markdown carries the clean signature only
+    // the embedded calc surface's generic `pub fn abs<T requires
+    // f32 | f64>(x: T) -> T` (the old concrete `pub host fn abs(x:
+    // f64) -> f64;` used to render `...f64;pub` — the span ran into
+    // the next decl's `pub`); the hover markdown carries the clean
+    // signature only
     let doc = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
@@ -881,6 +883,9 @@ fn host_fn_hover_via_the_calc_surface_has_no_next_decl_artifact() {
     let md = hover(&chain, &toks, &ast, &crate::mods::DocMods::default(), pos)
         .expect("abs hovers through the calc surface")
         .markdown;
-    assert!(md.contains("host fn abs(x: f64) -> f64"), "{md}");
+    assert!(
+        md.contains("fn abs<T requires f32 | f64>(x: T) -> T"),
+        "{md}"
+    );
     assert!(!md.contains(";pub"), "the next-decl artifact leaked: {md}");
 }

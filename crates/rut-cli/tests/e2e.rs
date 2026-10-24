@@ -18,7 +18,7 @@ use rut_core::ops::{Nat, Op};
 /// plus calc.
 fn case_world() -> Vec<rut_driver::Mounted> {
     let mut world = Vec::new();
-    for d in ["rut/ink", "rut/pouch"] {
+    for d in ["rut/ink", "rut/pouch", "rut/calc"] {
         world.extend(
             rut_native::dir_pkgs(
                 &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -29,13 +29,12 @@ fn case_world() -> Vec<rut_driver::Mounted> {
             .pkgs,
         );
     }
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     world
 }
 
 fn case_ctx() -> rut_vm::interp::HostPkgContext {
     let mut world = Vec::new();
-    for d in ["rut/ink", "rut/pouch"] {
+    for d in ["rut/ink", "rut/pouch", "rut/calc"] {
         world.extend(
             rut_native::dir_pkgs(
                 &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -46,7 +45,6 @@ fn case_ctx() -> rut_vm::interp::HostPkgContext {
             .pkgs,
         );
     }
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
     rut_driver::host_pkg_ctx(&world)
 }
 
@@ -166,11 +164,11 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
 /// mounts, `Logger`'s use appended above included).
 fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = with_logger_use(src);
-    let mut chain = rut_driver::RutRun::new().pkg(
-        rut_driver::Mounted::source(module, &combined)
-            .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
-    );
-    for d in ["rut/ink", "rut/pouch"] {
+    let mut chain =
+        rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(module, &combined).manifest(
+            rut_driver::Manifest::lib(module, &["calc", "calc_host", "ink", "pouch"]),
+        ));
+    for d in ["rut/ink", "rut/pouch", "rut/calc"] {
         let pkgs = rut_native::dir_pkgs(
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../..")
@@ -180,7 +178,6 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
         chain = pkgs.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
     }
     chain
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
         .entrypoint(module)
         .compile()
         .expect("compile the case")
@@ -1905,11 +1902,14 @@ fn unsuffixed_int_literals_must_fit_i32() {
 #[test]
 fn builtin_impl_numeric_methods_run() {
     // core's `builtin impl <int>` methods (ambient on the primitives,
-    // compiler-lowered) + `calc`'s `Math` namespace: the float helpers
-    // and the f64 host functions/constants. The integer abs/min/max/signum forms are gone —
-    // the float helpers are host fns now.
+    // compiler-lowered) + `calc`'s generic float surface: the width
+    // falls out of the argument (`sqrt(2.0f64)` is the f64 row), and
+    // the constants keep the `Math::` head on `calc_host`. The integer
+    // abs/min/max/signum forms are gone — the float helpers are host
+    // fns now.
     let src = r#"
-use calc::{ Math };
+use calc::{ abs, min, max, signum, sqrt };
+use calc_host::{ Math };
 entry fn main() -> nil {
     let log = Logger::new("app");
     // i32 wrapping
@@ -1940,9 +1940,9 @@ entry fn main() -> nil {
     log.info(f"{w.wrapping_add(1u64)} {w.saturating_add(1u64)} {cw.1}");
     // wrapping shift
     log.info(f"{1073741824.wrapping_shl(1)}");
-    // float helpers (host fns) + constants
-    log.info(f"{Math::abs(-2.5)} {Math::min(1.0, 2.0)} {Math::max(1.0, 2.0)} {Math::signum(-3.5)} {Math::signum(0.0)} {Math::signum(4.5)}");
-    log.info(f"{Math::sqrt(2.0)} {Math::PI}");
+    // float helpers (the generic surface, f64 members) + constants
+    log.info(f"{abs(-2.5f64)} {min(1.0f64, 2.0f64)} {max(1.0f64, 2.0f64)} {signum(-3.5f64)} {signum(0.0f64)} {signum(4.5f64)}");
+    log.info(f"{sqrt(2.0f64)} {Math::PI}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
@@ -1967,23 +1967,21 @@ entry fn main() -> nil {
 
 #[test]
 fn case_f32_math_surface() {
-    // the f32 twins of the calc surface: same magic-lane
-    // host fns with `f32` params/returns — the derived sigs bind TY_F32,
-    // and the `_f` suffix carries the width (rut has no overloading)
+    // the f32 members of the generic surface: unsuffixed float
+    // literals default to f32, so `sqrt(2.0)` IS the f32 member — the
+    // width falls out of the argument, no suffix to spell (the old
+    // `_f` twins are calc_host's internal row names now)
     let src = r#"
-use calc::{ Math };
+use calc::{ sqrt, abs, min, max, signum, copysign, fma, pow, floor, hypot };
 entry fn main() -> nil {
-    Logger::new("f32").info(f"{Math::sqrt_f(2.0)} {Math::abs_f(-2.5)} {Math::min_f(1.0, 2.0)} {Math::max_f(1.0, 2.0)}");
-    Logger::new("f32").info(f"{Math::signum_f(-3.5)} {Math::signum_f(0.0)} {Math::signum_f(4.5)} {Math::copysign_f(3.0, -1.0)}");
-    Logger::new("f32").info(f"{Math::fma_f(2.0, 3.0, 4.0)} {Math::pow_f(2.0, 10.0)} {Math::floor_f(2.7)} {Math::hypot_f(3.0, 4.0)}");
+    Logger::new("f32").info(f"{sqrt(2.0)} {abs(-2.5)} {min(1.0, 2.0)} {max(1.0, 2.0)}");
+    Logger::new("f32").info(f"{signum(-3.5)} {signum(0.0)} {signum(4.5)} {copysign(3.0, -1.0)}");
+    Logger::new("f32").info(f"{fma(2.0, 3.0, 4.0)} {pow(2.0, 10.0)} {floor(2.7)} {hypot(3.0, 4.0)}");
     // the width survives the boundary: 0.1f32 rounds differently from
-    // 0.1f64, and sqrt_f(x*x) comes back f32-rounded
+    // 0.1f64, and sqrt(x*x) comes back f32-rounded
     let x: f32 = 0.1;
-    let r: f32 = Math::sqrt_f(x * x);
+    let r: f32 = sqrt(x * x);
     Logger::new("f32").info(f"{x} {r}");
-    // a wrong-width arg cannot reach the boundary at all: the checker's
-    // widening rule is f32 -> f64 only, so `Math::sqrt_f(f64var)` is a
-    // compile error, and f64 literals infer down to the f32 param
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);
@@ -1991,6 +1989,33 @@ entry fn main() -> nil {
     assert_eq!(
         lines,
         vec!["1.4142135 2.5 1 2", "-1 0 1 -3", "10 1024 2 5", "0.1 0.1",]
+    );
+}
+
+#[test]
+fn calc_generic_surface_widths() {
+    // the closed-union dispatch end to end: inference from an
+    // annotated variable, inference from a literal's default, the
+    // explicit type argument, and a same-T binary member
+    let src = r#"
+use calc::{ sqrt, pow };
+use calc_host::{ Math };
+entry fn main() -> nil {
+    let log = Logger::new("w");
+    let d: f64 = 2.0;
+    let f: f32 = 2.0;
+    log.info(f"{sqrt(d)} {sqrt(f)} {sqrt<f64>(4.0)} {pow(3.0f64, 2.0f64)}");
+    log.info(f"{Math::E} {Math::SQRT_2}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(
+        lines,
+        vec![
+            "1.4142135623730951 1.4142135 2 9",
+            "2.718281828459045 1.4142135623730951"
+        ]
     );
 }
 
@@ -2580,7 +2605,7 @@ fn dbg_digest() {
             .pkgs,
         );
     }
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     let out = rut_driver::Walk {
         pkgs: world,
         root: String::new(),

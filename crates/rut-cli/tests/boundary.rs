@@ -14,7 +14,7 @@ fn case_world() -> Vec<rut_driver::Mounted> {
                 .pkgs,
         );
     }
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     world
 }
 

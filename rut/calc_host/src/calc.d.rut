@@ -1,0 +1,79 @@
+// calc_host/calc.d.rut — the float math HOST rows: f64 bodies in
+// `rut-std`, each with an f32 twin. The width is in the row name
+// (`sqrt_f64` / `sqrt_f32`) — these are the INTERNAL spellings;
+// callers reach the math through `calc`'s generic surface
+// (`use calc::{ sqrt }` — `sqrt<T requires f32 | f64>` routes per
+// member), never through this pkg. The constants keep the qualified
+// `Math::` head: `use calc_host::{ Math }` then `Math::PI`.
+//
+// The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
+// `checked_*`) are core's `builtin impl` methods on the primitives;
+// `NAN` is core's too (`use core::{NAN}`).
+//
+// Contract (std/core.d.rut): the surface is kept TRUE to the
+// implementation — signatures match the mount tables, never
+// aspirational.
+
+// ---- f64 host functions (the embedding Rust implements them) ----
+
+pub host fn sqrt_f64(x: f64) -> f64;
+pub host fn floor_f64(x: f64) -> f64;
+pub host fn ceil_f64(x: f64) -> f64;
+pub host fn round_f64(x: f64) -> f64;
+pub host fn trunc_f64(x: f64) -> f64;
+pub host fn exp_f64(x: f64) -> f64;
+pub host fn ln_f64(x: f64) -> f64;
+pub host fn log2_f64(x: f64) -> f64;
+pub host fn log10_f64(x: f64) -> f64;
+pub host fn sin_f64(x: f64) -> f64;
+pub host fn cos_f64(x: f64) -> f64;
+pub host fn tan_f64(x: f64) -> f64;
+pub host fn asin_f64(x: f64) -> f64;
+pub host fn acos_f64(x: f64) -> f64;
+pub host fn atan_f64(x: f64) -> f64;
+pub host fn sinh_f64(x: f64) -> f64;
+pub host fn cosh_f64(x: f64) -> f64;
+pub host fn tanh_f64(x: f64) -> f64;
+pub host fn pow_f64(x: f64, y: f64) -> f64;
+pub host fn atan2_f64(y: f64, x: f64) -> f64;
+pub host fn hypot_f64(x: f64, y: f64) -> f64;
+pub host fn copysign_f64(x: f64, y: f64) -> f64;
+pub host fn fma_f64(x: f64, y: f64, z: f64) -> f64;
+
+// ---- float helpers (ordinary host fns; the int forms are core's
+// `builtin impl` methods) ----
+
+pub host fn abs_f64(x: f64) -> f64;
+pub host fn min_f64(x: f64, y: f64) -> f64;
+pub host fn max_f64(x: f64, y: f64) -> f64;
+pub host fn signum_f64(x: f64) -> f64;
+
+// ---- f32 twins (same libm bodies on `f32`) ----
+
+pub host fn sqrt_f32(x: f32) -> f32;
+pub host fn floor_f32(x: f32) -> f32;
+pub host fn ceil_f32(x: f32) -> f32;
+pub host fn round_f32(x: f32) -> f32;
+pub host fn trunc_f32(x: f32) -> f32;
+pub host fn exp_f32(x: f32) -> f32;
+pub host fn ln_f32(x: f32) -> f32;
+pub host fn log2_f32(x: f32) -> f32;
+pub host fn log10_f32(x: f32) -> f32;
+pub host fn sin_f32(x: f32) -> f32;
+pub host fn cos_f32(x: f32) -> f32;
+pub host fn tan_f32(x: f32) -> f32;
+pub host fn asin_f32(x: f32) -> f32;
+pub host fn acos_f32(x: f32) -> f32;
+pub host fn atan_f32(x: f32) -> f32;
+pub host fn sinh_f32(x: f32) -> f32;
+pub host fn cosh_f32(x: f32) -> f32;
+pub host fn tanh_f32(x: f32) -> f32;
+pub host fn pow_f32(x: f32, y: f32) -> f32;
+pub host fn atan2_f32(y: f32, x: f32) -> f32;
+pub host fn hypot_f32(x: f32, y: f32) -> f32;
+pub host fn copysign_f32(x: f32, y: f32) -> f32;
+pub host fn fma_f32(x: f32, y: f32, z: f32) -> f32;
+pub host fn abs_f32(x: f32) -> f32;
+pub host fn min_f32(x: f32, y: f32) -> f32;
+pub host fn max_f32(x: f32, y: f32) -> f32;
+pub host fn signum_f32(x: f32) -> f32;

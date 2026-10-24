@@ -12,7 +12,7 @@ type is omitted returns nothing:
 
 ```rut
 use pouch::{ Vec };
-use calc::{ Math };
+use calc::{ sqrt };
 use ink::{ Logger };
 
 struct Point { x: f32; y: f32 }
@@ -24,7 +24,7 @@ fn swap(mut xs: Vec<i32>, a: i32, b: i32) {
 }
 
 fn length(pt: Point) -> f64 {
-    return Math::sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
+    return sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
 }
 
 entry fn main() {

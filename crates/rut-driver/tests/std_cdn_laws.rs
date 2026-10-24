@@ -53,9 +53,9 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
             // offer stays the walked tree pkg)
             .pkg(
                 rut_driver::Mounted::source(spec, src)
-                    .manifest(rut_driver::Manifest::lib(spec, &["calc"])),
+                    .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -90,13 +90,14 @@ const PKGS: &[(&str, &str)] = &[
     ("ink", "ink"),
     ("http", "http"),
     ("futures", "futures"),
+    ("calc", "calc"),
     ("ink_host", "ink_host"),
     ("http_host", "http_host"),
     ("nmap_host", "nmap_host"),
     ("strbuild_host", "strbuild_host"),
     ("async_host", "async_host"),
     ("core", "core"),
-    ("calc", "calc"),
+    ("calc_host", "calc_host"),
     ("bench-cross", "bench_cross"),
 ];
 
@@ -136,7 +137,7 @@ fn load_and_compile(
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .map_err(|e| e.to_string())?;
@@ -369,7 +370,7 @@ fn load_compile_run(
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .map_err(|e| e.to_string())?;
@@ -531,7 +532,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     // the builder's host rows demand bodies — the embedder half
     // (calc offered beside; the core prelude auto-rides)
     let mut world = session.pkgs.clone();
-    world.push(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"));
+    world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     let ctx = rut_driver::host_pkg_ctx(&world);
     let mut hosts = rut_vm::interp::HostRegistry::new();
     hosts.install_host_pkg(&ctx, rut_std::math::pkg());
@@ -541,7 +542,7 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
         .pkgs
         .iter()
         .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&session.root)
         .compile()
         .expect("compile the walk");

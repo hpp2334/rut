@@ -1,10 +1,12 @@
 use ink::{ Logger };
-use calc::{ Math };
+use calc::{ abs, min, max, signum };
 
-// mathhost — calc's host-fn helpers (Math::abs/min/max/signum) in a hot
-// loop: every call crosses the FFI (arg Values in, dyn dispatch, body,
-// result back). The host-fn hot-path canary (the hotpath plan): re-bench
-// after any change to call_host / HostRegistry / the join.
+// mathhost — calc's float helpers (abs/min/max/signum) in a hot loop:
+// every call routes through the generic wrapper (one rut-level call,
+// the closed-union dispatch folded per width) into the host crossing
+// (arg Values in, dyn dispatch, body, result back). The host-fn
+// hot-path canary (the hotpath plan): re-bench after any change to
+// call_host / HostRegistry / the join.
 // Scale: 1_000_000 iterations x 4 calls. Canonical reference: 3500000.
 
 entry fn main() -> nil {
@@ -16,10 +18,10 @@ entry fn main() -> nil {
         y = y * 0.9999999 + 0.0000002;
         if (x < 0.25) { x = x + 2.75; }
         if (y < 0.10) { y = y + 1.50; }
-        acc = acc + Math::abs(x - y);
-        acc = acc + Math::min(x, y);
-        acc = acc + Math::max(x, y);
-        acc = acc + Math::signum(x - y) * 0.5;
+        acc = acc + abs(x - y);
+        acc = acc + min(x, y);
+        acc = acc + max(x, y);
+        acc = acc + signum(x - y) * 0.5;
     }
     Logger("app").info(f"CHECKSUM {acc}");
 }

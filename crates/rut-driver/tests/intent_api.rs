@@ -121,18 +121,18 @@ fn run_entry(binary: Vec<u8>) -> i64 {
 /// classification — installs them like the old `host_pkg` did.
 #[test]
 fn pkg_host_offers_the_host_bodies() {
-    let mut calc = rut_vm::HostPkg::new("calc");
+    let mut calc = rut_vm::HostPkg::new("calc_host");
     calc.register::<_, (i64,), i64, _>("twice", |_vm: &mut rut_vm::interp::Vm, v: i64| v * 2);
     let compiled = rut_driver::RutRun::new()
         .pkg(
             Mounted::source(
                 "app",
-                "use calc::{ twice };\n\nentry fn go() -> i64 {\n    return twice(20);\n}\n",
+                "use calc_host::{ twice };\n\nentry fn go() -> i64 {\n    return twice(20);\n}\n",
             )
-            .manifest(rut_driver::Manifest::lib("app", &["calc"])),
+            .manifest(rut_driver::Manifest::lib("app", &["calc_host"])),
         )
         .pkg(Mounted::host(
-            "calc",
+            "calc_host",
             vec![rut_driver::HostRow::root(
                 "twice",
                 vec![rut_core::types::TY_I64],

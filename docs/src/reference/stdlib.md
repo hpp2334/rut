@@ -268,19 +268,19 @@ len)` members keyed by a byte range of the parent string — a range key is
 the same key as its content, with no key cell minted on a probe
 ([string views](string-views.md)).
 
-### `calc` — the `Math` namespace
+### `calc` — the generic float surface
 
 ```rut
-use calc::{ Math };
+use calc::{ sqrt, abs };
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("t");
     let x = 3.0f64;
     let y = 4.0f64;
-    let d = Math::sqrt(x * x + y * y);
-    let a = Math::abs(x);
-    let hf = Math::sqrt_f(2.0);            // f32 twin — the width is in the name
+    let d = sqrt(x * x + y * y);
+    let a = abs(x);
+    let hf = sqrt(2.0);                    // f32 — the width falls out of the argument
     log.info(f"{d} {a} {hf}");
 }
 ```
@@ -289,13 +289,16 @@ entry fn main() {
 5 3 1.4142135
 ```
 
-Functions (each with an `_f` f32 twin): `sqrt`, `floor`, `ceil`, `round`,
-`trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`,
-`acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`, `hypot`,
-`copysign`, `fma`, plus the float helpers `abs`, `min`, `max`, `signum`.
-Constants: `Math::PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`,
-`LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`, `MIN`,
-`MIN_POSITIVE`. Integer numeric methods are core's, not `calc`'s.
+Functions (each a closed-union generic over `f32 | f64` — the width is
+inferred from the arguments, or spelled `sqrt<f32>(x)`): `sqrt`, `floor`,
+`ceil`, `round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`,
+`tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`,
+`hypot`, `copysign`, `fma`, plus the float helpers `abs`, `min`, `max`,
+`signum`. Constants: `Math::PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`,
+`LOG2_E`, `LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`,
+`MIN`, `MIN_POSITIVE` — through `use calc_host::{ Math }` (the host
+package behind `calc`; the `Math::` head lives there). Integer numeric
+methods are core's, not `calc`'s.
 
 ### `json` — the serde package
 
