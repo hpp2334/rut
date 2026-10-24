@@ -120,6 +120,15 @@ manifests, JS only moves bytes) and walks its dependency rows:
   them only when the hash matches; the entry then lands in the cache
   atomically (tmp + rename). A poisoned entry evicts and re-fetches,
   like the CLI's healing loop.
+- **Source zips unpack whole** (the CLI's unpack law): the tree lays
+  down with the archive's own manifest beside the files and the
+  embedded `deps/<identity>/` groups under it, then the pkg's own dep
+  rows mount through the ordinary path-dep lane — so `ink` brings its
+  host surface `ink_host` along with zero manifest rows of your own,
+  and ctrl+click on `use ink_host::{ … }` inside the extracted ink
+  source lands in the embedded group's real file. First mount wins: a
+  name your manifest (or an earlier group) already mounted never
+  re-mounts from a ride-along.
 - **The pin is law at the mount door**: fetched or cached, bytes mount
   only with their `sha256` verified. An unpinned url row never mounts
   from the editor — one error hint, no silent unpinned bytes.

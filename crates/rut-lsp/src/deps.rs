@@ -277,13 +277,24 @@ pub struct BundleFile {
 /// A `.rutbundle`'s editable surface: the module's own name (the zip's
 /// own `rut.jsonc` spells it) and its own source files. Compiled-only
 /// bundles (no ridden source) yield zero files — the compiled groups
-/// are the loader's truth, never guessed back into text.
+/// are the loader's truth, never guessed back into text. The unpack
+/// law's ingredients ride beside: the archive's own manifest text
+/// (laid down beside the files, the pkg's own rows mount through the
+/// ordinary dir lane) and the embedded `deps/` entries (a source zip's
+/// ride-along groups; a compiled bundle's ride-alongs are compiled —
+/// never text, so always empty here).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BundleIndex {
     pub module: String,
     pub namespace: Option<String>,
     pub consts: Vec<(String, f64)>,
     pub files: Vec<BundleFile>,
+    /// the archive's own `rut.jsonc` text
+    pub manifest: String,
+    /// the embedded `deps/<identity>/` entries as (zip-relative path,
+    /// UTF-8 text) — the unpack law lays them under the extracted tree
+    /// and the pkg's own path rows resolve into them
+    pub embedded: Vec<(String, String)>,
 }
 
 /// The archive's own `rut.mods` rows, when the bundle carries the
@@ -367,8 +378,13 @@ fn entry_child_lookup(
 /// A SOURCE-ZIP cache entry's index — the source transport's editor
 /// face: the zip's own package (`rut.jsonc` + `src/**`) indexes as
 /// Impl files at their zip-relative paths; the embedded `deps/` trees
-/// belong to other pkgs and stay out of this index (a consumer's own
-/// dep rows cover them). The zip64/grammar/CRC laws ride
+/// stay out of THIS pkg's index (a consumer's own dep rows cover them)
+/// but ride home as [`BundleIndex::embedded`] — the unpack law lays
+/// them under the extracted tree and the pkg's own path rows mount
+/// them through the ordinary dir lane, first mount wins (the native
+/// `mount_zip_dep` gate). UTF-8 entries only: the dir lane reads
+/// `rut.jsonc` + `.rut` sources, and a non-text ride-along has no
+/// editor face. The zip64/grammar/CRC laws ride
 /// [`rut_driver::bundle::read_srczip`].
 pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let entries = rut_driver::bundle::read_srczip(bytes).map_err(|e| e.to_string())?;
@@ -385,9 +401,18 @@ pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         .clone()
         .ok_or_else(|| format!("`{MANIFEST_NAME}` has no `name`"))?;
     let mut files = Vec::new();
+    let mut embedded = Vec::new();
     for (name, bytes) in &entries {
+        if name.starts_with("deps/") {
+            // the ride-along groups: text entries only, archive-
+            // relative paths (the unpack law lays them verbatim)
+            if let Ok(src) = std::str::from_utf8(bytes) {
+                embedded.push((name.clone(), src.to_owned()));
+            }
+            continue;
+        }
         if !name.starts_with("src/") || !name.ends_with(".rut") {
-            continue; // the manifest, the embedded deps, inert files — not this pkg's code
+            continue; // the manifest, inert files — not this pkg's code
         }
         let src = String::from_utf8(bytes.clone()).map_err(|_| format!("{name}: not UTF-8"))?;
         files.push(BundleFile {
@@ -404,6 +429,8 @@ pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         namespace: table.namespace,
         consts: table.consts,
         files,
+        manifest: manifest_text,
+        embedded,
     })
 }
 
@@ -608,6 +635,11 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         namespace: table.namespace,
         consts: table.consts,
         files,
+        // a compiled bundle's ride-alongs are compiled groups — never
+        // text — so the unpack ingredients stay empty here (the
+        // loader's business, unchanged law)
+        manifest: manifest_text,
+        embedded: Vec::new(),
     })
 }
 
@@ -1340,6 +1372,59 @@ pub host fn legacy_ping() -> bool;
     fn not_a_bundle_is_the_error() {
         let err = bundle_sources(b"definitely not a zip").unwrap_err();
         assert!(err.contains("not a zip"), "{err}");
+    }
+
+    #[test]
+    fn srczip_rides_the_unpack_ingredients() {
+        // the real std artifact: the zip's own pkg indexes src-only,
+        // while the embedded `deps/ink_host@…/` group rides home whole —
+        // the manifest text beside the files, the group's entries under
+        // it (the unpack law: the ordinary dir lane mounts the pkg's own
+        // path rows INTO the embedded groups, first mount wins)
+        let b = srczip_sources(include_bytes!("../../../dist/std/ink.zip"))
+            .expect("the ink source zip indexes");
+        assert_eq!(b.module, "ink");
+        assert!(
+            b.files.iter().all(|f| f.path.starts_with("src/")),
+            "the own index stays src-only: {:?}",
+            b.files.iter().map(|f| &f.path).collect::<Vec<_>>()
+        );
+        assert!(
+            b.files.iter().any(|f| f.path == "src/mod.rut"),
+            "the root module rides"
+        );
+        // the archive's own manifest, verbatim — the walk lays it beside
+        // the files and parses the pkg's own rows from it
+        assert!(
+            b.manifest.contains("\"name\": \"ink\""),
+            "the own manifest text: {}",
+            b.manifest
+        );
+        // the embedded group: both its entries (the mini manifest + the
+        // host surface), verbatim archive-relative paths
+        let paths: Vec<_> = b.embedded.iter().map(|(p, _)| p.as_str()).collect();
+        assert!(
+            paths.contains(&"deps/ink_host@7e9a5d738fbd9797/rut.jsonc"),
+            "{paths:?}"
+        );
+        assert!(
+            paths.contains(&"deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut"),
+            "{paths:?}"
+        );
+        let group_manifest = &b
+            .embedded
+            .iter()
+            .find(|(p, _)| p.ends_with("/rut.jsonc"))
+            .expect("the group manifest rides")
+            .1;
+        assert!(
+            group_manifest.contains("\"name\": \"ink_host\""),
+            "{group_manifest}"
+        );
+        // a compiled bundle's ride-alongs are compiled — never text —
+        // so the unpack ingredients stay empty there (unchanged law)
+        let pouch = bundle_sources(POUCH_BUNDLE).expect("pouch indexes");
+        assert!(pouch.embedded.is_empty(), "{:?}", pouch.embedded);
     }
 
     #[test]

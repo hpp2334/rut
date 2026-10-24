@@ -1295,11 +1295,14 @@ async function main() {
       // ---- the source-zip transport's extract, through the SAME
       // binding mountUrlDep drives (the std set ships as source zips —
       // `src/` shells + source-zip deps): `rut_extract_srczip` unpacks
-      // the package's own `src/**` files with their mod paths, the
-      // embedded `deps/` trees of OTHER pkgs stay out, and the Logger
-      // class the scaffold's `use ink::{ Logger }` jumps to rides the
-      // body. (The capability seam above guarantees the export exists;
-      // this proves the round trip.)
+      // the package's own `src/**` files with their mod paths, and the
+      // Logger class the scaffold's `use ink::{ Logger }` jumps to rides
+      // the body. The unpack law's ingredients ride beside: the
+      // archive's own manifest (the walk lays it beside the files) and
+      // the embedded `deps/` groups (the transitive host pkgs a
+      // scaffold never spells — ink carries ink_host). (The capability
+      // seam above guarantees the export exists; this proves the round
+      // trip.)
       const inkZip = fs.readFileSync(path.join(REPO, 'dist', 'std', 'ink.zip'));
       const srczip = rut.extractSrczip(new Uint8Array(inkZip));
       assert.ok(!srczip.error, `srczip extract envelope: ${JSON.stringify(srczip)}`);
@@ -1311,8 +1314,63 @@ async function main() {
       assert.ok(inkRoot.src.includes('pub class Logger'), 'the Logger class rides the srczip body');
       assert.ok(
         !srczip.files.some((f) => f.path.startsWith('deps/')),
-        `other pkgs' embedded dep trees stay out: ${JSON.stringify(srczip.files.map((f) => f.path))}`
+        `other pkgs' embedded dep trees stay out of THIS pkg's files: ${JSON.stringify(srczip.files.map((f) => f.path))}`
       );
+      // the unpack ingredients: the own manifest verbatim, the embedded
+      // group's entries verbatim (paths stay archive-relative — the
+      // walk lays them under the tree and the pkg's own path rows
+      // resolve INTO them)
+      assert.ok(srczip.manifest.includes('"name": "ink"'), 'the own manifest text rides');
+      const groupManifest = srczip.embedded.find((e) => e.path === 'deps/ink_host@7e9a5d738fbd9797/rut.jsonc');
+      assert.ok(groupManifest, `the embedded group's manifest rides: ${JSON.stringify(srczip.embedded.map((e) => e.path))}`);
+      assert.ok(groupManifest.src.includes('"name": "ink_host"'), 'the group names itself');
+      const groupSurface = srczip.embedded.find((e) => e.path === 'deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut');
+      assert.ok(groupSurface && groupSurface.src.includes('pub host fn create_logger'), 'the host surface rides the group');
+      // THE HOP-2 LAW, through the shipped artifact: mount the laid
+      // tree the way the walk does, then the ink source's `use
+      // ink_host::{ … }` lands IN the embedded group — head and leaves,
+      // all real file:// origins (the ambient embed's repo-relative
+      // answer would drop outside any scaffold)
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-srczip-'));
+      const depDir = path.join(ws, '.rut', 'deps', 'ink-eb2b568316ef');
+      const lay = (rel, src) => {
+        const p = path.join(depDir, rel);
+        fs.mkdirSync(path.dirname(p), { recursive: true });
+        fs.writeFileSync(p, src);
+      };
+      lay('rut.jsonc', srczip.manifest);
+      for (const f of srczip.files) lay(f.path, f.src);
+      for (const e of srczip.embedded) lay(e.path, e.src);
+      const mounted = new Set();
+      const walkManifest = (manifestPath) => {
+        const dir = path.dirname(manifestPath);
+        const t = rut.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
+        assert.ok(!t.error, `the laid manifest parses: ${JSON.stringify(t)}`);
+        if (mounted.has(t.name)) return; // first mount wins
+        mounted.add(t.name);
+        for (const e of t.entries) {
+          rut.addDefNamed('file://' + path.join(dir, e.path), t.name, fs.readFileSync(path.join(dir, e.path), 'utf8'));
+        }
+        for (const p of t.entries.filter((e) => e.mode === 'Impl').map((e) => e.path)) {
+          const uri = path.join(dir, p);
+          const stamped = rut.addDefMod('file://' + uri, t.name, '', fs.readFileSync(uri, 'utf8'));
+          assert.ok(!stamped.error, `the root stamps: ${JSON.stringify(stamped)}`);
+        }
+        for (const row of t.deps) walkManifest(path.join(dir, row.source.dir, 'rut.jsonc'));
+      };
+      walkManifest(path.join(depDir, 'rut.jsonc'));
+      assert.deepStrictEqual([...mounted].sort(), ['ink', 'ink_host'], 'the embedded group mounts with its parent');
+      const inkUri = 'file://' + path.join(depDir, 'src/mod.rut');
+      const inkSrc = fs.readFileSync(path.join(depDir, 'src/mod.rut'), 'utf8');
+      rut.analyze(inkUri, inkSrc);
+      const useLine = inkSrc.split('\n').findIndex((l) => l.includes('use ink_host::'));
+      const target = 'file://' + path.join(depDir, 'deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut');
+      for (const needle of ['ink_host', 'create_logger', 'logger_log']) {
+        const c = inkSrc.split('\n')[useLine].indexOf(needle);
+        const hits = rut.definition(inkUri, useLine, c);
+        assert.strictEqual(hits.length, 1, `hop-2 ${needle}: ${JSON.stringify(hits)}`);
+        assert.strictEqual(hits[0].uri, target, `hop-2 ${needle} lands in the embedded group`);
+      }
       smokes++;
 
       // the mount: <tmp>/.rut/deps/pouch-<pin12>/ — the pin prefix IS

@@ -504,7 +504,11 @@ fn use_graph_targets<'a>(
 /// bundle loader stamps the root) first, then the flat roots
 /// (`mod_path == None` — how a host `calc.d.rut` and the std
 /// surface's root files index), tie-broken body-over-decl (the
-/// `prefer_bodies` law). No root-shaped index → `None` — an honest
+/// `prefer_bodies` law). Equals once more tie-broken toward the
+/// MOUNTED closure: a scheme'd origin (`file://`, `bundle:`) is a real
+/// artifact this workspace pinned, the scheme-less one the ambient std
+/// surface answering for a name nothing mounted — the mount wins, the
+/// embed is the fallback. No root-shaped index → `None` — an honest
 /// miss, never a wrong jump.
 fn pkg_root_index<'a>(idxs: &[&'a DefIndex], pkg: &str) -> Option<&'a DefIndex> {
     let mut roots: Vec<&DefIndex> = idxs
@@ -512,7 +516,13 @@ fn pkg_root_index<'a>(idxs: &[&'a DefIndex], pkg: &str) -> Option<&'a DefIndex> 
         .copied()
         .filter(|i| matches_pkg(i, pkg) && crate::mods::mod_path_of(i).is_empty())
         .collect();
-    roots.sort_by_key(|i| (i.mod_path.is_none(), i.mode == Some(Mode::Decl)));
+    roots.sort_by_key(|i| {
+        (
+            i.mod_path.is_none(),
+            i.mode == Some(Mode::Decl),
+            !i.origin.contains("://"),
+        )
+    });
     roots.into_iter().next()
 }
 
@@ -1106,6 +1116,57 @@ mod tests {
         assert_eq!(hits.len(), 1, "{hits:?}");
         assert_eq!(hits[0].uri, "file:///deps/calc/calc.d.rut");
         assert_eq!(span_of(&surface_src, &ix, &hits[0]), (0, 0));
+    }
+
+    #[test]
+    fn a_mounted_root_beats_the_ambient_surface_twin() {
+        // the transitive-mount world: a pkg the walk mounted (a real
+        // file:// origin) AND the ambient std surface's embed of the
+        // same name (scheme-less `rut/…`) both carry a flat Decl root —
+        // the mount wins for the pkg head and the leaf: the workspace
+        // pinned these bytes, the embed is only ever the fallback
+        let src = "use ink_host::{ create_logger };\nentry fn main() -> nil {\n    create_logger(\"a\");\n}\n";
+        let d = doc(src);
+        let ambient = crate::deps::index_dep(
+            "ink_host",
+            "rut/ink_host/src/ink_host.d.rut",
+            "pub host fn create_logger(name: str) -> opaque;\n",
+            Mode::Decl,
+            None,
+            &[],
+        );
+        let mounted = crate::deps::index_dep(
+            "ink_host",
+            "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut",
+            "pub host fn create_logger(name: str) -> opaque;\n",
+            Mode::Decl,
+            None,
+            &[],
+        );
+        // the chain order puts the ambient surface first (registered at
+        // init, before any mount)
+        let extra = [ambient, mounted];
+        // the pkg head: the MOUNTED surface's file top, never the embed
+        let hits = def(&d, at(&d.src, "use ink_host::", 1) + 4, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(
+            hits[0].uri,
+            "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut"
+        );
+        assert_eq!(span_of(&d.src, &LineIndex::new(&d.src), &hits[0]), (0, 0));
+        // the leaf: the ambiguity peek may answer both twins, the
+        // MOUNTED one among them (the real defs store coalesces the
+        // module's twins to one — one answer, the mounted file)
+        let hits = def(
+            &d,
+            at(&d.src, "use ink_host::{ create_logger }", 1) + 18,
+            &extra,
+        );
+        assert!(
+            hits.iter()
+                .any(|h| h.uri.starts_with("file:///ws/.rut/deps/")),
+            "{hits:?}"
+        );
     }
 
     #[test]

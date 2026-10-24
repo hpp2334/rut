@@ -174,9 +174,17 @@ export interface BundleExtracted {
   files: BundleExtractedFile[];
 }
 
-/// `rut_extract_srczip`'s success envelope — the same shape, over a
-/// source zip's own package files (`src/**` at zip-relative paths)
-export type SrczipExtracted = BundleExtracted;
+/// `rut_extract_srczip`'s success envelope — the same shape over a
+/// source zip's own package files (`src/**` at zip-relative paths),
+/// plus the unpack law's ingredients: the archive's own manifest text
+/// (the walk lays it beside the files; the pkg's own dep rows mount
+/// through the ordinary dir lane) and the embedded `deps/<identity>/`
+/// entries (the ride-along groups, laid under the tree — the transitive
+/// host pkgs a scaffold never spells)
+export interface SrczipExtracted extends BundleExtracted {
+  manifest: string;
+  embedded: Array<{ path: string; src: string }>;
+}
 
 interface RutExports {
   memory: WebAssembly.Memory;

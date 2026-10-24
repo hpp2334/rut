@@ -10,7 +10,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Analysis, DepRow, isEnvelope, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSignatureHelp, LspSymbol, RutWasm } from './wasm';
+import { Analysis, DepRow, isEnvelope, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSignatureHelp, LspSymbol, RutWasm, SrczipExtracted } from './wasm';
 
 const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 
@@ -152,6 +152,10 @@ interface WalkCtx {
   folder: vscode.Uri;
   /// resolved manifest dirs — the cycle break
   seen: Set<string>;
+  /// mounted module names — first mount wins (the native gate: a name
+  /// an earlier row or embedded group mounted never re-mounts from a
+  /// ride-along tree, so a diamond's pins cannot double-stamp)
+  mounted: Set<string>;
   /// remaining dep-file budget
   files: number;
   /// the `.rut/deps/` trees this walk's rows reference (fsPaths) —
@@ -270,6 +274,7 @@ async function walkDeps(rut: RutWasm): Promise<void> {
       rut,
       folder: folder.uri,
       seen: new Set(),
+      mounted: new Set(),
       files: MAX_DEP_FILES,
       depDirs: new Set(),
       truncated: false,
@@ -356,6 +361,13 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
       hintOnce(`direct:${dirKey}:${stamped.error}`, `rut: ${stamped.error}`, true);
     }
   }
+  // first mount wins — the native gate: a module name an earlier row
+  // (or embedded group) mounted never re-mounts, so a diamond's
+  // different-pin copies cannot double-stamp the world
+  if (ctx.mounted.has(module)) {
+    return;
+  }
+  ctx.mounted.add(module);
   for (const entry of table.entries) {
     if (ctx.files <= 0) {
       ctx.truncated = true;
@@ -386,7 +398,7 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
       return;
     }
     if (row.source.kind === 'url') {
-      await mountUrlDep(ctx, row);
+      await mountUrlDep(ctx, row, depth);
       continue;
     }
     const depDir = path.resolve(dirKey, row.source.dir);
@@ -540,7 +552,7 @@ async function mountChildMod(
 // and index through the same lane path deps use (`addDefMod` /
 // `addDefNamed` over `file://` uris): go-to-definition lands in
 // openable workspace files, no `bundle:` origins.
-async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
+async function mountUrlDep(ctx: WalkCtx, row: DepRow, depth: number): Promise<void> {
   const source = row.source;
   if (source.kind !== 'url') {
     return;
@@ -630,6 +642,35 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow): Promise<void> {
       `rut: dep '${row.name}' — the bundle did not mount: ${extracted.error}`,
       true
     );
+    return;
+  }
+  if (isZip) {
+    // THE UNPACK LAW (the native `mount_zip_dep`'s, mirrored): the tree
+    // lays down WHOLE — the archive's own manifest beside the files,
+    // the embedded `deps/<identity>/` groups under it (a source zip's
+    // transitive pkgs: the host surface `ink_host` inside `ink.zip`,
+    // the host pkgs every scaffold never spells) — then the ordinary
+    // dir lane mounts the pkg: the entry law stamps the surfaces, the
+    // declared mod tree follows the wasm-parsed decls, and the pkg's
+    // own dep rows recurse INTO the embedded groups (path rows beside
+    // the manifest). First mount wins in `walkManifest`'s gate, so a
+    // name the walk already mounted never re-mounts from a ride-along.
+    const tree = extracted as SrczipExtracted;
+    const writes: Array<{ rel: string; src: string }> = [
+      { rel: MANIFEST_NAME, src: tree.manifest },
+      ...tree.embedded.map((e) => ({ rel: e.path, src: e.src })),
+    ];
+    for (const w of writes) {
+      // real files on real drift only — an identical tree stays
+      // untouched, or the `**/rut.jsonc` watcher's re-walk would
+      // rewrite it forever
+      const target = vscode.Uri.joinPath(depDir, w.rel);
+      if (!(await fileHasContent(target, w.src))) {
+        await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(target, '..'));
+        await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(w.src));
+      }
+    }
+    await walkManifest(ctx, vscode.Uri.joinPath(depDir, MANIFEST_NAME), depth + 1);
     return;
   }
   for (const f of extracted.files) {

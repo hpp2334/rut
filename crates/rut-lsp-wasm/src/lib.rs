@@ -913,6 +913,17 @@ pub unsafe extern "C" fn rut_extract_srczip(ptr: *const u8, len: usize) -> *mut 
         "namespace": b.namespace,
         "consts": b.consts,
         "files": files,
+        // the unpack law's ingredients: the archive's own manifest (the
+        // host lays it beside the files and the pkg's own rows mount
+        // through the ordinary dir lane) and the embedded
+        // `deps/<identity>/` entries (the ride-along groups, laid under
+        // the tree; first mount wins)
+        "manifest": b.manifest,
+        "embedded": b
+            .embedded
+            .iter()
+            .map(|(path, src)| serde_json::json!({ "path": path, "src": src }))
+            .collect::<Vec<_>>(),
     }))
 }
 
