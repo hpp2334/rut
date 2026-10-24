@@ -79,8 +79,9 @@ fn dist_std() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std"))
 }
 
-/// The 16 pkgs: (tree dir, artifact name). Keep in sync with
-/// scripts/pack-std::cjs's PKGS table.
+/// The 16 pkgs: (tree dir, artifact name) — the frozen .rutbundle
+/// envelope set (nothing repacks it). The live zip rows are the lock's:
+/// crates/rut-cli/template/rut.lock (the lock is the carrier).
 const PKGS: &[(&str, &str)] = &[
     ("pouch", "pouch"),
     ("flow", "flow"),
@@ -154,7 +155,11 @@ fn every_committed_artifact_is_byte_fresh() {
         assert_eq!(
             fresh, committed,
             "rut/{dir} repacks differently from the committed dist/std/{name}.rutbundle — \
-             run `node scripts/pack-std::cjs && node scripts/pack-std::cjs --pins`"
+             the .rutbundle envelope (dist/std, like the frozen dist/std-vNN snapshots) is \
+             frozen forever — the bin lane is retired and nothing repacks it: drift here is \
+             fixture corruption, not a repack trigger; restore the committed bytes \
+             (`git restore dist/std`), never repack. The live CDN lane is the source zips \
+             (`node scripts/pack-std.cjs` cuts, `node scripts/publish-std.cjs` publishes)"
         );
     }
 }

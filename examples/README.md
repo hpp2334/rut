@@ -43,13 +43,16 @@ every one against its `.expected` sidecar. The parser conformance suite
 
 ## Std from a CDN — what a url row delivers
 
-The std tree ships as committed per-package bundles
-(`dist/std/<pkg>.rutbundle`, packed + freshness-gated by
-`scripts/pack-std::cjs`), served by jsDelivr at an immutable
+The std tree ships as committed per-package source zips
+(`dist/std/<pkg>.zip`, cut + freshness-gated by
+`scripts/pack-std.cjs`), served by jsDelivr at an immutable
 `@std-vNN` tag and pinned by sha256 — the pin is law at the mount door
 on every load, offline or not (the committed artifact IS the cache; a
 project manifest is the only url carrier, and the embedder seeds the
 fetcher from it — [embedding](../docs/src/reference/embedding.md)).
+The retired `.rutbundle` envelopes stay committed frozen
+(`dist/std/`, `dist/std-v12/`, …) — old readers and test fixtures
+still read them; nothing repacks them.
 The delivery is the engine's instantiation law: a compiled bundle
 carries its pack closure's instantiations in its ledger and its
 generic bodies as templates inside the binaries — so the
