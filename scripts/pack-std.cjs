@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Cut the std release: pack the SOURCE ZIPS and re-pin the two
+ * Cut the std release: pack the SOURCE ZIPS — the dist/std-vNN/
+ * envelope AND the dist/std/ working mirror (the path the lock urls
+ * serve; a stale mirror is publish poison — the publish's CDN verify
+ * would compare fresh pins against stale bytes) — and re-pin the two
  * template carriers. The std CDN lane is source zips only — the
  * .rutbundle bin lane is RETIRED (git history holds that script); the
  * frozen committed envelopes (dist/std*, the older dist/std-vNN/) stay
@@ -24,16 +27,19 @@
  *
  * Usage:
  *   node scripts/pack-std.cjs         cut: pack the source zips →
- *                                     dist/std-vNN/ + re-pin the two
- *                                     template carriers, print the
- *                                     NEXT banner, stop.
+ *                                     dist/std-vNN/ + the dist/std/
+ *                                     mirror, re-pin the two template
+ *                                     carriers, print the NEXT
+ *                                     banner, stop.
  *   node scripts/pack-std.cjs --check offline gates: repack each pkg
  *                                     to a temp dir, byte-compare
  *                                     against the committed
- *                                     dist/<tag>/ envelope, and hold
- *                                     the lock pins + the template
- *                                     urls against the same bytes.
- *                                     Exit 1 on drift.
+ *                                     dist/<tag>/ envelope, hold the
+ *                                     lock pins + the template urls
+ *                                     against the same bytes, and
+ *                                     require the dist/std/ mirror to
+ *                                     ride the envelope. Exit 1 on
+ *                                     drift.
  *   -h, --help
  *
  * Retired flags die loudly: --tag (publishing moved to
@@ -283,6 +289,29 @@ if (doCheck) {
       console.error(`  ${green("ok")}: dist/${tag}/${row.pkg}.zip (${bytes.length} bytes, sha256 ${sha.slice(0, 16)}…)`);
     }
   }
+
+  // the mirror law: dist/std/ is the working envelope the lock urls
+  // serve — it must ride the committed tag bytes, or a publish's CDN
+  // verify would compare fresh pins against stale mirror bytes
+  // (publish poison — this gate is where that dies).
+  for (const row of rows) {
+    const mirror = path.join(ROOT, "dist", "std", `${row.pkg}.zip`);
+    if (!fs.existsSync(mirror)) {
+      console.error(`  ${red("missing")}: dist/std/${row.pkg}.zip (the mirror is committed — re-run the cut)`);
+      drift++;
+      continue;
+    }
+    const committed = path.join(ROOT, "dist", tag, `${row.pkg}.zip`);
+    if (!fs.existsSync(committed)) continue; // the missing-envelope row above already fired
+    if (!fs.readFileSync(mirror).equals(fs.readFileSync(committed))) {
+      console.error(
+        `  ${red("drift")}: dist/std/${row.pkg}.zip (the mirror moved off dist/${tag}/ — publish poison, re-run the cut)`
+      );
+      drift++;
+    } else {
+      console.error(`  ${green("ok")}: dist/std/${row.pkg}.zip (mirror == dist/${tag}/ bytes)`);
+    }
+  }
   fs.rmSync(tmp, { recursive: true, force: true });
 
   // the two templates tell one story: every manifest url is its lock
@@ -325,15 +354,23 @@ const rows = readLockRows();
 const { base, tag: oldTag } = urlSpace(rows);
 const next = nextTag();
 const outDir = path.join(ROOT, "dist", next);
+const mirrorDir = path.join(ROOT, "dist", "std");
 fs.mkdirSync(outDir, { recursive: true });
+fs.mkdirSync(mirrorDir, { recursive: true });
 
 info(`cutting ${bold(next)}: packing ${rows.length} source zips (the lock is the carrier — old tag ${oldTag})`);
 const shaByPkg = {};
 for (const row of rows) {
   const out = path.join(outDir, `${row.pkg}.zip`);
   packZip(row.pkg, out);
+  // the working mirror (the path the lock urls serve) rides the SAME
+  // bytes — copied, not re-packed, so mirror identity is a fact, not a
+  // law to trust
+  fs.copyFileSync(out, path.join(mirrorDir, `${row.pkg}.zip`));
   shaByPkg[row.pkg] = sha256(fs.readFileSync(out));
-  console.error(`  ${green("packed")}: dist/${next}/${row.pkg}.zip (sha256 ${shaByPkg[row.pkg].slice(0, 16)}…)`);
+  console.error(
+    `  ${green("packed")}: dist/${next}/${row.pkg}.zip + dist/std/ mirror (sha256 ${shaByPkg[row.pkg].slice(0, 16)}…)`
+  );
 }
 
 // carrier 1 — the manifest: a surgical token swap @<old> → @<next>
@@ -367,8 +404,8 @@ fs.writeFileSync(
 );
 
 console.error("");
-info(green(`packed ${rows.length} zips → dist/${next}/ + re-pinned template/rut.jsonc + rut.lock`));
+info(green(`packed ${rows.length} zips → dist/${next}/ + the dist/std/ mirror + re-pinned template/rut.jsonc + rut.lock`));
 info(
-  `NEXT (a human act): ${bold("git diff")} (${rows.length} zips + 2 template files), ${bold("commit")}, then`
+  `NEXT (a human act): ${bold("git diff")} (${2 * rows.length} binary zips — dist/${next}/ envelope + dist/std/ mirror — + 2 template files), ${bold("commit")}, then`
 );
 console.log(`  ${bold("node scripts/publish-std.cjs")}`);

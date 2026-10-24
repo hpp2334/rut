@@ -73,12 +73,14 @@ exactly how the retired bin lane rotted), and `cargo nextest run -p rut-cli
 Delivery is THREE ACTS with one boundary — no script ever types `git commit`:
 
 1. **Cut**: `node scripts/pack-std.cjs` — derives the next tag (`git tag
-   -l "std-v*"` max + 1), packs the 9 source zips into `dist/std-vNN/`,
-   and re-pins `crates/rut-cli/template/rut.jsonc` (url token swap) +
-   `template/rut.lock` (regenerated). It prints a NEXT banner and STOPS
-   before git.
-2. **Review + commit (a HUMAN act)**: read `git diff` — 9 binary zips +
-   2 text files — and commit. This is the review point.
+   -l "std-v*"` max + 1), packs the 9 source zips into `dist/std-vNN/`
+   AND the same bytes into the `dist/std/` working mirror (the path the
+   lock urls serve), and re-pins `crates/rut-cli/template/rut.jsonc`
+   (url token swap) + `template/rut.lock` (regenerated). It prints a
+   NEXT banner and STOPS before git.
+2. **Review + commit (a HUMAN act)**: read `git diff` — 18 binary zips
+   (the `dist/std-vNN/` envelope + the `dist/std/` mirror) + 2 text
+   files — and commit. This is the review point.
 3. **Publish**: `node scripts/publish-std.cjs` — the gates, then
    `git tag -a <tag>` + push, then a jsDelivr sha-verify of all 9 urls,
    then the e2e: `rut new → install → run` must print `hello, rut!`.
