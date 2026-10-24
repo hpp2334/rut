@@ -1,8 +1,9 @@
 {
-  // mathhost/ — calc's host-fn helpers (Math::abs/min/max/signum) in a hot
-  // loop: every call crosses the FFI — the host-fn hot-path canary.
-  // `calc` is a declared path row (the walk mounts the surface; the
-  // chain's blanket host-pkg install binds the bodies); `ink` is
+  // mathhost/ — calc's float helpers (abs/min/max/signum) in a hot
+  // loop: every call routes through the generic wrapper into the host
+  // crossing — the host-fn hot-path canary. `calc` is a declared path
+  // row (the walk mounts the lib; its `[deps]` pull `calc_host`, whose
+  // bodies the chain's blanket host-pkg install binds); `ink` is
   // declared for the logger. The JS twin is ../mathhost.js.
   "name": "mathhost",
     "deps": {

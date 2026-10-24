@@ -110,7 +110,7 @@ Ambient like the primitives themselves: `x.wrapping_add(y)` needs no
 ### Constants
 
 `NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float
-constants are `calc`'s.
+constants are `calc_host`'s.
 
 ## The swappable set
 
@@ -128,7 +128,8 @@ declaration surface whose bodies the embedder binds.
 | `nmap_host` / `nmapset` | host pkg + rut pkg | the native key table; `HashMap`/`HashSet` |
 | `json` | rut pkg (`strbuild` + `pouch` + `nmapset` as deps) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and the wrapper families |
 | `strbuild_host` / `strbuild` | host pkg + rut pkg | the builder rows; the `StringBuilder` class |
-| `calc` | host pkg | the `Math` namespace |
+| `calc` | rut pkg (over `calc_host`) | the generic float surface (`sqrt<T requires f32 \| f64>` — the width falls out of the argument) |
+| `calc_host` | host pkg | the math rows + the `Math::` constants |
 | `async_host` / `futures` | host pkg + rut pkg | the launcher rows; `launch_future` / `sleep` |
 | `http_host` / `http` | host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg | the std HTTP lanes |
 | `bench-cross` | host pkg | the crossing-tax benchmark rows |

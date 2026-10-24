@@ -4800,7 +4800,7 @@ msgid ""
 "/ `HashSet()` are the designated `new`; `with_capacity(n)` stays named."
 msgstr ""
 
-#: src/tutorial/stdlib.md:208 src/reference/stdlib.md:182
+#: src/tutorial/stdlib.md:208 src/reference/stdlib.md:183
 msgid "`flow` — the push pipeline"
 msgstr ""
 
@@ -11080,7 +11080,7 @@ msgstr ""
 msgid "seq"
 msgstr ""
 
-#: src/reference/primitive-types.md:15 src/reference/stdlib.md:341
+#: src/reference/primitive-types.md:15 src/reference/stdlib.md:342
 msgid "`Vec<T>`"
 msgstr ""
 
@@ -11090,7 +11090,7 @@ msgid ""
 "generic types](builtin-generic-types.md))"
 msgstr ""
 
-#: src/reference/primitive-types.md:16 src/reference/stdlib.md:340
+#: src/reference/primitive-types.md:16 src/reference/stdlib.md:341
 msgid "`[T]`"
 msgstr ""
 
@@ -11104,7 +11104,7 @@ msgstr ""
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:65 src/reference/stdlib.md:339
+#: src/reference/by-reference-and-nullable.md:65 src/reference/stdlib.md:340
 msgid "`?T`"
 msgstr ""
 
@@ -11578,7 +11578,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:400
+#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:401
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -11594,7 +11594,7 @@ msgstr ""
 msgid "iteration; `x` is the shared element"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:180
+#: src/reference/builtin-generic-types.md:103 src/reference/stdlib.md:181
 msgid "`slice(from, to) -> ?Vec<T>`"
 msgstr ""
 
@@ -11610,7 +11610,7 @@ msgstr ""
 msgid "copy the live elements into a fresh, exactly-sized array"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:179
+#: src/reference/builtin-generic-types.md:105 src/reference/stdlib.md:180
 msgid "`freeze() -> bytes`"
 msgstr ""
 
@@ -13025,7 +13025,7 @@ msgid "marker"
 msgstr ""
 
 #: src/reference/classes.md:91 src/reference/stdlib.md:122
-#: src/reference/stdlib.md:222
+#: src/reference/stdlib.md:223
 msgid "surface"
 msgstr ""
 
@@ -19275,7 +19275,7 @@ msgstr ""
 msgid "`bench_cross::pkg()`"
 msgstr ""
 
-#: src/reference/embedding.md:506 src/reference/stdlib.md:134
+#: src/reference/embedding.md:506 src/reference/stdlib.md:135
 msgid "the crossing-tax benchmark rows"
 msgstr ""
 
@@ -20268,8 +20268,8 @@ msgid "emitted row"
 msgstr ""
 
 #: src/reference/host-fns.md:289 src/reference/stdlib.md:36
-#: src/reference/stdlib.md:173 src/reference/stdlib.md:222
-#: src/reference/stdlib.md:394 src/reference/typed-bytecode.md:101
+#: src/reference/stdlib.md:174 src/reference/stdlib.md:223
+#: src/reference/stdlib.md:395 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:59 src/reference/cli.md:370
 #: src/reference/glossary.md:9
 msgid "meaning"
@@ -21011,7 +21011,7 @@ msgstr ""
 msgid "class"
 msgstr ""
 
-#: src/reference/stdlib.md:75 src/reference/stdlib.md:335
+#: src/reference/stdlib.md:75 src/reference/stdlib.md:336
 msgid "members"
 msgstr ""
 
@@ -21145,7 +21145,7 @@ msgstr ""
 #: src/reference/stdlib.md:112
 msgid ""
 "`NAN` (f64) — core's one const, behind `use core::{NAN}`. All other float "
-"constants are `calc`'s."
+"constants are `calc_host`'s."
 msgstr ""
 
 #: src/reference/stdlib.md:115
@@ -21172,8 +21172,8 @@ msgstr ""
 msgid "`ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:124 src/reference/stdlib.md:131
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:124 src/reference/stdlib.md:132
+#: src/reference/stdlib.md:135
 msgid "host pkg"
 msgstr ""
 
@@ -21224,7 +21224,7 @@ msgid "`nmap_host` / `nmapset`"
 msgstr ""
 
 #: src/reference/stdlib.md:128 src/reference/stdlib.md:130
-#: src/reference/stdlib.md:132
+#: src/reference/stdlib.md:133
 msgid "host pkg + rut pkg"
 msgstr ""
 
@@ -21259,45 +21259,59 @@ msgid "`calc`"
 msgstr ""
 
 #: src/reference/stdlib.md:131
-msgid "the `Math` namespace"
+msgid "rut pkg (over `calc_host`)"
+msgstr ""
+
+#: src/reference/stdlib.md:131
+msgid ""
+"the generic float surface (`sqrt<T requires f32 \\| f64>` — the width falls "
+"out of the argument)"
+msgstr ""
+
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:260
+msgid "`calc_host`"
 msgstr ""
 
 #: src/reference/stdlib.md:132
+msgid "the math rows + the `Math::` constants"
+msgstr ""
+
+#: src/reference/stdlib.md:133
 msgid "`async_host` / `futures`"
 msgstr ""
 
-#: src/reference/stdlib.md:132
+#: src/reference/stdlib.md:133
 msgid "the launcher rows; `launch_future` / `sleep`"
 msgstr ""
 
-#: src/reference/stdlib.md:133
+#: src/reference/stdlib.md:134
 msgid "`http_host` / `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:133
+#: src/reference/stdlib.md:134
 msgid "host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg"
 msgstr ""
 
-#: src/reference/stdlib.md:133 src/reference/cli.md:81
+#: src/reference/stdlib.md:134 src/reference/cli.md:81
 msgid "the std HTTP lanes"
 msgstr ""
 
-#: src/reference/stdlib.md:134
+#: src/reference/stdlib.md:135
 msgid "`bench-cross`"
 msgstr ""
 
-#: src/reference/stdlib.md:136
+#: src/reference/stdlib.md:137
 msgid "`ink_host` and `ink` — logging"
 msgstr ""
 
-#: src/reference/stdlib.md:138
+#: src/reference/stdlib.md:139
 msgid ""
 "There is no global output builtin. All logging goes through a used logger; "
 "the host owns the sink, and an uninstalled sink is a silent no-op — a script "
 "cannot accidentally spam an embedded host's stdout."
 msgstr ""
 
-#: src/reference/stdlib.md:142
+#: src/reference/stdlib.md:143
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -21309,114 +21323,114 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:155
+#: src/reference/stdlib.md:156
 msgid ""
 "`Logger(\"app\")` constructs through the class's `[constructor]` member — "
 "the call form spells the construction."
 msgstr ""
 
-#: src/reference/stdlib.md:158
+#: src/reference/stdlib.md:159
 msgid "method"
 msgstr ""
 
-#: src/reference/stdlib.md:158
+#: src/reference/stdlib.md:159
 msgid "level passed to `ink_host`"
 msgstr ""
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:161
 msgid "`debug(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:160
+#: src/reference/stdlib.md:161
 msgid "0"
 msgstr ""
 
-#: src/reference/stdlib.md:161
+#: src/reference/stdlib.md:162
 msgid "`info(msg)` / `log(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:161 src/reference/frontend.md:98
+#: src/reference/stdlib.md:162 src/reference/frontend.md:98
 msgid "1"
 msgstr ""
 
-#: src/reference/stdlib.md:162
+#: src/reference/stdlib.md:163
 msgid "`warn(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:162 src/reference/frontend.md:99
+#: src/reference/stdlib.md:163 src/reference/frontend.md:99
 msgid "2"
 msgstr ""
 
-#: src/reference/stdlib.md:163
+#: src/reference/stdlib.md:164
 msgid "`error(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:163 src/reference/frontend.md:100
+#: src/reference/stdlib.md:164 src/reference/frontend.md:100
 msgid "3"
 msgstr ""
 
-#: src/reference/stdlib.md:165
+#: src/reference/stdlib.md:166
 msgid ""
 "Embedder side: `.pkg(rut_std::logger::pkg(|s| println!(\"{s}\")))` on the "
 "run chain ([embedding](embedding.md)). Offering `ink` pulls `ink_host` along "
 "(`deps`)."
 msgstr ""
 
-#: src/reference/stdlib.md:169
+#: src/reference/stdlib.md:170
 msgid "`pouch` — `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:171
+#: src/reference/stdlib.md:172
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr ""
 
-#: src/reference/stdlib.md:173 src/reference/stdlib.md:394
+#: src/reference/stdlib.md:174 src/reference/stdlib.md:395
 msgid "member"
 msgstr ""
 
-#: src/reference/stdlib.md:175
+#: src/reference/stdlib.md:176
 msgid "`new()` / `with_capacity(cap)` / `filled(v, n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:175
+#: src/reference/stdlib.md:176
 msgid "construction (`[v; n]` under the hood)"
 msgstr ""
 
-#: src/reference/stdlib.md:176
+#: src/reference/stdlib.md:177
 msgid "`push(v)` / `pop() -> T`"
 msgstr ""
 
-#: src/reference/stdlib.md:176
+#: src/reference/stdlib.md:177
 msgid ""
 "`pop` returns the removed element; **traps on empty** — guard with `len() > "
 "0`"
 msgstr ""
 
-#: src/reference/stdlib.md:177
+#: src/reference/stdlib.md:178
 msgid "`get`/`set` via `v[i]`, `for (x of v)`"
 msgstr ""
 
-#: src/reference/stdlib.md:177
+#: src/reference/stdlib.md:178
 msgid "compiler-lowered; element access aliases the stored cell"
 msgstr ""
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:179
 msgid "`from([T])` / `as_array() -> [T]`"
 msgstr ""
 
-#: src/reference/stdlib.md:178
+#: src/reference/stdlib.md:179
 msgid "bridges to the fixed array"
 msgstr ""
 
-#: src/reference/stdlib.md:179
+#: src/reference/stdlib.md:180
 msgid "the `Vec<u8>` → immutable `bytes` copy (exactly the live length)"
 msgstr ""
 
-#: src/reference/stdlib.md:180
+#: src/reference/stdlib.md:181
 msgid "compiler-lowered O(1) fixed-length window; detaches on grow"
 msgstr ""
 
-#: src/reference/stdlib.md:184
+#: src/reference/stdlib.md:185
 msgid ""
 "`Flow<E>` chains the push contract: a type is iterable when it marks an "
 "`[iterable]` member, and a Flow wraps one drive in adapter stages — a "
@@ -21424,7 +21438,7 @@ msgid ""
 "fused builtin loops stay the perf tier."
 msgstr ""
 
-#: src/reference/stdlib.md:189
+#: src/reference/stdlib.md:190
 msgid ""
 "Entry and sink are **interfaces, satisfied structurally**: `IntoFlow<E>` is "
 "`fn into_flow(self) -> Flow<E>` — `Flow` itself carries the identity member "
@@ -21437,7 +21451,7 @@ msgid ""
 "every time."
 msgstr ""
 
-#: src/reference/stdlib.md:200
+#: src/reference/stdlib.md:201
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
@@ -21458,91 +21472,91 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:224
+#: src/reference/stdlib.md:225
 msgid "`x.into_flow() -> Flow<E>`"
 msgstr ""
 
-#: src/reference/stdlib.md:224
+#: src/reference/stdlib.md:225
 msgid ""
 "the entry — `IntoFlow<E>`'s member; `Flow` carries the identity row, the "
 "wrappers `ArrFlow<T>` / `StrFlow` / `BytesFlow` / `VecFlow<T>` carry the rest"
 msgstr ""
 
-#: src/reference/stdlib.md:225
+#: src/reference/stdlib.md:226
 msgid "`VecFlow<T>(vec)` / `ArrFlow<T>(arr)` / `StrFlow(s)` / `BytesFlow(b)`"
 msgstr ""
 
-#: src/reference/stdlib.md:225
+#: src/reference/stdlib.md:226
 msgid ""
 "the adapters — newtype wrappers manufactured at the call site; a primitive "
 "or bare container cannot carry members, the wrapper does"
 msgstr ""
 
-#: src/reference/stdlib.md:226
+#: src/reference/stdlib.md:227
 msgid "`map<R>(f: fn(E) -> R) -> Flow<R>`"
 msgstr ""
 
-#: src/reference/stdlib.md:226
+#: src/reference/stdlib.md:227
 msgid ""
 "transform — introduces a new type variable, so annotate the lambda or spell "
 "the type argument; a fn path infers"
 msgstr ""
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:228
 msgid "`filter(p: fn(E) -> bool) -> Self`"
 msgstr ""
 
-#: src/reference/stdlib.md:227
+#: src/reference/stdlib.md:228
 msgid "keep the elements the predicate admits"
 msgstr ""
 
-#: src/reference/stdlib.md:228
+#: src/reference/stdlib.md:229
 msgid "`take(n)` / `skip(n)`"
 msgstr ""
 
-#: src/reference/stdlib.md:228
+#: src/reference/stdlib.md:229
 msgid ""
 "the first `n` / everything after the first `n` — the counter is a record the "
 "drive mutates, so a drained stage stays drained"
 msgstr ""
 
-#: src/reference/stdlib.md:229
+#: src/reference/stdlib.md:230
 msgid ""
 "`count() -> i32` / `for_each(f)` / `fold<R>(init, f) -> R` / `enumerate() -> "
 "Flow<(i32, E)>`"
 msgstr ""
 
-#: src/reference/stdlib.md:229
+#: src/reference/stdlib.md:230
 msgid "the one-drive consumers"
 msgstr ""
 
-#: src/reference/stdlib.md:230
+#: src/reference/stdlib.md:231
 msgid "`W<T>::from_flow(it: Flow<E>) -> W<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:230
+#: src/reference/stdlib.md:231
 msgid ""
 "the sink — `FromFlow<E>`'s no-self member, carried by `VecFlow<T>` and "
 "`SetFlow<T>`; `collected()` / `items()` unwrap the materialized container"
 msgstr ""
 
-#: src/reference/stdlib.md:231
+#: src/reference/stdlib.md:232
 msgid "`for (x of chain)`"
 msgstr ""
 
-#: src/reference/stdlib.md:231
+#: src/reference/stdlib.md:232
 msgid ""
 "chains are iterable — the `[iterable]` member on `Flow<E>` feeds the "
 "ordinary desugar"
 msgstr ""
 
-#: src/reference/stdlib.md:233
+#: src/reference/stdlib.md:234
 msgid ""
 "**Import the interfaces you spell and the pipeline type**: `use flow::{ "
 "Flow, IntoFlow, FromFlow }` — the use-both law names each one."
 msgstr ""
 
-#: src/reference/stdlib.md:236
+#: src/reference/stdlib.md:237
 msgid ""
 "**Deferred, documented**: `IntoFlow` for the mapset (nmapset ships no "
 "host-table walk — json's map encode grows with it) and a map sink (nmapset's "
@@ -21550,17 +21564,17 @@ msgid ""
 "wrappers are the precedent such a family would follow)."
 msgstr ""
 
-#: src/reference/stdlib.md:242
+#: src/reference/stdlib.md:243
 msgid "`nmapset` — `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:244
+#: src/reference/stdlib.md:245
 msgid ""
 "Thin wrappers over the native key table (`nmap_host` rows): the whole state "
 "is one `opaque` handle, every method one host call."
 msgstr ""
 
-#: src/reference/stdlib.md:247
+#: src/reference/stdlib.md:248
 msgid ""
 "```rut\n"
 "pub class HashMap<K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | "
@@ -21579,13 +21593,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:260
+#: src/reference/stdlib.md:261
 msgid ""
 "Both classes designate `new` — `HashMap()` / `HashSet()` spell the "
 "construction; `with_capacity` stays a named constructor."
 msgstr ""
 
-#: src/reference/stdlib.md:263
+#: src/reference/stdlib.md:264
 msgid ""
 "Laws: the key set is closed (no floats — no stable equality; encode a custom "
 "key canonically to `bytes`); `get` answers the stored cell, so two gets of "
@@ -21596,11 +21610,11 @@ msgid ""
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:271
+#: src/reference/stdlib.md:272
 msgid "`calc` — the generic float surface"
 msgstr ""
 
-#: src/reference/stdlib.md:273
+#: src/reference/stdlib.md:274
 msgid ""
 "```rut\n"
 "use calc::{ sqrt, abs };\n"
@@ -21619,7 +21633,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:292
+#: src/reference/stdlib.md:293
 msgid ""
 "Functions (each a closed-union generic over `f32 | f64` — the width is "
 "inferred from the arguments, or spelled `sqrt<f32>(x)`): `sqrt`, `floor`, "
@@ -21633,11 +21647,11 @@ msgid ""
 "not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:303
+#: src/reference/stdlib.md:304
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:305
+#: src/reference/stdlib.md:306
 msgid ""
 "Pure rut, zero host fns — offering json adds no host bindings. Its container "
 "wrapper families are json's OWN source, and `strbuild`, `pouch`, and "
@@ -21645,21 +21659,21 @@ msgid ""
 "kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:319
+#: src/reference/stdlib.md:320
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:322
+#: src/reference/stdlib.md:323
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:325
+#: src/reference/stdlib.md:326
 msgid ""
 "**Satisfaction is structural**: your type satisfies "
 "`JsonSerialize`/`JsonDeserialize` by spelling the members on its own "
@@ -21668,7 +21682,7 @@ msgid ""
 "them without asking."
 msgstr ""
 
-#: src/reference/stdlib.md:330
+#: src/reference/stdlib.md:331
 msgid ""
 "**The wrapper law**: primitives and bare containers never satisfy — no "
 "inherent members to have. The wrapper families are the spelled, per-call "
@@ -21676,95 +21690,95 @@ msgid ""
 "auto-inserted, forever."
 msgstr ""
 
-#: src/reference/stdlib.md:335
+#: src/reference/stdlib.md:336
 msgid "wrapper"
 msgstr ""
 
-#: src/reference/stdlib.md:335
+#: src/reference/stdlib.md:336
 msgid "wraps"
 msgstr ""
 
-#: src/reference/stdlib.md:337
+#: src/reference/stdlib.md:338
 msgid "`JsonI64` / `JsonF64` / `JsonBool` / `JsonStr`"
 msgstr ""
 
-#: src/reference/stdlib.md:337
+#: src/reference/stdlib.md:338
 msgid "`i64` / `f64` / `bool` / `str`"
 msgstr ""
 
-#: src/reference/stdlib.md:337
+#: src/reference/stdlib.md:338
 msgid "both directions; `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:339
 msgid "`JsonU64`"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:339
 msgid "`u64`"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:339
 msgid ""
 "decode-only — satisfaction is per-interface, so it satisfies "
 "`JsonDeserialize` alone (an out-of-`i64`\\-range producer has no encode "
 "row); `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:339
+#: src/reference/stdlib.md:340
 msgid "`SOpt<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:339
+#: src/reference/stdlib.md:340
 msgid ""
 "both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction "
 "bound means a decode-only `T` cannot ride it)"
 msgstr ""
 
-#: src/reference/stdlib.md:340
+#: src/reference/stdlib.md:341
 msgid "`JsonArr<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:340
+#: src/reference/stdlib.md:341
 msgid "both; `to_arr()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:341
+#: src/reference/stdlib.md:342
 msgid "`JsonVec<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:341
+#: src/reference/stdlib.md:342
 msgid "both (over pouch's `Vec<T>`); `to_vec()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:342
+#: src/reference/stdlib.md:343
 msgid ""
 "`JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>`"
 msgstr ""
 
-#: src/reference/stdlib.md:342
+#: src/reference/stdlib.md:343
 msgid "`HashMap<K, V>` per key shape"
 msgstr ""
 
-#: src/reference/stdlib.md:342
+#: src/reference/stdlib.md:343
 msgid ""
 "decode-only (over nmapset's `HashMap`); `to_map()` unwraps — `JMapBytes` "
 "answers the bytes-keys disclosure"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:344
 msgid "`JSet<T requires JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:344
 msgid "`HashSet<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:344
 msgid "decode-only (over nmapset's `HashSet`); `to_set()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:345
+#: src/reference/stdlib.md:346
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -21772,13 +21786,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:349
+#: src/reference/stdlib.md:350
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:351
+#: src/reference/stdlib.md:352
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -21787,11 +21801,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:356
+#: src/reference/stdlib.md:357
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:358
 msgid ""
 "**Ownership**: json owns everything — the interfaces AND the container "
 "wrapper families (json's own source); `pouch` and `nmapset` are plain "
@@ -21799,17 +21813,17 @@ msgid ""
 "([dependency kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:362
+#: src/reference/stdlib.md:363
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str::scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:366
+#: src/reference/stdlib.md:367
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:368
+#: src/reference/stdlib.md:369
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the "
 "`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
@@ -21819,7 +21833,7 @@ msgid ""
 "bodies:"
 msgstr ""
 
-#: src/reference/stdlib.md:375
+#: src/reference/stdlib.md:376
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -21837,54 +21851,54 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:396
+#: src/reference/stdlib.md:397
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:396
+#: src/reference/stdlib.md:397
 msgid ""
 "grow from small — the designated `[constructor]`: `StringBuilder()` spells it"
 msgstr ""
 
-#: src/reference/stdlib.md:397
+#: src/reference/stdlib.md:398
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:397
+#: src/reference/stdlib.md:398
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical "
 "behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:398
+#: src/reference/stdlib.md:399
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:398
+#: src/reference/stdlib.md:399
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:399
+#: src/reference/stdlib.md:400
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:399
+#: src/reference/stdlib.md:400
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:400
+#: src/reference/stdlib.md:401
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:401
+#: src/reference/stdlib.md:402
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:401
+#: src/reference/stdlib.md:402
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:403
+#: src/reference/stdlib.md:404
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
@@ -21894,25 +21908,25 @@ msgid ""
 "engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:410
+#: src/reference/stdlib.md:411
 msgid ""
 "Embedder side: `.pkg(rut_std::strbuild::pkg())` on the run chain. Offering "
 "`strbuild` pulls `strbuild_host` along (`deps`); offering `json` pulls both "
 "(its writer rides the builder)."
 msgstr ""
 
-#: src/reference/stdlib.md:414
+#: src/reference/stdlib.md:415
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = "
 "f\"{out}{t}\"` appends in place, linear in the total output "
 "([f-strings](literals-and-inference.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:418
+#: src/reference/stdlib.md:419
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:420
+#: src/reference/stdlib.md:421
 msgid ""
 "`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `futures` restores the typed surface: `launch_future(f: "
@@ -21923,7 +21937,7 @@ msgid ""
 "futures](launched-futures.md), [host futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:428
+#: src/reference/stdlib.md:429
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks) "
 "as a surface tree — `net/` carries the send + the response readbacks, "
@@ -21933,7 +21947,7 @@ msgid ""
 "constructs through the designated `new`:"
 msgstr ""
 
-#: src/reference/stdlib.md:436
+#: src/reference/stdlib.md:437
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -21948,18 +21962,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:448
+#: src/reference/stdlib.md:449
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:452
+#: src/reference/stdlib.md:453
 msgid "Offering"
 msgstr ""
 
-#: src/reference/stdlib.md:454
+#: src/reference/stdlib.md:455
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless "
 "a pkg named `core` was offered. `calc` and the async pair are ordinary tree "
@@ -21970,7 +21984,7 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:462
+#: src/reference/stdlib.md:463
 msgid ""
 "The rut packages over host rows (`ink`, `strbuild`, `nmapset`, `futures`, "
 "`http`) pull their decl pkg along (`deps`) — the embedder pairs the mount "
@@ -21980,7 +21994,7 @@ msgid ""
 "pipeline](compiler.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:468
+#: src/reference/stdlib.md:469
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "
@@ -26898,10 +26912,6 @@ msgid ""
 "the math surface as a normal lib — generic fns over `calc_host`; a "
 "`deps`\\-carrying dir mounts through `load_dir`/`dir_pkgs`, never `tree_pkg` "
 "([stdlib](stdlib.md))"
-msgstr ""
-
-#: src/reference/project-structure.md:260
-msgid "`calc_host`"
 msgstr ""
 
 #: src/reference/project-structure.md:260

@@ -22120,8 +22120,12 @@ msgstr "`calc`"
 
 
 #: src/reference/stdlib.md:131
-msgid "the `Math` namespace"
-msgstr "`Math` 命名空间"
+msgid "rut pkg (over `calc_host`)"
+msgstr "rut 包（宿主包 `calc_host` 之上）"
+
+#: src/reference/stdlib.md:132
+msgid "the math rows + the `Math::` constants"
+msgstr "数学行 + `Math::` 常量"
 
 
 #: src/reference/stdlib.md:132
