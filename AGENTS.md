@@ -59,6 +59,42 @@ acceptance):
   Cloudflare Pages (production from `master`):
   <https://playground.rut.hpp2334.com>.
 
+## Std publishing (pack → commit → publish)
+
+The law: std ships as SOURCE ZIPS at immutable `std-vNN` git tags —
+jsDelivr's gh lane serves committed repo files at a ref, so a tag names
+committed bytes, and publish ADVANCES, never rewrites (an existing tag is
+refused; a botched publish is fixed by the NEXT cut, never by re-tagging).
+The pin table lives ONLY in `crates/rut-cli/template/rut.lock` — the lock is
+the carrier: no script keeps a second pkg/sha/tag table (that duplication is
+exactly how the retired bin lane rotted), and `cargo nextest run -p rut-cli
+--test new_lane` holds the law.
+
+Delivery is THREE ACTS with one boundary — no script ever types `git commit`:
+
+1. **Cut**: `node scripts/pack-std.cjs` — derives the next tag (`git tag
+   -l "std-v*"` max + 1), packs the 9 source zips into `dist/std-vNN/`,
+   and re-pins `crates/rut-cli/template/rut.jsonc` (url token swap) +
+   `template/rut.lock` (regenerated). It prints a NEXT banner and STOPS
+   before git.
+2. **Review + commit (a HUMAN act)**: read `git diff` — 9 binary zips +
+   2 text files — and commit. This is the review point.
+3. **Publish**: `node scripts/publish-std.cjs` — the gates, then
+   `git tag -a <tag>` + push, then a jsDelivr sha-verify of all 9 urls,
+   then the e2e: `rut new → install → run` must print `hello, rut!`.
+
+Gate modes (no act; each gate dies loudly on drift): `node
+scripts/pack-std.cjs --check` is the offline, CI-shaped gate (repacks to a
+temp dir and byte-compares against the committed envelope — no network, no
+git writes); `node scripts/publish-std.cjs --dry-run` runs the publish
+gates and PRINTS the tag + push without doing them (it still derives the
+tag from origin).
+
+History: the `.rutbundle` bin lane is retired. The frozen `dist/std*`
+envelopes (`dist/std/`, `dist/std-v12/`, `dist/std-v13/`, …) stay committed
+untouched — old readers and test fixtures still read them — and the old
+pack script lives in git history.
+
 ## Docs: the book lives in `docs/`, RFCs are gone
 
 - The user manual is an mdbook site: source in `docs/src/` (TOC:
