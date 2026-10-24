@@ -230,6 +230,26 @@ fn member_span(m: &MemberSrc) -> Option<Span> {
 /// Empty when nothing resolves (keywords, unknown names, primitives
 /// with no surface decl).
 pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
+    dedupe_hits(definition_targets(ctx, pos))
+}
+
+/// identical answers are one answer. The chain lawfully carries a
+/// doc's stamped twin beside its own index (the twin may lag an open
+/// edit; the doc index is freshest), and a name both carry resolves to
+/// the same (uri, span) twice. The ambiguity layers answer every hit
+/// ON PURPOSE — a peek, not a guess — but a doubled target is not a
+/// peek; only DISTINCT targets ride.
+fn dedupe_hits(locs: Vec<DefLocation>) -> Vec<DefLocation> {
+    let mut out: Vec<DefLocation> = Vec::with_capacity(locs.len());
+    for l in locs {
+        if !out.iter().any(|e| e.uri == l.uri && e.range == l.range) {
+            out.push(l);
+        }
+    }
+    out
+}
+
+fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     let Some(t) = lookup::tok_at(ctx.toks, pos) else {
         return Vec::new();
     };
@@ -243,7 +263,8 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     let imported = import_map(ctx.doc());
 
     // 1. decl sites — the hovered span EXACTLY equals a recorded name
-    //    span (field / enum member / module let): the declaration IS
+    //    span (field / enum member / module let / fn decl — free fns,
+    //    impl methods, `[constructor]`s alike): the declaration IS
     //    the answer (go-to-def on a decl → itself)
     if decl_site(ctx.doc(), t.span, name) {
         return vec![DefLocation {
@@ -361,6 +382,10 @@ pub fn definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 /// declared types, binding types, module lets), then jump to that
 /// type's declaration. The same layers, one step further.
 pub fn type_definition(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
+    dedupe_hits(type_definition_targets(ctx, pos))
+}
+
+fn type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     let Some(t) = lookup::tok_at(ctx.toks, pos) else {
         return Vec::new();
     };
@@ -705,6 +730,13 @@ fn decl_site(doc: &DefIndex, span: Span, name: &str) -> bool {
         .lets
         .iter()
         .any(|l| l.name == name && l.name_span == Some(span))
+        // fn decls ride the same law — the name a ctor shares with
+        // every other class's ctor is exactly the case the name layers
+        // must never answer with a cross-pkg fan-out
+        || doc
+            .fns
+            .iter()
+            .any(|f| f.name == name && f.name_span == Some(span))
 }
 
 fn member_locations(ctx: &Ctx, target: &MemberTarget) -> Vec<DefLocation> {
@@ -1166,6 +1198,119 @@ mod tests {
             hits.iter()
                 .any(|h| h.uri.starts_with("file:///ws/.rut/deps/")),
             "{hits:?}"
+        );
+    }
+
+    #[test]
+    fn a_ctor_decl_click_answers_itself() {
+        // `[constructor] fn new` — the one name every class reuses. The
+        // decl click answers ITSELF (the decl-site law covers fn
+        // decls), never the cross-pkg fan-out of every other class's
+        // ctor the name layers would peek
+        let src = [
+            "class Logger {",
+            "    internal: opaque;",
+            "}",
+            "",
+            "impl Logger {",
+            "    [constructor] pub fn new(name: str) -> Self {",
+            "        return Self { internal: 1 };",
+            "    }",
+            "}",
+        ]
+        .join("\n");
+        let d = doc(&src);
+        let other = doc_at(
+            "file:///ws/flow/lib.rut",
+            "class Ctx {\n    internal: opaque;\n}\n\nimpl Ctx {\n    [constructor] pub fn new(cap: i32) -> Self {\n        return Self { internal: 2 };\n    }\n}\n",
+        )
+        .index;
+        let ix = LineIndex::new(&d.src);
+        let want = at(&d.src, "fn new", 1) + 3;
+        let hits = def(&d, want, &[other]);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, DOC);
+        assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 3));
+    }
+
+    #[test]
+    fn a_fn_decl_click_answers_itself_despite_a_foreign_twin() {
+        // a plain fn decl click: the name layers would peek every pkg
+        // carrying the same fn name — the decl-site law answers the
+        // doc's own declaration, full stop
+        let src =
+            "fn make() -> i32 { return 1; }\nentry fn main() -> nil {\n    let x = make();\n}\n";
+        let d = doc(src);
+        let other = doc_at(
+            "file:///ws/other/lib.rut",
+            "fn make() -> i32 { return 2; }\n",
+        )
+        .index;
+        let ix = LineIndex::new(&d.src);
+        let want = at(&d.src, "fn make", 1) + 3;
+        let hits = def(&d, want, &[other]);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, DOC);
+        assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 4));
+    }
+
+    #[test]
+    fn a_doubled_twin_answer_is_one_answer() {
+        // the stamped twin: an open doc is indexed by its analyze lane
+        // AND stamped by the mount lane at the same origin — a name both
+        // carry resolved twice. Identical answers are one answer; the
+        // ambiguity peek is for DISTINCT targets
+        let src = "class Widget {\n    id: i32;\n}\n";
+        let d = doc(src);
+        let twin = doc_at(DOC, src).index; // the same origin, stamped twin
+        let ix = LineIndex::new(&d.src);
+        let want = at(&d.src, "Widget", 1);
+        let hits = def(&d, want, &[twin]);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].uri, DOC);
+        assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 6));
+    }
+
+    #[test]
+    fn a_mounted_member_beats_the_ambient_twin() {
+        // the member lane rides the same mounted-over-embed law the ty
+        // and fn layers carry: the chain holds class Logger twice — the
+        // ambient std surface (scheme-less `rut/…` src_path) and the dep
+        // walk's mounted tree (a real file:// origin) — and BOTH member
+        // shapes land in the mount: the impl method and the field read
+        let src = [
+            "use ink::{ Logger };",
+            "",
+            "entry fn main() -> nil {",
+            "    let log = Logger(\"a\");",
+            "    log.info(\"x\");",
+            "    print(log.internal);",
+            "}",
+        ]
+        .join("\n");
+        let d = doc(&src);
+        let surface = "class Logger {\n    internal: opaque;\n}\n\nimpl Logger {\n    pub fn info(msg: str) -> nil { }\n}\n";
+        let mut ambient = doc_at("rut/ink/src/mod.rut", surface).index;
+        ambient.src_path = Some("rut/ink/src/mod.rut".into());
+        let mounted = doc_at("file:///ws/.rut/deps/ink-eb2b568316ef/src/mod.rut", surface).index;
+        let extra = [ambient, mounted];
+        let surface_src = normalize(surface);
+        let six = LineIndex::new(&surface_src);
+        // the impl method: `info` in `log.info("x")`
+        let hits = def(&d, at(&d.src, "log.info", 1) + 4, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(
+            hits[0].uri,
+            "file:///ws/.rut/deps/ink-eb2b568316ef/src/mod.rut"
+        );
+        let want = at(&surface_src, "fn info", 1) + 3;
+        assert_eq!(span_of(&surface_src, &six, &hits[0]), (want, want + 4));
+        // the field read: `internal` in `print(log.internal)`
+        let hits = def(&d, at(&d.src, "log.internal", 1) + 4, &extra);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(
+            hits[0].uri,
+            "file:///ws/.rut/deps/ink-eb2b568316ef/src/mod.rut"
         );
     }
 

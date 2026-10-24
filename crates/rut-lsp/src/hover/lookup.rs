@@ -375,9 +375,24 @@ pub(crate) fn enclosing_type<'a>(
 }
 
 pub(crate) fn find_ty<'a>(idxs: &'a [&DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
-    idxs.iter().find_map(|i| i.ty(name).map(|t| (*i, t)))
+    // mounted-over-embed (the `prefer_bodies` carrier rule): the chain
+    // may carry the same ty twice — the dep walk's real origins and the
+    // ambient std surface answering for a name nothing mounted — and
+    // the MOUNTED carrier wins (chain order keeps the doc freshest
+    // among equals); the embed is the zero-fetch fallback
+    let mut fallback = None;
+    for i in idxs.iter().copied() {
+        if let Some(t) = i.ty(name) {
+            if i.src_path.is_none() {
+                return Some((i, t));
+            }
+            if fallback.is_none() {
+                fallback = Some((i, t));
+            }
+        }
+    }
+    fallback
 }
-
 /// The member-lookup verdict: found (a resolved declaration target), a
 /// final miss (the receiver's type is known — the gate or a genuine
 /// miss), or an unknown receiver (the caller may fall through to the
@@ -451,15 +466,30 @@ pub(crate) fn member_target<'a>(
         return MemberHit::None;
     }
     // inherent impl-block methods — where methods live since type bodies
-    // went fields-only; the owner string IS the target type's name
-    for i in idxs {
-        for f in &i.fns {
-            if f.name == member && f.owner.as_deref() == Some(ty_name.as_str()) {
+    // went fields-only; the owner string IS the target type's name.
+    // The mounted-over-embed law rides (`find_ty`'s): the chain may
+    // carry the same owner twice — the dep walk's real origins and the
+    // ambient surface answering for a name nothing mounted — and the
+    // mount wins
+    let mut fallback: Option<(&DefIndex, &FnDef)> = None;
+    for i in idxs.iter().copied() {
+        if let Some(f) = i
+            .fns
+            .iter()
+            .find(|f| f.name == member && f.owner.as_deref() == Some(ty_name.as_str()))
+        {
+            if i.src_path.is_none() {
                 return MemberHit::Found(MemberTarget::ImplFn(i, f));
+            }
+            if fallback.is_none() {
+                fallback = Some((i, f));
             }
         }
     }
-    MemberHit::None
+    match fallback {
+        Some((i, f)) => MemberHit::Found(MemberTarget::ImplFn(i, f)),
+        None => MemberHit::None,
+    }
 }
 
 /// hover's half: the resolved target's markdown (definition uses the
