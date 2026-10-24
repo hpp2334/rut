@@ -1,60 +1,47 @@
 #!/usr/bin/env node
 /**
- * Pack the std tree (`rut/`) into the committed CDN artifacts
- * (`dist/std/*.rutbundle`) — the delivery law: jsDelivr's gh lane
- * serves REPO FILES at a ref, so the packed bundles are COMMITTED and
- * the publish act is a git tag (`std-vNN`, immutable in practice —
- * publish ADVANCES the number, never rewrites a tag).
+ * Cut the std release: pack the SOURCE ZIPS and re-pin the two
+ * template carriers. The std CDN lane is source zips only — the
+ * .rutbundle bin lane is RETIRED (git history holds that script); the
+ * frozen committed envelopes (dist/std*, the older dist/std-vNN/) stay
+ * in the repo untouched, and nothing here rewrites them.
  *
- * The bundle set is exhaustive over `rut/` (16 pkgs): lib pkgs pack as
- * compiled roots (their closures ride inside, each group carrying its
- * GENERATED declaration entry), host pkgs pack as decl roots
- * (single-package — the ONE consolidated surface entry is the root);
- * `format_version` is 12, always — the manifest's `type` routes the
- * root kind. Same input directory ⇒ byte-identical bundle (Q4), so
- * "pins fresh" is a PURE EQUALITY gate — CI never touches the network.
+ * THREE ACTS, ONE BOUNDARY: this script CUTS (pack the zips + re-pin
+ * crates/rut-cli/template/rut.{jsonc,lock}) and STOPS — no git. A
+ * HUMAN reviews the diff and commits (the review point), then
+ * scripts/publish-std.cjs PUBLISHES (gate the committed bytes → tag +
+ * push → verify the CDN). No script ever types `git commit`.
+ *
+ * THE LOCK IS THE CARRIER: the pkg set, the urls and the live tag are
+ * read from crates/rut-cli/template/rut.lock — no pkg table, no sha
+ * table, no tag constant here (that duplication is exactly how the
+ * bin lane rotted).
+ *
+ * TAGS ARE ALWAYS DERIVED (dense, advancing): the cut takes
+ * `git tag -l "std-v*"`'s max + 1. Derivation counts TAGS, not dist
+ * dirs — an uncommitted cut re-runs byte-identically under the same
+ * number.
  *
  * Usage:
- *   node scripts/pack-std.cjs              pack all 16 → dist/std/
- *   node scripts/pack-std.cjs --pins       rewrite the example
- *                                          manifests' url/sha256 rows
- *                                          (the EXAMPLES map below is
- *                                          the single rewrite map)
- *   node scripts/pack-std.cjs --check      gate mode: repack to a temp
- *                                          dir, byte-compare against
- *                                          the committed artifacts, and
- *                                          assert every example
- *                                          rut.lock pin row matches
- *                                          sha256(committed bytes) +
- *                                          the url shape.
- *                                          Exit 1 on drift.
- *   node scripts/pack-std.cjs --tag        PRINT the publish commands
- *                                          (git tag + push). Never runs
- *                                          them — publishing is a
- *                                          user-requested act.
- *
- * Options:
- *   --tag-name <t>   the jsDelivr tag the urls spell (env
- *                    RUT_STD_TAG). `--check` defaults it to std-v12
- *                    (the pins' committed envelope — the locks name
- *                    those bytes until a publish re-pins); `--tag`
- *                    defaults it to std-v13 (the NEXT tag — publish
- *                    advances, never re-points).
+ *   node scripts/pack-std.cjs         cut: pack the source zips →
+ *                                     dist/std-vNN/ + re-pin the two
+ *                                     template carriers, print the
+ *                                     NEXT banner, stop.
+ *   node scripts/pack-std.cjs --check offline gates: repack each pkg
+ *                                     to a temp dir, byte-compare
+ *                                     against the committed
+ *                                     dist/<tag>/ envelope, and hold
+ *                                     the lock pins + the template
+ *                                     urls against the same bytes.
+ *                                     Exit 1 on drift.
  *   -h, --help
  *
- * No pushing, no network. The `rut fetch` / `rut run` human lane hits
- * jsDelivr once per bundle, then caches; every offline gate is green
- * because the committed artifact IS the seed.
- *
- * THE PIN BOUNDARY: dist/std is the WORKING envelope — repacked
- * whenever the pack shape moves (the wire-12 declaration-entry lane
- * did), byte-checked by --check's freshness half. The example
- * projects' rut.lock rows ride the committed `dist/std-v12/` bytes —
- * the offline gates' wire — and --check's pin half asserts every row
- * against THEM, not against dist/std. `dist/std-v13/` is the CUT
- * envelope for the next publish (byte-identical to dist/std; the tag
- * lane a consumer re-pins to). The reader's old lane loads v11
- * forever; migration is a re-pin, not a break.
+ * Retired flags die loudly: --tag (publishing moved to
+ * scripts/publish-std.cjs), --pins (the template lock is regenerated
+ * by the cut; no tool rewrites the example locks — a publish re-pins
+ * consumers via `rut install`). There is no lane flag and no tag
+ * flag: the zip lane is the only lane, the tag is always the derived
+ * next one.
  */
 "use strict";
 
@@ -65,14 +52,9 @@ const os = require("node:os");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const RUT = path.join(ROOT, "rut");
-const DIST = path.join(ROOT, "dist", "std");
-const PINNED = path.join(ROOT, "dist", "std-v12");
-const CUT = path.join(ROOT, "dist", "std-v13");
-// the pins' tag (the locks' url rows) and the NEXT publish tag
-const DEFAULT_TAG = "std-v12";
-const NEXT_TAG = "std-v13";
-const URL_BASE = "https://cdn.jsdelivr.net/gh/hpp2334/rut";
+const TEMPLATE = path.join(ROOT, "crates", "rut-cli", "template");
+const LOCK = path.join(TEMPLATE, "rut.lock");
+const MANIFEST = path.join(TEMPLATE, "rut.jsonc");
 
 // ---------------------------------------------------------------------------
 // output helpers (deploy.cjs's loud-fail culture: say what runs, die loudly)
@@ -92,13 +74,12 @@ const die = (s) => {
 };
 
 const usage = () => {
-  console.log(
-    `usage: node scripts/pack-std.cjs [--pins] [--check] [--tag] [--tag-name <t>]`
-  );
+  console.log(`usage: node scripts/pack-std.cjs [--check]`);
 };
 
 // ---------------------------------------------------------------------------
-// args
+// args — bare = cut, --check = offline gates. No lane flags, no tag flags:
+// anything else dies loudly with its pointer.
 // ---------------------------------------------------------------------------
 
 const argv = process.argv.slice(2);
@@ -106,105 +87,32 @@ if (argv.includes("-h") || argv.includes("--help")) {
   usage();
   process.exit(0);
 }
-function takeValue(flag) {
-  const i = argv.indexOf(flag);
-  if (i === -1) return null;
-  const v = argv[i + 1];
-  if (!v || v.startsWith("--")) die(`${flag} needs a value`);
-  argv.splice(i, 2);
-  return v;
-}
-function takeFlag(flag) {
-  const i = argv.indexOf(flag);
-  if (i === -1) return false;
-  argv.splice(i, 1);
-  return true;
-}
-const doCheck = takeFlag("--check");
-const doTag = takeFlag("--tag");
-const isTagMode = doTag;
-const tag = takeValue("--tag-name")
-  ?? process.env.RUT_STD_TAG
-  ?? (isTagMode ? NEXT_TAG : DEFAULT_TAG);
-if (argv.length) die(`unknown arguments: ${argv.join(" ")}`);
-if (takeFlag("--pins")) {
+if (argv.includes("--tag")) {
   die(
-    "--pins is retired: the example manifests' rows ride the committed dist/std-v12 envelope — " +
-      "repack updates dist/std; re-pointing a tag is a publish act, not a repack"
+    "--tag is retired: publishing moved to scripts/publish-std.cjs (bare = publish, " +
+      "--dry-run = gates + print) — the tag is always the derived next one, nothing to choose"
   );
 }
-if ([doCheck, doTag].filter(Boolean).length > 1) {
-  die("--check / --tag are mutually exclusive modes");
+if (argv.includes("--pins")) {
+  die(
+    "--pins is retired: the template lock is regenerated by the cut, and no tool rewrites " +
+      "the example locks — a publish re-pins consumers via `rut install`"
+  );
 }
-
-// ---------------------------------------------------------------------------
-// the bundle set — exhaustive over rut/ (the completeness law: every pkg
-// a [deps]/[dev-deps] row can spell ships from the CDN). `out` is the
-// artifact name (the manifest name — what a deps row spells); dir is the
-// tree directory when the two differ.
-// ---------------------------------------------------------------------------
-
-const PKGS = [
-  // lib pkgs — compiled roots; each closure rides inside
-  { dir: "pouch" },
-  { dir: "flow" },
-  { dir: "nmapset" },
-  { dir: "strbuild" },
-  { dir: "json" },
-  { dir: "ink" },
-  { dir: "http" },
-  { dir: "futures" },
-  { dir: "calc" },
-  // host pkgs — decl roots, single-package
-  { dir: "ink_host" },
-  { dir: "http_host" },
-  { dir: "nmap_host" },
-  { dir: "strbuild_host" },
-  { dir: "async_host" },
-  { dir: "core" },
-  { dir: "calc_host" },
-  { dir: "bench-cross" },
-];
-
-// The example roots' rut.lock files — the frozen pins (--check verifies
-// them; nothing rewrites them). Each lock's rows are url-keyed, sha256
-// per row; the PINNED snapshot (`dist/std-v12/`) must carry an artifact
-// per distinct url key — the bytes each row's sha256 commits to.
-//
-// THE BOUNDARY (the publish act): the rows are FROZEN between
-// publishes. dist/std repacks whenever the pack shape moves — the pins
-// do NOT move until a publish act cuts the next envelope
-// (`dist/std-vNN` + tag) and every referencer re-points. The pins name
-// the std-v12 bytes, which load through the reader's primary lane (the
-// strict format_version-12 gate). The manifest sha256 key is retired —
-// the lock is THE pin law. --pins is gone: no tool rewrites these rows
-// anymore; a publish regenerates them with `rut install` against the
-// new envelope.
-const EXAMPLES = [
-  "examples/00-todolist/rut.lock",
-  "examples/01-sort/rut.lock",
-  "examples/02-digest/rut.lock",
-  "examples/03-plugin/plugin/rut.lock",
-  "examples/05-todolist-web/rut/biz/rut.lock",
-  "examples/05-todolist-web/rut/ui/rut.lock",
-  "examples/05-todolist-web/tests/store_probe/rut.lock",
-  "examples/05-todolist-web/tests/t1_harness/rut.lock",
-  "examples/06-github-viewer-cli/rut.lock",
-];
+const doCheck = argv.includes("--check");
+const unknown = argv.filter((f) => f !== "--check");
+if (unknown.length) {
+  die(
+    `unknown arguments: ${unknown.join(" ")} — the zip lane is the only lane; ` +
+      "the tag is always the derived next one"
+  );
+}
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
 const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
-
-/** A pkg's manifest name (what a deps row spells — the artifact name). */
-function pkgName(dir) {
-  const text = fs.readFileSync(path.join(RUT, dir, "rut.jsonc"), "utf8");
-  const m = text.match(/"name"\s*:\s*"([A-Za-z0-9_]+)"/);
-  if (!m) die(`rut/${dir}/rut.jsonc has no \`name\` row`);
-  return m[1];
-}
 
 /** Run a command, inheriting stdio (loud), dying on failure. */
 function run(cmd, args) {
@@ -213,143 +121,189 @@ function run(cmd, args) {
   if (r.status !== 0) die(`${cmd} ${args.join(" ")} exited ${r.status}`);
 }
 
-/** The url row for one dep key of one example manifest. */
-function urlRow(key) {
-  return `${URL_BASE}@${tag}/dist/std/${key}.rutbundle`;
-}
+/** JSONC the way this script has always read it: full-line // comments off. */
+const stripComments = (text) => text.replace(/^[ \t]*\/\/.*$/gm, "");
 
-// ---------------------------------------------------------------------------
-// modes
-// ---------------------------------------------------------------------------
-
-if (doTag) {
-  console.log(`
-Publish the committed dist/std/ artifacts to jsDelivr (the gh lane
-serves repo files at a ref — the artifacts are already committed; this
-tag IS the publish). Tags are IMMUTABLE in practice: publish advances
-std-vNN, never rewrites. The cut envelope for this publish is
-dist/std-v13/ (byte-identical to dist/std/ — the tag names THESE
-bytes); after publishing, re-pin consumers with \`rut install\` against
-the new tag's urls:
-
-  git tag ${tag}
-  git push origin ${tag}
-
-Then verify one artifact resolves (expect 200):
-
-  curl -fsSI ${urlRow("pouch")}
-`);
-  process.exit(0);
-}
-
-// every mode below needs the artifacts: pack (default, --pins) writes
-// them; --check repacks to a temp dir and byte-compares.
-function packAll(outDir) {
-  fs.mkdirSync(outDir, { recursive: true });
-  for (const { dir } of PKGS) {
-    const name = pkgName(dir);
-    run("cargo", [
-      "run", "-q", "-p", "rut-cli", "--",
-      "pack", path.join("rut", dir), "-o", path.relative(ROOT, path.join(outDir, `${name}.rutbundle`)),
-      // the committed artifacts are the COMPILED wire (the delivery
-      // law: a .rutbundle names the bin lane — the byte-fresh gate
-      // packs through the same lane)
-      "--mode", "bin",
-    ]);
+/** The lock's rows ({pkg, url, sha256}) — THE CARRIER. No pkg table here. */
+function readLockRows() {
+  let lock;
+  try {
+    lock = JSON.parse(stripComments(fs.readFileSync(LOCK, "utf8")));
+  } catch (e) {
+    die(`crates/rut-cli/template/rut.lock does not parse (${e.message})`);
   }
+  const rows = (lock.deps || []).map((r) => ({ pkg: r.pkg, url: r.url, sha256: r.sha256 }));
+  if (!rows.length) die("crates/rut-cli/template/rut.lock has no dep rows — nothing to pin");
+  for (const r of rows) {
+    if (!r.pkg || !r.url || !r.sha256) {
+      die("crates/rut-cli/template/rut.lock has a row missing pkg/url/sha256");
+    }
+  }
+  return rows;
 }
+
+/** A std zip url: <base>@<tag>/dist/std/<pkg>.zip. */
+const URL_RE = /^(.+)@(std-v\d+)\/dist\/std\/([A-Za-z0-9_]+)\.zip$/;
+
+/** Parse every row's url; die unless they all spell ONE base@tag. */
+function urlSpace(rows) {
+  let base = null;
+  let tag = null;
+  for (const row of rows) {
+    const m = row.url.match(URL_RE);
+    if (!m) die(`the lock's \`${row.pkg}\` url is off the std zip envelope — ${row.url}`);
+    if (m[3] !== row.pkg) {
+      die(`the lock's \`${row.pkg}\` url names \`${m[3]}.zip\` — pkg and url disagree`);
+    }
+    if (base === null) {
+      base = m[1];
+      tag = m[2];
+    } else if (m[1] !== base || m[2] !== tag) {
+      die(`the lock's urls do not all spell one tag — ${row.url} breaks the ${base}@${tag} story`);
+    }
+  }
+  return { base, tag };
+}
+
+/** The next tag: `git tag -l "std-v*"`'s max + 1 (counts TAGS, not dist
+ *  dirs — an uncommitted cut re-runs byte-identically under the same
+ *  number). */
+function nextTag() {
+  const r = spawnSync("git", ["tag", "-l", "std-v*"], { cwd: ROOT, encoding: "utf8" });
+  if (r.status !== 0) die(`git tag -l "std-v*" failed — ${String(r.stderr).trim()}`);
+  let max = 0;
+  for (const t of r.stdout.split("\n")) {
+    const m = t.trim().match(/^std-v(\d+)$/);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `std-v${max + 1}`;
+}
+
+/** Pack one source zip — `--mode source` spelled explicitly for
+ *  loudness (it is also the default). */
+function packZip(pkg, outAbs) {
+  run("cargo", [
+    "run",
+    "-q",
+    "-p",
+    "rut-cli",
+    "--",
+    "pack",
+    path.join("rut", pkg),
+    "-o",
+    path.relative(ROOT, outAbs),
+    "--mode",
+    "source",
+  ]);
+}
+
+/** The template manifest's dep rows ({key: {url}}) — read-only. */
+function manifestDeps() {
+  let m;
+  try {
+    m = JSON.parse(stripComments(fs.readFileSync(MANIFEST, "utf8")));
+  } catch (e) {
+    die(`crates/rut-cli/template/rut.jsonc does not parse (${e.message})`);
+  }
+  return m.deps || {};
+}
+
+/**
+ * Render the lock in the canonical grammar — a JS mirror of
+ * rut-driver's `render_lock` (new.rs:12–14: the template lock is
+ * byte-identical to what `rut install` writes): rows sorted by url,
+ * fields in the fixed pkg/url/sha256 order, pkg and url columns
+ * aligned, 2-space indent, the header comment, trailing newline.
+ */
+function renderLock(rows) {
+  const sorted = [...rows].sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  // a column's pad is the widest quoted-and-comma'd token
+  const pkgW = Math.max(...sorted.map((r) => r.pkg.length + 3));
+  const urlW = Math.max(...sorted.map((r) => r.url.length + 3));
+  const lines = [
+    "// rut.lock — generated by `rut install`; commit it. Rows sorted by url;",
+    "// the sha256 is law at the mount door on every load.",
+    "{",
+    '  "format": "rutlock",',
+    '  "format_version": 1,',
+    '  "deps": [',
+    ...sorted.map((r, i) => {
+      const comma = i === sorted.length - 1 ? "" : ",";
+      return (
+        `    { "pkg": ${`"${r.pkg}",`.padEnd(pkgW)} ` +
+        `"url": ${`"${r.url}",`.padEnd(urlW)} ` +
+        `"sha256": "${r.sha256}" }${comma}`
+      );
+    }),
+    "  ]",
+    "}",
+    "",
+  ];
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// --check — offline gates, CI-shaped: no network, no git writes. The
+// live tag is parsed from the lock's urls (no constants).
+// ---------------------------------------------------------------------------
 
 if (doCheck) {
+  const rows = readLockRows();
+  const { base, tag } = urlSpace(rows);
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rut-pack-std-check-"));
-  info(`repacking to ${dim(tmp)} for the byte comparison`);
-  packAll(tmp);
-  const hashes = {};
+  info(`the lock pins ${rows.length} pkgs at ${bold(tag)} — repacking to ${dim(tmp)} for the byte comparison`);
+
   let drift = 0;
-  for (const { dir } of PKGS) {
-    const name = pkgName(dir);
-    const committed = path.join(DIST, `${name}.rutbundle`);
-    const fresh = path.join(tmp, `${name}.rutbundle`);
+  const fresh = {};
+  for (const row of rows) {
+    fresh[row.pkg] = path.join(tmp, `${row.pkg}.zip`);
+    packZip(row.pkg, fresh[row.pkg]);
+  }
+
+  // freshness + pin law: the committed envelope IS the seed — rut/ must
+  // pack to its bytes, and the lock's sha256 must name those bytes.
+  for (const row of rows) {
+    const committed = path.join(ROOT, "dist", tag, `${row.pkg}.zip`);
     if (!fs.existsSync(committed)) {
-      console.error(`  ${red("missing")}: dist/std/${name}.rutbundle (pack to create it)`);
+      console.error(`  ${red("missing")}: dist/${tag}/${row.pkg}.zip (the envelope is committed)`);
       drift++;
       continue;
     }
-    const a = fs.readFileSync(committed);
-    const b = fs.readFileSync(fresh);
-    hashes[name] = sha256(a);
-    if (!a.equals(b)) {
-      console.error(`  ${red("drift")}: dist/std/${name}.rutbundle (repack differs from the committed bytes)`);
+    const bytes = fs.readFileSync(committed);
+    const sha = sha256(bytes);
+    if (!bytes.equals(fs.readFileSync(fresh[row.pkg]))) {
+      console.error(
+        `  ${red("drift")}: dist/${tag}/${row.pkg}.zip (rut/ moved, the envelope didn't — re-run the cut)`
+      );
+      drift++;
+    } else if (row.sha256 !== sha) {
+      console.error(`  ${red("pin")}: the lock's sha256 for \`${row.pkg}\` does not match dist/${tag}/${row.pkg}.zip`);
       drift++;
     } else {
-      console.error(`  ${green("ok")}: dist/std/${name}.rutbundle (${a.length} bytes, sha256 ${hashes[name].slice(0, 16)}…)`);
+      console.error(`  ${green("ok")}: dist/${tag}/${row.pkg}.zip (${bytes.length} bytes, sha256 ${sha.slice(0, 16)}…)`);
     }
   }
   fs.rmSync(tmp, { recursive: true, force: true });
 
-  // the CUT envelope (dist/std-v13/): byte-identical to dist/std while
-  // the cut stands — the tag names these bytes, so a drift between the
-  // working envelope and the cut one is publish poison.
-  for (const { dir } of PKGS) {
-    const name = pkgName(dir);
-    const cut = path.join(CUT, `${name}.rutbundle`);
-    const working = path.join(DIST, `${name}.rutbundle`);
-    if (!fs.existsSync(cut)) {
-      console.error(`  ${red("missing")}: dist/std-v13/${name}.rutbundle (the cut envelope is committed)`);
+  // the two templates tell one story: every manifest url is its lock
+  // row's url, both directions (same tag, same keys).
+  const deps = manifestDeps();
+  for (const row of rows) {
+    const dep = deps[row.pkg];
+    if (!dep) {
+      console.error(`  ${red("template")}: template/rut.jsonc has no dep \`${row.pkg}\` — the lock pins it`);
       drift++;
-      continue;
-    }
-    if (!fs.readFileSync(cut).equals(fs.readFileSync(working))) {
-      console.error(`  ${red("drift")}: dist/std-v13/${name}.rutbundle (the cut envelope moved from dist/std — re-cut it: cp dist/std/*.rutbundle dist/std-v13/)`);
+    } else if (dep.url !== row.url) {
+      console.error(
+        `  ${red("template")}: template/rut.jsonc \`${row.pkg}\` url is \`${dep.url}\`, want the lock's \`${row.url}\``
+      );
       drift++;
     }
   }
-
-  // the example pins: every rut.lock row spells a
-  // /dist/std/<key>.rutbundle url and its sha256 equals the hash of the
-  // committed envelope bytes (dist/std-v12/) — the bytes the row commits
-  // to. dist/std (the working envelope) is NOT the pins' reference: the
-  // rename moved the pack shape, the pins did not move, and the
-  // reader's compat lane loads the old envelope.
-  const pinHashes = {};
-  const pinOf = (key) => {
-    if (!(key in pinHashes)) {
-      const frozen = path.join(PINNED, `${key}.rutbundle`);
-      pinHashes[key] = fs.existsSync(frozen) ? sha256(fs.readFileSync(frozen)) : null;
-    }
-    return pinHashes[key];
-  };
-  for (const lock of EXAMPLES) {
-    const p = path.join(ROOT, lock);
-    if (!fs.existsSync(p)) continue; // the phase that lands it owns the rows
-    let rows;
-    try {
-      rows = JSON.parse(fs.readFileSync(p, "utf8").replace(/^[ \t]*\/\/.*$/gm, "")).deps;
-    } catch (e) {
-      console.error(`  ${red("pin")}: ${lock} does not parse (${e.message})`);
+  for (const key of Object.keys(deps)) {
+    if (!rows.some((r) => r.pkg === key)) {
+      console.error(`  ${red("template")}: template/rut.jsonc dep \`${key}\` has no lock row`);
       drift++;
-      continue;
-    }
-    for (const row of rows) {
-      const m = (row.url || "").match(/\/dist\/std\/([A-Za-z0-9_]+)\.rutbundle$/);
-      const key = m && m[1];
-      if (!key) {
-        console.error(`  ${red("pin")}: ${lock} has a row off the std envelope — url ${row.url}`);
-        drift++;
-        continue;
-      }
-      const wantUrl = urlRow(key);
-      if (row.url !== wantUrl) {
-        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` url is \`${row.url}\`, want \`${wantUrl}\``);
-        drift++;
-      }
-      const pin = pinOf(key);
-      if (!pin) {
-        console.error(`  ${red("pin")}: dist/std-v12/${key}.rutbundle is missing — the committed envelope bytes must be committed`);
-        drift++;
-      } else if (row.sha256 !== pin) {
-        console.error(`  ${red("pin")}: ${lock} \`${row.pkg}\` sha256 does not match dist/std-v12/${key}.rutbundle (the committed envelope bytes)`);
-        drift++;
-      }
     }
   }
 
@@ -357,18 +311,64 @@ if (doCheck) {
     console.error("");
     die(`${drift} drift row(s) — fix with: node scripts/pack-std.cjs`);
   }
-  info(green(`all ${PKGS.length} artifacts byte-fresh, every example pin matches the committed std-v12 bytes`));
+  info(green(`all ${rows.length} zips byte-fresh at ${tag}, every lock pin + template url matches`));
   process.exit(0);
 }
 
-// default: pack the committed working-envelope artifacts (dist/std).
-// The pins never move (see --pins above): dist/std is the freshness
-// gate's half; dist/std-v12 is the pins' half.
-packAll(DIST);
-const hashes = {};
-for (const { dir } of PKGS) {
-  const name = pkgName(dir);
-  hashes[name] = sha256(fs.readFileSync(path.join(DIST, `${name}.rutbundle`)));
-  console.error(`  ${green("packed")}: dist/std/${name}.rutbundle (sha256 ${hashes[name].slice(0, 16)}…)`);
+// ---------------------------------------------------------------------------
+// the cut: pack 9 zips + re-pin the two carriers, print NEXT, STOP.
+// No git — committing is the human review point; publishing is
+// publish-std.cjs's act.
+// ---------------------------------------------------------------------------
+
+const rows = readLockRows();
+const { base, tag: oldTag } = urlSpace(rows);
+const next = nextTag();
+const outDir = path.join(ROOT, "dist", next);
+fs.mkdirSync(outDir, { recursive: true });
+
+info(`cutting ${bold(next)}: packing ${rows.length} source zips (the lock is the carrier — old tag ${oldTag})`);
+const shaByPkg = {};
+for (const row of rows) {
+  const out = path.join(outDir, `${row.pkg}.zip`);
+  packZip(row.pkg, out);
+  shaByPkg[row.pkg] = sha256(fs.readFileSync(out));
+  console.error(`  ${green("packed")}: dist/${next}/${row.pkg}.zip (sha256 ${shaByPkg[row.pkg].slice(0, 16)}…)`);
 }
-info(green(`packed ${PKGS.length} artifacts → dist/std/ (the example pins ride dist/std-v12/)`));
+
+// carrier 1 — the manifest: a surgical token swap @<old> → @<next>
+// inside url strings only (the comment prose mentions the tag without
+// the `@` and stays untouched), so formatting never moves.
+const token = `@${oldTag}`;
+const manifest = fs.readFileSync(MANIFEST, "utf8");
+const hits = manifest.split(token).length - 1;
+if (hits !== rows.length) {
+  die(
+    `template/rut.jsonc spells ${token} ${hits} time(s), want ${rows.length} (the lock's rows) — ` +
+      "the template and the lock disagree; fix the template first"
+  );
+}
+fs.writeFileSync(MANIFEST, manifest.split(token).join(`@${next}`));
+
+// carrier 2 — the lock: REGENERATED (not regex-edited) from the rows:
+// same pkg keys, urls re-pointed at the new tag (the url base is
+// parsed from the existing rows, not hardcoded), shas from the zip
+// bytes just written — rendered in the canonical grammar, byte-identical
+// in shape to what `rut install` writes.
+fs.writeFileSync(
+  LOCK,
+  renderLock(
+    rows.map((row) => ({
+      pkg: row.pkg,
+      url: `${base}@${next}/dist/std/${row.pkg}.zip`,
+      sha256: shaByPkg[row.pkg],
+    }))
+  )
+);
+
+console.error("");
+info(green(`packed ${rows.length} zips → dist/${next}/ + re-pinned template/rut.jsonc + rut.lock`));
+info(
+  `NEXT (a human act): ${bold("git diff")} (${rows.length} zips + 2 template files), ${bold("commit")}, then`
+);
+console.log(`  ${bold("node scripts/publish-std.cjs")}`);
