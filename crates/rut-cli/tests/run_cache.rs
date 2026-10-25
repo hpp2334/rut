@@ -1,10 +1,11 @@
-//! The cache-first `rut run <dir>`: the whole-program compile is the
-//! deterministic reference, so a run may emit its archive into
-//! `.rut/cache/` keyed by the closure's content — and every later run
-//! of the SAME closure mounts the cached bundle. The debug door
-//! (`--no-cache`, alias `--repack`) forces the miss path; the entry
-//! still refreshes. A corrupt entry self-heals: the hit falls through
-//! to the miss and rewrites it.
+//! The cache-first `rut run <dir>`: ONE execution lane — the driven
+//! artifact is always the packed archive (the miss packs fresh and
+//! runs those exact bytes, the hit mounts the cached bundle) — so a
+//! run may emit its archive into `.rut/cache/` keyed by the closure's
+//! content, and every later run of the SAME closure mounts the cached
+//! bundle. The debug door (`--no-cache`, alias `--repack`) forces the
+//! miss path; the entry still refreshes. A corrupt entry self-heals:
+//! the hit falls through to the miss and rewrites it.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -204,6 +205,154 @@ fn the_run_help_names_the_cache_law_and_the_debug_door() {
         text.contains("archive") || text.contains(".rutbundle"),
         "{text}"
     );
+}
+
+// ── the generic-dep closure: the instantiation rides the archive ─────
+//
+// A cross-package generic instantiation packs into the root's binary
+// as a BODYLESS mirror stub keyed by its ledger row; the owner group
+// serves the body at load (the mirror-seed law). The miss and the hit
+// must behave identically — run 1 replays the very bytes run 2 will.
+
+/// A generic dep world: `gen` owns a generic class, `app` instantiates
+/// it across the package line. The manifests ride multi-line — the
+/// source-zip rewrite drops wire rows line-wise.
+fn generic_dep_world(tag: &str, gen_manifest: &str) -> (PathBuf, PathBuf) {
+    let root = scratch(tag);
+    let gen = root.join("gen");
+    write(&gen, "rut.jsonc", gen_manifest);
+    write(
+        &gen,
+        "src/mod.rut",
+        r#"pub class Box<T> {
+    v: T,
+}
+
+impl<T> Box<T> {
+    [constructor] pub fn new(v: T) -> Self {
+        return Self { v };
+    }
+
+    pub fn get(mut self) -> T {
+        return self.v;
+    }
+}
+"#,
+    );
+    let app = root.join("app");
+    write(&app, "rut.jsonc", &gen_app_manifest("../gen", None));
+    write(
+        &app,
+        "src/mod.rut",
+        r#"use gen::Box;
+
+entry fn main() -> nil {
+    let b: Box<i64> = Box::new(42);
+    let n = b.get();
+    return;
+}
+"#,
+    );
+    (app, root)
+}
+
+fn gen_app_manifest(dep: &str, url: Option<&str>) -> String {
+    let row = match url {
+        Some(u) => format!(r#"{{ "url": "{u}" }}"#),
+        None => format!(r#"{{ "path": "{dep}" }}"#),
+    };
+    format!(
+        r#"{{
+  "format": "rutbundle",
+  "format_version": 12,
+  "name": "app",
+  "deps": {{
+    "gen": {row}
+  }}
+}}"#
+    )
+}
+
+fn assert_miss_then_hit(app: &Path) {
+    // miss: the fresh archive IS the run — the mirror stub materializes
+    // at load and the program exits clean
+    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "first run: {err}");
+    let bundles: Vec<PathBuf> = cache_entries(app)
+        .into_iter()
+        .filter(|e| e.extension().is_some_and(|e| e == "rutbundle"))
+        .collect();
+    assert_eq!(bundles.len(), 1, "one run-cache entry after the miss");
+
+    // hit: the cached archive replays through the same lane — the
+    // second run must behave exactly like the first, the entry untouched
+    let before = std::fs::read(&bundles[0]).unwrap();
+    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "second run: {err}");
+    assert_eq!(
+        std::fs::read(&bundles[0]).unwrap(),
+        before,
+        "a hit never rewrites the entry"
+    );
+}
+
+#[test]
+fn a_generic_path_dep_runs_identically_on_the_miss_and_the_hit() {
+    let (app, root) = generic_dep_world(
+        "generic-path",
+        r#"{
+  "format": "rutbundle",
+  "format_version": 12,
+  "name": "gen"
+}"#,
+    );
+    assert_miss_then_hit(&app);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_generic_url_dep_runs_identically_on_the_miss_and_the_hit() {
+    let (app, root) = generic_dep_world(
+        "generic-url",
+        r#"{
+  "name": "gen"
+}"#,
+    );
+    // the dep rides the url lane as a SOURCE ZIP — the std-v14 shape,
+    // whose group mounts as source at load
+    let zip = rut_native::pack_dir_zip(&root.join("gen")).expect("pack gen source zip");
+    let port = serve(zip.clone());
+    let url = format!("http://127.0.0.1:{port}/gen.zip");
+    let pin = rut_driver::sha256_hex(&zip);
+    write(&app, "rut.jsonc", &gen_app_manifest("", Some(&url)));
+    write(
+        &app,
+        "rut.lock",
+        &rut_driver::render_lock(&rut_driver::LockFile::from_rows(vec![
+            rut_driver::LockRow {
+                pkg: "gen".into(),
+                url: url.clone(),
+                sha256: pin,
+            },
+        ])),
+    );
+
+    // install first: run never downloads
+    let (code, err) = rut_run(&["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install: {err}");
+
+    let url_entry = app
+        .join(".rut")
+        .join("cache")
+        .join(format!("{}.zip", rut_driver::sha256_hex(url.as_bytes())));
+    assert!(url_entry.is_file(), "the url dep's cache entry lands");
+    assert_miss_then_hit(&app);
+    assert_eq!(
+        std::fs::read(&url_entry).unwrap(),
+        zip,
+        "a hit never rewrites the url entry"
+    );
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ── the url-dep closure: the key rides the RESOLVED bytes ─────────────

@@ -456,8 +456,53 @@ impl<'a> GraphCompiler<'a> {
         // scope: the mints spell (own, local), which link maps through
         // the own segment — in bounds, and stable under later stagings.
         program.types.own_attribution = true;
+        // THE MIRROR-SEED LAW: a packed binary carries its cross-package
+        // generic instantiations as BODYLESS mirror stubs keyed by their
+        // ledger rows — the owner is expected to materialize the body at
+        // load. Requests are the only channel an owner learns a shape
+        // through, and a compiled unit contributes none on its own (the
+        // source arm pushes `out.requests`; there is no source compile
+        // here), so every stub row must re-enter the request queue — the
+        // owner's body_kind routes it (a source owner recompiles with
+        // the seed; a packaged owner answers from its pack-time ledger
+        // or its templates; a host owner refuses). Without this sweep
+        // the stub lands unclaimed: link keeps it as "the loud trap"
+        // and the first executed call died in it.
+        let mut mirror_seeds: Vec<(String, rut_lir::check::InstRequest)> = Vec::new();
+        for row in &program.inst_fns {
+            let stub = program
+                .funcs
+                .get(row.fid as usize)
+                .is_some_and(|f| f.code.is_empty() && f.host_id.is_none());
+            if !stub {
+                continue;
+            }
+            let (is_fn, decl, methods, args) = match &row.kind {
+                rut_core::binary::InstFnKind::Free { name, subst, .. } => {
+                    (true, *name, Vec::new(), subst.clone())
+                }
+                rut_core::binary::InstFnKind::Method {
+                    data, name, subst, ..
+                } => (false, *data, vec![*name], subst.clone()),
+                // a host thunk binds at mount; it is not an instantiation
+                rut_core::binary::InstFnKind::HostThunk { .. } => continue,
+            };
+            mirror_seeds.push((
+                spec.to_string(),
+                rut_lir::check::InstRequest {
+                    owner: program.interner.name(row.owner).to_string(),
+                    decl,
+                    args,
+                    methods,
+                    is_fn,
+                    is_impl: false,
+                    impl_target: 0,
+                },
+            ));
+        }
         let idx = self.programs.len();
         self.programs.push(program);
+        self.requests.extend(mirror_seeds);
         let unit = Unit { idx, scope };
         self.done.insert(spec.to_string(), unit.clone());
         Some(unit)
