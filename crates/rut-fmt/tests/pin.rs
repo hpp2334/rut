@@ -136,6 +136,65 @@ fn raw_strings_survive_verbatim() {
     );
 }
 
+// ---- hash-leveled multi-line literals ----
+
+#[test]
+fn multiline_raw_prints_verbatim_at_level_one() {
+    assert_eq!(
+        fmt("fn f() {\n    let s = r#\"a\nb\"#;\n}"),
+        "fn f() {\n    let s = r#\"a\nb\"#;\n}\n"
+    );
+}
+
+#[test]
+fn raw_embedded_quotes_print_at_level_one() {
+    assert_eq!(
+        fmt("fn f() {\n    let q = r#\"she said \"never\"\"#;\n}"),
+        "fn f() {\n    let q = r#\"she said \"never\"\"#;\n}\n"
+    );
+}
+
+#[test]
+fn raw_hash_runs_pick_the_minimal_level() {
+    // value `a"#b` needs level 2 — and level 2 is what comes back
+    assert_eq!(
+        fmt("fn f() {\n    let s = r##\"a\"#b\"##;\n}"),
+        "fn f() {\n    let s = r##\"a\"#b\"##;\n}\n"
+    );
+}
+
+#[test]
+fn raw_that_fits_downgrades_to_level_zero() {
+    // hashes are never kept when the value needs none of them
+    assert_eq!(
+        fmt("fn f() {\n    let x = r#\"plain\"#;\n}"),
+        "fn f() {\n    let x = r\"plain\";\n}\n"
+    );
+}
+
+#[test]
+fn multiline_fstr_prints_hash_form_with_real_newlines() {
+    assert_eq!(
+        fmt("fn f() {\n    let t = f#\"line {x}\nmore\"#;\n}"),
+        "fn f() {\n    let t = f#\"line {x}\nmore\"#;\n}\n"
+    );
+}
+
+#[test]
+fn single_line_fstr_stays_level_zero() {
+    assert_eq!(
+        fmt("fn f() {\n    let t = f\"a {x} b\";\n}"),
+        "fn f() {\n    let t = f\"a {x} b\";\n}\n"
+    );
+}
+
+#[test]
+fn multiline_literals_are_idempotent() {
+    let src = "fn f() {\n    let s = r#\"a\nb\"#;\n    let t = f#\"line {x}\nmore\"#;\n}";
+    let once = fmt(src);
+    assert_eq!(fmt(&once), once);
+}
+
 // ---- parens / precedence ----
 
 #[test]

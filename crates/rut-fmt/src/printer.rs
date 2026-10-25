@@ -160,7 +160,7 @@ fn float_suffix(s: Option<FloatSuffix>) -> &'static str {
 /// The escape inverse of the lexer's `lex_escape` (`lexer.rs:171-212`),
 /// plus the f-string's `{{`/`}}` doubling (the fmt survey §2): every
 /// escape the lexer DECODES must re-encode so bytes re-lex identically.
-fn escape_str(body: &str, in_fstring: bool) -> String {
+fn escape_str(body: &str, in_fstring: bool, literal_newline: bool) -> String {
     let mut s = String::with_capacity(body.len() + 8);
     for c in body.chars() {
         if in_fstring {
@@ -178,7 +178,15 @@ fn escape_str(body: &str, in_fstring: bool) -> String {
         }
         match c {
             '\t' => s.push_str("\\t"),
-            '\n' => s.push_str("\\n"),
+            '\n' => {
+                if literal_newline {
+                    // the hash-leveled multi-line forms emit the newline
+                    // for real — that is their point
+                    s.push('\n');
+                } else {
+                    s.push_str("\\n");
+                }
+            }
             '\r' => s.push_str("\\r"),
             '\u{8}' => s.push_str("\\b"),
             '\u{c}' => s.push_str("\\f"),
@@ -195,11 +203,45 @@ fn escape_str(body: &str, in_fstring: bool) -> String {
     s
 }
 
+/// Canonical raw-literal spelling: `r"..."` while the value fits (no
+/// newline, no quote); otherwise the hash-leveled multi-line form at the
+/// MINIMAL level — one past the longest `#` run that follows any `"` in
+/// the value (that run is what a close scan would trip on). A pure
+/// function of the value: parse∘print round-trips and fmt stays
+/// idempotent.
+fn raw_repr(s: &str) -> String {
+    if !s.contains('\n') && !s.contains('"') {
+        return format!("r\"{s}\"");
+    }
+    let b = s.as_bytes();
+    let mut level = 1usize;
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'"' {
+            let mut run = 0usize;
+            let mut j = i + 1;
+            while j < b.len() && b[j] == b'#' {
+                run += 1;
+                j += 1;
+            }
+            level = level.max(run + 1);
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    let hashes = "#".repeat(level);
+    format!("r{hashes}\"{s}\"{hashes}")
+}
+
 #[derive(Clone, Copy)]
 struct Mark {
     len: usize,
     ri: usize,
     passed: u32,
+    /// the literal-newline counter at stamp time — `over_on_flat`
+    /// discounts newlines that came from multi-line literal content
+    lit_nl: usize,
 }
 
 /// the begin-hook's drain mode:
@@ -239,6 +281,10 @@ pub(super) struct P<'a> {
     pending: Option<usize>,
     /// the inline-flat depth (arm bodies): drains suppress, breaks skip
     in_flat: usize,
+    /// newlines emitted INSIDE multi-line literal content (`r#"..."#`,
+    /// `f#"..."#`) — the flat-attempt probe discounts them: a multi-line
+    /// literal is an atom that fits, not a child break
+    lit_nl: usize,
 }
 
 impl<'a> P<'a> {
@@ -268,6 +314,7 @@ impl<'a> P<'a> {
             level: 0,
             pending: Some(0),
             in_flat: 0,
+            lit_nl: 0,
         }
     }
 }
@@ -329,6 +376,14 @@ impl<'a> P<'a> {
         self.out.push_str(s);
     }
 
+    /// emit literal content that may carry REAL newlines (the
+    /// hash-leveled multi-line forms); the count rides `lit_nl` so the
+    /// flat-attempt probe can discount them
+    fn text_lit(&mut self, s: &str) {
+        self.lit_nl += s.matches('\n').count();
+        self.text(s);
+    }
+
     /// one space on the open line (never at a fresh line — the pending
     /// indent IS the pad there)
     fn sp(&mut self) {
@@ -370,6 +425,7 @@ impl<'a> P<'a> {
             len: self.out.len(),
             ri: self.ri,
             passed: self.passed,
+            lit_nl: self.lit_nl,
         }
     }
 
@@ -377,6 +433,7 @@ impl<'a> P<'a> {
         self.out.truncate(m.len);
         self.ri = m.ri;
         self.passed = m.passed;
+        self.lit_nl = m.lit_nl;
         self.pending = if self.out.is_empty() || self.out.ends_with('\n') {
             Some(self.level)
         } else {
@@ -385,9 +442,12 @@ impl<'a> P<'a> {
     }
 
     /// flat attempt failed: a newline appeared inside it (a comment or
-    /// a child break), or the resulting line exceeds the width
+    /// a child break), or the resulting line exceeds the width. Newlines
+    /// inside multi-line literal content do NOT count — the literal is
+    /// an atom that fits wherever its first line does.
     fn over_on_flat(&self, m: Mark) -> bool {
-        if self.out[m.len..].contains('\n') {
+        let nls = self.out[m.len..].matches('\n').count();
+        if nls > self.lit_nl - m.lit_nl {
             return true;
         }
         self.col() > self.style.max_width
@@ -1900,12 +1960,23 @@ impl<'a> P<'a> {
                 self.text("?");
             }
             ExprKind::FStr { parts } => {
-                self.text("f\"");
+                // a newline in any chunk promotes the literal to the
+                // hash-leveled multi-line form — the template's line
+                // structure survives formatting
+                let multiline = parts
+                    .iter()
+                    .any(|p| matches!(p, FPartAst::Lit(s) if s.contains('\n')));
+                let (open, close) = if multiline {
+                    ("f#\"", "\"#")
+                } else {
+                    ("f\"", "\"")
+                };
+                self.text_lit(open);
                 for p in parts {
                     match p {
                         FPartAst::Lit(s) => {
-                            let esc = escape_str(&s, true);
-                            self.text(&esc);
+                            let esc = escape_str(&s, true, multiline);
+                            self.text_lit(&esc);
                         }
                         FPartAst::Hole(e) => {
                             self.text("{");
@@ -1914,7 +1985,7 @@ impl<'a> P<'a> {
                         }
                     }
                 }
-                self.text("\"");
+                self.text_lit(close);
             }
             ExprKind::Struct { ty, fields } => {
                 self.ty(ty);
@@ -2113,14 +2184,14 @@ impl<'a> P<'a> {
                 self.text(&s);
             }
             Lit::Str(s) => {
-                let esc = escape_str(s, false);
+                let esc = escape_str(s, false, false);
                 self.text(&format!("\"{}\"", esc));
             }
             Lit::RawStr(s) => {
-                // no escape processing, no hash-quoted form in the
-                // lexer — the content can never contain `"` (the raw
-                // body closes at the first one)
-                self.text(&format!("r\"{}\"", s));
+                // hash-leveled repr — level 0 while the value fits (no
+                // newline, no quote), else the minimal multi-line level
+                // (`raw_repr`); content prints verbatim, never re-indented
+                self.text_lit(&raw_repr(s));
             }
             Lit::Bool(b) => {
                 self.text(if *b { "true" } else { "false" });
