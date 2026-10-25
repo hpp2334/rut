@@ -1358,6 +1358,17 @@ async function main() {
         }
         for (const row of t.deps) walkManifest(path.join(dir, row.source.dir, 'rut.jsonc'));
       };
+      // THE HOP-1 LAW: the lane's OWN files index directly — the zip's
+      // published manifest carries no entry rows, so the mini-walk's
+      // entries loop cannot see them; the mod path rides the envelope
+      // ('' the root) and the uri is the laid file (the mountUrlDep
+      // zip lane writes AND indexes tree.files — dropping either half
+      // strands every own-symbol click on the ambient repo-relative
+      // answer, which opens nowhere outside the rut repo).
+      for (const f of srczip.files) {
+        const stamped = rut.addDefMod('file://' + path.join(depDir, f.path), srczip.module, f.mod_path, f.src);
+        assert.ok(!stamped.error, `the lane's own file indexes: ${JSON.stringify(stamped)}`);
+      }
       walkManifest(path.join(depDir, 'rut.jsonc'));
       assert.deepStrictEqual([...mounted].sort(), ['ink', 'ink_host'], 'the embedded group mounts with its parent');
       const inkUri = 'file://' + path.join(depDir, 'src/mod.rut');
@@ -1371,6 +1382,41 @@ async function main() {
         assert.strictEqual(hits.length, 1, `hop-2 ${needle}: ${JSON.stringify(hits)}`);
         assert.strictEqual(hits[0].uri, target, `hop-2 ${needle} lands in the embedded group`);
       }
+      smokes++;
+
+      // hop-1, the scaffold's actual gesture: a consumer's `Logger(`
+      // click lands IN the laid tree's own src/mod.rut — a real
+      // openable file:// — never the ambient `rut/ink/...` answer
+      const consumerDoc = 'use ink::{ Logger };\nentry fn main() {\n    let log = Logger("hello");\n}\n';
+      const consumerUri = 'file://' + path.join(ws, 'src', 'mod.rut');
+      rut.analyze(consumerUri, consumerDoc);
+      const cLines = consumerDoc.split('\n');
+      const ctorLine = cLines.findIndex((l) => l.includes('Logger("hello")'));
+      const ctorCol = cLines[ctorLine].indexOf('Logger(') + 2;
+      const hop1 = rut.definition(consumerUri, ctorLine, ctorCol);
+      const hop1Own = hop1.filter((l) => l.uri.includes('.rut/deps/ink-'));
+      assert.strictEqual(hop1Own.length, 1, `hop-1 Logger targets: ${JSON.stringify(hop1)}`);
+      assert.ok(
+        !hop1.some((l) => l.uri.startsWith('rut/')),
+        `no ambient repo-relative answer beside the mounted tree: ${JSON.stringify(hop1)}`
+      );
+      assert.strictEqual(
+        hop1Own[0].uri,
+        'file://' + path.join(depDir, 'src/mod.rut'),
+        'hop-1 lands in the laid tree'
+      );
+      assert.ok(
+        fs.readFileSync(hop1Own[0].uri.replace(/^file:\/\//, ''), 'utf8').includes('pub class Logger'),
+        'the hop-1 target is the Logger body, read back from disk'
+      );
+      // the binding's null-coercion law: an unanalyzed doc answers []
+      // (the provider never sees null — the TypeError class dies here)
+      assert.deepStrictEqual(rut.definition('file:///nowhere/x.rut', 0, 5), [], 'null definition coerces to []');
+      assert.deepStrictEqual(
+        rut.inlayHint('file:///nowhere/x.rut', { line: 0, character: 0 }, { line: 1, character: 0 }),
+        [],
+        'null inlay coerces to []'
+      );
       smokes++;
 
       // the mount: <tmp>/.rut/deps/pouch-<pin12>/ — the pin prefix IS

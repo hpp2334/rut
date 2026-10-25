@@ -321,37 +321,45 @@ export class RutWasm {
 
   /// go-to-definition at an LSP position — [] when nothing resolves
   definition(uri: string, line: number, character: number): LspLocation[] {
-    return this.call(() => {
-      const [u, ul] = this.put(uri);
-      return this.e.rut_definition(u, ul, line, character);
-    });
+    return (
+      this.call(() => {
+        const [u, ul] = this.put(uri);
+        return this.e.rut_definition(u, ul, line, character);
+      }) ?? []
+    );
   }
 
   /// go-to-type-definition at an LSP position — [] when nothing resolves
   typeDefinition(uri: string, line: number, character: number): LspLocation[] {
-    return this.call(() => {
-      const [u, ul] = this.put(uri);
-      return this.e.rut_type_definition(u, ul, line, character);
-    });
+    return (
+      this.call(() => {
+        const [u, ul] = this.put(uri);
+        return this.e.rut_type_definition(u, ul, line, character);
+      }) ?? []
+    );
   }
 
   /// inlay hints for a document range — the inline inference display
   /// ([] when nothing resolves)
   inlayHint(uri: string, start: LspPosition, end: LspPosition): LspInlayHint[] {
-    return this.call(() => {
-      const [u, ul] = this.put(uri);
-      return this.e.rut_inlay(u, ul, start.line, start.character, end.line, end.character);
-    });
+    return (
+      this.call(() => {
+        const [u, ul] = this.put(uri);
+        return this.e.rut_inlay(u, ul, start.line, start.character, end.line, end.character);
+      }) ?? []
+    );
   }
 
   /// find references at an LSP position — the definition index read
   /// backwards ([] when nothing resolves); includeDeclaration follows
   /// the LSP toggle
   references(uri: string, line: number, character: number, includeDeclaration: boolean): LspLocation[] {
-    return this.call(() => {
-      const [u, ul] = this.put(uri);
-      return this.e.rut_references(u, ul, line, character, includeDeclaration ? 1 : 0);
-    });
+    return (
+      this.call(() => {
+        const [u, ul] = this.put(uri);
+        return this.e.rut_references(u, ul, line, character, includeDeclaration ? 1 : 0);
+      }) ?? []
+    );
   }
 
   /// signature help at an LSP position — null when there is no call to

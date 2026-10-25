@@ -658,6 +658,7 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow, depth: number): Promise<vo
     const tree = extracted as SrczipExtracted;
     const writes: Array<{ rel: string; src: string }> = [
       { rel: MANIFEST_NAME, src: tree.manifest },
+      ...tree.files.map((f) => ({ rel: f.path, src: f.src })),
       ...tree.embedded.map((e) => ({ rel: e.path, src: e.src })),
     ];
     for (const w of writes) {
@@ -668,6 +669,35 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow, depth: number): Promise<vo
       if (!(await fileHasContent(target, w.src))) {
         await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(target, '..'));
         await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(w.src));
+      }
+    }
+    // the pkg's OWN files index directly — the bundle lane's law (the
+    // published zip manifest carries no entry rows, so `walkManifest`'s
+    // entries loop cannot see them; the mod paths ride the envelope).
+    // First mount wins, the native gate: a name an earlier row mounted
+    // never re-mounts from a ride-along.
+    if (!ctx.mounted.has(tree.module)) {
+      ctx.mounted.add(tree.module);
+      for (const f of tree.files) {
+        if (ctx.files <= 0) {
+          ctx.truncated = true;
+          return;
+        }
+        const fileUri = vscode.Uri.joinPath(depDir, f.path);
+        if (f.mod_path === null) {
+          ctx.rut.addDefNamed(fileUri.toString(), tree.module, f.src);
+        } else {
+          const stamped = ctx.rut.addDefMod(fileUri.toString(), tree.module, f.mod_path, f.src);
+          if (isEnvelope(stamped)) {
+            hintOnce(
+              `bundle:${url}`,
+              `rut: dep '${row.name}' — ${tree.module} did not index: ${stamped.error}`,
+              true
+            );
+            return;
+          }
+        }
+        ctx.files--;
       }
     }
     await walkManifest(ctx, vscode.Uri.joinPath(depDir, MANIFEST_NAME), depth + 1);
@@ -1106,6 +1136,10 @@ function defDropHint(rut: RutWasm, locs: LspLocation[]): string {
   if (!rut.hasSrczip && locs.some((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
     return 'rut: definition target not openable — the dep is a source zip and the loaded ' +
       'rut-lsp.wasm predates source-zip deps; rebuild and reinstall the extension, then reload the window';
+  }
+  if (rut.hasSrczip && locs.every((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
+    return 'rut: definition target not openable — the resolved definition lives in the rut ' +
+      'repo sources, which are not in this workspace; reload the window if the dep was just installed';
   }
   return 'rut: definition target not openable — a dep may not be extracted yet; ' +
     'run `rut install`, then reload the window';
