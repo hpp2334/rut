@@ -173,7 +173,8 @@ pub(crate) fn member_context(toks: &[Token], t: &Token) -> Option<String> {
     }
     match &toks[i - 2].tok {
         Tok::Ident(s) => Some(s.clone()),
-        Tok::Str(_) => Some("str".to_string()),
+        // every string-literal form is a `str` receiver
+        Tok::Str(_) | Tok::RawStr(_) | Tok::FStr(_) => Some("str".to_string()),
         _ => None,
     }
 }

@@ -191,7 +191,9 @@ fn recv_before(toks: &[Token], pos: u32) -> Option<(String, String)> {
     };
     let recv = match &toks[recv_i].tok {
         Tok::Ident(s) => s.clone(),
-        Tok::Str(_) => "str".to_string(),
+        // every string-literal form is a `str` receiver — `"a".len()`,
+        // `r#"b"#.len()`, `f"{x}".len()`
+        Tok::Str(_) | Tok::RawStr(_) | Tok::FStr(_) => "str".to_string(),
         _ => return None,
     };
     Some((recv, prefix))
