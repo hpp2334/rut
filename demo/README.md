@@ -34,8 +34,8 @@ command); `build:wasm` copies them with the same curated loud-fail.
 
 - **wasm mode (live)**: the page probes `GET /rut.wasm` at boot —
   `npm run build:wasm` drops the artifact at `public/rut.wasm`, and the
-  page runs real `compile`/`run` calls through the raw ABI of the
-  `rut-wasm` crate (see `src/wasm/rut-api.d.ts` and
+  page runs real `compile`/`run` calls through the wasm-bindgen
+  `RutEngine` of the `rut-wasm` crate (see `src/wasm/rut-api.d.ts` and
   `../crates/rut-wasm/src/lib.rs`). Every run really executes; the
   Output pane is the result surface. The banner
   names the real engine slice mounted into the wasm host.
@@ -142,7 +142,7 @@ src/
   runner.ts              wasm-or-error resolution (no fallback)
   lsp/
     rut-lsp.ts           the standalone rut-lsp.wasm binding:
-                         rut_begin/alloc envelopes, ONE analyze call per change
+                         the wasm-bindgen RutLsp class, ONE analyze call per change
     overlay.ts           tokens+diags -> overlay spans (pure, smoke-driven)
   wasm/rut-api.d.ts      the compile/run/resume contract
   smoke/smoke-entry.ts   the smoke bundle's exports (the app's own surface)

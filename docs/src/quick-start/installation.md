@@ -260,14 +260,16 @@ binary's reference.
 ## Optional: the wasm playground
 
 The [playground](playground.md) runs the same engine compiled to
-WebAssembly. Building it needs one extra target:
+WebAssembly. Building it needs [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+and one extra target:
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cargo build -p rut-wasm --target wasm32-unknown-unknown --release
+wasm-pack build crates/rut-wasm --target web --release
+wasm-pack build crates/rut-lsp-wasm --target web --release
 ```
 
-or, from `demo/`, the one-command lane that also copies the artifact
+or, from `demo/`, the one-command lane that also copies the artifacts
 into place:
 
 ```sh

@@ -1,8 +1,15 @@
-// smoke: compile+run case1 through the wasm ABI (same glue the demo uses)
-// + the StackTrace lane (err-channel phase 2): the SAME frame walk and
-// lazy symbolication on wasm32 — a->b->c capture pinned innermost-first
-// with exact call-site lines, through the raw ABI.
+// smoke: compile+run case1 through the wasm-bindgen glue (the same
+// module the demo playground bundles) + the StackTrace lane (err-channel
+// phase 2): the SAME frame walk and lazy symbolication on wasm32 —
+// a->b->c capture pinned innermost-first with exact call-site lines,
+// through the engine class. Run after
+//   wasm-pack build crates/rut-wasm --target web --release
+//   node crates/rut-wasm/smoke.js            (from the repo root)
 const fs = require("fs");
+const path = require("path");
+
+const PKG = path.join(__dirname, "pkg");
+
 function countNodes(n) {
   // structural walk over the flattened tagged AST objects
   let k = 1;
@@ -20,78 +27,63 @@ function countNodes(n) {
   }
   return k;
 }
-(async () => {
-  const bytes = fs.readFileSync("target/wasm32-unknown-unknown/release/rut_wasm.wasm");
-  const { instance } = await WebAssembly.instantiate(bytes, {});
-  const e = instance.exports;
-  const enc = new TextEncoder();
-  const dec = new TextDecoder();
 
-  const src = enc.encode(`use ink::{ Logger };
+(async () => {
+  const bytes = fs.readFileSync(path.join(PKG, "rut_wasm_bg.wasm"));
+  const glue = await import(
+    "file://" + path.join(PKG, "rut_wasm.js").replaceAll("\\", "/")
+  );
+  await glue.default({ module_or_path: bytes });
+  const engine = new glue.RutEngine();
+
+  const compileAndRun = (src, fuel, heap) => {
+    const compiled = JSON.parse(engine.compile(src));
+    if (!compiled.binary) throw new Error("wasm lane compile failed: " + JSON.stringify(compiled.diags));
+    const bin = Buffer.from(compiled.binary, "base64");
+    return JSON.parse(engine.run(bin, fuel, heap));
+  };
+
+  // the demo's hello-format case (demo/src/cases.ts) — kept in sync by
+  // hand here; the demo smoke is the corpus gate, this one the ABI's
+  const compiled = JSON.parse(
+    engine.compile(`use ink::{Logger};
+
 enum Flavor { Sweet, Sour }
+
 fn describe(f: Flavor) -> str {
     return when (f) {
-        Flavor.Sweet -> "sweet",
-        Flavor.Sour  -> "sour",
+        Flavor::Sweet -> "sweet",
+        Flavor::Sour  -> "sour",
     };
 }
-entry fn main() -> nil {
+
+entry fn main() {
+    let log = Logger("case");
     let name = "rut";
     let n = 41 + 1;
-    let log = Logger.new("smoke");
-    let sweet = "sweet";
-    log.info(f"hi {name}! n={n} tab:\\t{sweet}");
-    log.info(describe(Flavor.Sour));
+    log.info(f"hi {name}! n={n} tab:\\t");
+    log.info(describe(Flavor::Sour));
 }
-`);
-  const srcPtr = e.rut_alloc(src.length);
-  new Uint8Array(e.memory.buffer, srcPtr, src.length).set(src);
-  const resPtr = e.rut_compile(srcPtr, src.length);
-  const resLen = new DataView(e.memory.buffer, resPtr, 4).getUint32(0, true);
-  const resJson = dec.decode(new Uint8Array(e.memory.buffer, resPtr + 4, resLen));
-  const compiled = JSON.parse(resJson);
+`)
+  );
+  if (compiled.diags.length) {
+    throw new Error("smoke case must compile clean: " + JSON.stringify(compiled.diags));
+  }
   console.log("diags:", compiled.diags.length);
   console.log("ast nodes:", compiled.ast ? countNodes(compiled.ast) : 0);
   console.log("irDump bytes:", compiled.irDump.length);
   console.log("binary b64 bytes:", compiled.binary ? compiled.binary.length : 0);
 
   const bin = Buffer.from(compiled.binary, "base64");
-  const binPtr = e.rut_alloc(bin.length);
-  new Uint8Array(e.memory.buffer, binPtr, bin.length).set(bin);
-  const runPtr = e.rut_run(binPtr, bin.length, 1000000n, 4n * 1024n * 1024n);
-  const runLen = new DataView(e.memory.buffer, runPtr, 4).getUint32(0, true);
-  const runJson = dec.decode(new Uint8Array(e.memory.buffer, runPtr + 4, runLen));
-  console.log("run:", runJson);
-})();
+  const run = JSON.parse(engine.run(bin, 1000000n, 4n * 1024n * 1024n));
+  console.log("run:", JSON.stringify(run));
 
-// ---- the StackTrace lane (err-channel phase 2): the same walk on wasm32 ----
-// a -> b -> c captures; each body is >24 statements so the checker
-// inliner keeps them as REAL frames (the host-lane driver pins use the
-// same padding). The render rides ink::log through the wasm output
-// channel — the raw ABI's one rut-visible output — and the exact RFC
-// 0036 text is pinned here, byte for byte, on the wasm32 build.
-(async () => {
-  const bytes = fs.readFileSync("target/wasm32-unknown-unknown/release/rut_wasm.wasm");
-  const { instance } = await WebAssembly.instantiate(bytes, {});
-  const e = instance.exports;
-  const enc = new TextEncoder();
-  const dec = new TextDecoder();
-
-  function compileAndRun(src, fuel, heap) {
-    const srcPtr = e.rut_alloc(src.length);
-    new Uint8Array(e.memory.buffer, srcPtr, src.length).set(enc.encode(src));
-    const resPtr = e.rut_compile(srcPtr, src.length);
-    const resLen = new DataView(e.memory.buffer, resPtr, 4).getUint32(0, true);
-    const compiled = JSON.parse(dec.decode(new Uint8Array(e.memory.buffer, resPtr + 4, resLen)));
-    if (!compiled.binary) throw new Error("wasm lane compile failed: " + JSON.stringify(compiled.diags));
-    const bin = Buffer.from(compiled.binary, "base64");
-    const binPtr = e.rut_alloc(bin.length);
-    new Uint8Array(e.memory.buffer, binPtr, bin.length).set(bin);
-    const runPtr = e.rut_run(binPtr, bin.length, fuel, heap);
-    const runLen = new DataView(e.memory.buffer, runPtr, 4).getUint32(0, true);
-    return JSON.parse(dec.decode(new Uint8Array(e.memory.buffer, runPtr + 4, runLen)));
-  }
-
+  // ---- the StackTrace lane (err-channel phase 2): the same walk on wasm32 ----
+  // a -> b -> c captures; each body is >24 statements so the checker
+  // inliner keeps them as REAL frames (the host-lane driver pins use the
+  // same padding). The render rides ink::log through the wasm output
+  // channel — the engine's one rut-visible output — and the exact RFC
+  // 0036 text is pinned here, byte for byte, on the wasm32 build.
   let pad = "";
   for (let i = 0; i < 25; i++) pad += `    let p${i} = ${i};\n`;
   const src = `use ink::{ Logger };
@@ -108,23 +100,22 @@ ${pad}    return b_big();
 }
 entry fn main() -> nil {
     let r = a_big();
-    let log = Logger.new("trace");
+    let log = Logger("trace");
     log.info(r);
 }
 `;
   const env = compileAndRun(src, 1000000n, 4n * 1024n * 1024n);
   if (env.trap !== null) throw new Error("wasm trace lane trapped: " + env.trap);
-  // Lines are relative to the SPLICED compilation unit: `ink` is an
-  // explicitly-inlined module (graph.rs), so its 26 lines sit above the
-  // user source — the capture lands at 28+26=54, and every call site
-  // rides the same +26. Cols are the callee idents, exactly like the
-  // host-lane pins. The frame walk and format are IDENTICAL to wasm32's
-  // host twin; only the unit's line offset differs (splice, not trace).
+  // Lines are relative to the SPLICED compilation unit: the host
+  // surface (ink_host) rides above the user source, and every call
+  // site's column is the callee ident, exactly like the host-lane
+  // pins. The frame walk and format are IDENTICAL to wasm32's host
+  // twin; the unit's file name and line offset are pinned byte-exact.
   const expected = [
-    "at c_big (rt:54:13)",     // the capture site: col 13
-    "at b_big (rt:84:12)",     // the call that pushed the c_big frame
-    "at a_big (rt:112:12)",
-    "at main (rt:115:13)",
+    "at c_big (ink_host:28:13)",  // the capture site: col 13
+    "at b_big (ink_host:58:12)",  // the call that pushed the c_big frame
+    "at a_big (ink_host:86:12)",
+    "at main (ink_host:89:13)",
   ];
   const got = env.output.length === 1 ? env.output[0].split("\n") : env.output;
   if (JSON.stringify(got) !== JSON.stringify(expected)) {
@@ -146,4 +137,7 @@ entry fn main() -> i32 {
   }
   console.log("wasm StackTrace lane: render byte-exact on wasm32,", expected.length, "frames innermost-first; out-of-range traps loud");
   console.log("wasm StackTrace lane: ALL CHECKS PASSED");
-})();
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

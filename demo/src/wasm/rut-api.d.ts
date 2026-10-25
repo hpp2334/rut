@@ -1,8 +1,9 @@
 /**
  * The rut wasm contract.
  *
- * `demo/public/rut.wasm` (built from `crates/rut-wasm`) must
- * export these. This file is the single source of truth — change both together.
+ * `demo/public/rut.wasm` (built from `crates/rut-wasm` via wasm-pack)
+ * carries the wasm-bindgen `RutEngine` class; its methods answer these
+ * shapes. This file is the single source of truth — change both together.
  */
 
 export interface Diag {

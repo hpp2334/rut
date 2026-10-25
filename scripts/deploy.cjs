@@ -231,50 +231,71 @@ if (!doBuild) {
     }
   }
 
-  // (b) build crates/rut-wasm and stage the artifact. docs/wasm/ is
+  // (b) build crates/rut-wasm (wasm-pack, no-modules: the book's
+  //     classic-script page has no module loader — the glue assigns the
+  //     `wasm_bindgen` global) and stage BOTH files. docs/wasm/ is
   //     gitignored build output, so --no-build only skips this when the
-  //     staged artifact is already there; a missing artifact is built
-  //     even under --no-build (the sanity check below refuses a book
-  //     whose run buttons would 404).
+  //     staged pair is already there; a missing artifact is built even
+  //     under --no-build (the sanity check below refuses a book whose
+  //     run buttons would 404).
   const artifact = path.join(ROOT, "docs", "wasm", "rut.wasm");
-  const skipWasmBuild = !doBuild && fs.existsSync(artifact);
+  const glue = path.join(ROOT, "docs", "wasm", "rut-wasm.js");
+  const skipWasmBuild = !doBuild && fs.existsSync(artifact) && fs.existsSync(glue);
   if (skipWasmBuild) {
-    info(dim("skipping the wasm build (--no-build) — docs/wasm/rut.wasm present"));
+    info(
+      dim("skipping the wasm build (--no-build) — docs/wasm/rut.wasm + rut-wasm.js present")
+    );
   } else {
     if (!doBuild)
       info(
-        dim("docs/wasm/rut.wasm missing — building it despite --no-build (the artifact is not committed)")
+        dim("docs/wasm/ missing the artifact pair — building it despite --no-build (the artifacts are not committed)")
       );
+    const havePack = spawnSync("wasm-pack", ["--version"], { encoding: "utf8" });
+    if (havePack.error?.code === "ENOENT") {
+      die(
+        "wasm-pack not found — install it with `cargo install wasm-pack --locked` " +
+          "(or the installer at rustwasm.github.io/wasm-pack/installer)"
+      );
+    }
     info(
       dim(
-        "building the run-button artifact — cargo build -p rut-wasm --target wasm32-unknown-unknown --release"
+        "building the run-button artifact — wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release"
       )
     );
     if (!dryRun) {
       const built = spawnSync(
-        "cargo",
-        ["build", "-p", "rut-wasm", "--target", "wasm32-unknown-unknown", "--release"],
+        "wasm-pack",
+        [
+          "build",
+          "crates/rut-wasm",
+          "--target",
+          "no-modules",
+          "--out-dir",
+          "pkg-book",
+          "--release",
+        ],
         { cwd: ROOT, stdio: "inherit" }
       );
       if (built.status !== 0)
         die(
-          "`cargo build -p rut-wasm --target wasm32-unknown-unknown --release` failed " +
+          "`wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release` failed " +
             "(exit " + (built.status ?? "?") + ") — run it directly for the full error"
         );
-      const from = path.join(
-        ROOT,
-        "target",
-        "wasm32-unknown-unknown",
-        "release",
-        "rut_wasm.wasm"
-      );
-      if (!fs.existsSync(from))
+      const fromWasm = path.join(ROOT, "crates", "rut-wasm", "pkg-book", "rut_wasm_bg.wasm");
+      const fromGlue = path.join(ROOT, "crates", "rut-wasm", "pkg-book", "rut_wasm.js");
+      if (!fs.existsSync(fromWasm))
         die(
-          "cargo produced no target/wasm32-unknown-unknown/release/rut_wasm.wasm — " +
+          "wasm-pack produced no crates/rut-wasm/pkg-book/rut_wasm_bg.wasm — " +
+            "check crates/rut-wasm's crate-type"
+        );
+      if (!fs.existsSync(fromGlue))
+        die(
+          "wasm-pack produced no crates/rut-wasm/pkg-book/rut_wasm.js — " +
             "check crates/rut-wasm's crate-type"
         );
       fs.mkdirSync(path.join(ROOT, "docs", "wasm"), { recursive: true });
-      fs.copyFileSync(from, artifact);
+      fs.copyFileSync(fromWasm, artifact);
+      fs.copyFileSync(fromGlue, glue);
     }
   }
 
@@ -314,6 +335,7 @@ if (!doBuild) {
 
 if (book) {
   const artifact = path.join(ROOT, "docs", "wasm", "rut.wasm");
+  const glue = path.join(ROOT, "docs", "wasm", "rut-wasm.js");
   const bake = path.join(
     ROOT,
     "integrations",
@@ -342,15 +364,16 @@ if (book) {
         if (bk.status !== 0)
           die(`bake-book failed (exit ${bk.status ?? "?"}) — run \`node ${path.relative(ROOT, bake)} ${root}\` directly`);
       }
-      if (!fs.existsSync(artifact)) {
+      if (!fs.existsSync(artifact) || !fs.existsSync(glue)) {
         die(
-          "docs/wasm/rut.wasm is missing — run " +
-            "`cargo build -p rut-wasm --target wasm32-unknown-unknown --release` and " +
-            "copy target/wasm32-unknown-unknown/release/rut_wasm.wasm to docs/wasm/rut.wasm"
+          "docs/wasm/ is missing the run-button pair (rut.wasm + rut-wasm.js) — run " +
+            "`wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release` and " +
+            "copy crates/rut-wasm/pkg-book/{rut_wasm_bg.wasm,rut_wasm.js} to docs/wasm/ as rut.wasm/rut-wasm.js"
         );
       }
       fs.mkdirSync(path.join(root, "wasm"), { recursive: true });
       fs.copyFileSync(artifact, path.join(root, "wasm", "rut.wasm"));
+      fs.copyFileSync(glue, path.join(root, "wasm", "rut-wasm.js"));
     }
   }
 
@@ -372,16 +395,17 @@ if (book) {
   fs.mkdirSync(dist, { recursive: true });
   fs.cpSync(BOOK_ROOTS.en, dist, { recursive: true });
   fs.cpSync(BOOK_ROOTS.zh, path.join(dist, "zh"), { recursive: true });
-  if (!fs.existsSync(artifact)) {
+  if (!fs.existsSync(artifact) || !fs.existsSync(glue)) {
     die(
-      "docs/wasm/rut.wasm is missing — run " +
-        "`cargo build -p rut-wasm --target wasm32-unknown-unknown --release` and " +
-        "copy target/wasm32-unknown-unknown/release/rut_wasm.wasm to docs/wasm/rut.wasm"
+      "docs/wasm/ is missing the run-button pair (rut.wasm + rut-wasm.js) — run " +
+        "`wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release` and " +
+        "copy crates/rut-wasm/pkg-book/{rut_wasm_bg.wasm,rut_wasm.js} to docs/wasm/ as rut.wasm/rut-wasm.js"
     );
   }
   for (const sub of ["", "zh"]) {
     fs.mkdirSync(path.join(dist, sub, "wasm"), { recursive: true });
     fs.copyFileSync(artifact, path.join(dist, sub, "wasm", "rut.wasm"));
+    fs.copyFileSync(glue, path.join(dist, sub, "wasm", "rut-wasm.js"));
   }
 
   // ---------------------------------------------------------------------------
@@ -410,12 +434,14 @@ if (book) {
     // the run buttons' artifact ships with EACH edition — a missing one
     // would 404 on every ▶ Run click (the buttons show the loud build
     // panel, but a deploy that knowingly ships it is a broken deploy)
-    if (!fs.existsSync(path.join(root, "wasm", "rut.wasm"))) {
-      die(
-        `${root} is missing wasm/rut.wasm (the ▶ Run buttons would 404) — build the artifact ` +
-          `with \`cargo build -p rut-wasm --target wasm32-unknown-unknown --release\`, then ` +
-          `\`node scripts/deploy.cjs --book\` (the lane copies it into both editions)`
-      );
+    for (const f of ["rut.wasm", "rut-wasm.js"]) {
+      if (!fs.existsSync(path.join(root, "wasm", f))) {
+        die(
+          `${root} is missing wasm/${f} (the ▶ Run buttons would 404) — build the artifact ` +
+            `with \`wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release\`, then ` +
+            `\`node scripts/deploy.cjs --book\` (the lane copies the pair into both editions)`
+        );
+      }
     }
     pages[lang] = htmls.length;
   }

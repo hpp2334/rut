@@ -22,6 +22,11 @@ const config: RspackOptions = {
     extensions: [".tsx", ".ts", ".js"],
   },
   module: {
+    // the wasm-bindgen glue's `new URL('..._bg.wasm', import.meta.url)`
+    // fallback never runs (the bindings always pass the artifact bytes
+    // to init) — URL parsing off keeps rspack from emitting the
+    // artifacts a second time as dead asset modules
+    parser: { javascript: { url: false } },
     rules: [
       {
         test: /\.ts$/,

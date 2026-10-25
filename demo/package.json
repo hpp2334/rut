@@ -7,8 +7,8 @@
     "dev": "node scripts/preflight-wasm.mjs && rspack serve",
     "dev:channel": "node scripts/preflight-wasm.mjs && node scripts/dev-channel.mjs",
     "build": "node scripts/preflight-wasm.mjs && rspack build",
-    "build:wasm": "cargo build -p rut-wasm --target wasm32-unknown-unknown --release && cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs",
-    "build:lsp": "cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release && node scripts/copy-wasm.mjs --lsp",
+    "build:wasm": "wasm-pack build ../crates/rut-wasm --target web --release && wasm-pack build ../crates/rut-lsp-wasm --target web --release && node scripts/copy-wasm.mjs",
+    "build:lsp": "wasm-pack build ../crates/rut-lsp-wasm --target web --release && node scripts/copy-wasm.mjs --lsp",
     "build:smoke": "rspack build --config rspack.smoke.config.ts",
     "smoke": "node scripts/preflight-wasm.mjs && npm run build:smoke && node scripts/smoke.mjs",
     "deploy": "node ../scripts/deploy.cjs"

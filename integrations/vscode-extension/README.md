@@ -16,7 +16,7 @@ files, and the manifest gets schema-validated hovers.
 ```sh
 cd integrations/vscode-extension
 npm install
-npm run build:wasm    # cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release
+npm run build:wasm    # wasm-pack build crates/rut-lsp-wasm --target web --release
 npm run compile       # esbuild bundle -> out/extension.js
 ```
 
@@ -29,16 +29,17 @@ copy the folder into `~/.vscode/extensions`. Open any `.rut` file.
 
 ## How it runs
 
-`crates/rut-lsp-wasm` exposes the language core over a raw wasm ABI (the
-same envelope pattern as `rut-wasm` — no wasm-bindgen). `src/wasm.ts`
-binds that ABI; `src/extension.ts` registers semantic tokens,
-diagnostics, symbols, hover, completion, definition, type-definition,
-references, inlay-hint, and signature-help providers directly against
-`vscode.languages`. There is no JSON-RPC and no language-client
-dependency — the module's results are already LSP values, serialized by
-serde_json. The workspace is indexed with `workspace.findFiles` and
-pushed into the module (`rut_add_def`), mirroring the native server's
-fs walk.
+`crates/rut-lsp-wasm` exposes the language core as a wasm-bindgen
+module (the `RutLsp` class — the `rut-wasm` engine pattern). The glue
+is built by `npm run build:wasm` (`wasm-pack build --target web`),
+bundled by esbuild, and `src/wasm.ts` wraps it; `src/extension.ts`
+registers semantic tokens, diagnostics, symbols, hover, completion,
+definition, type-definition, references, inlay-hint, and
+signature-help providers directly against `vscode.languages`. There is
+no JSON-RPC and no language-client dependency — the module's results
+are already LSP values, serialized by serde_json. The workspace is
+indexed with `workspace.findFiles` and pushed into the module
+(`add_def`), mirroring the native server's fs walk.
 
 The **native `rut-lsp` binary remains the face for other editors**
 (Neovim / Helix / Zed / Emacs / Sublime — see
@@ -208,8 +209,8 @@ manifests, JS only moves bytes) and walks its dependency rows:
 ## Packaging
 
 ```sh
-npm run release        # the one lane: preflight → build:wasm → gates
-                       # (grammar corpus + through-wasm e2e + the
+npm run release        # the one lane: preflight → build:wasm (wasm-pack)
+                       # → gates (grammar corpus + through-wasm e2e + the
                        # skip-tolerant host suite) → vsce package →
                        # byte-verify the wasm inside the vsix
 npm run package        # just compile + vsce package (no gates)

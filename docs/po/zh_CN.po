@@ -914,17 +914,22 @@ msgstr "可选：wasm Playground"
 
 #: src/quick-start/installation.md:262
 msgid ""
-"The [playground](playground.md) runs the same engine compiled to WebAssembly. Building it needs one extra target:"
-msgstr "[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要一个额外的 target："
+"The [playground](playground.md) runs the same engine compiled to "
+"WebAssembly. Building it needs "
+"[wasm-pack](https://rustwasm.github.io/wasm-pack/) and one extra target:"
+msgstr ""
+"[Playground](playground.md) 运行的是同一个引擎，只是编译成了 WebAssembly。构建它需要 "
+"[wasm-pack](https://rustwasm.github.io/wasm-pack/) 和一个额外的 target："
 
 
-#: src/quick-start/installation.md:270
+#: src/quick-start/installation.md:272
 msgid ""
-"or, from `demo/`, the one-command lane that also copies the artifact into place:"
+"or, from `demo/`, the one-command lane that also copies the artifacts into "
+"place:"
 msgstr "或者，在 `demo/` 里走那条只需一条命令的路径，它还会把产物复制到位："
 
 
-#: src/quick-start/installation.md:277
+#: src/quick-start/installation.md:281
 msgid "Optional: build this book"
 msgstr "可选：构建本书"
 
@@ -934,14 +939,14 @@ msgid "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) sit
 msgstr "本文档是一个 [mdbook](https://rust-lang.github.io/mdBook/) 站点："
 
 
-#: src/quick-start/installation.md:284
+#: src/quick-start/installation.md:286
 msgid ""
 "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 "# live-reload preview at http://localhost:3000\n"
 
 
-#: src/quick-start/installation.md:285
+#: src/quick-start/installation.md:287
 msgid ""
 "# static site in docs/book/\n"
 msgstr ""
@@ -19141,9 +19146,9 @@ msgstr ""
 
 #: src/reference/embedding.md:236
 msgid ""
-"The wasm playground rides the same law with a host-side default: the page's compile lane accepts an optional consumer manifest (jsonc) beside the source — `rut_compile_manifest` in the raw ABI (a manifest that does not parse returns as a span-0 diagnostic) — while plain `rut_compile` defaults the program's declaration to the offered lib names (`ink_host`, `nmap_host`, `ink`, `pouch`, `nmapset`, `flow`, `async_host`, `futures`, `strbuild_host`, `strbuild`, `json`, `calc` — `core` stays row-free; the prelude is free by law), computed from the world the host actually mounts. A `use` outside the declared set is D5."
+"The wasm playground rides the same law with a host-side default: the page's compile lane accepts an optional consumer manifest (jsonc) beside the source — `compile_manifest` on the wasm engine (a manifest that does not parse returns as a span-0 diagnostic) — while plain `compile` defaults the program's declaration to the offered lib names (`ink_host`, `nmap_host`, `ink`, `pouch`, `nmapset`, `flow`, `async_host`, `futures`, `strbuild_host`, `strbuild`, `json`, `calc` — `core` stays row-free; the prelude is free by law), computed from the world the host actually mounts. A `use` outside the declared set is D5."
 msgstr ""
-"wasm Playground 以宿主侧默认值承载同一条法则：页面的编译车道接受随源码一起提交的可选消费者清单（jsonc）——裸 ABI 里的 `rut_compile_manifest`（解析不了的清单会以 span-0 诊断返回）——而朴素的 `rut_compile` 把程序的声明默认成被 offer 的库名集合（`ink_host`、`nmap_host`、`ink`、`pouch`、`nmapset`、`flow`、`async_host`、`futures`、`strbuild_host`、`strbuild`、`json`、`calc`——`core` 免行；prelude依法免费），从宿主实际挂载的世界计算而来。声明集合之外的 `use` 就是 D5。"
+"wasm Playground 以宿主侧默认值承载同一条法则：页面的编译车道接受随源码一起提交的可选消费者清单（jsonc）——wasm 引擎的 `compile_manifest`（解析不了的清单会以 span-0 诊断返回）——而朴素的 `compile` 把程序的声明默认成被 offer 的库名集合（`ink_host`、`nmap_host`、`ink`、`pouch`、`nmapset`、`flow`、`async_host`、`futures`、`strbuild_host`、`strbuild`、`json`、`calc`——`core` 免行；prelude依法免费），从宿主实际挂载的世界计算而来。声明集合之外的 `use` 就是 D5。"
 
 
 #: src/reference/embedding.md:246

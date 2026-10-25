@@ -3,12 +3,12 @@
  *
  * Every ```rut fenced block whose text contains `entry fn main` gets a
  * "▶ Run" button; clicking it compiles + runs the block in-browser on
- * the rut wasm engine (crates/rut-wasm, the same artifact the demo
- * playground ships) and renders the program's output lines, compile
- * diagnostics, or — when the artifact is missing/invalid — a LOUD
- * panel naming the exact build command. There is no silent fallback:
- * a run either answers with the engine's envelope or says, loudly,
- * how to build the artifact.
+ * the rut wasm engine (crates/rut-wasm's `RutEngine`, the same module
+ * the demo playground ships) and renders the program's output lines,
+ * compile diagnostics, or — when the artifact is missing/invalid — a
+ * LOUD panel naming the exact build command. There is no silent
+ * fallback: a run either answers with the engine's envelope or says,
+ * loudly, how to build the artifact.
  *
  * Runnable blocks are also EDITABLE: the code itself is
  * contenteditable (plaintext-only where supported, with plain-text
@@ -17,22 +17,20 @@
  * block's top-left restores the book's original code. An "edited"
  * badge marks blocks that no longer match the book's text.
  *
- * Plain browser JS, zero dependencies. The ABI is the wasm module's
- * export surface (mirrored by demo/src/wasm/rut-api.d.ts):
- *   memory, rut_alloc(len) -> ptr,
- *   rut_compile(src_ptr, src_len) -> ptr,
- *   rut_run(bin_ptr, bin_len, fuel: u64, heap: u64) -> ptr,
- *   rut_resume(extra_fuel, heap), rut_drop_frame()  (validated, unused
- *   here — a fresh rut_run supersedes any parked frame by itself)
- * Every call returns [u32 LE length][JSON bytes] at the returned ptr;
- * the compile envelope carries the binary base64-encoded. The engine
- * mounts the default packages (ink, pouch, json, strbuild, ...) the
- * same way `rut run` does — book blocks need no package wiring.
+ * Plain browser JS, zero dependencies. The engine module is the
+ * wasm-bindgen no-modules build: wasm-pack stages TWO files beside the
+ * page — wasm/rut-wasm.js (the glue; a classic script assigning the
+ * `wasm_bindgen` global) and wasm/rut.wasm (the module). First click
+ * injects the glue script, fetches the artifact bytes, and inits with
+ * them (`wasm_bindgen(bytes)` — never the glue's URL fallback); every
+ * call after that is `engine.compile(src)` / `engine.run(bin, fuel,
+ * heap)` answering the JSON envelope as a string (the compile envelope
+ * carries the binary base64-encoded; fuel/heap are BigInts — u64s).
  *
- * The artifact is fetched from wasm/rut.wasm at the BOOK ROOT (not
- * committed; scripts/deploy.cjs --book builds and copies it, and
- * docs/book.toml ships it into the rendered book). The root-relative
- * URL comes from this script tag's own src — mdbook emits additional-js
+ * The artifacts are fetched from wasm/ at the BOOK ROOT (not
+ * committed; scripts/deploy.cjs --book builds and stages them, and the
+ * lane copies the pair into both editions). The root-relative URL
+ * comes from this script tag's own src — mdbook emits additional-js
  * with the page's correct "../theme/..." prefix, and this file always
  * lives one level under the root in theme/.
  */
@@ -50,17 +48,17 @@
   // the exact commands every loud panel names (the repo's
   // no-silent-fallback law — the fix is always spelled out)
   var BUILD_CMD =
-    "cargo build -p rut-wasm --target wasm32-unknown-unknown --release";
+    "wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release";
   var COPY_CMD =
-    "cp target/wasm32-unknown-unknown/release/rut_wasm.wasm docs/wasm/rut.wasm";
+    "node scripts/deploy.cjs --book (stages wasm/rut.wasm + wasm/rut-wasm.js into both editions)";
 
   // ---- the module singleton (loaded lazily on first click) ------------
 
-  var modulePromise = null; // the one WebAssembly.Instance, shared
+  var enginePromise = null; // the one initialized RutEngine, shared
   var artifactError = null; // set once the artifact proves missing/invalid
 
-  /** book-root wasm/rut.wasm, derived from this script's own URL */
-  function artifactUrl() {
+  /** book-root wasm/<name>, derived from this script's own URL */
+  function wasmUrl(name) {
     var src = null;
     if (document.currentScript && document.currentScript.src) {
       src = document.currentScript.src;
@@ -68,10 +66,10 @@
       var el = document.querySelector('script[src*="rut-book"]');
       if (el) src = el.src;
     }
-    if (src) return new URL("../wasm/rut.wasm", src).href;
+    if (src) return new URL("../wasm/" + name, src).href;
     // last resort: correct only for root-level pages — never silent,
     // the fetch failure surfaces in the loud panel with the fix
-    return "wasm/rut.wasm";
+    return "wasm/" + name;
   }
 
   function fetchBytes(url) {
@@ -81,47 +79,49 @@
     });
   }
 
-  /** instantiate: streaming when the server speaks wasm MIME, else bytes */
-  function instantiate(url) {
-    var bytes = fetchBytes(url);
-    var streaming = WebAssembly.instantiateStreaming
-      ? WebAssembly.instantiateStreaming(fetch(url), {})
-      : Promise.reject(new Error("no instantiateStreaming"));
-    return streaming.catch(function () {
-      return bytes.then(function (buf) {
-        return WebAssembly.instantiate(buf, {});
-      });
+  /** inject the glue's classic script; it assigns the `wasm_bindgen`
+      global (the no-modules build — the book has no module loader) */
+  function loadGlue(url) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = url;
+      s.onload = function () {
+        if (typeof wasm_bindgen !== "function") {
+          reject(new Error("wasm/rut-wasm.js loaded but defined no wasm_bindgen global"));
+          return;
+        }
+        resolve();
+      };
+      s.onerror = function () {
+        reject(new Error("failed to load " + url));
+      };
+      document.head.appendChild(s);
     });
   }
 
   /** the export surface is the contract — an invalid artifact is LOUD */
-  function validate(exports) {
-    var fns = [
-      "rut_alloc",
-      "rut_compile",
-      "rut_run",
-      "rut_resume",
-      "rut_drop_frame",
-    ];
-    for (var i = 0; i < fns.length; i += 1) {
-      if (typeof exports[fns[i]] !== "function") {
-        throw new Error("invalid rut.wasm: missing export " + fns[i]);
-      }
-    }
-    if (!exports.memory) {
-      throw new Error("invalid rut.wasm: missing export memory");
+  function validate() {
+    if (typeof wasm_bindgen.RutEngine !== "function") {
+      throw new Error("invalid rut-wasm.js: no RutEngine class");
     }
   }
 
-  function loadModule() {
+  function loadEngine() {
     if (artifactError) return Promise.reject(new Error(artifactError));
-    if (modulePromise) return modulePromise;
-    var url = artifactUrl();
-    modulePromise = instantiate(url)
-      .then(function (wired) {
-        var inst = wired.instance || wired;
-        validate(inst.exports);
-        return inst;
+    if (enginePromise) return enginePromise;
+    var glueUrl = wasmUrl("rut-wasm.js");
+    var wasmAddr = wasmUrl("rut.wasm");
+    enginePromise = loadGlue(glueUrl)
+      .then(function () {
+        validate();
+        return fetchBytes(wasmAddr);
+      })
+      .then(function (bytes) {
+        // explicit bytes — never the glue's URL fallback
+        return wasm_bindgen(new Uint8Array(bytes));
+      })
+      .then(function () {
+        return new wasm_bindgen.RutEngine();
       })
       .catch(function (err) {
         // poison the singleton: every button (this page's and later
@@ -129,33 +129,17 @@
         artifactError =
           (err && err.message ? err.message : String(err)) +
           " — fetched " +
-          url;
-        modulePromise = null;
+          wasmAddr;
+        enginePromise = null;
         throw new Error(artifactError);
       });
-    return modulePromise;
+    return enginePromise;
   }
 
-  // ---- the raw ABI over linear memory ---------------------------------
+  // ---- the engine calls (JSON envelope strings in, parsed here) ------
 
-  function writeBytes(exports, bytes) {
-    var ptr = exports.rut_alloc(bytes.length);
-    if (!ptr) throw new Error("wasm heap exhausted");
-    new Uint8Array(exports.memory.buffer, ptr, bytes.length).set(bytes);
-    return ptr;
-  }
-
-  /** [u32 LE length][JSON bytes] at the returned ptr */
-  function readEnvelope(exports, ptr) {
-    var len = new DataView(exports.memory.buffer, ptr, 4).getUint32(0, true);
-    var bytes = new Uint8Array(exports.memory.buffer, ptr + 4, len);
-    return new TextDecoder().decode(bytes);
-  }
-
-  function compileSrc(exports, src) {
-    var bytes = new TextEncoder().encode(src);
-    var ptr = writeBytes(exports, bytes);
-    return JSON.parse(readEnvelope(exports, exports.rut_compile(ptr, bytes.length)));
+  function compileSrc(engine, src) {
+    return JSON.parse(engine.compile(src));
   }
 
   function decodeBase64(b64) {
@@ -165,14 +149,13 @@
     return out;
   }
 
-  function runBinary(exports, binary) {
-    var bytes = decodeBase64(binary);
-    var ptr = writeBytes(exports, bytes);
+  function runBinary(engine, binary) {
     return JSON.parse(
-      readEnvelope(
-        exports,
-        exports.rut_run(ptr, bytes.length, BigInt(DEFAULT_FUEL), BigInt(DEFAULT_HEAP_BYTES)),
-      ),
+      engine.run(
+        decodeBase64(binary),
+        BigInt(DEFAULT_FUEL),
+        BigInt(DEFAULT_HEAP_BYTES)
+      )
     );
   }
 
@@ -209,9 +192,8 @@
     return el;
   }
 
-  function renderRun(instance, out, src) {
-    var exports = instance.exports;
-    var compiled = compileSrc(exports, src);
+  function renderRun(engine, out, src) {
+    var compiled = compileSrc(engine, src);
 
     // compile diagnostics first — the loud channel, the button stays usable
     if (compiled.diags && compiled.diags.length) {
@@ -229,7 +211,7 @@
       return;
     }
 
-    var run = runBinary(exports, compiled.binary);
+    var run = runBinary(engine, compiled.binary);
     (run.output || []).forEach(function (l) {
       line(out, "rut-run-line", l);
     });
@@ -282,10 +264,10 @@
         }
       };
 
-      loadModule()
-        .then(function (instance) {
+      loadEngine()
+        .then(function (engine) {
           out.textContent = "";
-          renderRun(instance, out, src);
+          renderRun(engine, out, src);
         })
         .catch(fail)
         .then(function () {

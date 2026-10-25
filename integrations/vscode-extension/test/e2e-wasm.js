@@ -120,16 +120,14 @@ async function main() {
   const bad = [];
   let smokes = 0;
 
-  // ---- the capability probe (the stale-install seam): the extract
-  // exports an artifact must carry for the source-zip dep lane to
-  // mount. A same-version-but-older install without them dead-ended
-  // every std ctrl+click in a scaffold (the wasm answered the ambient
-  // std embed's repo-relative path, the extension dropped it) — the
-  // binding now answers a synthetic error envelope and the walk hints
-  // the reinstall. The SHIPPED artifact must have both.
-  if (rut.hasSrczip !== true || rut.hasBundleExtract !== true) {
-    bad.push(`capability probe: hasSrczip=${rut.hasSrczip} hasBundleExtract=${rut.hasBundleExtract} — stale artifact, rebuild (npm run build:wasm)`);
-  }
+  // ---- the capability probe (the stale-install seam) ----
+  // The old probe checked `hasSrczip`/`hasBundleExtract` on the loaded
+  // artifact, because a same-version-but-older install could pair a new
+  // binding with an old wasm and dead-end every std ctrl+click. The
+  // wasm-bindgen glue and the .wasm now ship as ONE pair (one build,
+  // one vsix) — the module cannot be older than its lane, and a
+  // byte-mismatched pair fails `load` loudly instead. The boot itself
+  // is the probe.
   smokes++;
 
   // ---- the semantic-token legend (16 types, the extension's map —
@@ -1104,37 +1102,20 @@ async function main() {
   // exactly what the ABI landed (the binding lane above keeps its own
   // instance unpolluted for the corpus walk). ----
   {
-    const bytes = fs.readFileSync(WASM_PATH);
-    const { instance } = await WebAssembly.instantiate(bytes, {});
-    const e = instance.exports;
-    const enc = new TextEncoder();
-    const dec = new TextDecoder();
-    const put = (s) => {
-      const b = enc.encode(s);
-      const p = e.rut_alloc(b.length);
-      assert.notStrictEqual(p, 0, 'dep lane: arena overflow');
-      new Uint8Array(e.memory.buffer, p, b.length).set(b);
-      return [p, b.length];
-    };
-    // binary (ptr, len) — the bundle bytes are a zip, not text
-    const putBytes = (b) => {
-      const p = e.rut_alloc(b.length);
-      assert.notStrictEqual(p, 0, 'dep lane: arena overflow');
-      new Uint8Array(e.memory.buffer, p, b.length).set(b);
-      return [p, b.length];
-    };
-    const take = (ptr) => {
-      assert.notStrictEqual(ptr, 0, 'dep lane: arena overflow');
-      const len = new DataView(e.memory.buffer, ptr, 4).getUint32(0, true);
-      return JSON.parse(dec.decode(new Uint8Array(e.memory.buffer, ptr + 4, len)));
-    };
+    // a FRESH binding instance: dropping the require cache re-executes
+    // the bundle, so the wasm-bindgen module instantiates AGAIN from the
+    // same shipped bytes — this lane's defs are the std surface plus
+    // exactly what it indexes, and the corpus lane above keeps its
+    // instance unpolluted
+    delete require.cache[BINDING_PATH];
+    const depBinding = require(BINDING_PATH);
+    const dep = await depBinding.RutWasm.load(WASM_PATH);
 
     // the manifest: the repo's own path+url fixture (03-plugin) — the
     // same bytes rut-lsp's dep_table unit test pins
     const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
     const manifest = fs.readFileSync(manifestPath, 'utf8');
-    e.rut_begin();
-    const table = take(e.rut_parse_manifest(...put(manifest)));
+    const table = dep.parseManifest(manifest);
     assert.strictEqual(table.name, 'plugin', `manifest name: ${JSON.stringify(table)}`);
     // the body rides the src/mod.rut convention (the entry keys are
     // repealed — the root module is a file under the `src/` shell,
@@ -1193,15 +1174,13 @@ async function main() {
 
     // entry.type indexes in Decl mode (the envelope spells the variant)
     const hostManifest = '{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }';
-    e.rut_begin();
-    const host = take(e.rut_parse_manifest(...put(hostManifest)));
+    const host = dep.parseManifest(hostManifest);
     assert.deepStrictEqual(host.entries, [{ path: 'src/surface.d.rut', mode: 'Decl' }],
       `decl entry: ${JSON.stringify(host.entries)}`);
     // a malformed manifest is the ERROR envelope — the host's hint
     // (named `manifestErr`, NOT `bad` — that name is the lane's
     // error collector and a shadow here silences every later push)
-    e.rut_begin();
-    const manifestErr = take(e.rut_parse_manifest(...put('{"name": six}')));
+    const manifestErr = dep.parseManifest('{"name": six}');
     assert.ok(manifestErr.error && manifestErr.error.startsWith('line 1: '), `error envelope: ${JSON.stringify(manifestErr)}`);
     smokes++;
 
@@ -1210,20 +1189,16 @@ async function main() {
     // tier lists the dep's public surface
     const gUri = 'file:///ws/gadgets/lib.rut';
     const gSrc = 'pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n';
-    e.rut_begin();
-    e.rut_add_def_named(...put(gUri), ...put('gadgets'), ...put(gSrc));
+    dep.addDefNamed(gUri, 'gadgets', gSrc);
     const depDoc = 'use gadgets::\nfn main() -> nil {\n}\n';
     const depUri = 'file:///ws/e2e-dep.rut';
-    e.rut_begin();
-    take(e.rut_analyze(...put(depUri), ...put(depDoc)));
-    e.rut_begin();
-    const namesTier = take(e.rut_complete(...put(depUri), 0, depDoc.indexOf('::') + 2));
+    dep.analyze(depUri, depDoc);
+    const namesTier = dep.complete(depUri, 0, depDoc.indexOf('::') + 2);
     const depLabels = namesTier.map((i) => i.label);
     for (const want of ['Widget', 'tag']) {
       if (!depLabels.includes(want)) bad.push(`named dep 'gadgets' lacks '${want}' in use completion (got ${depLabels.join(', ')})`);
     }
-    e.rut_begin();
-    const modTier = take(e.rut_complete(...put(depUri), 0, 4)); // right after `use `
+    const modTier = dep.complete(depUri, 0, 4); // right after `use `
     if (!modTier.map((i) => i.label).includes('gadgets')) {
       bad.push(`module tier lacks 'gadgets' (got ${modTier.map((i) => i.label).join(', ')})`);
     }
@@ -1233,16 +1208,14 @@ async function main() {
     // offline url-dep fixture) — the envelope names module + entry
     // paths, the surface lands in hover and go-to-definition
     const bundleBytes = fs.readFileSync(path.join(REPO, 'dist', 'std', 'pouch.rutbundle'));
-    e.rut_begin();
-    const bundle = take(e.rut_add_bundle(...putBytes(bundleBytes)));
+    const bundle = dep.addBundle(bundleBytes);
     assert.strictEqual(bundle.module, 'pouch', `bundle envelope: ${JSON.stringify(bundle)}`);
     // wire v12: the compiled group ships its GENERATED declaration
     // entry as the editing surface (the .d.ts pattern) — the envelope
     // names the entry, never the compiled mod.rutc body
     assert.deepStrictEqual(bundle.files, ['mod.d.rut']);
-    e.rut_begin();
     const junk = Buffer.from('definitely not a zip');
-    const bundleErr = take(e.rut_add_bundle(...putBytes(junk)));
+    const bundleErr = dep.addBundle(junk);
     assert.ok(bundleErr.error && bundleErr.error.includes('not a zip'),
       `bundle error envelope: ${JSON.stringify(bundleErr)}`);
     // the indexed surface resolves: the MOUNTED bundle outranks the
@@ -1252,16 +1225,13 @@ async function main() {
     // one target — and a member hover answers through the named module
     const pouchDoc = 'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n';
     const pouchUri = 'file:///ws/e2e-bundle.rut';
-    e.rut_begin();
-    take(e.rut_analyze(...put(pouchUri), ...put(pouchDoc)));
-    e.rut_begin();
-    const vecLocs = take(e.rut_definition(...put(pouchUri), 0, pouchDoc.indexOf('Vec')));
+    dep.analyze(pouchUri, pouchDoc);
+    const vecLocs = dep.definition(pouchUri, 0, pouchDoc.indexOf('Vec'));
     const targetUris = vecLocs.map((l) => l.uri);
     assert.deepStrictEqual(targetUris, ['bundle:pouch/mod.d.rut'],
       `bundle go-to-definition targets: ${JSON.stringify(targetUris)}`);
     const pushCh = pouchDoc.split('\n')[3].indexOf('push');
-    e.rut_begin();
-    const pushHover = take(e.rut_hover(...put(pouchUri), 3, pushCh));
+    const pushHover = dep.hover(pouchUri, 3, pushCh);
     if (!pushHover || !pushHover.contents.value.includes('push')) {
       bad.push(`bundle member hover missed: ${pushHover && JSON.stringify(pushHover.contents.value.slice(0, 60))}`);
     }
@@ -1275,8 +1245,8 @@ async function main() {
     // lands in REAL files, never bundle: URIs. The BINDING drives the
     // lane (the exact call src/extension.ts mountUrlDep makes), the
     // files are read back from disk. ----
-    assert.strictEqual(typeof e.rut_extract_bundle, 'function',
-      'rut_extract_bundle missing from the artifact — rebuild (npm run build:wasm)');
+    assert.strictEqual(typeof dep.extractBundle, 'function',
+      'extractBundle missing from the binding — rebuild (npm run build:wasm)');
     {
       const extracted = rut.extractBundle(bundleBytes);
       assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
@@ -1560,44 +1530,34 @@ async function main() {
     // segment hover names the mounted file. A fresh package name: the
     // lane's earlier flat `gadgets` index stays the transitional shape
     // it was indexed as. ----
-    e.rut_begin();
     const mRoot = 'pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n';
-    const rootOut = take(e.rut_add_def_mod(
-      ...put('file:///ws/tools/src/mod.rut'), ...put('tools'), ...put(''), ...put(mRoot)
-    ));
+    const rootOut = dep.addDefMod('file:///ws/tools/src/mod.rut', 'tools', '', mRoot);
     assert.deepStrictEqual(rootOut.decls, [
       { name: 'layout', vis: 'pub' },
       { name: 'secret', vis: 'mod' },
     ], `root mod decls: ${JSON.stringify(rootOut.decls)}`);
-    e.rut_begin();
     const mChild = 'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n';
-    const childOut = take(e.rut_add_def_mod(
-      ...put('file:///ws/tools/src/layout/mod.rut'), ...put('tools'), ...put('layout'), ...put(mChild)
-    ));
+    const childOut = dep.addDefMod('file:///ws/tools/src/layout/mod.rut', 'tools', 'layout', mChild);
     assert.deepStrictEqual(childOut.decls, [], `leaf mod decls: ${JSON.stringify(childOut.decls)}`);
 
     const modDoc = 'use tools::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n';
     const modUri = 'file:///ws/e2e-mods.rut';
-    e.rut_begin();
-    take(e.rut_analyze(...put(modUri), ...put(modDoc)));
+    dep.analyze(modUri, modDoc);
     // the walked tier: the resolved module's exports
-    e.rut_begin();
-    const walkTier = take(e.rut_complete(...put(modUri), 0, 'use tools::layout::'.length));
+    const walkTier = dep.complete(modUri, 0, 'use tools::layout::'.length);
     const walkLabels = walkTier.map((i) => i.label);
     for (const want of ['Column', 'mk']) {
       assert.ok(walkLabels.includes(want), `mod walk lacks '${want}' (got ${walkLabels.join(', ')})`);
     }
     // the root tier: the pub mod child offers, the private edge and
     // the child's members never leak
-    e.rut_begin();
-    const rootTier = take(e.rut_complete(...put(modUri), 0, 'use tools::'.length));
+    const rootTier = dep.complete(modUri, 0, 'use tools::'.length);
     const rootLabels = rootTier.map((i) => i.label);
     assert.ok(rootLabels.includes('layout'), `root tier mod edges: ${JSON.stringify(rootLabels)}`);
     assert.ok(!rootLabels.includes('secret'), `a bare \`mod\` edge never crosses: ${JSON.stringify(rootLabels)}`);
     assert.ok(!rootLabels.includes('Column'), `child members stay under their path: ${JSON.stringify(rootLabels)}`);
     // the segment hover resolves the mounted module
-    e.rut_begin();
-    const segHover = take(e.rut_hover(...put(modUri), 0, 'use tools::layout::'.length - 3));
+    const segHover = dep.hover(modUri, 0, 'use tools::layout::'.length - 3);
     assert.ok(segHover && segHover.contents.value.includes('layout/mod.rut'),
       `segment hover missed: ${segHover && JSON.stringify(segHover.contents.value.slice(0, 80))}`);
     smokes++;
@@ -1607,15 +1567,13 @@ async function main() {
     // (the tail still short the dot — the analyze debounce's window)
     // cannot mask the member tier, and the dot guard holds through the
     // raw entry (an unresolved receiver answers [], never the dump). ----
-    assert.strictEqual(typeof e.rut_complete_in, 'function',
-      'rut_complete_in missing from the artifact — rebuild (npm run build:wasm)');
+    assert.strictEqual(typeof dep.complete, 'function',
+      'doc-sync completion missing from the binding — rebuild (npm run build:wasm)');
     const syncUri = 'file:///ws/e2e-sync.rut';
     const staleDoc = 'fn go() -> nil {\n    let log = Logger("h");\n    log\n}\n';
     const freshDoc = 'fn go() -> nil {\n    let log = Logger("h");\n    log.\n}\n';
-    e.rut_begin();
-    take(e.rut_analyze(...put(syncUri), ...put(staleDoc)));
-    e.rut_begin();
-    const synced = take(e.rut_complete_in(...put(syncUri), ...put(freshDoc), 2, 8));
+    dep.analyze(syncUri, staleDoc);
+    const synced = dep.complete(syncUri, 2, 8, freshDoc);
     const syncedLabels = synced.map((i) => i.label);
     for (const want of ['new', 'debug', 'info', 'warn', 'error']) {
       assert.ok(syncedLabels.includes(want),
@@ -1625,8 +1583,7 @@ async function main() {
       `doc-sync completion leaked the host fn 'abs' (got ${syncedLabels.join(', ')})`);
     // the dot guard through the raw entry: `probe().` — [] exactly
     const guardDoc = 'fn go() -> nil {\n    let x = probe().\n}\n';
-    e.rut_begin();
-    const guarded = take(e.rut_complete_in(...put(syncUri), ...put(guardDoc), 1, 20));
+    const guarded = dep.complete(syncUri, 1, 20, guardDoc);
     assert.deepStrictEqual(guarded, [], `dot guard through the raw entry: ${JSON.stringify(guarded)}`);
     smokes++;
 
@@ -1641,10 +1598,7 @@ async function main() {
     {
       const chkDepSrc =
         'pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n';
-      e.rut_begin();
-      const chkDep = take(
-        e.rut_add_def_mod(...put('file:///ws/chk/dep/src/mod.rut'), ...put('chkdep'), ...put(''), ...put(chkDepSrc))
-      );
+      const chkDep = dep.addDefMod('file:///ws/chk/dep/src/mod.rut', 'chkdep', '', chkDepSrc);
       assert.ok(Array.isArray(chkDep.decls), `chkdep stamps: ${JSON.stringify(chkDep)}`);
       const chkAppSrc = [
         'use chkdep::{ Task };',
@@ -1656,13 +1610,9 @@ async function main() {
         '',
       ].join('\n');
       const chkAppUri = 'file:///ws/chk/app/src/mod.rut';
-      e.rut_begin();
-      const chkApp = take(
-        e.rut_add_def_mod(...put(chkAppUri), ...put('chkapp'), ...put(''), ...put(chkAppSrc))
-      );
+      const chkApp = dep.addDefMod(chkAppUri, 'chkapp', '', chkAppSrc);
       assert.ok(Array.isArray(chkApp.decls), `chkapp stamps: ${JSON.stringify(chkApp)}`);
-      e.rut_begin();
-      const chkMerged = take(e.rut_analyze(...put(chkAppUri), ...put(chkAppSrc)));
+      const chkMerged = dep.analyze(chkAppUri, chkAppSrc);
       const chkDiags = chkMerged.diags || [];
       const mismatch = chkDiags.find((d) => (d.message || '').includes('assignment type mismatch'));
       const missingField = chkDiags.find((d) => (d.message || '').includes('id` is missing'));
@@ -1680,8 +1630,7 @@ async function main() {
         bad.push(`check lane: missing-field diag on line ${missingField.range.start.line} != 4`);
       }
       // the parse-only fallback: the SAME text at an unstamped uri
-      e.rut_begin();
-      const chkPlain = take(e.rut_analyze(...put('file:///ws/chk/plain.rut'), ...put(chkAppSrc)));
+      const chkPlain = dep.analyze('file:///ws/chk/plain.rut', chkAppSrc);
       if ((chkPlain.diags || []).length !== 0) {
         bad.push(`unstamped doc must stay parse-only clean: ${JSON.stringify(chkPlain.diags)}`);
       }

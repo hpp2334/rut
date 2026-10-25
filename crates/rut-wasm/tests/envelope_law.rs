@@ -1,30 +1,20 @@
-//! The envelope lane's nameability law (D5). Plain `rut_compile`
+//! The envelope lane's nameability law (D5). Plain `compile`
 //! DEFAULTS `main`'s manifest host-side to the offered lib names — so
 //! every std head the page's programs name is declared, and the smoke's
-//! cases keep compiling. `rut_compile_manifest(src, man)` is the page's
+//! cases keep compiling. `compile_manifest(src, man)` is the page's
 //! own door: the manifest it passes IS main's declaration — a use of a
 //! mounted pkg outside that set is D5's fire (main is a hand offer, so
 //! the diagnostic renders the host clause).
 //!
-//! Driven through the RAW ABI (the same exports the demo glue calls),
-//! natively — the crate builds as rlib beside the cdylib.
+//! Driven through the SAME methods the wasm class offers, natively —
+//! the crate builds as rlib beside the cdylib.
 
-/// One compile through the raw ABI; the JSON envelope back as a String.
+/// One compile through the engine; the JSON envelope back as a String.
 fn compile_envelope(src: &str, man: Option<&str>) -> String {
-    let (sp, sl) = (src.as_ptr(), src.len());
-    let res_ptr = match man {
-        // SAFETY: the pointers point at `src`/`m`, alive for the call
-        None => unsafe { rut_wasm::rut_compile(sp, sl) },
-        Some(m) => unsafe { rut_wasm::rut_compile_manifest(sp, sl, m.as_ptr(), m.len()) },
-    };
-    unsafe {
-        // the ABI's envelope is [u32 LE length][bytes] at the returned
-        // ptr — the static heap's offsets carry no alignment promise,
-        // so the length reads unaligned (the JS glue's DataView reads
-        // it the same way)
-        let len = u32::from_le_bytes(std::ptr::read_unaligned(res_ptr as *const [u8; 4])) as usize;
-        let bytes = std::slice::from_raw_parts(res_ptr.add(4), len);
-        String::from_utf8_lossy(bytes).to_string()
+    let engine = rut_wasm::RutEngine::new();
+    match man {
+        None => engine.compile(src),
+        Some(m) => engine.compile_manifest(src, m),
     }
 }
 
@@ -64,7 +54,7 @@ entry fn main() -> nil {
 
 #[test]
 fn the_default_manifest_declares_the_offered_lib_names() {
-    // plain rut_compile: the host-side default names EVERY offered lib,
+    // plain compile: the host-side default names EVERY offered lib,
     // so a use of ink + calc (both std heads) compiles clean — the
     // smoke's 26 programs ride exactly this lane
     assert!(

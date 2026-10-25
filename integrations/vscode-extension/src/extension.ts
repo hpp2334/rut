@@ -618,23 +618,11 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow, depth: number): Promise<vo
   }
   // the artifact kind the url's own spelling declares — a `.zip` is
   // the source transport (its `src/**` tree extracts like a bundle's
-  // ride-along set), anything else the compiled wire. The capability
-  // seam sits BEFORE the extract: the bytes verified against the pin,
-  // then the loaded wasm turns out to predate the transport (a
-  // same-version install older than the lane — the exact stale-0.3.1
-  // shape that dead-ended every std ctrl+click in a scaffold). One hint
-  // names the extension reinstall; the binding's synthetic error
-  // envelope backstops the same way.
+  // ride-along set), anything else the compiled wire. (The old
+  // capability seam — a loaded wasm predating the transport — is
+  // structurally gone: the wasm-bindgen glue and the .wasm ship as one
+  // pair in the package, so the module cannot be older than its lane.)
   const isZip = /\.zip$/.test(cache_path);
-  if (isZip && !ctx.rut.hasSrczip) {
-    hintOnce(
-      `srczip-cap:${row.name}`,
-      `rut: dep '${row.name}' — this dep is a source zip and the loaded rut-lsp.wasm ` +
-        `predates source-zip deps; rebuild and reinstall the extension, then reload the window`,
-      true
-    );
-    return;
-  }
   const extracted = isZip ? ctx.rut.extractSrczip(bytes) : ctx.rut.extractBundle(bytes);
   if (isEnvelope(extracted)) {
     hintOnce(
@@ -1129,15 +1117,10 @@ function resolveLocations(rut: RutWasm, locs: LspLocation[], srcUri: string): vs
 // the drop hint names the LIKELIEST cause, not just the generic one.
 // A relative `rut/…` target is the embedded std surface answering for a
 // dep that never mounted; when the workspace's cache carries source
-// zips AND the loaded wasm predates the source-zip transport, `rut
-// install` already ran and reloading cannot help — the extension is the
-// stale piece, so the hint says so.
-function defDropHint(rut: RutWasm, locs: LspLocation[]): string {
-  if (!rut.hasSrczip && locs.some((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
-    return 'rut: definition target not openable — the dep is a source zip and the loaded ' +
-      'rut-lsp.wasm predates source-zip deps; rebuild and reinstall the extension, then reload the window';
-  }
-  if (rut.hasSrczip && locs.every((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
+// zips, `rut install` already ran and reloading cannot help — the
+// definition lives in the rut repo sources, so the hint says so.
+function defDropHint(_rut: RutWasm, locs: LspLocation[]): string {
+  if (locs.every((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
     return 'rut: definition target not openable — the resolved definition lives in the rut ' +
       'repo sources, which are not in this workspace; reload the window if the dep was just installed';
   }

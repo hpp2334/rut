@@ -1,13 +1,16 @@
-// copy the cargo-built rut-lsp wasm module into bin/ — one artifact,
-// every platform (the whole point of the wasm mode)
+// copy the wasm-pack-built rut-lsp module into bin/ — one artifact,
+// every platform (the whole point of the wasm mode). The glue
+// (`pkg/rut_lsp_wasm.js`) is NOT copied: esbuild bundles it straight
+// from the pkg dir into the extension's own bundle.
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const src = join('..', '..', 'target', 'wasm32-unknown-unknown', 'release', 'rut_lsp_wasm.wasm');
+const src = join('..', '..', 'crates', 'rut-lsp-wasm', 'pkg', 'rut_lsp_wasm_bg.wasm');
 if (!existsSync(src)) {
   console.error(
     `wasm module not found: ${src} — run ` +
-      `\`cargo build -p rut-lsp-wasm --target wasm32-unknown-unknown --release\` first`
+      `\`wasm-pack build ../../crates/rut-lsp-wasm --target web --release\` first ` +
+      `(npm run build:wasm)`
   );
   process.exit(1);
 }

@@ -23,7 +23,13 @@ docs/dist-book/
 # plus src/theme/po symlinks; created and removed by the zh build)
 docs/.book-zh/
 
-# the book's run-button artifact (built from crates/rut-wasm, not committed;
+# the book's run-button artifacts (built from crates/rut-wasm, not committed;
 # scripts/deploy.cjs --book and docs/wasm/ own the build+copy lane)
 docs/wasm/
+
+# the wasm-pack pkg dirs (the wasm-bindgen glue + module; npm scripts
+# and CI build them with wasm-pack --target web / no-modules)
+crates/rut-wasm/pkg/
+crates/rut-wasm/pkg-book/
+crates/rut-lsp-wasm/pkg/
 __pycache__/

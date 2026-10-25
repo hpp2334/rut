@@ -1275,6 +1275,7 @@ dependencies = [
  "rut-lsp",
  "rut-parser",
  "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1347,6 +1348,7 @@ dependencies = [
  "rut-parser",
  "rut-std",
  "rut-vm",
+ "wasm-bindgen",
 ]
 
 [[package]]

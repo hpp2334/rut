@@ -236,9 +236,9 @@ legal: the law bounds uses by declarations, never declarations by uses.
 
 The wasm playground rides the same law with a host-side default: the
 page's compile lane accepts an optional consumer manifest (jsonc)
-beside the source — `rut_compile_manifest` in the raw ABI (a manifest
+beside the source — `compile_manifest` on the wasm engine (a manifest
 that does not parse returns as a span-0 diagnostic) — while plain
-`rut_compile` defaults the program's declaration to the offered lib
+`compile` defaults the program's declaration to the offered lib
 names (`ink_host`, `nmap_host`, `ink`, `pouch`, `nmapset`, `flow`,
 `async_host`, `futures`, `strbuild_host`, `strbuild`, `json`, `calc` —
 `core` stays row-free; the prelude is free by law), computed from the

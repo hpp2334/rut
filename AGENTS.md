@@ -100,11 +100,13 @@ pack script lives in git history.
 ## VS Code extension — `npm run release` (build → gates → pack)
 
 The extension (`integrations/vscode-extension/`) ships two local,
-gitignored artifacts: `bin/rut-lsp.wasm` (the in-process LSP) and
-`rut-vscode-<version>.vsix`. One lane produces both, in order:
+gitignored artifacts: `bin/rut-lsp.wasm` (the in-process LSP, built by
+wasm-pack) and `rut-vscode-<version>.vsix`. One lane produces both, in
+order:
 
     cd integrations/vscode-extension
-    npm run release        # preflight (cargo on PATH) → build:wasm →
+    npm run release        # preflight (cargo+wasm-pack on PATH) →
+                           # build:wasm (wasm-pack --target web) →
                            # grammar corpus + through-wasm e2e (+ the
                            # skip-tolerant host suite) → vsce package →
                            # byte-verify the wasm inside the vsix
@@ -145,9 +147,11 @@ gitignored artifacts: `bin/rut-lsp.wasm` (the in-process LSP) and
 - Book run buttons: qualifying ```rut blocks (those containing
   `entry fn main`) get a "▶ Run" button (docs/theme/rut-book.js) that
   runs the block in-browser on the rut wasm engine. The artifact is
-  built from `crates/rut-wasm` (`cargo build -p rut-wasm --target
-  wasm32-unknown-unknown --release`) and must land at
-  `docs/wasm/rut.wasm`; the heap mirrors the default (4 MiB), while
+  the wasm-bindgen PAIR built from `crates/rut-wasm`
+  (`wasm-pack build crates/rut-wasm --target no-modules --out-dir
+  pkg-book --release`) and must land at `docs/wasm/` as `rut.wasm` +
+  `rut-wasm.js` (the classic-script glue — the book page has no module
+  loader); the heap mirrors the default (4 MiB), while
   the book host EXPLICITLY opts into 10M fuel — the mechanism default
   is OFF (engine `Limits::default()` is uncapped) and the
   playground's user-facing default is OFF too (opt-in via the fuel

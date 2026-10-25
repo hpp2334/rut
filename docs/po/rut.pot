@@ -824,29 +824,30 @@ msgstr ""
 #: src/quick-start/installation.md:262
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to "
-"WebAssembly. Building it needs one extra target:"
+"WebAssembly. Building it needs "
+"[wasm-pack](https://rustwasm.github.io/wasm-pack/) and one extra target:"
 msgstr ""
 
-#: src/quick-start/installation.md:270
+#: src/quick-start/installation.md:272
 msgid ""
-"or, from `demo/`, the one-command lane that also copies the artifact into "
+"or, from `demo/`, the one-command lane that also copies the artifacts into "
 "place:"
 msgstr ""
 
-#: src/quick-start/installation.md:277
+#: src/quick-start/installation.md:279
 msgid "Optional: build this book"
 msgstr ""
 
-#: src/quick-start/installation.md:279
+#: src/quick-start/installation.md:281
 msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr ""
 
-#: src/quick-start/installation.md:284
+#: src/quick-start/installation.md:286
 msgid "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 
-#: src/quick-start/installation.md:285
+#: src/quick-start/installation.md:287
 msgid "# static site in docs/book/\n"
 msgstr ""
 
@@ -18567,8 +18568,8 @@ msgstr ""
 msgid ""
 "The wasm playground rides the same law with a host-side default: the page's "
 "compile lane accepts an optional consumer manifest (jsonc) beside the source "
-"— `rut_compile_manifest` in the raw ABI (a manifest that does not parse "
-"returns as a span-0 diagnostic) — while plain `rut_compile` defaults the "
+"— `compile_manifest` on the wasm engine (a manifest that does not parse "
+"returns as a span-0 diagnostic) — while plain `compile` defaults the "
 "program's declaration to the offered lib names (`ink_host`, `nmap_host`, "
 "`ink`, `pouch`, `nmapset`, `flow`, `async_host`, `futures`, `strbuild_host`, "
 "`strbuild`, `json`, `calc` — `core` stays row-free; the prelude is free by "

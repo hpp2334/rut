@@ -47,10 +47,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest+wasm-pack
       - name: cargo nextest
         run: cargo nextest run --workspace
       - name: book code blocks compile and run
         run: cargo nextest run -p rut-cli --test book_blocks
-      - name: wasm32 release build (the book's rut.wasm artifact lane)
-        run: cargo build -p rut-wasm -p rut-lsp-wasm --target wasm32-unknown-unknown --release
+      # the artifact lane: the wasm-bindgen glue + module pairs the
+      # extension, the demo and the book stage (web target for the
+      # bundlers' consumers, no-modules for the book's classic-script
+      # page). wasm-pack fetches the wasm-bindgen CLI matching
+      # Cargo.lock, so the glue can never drift from the crate.
+      - name: wasm32 artifact lane (wasm-pack)
+        run: |
+          wasm-pack build crates/rut-wasm --target web --release
+          wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release
+          wasm-pack build crates/rut-lsp-wasm --target web --release
