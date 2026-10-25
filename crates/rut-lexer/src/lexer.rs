@@ -1,6 +1,9 @@
 //! Lexer — mode-stack tokenizer. Pure function `&str ->
 //! (Vec<Token>, Vec<Diag>)`. Handles `f"..."` interpolation holes (fully
 //! lexed token streams, brace-balanced), `r"..."` raw strings,
+//! hash-leveled multi-line raw and format strings (`r#"..."#`,
+//! `f#"..."#` — the hash count is the multi-line opt-in AND the
+//! quote-embedding level; level 0 stays newline-terminated),
 //! maximal munch with a longest-match table, reserved-word rejection with
 //! rut-specific messages, and the bracket depth budget
 //! (C3 — exceeding it is a Diag, never a host crash).
@@ -67,6 +70,10 @@ impl<'a> Lexer<'a> {
 
     fn peek(&self) -> u8 {
         *self.src.get(self.pos).unwrap_or(&0)
+    }
+    /// Look `off` bytes ahead of `pos` without consuming.
+    fn peek_at(&self, off: usize) -> u8 {
+        *self.src.get(self.pos + off).unwrap_or(&0)
     }
     fn peek2(&self) -> u8 {
         *self.src.get(self.pos + 1).unwrap_or(&0)
@@ -371,15 +378,17 @@ impl<'a> Lexer<'a> {
         }
         let word = String::from_utf8_lossy(&self.src[start..self.pos]).to_string();
         match word.as_str() {
-            "r" if self.peek() == b'"' => {
-                self.pos += 1;
-                let s = self.lex_raw_string_body(lo);
-                self.push(Tok::RawStr(s), lo);
+            "r" if self.peek() == b'"' || self.peek() == b'#' => {
+                if let Some(n) = self.lex_str_prefix(lo, "r") {
+                    let s = self.lex_raw_string_body(lo, n);
+                    self.push(Tok::RawStr(s), lo);
+                }
             }
-            "f" if self.peek() == b'"' => {
-                self.pos += 1;
-                let f = self.lex_fstring(lo);
-                self.push(Tok::FStr(f), lo);
+            "f" if self.peek() == b'"' || self.peek() == b'#' => {
+                if let Some(n) = self.lex_str_prefix(lo, "f") {
+                    let f = self.lex_fstring(lo, n);
+                    self.push(Tok::FStr(f), lo);
+                }
             }
             "true" => self.push(Tok::Bool(true), lo),
             "false" => self.push(Tok::Bool(false), lo),
@@ -396,30 +405,74 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn lex_raw_string_body(&mut self, lo: usize) -> String {
-        // every byte is literal; `\"` does NOT close the string.
+    /// Consume the `#` run after an `r`/`f` prefix plus the opening `"`.
+    /// Returns the delimiter level (0 with no `#`s), or `None` when the
+    /// prefix is malformed — the diagnostic is emitted and no literal
+    /// token is pushed (the trailing text lexes on its own).
+    fn lex_str_prefix(&mut self, lo: usize, word: &str) -> Option<usize> {
+        let mut n = 0usize;
+        while self.peek() == b'#' {
+            self.pos += 1;
+            n += 1;
+        }
+        if self.peek() != b'"' {
+            let hashes = "#".repeat(n);
+            self.err(
+                self.span(lo),
+                format!("expected `\"` after `{word}{hashes}` to open the string literal"),
+            );
+            return None;
+        }
+        self.pos += 1; // opening quote
+        Some(n)
+    }
+
+    /// Body after the opening `"`. Every byte is literal; `\"` does NOT
+    /// close the string. Level 0 keeps the single-line law — a newline
+    /// terminates with a diagnostic. Level `n >= 1` is the multi-line
+    /// form: newlines are content, and the body closes at the first `"`
+    /// followed by at least `n` `#`s (exactly `n` consumed; the surplus
+    /// `#`s lex as stray characters).
+    fn lex_raw_string_body(&mut self, lo: usize, n: usize) -> String {
         let mut out = Vec::new();
         loop {
-            if self.at_end() || self.peek() == b'\n' {
+            if self.at_end() || (n == 0 && self.peek() == b'\n') {
                 self.err(self.span(lo), "unterminated raw string literal");
                 return String::from_utf8_lossy(&out).to_string();
             }
             let b = self.peek();
             self.pos += 1;
             if b == b'"' {
-                return String::from_utf8_lossy(&out).to_string();
+                if n == 0 {
+                    return String::from_utf8_lossy(&out).to_string();
+                }
+                let mut run = 0usize;
+                while self.peek_at(run) == b'#' {
+                    run += 1;
+                }
+                if run >= n {
+                    self.pos += n; // consume exactly n of the run
+                    return String::from_utf8_lossy(&out).to_string();
+                }
+                // a `"` whose `#` run is short is content, run included
+                out.push(b'"');
+                out.extend(std::iter::repeat_n(b'#', run));
+                self.pos += run;
+                continue;
             }
             out.push(b);
         }
     }
 
     /// `f"..."` — literal chunks with `{{`/`}}` escapes, holes fully lexed.
-    /// The lexer mode-stacks into hole lexing.
-    fn lex_fstring(&mut self, lo: usize) -> FStrTok {
+    /// The lexer mode-stacks into hole lexing. Level 0 is single-line;
+    /// level `n >= 1` lets newlines through and closes at the first `"`
+    /// followed by at least `n` `#`s — any other `"` is a chunk byte.
+    fn lex_fstring(&mut self, lo: usize, n: usize) -> FStrTok {
         let mut parts: Vec<FPart> = Vec::new();
         let mut lit = String::new();
         loop {
-            if self.at_end() || self.peek() == b'\n' {
+            if self.at_end() || (n == 0 && self.peek() == b'\n') {
                 self.err(self.span(lo), "unterminated format string");
                 break;
             }
@@ -427,7 +480,20 @@ impl<'a> Lexer<'a> {
             match b {
                 b'"' => {
                     self.pos += 1;
-                    break;
+                    if n == 0 {
+                        break;
+                    }
+                    let mut run = 0usize;
+                    while self.peek_at(run) == b'#' {
+                        run += 1;
+                    }
+                    if run >= n {
+                        self.pos += n; // consume exactly n of the run
+                        break;
+                    }
+                    lit.push('"');
+                    lit.extend(std::iter::repeat_n('#', run));
+                    self.pos += run;
                 }
                 b'{' if self.peek2() == b'{' => {
                     self.pos += 2;
