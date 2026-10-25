@@ -2,7 +2,7 @@
   "name": "rut-vscode",
   "displayName": "rut",
   "description": "rut language support — semantic tokens, diagnostics, document symbols, hover, completions and go-to-definition via an in-process wasm module (no server process)",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "rut",
   "license": "MIT OR Apache-2.0",
   "repository": {
@@ -115,7 +115,8 @@
     "test:grammar": "node test/grammar-corpus.js",
     "test:e2e": "node test/e2e-wasm.js",
     "test:host": "node scripts/run-vscode-test.mjs",
-    "package": "npm run compile && vsce package"
+    "package": "npm run compile && vsce package",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

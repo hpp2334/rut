@@ -208,15 +208,28 @@ manifests, JS only moves bytes) and walks its dependency rows:
 ## Packaging
 
 ```sh
-npm run package        # vsce package -> rut-vscode-<version>.vsix
+npm run release        # the one lane: preflight → build:wasm → gates
+                       # (grammar corpus + through-wasm e2e + the
+                       # skip-tolerant host suite) → vsce package →
+                       # byte-verify the wasm inside the vsix
+npm run package        # just compile + vsce package (no gates)
 code --install-extension rut-vscode-<version>.vsix
 ```
+
+`release` packs whatever `package.json` says — it never bumps the
+version and never touches git; a bump is a deliberate act:
+`npm version X.Y.Z --no-git-tag-version` first. It warns before
+overwriting an existing vsix, byte-verifies that the wasm inside the
+package is the gated `bin/rut-lsp.wasm`, and reports older
+`rut-vscode-*.vsix` files without deleting them.
+`npm run release -- --dry-run` runs the build and the gates, then stops
+before packing.
 
 ## How highlighting splits
 
 | Layer | What | Where |
 |---|---|---|
-| TextMate | comments, strings (incl. `r"…"`/`f"…"`), numbers + suffixes, keywords (incl. contextual `type`/`builtin`), primitives (`str`/`bytes`), `opaque`, nullable `?`, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
+| TextMate | comments, strings (incl. `r"…"`, `f"…"`, and the hash-leveled multi-line forms `r#"…"#` / `f#"…"#` — the `#` run sets the level via a begin/end backreference), numbers + suffixes, keywords (incl. contextual `type`/`builtin`), primitives (`str`/`bytes`), `opaque`, nullable `?`, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
 | Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes | `crates/rut-lsp` (`semantic/`) |
 
 VS Code merges both: semantic tokens override the grammar inside their

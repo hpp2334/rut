@@ -97,6 +97,35 @@ envelopes (`dist/std/`, `dist/std-v12/`, `dist/std-v13/`, …) stay committed
 untouched — old readers and test fixtures still read them — and the old
 pack script lives in git history.
 
+## VS Code extension — `npm run release` (build → gates → pack)
+
+The extension (`integrations/vscode-extension/`) ships two local,
+gitignored artifacts: `bin/rut-lsp.wasm` (the in-process LSP) and
+`rut-vscode-<version>.vsix`. One lane produces both, in order:
+
+    cd integrations/vscode-extension
+    npm run release        # preflight (cargo on PATH) → build:wasm →
+                           # grammar corpus + through-wasm e2e (+ the
+                           # skip-tolerant host suite) → vsce package →
+                           # byte-verify the wasm inside the vsix
+
+- **When the frontend moves, the lane moves**: any change touching the
+  lexer, parser, `rut-lsp`, or the TextMate grammar must run this lane
+  (or at minimum `build:wasm` + `test:e2e`) before the work is done —
+  a new syntax reads as false diagnostics through a stale wasm, and the
+  corpus gate catches exactly that.
+- **The gates gate the shipped bytes**: the e2e drives `bin/rut-lsp.wasm`,
+  the pack embeds that same file, and the lane byte-compares the copy
+  inside the vsix — a stale artifact cannot pass.
+- **No version writes, no git**: the script packs whatever `package.json`
+  says; a bump is a deliberate human act
+  (`npm version X.Y.Z --no-git-tag-version`), and older
+  `rut-vscode-*.vsix` files are listed, never deleted.
+- `npm run release -- --dry-run` runs the build and the gates, then stops
+  before packing.
+- The demo carries its OWN wasm copy (`demo/public/rut-lsp.wasm`,
+  `cd demo && npm run build:lsp`) — this lane does not refresh it.
+
 ## Docs: the book lives in `docs/`, RFCs are gone
 
 - The user manual is an mdbook site: source in `docs/src/` (TOC:
