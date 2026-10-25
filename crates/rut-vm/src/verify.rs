@@ -13,8 +13,8 @@ pub fn verify(prog: &Program) -> Result<(), String> {
         // bodyless host functions have no code to verify; a BODYLESS
         // mirror stub (empty code, no params — every compiled body ends
         // in its implicit Ret) that lost the ledger claim was
-        // redirected at link, and one nothing claimed stays loud at
-        // its (arity-mismatched) call site
+        // redirected at link, and one nothing claimed is refused at
+        // its call site (the Call/CallM arm below — never executed)
         if f.host_id.is_some() || (f.code.is_empty() && f.params.is_empty()) {
             continue;
         }
@@ -94,6 +94,19 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                         .funcs
                         .get(*func as usize)
                         .ok_or_else(|| bad(format!("call target #{func} out of range")))?;
+                    // the mirror-stub law's trap, made actual: a bodyless,
+                    // host-unbound callee is an instantiation the load never
+                    // materialized — executing it would jump into an empty
+                    // function and dereference its (dangling) code and tag
+                    // pointers. Host thunks carry `host_id` and are the one
+                    // legal bodyless shape.
+                    if callee.code.is_empty() && callee.host_id.is_none() {
+                        return Err(bad(format!(
+                            "call to bodyless stub `{}` (#{func}) — the instantiation was \
+                             never materialized",
+                            prog.func_name(callee)
+                        )));
+                    }
                     if matches!(op, Op::CallM { .. }) && !callee.is_method {
                         return Err(bad("CallM to a non-method".into()));
                     } // the pool span is the callee's whole parameter list
@@ -605,5 +618,81 @@ fn tys_of(op: &Op) -> Vec<u32> {
         | Op::WeakNew { ty, .. }
         | Op::WeakUpgrade { ty, .. } => vec![*ty],
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::verify;
+    use rut_core::binary::{FuncCode, Program};
+    use rut_core::ops::Op;
+    use rut_core::sym::{IdentId, Interner};
+
+    fn empty_func(name: IdentId, host_id: Option<IdentId>) -> FuncCode {
+        FuncCode {
+            name,
+            params: Vec::new(),
+            ret: 0,
+            is_method: false,
+            n_captures: 0,
+            regs: Vec::new(),
+            argv: Vec::new(),
+            labels: Vec::new(),
+            code: Vec::new(),
+            spans: Vec::new(),
+            pos: Vec::new(),
+            host_id,
+        }
+    }
+
+    /// `main` aiming one zero-arg `Op::Call` at func #1 (the callee),
+    /// then `Ret` — the shape law: every body ends in its implicit Ret.
+    fn prog_with_call(callee_name: &str, callee_host: Option<&str>) -> Program {
+        let mut interner = Interner::new();
+        let main_id = interner.intern("main");
+        let callee_id = interner.intern(callee_name);
+        let host_id = callee_host.map(|h| interner.intern(h));
+        let main = FuncCode {
+            name: main_id,
+            params: Vec::new(),
+            ret: 0,
+            is_method: false,
+            n_captures: 0,
+            regs: vec![0],
+            argv: Vec::new(),
+            labels: Vec::new(),
+            code: vec![
+                Op::Call {
+                    func: 1,
+                    argv_off: 0,
+                    argc: 0,
+                    dst: 0,
+                },
+                Op::Ret { val: None },
+            ],
+            spans: Vec::new(),
+            pos: Vec::new(),
+            host_id: None,
+        };
+        let callee = empty_func(callee_id, host_id);
+        Program {
+            interner,
+            funcs: vec![main, callee],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_call_to_a_bodyless_unbound_callee_refuses() {
+        let prog = prog_with_call("HashMap$new", None);
+        let err = verify(&prog).expect_err("a bodyless, host-unbound callee must refuse");
+        assert!(err.contains("bodyless stub"), "{err}");
+        assert!(err.contains("HashMap$new"), "{err}");
+    }
+
+    #[test]
+    fn a_call_to_a_bodyless_host_thunk_verifies() {
+        let prog = prog_with_call("map_new", Some("map_new"));
+        verify(&prog).expect("a host thunk is the one legal bodyless callee");
     }
 }
