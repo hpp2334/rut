@@ -110,7 +110,7 @@ Arithmetic has two sharp edges:
 
 ## Text: plain, raw, and format strings
 
-Three literal forms. A plain string is always inert — no interpolation
+Four literal forms. A plain string is always inert — no interpolation
 ever happens implicitly.
 
 ```rut
@@ -154,6 +154,42 @@ round-trip decimal: `3.5`, `0.1`), `bool` (`true`/`false`), `str`
 `Green`). Composite values — structs, classes, arrays, vecs — are a
 compile error inside an f-string; write a `to_string()`-style method
 and call it, or use a debug dump for development.
+
+### Multi-line literals — `r#"..."#` and `f#"..."#`
+
+The `#` count after `r` / `f` is the literal's level. Level 0 is
+single-line (a newline inside it is an error). From one `#` up, the
+body spans lines and closes at a `"` followed by that many `#`s —
+quotes need no escaping, and every byte between the delimiters is the
+value (no indentation stripping: the newline right after `r#"` is
+part of the value):
+
+```rut
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("text");
+    let sql = r#"
+        select id, name
+        from users
+    "#;
+    let quote = r#"she said "never""#;
+    log.info(f#"query:{sql}quote={quote}"#);
+}
+```
+
+```text
+query:
+        select id, name
+        from users
+    quote=she said "never"
+```
+
+`f#"..."#` is the format string with the same body law: escapes and
+`{{`/`}}` work as usual, chunks may span lines, and holes stay
+single-line. Raw and format still do not combine (`rf#"..."#` does not
+parse). The level rules live in
+[the reference](../reference/literals-and-inference.md).
 
 ## Sequences and buffers
 

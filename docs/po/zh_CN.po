@@ -1562,8 +1562,8 @@ msgstr "文本：普通、原始与格式化字符串"
 
 #: src/tutorial/values-and-variables.md:113
 msgid ""
-"Three literal forms. A plain string is always inert — no interpolation ever happens implicitly."
-msgstr "三种字面量形式。普通字符串永远是惰性的——绝不会隐式发生插值。"
+"Four literal forms. A plain string is always inert — no interpolation ever happens implicitly."
+msgstr "四种字面量形式。普通字符串永远是惰性的——绝不会隐式发生插值。"
 
 
 #: src/tutorial/values-and-variables.md:116
@@ -1608,6 +1608,65 @@ msgid ""
 "What an f-string can render: integers (decimal), floats (shortest round-trip decimal: `3.5`, `0.1`), `bool` (`true`/`false`), `str` (contents), and enum members (their name: `Color::Green` renders `Green`). Composite values — structs, classes, arrays, vecs — are a compile error inside an f-string; write a `to_string()`\\-style method and call it, or use a debug dump for development."
 msgstr ""
 "f-string 能渲染的东西：整数（十进制）、浮点数（最短往返十进制：`3.5`、`0.1`）、`bool`（`true`/`false`）、`str`（内容），以及枚举成员（它们的名字：`Color::Green` 渲染为 `Green`）。复合值——结构体、类、数组、vec——在 f-string 里是编译错误；写一个 `to_string()` 风格的方法并调用它，或者在开发时用调试转储。"
+
+
+#: src/tutorial/values-and-variables.md:158 src/reference/literals-and-inference.md:125
+msgid "Multi-line literals — `r#\"...\"#` and `f#\"...\"#`"
+msgstr "多行字面量 —— `r#\"...\"#` 与 `f#\"...\"#`"
+
+
+#: src/tutorial/values-and-variables.md:160
+msgid ""
+"The `#` count after `r` / `f` is the literal's level. Level 0 is single-line "
+"(a newline inside it is an error). From one `#` up, the body spans lines and "
+"closes at a `\"` followed by that many `#`s — quotes need no escaping, and "
+"every byte between the delimiters is the value (no indentation stripping: "
+"the newline right after `r#\"` is part of the value):"
+msgstr ""
+"`r` / `f` 之后的 `#` 个数就是该字面量的级别。级别 0 是单行的（体内出现换行是错误）。"
+"从一个 `#` 起，字符串体可以跨行，并在后跟同样数量 `#` 的 `\"` 处闭合——引号无需转义，"
+"分隔符之间的每个字节都按原样成为值（不剥离缩进：`r#\"` 之后的那个换行就是值的一部分）："
+
+
+#: src/tutorial/values-and-variables.md:167
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"text\");\n"
+"    let sql = r#\"\n"
+"        select id, name\n"
+"        from users\n"
+"    \"#;\n"
+"    let quote = r#\"she said \"never\"\"#;\n"
+"    log.info(f#\"query:{sql}quote={quote}\"#);\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/tutorial/values-and-variables.md:181
+msgid ""
+"```text\n"
+"query:\n"
+"        select id, name\n"
+"        from users\n"
+"    quote=she said \"never\"\n"
+"```"
+msgstr ""
+
+
+#: src/tutorial/values-and-variables.md:188
+msgid ""
+"`f#\"...\"#` is the format string with the same body law: escapes and `{{`/`}}` "
+"work as usual, chunks may span lines, and holes stay single-line. Raw and "
+"format still do not combine (`rf#\"...\"#` does not parse). The level rules "
+"live in [the reference](../reference/literals-and-inference.md)."
+msgstr ""
+"`f#\"...\"#` 是适用同一字符串体法则的格式化字符串：转义与 `{{`/`}}` 照常工作，"
+"字面量块可以跨行，而插值洞保持单行。原始与格式化仍然不能组合（`rf#\"...\"#` 无法解析）。"
+"级别规则见[参考](../reference/literals-and-inference.md)。"
 
 
 #: src/tutorial/values-and-variables.md:158
@@ -12493,8 +12552,8 @@ msgstr "字符串字面量"
 
 #: src/reference/literals-and-inference.md:108
 msgid ""
-"Three forms — a plain `\"...\"` string is always inert (no interpolation ever happens implicitly):"
-msgstr "三种形式 —— 普通的 `\"...\"` 字符串始终是惰性的（绝不会隐式发生插值）："
+"Four forms — a plain `\"...\"` string is always inert (no interpolation ever happens implicitly):"
+msgstr "四种形式 —— 普通的 `\"...\"` 字符串始终是惰性的（绝不会隐式发生插值）："
 
 
 #: src/reference/literals-and-inference.md:111
@@ -12548,12 +12607,120 @@ msgid "Rust-style placeholders, evaluated at runtime"
 msgstr "Rust 风格的占位符，在运行时求值"
 
 
+#: src/reference/literals-and-inference.md:116
+msgid "multi-line"
+msgstr "多行"
+
+
+#: src/reference/literals-and-inference.md:116
+msgid "`r#\"...\"#`, `f#\"...\"#`"
+msgstr "`r#\"...\"#`, `f#\"...\"#`"
+
+
+#: src/reference/literals-and-inference.md:116
+msgid "the `#` count sets the level: newlines are content, `\"` needs no escape"
+msgstr "`#` 的个数设定级别：换行是内容，`\"` 无需转义"
+
+
+#: src/reference/literals-and-inference.md:118
+msgid ""
+"All three level-0 forms are single-line: the body closes at the first `\"`, "
+"and a newline inside it is an _unterminated string_ diagnostic — a forgotten "
+"close quote fails on its own line."
+msgstr ""
+"三种级别 0 的形式都是单行的：字符串体在第一个 `\"` 处闭合，体内出现换行是一条 "
+"_unterminated string_ 诊断——忘写的闭合引号会在它自己那一行报错。"
+
+
+#: src/reference/literals-and-inference.md:122
+msgid "Raw and format do not combine at any level (`rf#\"...\"#` does not parse)."
+msgstr "原始与格式化在任何级别都不能组合（`rf#\"...\"#` 无法解析）。"
+
+
+#: src/reference/literals-and-inference.md:127
+msgid ""
+"The `#` count after `r` / `f` is the literal's **level**. At level `n >= 1` "
+"the body may span lines and closes only at the first `\"` followed by `n` or "
+"more `#`s (exactly `n` consumed; a surplus `#` is an ordinary stray "
+"character). Any `\"` whose following run of `#`s is shorter than the level is "
+"content — so quotes need no escaping, and a value that itself contains `\"#` "
+"just bumps the level (`r##\"a \"# b\"##` holds `a \"# b`)."
+msgstr ""
+"`r` / `f` 之后的 `#` 个数是该字面量的**级别**。在级别 `n >= 1`，字符串体可以跨行，"
+"且只在第一个后跟 `n` 个或更多 `#` 的 `\"` 处闭合（恰好消耗 `n` 个；多余的 `#` 是普通的杂散字符）。"
+"任何后跟 `#` 串短于级别的 `\"` 都是内容——因此引号无需转义，而自身含有 `\"#` 的值只要把级别加一即可"
+"（`r##\"a \"# b\"##` 装着 `a \"# b`）。"
+
+
+#: src/reference/literals-and-inference.md:135
+msgid ""
+"```rut\n"
+"use ink::{ Logger };\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"sql\");\n"
+"    let sql = r#\"\n"
+"        select id, name\n"
+"        from users\n"
+"    \"#;\n"
+"    let quote = r#\"she said \"never\"\"#;\n"
+"    log.info(f#\"query:{sql}note={quote}\"#);\n"
+"}\n"
+"```"
+msgstr ""
+
+
+#: src/reference/literals-and-inference.md:149
+msgid ""
+"```text\n"
+"query:\n"
+"        select id, name\n"
+"        from users\n"
+"    note=she said \"never\"\n"
+"```"
+msgstr ""
+
+
+#: src/reference/literals-and-inference.md:156
+msgid ""
+"**Verbatim law**: every byte between the delimiters is the value — no "
+"indentation stripping, no leading/trailing-newline magic. The newline right "
+"after `r#\"` is part of the value, as is the indented closing line."
+msgstr ""
+"**逐字法则**：分隔符之间的每个字节都是值——不剥离缩进，也没有首尾换行的魔法。"
+"`r#\"` 之后的换行是值的一部分，带缩进的闭合行同样如此。"
+
+
+#: src/reference/literals-and-inference.md:160
+msgid ""
+"**Values are LF-only**: the source's CRLF is normalized before lexing, so a "
+"multi-line value never contains `\\r`."
+msgstr ""
+"**值只含 LF**：源码的 CRLF 在词法分析之前就被归一化，因此多行值绝不会包含 `\\r`。"
+
+
+#: src/reference/literals-and-inference.md:162
+msgid ""
+"**`f#\"...\"#` is the format string under the same body law**: escapes and "
+"`{{`/`}}` work exactly as at level 0, literal chunks may span lines, and "
+"holes stay single-line (a hole spilling past its line is a diagnostic — bind "
+"the expression to a name first)."
+msgstr ""
+"**`f#\"...\"#` 是适用同一字符串体法则的格式化字符串**：转义与 `{{`/`}}` 在级别 0 下照常工作，"
+"字面量块可以跨行，而插值洞保持单行（洞溢出到行外是一条诊断——先把表达式绑定给一个名字）。"
+
+
+#: src/reference/literals-and-inference.md:166
+msgid ""
+"The formatter reprints a value at its **minimal level**: `r\"...\"` while "
+"the value has no newline and no `\"`, one past the longest `#` run that "
+"follows a `\"` otherwise. Formatting never re-indents literal content."
+msgstr ""
+"格式化器以**最小级别**重排一个值：值里没有换行也没有 `\"` 时用 `r\"...\"`，"
+"否则取比最长的 `\"` 后 `#` 串再多一级。格式化绝不重排字面量内容的缩进。"
+
+
 #: src/reference/literals-and-inference.md:117
-msgid "Raw and format do not combine (`rf\"...\"` does not parse)."
-msgstr "原始与格式化不能组合（`rf\"...\"` 无法解析）。"
-
-
-#: src/reference/literals-and-inference.md:119
 msgid "Format literals — `f\"...\"`"
 msgstr "格式化字面量 —— `f\"...\"`"
 
@@ -23332,8 +23499,12 @@ msgstr ""
 
 #: src/reference/frontend.md:65
 msgid ""
-"Raw strings `r\"...\"` carry everything up to the closing `\"` literally; `\\\"` inside a raw string does not close it."
-msgstr "原始字符串 `r\"...\"` 逐字携带直到闭合 `\"` 为止的一切；原始字符串里的 `\\\"` 不会闭合它。"
+"Raw strings `r\"...\"` carry everything up to the closing `\"` literally; `\\\"` inside a raw string does not close it. The `#` count after the `r`/`f` prefix is the literal's LEVEL: level 0 is single-line (a newline inside the body is an _unterminated_ diagnostic), and at level `n >= 1` (`r#\"...\"#`, `f#\"...\"#`) the body spans lines and closes at the first `\"` followed by `n` or more `#`s — any shorter-`#`\\-run `\"` is content. Holes stay single-line at every level."
+msgstr ""
+"原始字符串 `r\"...\"` 逐字携带直到闭合 `\"` 为止的一切；原始字符串里的 `\\\"` 不会闭合它。"
+"`r`/`f` 前缀之后的 `#` 个数是该字面量的级别：级别 0 是单行的（体内出现换行是一条 _unterminated_ 诊断），"
+"而在级别 `n >= 1`（`r#\"...\"#`、`f#\"...\"#`），字符串体可以跨行，并在第一个后跟 `n` 个或更多 `#` 的 `\"` 处闭合——"
+"任何 `#` 串更短的 `\"` 都是内容。插值洞在所有级别下都保持单行。"
 
 
 #: src/reference/frontend.md:68

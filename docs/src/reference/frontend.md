@@ -63,7 +63,12 @@ is a lex error with a *bind it to a name first* note. See
 [Templates](templates.md) for the surface semantics.
 
 Raw strings `r"..."` carry everything up to the closing `"` literally;
-`\"` inside a raw string does not close it.
+`\"` inside a raw string does not close it. The `#` count after the
+`r`/`f` prefix is the literal's LEVEL: level 0 is single-line (a
+newline inside the body is an *unterminated* diagnostic), and at level
+`n >= 1` (`r#"..."#`, `f#"..."#`) the body spans lines and closes at
+the first `"` followed by `n` or more `#`s — any shorter-`#`-run `"` is
+content. Holes stay single-line at every level.
 
 ### Nesting budgets
 

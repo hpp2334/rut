@@ -105,7 +105,7 @@ see [Primitive types](primitive-types.md).
 
 ## String literals
 
-Three forms — a plain `"..."` string is always inert (no interpolation
+Four forms — a plain `"..."` string is always inert (no interpolation
 ever happens implicitly):
 
 | Form | Example | Meaning |
@@ -113,8 +113,60 @@ ever happens implicitly):
 | plain | `"hi\tname"` | escapes processed: `\t \n \r \b \f \\ \" \u{...}` |
 | raw | `r"C:\temp\log.txt"` | **no** escape processing; every byte is literal |
 | format | `f"hi {name}, n={n}"` | Rust-style placeholders, evaluated at runtime |
+| multi-line | `r#"..."#`, `f#"..."#` | the `#` count sets the level: newlines are content, `"` needs no escape |
 
-Raw and format do not combine (`rf"..."` does not parse).
+All three level-0 forms are single-line: the body closes at the first
+`"`, and a newline inside it is an *unterminated string* diagnostic —
+a forgotten close quote fails on its own line.
+
+Raw and format do not combine at any level (`rf#"..."#` does not
+parse).
+
+## Multi-line literals — `r#"..."#` and `f#"..."#`
+
+The `#` count after `r` / `f` is the literal's **level**. At level
+`n >= 1` the body may span lines and closes only at the first `"`
+followed by `n` or more `#`s (exactly `n` consumed; a surplus `#` is
+an ordinary stray character). Any `"` whose following run of `#`s is
+shorter than the level is content — so quotes need no escaping, and a
+value that itself contains `"#` just bumps the level
+(`r##"a "# b"##` holds `a "# b`).
+
+```rut
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("sql");
+    let sql = r#"
+        select id, name
+        from users
+    "#;
+    let quote = r#"she said "never""#;
+    log.info(f#"query:{sql}note={quote}"#);
+}
+```
+
+```text
+query:
+        select id, name
+        from users
+    note=she said "never"
+```
+
+- **Verbatim law**: every byte between the delimiters is the value —
+  no indentation stripping, no leading/trailing-newline magic. The
+  newline right after `r#"` is part of the value, as is the indented
+  closing line.
+- **Values are LF-only**: the source's CRLF is normalized before
+  lexing, so a multi-line value never contains `\r`.
+- **`f#"..."#` is the format string under the same body law**: escapes
+  and `{{`/`}}` work exactly as at level 0, literal chunks may span
+  lines, and holes stay single-line (a hole spilling past its line is
+  a diagnostic — bind the expression to a name first).
+- The formatter reprints a value at its **minimal level**: `r"..."`
+  while the value has no newline and no `"`, one past the longest
+  `#` run that follows a `"` otherwise. Formatting never re-indents
+  literal content.
 
 ## Format literals — `f"..."`
 

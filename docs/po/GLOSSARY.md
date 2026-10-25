@@ -63,6 +63,7 @@ source text by design; a partially translated book is a valid book.
 | weak reference | 弱引用 | |
 | cycle | 循环引用 | the cycle collector → 循环收集器 |
 | string view | 字符串视图 | slicing → 切片 |
+| literal level | 字面量级别 | the `#` count after `r`/`f` → `r`/`f` 之后的 `#` 个数；level 0 → 级别 0；multi-line literal → 多行字面量；`r#"..."#` / `f#"..."#` stay code |
 | standard library | 标准库 | |
 | playground | Playground | 专有名词，不译 |
 | compile | 编译 | the compiler → 编译器；frontend → 前端 |

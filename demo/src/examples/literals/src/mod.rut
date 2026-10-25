@@ -7,6 +7,9 @@ use pouch::{ Vec };
 // `for (x of a)` lower through the same shape.
 // `bytes` is the binary primitive — `bytes(64)` zeroes a 64-octet
 // buffer; see the bytes example for encode/decode/clone.
+// Strings: plain/raw/format, PLUS the hash-leveled multi-line forms —
+// `r#"..."#` and `f#"..."#`: newlines are content, `"` needs no escape,
+// the `#` count sets the level (level 0 stays single-line).
 
 use ink::{ Logger };
 
@@ -26,6 +29,11 @@ fn literals(name: str) {
     let s = "hi\tname";              // plain string: escapes processed
     let raw = r"C:\temp\log.txt";    // raw literal: NO escape processing
     let t = f"hi {name}!";           // format literal (§4.1)
+    let sql = r#"
+        select id, name
+        from users
+    "#;                              // multi-line raw: every byte verbatim
+    let quote = r#"she said "never""#; // level 1: embedded `"` unescaped
     let ch = "h";                    // 1-codepoint str (`char` is gone)
     let mut arr = [1, 2, 3];         // [i32] — heap cell
     let mut zero: Vec<f32> = Vec<f32>::filled(0.0, 1024);    // growable, zeroed, flat
@@ -36,6 +44,7 @@ fn literals(name: str) {
     let p = Point { x: 1, y: 2 };    // struct literal: no `new`
 
     log.info(f"a={a} e={e} d64={d64} ch={ch} p.x={p.x} zero[0]={zero[0]} len={grow.len()} bin={bin.len()}");
+    log.info(f#"== {t} =={sql}quote={quote}"#);   // multi-line format literal
 }
 
 entry fn main() {
