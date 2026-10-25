@@ -1417,6 +1417,31 @@ async function main() {
         [],
         'null inlay coerces to []'
       );
+
+      // the member click rides the same law: the mounted class's
+      // inherent impl method answers through the dep index (the
+      // engine's impl fallback) — the scaffold's `log.info(…)` gesture.
+      // The member sits on ITS OWN line; the position is the member
+      // ident after the dot (a column mathed off another line clicks
+      // garbage and honestly misses).
+      const memberDoc = 'use ink::{ Logger };\nentry fn main() {\n    let log = Logger("hello");\n    log.info("hi");\n}\n';
+      const memberUri = 'file://' + path.join(ws, 'src', 'member.rut');
+      rut.analyze(memberUri, memberDoc);
+      const mLines = memberDoc.split('\n');
+      const mLine = mLines.findIndex((l) => l.includes('.info'));
+      const mHits = rut
+        .definition(memberUri, mLine, mLines[mLine].indexOf('.info') + 1)
+        .filter((l) => l.uri.includes('.rut/deps/ink-'));
+      assert.strictEqual(mHits.length, 1, `hop-1 .info targets: ${JSON.stringify(mHits)}`);
+      assert.strictEqual(
+        mHits[0].uri,
+        'file://' + path.join(depDir, 'src/mod.rut'),
+        'the .info click lands in the laid tree'
+      );
+      assert.ok(
+        fs.readFileSync(mHits[0].uri.replace(/^file:\/\//, ''), 'utf8').includes('pub fn info'),
+        'the .info target is the impl method in the laid tree'
+      );
       smokes++;
 
       // the mount: <tmp>/.rut/deps/pouch-<pin12>/ — the pin prefix IS

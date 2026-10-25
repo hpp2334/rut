@@ -1517,6 +1517,67 @@ pub host fn sqrt(x: f64) -> f64;
         assert_eq!(root.mods[0].name, "layout");
     }
 
+    /// THE HOP-1 MEMBER LAW: a dep source's inherent impl methods ride
+    /// the dep index (`impl Logger { pub fn info(self, …) }` → `fns`
+    /// with `owner: Some("Logger")`), so a consumer's `log.info(…)`
+    /// click resolves THROUGH `member_target`'s impl fallback to the
+    /// dep index's fn — the ink shape that stranded every scaffold's
+    /// method jump on the ambient repo-relative answer.
+    #[test]
+    fn dep_impl_methods_ride_the_dep_index() {
+        const INK: &str = concat!(
+            "use ink_host::{ create_logger, logger_log };\n",
+            "pub class Logger {\n",
+            "    internal: opaque;\n",
+            "}\n",
+            "impl Logger {\n",
+            "    pub fn info(self, msg: str) -> nil { logger_log(self.internal, 1, msg); }\n",
+            "}\n",
+        );
+        let idx = index_dep_mod(
+            "ink",
+            "file:///deps/ink/src/mod.rut",
+            "",
+            INK,
+            Mode::Impl,
+            None,
+            &[],
+        );
+        let info = idx.fns.iter().find(|f| f.name == "info");
+        assert_eq!(
+            info.map(|f| f.owner.as_deref()),
+            Some(Some("Logger")),
+            "impl methods ride the dep index: {:?}",
+            idx.fns
+                .iter()
+                .map(|f| (f.name.as_str(), f.owner.as_deref()))
+                .collect::<Vec<_>>()
+        );
+        // the class body is fields-only; the method answers ONLY through
+        // the impl fallback
+        let ty = idx.ty("Logger").expect("the Logger ty rides");
+        assert!(ty.methods.iter().all(|m| m.name != "info"));
+        // the full member resolution, the definition lane's own path:
+        // receiver `log` (ctor-inferred Logger) → `.info` → the dep fn
+        let consumer = "use ink::{ Logger };\nentry fn main() {\n    let log = Logger(\"hello\");\n    log.info(\"hi\");\n}\n";
+        let lines: Vec<&str> = consumer.lines().collect();
+        let line = lines
+            .iter()
+            .position(|l| l.contains(".info"))
+            .expect("the .info line") as u32;
+        let ch = lines[line as usize].find(".info").unwrap() as u32 + 1;
+        let hits = crate::analysis::definition_at(
+            "file:///ws/main.rut",
+            consumer,
+            &[idx],
+            &crate::mods::DocMods::default(),
+            line,
+            ch,
+        );
+        assert_eq!(hits.len(), 1, "the .info click resolves: {hits:?}");
+        assert_eq!(hits[0].uri, "file:///deps/ink/src/mod.rut");
+    }
+
     /// a mod-carrying bundle in the pack writer's shape: manifest + the
     /// additive `rut.mods` rows entry (the tree as path-keyed rows)
     fn kit_rows_bundle() -> Vec<u8> {
