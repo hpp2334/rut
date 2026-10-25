@@ -47,7 +47,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest+wasm-pack
+          tool: cargo-nextest,wasm-pack
       - name: cargo nextest
         run: cargo nextest run --workspace
       - name: book code blocks compile and run
