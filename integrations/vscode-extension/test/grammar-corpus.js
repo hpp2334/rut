@@ -151,6 +151,14 @@ const SNIPPETS = [
   // aligned-already guards: f-string holes re-enter source.rut; comments win.
   { name: 'f-string hole embedded', src: 'let t = f"{x}";', text: 'x', scope: 'meta.embedded.line.rut' },
   { name: 'comment rule wins', src: '// struct dataclass where string opaque ?', text: 'struct', scope: 'comment.line.double-slash.rut' },
+  // hash-leveled multi-line literals — the grammar tracks the lexer's
+  // law: the `#` run sets the level, the close is `"` + the same run,
+  // and shorter-run quotes are content.
+  { name: 'hash raw multi-line', src: 'let s = r#"\n  select id\n  from users\n"#;', text: 'select id', scope: 'string.quoted.other.rut' },
+  { name: 'hash raw embedded quotes', src: 'let q = r#"she said "never""#;', text: 'she said "never"', scope: 'string.quoted.other.rut' },
+  { name: 'hash raw level 2', src: 'let f = r##"flag = "# done"##;', text: 'done', scope: 'string.quoted.other.rut' },
+  { name: 'hash f-string multi-line', src: 'let t = f#"row {n}\nend"#;', text: 'row', scope: 'string.interpolated.rut' },
+  { name: 'hash f-string hole embedded', src: 'let t = f#"row {n}\nend"#;', text: 'n', scope: 'meta.embedded.line.rut' },
   // phase-3: the fallback mirrors the semantic classifier's use-line law —
   // path segments: capitalized -> type, lowercase -> namespace; brace
   // imports: capitalized -> type, lowercase -> function — plus the
