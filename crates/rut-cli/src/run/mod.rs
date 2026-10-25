@@ -1,7 +1,8 @@
-//! the `run` subcommand: cache-first for a package directory (the
-//! whole-program compile is the reference; its archive caches), direct
-//! load for a packed archive — either way compile through the host
-//! chain, verify, drive.
+//! the `run` subcommand: cache-first for a package directory, direct
+//! load for a packed archive — ONE execution lane either way: the
+//! driven artifact is always the packed archive (the miss packs fresh,
+//! the hit mounts the cached bytes), compiled through the host chain,
+//! verified, driven. Run 1 and run 2 cannot differ.
 
 mod chain;
 mod door;
@@ -53,11 +54,11 @@ pub(crate) fn run(args: &RunArgs) {
         return;
     }
     // a package directory: cache-first. A hit mounts the cached
-    // archive exactly like a direct `.rutbundle`; a miss is the
-    // whole-program compile — the deterministic reference — whose
-    // archive then emits into the cache. `None` here covers the
-    // uncachable shapes too: an unkeyable closure (no manifest — the
-    // walk diagnoses) and a `<uncached>` key (never written — cache.rs)
+    // archive exactly like a direct `.rutbundle`; a miss packs a fresh
+    // archive and drives it through the same lane. `None` here covers
+    // the uncachable shapes too: an unkeyable closure (no manifest —
+    // the walk diagnoses) and a `<uncached>` key (never written —
+    // cache.rs)
     let cache_entry = if args.no_cache {
         None
     } else {
@@ -89,10 +90,14 @@ pub(crate) fn run(args: &RunArgs) {
             }
         }
     }
-    // the miss path — today's run: the install-first gate (run never
-    // networks — a missing url dep is one aggregated refusal), then
-    // the walk (url deps ride the cache-first fetcher — offline here:
-    // every dep is already cached), compile through the chain
+    // the miss path — the install-first gate (run never networks — a
+    // missing url dep is one aggregated refusal), then the walk (url
+    // deps ride the cache-first fetcher — offline here: every dep is
+    // already cached), then THE ONE LANE: pack the closure and drive
+    // the packed archive — the exact bytes the cache stores, through
+    // the same lane a cache hit replays. Run 1 and run 2 execute
+    // identically by construction; a bundle-lane bug crashes the
+    // FIRST run, never only the cache hit.
     let remote = cache::offline_remote_for(p);
     if let Err(e) = cache::ensure_deps_cached(p, "run", &remote) {
         eprintln!("{e}");
@@ -107,32 +112,40 @@ pub(crate) fn run(args: &RunArgs) {
         }
     };
     door::refuse_host_walk(&loaded, path);
-    let compiled = chain::compile(&loaded);
-    let prog = compiled
-        .graph
-        .program
-        .clone()
-        .expect("chain::compile refuses a graph with no program");
-    let entry_name = entry::designate(entry, &prog);
-    drive::run_entry(compiled, &entry_name, fuel);
-    // the run succeeded: emit the archive via the pack lane and write
-    // the cache entry (also under --no-cache — the entry mirrors what
-    // the reference engine just produced). Best-effort; a host-rooted
-    // dir never gets here (the door refused above). The pack rides the
-    // cache-only remote — the closure was just loaded offline, so
-    // every url dep is cached and the wire never fires.
-    let remote = cache::offline_remote_for(p);
-    if let Ok((bytes, _)) = cache::block_on(rut_native::pack_dir_opts_with(
+    // the source-compile gate: compile diagnostics surface here, with
+    // the walked sources' labels — the pack lane flattens them, and an
+    // archive's root group carries no text to re-render from. No drive:
+    // the archive is the law; this graph is a check.
+    chain::compile(&loaded);
+    let bytes = match cache::block_on(rut_native::pack_dir_opts_with(
         p,
         &rut_driver::PackOpts::default(),
         &remote,
     )) {
-        // `None` = the closure cannot be cached honestly (unkeyable,
-        // or a `<uncached>` url key — dead by construction); the
-        // entry is skipped rather than written where no run can hit it
-        if let Ok(Some(cache_path)) = cache::run_cache_path(p) {
-            cache::store_run_cache(&cache_path, &bytes);
+        Ok((bytes, _)) => bytes,
+        Err(e) => {
+            eprintln!("run: {e}");
+            std::process::exit(1);
         }
+    };
+    let archive = match rut_driver::Bundle::parse(&bytes) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("run: {path}: {e}");
+            std::process::exit(2);
+        }
+    };
+    // defense-in-depth: a host archive never lands in the cache, but
+    // the miss lane holds the decoded handle — it refuses exactly like
+    // the direct `.rutbundle` lane
+    door::refuse_host_archive(&archive, path);
+    run_archive_bytes(archive, entry, fuel, path);
+    // the run succeeded: the archive that JUST RAN is the cache entry.
+    // `None` = the closure cannot be cached honestly (unkeyable, or a
+    // `<uncached>` url key — dead by construction); the entry is
+    // skipped rather than written where no run can hit it
+    if let Ok(Some(cache_path)) = cache::run_cache_path(p) {
+        cache::store_run_cache(&cache_path, &bytes);
     }
 }
 
