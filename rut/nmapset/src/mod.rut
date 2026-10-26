@@ -30,7 +30,8 @@ use nmap_host::{ map_new, map_len,
             map_hput, map_hfind, map_hremove,
             map_hput_sv, map_hfind_sv, map_hremove_sv,
             map_hvput, map_hvget, map_hvremove,
-            map_hvput_sv, map_hvget_sv, map_hvremove_sv };
+            map_hvput_sv, map_hvget_sv, map_hvremove_sv,
+            map_iter_new, map_iter_next };
 
 // ---------------------------------------------------- the owners ----
 
@@ -118,6 +119,35 @@ impl<K, V> HashMap<K, V> {
     pub fn remove_range(mut self, parent: str, off: i32, len: i32) -> bool {
         return map_hvremove_sv(self.t, parent, off, len) >= 0;
     }
+
+    // ---- iteration (the `for..of` lane) ------------------------------
+    // `for (let k of m)` walks the KEYS — the element type IS `K`, and
+    // the value rides the law it always has: `m.get(k)` answers the
+    // STORED cell (the aliasing law), one host call per element.
+    //
+    // THE SNAPSHOT LAW: the walk is the keys taken when the loop starts —
+    // puts/removes inside the body never touch it (the host clones the
+    // live keys into a cursor at `map_iter_new`; the cursor dies with
+    // the loop). THE ORDER LAW: birth order — insertion order of live
+    // entries; a remove-then-reinsert moves the key to the end (handles
+    // are never recycled). THE FRESH-COPY LAW: a yielded key is a NEW
+    // cell of equal content — there IS no stored rut key cell to hand
+    // out (the sv lanes mint none by design); `get` stays the way to a
+    // stored cell. `emit` answering `false` is the loop's `break` — the
+    // walk stops pulling (the engine's iterable contract, Flow's law).
+    //
+    // `type_id<K>()` is the mint's exact type id: the host writes each
+    // key back under it, so `opaque::downcast<K>` recovers it — an `i8`
+    // key reads `-5`, a `u64` key keeps its high bit — and the recovery
+    // can never nil (the `?K` auto-derefs into `emit`'s `K` param).
+    [iterable] pub fn iterate(self, emit: fn(K) -> bool) {
+        let cur = map_iter_new(self.t, type_id<K>());
+        let mut cell = map_iter_next(cur);
+        while (cell != nil) {
+            if (!emit(opaque::downcast<K>(cell))) { break; }
+            cell = map_iter_next(cur);
+        }
+    }
 }
 
 // `HashSet<T>` — the same host table, no value machinery: it shares
@@ -151,5 +181,18 @@ impl<T> HashSet<T> {
 
     pub fn len(self) -> i32 {
         return map_len(self.t);
+    }
+
+    // ---- iteration (the `for..of` lane) ------------------------------
+    // The same walk as the map's, the element type IS `T` (a set's
+    // elements ARE its keys): snapshot law, birth order, fresh-copy law,
+    // `emit` false = break — see the map's `iterate` for the full law.
+    [iterable] pub fn iterate(self, emit: fn(T) -> bool) {
+        let cur = map_iter_new(self.t, type_id<T>());
+        let mut cell = map_iter_next(cur);
+        while (cell != nil) {
+            if (!emit(opaque::downcast<T>(cell))) { break; }
+            cell = map_iter_next(cur);
+        }
     }
 }

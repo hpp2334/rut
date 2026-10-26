@@ -154,6 +154,43 @@ floats have no stable equality contract. The API is
 `?V` — `nil` is absent, and a hit returns the **stored cell**, not a
 copy (the aliasing law).
 
+**Iteration.** Both classes mark the engine's `[iterable]` contract:
+`for (let k of m)` walks a map's **keys** and `for (let x of s)` a
+set's **elements** — the value rides the law it always has,
+`m.get(k)` answers the stored cell. The walk is the **snapshot** taken
+when the loop starts (puts/removes inside the body never touch it), in
+**birth order** — insertion order of live entries; a
+remove-then-reinsert moves the key to the end. A yielded key is a
+**fresh cell** of equal content, never the map's own (there is no
+stored key cell to hand out) — `get` stays the way to a stored cell.
+The loop body is the emit closure: scalars copy in, so accumulators are
+shared record cells (see [Control flow](control-flow.md)).
+
+```rut
+use nmapset::{ HashMap };
+use ink::{ Logger };
+
+struct Sum { total: i32 = 0; }
+
+entry fn main() {
+    let log = Logger("ages");
+    let mut ages = HashMap<str, i32>::new();
+    ages.put("ada", 36);
+    ages.put("grace", 45);
+    // the loop body IS the emit closure — scalars copy in, so the
+    // accumulator is a shared record cell
+    let mut acc: ?Sum = Sum { };
+    for (let name of ages) {
+        acc.total += ages.get(name);
+    }
+    log.info(f"total={acc.total} count={ages.len()}");
+}
+```
+
+```text
+total=81 count=2
+```
+
 ## Absence and errors
 
 - **Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil`

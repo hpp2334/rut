@@ -78,7 +78,6 @@ use hashbrown::HashTable;
 use rut_vm::heap::Heap;
 use rut_vm::interp::{HostPkg, Ret, Vm};
 use rut_vm::{HostPayload, Opaque, OpaqueRef, Slot, Trap, TrapKind, ValSlot, Value};
-
 /// Which payload flavor the table stores — fixed by the first inserted
 /// key and admitted thereafter (the wrapper is generic over `K`, so keys
 /// are homogeneous per map by construction; the check is defense, and a
@@ -555,6 +554,21 @@ impl NativeTable {
         self.map.is_empty()
     }
 
+    /// THE SNAPSHOT (the `for..of` law): the live keys cloned in BIRTH
+    /// order — the never-recycled handle IS the order, so the walk reads
+    /// insertion order of live entries and a remove-then-reinsert moves
+    /// the key to the end. The walk IS this Vec: puts/removes after
+    /// `iter_new` (inside an emit body, user code) never touch it.
+    pub(crate) fn iter_snapshot(&self) -> Vec<KeyVal> {
+        let mut births: Vec<(i32, KeyVal)> = self
+            .map
+            .iter()
+            .map(|it| (it.1.handle, it.0.clone()))
+            .collect();
+        births.sort_by_key(|(h, _)| *h);
+        births.into_iter().map(|(_, k)| k).collect()
+    }
+
     /// Kind admission: homogeneous per table by construction; a mismatch
     /// is a host/wrapper bug and traps instead of silently missing.
     fn admit(&self, kind: KeyKind) -> Result<(), Trap> {
@@ -568,8 +582,19 @@ impl NativeTable {
     }
 }
 
-/// The table is a HostOpaque payload (nmap-hostvals P2) whose release
-/// hook is REAL since P5: at store-entry death (rc-0 inside the release
+/// The iteration cursor's payload (the `for..of` law): the SNAPSHOT —
+/// the live keys in birth order ([`NativeTable::iter_snapshot`]) — plus
+/// the mint's exact key type (the wrapper's `type_id<K>()` crossing) and
+/// the walk position. Pure Rust data, no rut references: plain
+/// [`Opaque::alloc`], no finalize hook — the Vec drops with the box at
+/// rc-0, and `map_iter_next` mints each key box fresh per yield.
+pub(crate) struct IterCursor {
+    keys: Vec<KeyVal>,
+    ty: u32,
+    pos: usize,
+}
+
+/// The table is a HostOpaque payload (nmap-hostvals P2) whose release/// hook is REAL since P5: at store-entry death (rc-0 inside the release
 /// walk, BEFORE the payload's own Drop) every held value
 /// cell releases through the provided heap view — the record-field
 /// pattern, children through the same walk that frees the parent — and
@@ -642,6 +667,65 @@ fn dead_handle_trap(handle: i32, births: i32) -> Trap {
             "nmap: val handle {handle} has no live entry (the key was removed; births {births})"
         ),
     )
+}
+
+/// The iteration lane's key-type decode: the wrapper's `type_id<K>()`
+/// crossing as the mint's exact `val_ty`, mapped to the table's flavor.
+/// Defense: anything outside the closed key set — floats, records, user
+/// types — traps by name (the wrapper's union bound is the compile-time
+/// admission, this is the host's, exactly the put crossing's law).
+fn iter_key_kind(ty: u32) -> Result<KeyKind, Trap> {
+    use rut_core::types::{
+        TY_BOOL, TY_BYTES, TY_I16, TY_I32, TY_I64, TY_I8, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
+    };
+    match ty {
+        TY_I8 | TY_I16 | TY_I32 | TY_I64 | TY_U8 | TY_U16 | TY_U32 | TY_U64 | TY_BOOL => {
+            Ok(KeyKind::Bits)
+        }
+        TY_STR => Ok(KeyKind::Str),
+        TY_BYTES => Ok(KeyKind::Bytes),
+        _ => Err(Trap::new(
+            TrapKind::Invalid,
+            format!(
+                "nmap: iter key type #{ty} outside the closed key set — the integer primitives, `bool`, `str`, `bytes`"
+            ),
+        )),
+    }
+}
+
+/// THE MINT (the `for..of` law): one fresh key box per yield — the exact
+/// inverse of the put crossing's decode (`slot_to_value`'s law,
+/// mirrored). The integer and `bool` lanes ride the RAW slot word: Bits
+/// stored it sign/zero-extended at the put, and the word is the identity
+/// — the mint writes it back under the requested type, so an `i8` key
+/// reads `-5` and a `u64` key reads its high bit through
+/// `opaque::downcast<K>` bit-for-bit. The octet lanes mint a FRESH cell
+/// (`String`/`Vec<u8>`'s boundary return — the charged alloc) — the
+/// fresh-copy law: there is no stored rut key cell to hand out (the sv
+/// borrow law minted none), so every yield is a new cell of equal
+/// content. `ty` is the box's `val_ty` — the exact check
+/// `opaque::downcast<K>` runs — which is why the wrapper's
+/// `type_id<K>()` crosses at all; the recovery can never nil.
+fn mint_key_box(vm: &mut Vm, ty: u32, key: &KeyVal) -> Result<OpaqueRef, Trap> {
+    let payload = match (iter_key_kind(ty)?, key) {
+        (KeyKind::Bits, KeyVal::Bits(word)) => {
+            if ty == rut_core::types::TY_BOOL {
+                Slot::bool(*word != 0)
+            } else {
+                Slot::int(*word as i64)
+            }
+        }
+        (KeyKind::Str, KeyVal::Str(s)) => <String as Ret>::into_slot(s.clone(), vm)?,
+        (KeyKind::Bytes, KeyVal::Bytes(b)) => <Vec<u8> as Ret>::into_slot(b.clone(), vm)?,
+        _ => {
+            return Err(Trap::new(
+                TrapKind::Invalid,
+                "nmap: iter flavor mismatch — the snapshot's keys disagree with the requested key type (a host/wrapper bug)",
+            ))
+        }
+    };
+    let box_slot = vm.alloc_opaque_box(payload, ty)?;
+    OpaqueRef::from_slot(vm, box_slot, rut_core::types::TY_OPAQUE)
 }
 
 /// The two hash constants the removed pure-rut `mapset` pkg's
@@ -1096,6 +1180,45 @@ pub fn pkg() -> HostPkg {
         |vm: &mut Vm, b: Opaque<NativeTable>, parent: &str, off: i32, len: i32| -> Result<i32, Trap> {
             let range = sv_range(parent, off, len)?;
             b.with_mut(vm, |vm, t| t.hremove_ref(vm, KeyRef::Str(range)))?
+        },
+    );
+
+    // ---- the iteration lanes (the `for..of` law) -----------------------
+    // Two crossings. `map_iter_new` snapshots the live keys (BIRTH order —
+    // insertion order of live entries) into a cursor box under the
+    // wrapper's own `type_id<K>()` (the mint's exact `val_ty`; the flavor
+    // mismatch traps by name before any cursor exists). Every
+    // `map_iter_next` mints ONE fresh key box ([`mint_key_box`]) and
+    // answers it as `?opaque` — nil at the end. The snapshot is pure Rust
+    // data: puts/removes inside the emit body never touch the walk, and
+    // the cursor drops with the wrapper's loop.
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_iter_new",
+        (Opaque<NativeTable>, u32) -> OpaqueRef,
+        |vm: &mut Vm, b: Opaque<NativeTable>, ty: u32| -> Result<OpaqueRef, Trap> {
+            let kind = iter_key_kind(ty)?;
+            let keys = b.with(|t| -> Result<Vec<KeyVal>, Trap> {
+                t.admit(kind)?; // the flavor check — a mismatched ty traps by name
+                Ok(t.iter_snapshot())
+            })??;
+            let cur = Opaque::alloc(vm, IterCursor { keys, ty, pos: 0 })?;
+            Ok(cur.handle().clone())
+        },
+    );
+    rut_vm::pkg_fn!(
+        pkg,
+        "map_iter_next",
+        (Opaque<IterCursor>) -> Option<OpaqueRef>,
+        |vm: &mut Vm, cur: Opaque<IterCursor>| -> Result<Option<OpaqueRef>, Trap> {
+            cur.with_mut(vm, |vm, c| {
+                let key = match c.keys.get(c.pos) {
+                    Some(k) => k,
+                    None => return Ok(None), // the walk's end — the flat nil
+                };
+                c.pos += 1;
+                mint_key_box(vm, c.ty, key).map(Some)
+            })?
         },
     );
     pkg.build()
@@ -2053,5 +2176,147 @@ mod tests {
         assert_eq!(fused_remove(&vm, &mut b, &bits(1)).unwrap(), 0);
         // kind mixing still traps through the fused path
         assert!(fused_put(&mut t, KeyVal::Str("s".into())).is_err());
+    }
+
+    // ---- the iteration lane (the `for..of` law) -------------------------
+
+    use rut_core::types::{TY_BOOL, TY_BYTES, TY_I32, TY_I64, TY_I8, TY_STR, TY_U32, TY_U64};
+
+    /// A cursor over a table filled through the fused lanes — the tests'
+    /// shared shape. `keys` must be inserted in the intended birth order.
+    fn cursor_of(vm: &mut Vm, t: &NativeTable, ty: u32) -> Result<Opaque<IterCursor>, Trap> {
+        let kind = iter_key_kind(ty)?;
+        let keys = t.admit(kind).map(|_| t.iter_snapshot())?;
+        Opaque::alloc(vm, IterCursor { keys, ty, pos: 0 })
+    }
+
+    /// The snapshot walks BIRTH order — insertion order of live entries;
+    /// a remove-then-reinsert is a NEW birth and walks last. The mint
+    /// answers each key as a fresh `?opaque` box, nil at the end.
+    #[test]
+    fn the_snapshot_walks_birth_order() {
+        let mut t = NativeTable::new(8);
+        for v in [30, 10, 20] {
+            fused_put(&mut t, bits(v)).unwrap();
+        }
+        let mut vm = bare_vm();
+        let cur = cursor_of(&mut vm, &t, TY_I64).unwrap();
+        let mut walked = Vec::new();
+        loop {
+            let next = cur
+                .with_mut(&mut vm, |vm, c| {
+                    let key = match c.keys.get(c.pos) {
+                        Some(k) => k.clone(),
+                        None => return Ok(None),
+                    };
+                    c.pos += 1;
+                    mint_key_box(vm, c.ty, &key).map(Some)
+                })
+                .unwrap()
+                .unwrap();
+            let Some(boxed) = next else { break };
+            let (ty, v) = rut_vm::rut_box_payload(&vm, &boxed).unwrap();
+            assert_eq!(ty, TY_I64);
+            let Value::I64(word) = v else { unreachable!() };
+            walked.push(word as u64);
+        }
+        assert_eq!(walked, vec![30, 10, 20], "birth order, not bucket order");
+    }
+
+    /// The mint is the put decode's exact inverse: every int width reads
+    /// back bit-for-bit through the box (i8 sign-extended, u64 raw,
+    /// bool the 0/1 word), str/bytes mint FRESH equal-content cells.
+    #[test]
+    fn the_mint_round_trips_every_key_flavor() {
+        let mut vm = bare_vm();
+        let read = |vm: &Vm, boxed: &OpaqueRef| -> (u32, Value) {
+            rut_vm::rut_box_payload(vm, boxed).unwrap()
+        };
+        // bits: the sign/zero-extension law, width by width. The words
+        // are the REALISTIC crossing words — signed widths sign-extend,
+        // unsigned widths zero-extend (the widening-distinctness law).
+        for (word, ty, expect) in [
+            (0xFFFF_FFFF_FFFF_FFFBu64, TY_I8, -5i64), // -5i8 sign-extended
+            (0xFFFF_FFFF_FFFF_FFFBu64, TY_I64, -5i64), // -5i64 raw
+            (0x8000_0000_0000_0005, TY_U64, -9223372036854775803i64), // the raw word
+            (0x0000_0000_FFFF_FFFB, TY_U32, 4294967291i64), // zero-extended
+            (5, TY_I32, 5),
+            (1, TY_BOOL, 1),
+            (0, TY_BOOL, 0),
+        ] {
+            let boxed = mint_key_box(&mut vm, ty, &KeyVal::Bits(word)).unwrap();
+            let (got_ty, got) = read(&vm, &boxed);
+            assert_eq!(got_ty, ty, "word {word:#x}");
+            match got {
+                Value::I64(w) => assert_eq!(w, expect, "word {word:#x} ty {ty}"),
+                Value::Bool(b) => assert_eq!(b as i64, expect, "word {word:#x}"),
+                other => panic!("unexpected payload {other:?}"),
+            }
+        }
+        // octets: fresh cells, equal content
+        let boxed = mint_key_box(&mut vm, TY_STR, &KeyVal::Str("alpha".into())).unwrap();
+        let (ty, v) = read(&vm, &boxed);
+        assert_eq!(ty, TY_STR);
+        assert_eq!(v, Value::Str("alpha".into()));
+        let boxed = mint_key_box(&mut vm, TY_BYTES, &KeyVal::Bytes(vec![1, 2, 3])).unwrap();
+        let (ty, v) = read(&vm, &boxed);
+        assert_eq!(ty, TY_BYTES);
+        assert_eq!(v, Value::Bytes(vec![1, 2, 3]));
+    }
+
+    /// The decode's defense rows: a type outside the closed set traps;
+    /// a flavor disagreement between the mint's `ty` and the snapshot
+    /// traps; `map_iter_new`'s admission runs before any cursor exists.
+    #[test]
+    fn iter_defense_traps_name_the_law() {
+        let mut t = NativeTable::new(8);
+        fused_put(&mut t, bits(1)).unwrap();
+        // outside the closed key set: a float type id, a garbage id
+        assert!(iter_key_kind(rut_core::types::TY_F64).is_err());
+        assert!(iter_key_kind(999_999).is_err());
+        // flavor mismatch: a Bits table walked under the str type
+        let mut vm = bare_vm();
+        let err = match cursor_of(&mut vm, &t, TY_STR) {
+            Err(e) => e,
+            Ok(_) => panic!("the flavor mismatch must trap"),
+        };
+        assert!(err.msg.contains("mixed key kinds"), "{}", err.msg);
+        // the mint itself refuses a mismatched pair (defense in depth)
+        let err = mint_key_box(&mut vm, TY_STR, &KeyVal::Bits(1)).unwrap_err();
+        assert!(err.msg.contains("flavor mismatch"), "{}", err.msg);
+        // an empty table walks to nil immediately
+        let empty = NativeTable::new(8);
+        let cur = cursor_of(&mut vm, &empty, TY_I64).unwrap();
+        let next = cur.with_mut(&mut vm, |vm, c| {
+            let key = match c.keys.get(c.pos) {
+                Some(k) => k.clone(),
+                None => return Ok(None),
+            };
+            c.pos += 1;
+            mint_key_box(vm, c.ty, &key).map(Some)
+        });
+        assert!(matches!(next, Ok(Ok(None))), "empty snapshot = nil");
+    }
+
+    /// Birth order through remove + re-insert: the reinserted key is a
+    /// NEW birth and walks after the survivors.
+    #[test]
+    fn reinsert_moves_the_key_to_the_walks_end() {
+        let vm = bare_vm();
+        let mut t = NativeTable::new(8);
+        for v in [1, 2, 3] {
+            fused_put(&mut t, bits(v)).unwrap();
+        }
+        fused_remove(&vm, &mut t, &bits(2)).unwrap();
+        fused_put(&mut t, bits(2)).unwrap(); // a NEW birth
+        let keys: Vec<u64> = t
+            .iter_snapshot()
+            .into_iter()
+            .map(|k| match k {
+                KeyVal::Bits(v) => v,
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(keys, vec![1, 3, 2]);
     }
 }

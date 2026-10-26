@@ -135,6 +135,9 @@ Guards live on the store entry and clear on return; to keep data, copy
 - **`nmapset`** — `HashMap`/`HashSet` over a native key table: every
   method is one host call, keys are the closed typed set, values are
   sealed boxes, and each key carries a stable host-side handle
-  ([core and the swappable packages](stdlib.md)).
+  ([core and the swappable packages](stdlib.md)). Both classes are
+  iterable: `for..of` walks the keys/elements from a host-side
+  snapshot, in birth order
+  ([keyed collections](builtin-generic-types.md#keyed-collections)).
 - **`json`**'s container wrappers are json's own rut source over the
   same packages ([core and the swappable packages](stdlib.md)).

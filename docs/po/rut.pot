@@ -2091,7 +2091,7 @@ msgid ""
 "one-type law (see [below](#one-type-across-the-arms)):"
 msgstr ""
 
-#: src/tutorial/control-flow.md:294 src/reference/control-flow.md:180
+#: src/tutorial/control-flow.md:294 src/reference/control-flow.md:184
 msgid "Patterns"
 msgstr ""
 
@@ -9850,7 +9850,7 @@ msgid "`point 1 2`"
 msgstr ""
 
 #: src/examples/playground-corpus.md:57 src/reference/lexical-structure.md:44
-#: src/reference/control-flow.md:153
+#: src/reference/control-flow.md:157
 msgid "`when`"
 msgstr ""
 
@@ -11740,29 +11740,67 @@ msgid ""
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:157
+msgid ""
+"**Iteration.** Both classes mark the engine's `[iterable]` contract: `for "
+"(let k of m)` walks a map's **keys** and `for (let x of s)` a set's "
+"**elements** — the value rides the law it always has, `m.get(k)` answers the "
+"stored cell. The walk is the **snapshot** taken when the loop starts "
+"(puts/removes inside the body never touch it), in **birth order** — "
+"insertion order of live entries; a remove-then-reinsert moves the key to the "
+"end. A yielded key is a **fresh cell** of equal content, never the map's own "
+"(there is no stored key cell to hand out) — `get` stays the way to a stored "
+"cell. The loop body is the emit closure: scalars copy in, so accumulators "
+"are shared record cells (see [Control flow](control-flow.md))."
+msgstr ""
+
+#: src/reference/builtin-generic-types.md:169
+msgid ""
+"```rut\n"
+"use nmapset::{ HashMap };\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Sum { total: i32 = 0; }\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"ages\");\n"
+"    let mut ages = HashMap<str, i32>::new();\n"
+"    ages.put(\"ada\", 36);\n"
+"    ages.put(\"grace\", 45);\n"
+"    // the loop body IS the emit closure — scalars copy in, so the\n"
+"    // accumulator is a shared record cell\n"
+"    let mut acc: ?Sum = Sum { };\n"
+"    for (let name of ages) {\n"
+"        acc.total += ages.get(name);\n"
+"    }\n"
+"    log.info(f\"total={acc.total} count={ages.len()}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+#: src/reference/builtin-generic-types.md:194
 msgid "Absence and errors"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:159
+#: src/reference/builtin-generic-types.md:196
 msgid ""
 "**Absence** is `nil` on a nullable: a lookup returns `?V`, and `nil` means "
 "\"not found\"."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:161
+#: src/reference/builtin-generic-types.md:198
 msgid ""
 "**Errors** are the answer channel: `(?T, err)` — see [Primitive "
 "types](primitive-types.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:163
+#: src/reference/builtin-generic-types.md:200
 msgid ""
 "**Type-erased recovery** is `opaque::downcast<T>(o) -> ?T` — the checked "
 "lane, `nil` on a miss; `unopaque<T>(o) -> T` is the inverse, the bad-cast "
 "lane — see [opaque — erasure and downcast](opaque.md)."
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:167
+#: src/reference/builtin-generic-types.md:204
 msgid ""
 "A nullable/enum value is not compared structurally with `==` — test it with "
 "`when`, a `nil`/`!= nil` guard, or the payload."
@@ -12152,7 +12190,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/literals-and-inference.md:111
-#: src/reference/control-flow.md:182
+#: src/reference/control-flow.md:186
 msgid "Example"
 msgstr ""
 
@@ -12544,17 +12582,24 @@ msgid ""
 msgstr ""
 
 #: src/reference/control-flow.md:121
+msgid ""
+"The keyed collections mark it too: `for (let k of m)` walks a `HashMap`'s "
+"keys, `for (let x of s)` a `HashSet`'s elements (see [Keyed "
+"collections](builtin-generic-types.md#keyed-collections))."
+msgstr ""
+
+#: src/reference/control-flow.md:125
 msgid "Indexed form — the C shape:"
 msgstr ""
 
-#: src/reference/control-flow.md:127
+#: src/reference/control-flow.md:131
 msgid ""
 "Both headers declare a **normal binding**, and the mut-binding law gates "
 "them like any `let`: assigning the loop variable — in the body, or in the "
 "indexed form's update clause — requires `mut` in the header:"
 msgstr ""
 
-#: src/reference/control-flow.md:131
+#: src/reference/control-flow.md:135
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12577,13 +12622,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:155
+#: src/reference/control-flow.md:159
 msgid ""
 "`when (x) { pattern -> body, ... }` is an **expression**: the first matching "
 "arm's body produces its value. No fallthrough; exactly one arm runs."
 msgstr ""
 
-#: src/reference/control-flow.md:159
+#: src/reference/control-flow.md:163
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12603,62 +12648,62 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:182
+#: src/reference/control-flow.md:186
 msgid "Pattern"
 msgstr ""
 
-#: src/reference/control-flow.md:184
+#: src/reference/control-flow.md:188
 msgid "enum member (path)"
 msgstr ""
 
-#: src/reference/control-flow.md:184
+#: src/reference/control-flow.md:188
 msgid "`Light::Green`"
 msgstr ""
 
-#: src/reference/control-flow.md:185
+#: src/reference/control-flow.md:189
 msgid "literal"
 msgstr ""
 
-#: src/reference/control-flow.md:185
+#: src/reference/control-flow.md:189
 msgid "`0`, `3.5`, `true`, `\"text\"`"
 msgstr ""
 
-#: src/reference/control-flow.md:186
+#: src/reference/control-flow.md:190
 msgid "negative literal"
 msgstr ""
 
-#: src/reference/control-flow.md:186
+#: src/reference/control-flow.md:190
 msgid "`-1`"
 msgstr ""
 
-#: src/reference/control-flow.md:187
+#: src/reference/control-flow.md:191
 msgid "alternatives (comma list)"
 msgstr ""
 
-#: src/reference/control-flow.md:187
+#: src/reference/control-flow.md:191
 msgid "`1, 2, 3`"
 msgstr ""
 
-#: src/reference/control-flow.md:188
+#: src/reference/control-flow.md:192
 msgid "wildcard `else` / `_`"
 msgstr ""
 
-#: src/reference/control-flow.md:188
+#: src/reference/control-flow.md:192
 msgid "`else -> ..`"
 msgstr ""
 
-#: src/reference/control-flow.md:190
+#: src/reference/control-flow.md:194
 msgid ""
 "Ranges, destructuring, binding patterns, and guards (`x if cond`) do not "
 "exist; patterns are enum members, literals, alternatives, and the wildcards "
 "only."
 msgstr ""
 
-#: src/reference/control-flow.md:194 src/reference/opaque.md:45
+#: src/reference/control-flow.md:198 src/reference/opaque.md:45
 msgid "The laws"
 msgstr ""
 
-#: src/reference/control-flow.md:196
+#: src/reference/control-flow.md:200
 msgid ""
 "**Exhaustiveness is always enforced.** An enum-typed scrutinee must cover "
 "every member (then `else` is optional) or add `else` — a partial `when` is a "
@@ -12666,7 +12711,7 @@ msgid ""
 "`else` is **mandatory**."
 msgstr ""
 
-#: src/reference/control-flow.md:200
+#: src/reference/control-flow.md:204
 msgid ""
 "**All arms must agree on one type** — that is the `when`'s type. Block arms "
 "are value blocks: a block arm's tail is the arm's value, and expression and "
@@ -12675,23 +12720,23 @@ msgid ""
 "block arms written for effect stay tail-less."
 msgstr ""
 
-#: src/reference/control-flow.md:206
+#: src/reference/control-flow.md:210
 msgid ""
 "Duplicate patterns, and arms made unreachable by earlier ones, are compile "
 "errors."
 msgstr ""
 
-#: src/reference/control-flow.md:208
+#: src/reference/control-flow.md:212
 msgid ""
 "Arms use `->`. Expression arms are comma-separated; block arms may omit the "
 "trailing comma (the corpus writes it)."
 msgstr ""
 
-#: src/reference/control-flow.md:210
+#: src/reference/control-flow.md:214
 msgid "`when` literal patterns match compile-time values, never runtime `==`."
 msgstr ""
 
-#: src/reference/control-flow.md:212
+#: src/reference/control-flow.md:216
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -12713,11 +12758,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/control-flow.md:235
+#: src/reference/control-flow.md:239
 msgid "A `when` is also the idiomatic nullable guard, together with `!= nil`:"
 msgstr ""
 
-#: src/reference/control-flow.md:237
+#: src/reference/control-flow.md:241
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -20825,10 +20870,12 @@ msgid ""
 "**`nmapset`** — `HashMap`/`HashSet` over a native key table: every method is "
 "one host call, keys are the closed typed set, values are sealed boxes, and "
 "each key carries a stable host-side handle ([core and the swappable "
-"packages](stdlib.md))."
+"packages](stdlib.md)). Both classes are iterable: `for..of` walks the "
+"keys/elements from a host-side snapshot, in birth order ([keyed "
+"collections](builtin-generic-types.md#keyed-collections))."
 msgstr ""
 
-#: src/reference/native-containers.md:139
+#: src/reference/native-containers.md:142
 msgid ""
 "**`json`**'s container wrappers are json's own rut source over the same "
 "packages ([core and the swappable packages](stdlib.md))."

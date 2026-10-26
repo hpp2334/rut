@@ -15,14 +15,14 @@
   // hello (ink only) runs clean with the full set declared.
   "name": "__NAME__",
   "deps": {
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip" },
-    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/flow.zip" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/nmapset.zip" },
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/json.zip" },
-    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/strbuild.zip" },
-    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/calc.zip" },
-    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/futures.zip" },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/http.zip" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip" },
+    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/flow.zip" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/nmapset.zip" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/json.zip" },
+    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/strbuild.zip" },
+    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/calc.zip" },
+    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/futures.zip" },
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/http.zip" }
   }
 }

@@ -109,7 +109,7 @@ Behavior:
 | package name | derived from the target's basename — bare `[a-zA-Z0-9_]+`, non-empty (the manifest's law). An illegal name is refused, never sanitized (exit 2) |
 | clobber refusal | a target already holding a `rut.jsonc`, a `src/mod.rut`, or a `rut.lock` is refused (exit 2, naming the file) — other pre-existing files are fine |
 | parents | created as needed — `rut new a/b/hello` works |
-| files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v14` tag (source zips); `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello |
+| files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v15` tag (source zips); `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello |
 | first run | **refuses**: `rut run`/`rut pack` never download — `rut install <dir>` fetches the std set (9 source zips) into `<dir>/.rut/cache` (with progress), `rut fetch <dir>` pre-warms the same way; then every run is cache-only |
 
 The three created files, for `rut new hello` — all verbatim:
@@ -121,7 +121,7 @@ The three created files, for `rut new hello` — all verbatim:
   // module the loader mounts.
   //
   // THE STD SET: all nine swappable std libs, each a COMMITTED
-  // source zip (dist/std, jsDelivr-served at the std-v14 tag) —
+  // source zip (dist/std, jsDelivr-served at the std-v15 tag) —
   // source compiles with YOUR toolchain, so a zip never goes stale
   // the way compiled IR does.
   // The pins live in `rut.lock` beside this file (machine-generated:
@@ -132,15 +132,15 @@ The three created files, for `rut new hello` — all verbatim:
   // hello (ink only) runs clean with the full set declared.
   "name": "hello",
   "deps": {
-    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip" },
-    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/flow.zip" },
-    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/nmapset.zip" },
-    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/json.zip" },
-    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/strbuild.zip" },
-    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/calc.zip" },
-    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/futures.zip" },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/http.zip" }
+    "ink": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip" },
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip" },
+    "flow": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/flow.zip" },
+    "nmapset": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/nmapset.zip" },
+    "json": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/json.zip" },
+    "strbuild": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/strbuild.zip" },
+    "calc": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/calc.zip" },
+    "futures": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/futures.zip" },
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/http.zip" }
   }
 }
 
@@ -151,15 +151,15 @@ The three created files, for `rut new hello` — all verbatim:
   "format": "rutlock",
   "format_version": 1,
   "deps": [
-    { "pkg": "calc",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/calc.zip",     "sha256": "d6d04afa561f39f06b5181411640e0cc0cb97a4095e0b7f8d1f5957534831686" },
-    { "pkg": "flow",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/flow.zip",     "sha256": "47ac4b49fc809640ea067cf3c945bf7442f017a7d113e2567d2f30f69124838c" },
-    { "pkg": "futures",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/futures.zip",  "sha256": "e143211a0a6e9ddb0a3ccb5e3e79796d85b2ee627ee4c63f046dc583a55eb711" },
-    { "pkg": "http",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/http.zip",     "sha256": "9c6855cd58d7d888515fff691787a42708cef512423dc6040f8e214dbd00cbac" },
-    { "pkg": "ink",      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip",      "sha256": "eb2b568316efb77286cc5d94bec24a94f45d528cf244f54b91cb0d619dc53cc1" },
-    { "pkg": "json",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/json.zip",     "sha256": "b15d867fb3743a829cc0bf5ace1a642dd8b9024d681aa7015d6c166bb29dbc63" },
-    { "pkg": "nmapset",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/nmapset.zip",  "sha256": "d9f722c65bf1d1a2d08078b478f342230a01fb07ef47f504edbd4defd73dbc6e" },
-    { "pkg": "pouch",    "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip",    "sha256": "5740cb0b874a2c9a81f1e0d9534520fe4067e5ec48320b82cf7147e2d6b34d36" },
-    { "pkg": "strbuild", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/strbuild.zip", "sha256": "1eedb374bcb52419b9ec82d9ea6f23fb3534faa0a4c75e4d03afedc6d7dabe33" }
+    { "pkg": "calc",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/calc.zip",     "sha256": "32314f2189d56627a452cf2c9cecf0c77b99d0d435c4e1f7db436e9faebc1209" },
+    { "pkg": "flow",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/flow.zip",     "sha256": "19545c61748bffa057cf6e5bea29bab728417fbcc6b84759216f7f3f68bbebc1" },
+    { "pkg": "futures",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/futures.zip",  "sha256": "e143211a0a6e9ddb0a3ccb5e3e79796d85b2ee627ee4c63f046dc583a55eb711" },
+    { "pkg": "http",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/http.zip",     "sha256": "9c6855cd58d7d888515fff691787a42708cef512423dc6040f8e214dbd00cbac" },
+    { "pkg": "ink",      "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip",      "sha256": "eb2b568316efb77286cc5d94bec24a94f45d528cf244f54b91cb0d619dc53cc1" },
+    { "pkg": "json",     "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/json.zip",     "sha256": "653867a4451d8eb991cfdd59c9196d95c92ecc7b3da530519cba15e68951b18a" },
+    { "pkg": "nmapset",  "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/nmapset.zip",  "sha256": "1a59e0e4cab803dcd176ac919160cb9dbbc305011fb563dcc1d8bcd82307f5dd" },
+    { "pkg": "pouch",    "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip",    "sha256": "5740cb0b874a2c9a81f1e0d9534520fe4067e5ec48320b82cf7147e2d6b34d36" },
+    { "pkg": "strbuild", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/strbuild.zip", "sha256": "1eedb374bcb52419b9ec82d9ea6f23fb3534faa0a4c75e4d03afedc6d7dabe33" }
   ]
 }
 
@@ -206,7 +206,7 @@ resolved to nothing.
 The streams: progress on **stderr**, summaries on **stdout** —
 
 ```text
-install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip
+install: ink — downloading https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip
 install: ink — downloaded (2883 bytes)
 install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes total)
 rut.lock written: 1 rows (1 added, 0 changed, 0 dropped)

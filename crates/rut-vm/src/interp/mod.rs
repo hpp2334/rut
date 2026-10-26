@@ -436,6 +436,16 @@ impl Vm {
         self.heap.used_bytes()
     }
 
+    /// The host's mint of a RUT seal box over a payload slot —
+    /// [`Heap::alloc_opaque`] through the crate wall (the `heap` field is
+    /// crate-private): nmap's iteration lane mints one fresh key box per
+    /// yield. `ty` is the payload's OWN type id — the box's `val_ty`, the
+    /// exact check `opaque::downcast<T>` runs — and the payload slot's
+    /// ownership moves into the box (the entry's release walks it).
+    pub fn alloc_opaque_box(&mut self, payload: Slot, ty: TypeId) -> Result<Slot, Trap> {
+        self.heap.alloc_opaque(payload, ty)
+    }
+
     /// The in-crossing rc: a host body storing a rut
     /// value takes its own reference (`retain` — the "retain on store"
     /// law) and releases it when the value leaves the store (`release`

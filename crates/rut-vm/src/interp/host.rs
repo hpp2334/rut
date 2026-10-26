@@ -254,8 +254,33 @@ impl HostRegistry {
         }
     }
 
-    /// Install one built host pkg. The contract is ASYMMETRIC, by
-    /// design:
+    /// The ONE-WAY gate: every row the mounted packages DECLARE is
+    /// bound, with the declared signature — bound rows the decl does
+    /// not name ride as inert extras (the [`install_host_pkg`](Self::install_host_pkg)
+    /// law's own spelling). This is the PINNED-ERA fixture's gate: a
+    /// committed std snapshot's surface mounted against the CURRENT
+    /// bodies (the strict both-ways [`verify_against`](Self::verify_against)
+    /// assumes one era on both sides, and refuses the newer rows).
+    pub fn verify_declared_against(&self, expected: &ExpectedHostFns) {
+        for (name, (params, ret)) in expected {
+            match self.fns.get(name) {
+                None => panic!(
+                    "host fn `{name}` is declared by a mounted package but never bound — register the body before Vm::new"
+                ),
+                Some(b) => {
+                    if b.sigs.slice() != params.as_slice() || b.sigs.ret != *ret {
+                        panic!(
+                            "host fn `{name}` signature drift: the pkg declares {}, the binding is {}",
+                            host_sig_str(params, *ret),
+                            host_sig_str(b.sigs.slice(), b.sigs.ret)
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Install one built host pkg. The contract is ASYMMETRIC, by    /// design:
     ///
     /// - scope IS mounted: this call must bind every DECLARED row
     ///   (declared-but-unbound ⇒ panic, naming the pkg) and every bound

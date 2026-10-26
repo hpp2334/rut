@@ -108,6 +108,8 @@ source text by design; a partially translated book is a valid book.
 | marker | 标记 | the closed marker set → 封闭标记集；designation by bracket, not name → 以方括号指定，而非以名字指定 |
 | designated surface | 指定表面 | the three designated surfaces：`[disposal]`（引擎事件）、`[iterable]`（for-of 脱糖）、`[constructor]`（用户调用的 `Type(..)`）——stay code；the designation routes the call → 指定路由调用；designate → 指定 |
 | designated slot | 指定槽位 | for-of reads this slot → for-of 读取该指定槽位 |
+| snapshot (iteration) | 快照 | the walk is the snapshot taken when the loop starts → 遍历走的是循环开始时拍下的快照；host-side snapshot → 宿主侧快照 |
+| birth order | 出生顺序 | the never-recycled birth handle IS the order → 永不回收的出生句柄即顺序；insertion order of live entries → 存活条目的插入顺序 |
 | mint (verb) | 铸造 | the engine mints the frame → 引擎铸造帧；engine-minted → 引擎铸造 |
 | async block | async 块 | `async { .. }` stays code；the async primitive → async 原语 |
 | inject | 注入 | the weave injects the resume context → 编织注入恢复上下文；injected, never spelled → 注入，绝不拼写 |

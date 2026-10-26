@@ -53,16 +53,32 @@ fn pkg_world_from_dirs(names: &[&str]) -> Vec<rut_driver::Mounted> {
 }
 
 fn pkg_world_from_bundles(names: &[&str]) -> Vec<rut_driver::Mounted> {
+    // the SERVED wire is the source zip (the .rutbundle bin lane is
+    // retired): unpack once and mount the directory package it carries —
+    // exactly the post-install state (`rut install` unpacks the same
+    // bytes into `deps/<name>@<fp16>/`). The zip carries its closure
+    // closed (the rewritten rows resolve inside), so ONE unpack mounts
+    // the whole graph — no second mount under other specs.
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut world = Vec::new();
     for b in names {
-        // the bundle carries its deps closed (the v11 deps/ wire) — ONE
-        // archive, no second mount under other specs
-        let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
-            .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
+        let bytes = std::fs::read(base.join(format!("dist/std/{b}.zip")))
+            .unwrap_or_else(|e| panic!("dist/std/{b}.zip: {e}"));
+        let entries =
+            rut_driver::bundle::read_srczip(&bytes).unwrap_or_else(|e| panic!("read {b}.zip: {e}"));
+        let dir =
+            std::env::temp_dir().join(format!("rut-generic-templates-{}-{b}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for (path, data) in &entries {
+            let p = dir.join(path);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(&p, data).unwrap();
+        }
         world.extend(
-            rut_driver::Mounted::from_bundle(&bytes)
-                .expect("mount the bundle")
+            rut_native::dir_pkgs(&dir)
+                .unwrap_or_else(|e| panic!("mount {b} (unpacked zip): {e}"))
                 .pkgs,
         );
     }

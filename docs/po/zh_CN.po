@@ -12133,6 +12133,54 @@ msgstr ""
 "`HashMap<K, V>` 与 `HashSet<T>`（包 `nmapset`）包装了一个原生键表。准入条件是编译期**联合约束** `K requires i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 | bool | str | bytes` —— 集合之外的键类型在实例化时失败（逃生口：把它规范地编码成 `bytes`）。浮点键被有意排除：浮点数没有稳定的相等契约。API 是 `new`/`with_capacity`/`put`/`get`/`has`/`remove`/`len`；`get` 应答 `?V` —— `nil` 表示不存在，命中时返回**存储的单元**而非副本（别名法则）。"
 
 
+#: src/reference/builtin-generic-types.md:156
+msgid ""
+"**Iteration.** Both classes mark the engine's `[iterable]` contract: `for "
+"(let k of m)` walks a map's **keys** and `for (let x of s)` a set's "
+"**elements** — the value rides the law it always has, `m.get(k)` answers the "
+"stored cell. The walk is the **snapshot** taken when the loop starts "
+"(puts/removes inside the body never touch it), in **birth order** — "
+"insertion order of live entries; a remove-then-reinsert moves the key to the "
+"end. A yielded key is a **fresh cell** of equal content, never the map's own "
+"(there is no stored key cell to hand out) — `get` stays the way to a stored "
+"cell. The loop body is the emit closure: scalars copy in, so accumulators "
+"are shared record cells (see [Control flow](control-flow.md))."
+msgstr ""
+"**迭代。** 两个类都标记了引擎的 `[iterable]` 契约：`for (let k of m)` 遍历映射"
+"的**键**，`for (let x of s)` 遍历集合的**元素**——而值依旧走它一贯的法则："
+"`m.get(k)` 应答存储的单元。遍历走的是循环开始时拍下的**快照**（循环体内的 "
+"put/remove 永远影响不到它），顺序是**出生顺序**——存活条目的插入顺序；删除后"
+"重新插入会把该键挪到最后。被产出的键是一个内容相同的**新单元**，绝不是映射自"
+"己的那份（本就不存在可交出的存储键单元）——要拿存储的单元，仍然走 `get`。循环"
+"体就是 emit 闭包：标量按值拷入，因此累加器要用共享的记录单元（见[控制流]"
+"(control-flow.md)）。"
+
+
+#: src/reference/builtin-generic-types.md:169
+msgid ""
+"```rut\n"
+"use nmapset::{ HashMap };\n"
+"use ink::{ Logger };\n"
+"\n"
+"struct Sum { total: i32 = 0; }\n"
+"\n"
+"entry fn main() {\n"
+"    let log = Logger(\"ages\");\n"
+"    let mut ages = HashMap<str, i32>::new();\n"
+"    ages.put(\"ada\", 36);\n"
+"    ages.put(\"grace\", 45);\n"
+"    // the loop body IS the emit closure — scalars copy in, so the\n"
+"    // accumulator is a shared record cell\n"
+"    let mut acc: ?Sum = Sum { };\n"
+"    for (let name of ages) {\n"
+"        acc.total += ages.get(name);\n"
+"    }\n"
+"    log.info(f\"total={acc.total} count={ages.len()}\");\n"
+"}\n"
+"```"
+msgstr ""
+
+
 #: src/reference/builtin-generic-types.md:157
 msgid "Absence and errors"
 msgstr "缺失与错误"
@@ -12983,6 +13031,16 @@ msgid ""
 "for (let mut x of expr) { .. }     // `mut`: the body may assign x\n"
 "```"
 msgstr ""
+
+
+#: src/reference/control-flow.md:125
+msgid ""
+"The keyed collections mark it too: `for (let k of m)` walks a `HashMap`'s "
+"keys, `for (let x of s)` a `HashSet`'s elements (see [Keyed "
+"collections](builtin-generic-types.md#keyed-collections))."
+msgstr ""
+"键控集合也标记了它：`for (let k of m)` 遍历 `HashMap` 的键，`for (let x of s)` "
+"遍历 `HashSet` 的元素（见[键控集合](builtin-generic-types.md#keyed-collections)）。"
 
 
 #: src/reference/control-flow.md:121
@@ -21635,9 +21693,9 @@ msgstr ""
 
 #: src/reference/native-containers.md:135
 msgid ""
-"**`nmapset`** — `HashMap`/`HashSet` over a native key table: every method is one host call, keys are the closed typed set, values are sealed boxes, and each key carries a stable host-side handle ([core and the swappable packages](stdlib.md))."
+"**`nmapset`** — `HashMap`/`HashSet` over a native key table: every method is one host call, keys are the closed typed set, values are sealed boxes, and each key carries a stable host-side handle ([core and the swappable packages](stdlib.md)). Both classes are iterable: `for..of` walks the keys/elements from a host-side snapshot, in birth order ([keyed collections](builtin-generic-types.md#keyed-collections))."
 msgstr ""
-"**`nmapset`**——架在原生键表之上的 `HashMap`/`HashSet`：每个方法一次宿主调用，键是封闭的类型化集合，值是封存的盒，每个键携带一个稳定的宿主侧句柄（[core 与可换包](stdlib.md)）。"
+"**`nmapset`**——架在原生键表之上的 `HashMap`/`HashSet`：每个方法一次宿主调用，键是封闭的类型化集合，值是封存的盒，每个键携带一个稳定的宿主侧句柄（[core 与可换包](stdlib.md)）。两个类都可迭代：`for..of` 按出生顺序遍历宿主侧快照里的键/元素（[键控集合](builtin-generic-types.md#keyed-collections)）。"
 
 
 #: src/reference/native-containers.md:139

@@ -265,15 +265,21 @@ pub fn verify(prog: &Program) -> Result<(), String> {
                                 // wrapper construction crosses: the consumer
                                 // mints the record over the owner's claimed
                                 // row) — the layout law compares the SPELLING
-                                // (name + kind), never two units' dense ids
+                                // (name + kind), never two units' dense ids.
+                                // The kind comparison is STRUCTURAL: a Debug
+                                // render embeds the nested rows' own dense ids
+                                // (two synthesized rows for one `Fn` spelling
+                                // differ in `params: [141]` vs `[152]` while
+                                // naming the same type), so the spellings are
+                                // walked recursively, names all the way down
                                 let reg_ty = f.regs[v as usize];
-                                let same = reg_ty == fields[i].ty || {
-                                    let rn = |t: u32| {
-                                        prog.interner.name(prog.types.type_at(t).name).to_string()
-                                    };
-                                    let kd = |t: u32| format!("{:?}", prog.types.kind(t));
-                                    rn(reg_ty) == rn(fields[i].ty) && kd(reg_ty) == kd(fields[i].ty)
-                                };
+                                let same = reg_ty == fields[i].ty
+                                    || spelling_same(
+                                        &prog.types,
+                                        &prog.interner,
+                                        reg_ty,
+                                        fields[i].ty,
+                                    );
                                 if !same {
                                     return Err(bad(
                                         "MakeRecord value type does not match the field type"
@@ -421,6 +427,87 @@ pub fn verify(prog: &Program) -> Result<(), String> {
 /// (the MakeOpt elision) and `OptPrimLoad` on reads (the deref fold).
 /// A refinement onto a non-`?prim` element, or a payload-prim mismatch,
 /// is a miscompile and must fail verification.
+/// The layout law's spelling comparison (the MakeRecord crossing): two
+/// type rows name the same layout when their NAMES agree and their KINDS
+/// agree — recursively, so nested synthesized rows (a `Fn`'s params, an
+/// `Array`'s element, a record's fields) compare by their own spellings
+/// and never by two units' dense ids. (A Debug render of a kind embeds
+/// the nested rows' ids — `Fn { params: [141] }` vs `[152]` for one
+/// spelling — which is why the walk is structural.)
+fn spelling_same(
+    types: &rut_core::types::TypeTable,
+    interner: &rut_core::Interner,
+    a: u32,
+    b: u32,
+) -> bool {
+    if interner.name(types.type_at(a).name) != interner.name(types.type_at(b).name) {
+        return false;
+    }
+    kind_same(types, interner, a, b, 32)
+}
+
+fn kind_same(
+    types: &rut_core::types::TypeTable,
+    interner: &rut_core::Interner,
+    a: u32,
+    b: u32,
+    depth: u32,
+) -> bool {
+    if a == b || depth == 0 {
+        return true;
+    }
+    // the single-element carriers first (one shape helper, never
+    // cross-variant or-patterns: an `Array` row must not match an `Opt`)
+    match (elem_ty(types.kind(a)), elem_ty(types.kind(b))) {
+        (Some(x), Some(y)) => return kind_same(types, interner, x, y, depth - 1),
+        (Some(_), None) | (None, Some(_)) => return false,
+        (None, None) => {}
+    }
+    match (types.kind(a), types.kind(b)) {
+        (
+            TyKind::Fn {
+                params: px,
+                ret: rx,
+            },
+            TyKind::Fn {
+                params: py,
+                ret: ry,
+            },
+        ) => {
+            kind_same(types, interner, *rx, *ry, depth - 1)
+                && px.len() == py.len()
+                && px
+                    .iter()
+                    .zip(py.iter())
+                    .all(|(x, y)| kind_same(types, interner, *x, *y, depth - 1))
+        }
+        (TyKind::Data { fields: fx }, TyKind::Data { fields: fy }) => {
+            fx.len() == fy.len()
+                && fx.iter().zip(fy.iter()).all(|(x, y)| {
+                    x.ty == y.ty
+                        || (interner.name(x.name) == interner.name(y.name)
+                            && kind_same(types, interner, x.ty, y.ty, depth - 1))
+                })
+        }
+        (TyKind::Prim(x), TyKind::Prim(y)) => x == y,
+        (TyKind::Enum { members: mx }, TyKind::Enum { members: my }) => mx == my,
+        (TyKind::IfaceObj { iface_id: x }, TyKind::IfaceObj { iface_id: y }) => x == y,
+        (x, y) => std::mem::discriminant(x) == std::mem::discriminant(y),
+    }
+}
+
+/// The one-element type carriers (`Array`/`Opt`/`Weak`/`Future`) — the
+/// kinds whose whole shape is one nested row.
+fn elem_ty(k: &TyKind) -> Option<u32> {
+    match k {
+        TyKind::Array { elem }
+        | TyKind::Opt { elem }
+        | TyKind::Weak { elem }
+        | TyKind::Future { elem } => Some(*elem),
+        _ => None,
+    }
+}
+
 fn elem_repr_ok(types: &rut_core::types::TypeTable, ety: u32, repr: Repr, is_store: bool) -> bool {
     if rut_core::types::arr_elem_repr(types, ety) == repr {
         return true;

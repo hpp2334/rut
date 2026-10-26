@@ -30,7 +30,8 @@ const SRC: &str = r#"
 use nmap_host::{ map_new, map_len,
             map_hput, map_hfind, map_hremove,
             map_hput_sv, map_hfind_sv, map_hremove_sv,
-            map_hvput, map_hvget, map_hvremove };
+            map_hvput, map_hvget, map_hvremove,
+            map_iter_new, map_iter_next };
 
 entry fn new_map(cap: i64) -> opaque { return map_new(cap); }
 
@@ -311,6 +312,109 @@ entry fn valued_strs(t: opaque) -> i64 {
     if (b != "beta-value") { fails += 100000; }
     return fails;
 }
+
+// ---- the iteration lanes (the `for..of` law) ------------------------
+// `type_id<K>()` is the mint's exact type id: the walk answers each key
+// as a fresh `?opaque` box the downcast opens, in BIRTH order (the
+// never-recycled handle IS the order), nil at the walk's end.
+
+// birth order, not bucket order: 30, 10, 20 inserted in that order
+entry fn iter_walk(t: opaque) -> i64 {
+    let mut fails: i64 = 0;
+    map_hput(t, opaque(30 as i64));
+    map_hput(t, opaque(10 as i64));
+    map_hput(t, opaque(20 as i64));
+    let cur = map_iter_new(t, type_id<i64>());
+    let mut word: [i64] = [0, 0, 0];
+    let mut n: i32 = 0;
+    let mut cell = map_iter_next(cur);
+    while (cell != nil) {
+        if (n >= 3) { fails += 1; break; }
+        word[n] = opaque::downcast<i64>(cell);
+        n += 1;
+        cell = map_iter_next(cur);
+    }
+    if (n != 3) { fails += 2; }
+    if (word[0] != 30 || word[1] != 10 || word[2] != 20) { fails += 4; }
+    return fails;
+}
+
+// the mint's widths: an i8 key sealed as -5 walks back -5 under
+// type_id<i8>() — the sign-extended word rides the raw slot law
+entry fn iter_i8_width(t: opaque) -> i64 {
+    map_hput(t, opaque(-5 as i8));
+    let cur = map_iter_new(t, type_id<i8>());
+    let cell = map_iter_next(cur);
+    if (cell == nil) { return 1; }
+    if (opaque::downcast<i8>(cell) != -5) { return 2; }
+    if (map_iter_next(cur) != nil) { return 3; }
+    return 0;
+}
+
+// a u64 key keeps its high bit through the box
+entry fn iter_u64_high_bit(t: opaque) -> i64 {
+    let big: u64 = 18446744073709551615u64;
+    map_hput(t, opaque(big));
+    let cur = map_iter_new(t, type_id<u64>());
+    let cell = map_iter_next(cur);
+    if (cell == nil) { return 1; }
+    if (opaque::downcast<u64>(cell) != big) { return 2; }
+    return 0;
+}
+
+// str keys: content equality in, equal-content boxes out
+entry fn iter_str_keys(t: opaque) -> i64 {
+    let a: str = "alpha";
+    let b: str = "beta";
+    map_hput(t, opaque(a));
+    map_hput(t, opaque(b));
+    let cur = map_iter_new(t, type_id<str>());
+    let mut fails: i64 = 0;
+    let mut first: str = "";
+    let mut n: i64 = 0;
+    let mut cell = map_iter_next(cur);
+    while (cell != nil) {
+        let k = opaque::downcast<str>(cell);
+        if (n == 0) { first = k; }
+        n += 1;
+        cell = map_iter_next(cur);
+    }
+    if (n != 2) { fails += 1; }
+    if (first != "alpha") { fails += 2; }
+    return fails;
+}
+
+// an empty table walks to nil immediately
+entry fn iter_empty(t: opaque) -> i64 {
+    let cur = map_iter_new(t, type_id<i64>());
+    if (map_iter_next(cur) != nil) { return 1; }
+    return 0;
+}
+
+// THE SNAPSHOT LAW at the raw lane: removes behind the cursor's back
+// never touch the walk — the keys were taken at iter_new
+entry fn iter_snapshot_survives_removal(t: opaque) -> i64 {
+    map_hput(t, opaque(1 as i64));
+    map_hput(t, opaque(2 as i64));
+    let cur = map_iter_new(t, type_id<i64>());
+    let c1 = map_iter_next(cur);
+    map_hremove(t, opaque(1 as i64));
+    map_hremove(t, opaque(2 as i64));
+    if (opaque::downcast<i64>(c1) != 1) { return 1; }
+    let c2 = map_iter_next(cur);
+    if (c2 == nil) { return 2; }
+    if (opaque::downcast<i64>(c2) != 2) { return 3; }
+    if (map_iter_next(cur) != nil) { return 4; }
+    if (map_len(t) != 0) { return 5; }
+    return 0;
+}
+
+// the flavor check traps by name: a Bits table walked under the str
+// type is a host/wrapper bug, never a silent walk
+entry fn iter_flavor_trap(t: opaque) -> opaque {
+    map_hput(t, opaque(1 as i64));
+    return map_iter_new(t, type_id<str>());
+}
 "#;
 
 fn vm_with_nmap() -> Vm {
@@ -507,5 +611,80 @@ fn valued_lanes_release_exactly_once_through_replace_and_finalize() {
     assert!(
         after <= base + 4096,
         "valued tables must free at rc-0: base {base}, after {after}"
+    );
+}
+
+// ---- the iteration lanes (the `for..of` law) ------------------------
+
+/// The snapshot walks BIRTH order — insertion order of live entries —
+/// and nils at the end; empty tables walk zero times.
+#[test]
+fn iter_walks_birth_order_and_empty_tables_walk_zero_times() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    assert_eq!(vm.call::<_, i64>("iter_empty", (t.clone(),)).unwrap(), 0);
+    assert_eq!(vm.call::<_, i64>("iter_walk", (t,)).unwrap(), 0);
+}
+
+/// The mint's widths: an i8 key reads -5, a u64 key keeps its high bit,
+/// str keys answer equal-content boxes — the type_id<K>() law.
+#[test]
+fn iter_mint_reads_every_width_bit_for_bit() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    assert_eq!(vm.call::<_, i64>("iter_i8_width", (t.clone(),)).unwrap(), 0);
+    let t2: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    assert_eq!(
+        vm.call::<_, i64>("iter_u64_high_bit", (t2.clone(),))
+            .unwrap(),
+        0
+    );
+    let t3: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    assert_eq!(vm.call::<_, i64>("iter_str_keys", (t3,)).unwrap(), 0);
+}
+
+/// The snapshot law at the raw lane: removes behind the cursor's back
+/// never touch the walk.
+#[test]
+fn iter_snapshot_survives_removal_behind_the_cursor() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    assert_eq!(
+        vm.call::<_, i64>("iter_snapshot_survives_removal", (t,))
+            .unwrap(),
+        0
+    );
+}
+
+/// The flavor check traps `Invalid` by name before any cursor exists —
+/// a Bits table walked under the str type.
+#[test]
+fn iter_flavor_mismatch_traps_invalid_by_name() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    let err = vm
+        .call::<_, OpaqueRef>("iter_flavor_trap", (t,))
+        .unwrap_err();
+    assert_eq!(err.kind, rut_vm::TrapKind::Invalid);
+    assert!(
+        err.msg.contains("nmap") && err.msg.contains("mixed key kinds"),
+        "{}",
+        err.msg
+    );
+}
+
+/// The cursor and its per-yield key boxes charge and free: a full walk
+/// over a churned table closes on the heap accounting (the boxes and
+/// the cursor are rc-managed — a leak would show here).
+#[test]
+fn iter_cursors_and_key_boxes_free_at_rc0() {
+    let mut vm = vm_with_nmap();
+    let t: OpaqueRef = vm.call("new_map", (8i64,)).unwrap();
+    let base = vm.heap_usage();
+    assert_eq!(vm.call::<_, i64>("iter_walk", (t.clone(),)).unwrap(), 0);
+    let after = vm.heap_usage();
+    assert!(
+        after <= base + 4096,
+        "the walk must free its cursor and key boxes: base {base}, after {after}"
     );
 }

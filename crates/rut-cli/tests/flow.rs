@@ -44,17 +44,34 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
     let mut world = rut_native::dir_pkgs(&base.join("rut/ink"))
         .expect("mount ink")
         .pkgs;
-    // flow's bundle carries its deps closed (the v11 `deps/` wire):
-    // pouch + nmapset ride inside it, so the consumer mounts ONE bundle
-    // — a second standalone pouch/nmapset would mount the same pkg
-    // twice under two specs and split the instantiation ledger
+    // flow's zip carries its closure closed (the rewritten rows resolve
+    // inside): pouch + nmapset + nmap_host ride inside it, so the
+    // consumer mounts ONE unpacked zip — the exact bytes jsDelivr serves
+    // at the pinned tag, the source transport's own lane (`rut install`
+    // unpacks the same bytes into `deps/<name>@<fp16>/` and mounts the
+    // directory package it carries)
     {
-        let b = "flow";
-        let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle")))
-            .unwrap_or_else(|e| panic!("dist/std/{b}.rutbundle: {e}"));
+        let bytes = std::fs::read(base.join("dist/std/flow.zip"))
+            .unwrap_or_else(|e| panic!("dist/std/flow.zip: {e}"));
+        let entries = rut_driver::bundle::read_srczip(&bytes)
+            .unwrap_or_else(|e| panic!("read flow.zip: {e}"));
+        static UNPACK_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "rut-flow-e2e-{}-{}",
+            std::process::id(),
+            UNPACK_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        for (path, data) in &entries {
+            let p = dir.join(path);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(&p, data).unwrap();
+        }
         world.extend(
-            rut_driver::Mounted::from_bundle(&bytes)
-                .unwrap_or_else(|e| panic!("mount {b}: {e:?}"))
+            rut_native::dir_pkgs(&dir)
+                .unwrap_or_else(|e| panic!("mount flow (unpacked zip): {e}"))
                 .pkgs,
         );
     }

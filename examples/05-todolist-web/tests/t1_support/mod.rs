@@ -43,7 +43,7 @@ pub fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
     // the raw `web` rows join the compiled registry (the nmap bodies
     // rode the chain)
     hosts::install_web_hosts(&mut compiled.hosts, &shared);
-    compiled.hosts.verify_against(&expected);
+    compiled.hosts.verify_declared_against(&expected);
 
     let vm = Vm::builder()
         .compiled(compiled)

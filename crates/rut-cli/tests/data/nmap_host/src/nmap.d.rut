@@ -112,3 +112,28 @@ pub host fn map_hvput_sv(m: opaque, parent: str, off: i32, len: i32, v: opaque) 
 pub host fn map_hvget_sv(m: opaque, parent: str, off: i32, len: i32) -> ?opaque;
 
 pub host fn map_hvremove_sv(m: opaque, parent: str, off: i32, len: i32) -> i32;
+
+// ---- the iteration lanes (the `for..of` law) ------------------------
+// Two crossings. `map_iter_new` snapshots the live keys — BIRTH order,
+// the never-recycled handle IS the order (insertion order of live
+// entries; a remove-then-reinsert is a NEW birth and walks last) — into
+// a pure-Rust cursor box, under the wrapper's own `type_id<K>()`: the
+// mint's EXACT `val_ty`, because `opaque::downcast<K>` checks the box's
+// type id and `Bits` alone erases the width. The flavor check runs
+// before any cursor exists — a `ty` outside the closed key set or
+// disagreeing with the table's kind traps `Invalid` by name. Every
+// `map_iter_next` mints ONE fresh key box — the exact inverse of the
+// put crossing's decode: the integer and `bool` lanes write the stored
+// word back under the requested type (signed widths crossed
+// sign-extended, unsigned zero-extended; the word is the identity), the
+// octet lanes mint a FRESH `str`/`bytes` cell of equal content (the
+// sv borrow law minted no stored rut key cell to hand out) — and
+// answers it as `?opaque`, nil at the walk's end. THE SNAPSHOT LAW:
+// the walk is the keys taken when the loop starts — puts/removes inside
+// the emit body never touch it; THE FRESH-COPY LAW: a yielded key is a
+// new cell, never the map's own (there is none) — `get` stays the way
+// to a stored cell.
+
+pub host fn map_iter_new(m: opaque, ty: u32) -> opaque;
+
+pub host fn map_iter_next(cur: opaque) -> ?opaque;

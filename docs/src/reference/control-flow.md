@@ -118,6 +118,10 @@ for (let x of expr) { .. }         // plain `let`: a read-only view
 for (let mut x of expr) { .. }     // `mut`: the body may assign x
 ```
 
+The keyed collections mark it too: `for (let k of m)` walks a
+`HashMap`'s keys, `for (let x of s)` a `HashSet`'s elements (see
+[Keyed collections](builtin-generic-types.md#keyed-collections)).
+
 Indexed form — the C shape:
 
 ```rut
