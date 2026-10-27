@@ -1,0 +1,51 @@
+[package]
+name = "rut-lsp-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "the rut language server over stdio — the native face (tower-lsp-server + tokio) over rut-lsp's queries"
+
+# the shell, not the language: `rut-lsp` is the pure core (tokens,
+# hover, completion, definition, check, deps) that BOTH faces call; this
+# crate is the stdio transport around it. Native only — stdio IS the
+# transport, and tokio rejects `io-std` on wasm32, where the core ships
+# as `rut-lsp-wasm` instead (the VS Code extension's in-process face).
+# The two shells are the twin adapters: same state shape (open docs + the
+# def index), same query entry points, no shared transport.
+[lib]
+name = "rut_lsp_server"
+path = "src/lib.rs"
+
+# the editor-facing name: every editor config spawns `rut-lsp` (the
+# rust-analyzer convention) — the PACKAGE is `rut-lsp-server`, the
+# BINARY stays `rut-lsp`
+[[bin]]
+name = "rut-lsp"
+path = "src/main.rs"
+
+[dependencies]
+rut-lsp = { path = "../rut-lsp" }
+# the server's own reads: the manifest/bundle bridge indexes dep sources
+# through `rut_lsp::deps`, and the mount door reads the bundle manifest
+# name + the parser's Mode off these two
+rut-driver = { path = "../rut-driver" }
+rut-parser = { path = "../rut-parser" }
+# the workspace walk normalizes source before indexing it (the same
+# `rut_lexer::lexer::normalize` the analyzer applies) and stamps
+# visibility on the mod rows it finds
+rut-lexer = { path = "../rut-lexer" }
+rut-ast = { path = "../rut-ast" }
+# the mount door verifies a url dep's `rut.lock` pin against the cached
+# bytes (the pin is law: a mismatch never indexes)
+sha2 = "0.10"
+ls-types = "0.0.6"
+tower-lsp-server = "0.23"
+tokio = { version = "1", features = ["macros", "rt", "io-std", "io-util", "time"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+serde_json = "1"
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

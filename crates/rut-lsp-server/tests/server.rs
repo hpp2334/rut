@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tower_lsp_server::{LspService, Server};
 
-use rut_lsp::server::Backend;
+use rut_lsp_server::Backend;
 
 struct Editor {
     tx: DuplexStream, // -> server stdin

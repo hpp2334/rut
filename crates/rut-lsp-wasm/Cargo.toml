@@ -16,13 +16,15 @@ name = "rut_lsp_wasm"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
 
-# The pure language core only — the stdio face (tower-lsp-server + tokio)
-# stays out of the module. The manifest/bundle machinery (`rut_lsp::deps`)
-# rides inside rut-lsp, so rut-driver is already in this graph (it added
-# the dep in the same change that landed `deps`) — wasm32-clean, proven by
+# The pure language core only. The stdio face is its own crate
+# (`rut-lsp-server`, native), so this graph carries no tokio and no
+# tower-lsp-server at all — the split is a dependency fact now, not a
+# feature flag. The manifest/bundle machinery (`rut_lsp::deps`) rides
+# inside rut-lsp, so rut-driver is already in this graph (it added the
+# dep in the same change that landed `deps`) — wasm32-clean, proven by
 # rut-wasm.
 [dependencies]
-rut-lsp = { path = "../rut-lsp", default-features = false }
+rut-lsp = { path = "../rut-lsp" }
 # the entry-source Mode (`Decl`/`Impl`) the envelope spells as a string —
 # named directly so the match is explicit, not a Debug-format wire value
 rut-parser = { path = "../rut-parser" }

@@ -17,6 +17,7 @@ members = [
     "crates/rut-lsp-wasm",
     "crates/rut-cli",
     "crates/rut-lsp",
+    "crates/rut-lsp-server",
     "examples/00-todolist",
     "examples/01-sort",
     "examples/02-digest",

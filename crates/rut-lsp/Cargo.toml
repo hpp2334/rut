@@ -3,22 +3,17 @@ name = "rut-lsp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the rut language server — semantic tokens, diagnostics, document symbols (the M6 LSP slice, landed early)"
+description = "the rut language core behind every editor face — semantic tokens, diagnostics, document symbols, hover, completion, definition, check"
 
+# The pure core: no transport, no tokio, no LSP service. The two shells
+# that serve it are separate crates — `rut-lsp-server` (stdio, the native
+# `rut-lsp` binary) and `rut-lsp-wasm` (the in-process module the VS Code
+# extension and the playground bundle). Both call the same `analysis`
+# entry points, so they cannot drift; keeping the service out of here is
+# what lets the wasm lane stay wasm32-clean with no feature gymnastics.
 [lib]
 name = "rut_lsp"
 path = "src/lib.rs"
-
-[[bin]]
-name = "rut-lsp"
-path = "src/main.rs"
-
-[features]
-default = ["server"]
-# the stdio JSON-RPC face (tower-lsp-server + tokio) — native only. The
-# wasm shim (`rut-lsp-wasm`, the VS Code extension) builds this crate with
-# `default-features = false` and gets the pure core alone.
-server = ["dep:tower-lsp-server", "dep:tokio"]
 
 # The workspace's first external dependencies (user-approved). Note: the
 # `tower-lsp` crate is stale; `tower-lsp-server` is its maintained
@@ -39,23 +34,6 @@ rut-semantic = { path = "../rut-semantic" }
 rut-driver = { path = "../rut-driver" }
 # the url-dep cache filename (`.rut/cache/<sha256(url)>.rutbundle`) is
 # computed Rust-side — JS never hashes URLs; pure Rust, wasm-clean
-sha2 = "0.10"
-
-# The stdio face's crates — native only, so they live under a target
-# table: on wasm32 tokio rejects `io-std` with a compile_error! ("Only
-# features sync,macros,io-util,rt,time are supported on wasm") and there
-# is no stdin to serve anyway. Declared outside `[dependencies]` so the
-# whole-workspace wasm32 check compiles this crate with default features
-# (feature `server` on, both deps resolved out per-target, no-op).
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tower-lsp-server = { version = "0.23", optional = true }
-tokio = { version = "1", features = ["macros", "rt", "io-std", "io-util", "time"], optional = true }
-
-[dev-dependencies]
-tower = { version = "0.5", features = ["util"] }
-serde_json = "1"
-# the dep-walk fixture computes the url pin + cache filename the same
-# way the server does (the pin is law at the mount door)
 sha2 = "0.10"
 
 # opt into the workspace lint gate (warnings = deny)

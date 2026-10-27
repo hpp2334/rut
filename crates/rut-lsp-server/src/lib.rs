@@ -1,13 +1,17 @@
-//! The LSP service — `Backend` over tower-lsp-server: full-document sync,
-//! semantic tokens (full), document symbols, hover, inlay hints, pushed
-//! diagnostics.
-//! One server, every editor that speaks LSP (VS Code via
-//! `integrations/vscode-extension`; Neovim / Helix / Zed / Emacs / Sublime
-//! configs in `integrations/README.md`). Hover/completion resolve against
-//! the open document first, then the embedded std surface
-//! (`std_surface`), then the workspace's rut files, then the manifest
-//! deps (see below). The wasm shim (`rut-lsp-wasm`) drives the same
-//! queries without this process.
+//! rut-lsp-server — the stdio face: [`Backend`] over tower-lsp-server:
+//! full-document sync, semantic tokens (full), document symbols, hover,
+//! completion, definition, inlay hints, references, signature help,
+//! pushed diagnostics. The `rut-lsp` binary in `src/main.rs` is this
+//! service on stdin/stdout.
+//!
+//! The queries are NOT here — they are `rut_lsp::analysis` (and the
+//! sibling modules), the same entry points `rut-lsp-wasm` calls for the
+//! VS Code extension. This crate owns the transport and the session
+//! shell: the open docs, the def index, the workspace scan, the dep walk,
+//! and the JSON-RPC provider bodies. Hover/completion resolve against the
+//! open document first, then the embedded std surface
+//! (`rut_lsp::std_surface`), then the workspace's rut files, then the
+//! manifest deps (see below).
 //!
 //! # Deps — cache-only by law
 //!
@@ -52,13 +56,13 @@ use rut_parser::Mode;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::{Client, LanguageServer};
 
-use crate::analysis::{self, Analysis};
-use crate::check;
-use crate::deps::{self, DepSource};
-use crate::hover::DefIndex;
-use crate::mods::DocMods;
-use crate::semantic::TokenType;
-use crate::std_surface;
+use rut_lsp::analysis::{self, Analysis};
+use rut_lsp::check;
+use rut_lsp::deps::{self, DepSource};
+use rut_lsp::hover::DefIndex;
+use rut_lsp::mods::DocMods;
+use rut_lsp::semantic::TokenType;
+use rut_lsp::std_surface;
 
 #[derive(Debug)]
 pub struct Backend {
@@ -1188,7 +1192,7 @@ impl Backend {
     /// relative (the client may still know the file — never a wrong jump)
     fn resolve_locations(
         &self,
-        locs: Vec<crate::definition::DefLocation>,
+        locs: Vec<rut_lsp::definition::DefLocation>,
     ) -> Option<Vec<Location>> {
         let root = self.root.read().unwrap().clone();
         let out: Vec<Location> = locs
@@ -1209,7 +1213,7 @@ impl Backend {
 
     fn locations(
         &self,
-        locs: Vec<crate::definition::DefLocation>,
+        locs: Vec<rut_lsp::definition::DefLocation>,
     ) -> Option<GotoDefinitionResponse> {
         self.resolve_locations(locs)
             .map(GotoDefinitionResponse::Array)

@@ -1,9 +1,13 @@
-//! rut-lsp — the rut language server (the M6 LSP slice, landed early): **semantic tokens** (grammar highlighting), pushed
-//! **diagnostics** (lexer + parser), **document symbols**, **hover**,
-//! and **completions**, built on rut-lexer/rut-ast/rut-parser. One
-//! server, every editor that speaks LSP (VS Code via
-//! `integrations/vscode-extension`; Neovim / Helix / Zed / Emacs /
-//! Sublime configs in `integrations/README.md`).
+//! rut-lsp — the rut language CORE (the M6 LSP slice, landed early):
+//! **semantic tokens** (grammar highlighting), **diagnostics** (lexer +
+//! parser + the checker), **document symbols**, **hover**, **completion**,
+//! **definition**, built on rut-lexer/rut-ast/rut-parser. This crate is
+//! the queries and the values; it owns no transport. Two shells serve it:
+//! `rut-lsp-server` (stdio — the `rut-lsp` binary every editor that
+//! speaks LSP spawns; Neovim / Helix / Zed / Emacs / Sublime configs in
+//! `integrations/README.md`) and `rut-lsp-wasm` (the in-process module
+//! the VS Code extension and the demo playground bundle). Both call the
+//! same entry points here, so they cannot drift.
 //! Layout: `line_index` (byte spans ⇄ UTF-16 positions over the
 //! normalized source), `semantic` (the pure classifier — it lives in
 //! `rut-semantic` and is re-exported here; `legend`, `tokens`, `names`,
@@ -29,12 +33,9 @@
 //! `check` (the semantic diagnostics lane — "check package → per-file
 //! diagnostics" over the driver's graph walk, the checker's type errors
 //! mapped back through the chain's file stamps and merged with the
-//! parse set; parse-only when no package graph assembles),
-//! `server` (the
-//! tower-lsp service — open doc + the embedded std surface + a
-//! workspace scan; feature `server`, native only). The wasm shim
-//! (`rut-lsp-wasm`) wraps the same pure core over a raw ABI — no server
-//! process.
+//! parse set; parse-only when no package graph assembles). No module here
+//! touches a socket, a stdio handle, or a string of JSON on its way out —
+//! shaping the values for a wire is the shell's job.
 
 pub mod analysis;
 pub mod check;
@@ -49,8 +50,3 @@ pub mod references;
 pub mod semantic;
 pub mod signature_help;
 pub mod std_surface;
-// feature `server` AND native — the deps are target-gated to
-// `cfg(not(target_arch = "wasm32"))` (tokio rejects `io-std` on wasm),
-// so on wasm32 the feature resolves to an empty set
-#[cfg(all(feature = "server", not(target_arch = "wasm32")))]
-pub mod server;
