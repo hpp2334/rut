@@ -62,3 +62,22 @@ jobs:
           wasm-pack build crates/rut-wasm --target web --release
           wasm-pack build crates/rut-wasm --target no-modules --out-dir pkg-book --release
           wasm-pack build crates/rut-lsp-wasm --target web --release
+          node crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs
+      # the extension's own gates: the .d.ts contract (typecheck), the
+      # TextMate corpus, and the through-wasm e2e over the SHIPPED
+      # artifact — the wire-shape block there is the only gate that can
+      # see a Rust-side envelope rename
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: integrations/vscode-extension/package-lock.json
+      - name: vscode extension lane
+        run: |
+          cd integrations/vscode-extension
+          npm ci
+          node scripts/copy-wasm.mjs
+          npm run typecheck
+          npm run test:grammar
+          npm run compile
+          npm run test:e2e

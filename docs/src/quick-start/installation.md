@@ -267,6 +267,8 @@ and one extra target:
 rustup target add wasm32-unknown-unknown
 wasm-pack build crates/rut-wasm --target web --release
 wasm-pack build crates/rut-lsp-wasm --target web --release
+# the JS face + declarations the editors import (pkg/index.js, pkg/index.d.ts)
+node crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs
 ```
 
 or, from `demo/`, the one-command lane that also copies the artifacts

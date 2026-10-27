@@ -111,6 +111,17 @@ order:
                            # skip-tolerant host suite) → vsce package →
                            # byte-verify the wasm inside the vsix
 
+- **The ABI face lives in the crate**: `crates/rut-lsp-wasm/js/index.js`
+  (the envelope parsing) and `js/index.d.ts` (every LSP/wire shape) are
+  assembled into the wasm package by `scripts/build-lsp-pkg.mjs` (run by
+  every `build:wasm`), and both hosts — this extension and the demo
+  playground — import `crates/rut-lsp-wasm/pkg/index.js`. A host must
+  never declare LSP shapes; it may only map them (the extension maps to
+  `vscode.*`). The contract has two gates: `npm run typecheck`
+  (`tsc --noEmit`, now part of `npm test` and the release lane) and the
+  `wire-shape` block in `test/e2e-wasm.js`, which asserts each
+  envelope's exact key set through the shipped artifact — the only gate
+  that can catch a Rust-side rename, since the wire is data.
 - **When the frontend moves, the lane moves**: any change touching the
   lexer, parser, `rut-lsp`, or the TextMate grammar must run this lane
   (or at minimum `build:wasm` + `test:e2e`) before the work is done —
