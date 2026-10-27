@@ -1,11 +1,12 @@
 # rut editor support
 
-One language server — `crates/rut-lsp` — serves every editor that speaks
-LSP. Build it once:
+One language server serves every editor that speaks LSP: the queries
+are `crates/rut-lsp` (the core), the stdio face is
+`crates/rut-lsp-server`. Build the binary once:
 
 ```sh
-cargo build -p rut-lsp --release
-# binary: target/release/rut-lsp[.exe]
+cargo build -p rut-lsp-server --release
+# binary: target/release/rut-lsp[.exe]  (package rut-lsp-server, binary rut-lsp)
 ```
 
 VS Code skips the server process entirely: its extension runs the same

@@ -111,6 +111,12 @@ order:
                            # skip-tolerant host suite) → vsce package →
                            # byte-verify the wasm inside the vsix
 
+- **Two shells, one core**: `crates/rut-lsp` is the queries (no
+  transport, no tokio); `crates/rut-lsp-server` is the stdio face and
+  ships the `rut-lsp` binary (package `rut-lsp-server`, binary name
+  unchanged — build with `cargo build -p rut-lsp-server`);
+  `crates/rut-lsp-wasm` is the in-process module. Add a feature to the
+  core, then wire it in both shells.
 - **The ABI face lives in the crate**: `crates/rut-lsp-wasm/js/index.js`
   (the envelope parsing) and `js/index.d.ts` (every LSP/wire shape) are
   assembled into the wasm package by `scripts/build-lsp-pkg.mjs` (run by

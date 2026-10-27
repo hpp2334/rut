@@ -33,7 +33,7 @@ msgid "Your first rut program"
 msgstr ""
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:273
+#: src/reference/project-structure.md:282
 msgid "The playground"
 msgstr ""
 
@@ -757,9 +757,9 @@ msgid ""
 "  \"name\": \"hello\",\n"
 "  \"deps\": {\n"
 "    // ink — the toolchain's logger package, served by jsDelivr at the\n"
-"    // std-v14 tag; the pin lives in rut.lock, one install below\n"
+"    // std-v15 tag; the pin lives in rut.lock, one install below\n"
 "    \"ink\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\" }\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "EOF\n"
@@ -779,7 +779,7 @@ msgstr ""
 msgid ""
 "```text\n"
 "install: ink — downloading "
-"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\n"
+"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\n"
 "install: ink — downloaded (2883 bytes)\n"
 "install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes "
 "total)\n"
@@ -828,26 +828,32 @@ msgid ""
 "[wasm-pack](https://rustwasm.github.io/wasm-pack/) and one extra target:"
 msgstr ""
 
-#: src/quick-start/installation.md:272
+#: src/quick-start/installation.md:269
+msgid ""
+"# the JS face + declarations the editors import (pkg/index.js, "
+"pkg/index.d.ts)\n"
+msgstr ""
+
+#: src/quick-start/installation.md:274
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifacts into "
 "place:"
 msgstr ""
 
-#: src/quick-start/installation.md:279
+#: src/quick-start/installation.md:281
 msgid "Optional: build this book"
 msgstr ""
 
-#: src/quick-start/installation.md:281
+#: src/quick-start/installation.md:283
 msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr ""
 
-#: src/quick-start/installation.md:286
+#: src/quick-start/installation.md:288
 msgid "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 
-#: src/quick-start/installation.md:287
+#: src/quick-start/installation.md:289
 msgid "# static site in docs/book/\n"
 msgstr ""
 
@@ -1709,9 +1715,9 @@ msgid ""
 "  \"deps\": {\n"
 "    // the pins live in literals/rut.lock — `rut install` writes it\n"
 "    \"pouch\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip\" },\n"
 "    \"ink\":   { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\" }\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -4070,7 +4076,7 @@ msgid ""
 "    // the toolchain's pouch package, from jsDelivr — the pin lives in\n"
 "    // the app's rut.lock (one lock per walk root)\n"
 "    \"pouch\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip\" }\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -4136,7 +4142,7 @@ msgid ""
 "    // the toolchain's ink package, from jsDelivr — the pin lives in\n"
 "    // this app's rut.lock\n"
 "    \"ink\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\" }\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -21342,7 +21348,7 @@ msgid ""
 "whose bodies the embedder binds."
 msgstr ""
 
-#: src/reference/stdlib.md:122 src/reference/project-structure.md:256
+#: src/reference/stdlib.md:122 src/reference/project-structure.md:265
 msgid "package"
 msgstr ""
 
@@ -21377,7 +21383,7 @@ msgstr ""
 msgid "the `Logger` class"
 msgstr ""
 
-#: src/reference/stdlib.md:126 src/reference/project-structure.md:264
+#: src/reference/stdlib.md:126 src/reference/project-structure.md:273
 msgid "`pouch`"
 msgstr ""
 
@@ -21389,7 +21395,7 @@ msgstr ""
 msgid "the growable sequence `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:127 src/reference/project-structure.md:265
+#: src/reference/stdlib.md:127 src/reference/project-structure.md:274
 msgid "`flow`"
 msgstr ""
 
@@ -21414,7 +21420,7 @@ msgstr ""
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:129 src/reference/project-structure.md:266
+#: src/reference/stdlib.md:129 src/reference/project-structure.md:275
 msgid "`json`"
 msgstr ""
 
@@ -21436,7 +21442,7 @@ msgstr ""
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:131 src/reference/project-structure.md:259
+#: src/reference/stdlib.md:131 src/reference/project-structure.md:268
 msgid "`calc`"
 msgstr ""
 
@@ -21450,7 +21456,7 @@ msgid ""
 "out of the argument)"
 msgstr ""
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:260
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:269
 msgid "`calc_host`"
 msgstr ""
 
@@ -26764,9 +26770,9 @@ msgid ""
 "  \"deps\": {\n"
 "    \"greet\": { \"path\": \"../greet\" },\n"
 "    \"pouch\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip\" },\n"
 "    \"ink\":   { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\" }\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -27056,7 +27062,7 @@ msgstr ""
 msgid "The toolchain tree"
 msgstr ""
 
-#: src/reference/project-structure.md:237
+#: src/reference/project-structure.md:239
 msgid ""
 "Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → "
 "rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the "
@@ -27066,109 +27072,116 @@ msgid ""
 "`rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp` sits on the "
 "frontend crates — tokens, diagnostics, and symbols need no VM — plus the "
 "driver's pure core for manifest and bundle parsing (the dep tables behind "
-"the editor's dep walk). Its classifier is `rut-semantic` (re-exported as "
-"`rut_lsp::semantic`), which sits on the frontend crates for the same reason "
-"— embedders take it without the server."
+"the editor's dep walk). It is the queries and the LSP values, never a "
+"transport: the two shells that serve it are separate crates. "
+"`rut-lsp-server` is the stdio face (tower-lsp-server + tokio) and ships the "
+"`rut-lsp` binary every editor config spawns; `rut-lsp-wasm` is the "
+"in-process module the VS Code extension and the playground bundle. Both call "
+"the same `rut_lsp::analysis` entry points with the same session state shape, "
+"so a feature lands on both faces or neither. The crate's classifier is "
+"`rut-semantic` (re-exported as `rut_lsp::semantic`), which sits on the "
+"frontend crates for the same reason — embedders take it without an editor at "
+"all."
 msgstr ""
 
-#: src/reference/project-structure.md:251
+#: src/reference/project-structure.md:260
 msgid "The in-tree packages"
 msgstr ""
 
-#: src/reference/project-structure.md:253
+#: src/reference/project-structure.md:262
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr ""
 
-#: src/reference/project-structure.md:256
+#: src/reference/project-structure.md:265
 msgid "shape"
 msgstr ""
 
-#: src/reference/project-structure.md:258
+#: src/reference/project-structure.md:267
 msgid "`core`"
 msgstr ""
 
-#: src/reference/project-structure.md:258
+#: src/reference/project-structure.md:267
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's "
 "`.compile()`"
 msgstr ""
 
-#: src/reference/project-structure.md:259
+#: src/reference/project-structure.md:268
 msgid ""
 "the math surface as a normal lib — generic fns over `calc_host`; a "
 "`deps`\\-carrying dir mounts through `load_dir`/`dir_pkgs`, never `tree_pkg` "
 "([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:260
+#: src/reference/project-structure.md:269
 msgid ""
 "host pkg: the math rows + the `Math::` constants — offer "
 "`rut_native::tree_pkg(\"calc_host\")`, bind `rut_std::math::pkg()` "
 "([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:261
+#: src/reference/project-structure.md:270
 msgid "`ink_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr ""
 
-#: src/reference/project-structure.md:261
+#: src/reference/project-structure.md:270
 msgid "host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:262
+#: src/reference/project-structure.md:271
 msgid "`http_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:262
+#: src/reference/project-structure.md:271
 msgid ""
 "host pkg, the surface-tree pilot — the default `src/mod.d.rut` root over the "
 "std HTTP rows, `net/` + `stream/` mods ([project "
 "structure](#host-surface-trees)); bodies in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:263
+#: src/reference/project-structure.md:272
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr ""
 
-#: src/reference/project-structure.md:263
+#: src/reference/project-structure.md:272
 msgid ""
 "rut classes over host rows (published compiled — methods cross on the "
 "surface's inherent rows)"
 msgstr ""
 
-#: src/reference/project-structure.md:264
+#: src/reference/project-structure.md:273
 msgid "the growable sequence `Vec<T>` (plain linked package)"
 msgstr ""
 
-#: src/reference/project-structure.md:265
+#: src/reference/project-structure.md:274
 msgid ""
 "the push pipeline (`Flow<E>`; its `VecFlow`/`SetFlow` wrappers over "
 "`pouch`/`nmapset`)"
 msgstr ""
 
-#: src/reference/project-structure.md:266
+#: src/reference/project-structure.md:275
 msgid ""
 "the serde pkg — owns the wrapper families over `pouch`/`nmapset`, plain "
 "`deps` ([Dependency kinds](dependency-kinds.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:267
+#: src/reference/project-structure.md:276
 msgid "`nmapset`"
 msgstr ""
 
-#: src/reference/project-structure.md:267
+#: src/reference/project-structure.md:276
 msgid "native-key maps/sets over `nmap_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:269
+#: src/reference/project-structure.md:278
 msgid ""
 "Nothing in the engine knows the swappable packages' names — deps are "
 "resolved by name from manifests; a host may replace the non-`core` set "
 "wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/project-structure.md:275
+#: src/reference/project-structure.md:284
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "
@@ -27368,7 +27381,7 @@ msgid ""
 "the toolchain ships. A `path` row is for **your own local packages**: a "
 "sibling directory in the same project (the modules tutorial's `greet` app "
 "mounting `../pkg` is the shape). The tag advances with format changes "
-"(`std-v14` today) and is never re-pointed, so a lock pin at a tag stays "
+"(`std-v15` today) and is never re-pointed, so a lock pin at a tag stays "
 "honest forever."
 msgstr ""
 
@@ -27698,7 +27711,7 @@ msgid ""
 "{\n"
 "  \"deps\": {\n"
 "    \"json\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/json.zip\" }\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/json.zip\" }\n"
 "  }\n"
 "}\n"
 "```"
@@ -27966,7 +27979,7 @@ msgstr ""
 #: src/reference/cli.md:112
 msgid ""
 "`rut.jsonc` — the derived name plus the whole swappable std set (nine "
-"packages) as unpinned url deps at the `@std-v14` tag (source zips); "
+"packages) as unpinned url deps at the `@std-v15` tag (source zips); "
 "`rut.lock` — the set's pins, rendered through the lock grammar "
 "([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello"
 msgstr ""
@@ -27995,7 +28008,7 @@ msgid ""
 "  // module the loader mounts.\n"
 "  //\n"
 "  // THE STD SET: all nine swappable std libs, each a COMMITTED\n"
-"  // source zip (dist/std, jsDelivr-served at the std-v14 tag) —\n"
+"  // source zip (dist/std, jsDelivr-served at the std-v15 tag) —\n"
 "  // source compiles with YOUR toolchain, so a zip never goes stale\n"
 "  // the way compiled IR does.\n"
 "  // The pins live in `rut.lock` beside this file (machine-generated:\n"
@@ -28007,24 +28020,24 @@ msgid ""
 "  \"name\": \"hello\",\n"
 "  \"deps\": {\n"
 "    \"ink\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\" },\n"
 "    \"pouch\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip\" },\n"
 "    \"flow\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/flow.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/flow.zip\" },\n"
 "    \"nmapset\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/nmapset.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/nmapset.zip\" },\n"
 "    \"json\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/json.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/json.zip\" },\n"
 "    \"strbuild\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/strbuild.zip\" "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/strbuild.zip\" "
 "},\n"
 "    \"calc\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/calc.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/calc.zip\" },\n"
 "    \"futures\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/futures.zip\" },\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/futures.zip\" },\n"
 "    \"http\": { \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/http.zip\" }\n"
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/http.zip\" }\n"
 "  }\n"
 "}\n"
 "\n"
@@ -28036,39 +28049,39 @@ msgid ""
 "  \"format_version\": 1,\n"
 "  \"deps\": [\n"
 "    { \"pkg\": \"calc\",     \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/calc.zip\",     "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/calc.zip\",     "
 "\"sha256\": "
-"\"d6d04afa561f39f06b5181411640e0cc0cb97a4095e0b7f8d1f5957534831686\" },\n"
+"\"32314f2189d56627a452cf2c9cecf0c77b99d0d435c4e1f7db436e9faebc1209\" },\n"
 "    { \"pkg\": \"flow\",     \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/flow.zip\",     "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/flow.zip\",     "
 "\"sha256\": "
-"\"47ac4b49fc809640ea067cf3c945bf7442f017a7d113e2567d2f30f69124838c\" },\n"
+"\"19545c61748bffa057cf6e5bea29bab728417fbcc6b84759216f7f3f68bbebc1\" },\n"
 "    { \"pkg\": \"futures\",  \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/futures.zip\",  "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/futures.zip\",  "
 "\"sha256\": "
 "\"e143211a0a6e9ddb0a3ccb5e3e79796d85b2ee627ee4c63f046dc583a55eb711\" },\n"
 "    { \"pkg\": \"http\",     \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/http.zip\",     "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/http.zip\",     "
 "\"sha256\": "
 "\"9c6855cd58d7d888515fff691787a42708cef512423dc6040f8e214dbd00cbac\" },\n"
 "    { \"pkg\": \"ink\",      \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\",      "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\",      "
 "\"sha256\": "
 "\"eb2b568316efb77286cc5d94bec24a94f45d528cf244f54b91cb0d619dc53cc1\" },\n"
 "    { \"pkg\": \"json\",     \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/json.zip\",     "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/json.zip\",     "
 "\"sha256\": "
-"\"b15d867fb3743a829cc0bf5ace1a642dd8b9024d681aa7015d6c166bb29dbc63\" },\n"
+"\"653867a4451d8eb991cfdd59c9196d95c92ecc7b3da530519cba15e68951b18a\" },\n"
 "    { \"pkg\": \"nmapset\",  \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/nmapset.zip\",  "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/nmapset.zip\",  "
 "\"sha256\": "
-"\"d9f722c65bf1d1a2d08078b478f342230a01fb07ef47f504edbd4defd73dbc6e\" },\n"
+"\"1a59e0e4cab803dcd176ac919160cb9dbbc305011fb563dcc1d8bcd82307f5dd\" },\n"
 "    { \"pkg\": \"pouch\",    \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/pouch.zip\",    "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip\",    "
 "\"sha256\": "
 "\"5740cb0b874a2c9a81f1e0d9534520fe4067e5ec48320b82cf7147e2d6b34d36\" },\n"
 "    { \"pkg\": \"strbuild\", \"url\": "
-"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/strbuild.zip\", "
+"\"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/strbuild.zip\", "
 "\"sha256\": "
 "\"1eedb374bcb52419b9ec82d9ea6f23fb3534faa0a4c75e4d03afedc6d7dabe33\" }\n"
 "  ]\n"
@@ -28136,7 +28149,7 @@ msgstr ""
 msgid ""
 "```text\n"
 "install: ink — downloading "
-"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v14/dist/std/ink.zip\n"
+"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\n"
 "install: ink — downloaded (2883 bytes)\n"
 "install: 1 url deps resolved — 1 downloaded, 0 cache hits (2883 bytes "
 "total)\n"

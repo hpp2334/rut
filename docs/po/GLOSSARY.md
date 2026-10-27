@@ -205,3 +205,4 @@ context; after that, use the zh-CN rendering alone.
 | implicit return | 隐式返回 | fn 体/lambda 块体的尾表达式即隐式返回；definite-return law → 必然返回法则（`missing return: …` 诊断原文保留） |
 | `if` atom | `if` 原子 | `if` 的表达式形式（`if` stays code）；parens required → 括号不可省；statement form → 语句形式；expression form → 表达式形式 |
 | value block | 值块 | 产生值的块；value-producing arm → 产生值的分支；arm → 分支（`when`/`if` 的分支，`->` 之后的部分） |
+| face / shell | 面 / 外壳 | the stdio face → stdio 面；the wasm face → wasm 面；the two shells that serve the core → 服务核心的两个外壳；the core owns no transport → 核心不承担传输 |

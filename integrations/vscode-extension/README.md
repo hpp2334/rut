@@ -48,8 +48,10 @@ indexed with `workspace.findFiles` and pushed into the module
 
 The **native `rut-lsp` binary remains the face for other editors**
 (Neovim / Helix / Zed / Emacs / Sublime — see
-[`../README.md`](../README.md)); both faces run the same queries from
-`crates/rut-lsp`, so they cannot drift.
+[`../README.md`](../README.md)). It ships from its own crate,
+`crates/rut-lsp-server` (stdlib transport, tokio); this extension's
+module is `crates/rut-lsp-wasm`. Both are shells over the same queries
+in `crates/rut-lsp`, so they cannot drift.
 
 ## File modules — src/mod.rut
 
