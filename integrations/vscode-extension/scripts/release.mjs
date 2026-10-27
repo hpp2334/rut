@@ -65,7 +65,7 @@ console.log(`release: building bin/rut-lsp.wasm for ${version}`);
 run(npm, ['run', 'build:wasm'], 'build:wasm');
 
 // ---- 3. gates — against the fresh artifact ------------------------------
-for (const gate of ['test:grammar', 'test:e2e', 'test:host']) {
+for (const gate of ['typecheck', 'test:grammar', 'test:e2e', 'test:host']) {
   console.log(`release: gate ${gate}`);
   run(npm, ['run', gate], gate);
 }

@@ -10,7 +10,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Analysis, DepRow, isEnvelope, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSignatureHelp, LspSymbol, RutWasm, SrczipExtracted } from './wasm';
+import { Analysis, decodeTokens, DepRow, isEnvelope, LspCompletionItem, LspDiag, LspInlayHint, LspLocation, LspRange, LspSignatureHelp, LspSymbol, RutLsp, SrczipExtracted } from './wasm';
 
 const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 
@@ -43,11 +43,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     return;
   }
-  const rut = await RutWasm.load(wasmPath);
+  const bytes = await fs.promises.readFile(wasmPath);
+  // the bytes are the shipped artifact — an invalid/missing file fails
+  // init LOUDLY inside the binding, never a silent half-working state
+  const rut = await RutLsp.load(bytes);
   registerAll(context, rut);
 }
 
-function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
+function registerAll(context: vscode.ExtensionContext, rut: RutLsp): void {
   const subscriptions = context.subscriptions;
 
   // ---- pushed diagnostics (the wasm twin of publish_diagnostics) ----
@@ -147,7 +150,7 @@ function registerAll(context: vscode.ExtensionContext, rut: RutWasm): void {
 // spam, never silent wrong results.
 
 interface WalkCtx {
-  rut: RutWasm;
+  rut: RutLsp;
   /// the anchoring workspace folder — where `.rut/cache/` lives
   folder: vscode.Uri;
   /// resolved manifest dirs — the cycle break
@@ -189,7 +192,7 @@ let walkTimer: ReturnType<typeof setTimeout> | undefined;
 let walking = false;
 let walkRerun = false;
 
-function scheduleDepWalk(rut: RutWasm): void {
+function scheduleDepWalk(rut: RutLsp): void {
   if (walkTimer !== undefined) {
     clearTimeout(walkTimer);
   }
@@ -199,7 +202,7 @@ function scheduleDepWalk(rut: RutWasm): void {
   }, ANALYSIS_DEBOUNCE_MS);
 }
 
-async function runDepWalk(rut: RutWasm): Promise<void> {
+async function runDepWalk(rut: RutLsp): Promise<void> {
   if (walking) {
     walkRerun = true;
     return;
@@ -221,7 +224,7 @@ async function runDepWalk(rut: RutWasm): Promise<void> {
 // restarts the whole index (watchers re-arm over the new folder set,
 // the scan + walk re-run — re-indexing is replace-by-origin, so this
 // is idempotent)
-function watchDeps(context: vscode.ExtensionContext, rut: RutWasm): void {
+function watchDeps(context: vscode.ExtensionContext, rut: RutLsp): void {
   const watchers: vscode.Disposable[] = [];
   const watchFolder = (folder: vscode.WorkspaceFolder): void => {
     for (const pattern of [`**/${MANIFEST_NAME}`, '**/mod.rut', '.rut/cache/**']) {
@@ -253,7 +256,7 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutWasm): void {
   );
 }
 
-async function walkDeps(rut: RutWasm): Promise<void> {
+async function walkDeps(rut: RutLsp): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
     // the pin ledger rides the walk root: `rut.lock` beside the root
     // manifest feeds `rut.setLock` BEFORE the manifest parses, so its
@@ -761,7 +764,7 @@ async function fileHasContent(file: vscode.Uri, src: string): Promise<boolean> {
 
 // ---- providers ----
 
-function registerSemanticTokens(rut: RutWasm): vscode.Disposable {
+function registerSemanticTokens(rut: RutLsp): vscode.Disposable {
   const legend = new vscode.SemanticTokensLegend(rut.legend(), []);
   return vscode.languages.registerDocumentSemanticTokensProvider(
     SELECTOR,
@@ -770,13 +773,9 @@ function registerSemanticTokens(rut: RutWasm): vscode.Disposable {
         const data = analyzeDoc(rut, doc).tokens.data;
         const builder = new vscode.SemanticTokensBuilder(legend);
         // decode the LSP delta encoding into the builder's absolute slots
-        let line = 0;
-        let char = 0;
-        for (let i = 0; i + 4 < data.length; i += 5) {
-          const deltaLine = data[i];
-          line += deltaLine;
-          char = deltaLine === 0 ? char + data[i + 1] : data[i + 1];
-          builder.push(line, char, data[i + 2], data[i + 3]);
+        // (one decoder for every host — the binding owns the wire)
+        for (const token of decodeTokens(data)) {
+          builder.push(token.line, token.start, token.length, token.type);
         }
         return builder.build();
       },
@@ -785,7 +784,7 @@ function registerSemanticTokens(rut: RutWasm): vscode.Disposable {
   );
 }
 
-function registerDocumentSymbols(rut: RutWasm): vscode.Disposable {
+function registerDocumentSymbols(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerDocumentSymbolProvider(SELECTOR, {
     provideDocumentSymbols(doc: vscode.TextDocument): vscode.DocumentSymbol[] {
       return analyzeDoc(rut, doc).symbols.map(toSymbol);
@@ -793,7 +792,7 @@ function registerDocumentSymbols(rut: RutWasm): vscode.Disposable {
   });
 }
 
-function registerHover(rut: RutWasm): vscode.Disposable {
+function registerHover(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerHoverProvider(SELECTOR, {
     provideHover(doc: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
       const h = rut.hover(doc.uri.toString(), position.line, position.character);
@@ -808,7 +807,7 @@ function registerHover(rut: RutWasm): vscode.Disposable {
   });
 }
 
-function registerCompletion(rut: RutWasm): vscode.Disposable {
+function registerCompletion(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerCompletionItemProvider(
     SELECTOR,
     {
@@ -834,14 +833,13 @@ function registerCompletion(rut: RutWasm): vscode.Disposable {
 // ctrl+click / F12 — the wasm definition query, targets resolved to
 // real URIs (the embedded std surface jumps carry repo-relative paths
 // into the true rut/ sources)
-function registerDefinition(rut: RutWasm): vscode.Disposable {
+function registerDefinition(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerDefinitionProvider(SELECTOR, {
     provideDefinition(
       doc: vscode.TextDocument,
       position: vscode.Position
     ): vscode.Location[] {
       return resolveLocations(
-        rut,
         rut.definition(doc.uri.toString(), position.line, position.character),
         doc.uri.toString()
       );
@@ -849,14 +847,13 @@ function registerDefinition(rut: RutWasm): vscode.Disposable {
   });
 }
 
-function registerTypeDefinition(rut: RutWasm): vscode.Disposable {
+function registerTypeDefinition(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerTypeDefinitionProvider(SELECTOR, {
     provideTypeDefinition(
       doc: vscode.TextDocument,
       position: vscode.Position
     ): vscode.Location[] {
       return resolveLocations(
-        rut,
         rut.typeDefinition(doc.uri.toString(), position.line, position.character),
         doc.uri.toString()
       );
@@ -868,7 +865,7 @@ function registerTypeDefinition(rut: RutWasm): vscode.Disposable {
 // label + the colon (type hints after unannotated bindings, param
 // names before exact-arity call args); VS Code renders the dotted
 // decoration and `editor.inlayHints` toggles it
-function registerInlayHints(rut: RutWasm): vscode.Disposable {
+function registerInlayHints(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerInlayHintsProvider(SELECTOR, {
     provideInlayHints(doc: vscode.TextDocument, range: vscode.Range): vscode.InlayHint[] {
       return rut
@@ -881,7 +878,7 @@ function registerInlayHints(rut: RutWasm): vscode.Disposable {
 // Shift+F12 / Find All References — the wasm references query (the
 // definition index read backwards); the LSP includeDeclaration toggle
 // rides the vscode ReferenceContext through
-function registerReferences(rut: RutWasm): vscode.Disposable {
+function registerReferences(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerReferenceProvider(SELECTOR, {
     provideReferences(
       doc: vscode.TextDocument,
@@ -889,7 +886,6 @@ function registerReferences(rut: RutWasm): vscode.Disposable {
       context: vscode.ReferenceContext
     ): vscode.Location[] {
       return resolveLocations(
-        rut,
         rut.references(doc.uri.toString(), position.line, position.character, context.includeDeclaration),
         doc.uri.toString()
       );
@@ -899,7 +895,7 @@ function registerReferences(rut: RutWasm): vscode.Disposable {
 
 // signature help (`(` / `,` triggers) — the callee resolves through the
 // same machinery the param-name hints ride; a mismatch shows nothing
-function registerSignatureHelp(rut: RutWasm): vscode.Disposable {
+function registerSignatureHelp(rut: RutLsp): vscode.Disposable {
   return vscode.languages.registerSignatureHelpProvider(
     SELECTOR,
     {
@@ -920,7 +916,7 @@ function registerSignatureHelp(rut: RutWasm): vscode.Disposable {
 
 // the folder-level package's name (its manifest parses in the wasm) —
 // `null` when the folder has no manifest or a broken one
-async function folderPkgName(rut: RutWasm, folder: vscode.Uri): Promise<string | null> {
+async function folderPkgName(rut: RutLsp, folder: vscode.Uri): Promise<string | null> {
   const bytes = await readFileNullable(vscode.Uri.joinPath(folder, MANIFEST_NAME));
   if (bytes === null) {
     return null;
@@ -964,7 +960,7 @@ function stripSrcShell(rel: string): string | null {
   return null;
 }
 
-async function indexWorkspace(rut: RutWasm): Promise<void> {
+async function indexWorkspace(rut: RutLsp): Promise<void> {
   const files = await vscode.workspace.findFiles(
     '**/*.rut',
     '{**/target/**,**/node_modules/**,**/.git/**,**/.*/**}',
@@ -1082,7 +1078,7 @@ async function indexWorkspace(rut: RutWasm): Promise<void> {
 // ---- shared helpers ----
 
 // the module's document key — the same string the Rust side stores
-function analyzeDoc(rut: RutWasm, doc: vscode.TextDocument): Analysis {
+function analyzeDoc(rut: RutLsp, doc: vscode.TextDocument): Analysis {
   return rut.analyze(doc.uri.toString(), doc.getText());
 }
 
@@ -1100,7 +1096,7 @@ function analyzeDoc(rut: RutWasm, doc: vscode.TextDocument): Analysis {
 // unopenable (a url dep not extracted yet, mostly) — hints once per
 // document instead of a silent dead ctrl+click; an empty input stays
 // silent (an honest miss — nothing resolved at all).
-function resolveLocations(rut: RutWasm, locs: LspLocation[], srcUri: string): vscode.Location[] {
+function resolveLocations(locs: LspLocation[], srcUri: string): vscode.Location[] {
   const out: vscode.Location[] = [];
   for (const l of locs) {
     const uri = toTargetUri(l.uri);
@@ -1109,7 +1105,7 @@ function resolveLocations(rut: RutWasm, locs: LspLocation[], srcUri: string): vs
     }
   }
   if (locs.length > 0 && out.length === 0) {
-    hintOnce(`def-dropped:${srcUri}`, defDropHint(rut, locs), false);
+    hintOnce(`def-dropped:${srcUri}`, defDropHint(locs), false);
   }
   return out;
 }
@@ -1119,7 +1115,7 @@ function resolveLocations(rut: RutWasm, locs: LspLocation[], srcUri: string): vs
 // dep that never mounted; when the workspace's cache carries source
 // zips, `rut install` already ran and reloading cannot help — the
 // definition lives in the rut repo sources, so the hint says so.
-function defDropHint(_rut: RutWasm, locs: LspLocation[]): string {
+function defDropHint(locs: LspLocation[]): string {
   if (locs.every((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
     return 'rut: definition target not openable — the resolved definition lives in the rut ' +
       'repo sources, which are not in this workspace; reload the window if the dep was just installed';

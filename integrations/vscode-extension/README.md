@@ -16,7 +16,8 @@ files, and the manifest gets schema-validated hovers.
 ```sh
 cd integrations/vscode-extension
 npm install
-npm run build:wasm    # wasm-pack build crates/rut-lsp-wasm --target web --release
+npm run build:wasm    # wasm-pack build crates/rut-lsp-wasm, then assemble
+                      # the package (JS face + .d.ts) into crates/rut-lsp-wasm/pkg/
 npm run compile       # esbuild bundle -> out/extension.js
 ```
 
@@ -30,12 +31,16 @@ copy the folder into `~/.vscode/extensions`. Open any `.rut` file.
 ## How it runs
 
 `crates/rut-lsp-wasm` exposes the language core as a wasm-bindgen
-module (the `RutLsp` class — the `rut-wasm` engine pattern). The glue
-is built by `npm run build:wasm` (`wasm-pack build --target web`),
-bundled by esbuild, and `src/wasm.ts` wraps it; `src/extension.ts`
-registers semantic tokens, diagnostics, symbols, hover, completion,
-definition, type-definition, references, inlay-hint, and
-signature-help providers directly against `vscode.languages`. There is
+module (the `RutLsp` class — the `rut-wasm` engine pattern). The crate
+owns the whole ABI face: `js/index.js` parses the envelopes and
+`js/index.d.ts` declares every shape, assembled into the wasm-pack
+package (`pkg/index.js` + `pkg/index.d.ts`) by `build:wasm`. The
+extension imports that package and declares **no** LSP shapes of its
+own — `src/wasm.ts` is a re-export, and `src/extension.ts` only maps
+the values onto `vscode.*` while registering semantic tokens,
+diagnostics, symbols, hover, completion, definition, type-definition,
+references, inlay-hint, and signature-help providers against
+`vscode.languages`. There is
 no JSON-RPC and no language-client dependency — the module's results
 are already LSP values, serialized by serde_json. The workspace is
 indexed with `workspace.findFiles` and pushed into the module
@@ -240,14 +245,15 @@ scopes so stock themes color everything out of the box.
 ## Tests
 
 ```sh
-npm test               # grammar corpus gate + through-wasm e2e gate + Extension Host run
+npm test               # typecheck + grammar corpus + through-wasm e2e + Extension Host run
+npm run typecheck      # tsc --noEmit: the hosts against the crate's .d.ts
 npm run test:grammar   # standalone TextMate gate: the grammar asserted over
                        # the repo corpus (rut/ + examples/ + demo/ +
                        # benches/workloads/) via vscode-textmate/oniguruma —
                        # no wasm, no VS Code needed (M1-M8 lock)
 npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
                        # driven through the extension's own ABI binding
-                       # (src/wasm.ts, bundled to out/wasm.js) over the full
+                       # (the crate's js face, bundled to out/wasm.js) over the full
                        # corpus — zero false diagnostics — plus per-feature
                        # smokes through the artifact: hover/completion
                        # (?T alias, ?Circle member resolution, bare
@@ -265,7 +271,10 @@ npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
                        # with its dep closure and the checker's type
                        # errors publish (assignment mismatch + missing
                        # field, each on its own line), while an unstamped
-                       # doc stays parse-only clean.
+                       # doc stays parse-only clean; the wire-shape block
+                       # asserts every envelope's key set against the
+                       # crate's index.d.ts (the runtime half of the ABI
+                       # contract that tsc cannot see).
                        # Needs bin/rut-lsp.wasm (npm run
                        # build:wasm); runs headless in plain node
 npm run test:host      # the Extension Host run (needs `code` on PATH and

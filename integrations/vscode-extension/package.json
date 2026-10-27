@@ -110,13 +110,14 @@
     "vscode:prepublish": "npm run compile",
     "compile": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
-    "build:wasm": "wasm-pack build ../../crates/rut-lsp-wasm --target web --release && node scripts/copy-wasm.mjs",
-    "test": "npm run test:grammar && npm run compile && npm run test:e2e && npm run test:host",
+    "build:wasm": "wasm-pack build ../../crates/rut-lsp-wasm --target web --release && node ../../crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs && node scripts/copy-wasm.mjs",
+    "test": "npm run typecheck && npm run test:grammar && npm run compile && npm run test:e2e && npm run test:host",
     "test:grammar": "node test/grammar-corpus.js",
     "test:e2e": "node test/e2e-wasm.js",
     "test:host": "node scripts/run-vscode-test.mjs",
     "package": "npm run compile && vsce package",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

@@ -114,9 +114,10 @@ async function main() {
     console.error(`e2e-wasm: ${path.relative(REPO, BINDING_PATH)} not found — run \`npm run compile\` first`);
     process.exit(1);
   }
-  // the extension's own binding (bundled src/wasm.ts), not a copy
-  const { RutWasm } = require(BINDING_PATH);
-  const rut = await RutWasm.load(WASM_PATH);
+  // the extension's own binding (the wasm crate's js face, bundled by
+  // src/wasm.ts), not a copy
+  const { RutLsp } = require(BINDING_PATH);
+  const rut = await RutLsp.load(fs.readFileSync(WASM_PATH));
   const bad = [];
   let smokes = 0;
 
@@ -1109,7 +1110,7 @@ async function main() {
     // instance unpolluted
     delete require.cache[BINDING_PATH];
     const depBinding = require(BINDING_PATH);
-    const dep = await depBinding.RutWasm.load(WASM_PATH);
+    const dep = await depBinding.RutLsp.load(fs.readFileSync(WASM_PATH));
 
     // the manifest: the repo's own path+url fixture (03-plugin) — the
     // same bytes rut-lsp's dep_table unit test pins
@@ -1653,7 +1654,7 @@ async function main() {
     const lock = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
     const pouchUrl = manifest.match(/"pouch"\s*:\s*\{\s*"url"\s*:\s*"([^"]+)"/)[1];
     assert.ok(pouchUrl, 'the fixture manifest carries a pouch url dep');
-    const inst = await RutWasm.load(WASM_PATH);
+    const inst = await RutLsp.load(fs.readFileSync(WASM_PATH));
     // BEFORE any setLock: the url row answers sha256 null — without a
     // lock the unpinned refusal stays honest, never a guessed pin
     const bare = inst.parseManifest(manifest);
@@ -1730,6 +1731,112 @@ async function main() {
     smokes++;
   }
 
+  // ---- the ABI wire shape (the .d.ts contract's runtime half) ----
+  // The declarations live in the wasm package
+  // (crates/rut-lsp-wasm/pkg/index.d.ts, assembled from the crate's js/).
+  // `tsc --noEmit` checks the hosts; only this block can catch a
+  // Rust-side rename, because the wire is data. Envelopes the crate OWNS
+  // get exact key sets; `ls_types` payloads allow the declared fields
+  // only — an unknown key means the .d.ts drifted from the wire.
+  {
+    const core = await RutLsp.load(fs.readFileSync(WASM_PATH));
+    const keysOf = (o) => Object.keys(o).sort();
+    const eqKeys = (o, want, what) =>
+      assert.deepStrictEqual(keysOf(o), [...want].sort(), `${what} keys: ${JSON.stringify(keysOf(o))}`);
+    const declaredOnly = (o, allowed, what) => {
+      const extra = keysOf(o).filter((k) => !allowed.includes(k));
+      assert.deepStrictEqual(extra, [], `${what} carries keys the .d.ts does not declare: ${extra}`);
+    };
+
+    // analyze: the crate's own envelope, exactly
+    const src = 'class Widget {\n    id: i32;\n}\nfn go(w: Widget) -> i32 {\n    return w.id;\n}\n';
+    const uri = 'file:///ws/wire-shape.rut';
+    const analysis = core.analyze(uri, src);
+    eqKeys(analysis, ['diags', 'symbols', 'tokens'], 'analysis');
+    eqKeys(analysis.tokens, ['data'], 'analysis.tokens');
+
+    // a symbol / a diagnostic / a hover — ls_types values, declared subset
+    const sym = analysis.symbols[0];
+    assert.ok(sym, 'the doc has a symbol');
+    declaredOnly(sym, ['name', 'detail', 'kind', 'range', 'selectionRange', 'children', 'tags', 'deprecated'], 'symbol');
+    eqKeys(sym.range, ['start', 'end'], 'symbol.range');
+    eqKeys(sym.range.start, ['line', 'character'], 'position');
+
+    const broken = core.analyze('file:///ws/wire-diag.rut', 'fn go( {\n}\n');
+    assert.ok(broken.diags.length > 0, 'the broken doc carries a parse diag');
+    declaredOnly(broken.diags[0],
+      ['range', 'severity', 'source', 'message', 'relatedInformation', 'code', 'codeDescription', 'tags', 'data'],
+      'diagnostic');
+
+    const hover = core.hover(uri, 0, 6);
+    if (hover) {
+      declaredOnly(hover, ['contents', 'range'], 'hover');
+      eqKeys(hover.contents, ['kind', 'value'], 'hover.contents');
+    }
+
+    // completion items and definition targets
+    const items = core.complete(uri, 4, 13, src);
+    assert.ok(items.length > 0, 'member completion answers');
+    declaredOnly(items[0], ['label', 'kind', 'detail', 'documentation', 'sortText', 'additionalTextEdits'],
+      'completion item');
+    const defs = core.definition(uri, 0, 6);
+    assert.ok(defs.length > 0, 'the class name defines');
+    eqKeys(defs[0], ['range', 'uri'], 'location');
+    eqKeys(defs[0].range, ['start', 'end'], 'location.range');
+
+    // inlay hints + signature help
+    for (const h of core.inlayHint(uri, { line: 0, character: 0 }, { line: 5, character: 0 })) {
+      declaredOnly(h, ['position', 'label', 'kind', 'tooltip', 'paddingLeft', 'paddingRight', 'textEdits', 'command'],
+        'inlay hint');
+    }
+    const call = 'fn add(a: i32, b: i32) -> i32 {\n    return a + b;\n}\nfn go() -> i32 {\n    return add(1, 2);\n}\n';
+    const curi = 'file:///ws/wire-sig.rut';
+    core.analyze(curi, call);
+    const sh = core.signatureHelp(curi, 4, 16);
+    if (sh) {
+      declaredOnly(sh, ['signatures', 'activeSignature', 'activeParameter'], 'signature help');
+      declaredOnly(sh.signatures[0], ['label', 'documentation', 'parameters', 'activeParameter'], 'signature');
+      eqKeys(sh.signatures[0].parameters[0], ['label'], 'parameter');
+    }
+
+    // the dep face — the crate's own envelopes, exactly
+    const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
+    const table = core.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
+    assert.ok(!table.error, `manifest parse: ${JSON.stringify(table)}`);
+    eqKeys(table, ['name', 'entries', 'namespace', 'consts', 'deps', 'dev_deps'], 'dep table');
+    eqKeys(table.entries[0], ['path', 'mode'], 'entry source');
+    eqKeys(table.deps[0], ['name', 'source', 'optional', 'lib'], 'dep row');
+    eqKeys(table.deps.find((r) => r.source.kind === 'path').source, ['kind', 'dir'], 'path dep source');
+    const urlRow = table.deps.find((r) => r.source.kind === 'url');
+    if (urlRow) eqKeys(urlRow.source, ['kind', 'url', 'sha256', 'cache_path'], 'url dep source');
+    eqKeys(core.parseManifest('{'), ['error'], 'manifest error envelope');
+
+    const lockText = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
+    eqKeys(core.setLock(lockText), ['pins'], 'set-lock answer');
+    eqKeys(core.setLock('{"format":"rutlock","format_version":1,"deps":[{"pkg":"p","url":"https://x/p.rutbundle","sha256":"nope"}]}'),
+      ['error'], 'lock error envelope');
+    eqKeys(core.setDirectDeps(['wiremod']), ['direct'], 'direct-deps answer');
+
+    const stamped = core.addDefMod('file:///ws/wire-mod/mod.rut', 'wiremod', '', 'pub mod child;\nmod hidden;\n');
+    eqKeys(stamped, ['decls'], 'mod decls');
+    eqKeys(stamped.decls[0], ['name', 'vis'], 'mod decl');
+
+    const bundle = fs.readFileSync(path.join(REPO, 'dist', 'std', 'pouch.rutbundle'));
+    eqKeys(core.addBundle(bundle), ['module', 'namespace', 'consts', 'files'], 'bundle index');
+    const extracted = core.extractBundle(bundle);
+    eqKeys(extracted, ['module', 'namespace', 'consts', 'files'], 'extract bundle');
+    eqKeys(extracted.files[0], ['path', 'src', 'mode', 'mod_path'], 'extracted file');
+
+    const zipPath = path.join(REPO, 'dist', 'std', 'calc.zip');
+    if (fs.existsSync(zipPath)) {
+      const zip = core.extractSrczip(fs.readFileSync(zipPath));
+      eqKeys(zip, ['module', 'namespace', 'consts', 'files', 'manifest', 'embedded'], 'extract srczip');
+      eqKeys(zip.files[0], ['path', 'src', 'mode', 'mod_path'], 'srczip file');
+      if (zip.embedded.length > 0) eqKeys(zip.embedded[0], ['path', 'src'], 'embedded group');
+    }
+    smokes++;
+  }
+
   if (bad.length) {
     console.error(`e2e-wasm: ${bad.length} violation(s):\n  ${bad.slice(0, 40).join('\n  ')}${bad.length > 40 ? `\n  … (+${bad.length - 40} more)` : ''}`);
     process.exit(1);
@@ -1744,7 +1851,7 @@ async function main() {
     `extract-deps-leaf+head/path-dep-segments/` +
     `eof-member+locals/` +
     `complete-in-doc-sync/check-lane-mismatch+missing-field/` +
-    `lock-feed-unpinned+pinned+extract-leaf) ` +
+    `lock-feed-unpinned+pinned+extract-leaf/wire-shape) ` +
     `through bin/rut-lsp.wasm`);
 }
 
