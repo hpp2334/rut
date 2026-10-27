@@ -85,7 +85,7 @@ The extension rides the same model:
 ## Semantic diagnostics — the check lane
 
 Diagnostics are two lanes merged (both faces, one engine —
-`crates/rut-lsp/src/check.rs`):
+`crates/rut-lsp/src/query/check.rs`):
 
 - **Parse lane** (always): the lexer + parser diags for the open
   document — a syntax error squiggles the moment it is written.

@@ -159,5 +159,5 @@ settings until one ships.
   the book consumes a byte-copy shim at `docs/theme/rut-highlight.js`.
 - Checker-level diagnostics now ride the editor's check lane for
   packaged documents (the compiler's checker behind
-  `crates/rut-lsp/src/check.rs`); hover/completion stay index-level by
+  `crates/rut-lsp/src/query/check.rs`); hover/completion stay index-level by
   design. Formatting is the remaining tooling-milestone item.

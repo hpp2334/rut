@@ -216,7 +216,7 @@ async function main() {
   }
 
   // ---- member hover/completion through a `?Circle` let-binding ----
-  // (M4's ty_head arm — mirrors crates/rut-lsp/src/hover/tests.rs's
+  // (M4's ty_head arm — mirrors crates/rut-lsp/tests/hover.rs's
   // nullable_let_binding_resolves_members through the shipped wasm;
   // methods live in impl blocks — RFC 0012 — so the doc analyzes clean)
   {

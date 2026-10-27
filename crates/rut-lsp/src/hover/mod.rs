@@ -21,7 +21,7 @@
 //! parsed document) → `bindings` + `lookup` + `infer` (what's under the
 //! cursor) → `render` (markdown).
 
-pub(crate) mod bindings;
+pub mod bindings;
 mod build;
 pub(crate) mod infer;
 pub(crate) mod lookup;
@@ -33,6 +33,3 @@ pub use build::{index, index_items};
 pub use lookup::{hover, HoverOut};
 pub(crate) use render::{binding_markdown, render_let};
 pub use types::{DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef};
-
-#[cfg(test)]
-mod tests;
