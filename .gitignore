@@ -28,7 +28,9 @@ docs/.book-zh/
 docs/wasm/
 
 # the wasm-pack pkg dirs (the wasm-bindgen glue + module; npm scripts
-# and CI build them with wasm-pack --target web / no-modules)
+# and CI build them with wasm-pack --target web / no-modules). The
+# rut-lsp-wasm pkg ALSO carries the crate's JS face + .d.ts, installed by
+# crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs after wasm-pack
 crates/rut-wasm/pkg/
 crates/rut-wasm/pkg-book/
 crates/rut-lsp-wasm/pkg/

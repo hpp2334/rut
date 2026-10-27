@@ -1274,6 +1274,7 @@ dependencies = [
  "rut-driver",
  "rut-lsp",
  "rut-parser",
+ "serde",
  "serde_json",
  "wasm-bindgen",
 ]
