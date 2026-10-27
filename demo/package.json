@@ -7,11 +7,12 @@
     "dev": "node scripts/preflight-wasm.mjs && rspack serve",
     "dev:channel": "node scripts/preflight-wasm.mjs && node scripts/dev-channel.mjs",
     "build": "node scripts/preflight-wasm.mjs && rspack build",
-    "build:wasm": "wasm-pack build ../crates/rut-wasm --target web --release && wasm-pack build ../crates/rut-lsp-wasm --target web --release && node scripts/copy-wasm.mjs",
-    "build:lsp": "wasm-pack build ../crates/rut-lsp-wasm --target web --release && node scripts/copy-wasm.mjs --lsp",
+    "build:wasm": "wasm-pack build ../crates/rut-wasm --target web --release && wasm-pack build ../crates/rut-lsp-wasm --target web --release && node ../crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs && node scripts/copy-wasm.mjs",
+    "build:lsp": "wasm-pack build ../crates/rut-lsp-wasm --target web --release && node ../crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs && node scripts/copy-wasm.mjs --lsp",
     "build:smoke": "rspack build --config rspack.smoke.config.ts",
     "smoke": "node scripts/preflight-wasm.mjs && npm run build:smoke && node scripts/smoke.mjs",
-    "deploy": "node ../scripts/deploy.cjs"
+    "deploy": "node ../scripts/deploy.cjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "react": "^18.3.1",
