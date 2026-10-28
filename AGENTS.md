@@ -136,6 +136,10 @@ order:
 - **The gates gate the shipped bytes**: the e2e drives `bin/rut-lsp.wasm`,
   the pack embeds that same file, and the lane byte-compares the copy
   inside the vsix — a stale artifact cannot pass.
+- **Style gate: biome, 4-space.** `npm run lint` (`biome check .`,
+  config `biome.json`: space/4, width 100, single quotes; `syntaxes/`
+  and `schemas/` excluded) fronts `npm test` and the release lane's
+  gate list — keep it green with `npm run format`.
 - **No version writes, no git**: the script packs whatever `package.json`
   says; a bump is a deliberate human act
   (`npm version X.Y.Z --no-git-tag-version`), and older

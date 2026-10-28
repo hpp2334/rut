@@ -1,131 +1,134 @@
 {
-  "name": "rut-vscode",
-  "displayName": "rut",
-  "description": "rut language support — semantic tokens, diagnostics, document symbols, hover, completions and go-to-definition via an in-process wasm module (no server process)",
-  "version": "0.3.5",
-  "publisher": "rut",
-  "license": "MIT OR Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/hpp2334/rut.git",
-    "directory": "integrations/vscode-extension"
-  },
-  "categories": [
-    "Programming Languages"
-  ],
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "activationEvents": [
-    "onLanguage:rut"
-  ],
-  "main": "./out/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "rut.reindexDeps",
-        "category": "rut",
-        "title": "Re-index dependencies"
-      }
+    "name": "rut-vscode",
+    "displayName": "rut",
+    "description": "rut language support \u2014 semantic tokens, diagnostics, document symbols, hover, completions and go-to-definition via an in-process wasm module (no server process)",
+    "version": "0.3.5",
+    "publisher": "rut",
+    "license": "MIT OR Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/hpp2334/rut.git",
+        "directory": "integrations/vscode-extension"
+    },
+    "categories": [
+        "Programming Languages"
     ],
-    "languages": [
-      {
-        "id": "rut",
-        "aliases": [
-          "rut"
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "activationEvents": [
+        "onLanguage:rut"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "rut.reindexDeps",
+                "category": "rut",
+                "title": "Re-index dependencies"
+            }
         ],
-        "extensions": [
-          ".rut"
+        "languages": [
+            {
+                "id": "rut",
+                "aliases": [
+                    "rut"
+                ],
+                "extensions": [
+                    ".rut"
+                ],
+                "configuration": "./language-configuration.json"
+            }
         ],
-        "configuration": "./language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "rut",
-        "scopeName": "source.rut",
-        "path": "./syntaxes/rut.tmLanguage.json"
-      }
-    ],
-    "jsonValidation": [
-      {
-        "fileMatch": "rut.jsonc",
-        "url": "./schemas/rut.manifest.schema.json"
-      }
-    ],
-    "semanticTokenScopes": [
-      {
-        "language": "rut",
-        "scopes": {
-          "keyword": [
-            "keyword.other"
-          ],
-          "number": [
-            "constant.numeric"
-          ],
-          "string": [
-            "string"
-          ],
-          "type": [
-            "entity.name.type"
-          ],
-          "function": [
-            "entity.name.function"
-          ],
-          "method": [
-            "entity.name.function.member"
-          ],
-          "variable": [
-            "variable.other"
-          ],
-          "parameter": [
-            "variable.parameter"
-          ],
-          "property": [
-            "variable.other.property"
-          ],
-          "enum": [
-            "entity.name.type.enum"
-          ],
-          "enumMember": [
-            "variable.other.enummember"
-          ],
-          "class": [
-            "entity.name.type.class"
-          ],
-          "trait": [
-            "entity.name.type.trait"
-          ],
-          "namespace": [
-            "entity.name.namespace"
-          ],
-          "operator": [
-            "keyword.operator"
-          ]
-        }
-      }
-    ]
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "node esbuild.mjs",
-    "watch": "node esbuild.mjs --watch",
-    "build:wasm": "wasm-pack build ../../crates/rut-lsp-wasm --target web --release && node ../../crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs && node scripts/copy-wasm.mjs",
-    "test": "npm run typecheck && npm run test:grammar && npm run compile && npm run test:e2e && npm run test:host",
-    "test:grammar": "node test/grammar-corpus.js",
-    "test:e2e": "node test/e2e-wasm.js",
-    "test:host": "node scripts/run-vscode-test.mjs",
-    "package": "npm run compile && vsce package",
-    "release": "node scripts/release.mjs",
-    "typecheck": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/node": "^20.14.0",
-    "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^3.0.0",
-    "esbuild": "^0.25.0",
-    "typescript": "^5.5.0",
-    "vscode-oniguruma": "^2.0.1",
-    "vscode-textmate": "^9.2.0"
-  }
+        "grammars": [
+            {
+                "language": "rut",
+                "scopeName": "source.rut",
+                "path": "./syntaxes/rut.tmLanguage.json"
+            }
+        ],
+        "jsonValidation": [
+            {
+                "fileMatch": "rut.jsonc",
+                "url": "./schemas/rut.manifest.schema.json"
+            }
+        ],
+        "semanticTokenScopes": [
+            {
+                "language": "rut",
+                "scopes": {
+                    "keyword": [
+                        "keyword.other"
+                    ],
+                    "number": [
+                        "constant.numeric"
+                    ],
+                    "string": [
+                        "string"
+                    ],
+                    "type": [
+                        "entity.name.type"
+                    ],
+                    "function": [
+                        "entity.name.function"
+                    ],
+                    "method": [
+                        "entity.name.function.member"
+                    ],
+                    "variable": [
+                        "variable.other"
+                    ],
+                    "parameter": [
+                        "variable.parameter"
+                    ],
+                    "property": [
+                        "variable.other.property"
+                    ],
+                    "enum": [
+                        "entity.name.type.enum"
+                    ],
+                    "enumMember": [
+                        "variable.other.enummember"
+                    ],
+                    "class": [
+                        "entity.name.type.class"
+                    ],
+                    "trait": [
+                        "entity.name.type.trait"
+                    ],
+                    "namespace": [
+                        "entity.name.namespace"
+                    ],
+                    "operator": [
+                        "keyword.operator"
+                    ]
+                }
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "node esbuild.mjs",
+        "watch": "node esbuild.mjs --watch",
+        "lint": "biome check .",
+        "format": "biome check --write .",
+        "build:wasm": "wasm-pack build ../../crates/rut-lsp-wasm --target web --release && node ../../crates/rut-lsp-wasm/scripts/build-lsp-pkg.mjs && node scripts/copy-wasm.mjs",
+        "test": "npm run lint && npm run typecheck && npm run test:grammar && npm run compile && npm run test:e2e && npm run test:host",
+        "test:grammar": "node test/grammar-corpus.js",
+        "test:e2e": "node test/e2e-wasm.js",
+        "test:host": "node scripts/run-vscode-test.mjs",
+        "package": "npm run compile && vsce package",
+        "release": "node scripts/release.mjs",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.6.3",
+        "@types/node": "^20.14.0",
+        "@types/vscode": "^1.85.0",
+        "@vscode/vsce": "^3.0.0",
+        "esbuild": "^0.25.0",
+        "typescript": "^5.5.0",
+        "vscode-oniguruma": "^2.0.1",
+        "vscode-textmate": "^9.2.0"
+    }
 }

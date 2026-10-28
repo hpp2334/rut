@@ -1,7 +1,7 @@
 // the extension's one set of budgets and names — mirrors the native
 // server's caps so the two faces stay guests of the same size
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 
 export const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 

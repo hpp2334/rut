@@ -21,7 +21,7 @@ npm run build:wasm    # wasm-pack build crates/rut-lsp-wasm, then assemble
 npm run compile       # esbuild bundle -> out/extension.js
 ```
 
-Then open this folder in VS Code and press **F5** (*Run Extension*) — or
+Then open this folder in VS Code and press **F5** (_Run Extension_) — or
 copy the folder into `~/.vscode/extensions`. Open any `.rut` file.
 
 - Without the wasm module the TextMate grammar still colors comments,
@@ -235,10 +235,10 @@ before packing.
 
 ## How highlighting splits
 
-| Layer | What | Where |
-|---|---|---|
-| TextMate | comments, strings (incl. `r"…"`, `f"…"`, and the hash-leveled multi-line forms `r#"…"#` / `f#"…"#` — the `#` run sets the level via a begin/end backreference), numbers + suffixes, keywords (incl. contextual `type`/`builtin`), primitives (`str`/`bytes`), `opaque`, nullable `?`, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
-| Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes | `crates/rut-lsp` (`semantic/`) |
+| Layer           | What                                                                                                                                                                                                                                                                                                                   | Where                          |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| TextMate        | comments, strings (incl. `r"…"`, `f"…"`, and the hash-leveled multi-line forms `r#"…"#` / `f#"…"#` — the `#` run sets the level via a begin/end backreference), numbers + suffixes, keywords (incl. contextual `type`/`builtin`), primitives (`str`/`bytes`), `opaque`, nullable `?`, operators — instant, no analysis | `syntaxes/rut.tmLanguage.json` |
+| Semantic tokens | identifier classes: functions, methods, types, primitives, params, fields, enum members — exact, incl. f-string holes                                                                                                                                                                                                  | `crates/rut-lsp` (`semantic/`) |
 
 VS Code merges both: semantic tokens override the grammar inside their
 ranges. The `semanticTokenScopes` contribution maps the legend onto theme
@@ -247,7 +247,11 @@ scopes so stock themes color everything out of the box.
 ## Tests
 
 ```sh
-npm test               # typecheck + grammar corpus + through-wasm e2e + Extension Host run
+npm test               # biome (format + lint) + typecheck + grammar corpus +
+                       # through-wasm e2e + Extension Host run
+npm run lint           # biome check: 4-space formatting + the recommended
+                       # lint set (biome.json; syntaxes/ and schemas/ excluded)
+npm run format         # biome check --write
 npm run typecheck      # tsc --noEmit: the hosts against the crate's .d.ts
 npm run test:grammar   # standalone TextMate gate: the grammar asserted over
                        # the repo corpus (rut/ + examples/ + demo/ +
