@@ -1,20 +1,22 @@
 # rut editor support
 
-One language server serves every editor that speaks LSP: the queries
-are `crates/rut-lsp` (the core), the stdio face is
-`crates/rut-lsp-server`. Build the binary once:
+The language core ships as ONE crate — `crates/rut-lsp-wasm`: the
+queries (semantic tokens, diagnostics, hover, completion, definition,
+references, inlay hints, signature help, the check lane) and the
+wasm-bindgen face that serves them. The VS Code extension runs it
+in-process — no server process, no per-platform binaries; the
+playground bundles the same module. See
+[`vscode-extension/README.md`](vscode-extension/README.md).
 
-```sh
-cargo build -p rut-lsp-server --release
-# binary: target/release/rut-lsp[.exe]  (package rut-lsp-server, binary rut-lsp)
-```
+There is no first-party stdio server today: an earlier native face
+(`rut-lsp-server`, the `rut-lsp` binary over tower-lsp-server) was
+dropped — its code lives in git history if a stdio wrapper is ever
+wanted again. The queries stay embeddable without a browser: the crate
+links natively too (`cargo test -p rut-lsp-wasm` runs its whole suite
+natively), so any future face is a thin shell over
+`rut_lsp_wasm::analysis`.
 
-VS Code skips the server process entirely: its extension runs the same
-language core as an in-process wasm module (`crates/rut-lsp-wasm` — see
-[`vscode-extension/README.md`](vscode-extension/README.md)). Both faces
-share one implementation, so features match.
-
-What it provides (the LSP slice landed early; the
+What the editor face provides (the LSP slice landed early; the
 `lsp-features` batch added the navigation + inference layer):
 
 - **semantic tokens** — grammar highlighting: keywords, literals,
@@ -78,8 +80,8 @@ What it provides (the LSP slice landed early; the
 
 ## VS Code
 
-See [`vscode-extension/`](vscode-extension/) — TextMate grammar + bundled
-server + semantic token scope mappings.
+See [`vscode-extension/`](vscode-extension/) — TextMate grammar + the
+bundled wasm module + semantic token scope mappings.
 
 ## highlight.js (browsers & the book)
 
@@ -90,65 +92,6 @@ drives code coloring on any highlight.js-based site and in the book
 HTML). Same derivation law as everywhere else: the lexer/parser tables
 are the truth.
 
-## Neovim (0.11+)
-
-```lua
-vim.lsp.config['rut'] = {
-  cmd = { '/path/to/rut/target/release/rut-lsp' },
-  filetypes = { 'rut' },
-  root_markers = { '.git' },
-}
-```
-
-(older releases: `require('lspconfig').rut_lsp.setup { cmd = { … } }`
-via a custom server definition.)
-
-## Helix
-
-`~/.config/helix/languages.toml`:
-
-```toml
-[[language]]
-name = "rut"
-scope = "source.rut"
-file-types = ["rut"]
-language-servers = ["rut-lsp"]
-
-[language-server.rut-lsp]
-command = "/path/to/rut/target/release/rut-lsp"
-```
-
-## Zed
-
-Add a `rut` Zed extension wrapping the server binary (its
-`language-server` setting points at `rut-lsp`), or use the LSP-pass-through
-settings until one ships.
-
-## Emacs (eglot)
-
-```elisp
-(with-eval-after-load 'eglot
-  (add-to-list 'eglot-server-programs
-               '(rut-mode . ("/path/to/rut/target/release/rut-lsp"))))
-```
-
-## Sublime Text (LSP package)
-
-`.sublime-project` settings:
-
-```json
-{
-  "settings": {
-    "LSP": {
-      "rut": {
-        "enabled": true,
-        "command": ["/path/to/rut/target/release/rut-lsp"]
-      }
-    }
-  }
-}
-```
-
 ## Notes
 
 - TextMate grammar for basic coloring (comments, strings, numbers,
@@ -157,7 +100,8 @@ settings until one ships.
 - `rut-highlightjs/register.js` is generated from the package's
   `src/grammar.js` (`node scripts/build.mjs`) and committed dist-style;
   the book consumes a byte-copy shim at `docs/theme/rut-highlight.js`.
-- Checker-level diagnostics now ride the editor's check lane for
-  packaged documents (the compiler's checker behind
-  `crates/rut-lsp/src/query/check.rs`); hover/completion stay index-level by
-  design. Formatting is the remaining tooling-milestone item.
+- Checker-level diagnostics ride the editor's check lane for packaged
+  documents (the compiler's checker behind
+  `crates/rut-lsp-wasm/src/query/check.rs`); hover/completion stay
+  index-level by design. Formatting is the remaining
+  tooling-milestone item.

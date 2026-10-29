@@ -22,7 +22,7 @@ const EXT = path.join(__dirname, '..');
 const REPO = path.join(EXT, '..', '..');
 const GRAMMAR_PATH = path.join(EXT, 'syntaxes', 'rut.tmLanguage.json');
 
-// corpus roots, mirroring crates/rut-lsp/tests/corpus.rs
+// corpus roots, mirroring crates/rut-lsp-wasm/tests/corpus.rs
 const CORPUS_ROOTS = [
     'rut',
     'examples',

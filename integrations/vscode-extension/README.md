@@ -44,14 +44,14 @@ references, inlay-hint, and signature-help providers against
 no JSON-RPC and no language-client dependency — the module's results
 are already LSP values, serialized by serde_json. The workspace is
 indexed with `workspace.findFiles` and pushed into the module
-(`add_def`), mirroring the native server's fs walk.
+(`add_def`) — the same scan the CLI's own lanes bound.
 
-The **native `rut-lsp` binary remains the face for other editors**
-(Neovim / Helix / Zed / Emacs / Sublime — see
-[`../README.md`](../README.md)). It ships from its own crate,
-`crates/rut-lsp-server` (stdlib transport, tokio); this extension's
-module is `crates/rut-lsp-wasm`. Both are shells over the same queries
-in `crates/rut-lsp`, so they cannot drift.
+The module IS the language core: the queries (`analysis`, `hover`,
+`completion`, `definition`, `check`, …) live in the same crate as this
+ABI (`crates/rut-lsp-wasm`), so a feature lands on the editor face as
+soon as it lands on the engine — there is no second face to keep in
+step. Other editors have no first-party face today (see
+[`../README.md`](../README.md)).
 
 ## File modules — src/mod.rut
 
@@ -84,8 +84,8 @@ The extension rides the same model:
 
 ## Semantic diagnostics — the check lane
 
-Diagnostics are two lanes merged (both faces, one engine —
-`crates/rut-lsp/src/query/check.rs`):
+Diagnostics are two lanes merged, one engine
+(`crates/rut-lsp-wasm/src/query/check.rs`):
 
 - **Parse lane** (always): the lexer + parser diags for the open
   document — a syntax error squiggles the moment it is written.
@@ -189,10 +189,10 @@ manifests, JS only moves bytes) and walks its dependency rows:
 - The manifest and its dep tables re-walk on change
   (`**/rut.jsonc` and `.rut/cache/**` watchers, debounced), and a
   workspace-folder change restarts the whole index.
-- **One engine, two faces** — the native server is deliberately
-  cache-only for url deps (a miss is a `window/showMessage` hint); the
-  extension is the face that fetches. Same dep tables
-  (`crates/rut-lsp/src/deps.rs`), no drift.
+- **One engine, one face** — the dep tables (`crates/rut-lsp-wasm/src/deps.rs`)
+  are the CLI's own parsers; the extension is the face that fetches
+  (a miss is a hint naming `rut fetch`/`rut install`), never a
+  silent wrong mount.
 - Auto-import completions offer foreign public names with the
   `use mod::Name;` insert (`additionalTextEdits`) and sort after the
   locals (`sortText`) — accepting an item never ungates members, the

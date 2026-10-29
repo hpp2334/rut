@@ -9,7 +9,7 @@ export const SELECTOR: vscode.DocumentSelector = { language: 'rut' };
 // stdio server got this from the language client's batching)
 export const ANALYSIS_DEBOUNCE_MS = 200;
 
-// mirrors the native server's workspace-scan cap — an LSP is a guest,
+// the workspace-scan cap — an LSP is a guest,
 // not an indexer daemon
 export const MAX_WORKSPACE_FILES = 500;
 

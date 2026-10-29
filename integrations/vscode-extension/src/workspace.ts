@@ -1,5 +1,5 @@
-// the workspace index — the wasm stand-in for the native server's fs
-// walk: every `**/*.rut` under the workspace folders indexes into the
+// the workspace index — the wasm face's fs scan (the CLI's install
+// lane walks the same shape): every `**/*.rut` under the workspace folders indexes into the
 // SAME `defs` store the dep walk fills, `mod.rut` files under a
 // folder-level package stamped with their (pkg, mod path) pair.
 
