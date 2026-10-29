@@ -3,7 +3,7 @@ name = "rut-lsp-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "wasm shim exposing the language core over wasm-bindgen — the VS Code extension runs it in-process, no server process"
+description = "the rut language core and its wasm ABI — semantic tokens, diagnostics, symbols, hover, completion, definition, deps; the VS Code extension runs it in-process"
 
 # wasm-pack's optional wasm-opt pass downloads binaryen from GitHub at
 # build time — the lane's optimization already comes from the cargo
@@ -14,23 +14,33 @@ wasm-opt = false
 [lib]
 name = "rut_lsp_wasm"
 path = "src/lib.rs"
-crate-type = ["cdylib"]
+# cdylib for wasm-pack; rlib so the integration tests (and any native
+# embedder) can link the queries directly
+crate-type = ["cdylib", "rlib"]
 
-# The pure language core only. The stdio face is its own crate
-# (`rut-lsp-server`, native), so this graph carries no tokio and no
-# tower-lsp-server at all — the split is a dependency fact now, not a
-# feature flag. The manifest/bundle machinery (`rut_lsp::deps`) rides
-# inside rut-lsp, so rut-driver is already in this graph (it added the
-# dep in the same change that landed `deps`) — wasm32-clean, proven by
-# rut-wasm.
+# The queries and the ABI are one crate: the graph is the language
+# core's own (the frontend crates + the driver's pure core + ls-types),
+# plus wasm-bindgen/serde for the boundary. Native-clean — the tests
+# run in the workspace's native nextest lane — and wasm32-clean,
+# proven by the CI lane.
 [dependencies]
-rut-lsp = { path = "../rut-lsp" }
-# the entry-source Mode (`Decl`/`Impl`) the envelope spells as a string —
-# named directly so the match is explicit, not a Debug-format wire value
-rut-parser = { path = "../rut-parser" }
-# the `Vis` spell on the mod-decl envelope rows (`pub` / `mod`)
+# the frontend: tokens, ast, parser, the classifier, and the checker's
+# run chain (`query/check` assembles RutRun package groups)
+rut-core = { path = "../rut-core" }
+rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
+rut-parser = { path = "../rut-parser" }
+rut-semantic = { path = "../rut-semantic" }
+# the manifest/bundle bridge (`deps`): parse_manifest + the STORE-only
+# zip reader live here, and the crate is wasm32-clean (rut-wasm already
+# builds it for the shim) — pure bytes in, values out
+rut-driver = { path = "../rut-driver" }
+# LSP values — the same crate tower-lsp-server re-exports; the queries
+# produce them whole and `wire` serializes them for the ABI
 ls-types = "0.0.6"
+# the url-dep cache filename (`.rut/cache/<sha256(url)>.rutbundle`) is
+# computed Rust-side — JS never hashes URLs; pure Rust, wasm-clean
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] } # user-approved: the `wire` structs derive Serialize (serde_json's own backend; no runtime beyond the derive)
 serde_json = "1" # user-approved: serializes the ls-types values over the ABI
 # the JS boundary: &str / &[u8] in, the JSON envelope String out — the

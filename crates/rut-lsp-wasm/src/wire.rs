@@ -178,11 +178,11 @@ pub fn mode_str(m: rut_parser::Mode) -> &'static str {
     }
 }
 
-impl From<&rut_lsp::deps::DepSource> for DepSource {
-    fn from(s: &rut_lsp::deps::DepSource) -> DepSource {
+impl From<&crate::deps::DepSource> for DepSource {
+    fn from(s: &crate::deps::DepSource) -> DepSource {
         match s {
-            rut_lsp::deps::DepSource::Path { dir } => DepSource::Path { dir: dir.clone() },
-            rut_lsp::deps::DepSource::Url {
+            crate::deps::DepSource::Path { dir } => DepSource::Path { dir: dir.clone() },
+            crate::deps::DepSource::Url {
                 url,
                 sha256,
                 cache_path,
@@ -195,8 +195,8 @@ impl From<&rut_lsp::deps::DepSource> for DepSource {
     }
 }
 
-impl From<&rut_lsp::deps::DepRow> for DepRow {
-    fn from(r: &rut_lsp::deps::DepRow) -> DepRow {
+impl From<&crate::deps::DepRow> for DepRow {
+    fn from(r: &crate::deps::DepRow) -> DepRow {
         DepRow {
             name: r.name.clone(),
             source: DepSource::from(&r.source),
@@ -206,8 +206,8 @@ impl From<&rut_lsp::deps::DepRow> for DepRow {
     }
 }
 
-impl From<&rut_lsp::deps::DepTable> for DepTable {
-    fn from(t: &rut_lsp::deps::DepTable) -> DepTable {
+impl From<&crate::deps::DepTable> for DepTable {
+    fn from(t: &crate::deps::DepTable) -> DepTable {
         DepTable {
             name: t.name.clone(),
             entries: t
@@ -231,12 +231,12 @@ impl BundleFile {
     /// rides `bundle_file_mod_path` (the rows-lane root spells `""`, a
     /// mounted child its `<path>`; a flat file stays `null`), so the
     /// host never re-derives the mount rule in TypeScript.
-    pub fn from_source(f: &rut_lsp::deps::BundleFile) -> BundleFile {
+    pub fn from_source(f: &crate::deps::BundleFile) -> BundleFile {
         BundleFile {
             path: f.path.clone(),
             src: f.src.clone(),
             mode: mode_str(f.mode),
-            mod_path: rut_lsp::deps::bundle_file_mod_path(&f.path),
+            mod_path: crate::deps::bundle_file_mod_path(&f.path),
         }
     }
 }
