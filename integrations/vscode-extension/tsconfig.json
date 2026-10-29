@@ -2,6 +2,10 @@
     "compilerOptions": {
         "target": "ES2022",
         "lib": ["ES2022"],
+        // the ambient globals the sources use (setTimeout/clearTimeout,
+        // Buffer-adjacent types) come from @types/node — pinned so the
+        // TS server never has to infer them
+        "types": ["node"],
         "module": "ESNext",
         "moduleResolution": "Bundler",
         "outDir": "out",
