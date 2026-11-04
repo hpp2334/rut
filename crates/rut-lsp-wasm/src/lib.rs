@@ -20,6 +20,12 @@
 //!
 //!   new RutLsp()                               the language core, with
 //!                                              the std surface pre-indexed
+//!   set_env(env)                               hand the core the READ-ONLY
+//!                                              host environment (`HostEnv`:
+//!                                              read/readDir/isDir/notify,
+//!                                              see `env`) — stored for the
+//!                                              dep walk; no entry reads it
+//!                                              yet
 //!   legend() -> String                         token-type names, JSON array
 //!   analyze(uri, src) -> String                store the doc + return
 //!                                              {diags, tokens, symbols}
@@ -122,6 +128,7 @@ mod query;
 pub use query::{analysis, check, completion, definition, inlay, references, signature_help};
 
 pub mod deps;
+pub mod env;
 pub mod hover;
 pub mod line_index;
 pub mod mods;
@@ -422,6 +429,24 @@ impl RutLsp {
     pub async fn set_direct_deps(&self, names_json: String) -> String {
         self.text(|tx| event_loop::Msg::SetDirectDeps { names_json, tx })
             .await
+    }
+
+    /// hand the core the READ-ONLY host environment — one object
+    /// carrying `read` / `readDir` / `isDir` / `notify` (the JS face's
+    /// `HostEnv`, `js/index.d.ts`). The four functions are cached off
+    /// the object at this call ([`env::JsEnv`]) and the loop STORES
+    /// the capability; no entry reads it yet (the dep walk's read-only
+    /// walk is the next phase), so the only behavior this lands is
+    /// that the capability is storable. A host that never calls it
+    /// keeps the env-less core, exactly today's shape (the demo
+    /// path). The await is ordering only.
+    pub async fn set_env(&self, env: js_sys::Object) {
+        let _ = self
+            .rpc(|tx| event_loop::Msg::SetEnv {
+                env: crate::env::JsEnv::new(env),
+                tx,
+            })
+            .await;
     }
 
     /// index one dep source file under its module NAME — `deps::index_dep`

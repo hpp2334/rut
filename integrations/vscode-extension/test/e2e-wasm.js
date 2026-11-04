@@ -2292,6 +2292,70 @@ async function main() {
         smokes++;
     }
 
+    // ---- dep-walk-into-crate phase 2: the injected READ-ONLY env —
+    // load(bytes, env) rides set_env on the fresh core (the host
+    // capability the walk's next phase reads). This phase only STORES
+    // it, so the gate proves the capability LANDS (load resolves, the
+    // core still answers, nothing called back into the env yet) and
+    // that omitting env boots exactly as before (the demo path). ----
+    {
+        const enc = new TextEncoder();
+        const files = new Map(
+            Object.entries({
+                'deps/kit@abc1230123456789/mod.rut':
+                    'pub fn kit_tag() -> i32 {\n    return 1;\n}\n',
+                'deps/kit@abc1230123456789/src/util.rut':
+                    'pub fn deep() -> i32 {\n    return 2;\n}\n',
+            }),
+        );
+        const dirEntries = new Map([
+            ['deps/kit@abc1230123456789', ['mod.rut', 'src']],
+            ['deps/kit@abc1230123456789/src', ['util.rut']],
+        ]);
+        const reads = [];
+        const notes = [];
+        const fakeEnv = {
+            read(p) {
+                reads.push(p);
+                const src = files.get(p);
+                return src === undefined ? null : enc.encode(src);
+            },
+            readDir(p) {
+                return dirEntries.get(p) ?? null;
+            },
+            isDir(p) {
+                return dirEntries.has(p);
+            },
+            notify(message, isError) {
+                notes.push({ message, isError });
+            },
+        };
+        const envRut = await RutLsp.load(fs.readFileSync(WASM_PATH), fakeEnv);
+        // set_env resolved (load returned) and the env-carrying core
+        // still answers: a clean analyze + the std surface intact
+        const envUri = 'file:///ws/e2e-env.rut';
+        const envSrc = 'fn main() -> nil {\n}\n';
+        const ea = await envRut.analyze(envUri, envSrc);
+        assert.strictEqual(
+            ea.diags.length,
+            0,
+            `env-injected probe doc: ${JSON.stringify(ea.diags)}`,
+        );
+        assert.ok(
+            (await envRut.legend()).includes('keyword'),
+            'the env-carrying core still boots the std surface',
+        );
+        // the zero-behavior law: no entry read the env this phase (the
+        // walk is the next one) and the hint lane stayed quiet
+        assert.deepStrictEqual(reads, [], 'phase 2 stores the env, nothing reads it');
+        assert.deepStrictEqual(notes, [], 'the hint lane stays quiet this phase');
+        // omitting env (the demo path): boots and answers exactly as before
+        const plainRut = await RutLsp.load(fs.readFileSync(WASM_PATH));
+        const pa = await plainRut.analyze(envUri, envSrc);
+        assert.strictEqual(pa.diags.length, 0, `env-less boot: ${JSON.stringify(pa.diags)}`);
+        smokes++;
+    }
+
     // ---- the ABI wire shape (the .d.ts contract's runtime half) ----
     // The declarations live in the wasm package
     // (crates/rut-lsp-wasm/pkg/index.d.ts, assembled from the crate's js/).
@@ -2491,7 +2555,7 @@ async function main() {
             `extract-deps-leaf+head/path-dep-segments/` +
             `eof-member+locals/` +
             `complete-in-doc-sync/check-lane-mismatch+missing-field/` +
-            `lock-feed-unpinned+pinned+extract-leaf/wire-shape) ` +
+            `lock-feed-unpinned+pinned+extract-leaf/env-injected+env-less/wire-shape) ` +
             `through bin/rut-lsp.wasm`,
     );
 }

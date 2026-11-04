@@ -5,7 +5,8 @@
 //! The laws this buys (the plan's structural wins):
 //!
 //! - **Handlers are sync fns over `&mut Core`** — today's entry bodies,
-//!   moved verbatim into [`handle`]'s match. They cannot await, so the
+//!   moved verbatim into [`handle`]'s match (plus the stored read-only
+//!   host env, `crate::env`). They cannot await, so the
 //!   borrow-across-await class of bug is unwritable.
 //! - **A handler gets NO sender to the loop** — the reply oneshot rides
 //!   IN the message, so a handler can answer but never post; the
@@ -27,6 +28,7 @@
 
 use std::collections::BTreeMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::rc::Rc;
 use std::str::FromStr;
 
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
@@ -35,7 +37,7 @@ use futures::StreamExt;
 use ls_types::Uri;
 
 use crate::wire;
-use crate::{json_envelope, locations_envelope, Core};
+use crate::{env::JsEnv, json_envelope, locations_envelope, Core};
 
 /// one ABI call in flight. The `tx` rides IN the message — the handler
 /// replies on it, and the field set is owned data (the bridge copies the
@@ -122,6 +124,15 @@ pub enum Msg {
         names_json: String,
         tx: Tx,
     },
+    /// the injected READ-ONLY host environment (the dep walk's
+    /// capability — `crate::env`). This phase's whole change: the loop
+    /// STORES it; no handler reads it yet (the walk is the next
+    /// phase). Carried by value; the handler wraps it in the `Rc` the
+    /// loop keeps.
+    SetEnv {
+        env: JsEnv,
+        tx: Tx,
+    },
     AddDefNamed {
         uri: String,
         name: String,
@@ -166,21 +177,25 @@ pub enum Reply {
 }
 
 /// the loop's body — own the core exclusively, answer one message at a
-/// time, never die on a bad handler.
+/// time, never die on a bad handler. The injected read-only host env
+/// (`set_env`) lives beside the core: `None` until the host hands one
+/// over, stored (not read) this phase.
 pub(crate) async fn run(core: Core, mut inbox: UnboundedReceiver<Msg>) {
     let mut core = core;
+    let mut env: Option<Rc<JsEnv>> = None;
     while let Some(msg) = inbox.next().await {
         // panic isolation: one bad handler drops ONE reply channel (the
         // bridge answers its error envelope); the loop never dies. The
         // handler may leave the core half-mutated — accepted; the next
         // message sees whatever state stands.
-        let _ = catch_unwind(AssertUnwindSafe(|| handle(&mut core, msg)));
+        let _ = catch_unwind(AssertUnwindSafe(|| handle(&mut core, &mut env, msg)));
     }
 }
 
 /// the entries' bodies — today's `RutLsp` methods, moved verbatim into
-/// sync arms over `&mut Core`. No sender, no await.
-fn handle(core: &mut Core, msg: Msg) {
+/// sync arms over `&mut Core` (and the stored env, which only the dep
+/// walk's phase will read). No sender, no await.
+fn handle(core: &mut Core, env: &mut Option<Rc<JsEnv>>, msg: Msg) {
     match msg {
         Msg::Legend { tx } => {
             let _ = tx.send(Reply::Text(json_envelope(serde_json::json!(
@@ -387,6 +402,14 @@ fn handle(core: &mut Core, msg: Msg) {
                 Err(e) => json_envelope(wire::Error::new(e.to_string())),
             };
             let _ = tx.send(Reply::Text(answer));
+        }
+        Msg::SetEnv { env: e, tx } => {
+            // the capability STORE — replace-on-reinject, exactly the
+            // ledger setters' shape. No handler reads it this phase;
+            // the Rc hands the walk (the next phase) a cheap clone of
+            // the same cached functions.
+            *env = Some(Rc::new(e));
+            let _ = tx.send(Reply::Done);
         }
         Msg::AddDefNamed { uri, name, src, tx } => {
             let mut idx = crate::deps::index_dep(

@@ -125,6 +125,24 @@ export function isEnvelope(v: unknown): v is Envelope;
 // ---- the deps face ----
 
 /**
+ * the injected, READ-ONLY host environment — the capability the core's
+ * dep walk reads (phase: dep-walk-into-crate). Paths are rooted
+ * strings; the crate joins them with `/` and the host normalizes. The
+ * grant is read-only by construction: no write, no delete, no fetch
+ * exists on this interface.
+ */
+export interface HostEnv {
+    /** one file's bytes — `null` on a miss, never a throw */
+    read(path: string): Uint8Array | null;
+    /** one directory's entry names — `null` when there is no dir */
+    readDir(path: string): string[] | null;
+    /** does the path name a directory? */
+    isDir(path: string): boolean;
+    /** the hint lane — a message for the user, error-flagged or not */
+    notify(message: string, isError: boolean): void;
+}
+
+/**
  * where a dep row's bytes live: a directory beside the manifest, or a
  * remote archive with its lock-sourced sha256 pin and the
  * Rust-computed cache path (JS never hashes URLs)
@@ -204,9 +222,13 @@ export class RutLsp {
 
   /**
    * Load the shipped artifact once (the glue's `init` is module-global).
-   * The std surface is already indexed by the constructor.
+   * The std surface is already indexed by the constructor. `env` — the
+   * injected read-only host environment — is optional: when present it
+   * rides `set_env` before the handle returns (the dep walk's
+   * capability); when omitted the core stays env-less, exactly the
+   * shape every host boots today.
    */
-  static load(bytes: Uint8Array | ArrayBuffer): Promise<RutLsp>;
+  static load(bytes: Uint8Array | ArrayBuffer, env?: HostEnv): Promise<RutLsp>;
 
   /** the semantic-token legend, names in token-type index order */
   legend(): Promise<string[]>;

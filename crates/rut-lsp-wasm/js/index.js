@@ -15,7 +15,11 @@
 // The environment-neutral law: no `node:*`, no `fetch`, no DOM. `load`
 // takes the artifact BYTES; who produced them (Node's fs, a browser
 // fetch, an in-process cache) is the host's business. That is what lets
-// the same file serve a Node extension and a browser playground.
+// the same file serve a Node extension and a browser playground. The
+// host ENVIRONMENT rides the same law — injected through `load`'s
+// optional second argument (`HostEnv`, declared in index.d.ts), never
+// imported: the read-only capability reaches the core only because a
+// host handed it over.
 //
 // The instance owns its session state (open docs + the index) for its
 // lifetime — one `RutLsp` per editing session, mutated per request; the
@@ -36,14 +40,25 @@ export class RutLsp {
    * The glue's `init` is module-global — one `load` per process; a
    * second call reuses the instantiated module.
    *
+   * `env` — the injected READ-ONLY host environment (`HostEnv`: read /
+   * readDir / isDir / notify) — is optional: when present it rides
+   * `set_env` right after the constructor (the capability the core's
+   * dep walk reads); when omitted the core stays env-less, exactly the
+   * shape every host boots today.
+   *
    * @param {Uint8Array | ArrayBuffer} bytes the `rut-lsp.wasm` artifact
+   * @param {HostEnv} [env] the read-only host environment, if the host has one
    * @returns {Promise<RutLsp>}
    */
-  static async load(bytes) {
+  static async load(bytes, env) {
     await init({
       module_or_path: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
     });
-    return new RutLsp(new Core());
+    const core = new Core();
+    if (env !== undefined && env !== null) {
+      await core.set_env(env);
+    }
+    return new RutLsp(core);
   }
 
   /** the semantic-token legend, names in token-type index order */

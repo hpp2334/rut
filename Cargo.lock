@@ -1213,6 +1213,7 @@ name = "rut-lsp-wasm"
 version = "0.2.0"
 dependencies = [
  "futures",
+ "js-sys",
  "ls-types",
  "rut-ast",
  "rut-core",
