@@ -75,10 +75,12 @@ fn law_pins(dir: &Path) -> BTreeMap<String, String> {
 /// the artifact bytes ride, no wire, no re-hash (install-time
 /// verification is the only hash pass). Else MISS: GET through the
 /// remote's bare door, hash the bytes, and — `locked` mode — verify
-/// against the law pin (a mismatch is a `~` drift row and publishes
-/// NOTHING; a url the lock has no row for is a `+` drift row); a
-/// verified fetch publishes into the store (tmp sibling → one atomic
-/// rename).
+/// against the law pin: a mismatch is a `~` drift row and publishes
+/// NOTHING (drift never enters the store); a url the lock has no row
+/// for is a `+` drift row whose bytes publish under their own hash
+/// (the address is content-derived, so the entry stays internally
+/// truthful — it is simply never what the lock pins). Everything else
+/// publishes into the store (tmp sibling → one atomic rename).
 ///
 /// Note on the rows: in practice they carry only `[deps]` url rows —
 /// `[dev-deps]` descriptors are path-only by grammar (a url there is
@@ -265,10 +267,13 @@ fn install_plain(p: &Path) {
 /// fetched hash that disagrees with the lock's pin is a `~` row naming
 /// BOTH hashes (catches an unpinned-in-manifest url whose server
 /// re-served different bytes, and stale locks after any pin change —
-/// and it publishes nothing: only pin-vouched bytes may enter the
-/// store); a lock row no closure url names anymore is a `-` row.
-/// Pin-vouched bytes DO warm the store (the same side effect the old
-/// online remote had) — CI's verify pass primes the offline runs.
+/// and it publishes nothing: drifted bytes never enter the store); a
+/// lock row no closure url names anymore is a `-` row.
+/// Non-drifted bytes DO warm the store (the same side effect the old
+/// online remote had) — CI's verify pass primes the offline runs; a
+/// `+` row's bytes publish under their own content hash (the address
+/// is content-derived, so the entry stays truthful — it is simply
+/// never what the lock pins).
 fn install_locked(p: &Path) {
     let rows = match rut_native::url_dep_rows(p) {
         Ok(rows) => rows,

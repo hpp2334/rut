@@ -22,8 +22,16 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn rut() -> &'static str {
-    env!("CARGO_BIN_EXE_rut")
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
+/// dir created once per test process (nextest runs one test per
+/// process), so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd() -> Command {
+    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    let home = HOME.get_or_init(|| scratch("rut-home"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
+    cmd.env("RUT_HOME", home);
+    cmd
 }
 
 /// The todolist shape: a root module importing its own `imp` child's
@@ -87,7 +95,7 @@ fn the_todolist_shape_runs_and_packs() {
     let root = todolist("positive");
     let dir = root.join("todolist");
 
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -97,7 +105,7 @@ fn the_todolist_shape_runs_and_packs() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
@@ -110,7 +118,7 @@ fn the_todolist_shape_runs_and_packs() {
     assert!(bundle.is_file(), "the bundle lands beside the dir");
 
     // and the packed bundle runs too
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", bundle.to_str().unwrap()])
         .output()
         .expect("run rut run <bundle>");
@@ -136,7 +144,7 @@ fn a_private_own_member_refuses_at_the_use_line() {
          entry fn main() {}\n",
     );
     write(&dir, "src/imp/mod.rut", "struct Task { id: i64; }\n");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -172,7 +180,7 @@ fn the_single_file_private_refusal_spells_the_file() {
          entry fn main() {}\n",
     );
     write(&dir, "src/imp.rut", "struct Task { id: i64; }\n");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -222,7 +230,7 @@ entry fn main() {
 }
 "#,
     );
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -247,7 +255,7 @@ fn both_child_spellings_are_the_loud_ambiguity() {
         "pub fn one() -> i64 { return 1; }\n",
     );
     write(&dir, "src/imp.rut", "pub fn two() -> i64 { return 2; }\n");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");

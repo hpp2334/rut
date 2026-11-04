@@ -23,8 +23,16 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn rut() -> &'static str {
-    env!("CARGO_BIN_EXE_rut")
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
+/// dir created once per test process (nextest runs one test per
+/// process), so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd() -> Command {
+    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    let home = HOME.get_or_init(|| scratch("rut-home"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
+    cmd.env("RUT_HOME", home);
+    cmd
 }
 
 /// A single-group world whose `main` panics with a stack-trace render —
@@ -55,7 +63,7 @@ fn panic_world(tag: &str) -> PathBuf {
 #[test]
 fn pack_strip_writes_and_prints_the_sidecar() {
     let root = panic_world("packflag");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args([
             "pack",
             root.join("app").to_str().unwrap(),
@@ -98,7 +106,7 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
     write(&root, "main.rut", "entry fn main() -> i32 { return 4; }\n");
     // a directory input reaches the pairing check: `--symbols` is a
     // compiled-bundle-only restore
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", root.to_str().unwrap(), "--symbols", "x.rutsym"])
         .output()
         .expect("run rut");
@@ -108,7 +116,7 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
     assert!(stderr.contains(".rutbundle"), "{stderr}");
     // a loose file never reaches the pairing check — the run lane's
     // allowlist door refuses it first (`run_lane.rs` pins that message)
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", src.to_str().unwrap(), "--symbols", "x.rutsym"])
         .output()
         .expect("run rut");
@@ -116,7 +124,7 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("not a runnable unit"), "{stderr}");
     // a dangling flag value is the same loud lane
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", src.to_str().unwrap(), "--symbols"])
         .output()
         .expect("run rut");
@@ -127,7 +135,7 @@ fn run_symbols_on_a_non_bundle_input_is_a_usage_error() {
 #[test]
 fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     let root = panic_world("e2e");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args([
             "pack",
             root.join("app").to_str().unwrap(),
@@ -140,7 +148,7 @@ fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     assert!(out.status.success());
 
     // without the sidecar: mangled names, pc-only degradation
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", root.join("app.rutbundle").to_str().unwrap()])
         .output()
         .expect("run rut");
@@ -154,7 +162,7 @@ fn run_on_a_stripped_bundle_restores_with_symbols_and_degrades_without() {
     assert!(stderr.contains("@ pc"), "pc-only degradation: {stderr}");
 
     // with the sidecar: the real fn name and a line/col position
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args([
             "run",
             root.join("app.rutbundle").to_str().unwrap(),

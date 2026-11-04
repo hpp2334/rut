@@ -24,8 +24,16 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn rut() -> &'static str {
-    env!("CARGO_BIN_EXE_rut")
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
+/// dir created once per test process (nextest runs one test per
+/// process), so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd() -> Command {
+    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    let home = HOME.get_or_init(|| scratch("rut-home"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
+    cmd.env("RUT_HOME", home);
+    cmd
 }
 
 /// The smallest runnable world: one manifest, one source, no deps.
@@ -46,7 +54,7 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
     let root = hello_world("positive");
     let dir = root.join("hello");
 
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -56,7 +64,7 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["pack", dir.to_str().unwrap(), "--mode", "bin"])
         .output()
         .expect("run rut pack");
@@ -68,7 +76,7 @@ fn run_accepts_a_module_dir_and_its_packed_bundle() {
     let bundle = root.join("hello.rutbundle");
     assert!(bundle.is_file(), "the bundle lands beside the dir");
 
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", bundle.to_str().unwrap()])
         .output()
         .expect("run rut run <bundle>");
@@ -85,7 +93,7 @@ fn run_defaults_to_the_working_directory() {
     let root = hello_world("default-dir");
     let dir = root.join("hello");
 
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .current_dir(&dir)
         .args(["run"])
         .output()
@@ -101,7 +109,7 @@ fn run_defaults_to_the_working_directory() {
 #[test]
 fn run_in_a_dir_without_a_manifest_refuses_naming_the_cwd_lock() {
     let root = scratch("default-bare");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .current_dir(&root)
         .args(["run"])
         .output()
@@ -116,7 +124,7 @@ fn run_in_a_dir_without_a_manifest_refuses_naming_the_cwd_lock() {
 fn a_loose_file_is_not_a_runnable_unit() {
     let root = scratch("loose");
     write(&root, "main.rut", "entry fn main() -> nil { return; }\n");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", root.join("main.rut").to_str().unwrap()])
         .output()
         .expect("run rut run <loose file>");
@@ -132,7 +140,7 @@ fn a_loose_file_is_not_a_runnable_unit() {
 fn a_declaration_surface_is_refused_with_its_own_message() {
     let root = scratch("decl");
     write(&root, "src/surf.d.rut", "pub host fn log(line: str);\n");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", root.join("src/surf.d.rut").to_str().unwrap()])
         .output()
         .expect("run rut run <file.d.rut>");
@@ -147,7 +155,7 @@ fn a_declaration_surface_is_refused_with_its_own_message() {
 fn a_typo_path_never_gets_past_the_door() {
     let root = scratch("typo");
     for probe in ["nope", "missing.rut", "notes.txt"] {
-        let out = Command::new(rut())
+        let out = rut_cmd()
             .args(["run", root.join(probe).to_str().unwrap()])
             .output()
             .expect("run rut run <typo path>");
@@ -185,7 +193,7 @@ fn several_entry_fns_refuse_to_guess_and_entry_designates() {
     let dir = root.join("hello");
 
     // no --entry: ambiguous, loud, nothing runs
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -199,7 +207,7 @@ fn several_entry_fns_refuse_to_guess_and_entry_designates() {
     assert!(stderr.contains("--entry"), "{stderr}");
 
     // --entry <name>: the designated entry runs
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap(), "--entry", "other"])
         .output()
         .expect("run rut run --entry other");
@@ -220,7 +228,7 @@ fn entry_naming_a_non_entry_fn_is_loud() {
         "src/mod.rut",
         "fn plain() -> nil { return; }\nentry fn main() -> nil { return; }\n",
     );
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap(), "--entry", "plain"])
         .output()
         .expect("run rut run --entry plain");
@@ -247,7 +255,7 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
         "src/mod.rut",
         "pub fn helper() -> i32 { return 7; }\n",
     );
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <dir>");
@@ -262,7 +270,7 @@ fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
 fn a_dangling_entry_value_is_a_usage_error() {
     let root = hello_world("dangling-entry");
     let dir = root.join("hello");
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap(), "--entry"])
         .output()
         .expect("run rut run --entry");
@@ -291,7 +299,7 @@ fn a_root_parse_error_names_the_file_line_and_column() {
         "src/mod.rut",
         "entry fn main() -> nil {\n    let x = @@;\n    return;\n}\n",
     );
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <broken root>");
@@ -328,7 +336,7 @@ fn an_error_in_a_mod_child_names_the_spec_path_label() {
         "src/layout/mod.rut",
         "pub fn cell() -> i32 {\n    let = 7;\n}\n",
     );
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <broken mod child>");
@@ -366,7 +374,7 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
         "src/mod.rut",
         "pub fn pi() -> f64 {\n    let = 7;\n}\n",
     );
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", hello.to_str().unwrap()])
         .output()
         .expect("run rut run <broken dep>");
@@ -395,7 +403,7 @@ fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
         "src/mod.rut",
         "fn f() -> str {\n    let x = 1;\n}\nentry fn main() -> str {\n    return f();\n}\n",
     );
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run <missing return>");

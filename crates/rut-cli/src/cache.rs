@@ -579,7 +579,9 @@ mod tests {
     }
 
     /// A temp `$RUT_HOME` for the test's lifetime — the store lanes
-    /// never touch the real `~/.rut`.
+    /// never touch the real `~/.rut`. Mutating the process env here is
+    /// safe under nextest's one-process-per-test model (the suite's
+    /// runner), which is the only runner this repo uses.
     struct Home(PathBuf);
     impl Home {
         fn new(tag: &str) -> Home {

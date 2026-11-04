@@ -241,6 +241,8 @@ mod tests {
     // ---- the home + the roots ----
 
     #[test]
+    // Env mutation is safe under nextest's one-process-per-test model
+    // (the suite's runner): this test owns its process's environment.
     fn the_home_is_the_override_then_the_default() {
         std::env::set_var("RUT_HOME", "/store-home");
         assert_eq!(rut_home(), "/store-home");

@@ -29,9 +29,9 @@ rut-parser = { path = "../rut-parser" }
 rut-ast = { path = "../rut-ast" }
 # the url-dep lane's transport lives in rut-native (`HttpRemote`,
 # behind its default-on `http` feature — the lock keeps ONE reqwest
-# entry); the CLI names the cache root (`RUT_CACHE_DIR` override /
-# project-local) and block_on's the READY fetch futures with a noop
-# waker.
+# entry); the CLI points run/pack's url reads at the global dep store
+# (`RUT_HOME`, default `~/.rut` — rut-driver's derivation core) and
+# block_on's the READY fetch futures with a noop waker.
 
 # opt into the workspace lint gate (warnings = deny)
 [lints]

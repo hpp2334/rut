@@ -22,12 +22,20 @@ fn write(dir: &Path, rel: &str, text: &str) {
     std::fs::write(p, text).unwrap();
 }
 
-fn rut() -> &'static str {
-    env!("CARGO_BIN_EXE_rut")
+/// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
+/// dir created once per test process (nextest runs one test per
+/// process), so every spawn — the run-key cache and the dep store
+/// included — stays off the real `~/.rut`.
+fn rut_cmd() -> Command {
+    static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    let home = HOME.get_or_init(|| scratch("rut-home"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
+    cmd.env("RUT_HOME", home);
+    cmd
 }
 
 fn run(dir: &Path) -> (i32, String) {
-    let out = Command::new(rut())
+    let out = rut_cmd()
         .args(["run", dir.to_str().unwrap()])
         .output()
         .expect("run rut run");
