@@ -238,7 +238,10 @@ fn cold_run_names_every_missing_dep_at_once() {
     server.set_up(false);
     let (code, err) = rut(&root.join("home"), &["run", app.to_str().unwrap()]);
     assert_eq!(code, 2, "{err}");
-    assert!(err.contains("2 url deps not in the bundle cache"), "{err}");
+    assert!(
+        err.contains("2 url deps not in the global dep store"),
+        "{err}"
+    );
     assert!(err.contains("run `rut install` first"), "{err}");
     assert!(err.contains("a — "), "{err}");
     assert!(err.contains("b — "), "{err}");

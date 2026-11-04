@@ -31,7 +31,7 @@ enum Cli {
     Fmt(fmt::FmtArgs),
     /// pack a package directory into a deterministic `.rutbundle` archive
     Pack(pack::PackArgs),
-    /// pre-warm the bundle cache for offline runs
+    /// pre-warm the global dep store for offline runs
     Fetch(fetch::FetchArgs),
     /// the AST + IR readbacks for one file
     Dump(dump::DumpArgs),

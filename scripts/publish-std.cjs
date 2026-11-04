@@ -426,7 +426,11 @@ try {
     return spawnSync("cargo", args, {
       cwd: ROOT,
       encoding: "utf8",
-      env: { ...process.env, RUT_CACHE_DIR: path.join(tmp, "cache") },
+      // a scratch RUT_HOME keeps the proof hermetic: install warms the
+      // global dep store (deps/ + the run-key cache) under this temp
+      // workspace, never the operator's real ~/.rut — a deterministic
+      // gate beats a warmed home
+      env: { ...process.env, RUT_HOME: path.join(tmp, "rut-home") },
     });
   };
   for (const sub of ["new", "install"]) {

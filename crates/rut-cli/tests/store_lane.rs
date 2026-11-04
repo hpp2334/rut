@@ -337,7 +337,7 @@ fn unpinned_rows_refuse_loudly_at_the_gate_and_the_walk() {
     server.set_up(false);
     let (code, _out, err) = rut(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 2, "an unpinned dep refuses the run: {err}");
-    assert!(err.contains("not in the bundle cache"), "{err}");
+    assert!(err.contains("not in the global dep store"), "{err}");
     assert!(err.contains("run `rut install` first"), "{err}");
     assert!(err.contains("util — "), "{err}");
 

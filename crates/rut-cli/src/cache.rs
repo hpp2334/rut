@@ -294,7 +294,7 @@ pub(crate) fn ensure_deps_cached(cmd: &str, remote: &StoreRemote) -> Result<(), 
         return Ok(());
     }
     let mut msg = format!(
-        "{cmd}: {} url dep{} not in the bundle cache — run `rut install` first:",
+        "{cmd}: {} url dep{} not in the global dep store — run `rut install` first:",
         missing.len(),
         if missing.len() == 1 { "" } else { "s" },
     );

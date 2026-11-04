@@ -26,13 +26,37 @@ fn write(dir: &Path, rel: &str, text: &str) {
 /// `rut` as a pre-configured Command: $RUT_HOME pinned to a scratch
 /// dir created once per test process (nextest runs one test per
 /// process), so every spawn — the run-key cache and the dep store
-/// included — stays off the real `~/.rut`.
+/// included — stays off the real `~/.rut` — and removed again at
+/// process exit (an atexit hook, below).
 fn rut_cmd() -> Command {
     static HOME: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let home = HOME.get_or_init(|| scratch("rut-home"));
+    let home = HOME.get_or_init(|| {
+        let h = scratch("rut-home");
+        remove_at_exit(&h);
+        h
+    });
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rut"));
     cmd.env("RUT_HOME", home);
     cmd
+}
+
+/// Remove `dir` when the process exits — the scratch rut home is
+/// litter, never a keeper.
+fn remove_at_exit(dir: &Path) {
+    extern "C" {
+        fn atexit(cb: extern "C" fn()) -> i32;
+    }
+    static PENDING: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+    extern "C" fn clean() {
+        let dir = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(dir) = dir {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+    *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some(dir.to_path_buf());
+    // registered once per process (the OnceLock above); a refused
+    // registration only leaves the litter
+    let _ = unsafe { atexit(clean) };
 }
 
 /// A single-group world whose `main` panics with a stack-trace render —
