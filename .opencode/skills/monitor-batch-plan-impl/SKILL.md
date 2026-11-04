@@ -1,6 +1,6 @@
 ---
 name: Monitor Batch Plan Implementation
-description: Watch a batch-plan-impl orchestrator session from this separate monitor session until ALL its plans are done — arm a background sleep timer (≤20 min, shortened to land exactly on the peak-strategy boundaries) after every check (the harness wakes you when it fires; never poll it), judge liveness from real message-stream timestamps in the OpenCode SQLite DB (never the lagging session table — a quiet worker may be deep inside a bench/build tool call), nudge the orchestrator to continue ONLY on a real stop (failure, provider outage, ~45-min no-growth stall, or a pending question form, which you answer yourself via the form reply API picking the recommended option) using `opencode run --session <id>`, and enforce the peak-time model strategy (workdays 14:00–18:00 UTC+8) — at 13:50 nudge it onto peak models (itself `peak.complex`, workers/subagents `peak.balance`), at 18:10 back onto main (`main.complex` / `main.balance`), refs resolved from `models.jsonc`; re-arm after every healthy check and finish with a final scoreboard once the orchestrator reports the plan queue empty. No user interaction: observe and report, intervene minimally, never implement anything yourself.
+description: Watch a batch-plan-impl orchestrator session from this separate monitor session until ALL its plans are done — arm a background sleep timer (20 min) after every check (the harness wakes you when it fires; never poll it), judge liveness from real message-stream timestamps in the OpenCode SQLite DB (never the lagging session table — a quiet worker may be deep inside a bench/build tool call), nudge the orchestrator to continue ONLY on a real stop (failure, provider outage, ~45-min no-growth stall, or a pending question form, which you answer yourself via the form reply API picking the recommended option) using `opencode run --session <id>`; re-arm after every healthy check and finish with a final scoreboard once the orchestrator reports the plan queue empty. No user interaction: observe and report, intervene minimally, never implement anything yourself.
 ---
 
 # Monitor Batch Plan Implementation
@@ -31,10 +31,12 @@ never create or delete sessions.
   logs `/tmp/opencode/rut-batch-plan-impl/run.md`, current git HEAD. Completed plan files
   are never removed, so file existence is NOT the done-signal; "done" is the
   orchestrator's own report plus nothing left in flight.
-- **Model refs** — `models.jsonc` at the project root defines `main.complex`,
-  `main.balance`, `peak.complex`, `peak.balance` (full `providerID/modelID`).
-  Resolve at nudge time, e.g.:
-  `sed 's://.*$::' models.jsonc | jq -r '.peak.complex'`.
+- **Model refs** — `models.jsonc` at the project root defines the one pair
+  `main.complex` / `main.balance` (full `providerID/modelID`). The batch pins
+  workers and reviews to `main.complex`, watchers and THIS monitor session to
+  `main.balance`. There are no switches to enforce anymore — if a fresh
+  worker shows a different pin, note the drift in your report (the
+  orchestrator owns pinning).
 
 ## Rules (each one was learned the hard way)
 
@@ -62,16 +64,6 @@ never create or delete sessions.
 - **The queue can grow mid-watch** — the user may feed the orchestrator new
   plans while you watch. Track the growth; keep watching until everything
   completes.
-- **Boundary targeting** — the next timer may be SHORTER than 20 min:
-  `scripts/timer-seconds.sh` prints `<seconds> <peak|main|none>`; sleep that
-  long so you land exactly on a peak-strategy boundary (13:50 / 18:10).
-- **Around each model switch expect a brief lull** — the orchestrator switches
-  its own model and re-pins dispatches; running workers may be left to
-  finish. Do not false-alarm within ~10 min after a boundary.
-- **A switch is applied only when visible in the DB** — on the next wake,
-  check `session_v2.model` of the orchestrator (watch-status.sh prints it)
-  and of its fresh workers against the requested refs; re-send ONCE if not
-  applied, then note it and move on.
 - Keep each wake-up report to the user SHORT: current phase/queue status in a
   few lines + "Next check at ~HH:MM".
 - The watch may span days and several "Continue"-style user messages. On any
@@ -87,59 +79,7 @@ never create or delete sessions.
 | Genuine stall (rule above) or `idle_outcome != succeeded` with plans unfinished | stopped | nudge to continue (below), then re-arm |
 | Several sessions died within ~2 min of each other | provider outage | note it; next cycle nudge "continue"; expect an adopt-don't-clean recovery |
 | A session has a pending question form and is otherwise quiet | blocked on a question | answer it yourself (below), verify resumption next wake |
-| Workday 13:50 UTC+8 reached (SWITCH_DUE wake) with plans unfinished | peak window starts in 10 min | send the peak-switch nudge (section below); re-arm; verify next wake |
-| Workday 18:10 UTC+8 reached (SWITCH_DUE wake) with plans unfinished | peak window over | send the main-switch nudge (section below); re-arm; verify next wake |
 | Orchestrator reports the queue empty / all plans done, nothing in flight | finished | final scoreboard; do NOT re-arm |
-
-## Peak-time model strategy (workdays 14:00–18:00 UTC+8)
-
-| Boundary (UTC+8, Mon–Fri) | Nudge the orchestrator to | Applies to |
-| --- | --- | --- |
-| 13:50 | `peak.complex` | its own session model |
-| 13:50 | dispatch-pin `peak.balance` | every worker + watcher/subagent session from now on |
-| 18:10 | `main.complex` | its own session model |
-| 18:10 | dispatch-pin `main.balance` | every worker + watcher/subagent session from now on |
-
-- Applies ONLY while the watch is active (plans unfinished). After the final
-  report: no switches, no timer.
-- Boundaries are fixed UTC+8 regardless of the machine timezone;
-  `scripts/timer-seconds.sh` implements the targeting with
-  `TZ=Asia/Shanghai`.
-- Resolve refs from `models.jsonc` at nudge time (see Inputs); the
-  orchestrator resolves the same pair itself per dispatch, so a nudge mostly
-  forces/confirms its own step-0/step-3 procedure.
-- Nudges go through the Nudge protocol channel (Workflow §4). Templates:
-
-Peak (13:50):
-
-```text
-Peak-time model switch (monitor nudge from watch session <YOUR_SESSION_ID>;
-the 14:00–18:00 UTC+8 peak window starts in ~10 minutes). You are still
-running plans, so: switch YOUR OWN session's model to <PEAK_COMPLEX> (model
-only, keep the build agent) and pin every worker and watcher/subagent session
-you dispatch from now on to <PEAK_BALANCE>. Re-running your own models.jsonc
-resolution (batch-plan-impl step 0/3) is fine. Running workers may finish on
-their current model — your call. Confirm what you changed.
-```
-
-Main (18:10):
-
-```text
-Peak window over (monitor nudge from watch session <YOUR_SESSION_ID>; it is
-past 18:00 UTC+8). Switch YOUR OWN session's model back to <MAIN_COMPLEX>
-(model only, keep the build agent) and pin worker/watcher dispatches back to
-<MAIN_BALANCE>. Re-running your own models.jsonc resolution (batch-plan-impl
-step 0/3) is fine. Running workers may finish as-is — your call. Confirm what
-you changed.
-```
-
-- **Late application** — if you wake past a boundary that was not applied
-  (suspension, missed timer), send that nudge late: peak while
-  13:50 ≤ now < 18:10, main once now ≥ 18:10 (workdays only, UTC+8). Your own
-  sent nudges in this session's history are the applied-today record.
-- **Mid-window start** — if you arm the watch during a workday peak window
-  with plans unfinished and no evidence of a prior switch, send the
-  peak-switch nudge as your first intervention.
 
 ## Workflow
 
@@ -164,28 +104,19 @@ you changed.
 ### 2. Arm the first timer, then report the setup
 
 ```sh
-bash "<skill-dir>/scripts/timer-seconds.sh" 1200   # -> "<seconds> <peak|main|none>"
-# none:              sleep 1200 && echo "WAKE_UP_CHECK $(date +%H:%M:%S)"   # background
-# <s> <kind>, s < 1200:
-#                    sleep <s> && echo "SWITCH_DUE <kind> $(TZ=Asia/Shanghai date +%H:%M:%S)"  # background
+sleep 1200 && echo "WAKE_UP_CHECK $(date +%H:%M:%S)"   # background
 ```
-
-If it prints `0 <kind>`, that boundary just passed — send the switch nudge
-now (see "Peak-time model strategy") before arming the next timer.
 
 Then tell the user, in a few lines: the watched session and title, its
 remaining queue, the nudge rule ("I nudge only if everything goes quiet with
-plans unfinished"), the peak-time strategy (13:50/18:10 model switches), and
-the next check time. End the turn.
+plans unfinished"), and the next check time. End the turn.
 
 ### 3. Every wake-up
 
 1. Run the status script.
 2. Classify per the decision policy; investigate before any nudge.
-3. On a `SWITCH_DUE` wake — or if a boundary was missed — apply the
-   peak-time switch (section above) and verify the previous one was applied.
-4. Re-arm the timer per the targeting rule (unless done).
-5. One short report: what is in flight / landed since last check (commit
+3. Re-arm the timer (unless done).
+4. One short report: what is in flight / landed since last check (commit
    hashes when the run log shows them), any switch applied or verified,
    + "Next check at ~HH:MM".
 
@@ -260,9 +191,9 @@ Nothing is pending — no timer is armed.
 | Action | Command |
 | --- | --- |
 | Wake-up status check | `bash "<skill-dir>/scripts/watch-status.sh" "$ORCH" "$PROJECT_DIR"` |
-| Arm the timer (background) | seconds from `scripts/timer-seconds.sh`: `sleep <s> && echo "WAKE_UP_CHECK $(date +%H:%M:%S)"` (routine) or `"SWITCH_DUE <kind> $(TZ=Asia/Shanghai date +%H:%M:%S)"` (boundary) |
-| Resolve model refs | `sed 's://.*$::' models.jsonc \| jq -r '.peak.complex'` (likewise `.peak.balance`, `.main.complex`, `.main.balance`) |
-| Verify a switch applied | `session_v2.model` of the orchestrator and its fresh workers (watch-status.sh prints it) |
+| Arm the timer (background) | `sleep 1200 && echo "WAKE_UP_CHECK $(date +%H:%M:%S)"` |
+| Model refs | `sed 's://.*$::' models.jsonc \| jq -r '.main.complex, .main.balance'` — workers/reviews on complex, watchers + this monitor on balance |
+| Worker pins (drift note only) | `session_v2.model` of fresh workers (watch-status.sh prints it) — expect `main.complex` workers, `main.balance` watchers; drift goes in the report, not a nudge |
 | True liveness per session | `MAX(session_message.time_created)` via read-only sqlite (python3; `sqlite3` CLI may be missing) |
 | Newest message of a session | `SELECT type, data FROM session_message WHERE session_id=? ORDER BY seq DESC LIMIT 1` |
 | Nudge the orchestrator | `cd "$PROJECT_DIR" && opencode run --session "$ORCH" "<facts + continue>"` |
@@ -278,9 +209,6 @@ Nothing is pending — no timer is armed.
 - `opencode api` flags: `--data/-d <body>`, `--header name:value`,
   `--param key=value`. `opencode run` flags: `--session/-s <id>`,
   `--format json`.
-- Peak boundaries are fixed UTC+8 (no DST); the machine clock may be in
-  another zone — never use bare `date` for boundary math (the scripts use
-  `TZ=Asia/Shanghai`).
 - Run log locations to consult for progress: `/tmp/opencode/rut-batch-plan-impl/run.md`
   (per-batch phase log) and `~/.opencode/plan/*.md` (the plan queue — the
   orchestrator adds files there as the user requests more work).
