@@ -238,9 +238,10 @@ hello, rut!
 
 `rut install` fetched `ink` from jsDelivr into the **global dep store**
 (`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per
-pinned dep, shared by every project; the project's own directory stays
-`rut.jsonc` + `rut.lock` + `src/` — no local cache) and pinned its
-sha256 in `hello/rut.lock` — the lock every later load verifies
+pinned dep, shared by every project; no dep cache lands inside
+`hello/` — the one local write is the walk's `.rut/unpacked/` scratch,
+where `.zip` deps unpack once as gitignored machine output) and pinned
+its sha256 in `hello/rut.lock` — the lock every later load verifies
 against, committed alongside the manifest (same manifest + same
 `rut.lock` ⇒ identical resolved world). `rut install --locked`
 re-verifies the pair without writing (the CI lane); `rut fetch hello`

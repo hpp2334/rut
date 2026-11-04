@@ -69,9 +69,11 @@ committed, and every load verifies the fetched bytes against it (an
 unpinned url refuses at the door: `run `rut install``). The store is
 content-addressed under `$RUT_HOME` (`~/.rut` by default), one
 `deps/<name>@<sha256[:16]>/` dir per pinned dep, shared by every
-project — the project's own directory carries no cache at all (a
-project is `rut.jsonc` + `rut.lock` + `src/`). Every later run is a
-pure store hit, `rut install hello --locked` re-verifies the lock
+project — no dep cache lands beside the project. (One piece of local
+scratch does: mounting a `.zip` dep unpacks it once under
+`.rut/unpacked/<sha-of-bytes>/` — content-addressed, gitignored,
+machine-managed; [loading](../reference/loading.md).) Every later run
+is a pure store hit, `rut install hello --locked` re-verifies the lock
 without writing (the CI lane), and `rut fetch hello` re-warms the
 store without running anything.
 

@@ -864,9 +864,10 @@ msgstr ""
 
 #: src/quick-start/installation.md:239
 msgid ""
-"`rut install` fetched `ink` from jsDelivr into the **global dep store** (`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per pinned dep, shared by every project; the project's own directory stays `rut.jsonc` + `rut.lock` + `src/` — no local cache) and pinned its sha256 in `hello/rut.lock` — the lock every later load verifies against, committed alongside the manifest (same manifest + same `rut.lock` ⇒ identical resolved world). `rut install --locked` re-verifies the pair without writing (the CI lane); `rut fetch hello` re-warms the store without running anything."
+"`rut install` fetched `ink` from jsDelivr into the **global dep store** (`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per pinned dep, shared by every project; no dep cache lands inside `hello/` — the one local write is the walk's `.rut/unpacked/` scratch, where `.zip` deps unpack once as gitignored machine output) and pinned its sha256 in `hello/rut.lock` — the lock every later load verifies against, committed alongside the manifest (same manifest + same `rut.lock` ⇒ identical resolved world). `rut install --locked` re-verifies the pair without writing (the CI lane); `rut fetch hello` re-warms the store without running anything."
 msgstr ""
-"`rut install` 把 `ink` 从 jsDelivr 取回放进**全局依赖存储**（`$RUT_HOME/deps`——默认 `~/.rut`，每个被固定的依赖一个按内容寻址的目录，所有项目共享；项目自己的目录只有 `rut.jsonc` + `rut.lock` + `src/`——没有本地缓存），并把它的 sha256 固定进 `hello/rut.lock`——此后每次加载都对照这把锁校验，它随清单一起提交（同一清单 + 同一 `rut.lock` ⇒ 完全相同的解析世界）。`rut install --locked` 只复核这对文件、绝不写入（CI 车道）；`rut fetch hello` 只再预热存储、不运行任何东西。"
+"`rut install` 把 `ink` 从 jsDelivr 取回放进**全局依赖存储**（`$RUT_HOME/deps`——默认 `~/.rut`，每个被固定的依赖一个按内容寻址的目录，所有项目共享；依赖缓存绝不落进 `hello/`——唯一的本地写入是遍历的 `.rut/unpacked/` 草稿，`.zip` 依赖在那里一次性解包，是 gitignored 的机器输出），并把它的 sha256 固定进 `hello/rut.lock`——此后每次加载都对照这把锁校验，它随清单一起提交（同一清单 + 同一 `rut.lock` ⇒ 完全相同的解析世界）。`rut install --locked` 只复核这对文件、绝不写入（CI 车道）；`rut fetch hello` 只再预热存储、不运行任何东西。"
+
 
 
 
@@ -978,9 +979,10 @@ msgstr ""
 
 #: src/quick-start/first-program.md:64
 msgid ""
-"The run works from ANY directory — nothing about it assumes a clone of the toolchain's repo. The url row names the package on jsDelivr; `rut install` fetched it once into the **global dep store** and pinned its sha256 in `hello/rut.lock` — the lock rides beside the manifest, committed, and every load verifies the fetched bytes against it (an unpinned url refuses at the door: `run `rut install\\``). The store is content-addressed under `$RUT_HOME` (`~/.rut` by default), one `deps/<name>@<sha256[:16]>/` dir per pinned dep, shared by every project — the project's own directory carries no cache at all (a project is `rut.jsonc` + `rut.lock` + `src/`). Every later run is a pure store hit, `rut install hello --locked` re-verifies the lock without writing (the CI lane), and `rut fetch hello` re-warms the store without running anything."
+"The run works from ANY directory — nothing about it assumes a clone of the toolchain's repo. The url row names the package on jsDelivr; `rut install` fetched it once into the **global dep store** and pinned its sha256 in `hello/rut.lock` — the lock rides beside the manifest, committed, and every load verifies the fetched bytes against it (an unpinned url refuses at the door: `run `rut install\\``). The store is content-addressed under `$RUT_HOME` (`~/.rut` by default), one `deps/<name>@<sha256[:16]>/` dir per pinned dep, shared by every project — no dep cache lands beside the project. (One piece of local scratch does: mounting a `.zip` dep unpacks it once under `.rut/unpacked/<sha-of-bytes>/` — content-addressed, gitignored, machine-managed; [loading](../reference/loading.md).) Every later run is a pure store hit, `rut install hello --locked` re-verifies the lock without writing (the CI lane), and `rut fetch hello` re-warms the store without running anything."
 msgstr ""
-"这次运行可以在任何目录下进行——它完全不假设你克隆了工具链的仓库。url 行点名了 jsDelivr 上的包；`rut install` 把它取回一次、放进**全局依赖存储**，并把它的 sha256 固定进 `hello/rut.lock`——锁随清单一起提交，每次加载都对照它校验取回的字节（没被固定的 url 在门口就会拒绝，并点名 `rut install`）。存储按内容寻址，位于 `$RUT_HOME` 之下（默认 `~/.rut`），每个被固定的依赖一个 `deps/<name>@<sha256[:16]>/` 目录，所有项目共享——项目自己的目录完全不携带缓存（一个项目就是 `rut.jsonc` + `rut.lock` + `src/`）。之后的每次运行都是纯存储命中；`rut install hello --locked` 只复核锁、绝不写入（CI 车道）；`rut fetch hello` 只再预热存储、不运行任何东西。"
+"这次运行可以在任何目录下进行——它完全不假设你克隆了工具链的仓库。url 行点名了 jsDelivr 上的包；`rut install` 把它取回一次、放进**全局依赖存储**，并把它的 sha256 固定进 `hello/rut.lock`——锁随清单一起提交，每次加载都对照它校验取回的字节（没被固定的 url 在门口就会拒绝，并点名 `rut install`）。存储按内容寻址，位于 `$RUT_HOME` 之下（默认 `~/.rut`），每个被固定的依赖一个 `deps/<name>@<sha256[:16]>/` 目录，所有项目共享——依赖缓存绝不落在项目旁边。（本地确有一块草稿：挂载 `.zip` 依赖时会在 `.rut/unpacked/<sha-of-bytes>/` 下一次性解包——按内容寻址、gitignored、机器管理；见[加载](../reference/loading.md)。）之后的每次运行都是纯存储命中；`rut install hello --locked` 只复核锁、绝不写入（CI 车道）；`rut fetch hello` 只再预热存储、不运行任何东西。"
+
 
 
 
@@ -29064,9 +29066,10 @@ msgstr "存储根目录"
 
 #: src/reference/cli.md:352
 msgid ""
-"`$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree). Projects carry no local cache — a project is `rut.jsonc` + `rut.lock` + `src/`"
+"`$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree). No dep cache lands beside a project — the walk's one local write is the `.rut/unpacked/<sha-of-bytes>/` scratch where `.zip` deps unpack once (content-addressed, gitignored — [loading](loading.md))"
 msgstr ""
-"`$RUT_HOME/deps/<name>@<sha256[:16]>/`——全局依赖存储：`RUT_HOME` 覆盖主目录（默认 `~/.rut`），固定值即地址（清单行的名字 + 锁固定值的前 16 位十六进制）。每个依赖目录持有 `artifact.<zip\\|rutbundle>`（按下载原样的固定字节）、`meta.json`（完整 sha256、url 与工件种类——读取者绝不重新哈希）和 `unpack/`（解包后的树）。项目不携带本地缓存——一个项目就是 `rut.jsonc` + `rut.lock` + `src/`"
+"`$RUT_HOME/deps/<name>@<sha256[:16]>/`——全局依赖存储：`RUT_HOME` 覆盖主目录（默认 `~/.rut`），固定值即地址（清单行的名字 + 锁固定值的前 16 位十六进制）。每个依赖目录持有 `artifact.<zip\\|rutbundle>`（按下载原样的固定字节）、`meta.json`（完整 sha256、url 与工件种类——读取者绝不重新哈希）和 `unpack/`（解包后的树）。依赖缓存绝不落在项目旁边——遍历唯一的本地写入是 `.zip` 依赖一次性解包的 `.rut/unpacked/<sha-of-bytes>/` 草稿（按内容寻址、gitignored——[加载](loading.md)）"
+
 
 
 #: src/reference/cli.md:353

@@ -7,9 +7,10 @@ integrations/vscode-extension/bin
 integrations/vscode-extension/dist
 *.vsix
 
-# `.rut/` scratch under a workspace (the editor dep-walk's extracted
-# trees; the CLI's own caches are global under `$RUT_HOME`, never
-# beside a project)
+# `.rut/` scratch under a workspace — two writers: the editor
+# dep-walk's extracted trees, and the CLI walk's own `.rut/unpacked/`
+# root (`.zip` deps unpack once beside the project); the dep caches
+# themselves are global under `$RUT_HOME`
 .rut/
 
 # mdbook build output

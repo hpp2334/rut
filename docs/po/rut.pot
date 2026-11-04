@@ -792,15 +792,16 @@ msgstr ""
 msgid ""
 "`rut install` fetched `ink` from jsDelivr into the **global dep store** "
 "(`$RUT_HOME/deps` — `~/.rut` by default, one content-addressed dir per "
-"pinned dep, shared by every project; the project's own directory stays "
-"`rut.jsonc` + `rut.lock` + `src/` — no local cache) and pinned its sha256 in "
+"pinned dep, shared by every project; no dep cache lands inside `hello/` — "
+"the one local write is the walk's `.rut/unpacked/` scratch, where `.zip` "
+"deps unpack once as gitignored machine output) and pinned its sha256 in "
 "`hello/rut.lock` — the lock every later load verifies against, committed "
 "alongside the manifest (same manifest + same `rut.lock` ⇒ identical resolved "
 "world). `rut install --locked` re-verifies the pair without writing (the CI "
 "lane); `rut fetch hello` re-warms the store without running anything."
 msgstr ""
 
-#: src/quick-start/installation.md:249
+#: src/quick-start/installation.md:250
 msgid ""
 "The hand-typed walkthrough is the lesson — the manifest is what you are "
 "learning. When it is routine, `rut new hello` is the one-step equivalent: it "
@@ -810,7 +811,7 @@ msgid ""
 "CLI](../reference/cli.md))."
 msgstr ""
 
-#: src/quick-start/installation.md:256
+#: src/quick-start/installation.md:257
 msgid ""
 "If that printed, the CLI is ready. Continue to [your first rut "
 "program](first-program.md) — and keep the lane's role in mind: the CLI is "
@@ -819,43 +820,43 @@ msgid ""
 "CLI](../reference/cli.md) is the binary's reference."
 msgstr ""
 
-#: src/quick-start/installation.md:263
+#: src/quick-start/installation.md:264
 msgid "Optional: the wasm playground"
 msgstr ""
 
-#: src/quick-start/installation.md:265
+#: src/quick-start/installation.md:266
 msgid ""
 "The [playground](playground.md) runs the same engine compiled to "
 "WebAssembly. Building it needs "
 "[wasm-pack](https://rustwasm.github.io/wasm-pack/) and one extra target:"
 msgstr ""
 
-#: src/quick-start/installation.md:272
+#: src/quick-start/installation.md:273
 msgid ""
 "# the JS face + declarations the editors import (pkg/index.js, "
 "pkg/index.d.ts)\n"
 msgstr ""
 
-#: src/quick-start/installation.md:277
+#: src/quick-start/installation.md:278
 msgid ""
 "or, from `demo/`, the one-command lane that also copies the artifacts into "
 "place:"
 msgstr ""
 
-#: src/quick-start/installation.md:284
+#: src/quick-start/installation.md:285
 msgid "Optional: build this book"
 msgstr ""
 
-#: src/quick-start/installation.md:286
+#: src/quick-start/installation.md:287
 msgid ""
 "The documentation is an [mdbook](https://rust-lang.github.io/mdBook/) site:"
 msgstr ""
 
-#: src/quick-start/installation.md:291
+#: src/quick-start/installation.md:292
 msgid "# live-reload preview at http://localhost:3000\n"
 msgstr ""
 
-#: src/quick-start/installation.md:292
+#: src/quick-start/installation.md:293
 msgid "# static site in docs/book/\n"
 msgstr ""
 
@@ -909,18 +910,20 @@ msgid ""
 "load verifies the fetched bytes against it (an unpinned url refuses at the "
 "door: `run `rut install\\``). The store is content-addressed under "
 "`$RUT_HOME` (`~/.rut` by default), one `deps/<name>@<sha256[:16]>/` dir per "
-"pinned dep, shared by every project — the project's own directory carries no "
-"cache at all (a project is `rut.jsonc` + `rut.lock` + `src/`). Every later "
-"run is a pure store hit, `rut install hello --locked` re-verifies the lock "
-"without writing (the CI lane), and `rut fetch hello` re-warms the store "
-"without running anything."
-msgstr ""
-
-#: src/quick-start/first-program.md:78
-msgid "Three things to notice:"
+"pinned dep, shared by every project — no dep cache lands beside the project. "
+"(One piece of local scratch does: mounting a `.zip` dep unpacks it once "
+"under `.rut/unpacked/<sha-of-bytes>/` — content-addressed, gitignored, "
+"machine-managed; [loading](../reference/loading.md).) Every later run is a "
+"pure store hit, `rut install hello --locked` re-verifies the lock without "
+"writing (the CI lane), and `rut fetch hello` re-warms the store without "
+"running anything."
 msgstr ""
 
 #: src/quick-start/first-program.md:80
+msgid "Three things to notice:"
+msgstr ""
+
+#: src/quick-start/first-program.md:82
 msgid ""
 "**One directory with a `rut.jsonc` is one program.** The manifest is the "
 "runnable unit — `rut run <dir>` (or a packed artifact) is the only run lane. "
@@ -928,7 +931,7 @@ msgid ""
 "through `use` paths (see the [modules tutorial](../tutorial/modules.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:85
+#: src/quick-start/first-program.md:87
 msgid ""
 "**`use ink::{ Logger };`** pulls `Logger` out of the `ink` package — and the "
 "manifest's `deps` row is what mounts it: a `use` line says _which_ names the "
@@ -936,24 +939,24 @@ msgid ""
 "structure](../reference/project-structure.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:89
+#: src/quick-start/first-program.md:91
 msgid ""
 "**`Logger(\"hello\")`** constructs the logger through the class's "
 "`[constructor]` member — the call form spells the construction "
 "([classes](../reference/classes.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:92
+#: src/quick-start/first-program.md:94
 msgid ""
 "**`f\"hello, {name}!\"`** is a format literal: `{expr}` interpolates any "
 "expression, rendered through the value's display contract."
 msgstr ""
 
-#: src/quick-start/first-program.md:95
+#: src/quick-start/first-program.md:97
 msgid "`entry fn main()` is the entry the CLI calls."
 msgstr ""
 
-#: src/quick-start/first-program.md:97
+#: src/quick-start/first-program.md:99
 msgid ""
 "Typing the directory by hand is the lesson — the manifest IS the program's "
 "door, and now you have written one. For the next directory, the CLI "
@@ -965,23 +968,23 @@ msgid ""
 "<dir>` runs it:"
 msgstr ""
 
-#: src/quick-start/first-program.md:107
+#: src/quick-start/first-program.md:109
 msgid "# hello/rut.jsonc (the std set) + hello/rut.lock + hello/src/mod.rut\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:108
+#: src/quick-start/first-program.md:110
 msgid "# fetch the std set into the global dep store (with progress)\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:112
+#: src/quick-start/first-program.md:114
 msgid "Values, briefly"
 msgstr ""
 
-#: src/quick-start/first-program.md:114
+#: src/quick-start/first-program.md:116
 msgid "Extend the file — rut infers, and every type is known at compile time:"
 msgstr ""
 
-#: src/quick-start/first-program.md:116
+#: src/quick-start/first-program.md:118
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -1001,7 +1004,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/quick-start/first-program.md:137
+#: src/quick-start/first-program.md:139
 msgid ""
 "The full tour — suffixes, casts, strings, `bytes`, structs — is the [values "
 "and variables](../tutorial/values-and-variables.md) tutorial, and the exact "
@@ -1009,44 +1012,44 @@ msgid ""
 "inference](../reference/literals-and-inference.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:142
+#: src/quick-start/first-program.md:144
 msgid "Format"
 msgstr ""
 
-#: src/quick-start/first-program.md:144
+#: src/quick-start/first-program.md:146
 msgid "The formatter is the style — there is no configuration:"
 msgstr ""
 
-#: src/quick-start/first-program.md:147 src/reference/cli.md:240
+#: src/quick-start/first-program.md:149 src/reference/cli.md:240
 msgid "# rewrite in place\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:148
+#: src/quick-start/first-program.md:150
 msgid "# verify only (note: --check goes AFTER the path)\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:149
+#: src/quick-start/first-program.md:151
 msgid "# walk a directory tree, every *.rut file\n"
 msgstr ""
 
-#: src/quick-start/first-program.md:152
+#: src/quick-start/first-program.md:154
 msgid ""
 "`--check` prints `unformatted: <file>` and exits `1` when a file needs "
 "changes, which makes it a clean CI gate. A file that does not parse is "
 "refused loudly rather than half-formatted."
 msgstr ""
 
-#: src/quick-start/first-program.md:156
+#: src/quick-start/first-program.md:158
 msgid "Inspect"
 msgstr ""
 
-#: src/quick-start/first-program.md:158
+#: src/quick-start/first-program.md:160
 msgid ""
 "`dump` compiles a single module and prints its structures — useful when a "
 "snippet behaves differently than you expect:"
 msgstr ""
 
-#: src/quick-start/first-program.md:165
+#: src/quick-start/first-program.md:167
 msgid ""
 "`dump` runs the lone module through the frontend _without_ mounting the "
 "packages, so it is the tool for surface questions (\"what does this lower "
@@ -1054,15 +1057,15 @@ msgid ""
 "panes show the same two views live — see [the playground](playground.md)."
 msgstr ""
 
-#: src/quick-start/first-program.md:171
+#: src/quick-start/first-program.md:173
 msgid "Budget it"
 msgstr ""
 
-#: src/quick-start/first-program.md:173
+#: src/quick-start/first-program.md:175
 msgid "Every `rut run` is uncapped by default — fuel is opt-in via `--fuel N`:"
 msgstr ""
 
-#: src/quick-start/first-program.md:179
+#: src/quick-start/first-program.md:181
 msgid ""
 "A program that exhausts its fuel halts with a diagnostic naming the budget — "
 "the same contract the VM enforces for embedded hosts, along with heap "
@@ -1070,23 +1073,23 @@ msgid ""
 "limits](../reference/resource-limits.md))."
 msgstr ""
 
-#: src/quick-start/first-program.md:184
+#: src/quick-start/first-program.md:186
 msgid "Where next"
 msgstr ""
 
-#: src/quick-start/first-program.md:186
+#: src/quick-start/first-program.md:188
 msgid ""
 "The [tutorial](../tutorial/values-and-variables.md) teaches the language "
 "hands-on, one concept per chapter."
 msgstr ""
 
-#: src/quick-start/first-program.md:188
+#: src/quick-start/first-program.md:190
 msgid ""
 "The [examples](../examples/index.md) are seven complete projects you can run "
 "today."
 msgstr ""
 
-#: src/quick-start/first-program.md:190
+#: src/quick-start/first-program.md:192
 msgid ""
 "[Core concepts](../core-concepts/design-goals.md) explains _why_ the "
 "language is shaped the way it is."
@@ -28454,8 +28457,10 @@ msgid ""
 "manifest row's name + the lock pin's first 16 hex digits). Each dep dir "
 "holds `artifact.<zip\\|rutbundle>` (the pinned bytes as downloaded), "
 "`meta.json` (the full sha256, url, and artifact kind — readers never "
-"re-hash), and `unpack/` (the extracted tree). Projects carry no local cache "
-"— a project is `rut.jsonc` + `rut.lock` + `src/`"
+"re-hash), and `unpack/` (the extracted tree). No dep cache lands beside a "
+"project — the walk's one local write is the `.rut/unpacked/<sha-of-bytes>/` "
+"scratch where `.zip` deps unpack once (content-addressed, gitignored — "
+"[loading](loading.md))"
 msgstr ""
 
 #: src/reference/cli.md:353
