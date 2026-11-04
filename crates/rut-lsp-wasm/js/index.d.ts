@@ -208,6 +208,27 @@ export interface SrczipExtracted extends BundleExtracted {
   embedded: Array<{ path: string; src: string }>;
 }
 
+/**
+ * one url dep the read-only walk refused to mount — the informational
+ * hint row a host surfaces (the `rut install` recipe itself already
+ * rode the env's notify lane, once per reason). `sha256` is `null`
+ * for an unpinned row: the honest refusal, never a guessed pin.
+ */
+export interface MissingDep {
+  url: string;
+  sha256: string | null;
+  cache_path: string;
+}
+
+/**
+ * `resolveDeps`'s answer — the walk's refused url rows. Mounted rows
+ * carry no row: the defs store they mounted into IS the answer,
+ * exactly the world an `addDef`-indexed file leaves.
+ */
+export interface WalkOut {
+  missing: MissingDep[];
+}
+
 // ---- the binding ----
 
 /**
@@ -301,6 +322,23 @@ export class RutLsp {
 
   /** unpack one SOURCE ZIP without indexing — the source transport's twin */
   extractSrczip(bytes: Uint8Array): Promise<SrczipExtracted | Envelope>;
+
+  /**
+   * re-inject the read-only host environment (replace-on-reinject —
+   * the same lane `load`'s optional `env` rides, for hosts that swap
+   * the capability after boot)
+   */
+  setEnv(env: HostEnv): Promise<void>;
+
+  /**
+   * the READ-ONLY dep walk: one call, the whole walked world — each
+   * root's `rut.lock` feeds the pin ledger, its `rut.jsonc` walks
+   * (entries, mod trees, path rows recursing, url rows mounting from
+   * the global dep store when its meta vouches the pin). The answer
+   * carries the refused url rows (`missing`); the mounted world lands
+   * in the core's defs store, exactly like `addDef`-indexed files.
+   */
+  resolveDeps(roots: string[]): Promise<WalkOut>;
 }
 
 /** one decoded semantic token — absolute 0-based LSP coordinates */
@@ -314,3 +352,35 @@ export interface DecodedToken {
 
 /** decode the flat `SemanticTokens.data` wire array */
 export function decodeTokens(data: number[]): DecodedToken[];
+
+// ---- the dep engine shell ----
+
+/** the dep engine's construction options */
+export interface DepEngineOptions {
+  /**
+   * the read-only host environment — re-injected before each run
+   * (replace-on-reinject). Optional: a core that carried one at
+   * `load` keeps it.
+   */
+  env?: HostEnv;
+  /** the workspace roots — a host callback, re-read at every run */
+  roots: () => string[];
+  /** the coalescing window in milliseconds (default 200) */
+  debounceMs?: number;
+}
+
+/** the dep engine handle — stir to schedule, dispose to retire */
+export interface DepEngine {
+  /** arm (or re-arm) the debounce; a stir mid-run coalesces into ONE rerun */
+  stir(): void;
+  /** retire the engine — pending timers clear, later stirs are no-ops */
+  dispose(): void;
+}
+
+/**
+ * The dep engine shell: debounce + one-run-in-flight +
+ * rerun-once-if-stirred over `resolveDeps` (the extension's walk
+ * scheduler law, moved into the crate face — `setTimeout` + `Promise`
+ * only, environment-neutral).
+ */
+export function depEngine(rut: RutLsp, opts: DepEngineOptions): DepEngine;

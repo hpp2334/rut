@@ -23,9 +23,9 @@
 //! joins with `/` (`std::path` never enters — the host normalizes).
 //!
 //! [`JsEnv`] is constructed only through the `set_env` bridge; native
-//! tests never build one (there is no JS to reach — the interop
-//! compiles natively, unused). This phase STORES the capability: no
-//! entry reads it yet (the walk is the next phase).
+//! tests never build one (they hand the loop their own `Io` through
+//! the native `set_env_io` seam). The dep walk (`crate::walk`) is the
+//! capability's one reader.
 
 use wasm_bindgen::{JsCast, JsValue};
 
@@ -87,7 +87,11 @@ impl Io for JsEnv {
         if v.is_null() || v.is_undefined() {
             return None; // the miss shape — null, never a throw
         }
-        Some(js_sys::Uint8Array::from(v).to_vec())
+        // a non-Uint8Array return degrades to the miss shape, never a
+        // panic: the cast is CHECKED (`dyn_ref`), not assumed — reads
+        // begin at the dep walk, so a hostile/sloppy host object must
+        // not take the core down
+        v.dyn_ref::<js_sys::Uint8Array>().map(|a| a.to_vec())
     }
 
     fn read_dir(&self, path: &str) -> Option<Vec<String>> {
@@ -96,18 +100,18 @@ impl Io for JsEnv {
         if v.is_null() || v.is_undefined() {
             return None; // no dir
         }
-        Some(
-            js_sys::Array::from(&v)
-                .iter()
-                .filter_map(|e| e.as_string())
-                .collect(),
-        )
+        // same law: a non-Array return degrades to no-dir, and a
+        // non-string entry skips (never a guessed name)
+        let arr = v.dyn_ref::<js_sys::Array>()?;
+        Some(arr.iter().filter_map(|e| e.as_string()).collect())
     }
 
     fn is_dir(&self, path: &str) -> bool {
         let Some(f) = self.is_dir.as_ref() else {
             return false;
         };
+        // a non-boolean return degrades to false — the total-function
+        // law every method of this impl keeps
         f.call1(&self.obj, &JsValue::from_str(path))
             .ok()
             .and_then(|v| v.as_bool())

@@ -169,6 +169,42 @@ pub struct ExtractSrczip {
     pub embedded: Vec<Embedded>,
 }
 
+/// one url dep the read-only walk refused to mount — the
+/// informational hint row a host surfaces (the recipe itself —
+/// `rut install` — already rode the notify lane, once per reason).
+/// `sha256` is `null` for an unpinned row: the honest refusal, never
+/// a guessed pin.
+#[derive(Serialize)]
+pub struct MissingDep {
+    pub url: String,
+    pub sha256: Option<String>,
+    pub cache_path: String,
+}
+
+/// `resolve_deps`'s answer — the walk's refused url rows. Mounted
+/// rows carry no row: the defs store they mounted into IS the answer,
+/// exactly the world a host-indexed dep leaves.
+#[derive(Serialize)]
+pub struct WalkOut {
+    pub missing: Vec<MissingDep>,
+}
+
+impl From<&crate::walk::WalkOut> for WalkOut {
+    fn from(out: &crate::walk::WalkOut) -> WalkOut {
+        WalkOut {
+            missing: out
+                .missing
+                .iter()
+                .map(|m| MissingDep {
+                    url: m.url.clone(),
+                    sha256: m.sha256.clone(),
+                    cache_path: m.cache_path.clone(),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// the entry-source mode as the envelope spells it (the variant name —
 /// the manifest's entry key decided it, `entry.type` → Decl).
 pub fn mode_str(m: rut_parser::Mode) -> &'static str {

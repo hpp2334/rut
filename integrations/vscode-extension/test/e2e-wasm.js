@@ -118,7 +118,7 @@ async function main() {
     }
     // the extension's own binding (the wasm crate's js face, bundled by
     // src/wasm.ts), not a copy
-    const { RutLsp } = require(BINDING_PATH);
+    const { RutLsp, depEngine } = require(BINDING_PATH);
     const rut = await RutLsp.load(fs.readFileSync(WASM_PATH));
     const bad = [];
     let smokes = 0;
@@ -2356,6 +2356,181 @@ async function main() {
         smokes++;
     }
 
+    // ---- dep-walk-into-crate phase 3: the READ-ONLY WALK through the
+    // injected env — a fake env (pure JS maps) over a FIXTURE STORE
+    // (meta.json + the unpack/ tree, keyed at the address rut-driver
+    // derives; the wasm target's `$RUT_HOME` fallback is `.rut`). A
+    // store hit mounts through the ordinary dir lanes — definitions
+    // land in real store paths, the embedded dep group included — and
+    // a missing dep answers the missing row plus exactly ONE hint
+    // (never fetched; the walk has no write lane at all). ----
+    {
+        const enc = new TextEncoder();
+        const PIN = 'abcdef0123456789'.repeat(4);
+        const GONE_PIN = '0123456789abcdef'.repeat(4);
+        const KIT_URL = 'https://cdn.jsdelivr.net/gh/example/rut@std-v1/dist/std/kit.zip';
+        const GONE_URL = 'https://cdn.jsdelivr.net/gh/example/rut@std-v1/dist/std/gone.zip';
+        const KIT_DIR = `.rut/deps/kit@${PIN.slice(0, 16)}`;
+        const files = new Map(
+            Object.entries({
+                // the project root: a lock pinning both urls, a
+                // manifest depending on both, the root module
+                '/ws/walkproj/rut.lock': JSON.stringify(
+                    {
+                        format: 'rutlock',
+                        format_version: 1,
+                        deps: [
+                            { pkg: 'kit', url: KIT_URL, sha256: PIN },
+                            { pkg: 'gone', url: GONE_URL, sha256: GONE_PIN },
+                        ],
+                    },
+                    null,
+                    2,
+                ),
+                '/ws/walkproj/rut.jsonc': JSON.stringify({
+                    name: 'walkapp',
+                    deps: { kit: { url: KIT_URL }, gone: { url: GONE_URL } },
+                }),
+                '/ws/walkproj/src/mod.rut': 'fn main() -> nil {\n}\n',
+                // the FIXTURE STORE: one pinned dep (meta vouches the
+                // lock pin) with a mod child and an embedded group
+                [`${KIT_DIR}/meta.json`]: JSON.stringify({
+                    name: 'kit',
+                    url: KIT_URL,
+                    sha256: PIN,
+                    format: 'zip',
+                    format_version: 1,
+                }),
+                [`${KIT_DIR}/unpack/rut.jsonc`]: JSON.stringify({
+                    name: 'kit',
+                    deps: { kitcore: { path: 'deps/kitcore@feed0123456789abc' } },
+                }),
+                [`${KIT_DIR}/unpack/src/mod.rut`]:
+                    'pub mod extra;\npub class KitBox {\n    n: i32;\n}\n',
+                [`${KIT_DIR}/unpack/src/extra/mod.rut`]:
+                    'pub fn kit_extra() -> i32 {\n    return 7;\n}\n',
+                [`${KIT_DIR}/unpack/deps/kitcore@feed0123456789abc/rut.jsonc`]: JSON.stringify({
+                    name: 'kitcore',
+                }),
+                [`${KIT_DIR}/unpack/deps/kitcore@feed0123456789abc/src/mod.rut`]:
+                    'pub fn core_tag() -> i32 {\n    return 9;\n}\n',
+            }),
+        );
+        const reads = [];
+        const notes = [];
+        const fakeEnv = {
+            read(p) {
+                reads.push(p);
+                const src = files.get(p);
+                return src === undefined ? null : enc.encode(src);
+            },
+            readDir(p) {
+                const names = [...files.keys()]
+                    .filter((k) => k.startsWith(`${p}/`))
+                    .map((k) => k.slice(p.length + 1).split('/')[0]);
+                return names.length ? [...new Set(names)] : null;
+            },
+            isDir(p) {
+                return [...files.keys()].some((k) => k.startsWith(`${p}/`));
+            },
+            notify(message, isError) {
+                notes.push({ message, isError });
+            },
+        };
+        const rut = await RutLsp.load(fs.readFileSync(WASM_PATH), fakeEnv);
+        const out = await rut.resolveDeps(['/ws/walkproj']);
+        assert.ok(!out.error, `resolve answer: ${JSON.stringify(out)}`);
+        // kit mounted from the store; gone refused with its row
+        assert.strictEqual(out.missing.length, 1, JSON.stringify(out));
+        assert.strictEqual(out.missing[0].url, GONE_URL);
+        assert.strictEqual(out.missing[0].sha256, GONE_PIN);
+        assert.ok(out.missing[0].cache_path.startsWith('.rut/cache/'));
+        assert.deepStrictEqual(
+            Object.keys(out.missing[0]).sort(),
+            ['cache_path', 'sha256', 'url'],
+            'the missing row carries exactly the declared keys',
+        );
+        // exactly ONE hint — the missing dep's `rut install` recipe —
+        // and the re-resolve never repeats it (the once-per-reason
+        // gate lives in the core) while the row keeps answering
+        const out2 = await rut.resolveDeps(['/ws/walkproj']);
+        assert.strictEqual(out2.missing.length, 1, JSON.stringify(out2));
+        assert.strictEqual(notes.length, 1, JSON.stringify(notes));
+        assert.ok(notes[0].message.includes('rut install'), notes[0].message);
+        assert.ok(notes[0].message.includes('gone'), notes[0].message);
+        assert.strictEqual(notes[0].isError, true);
+        // the walk read ONLY through the env, only the two worlds it
+        // was given (the project root and the derived store address)
+        assert.ok(reads.length > 0, 'the walk read through the env');
+        assert.ok(
+            reads.every((p) => p.startsWith('/ws/walkproj/') || p.startsWith('.rut/deps/')),
+            `unexpected read: ${reads.find((p) => !p.startsWith('/ws/walkproj/') && !p.startsWith('.rut/deps/'))}`,
+        );
+        // definitions land in REAL store paths: the pkg root, the mod
+        // child at its own path, and the embedded group through the
+        // pkg's own path row
+        const doc =
+            'use kit::{ KitBox };\n' +
+            'use kit::extra::{ kit_extra };\n' +
+            'use kitcore::{ core_tag };\n' +
+            'fn main() -> nil {\n}\n';
+        const wuri = 'file:///ws/e2e-walk.rut';
+        const wa = await rut.analyze(wuri, doc);
+        assert.strictEqual(wa.diags.length, 0, JSON.stringify(wa.diags));
+        const expectStoreLeaf = async (needle, tail) => {
+            const locs = await rut.definition(wuri, ...posOf(doc, needle));
+            assert.strictEqual(
+                locs.length,
+                1,
+                `${needle}: ${JSON.stringify(locs)} (want ${KIT_DIR}/${tail})`,
+            );
+            assert.ok(locs[0].uri === `${KIT_DIR}/${tail}`, `${needle} landed at ${locs[0].uri}`);
+        };
+        await expectStoreLeaf('KitBox', 'unpack/src/mod.rut');
+        await expectStoreLeaf('kit_extra', 'unpack/src/extra/mod.rut');
+        await expectStoreLeaf('core_tag', 'unpack/deps/kitcore@feed0123456789abc/src/mod.rut');
+        smokes++;
+
+        // ---- the engine shell through the shipped wasm: debounce
+        // coalesces, a mid-run stir reruns ONCE, dispose retires ----
+        {
+            let runs = 0;
+            let stirredMidRun = false;
+            let engine;
+            const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+            engine = depEngine(rut, {
+                env: fakeEnv,
+                roots: () => {
+                    runs++;
+                    if (runs === 1 && !stirredMidRun) {
+                        stirredMidRun = true;
+                        engine.stir(); // lands while run 1 is in flight
+                    }
+                    return ['/ws/walkproj'];
+                },
+                debounceMs: 15,
+            });
+            engine.stir();
+            engine.stir();
+            engine.stir(); // the window coalesces: ONE run leaves it
+            await wait(140);
+            assert.strictEqual(
+                runs,
+                2,
+                `3 stirs coalesce to 1 run + the mid-run stir reruns exactly once (got ${runs})`,
+            );
+            // quiescent again: a fresh stir runs; dispose then kills it
+            engine.stir();
+            await wait(90);
+            assert.strictEqual(runs, 3, 'a post-quiescence stir runs');
+            engine.dispose();
+            engine.stir();
+            await wait(60);
+            assert.strictEqual(runs, 3, 'a disposed engine never runs again');
+            smokes++;
+        }
+    }
+
     // ---- the ABI wire shape (the .d.ts contract's runtime half) ----
     // The declarations live in the wasm package
     // (crates/rut-lsp-wasm/pkg/index.d.ts, assembled from the crate's js/).
@@ -2535,6 +2710,19 @@ async function main() {
             eqKeys(zip.files[0], ['path', 'src', 'mode', 'mod_path'], 'srczip file');
             if (zip.embedded.length > 0) eqKeys(zip.embedded[0], ['path', 'src'], 'embedded group');
         }
+
+        // the dep walk's envelope — the env-less core above answers the
+        // loud error envelope; an env-carrying core answers WalkOut's
+        // exact key set (a roots-everywhere-miss world: no rows, but
+        // the shape is the shape)
+        eqKeys(await core.resolveDeps(['/ws/none']), ['error'], 'resolve no-env');
+        const walkCore = await RutLsp.load(fs.readFileSync(WASM_PATH), {
+            read: () => null,
+            readDir: () => null,
+            isDir: () => false,
+            notify: () => {},
+        });
+        eqKeys(await walkCore.resolveDeps(['/ws/none']), ['missing'], 'walk out');
         smokes++;
     }
 
@@ -2555,7 +2743,8 @@ async function main() {
             `extract-deps-leaf+head/path-dep-segments/` +
             `eof-member+locals/` +
             `complete-in-doc-sync/check-lane-mismatch+missing-field/` +
-            `lock-feed-unpinned+pinned+extract-leaf/env-injected+env-less/wire-shape) ` +
+            `lock-feed-unpinned+pinned+extract-leaf/env-injected+env-less/` +
+            `dep-walk-store-mount+missing-row+once-hint/dep-engine-debounce+rerun+dispose/wire-shape) ` +
             `through bin/rut-lsp.wasm`,
     );
 }

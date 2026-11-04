@@ -23,9 +23,18 @@
 //!   set_env(env)                               hand the core the READ-ONLY
 //!                                              host environment (`HostEnv`:
 //!                                              read/readDir/isDir/notify,
-//!                                              see `env`) — stored for the
-//!                                              dep walk; no entry reads it
-//!                                              yet
+//!                                              see `env`) — the dep walk's
+//!                                              capability
+//!   resolve_deps(roots_json) -> String         the READ-ONLY dep walk over
+//!                                              the injected env: one JSON
+//!                                              array of workspace roots in,
+//!                                              the walk's answer (`WalkOut`:
+//!                                              the url rows it refused —
+//!                                              informational rows for
+//!                                              hosts) out; every mounted dep
+//!                                              lands in the SAME defs store
+//!                                              the add_def lanes write (see
+//!                                              `walk`)
 //!   legend() -> String                         token-type names, JSON array
 //!   analyze(uri, src) -> String                store the doc + return
 //!                                              {diags, tokens, symbols}
@@ -109,11 +118,13 @@
 //! total, and no caller ever borrows the core.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::rc::Rc;
 
 use crate::hover::DefIndex;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod event_loop;
+mod walk;
 mod wire;
 
 // ---- the language core — the queries and the values ----
@@ -156,6 +167,11 @@ struct Core {
     /// compiler's D5 error). Union-accumulating: multi-folder walks
     /// and re-walks re-add the same names, never shrink the world.
     direct_deps: HashSet<String>,
+    /// the once-per-reason hint gate — every user-facing hint the
+    /// walk and the ledger feeds emit keys here, so a reason names
+    /// itself exactly once per session (never spam, however often the
+    /// world re-walks). The extension's `hintOnce` map, moved in.
+    hints_shown: HashSet<String>,
 }
 
 impl Core {
@@ -169,6 +185,99 @@ impl Core {
             defs: crate::std_surface::indexes(),
             lock_pins: BTreeMap::new(),
             direct_deps: HashSet::new(),
+            hints_shown: HashSet::new(),
+        }
+    }
+
+    // ---- the lanes the ABI handlers and the dep walk SHARE (the
+    // lifted handler bodies — one implementation, two doors: the
+    // message arms and [`walk`]'s read-only walk index through the
+    // same code, so a walked dep and a host-indexed dep can never
+    // drift) ----
+
+    /// [`event_loop::Msg::SetLock`]'s body: parse one `rut.lock` into
+    /// the url→pin ledger. Ok = the row count and the ledger standing;
+    /// Err = the ledger CLEARED (the honest unpinned refusal, never
+    /// half-parsed or stale pins) and the error for the caller to
+    /// surface.
+    pub(crate) fn set_lock_text(&mut self, text: &str) -> Result<usize, String> {
+        match crate::deps::lock_pins(text) {
+            Ok(pins) => {
+                let n = pins.len();
+                self.lock_pins = pins;
+                Ok(n)
+            }
+            Err(e) => {
+                self.lock_pins = BTreeMap::new();
+                Err(e)
+            }
+        }
+    }
+
+    /// [`event_loop::Msg::AddDefNamed`]'s body: index one dep source
+    /// file under its module NAME (replace-by-origin), the direct-dep
+    /// marker stamped from the set the way it is at this call.
+    pub(crate) fn add_def_named_at(&mut self, uri: &str, name: &str, src: &str) {
+        let mut idx =
+            crate::deps::index_dep(name, uri, src, crate::analysis::mode_of(uri), None, &[]);
+        idx.direct_dep = self.direct_deps.contains(name);
+        self.replace_by_origin(uri, idx);
+    }
+
+    /// [`event_loop::Msg::AddDefMod`]'s body: index one dep source
+    /// file at a MOD PATH (the pkg root `""`, a mounted child its
+    /// `<path>`), answering the parsed file's own `mod` declarations —
+    /// the walk's next hop (structure lives in the parse, never in
+    /// path munging).
+    pub(crate) fn add_def_mod_at(
+        &mut self,
+        uri: &str,
+        name: &str,
+        mod_path: &str,
+        src: &str,
+    ) -> Vec<wire::ModDecl> {
+        let mut idx = crate::deps::index_dep_mod(
+            name,
+            uri,
+            mod_path,
+            src,
+            crate::analysis::mode_of(uri),
+            None,
+            &[],
+        );
+        idx.direct_dep = self.direct_deps.contains(name);
+        let decls: Vec<wire::ModDecl> = idx
+            .mods
+            .iter()
+            .map(|m| wire::ModDecl {
+                name: m.name.clone(),
+                vis: if matches!(m.vis, rut_ast::ast::Vis::Pub) {
+                    "pub"
+                } else {
+                    "mod"
+                },
+            })
+            .collect();
+        self.replace_by_origin(uri, idx);
+        decls
+    }
+
+    /// the defs store's replace-by-origin law — one index per origin
+    /// uri, re-indexing replaces (the world stays idempotent under
+    /// re-walks).
+    fn replace_by_origin(&mut self, uri: &str, idx: crate::hover::DefIndex) {
+        match self.defs.iter().position(|d| d.origin == uri) {
+            Some(slot) => self.defs[slot] = idx,
+            None => self.defs.push(idx),
+        }
+    }
+
+    /// the once-per-reason hint gate: the first `key` notifies, every
+    /// later one is silent. All walk hints are error-flagged (the
+    /// extension's law for these lanes).
+    pub(crate) fn hint_once(&mut self, io: &dyn env::Io, key: &str, msg: &str) {
+        if self.hints_shown.insert(key.to_string()) {
+            io.notify(msg, true);
         }
     }
 
@@ -434,19 +543,42 @@ impl RutLsp {
     /// hand the core the READ-ONLY host environment — one object
     /// carrying `read` / `readDir` / `isDir` / `notify` (the JS face's
     /// `HostEnv`, `js/index.d.ts`). The four functions are cached off
-    /// the object at this call ([`env::JsEnv`]) and the loop STORES
-    /// the capability; no entry reads it yet (the dep walk's read-only
-    /// walk is the next phase), so the only behavior this lands is
-    /// that the capability is storable. A host that never calls it
-    /// keeps the env-less core, exactly today's shape (the demo
-    /// path). The await is ordering only.
+    /// the object at this call ([`env::JsEnv`]) and the loop stores
+    /// the capability; the dep walk ([`resolve_deps`](Self::resolve_deps))
+    /// reads through it and nothing else does. A host that never
+    /// calls it keeps the env-less core (the demo path), and its
+    /// `resolve_deps` answers the no-env error envelope — loud, never
+    /// a silent empty walk. Replace-on-reinject: a later call swaps
+    /// the capability. The await is ordering only.
     pub async fn set_env(&self, env: js_sys::Object) {
         let _ = self
             .rpc(|tx| event_loop::Msg::SetEnv {
-                env: crate::env::JsEnv::new(env),
+                env: Rc::new(crate::env::JsEnv::new(env)) as Rc<dyn crate::env::Io>,
                 tx,
             })
             .await;
+    }
+
+    /// the READ-ONLY dep walk (`walk` — the extension's manifest walk
+    /// moved into the crate): one JSON array of workspace-root paths
+    /// in, the walk's answer out. Per root: its `rut.lock` feeds the
+    /// pin ledger, its `rut.jsonc` walks — entries and mod trees index
+    /// through the SAME lanes `add_def_named` / `add_def_mod` run, path
+    /// rows recurse cycle-safe under the depth/file budgets, and url
+    /// rows mount from the global dep store (`$RUT_HOME/deps`, the
+    /// address rut-driver derives) when its `meta.json` vouches the
+    /// lock pin — never fetched, never written; a refused row answers
+    /// one `missing` row plus ONE hint per reason through the env's
+    /// notify lane. The answer is `{"missing": [...]}` (see
+    /// `wire::WalkOut`); the mounted world itself is the defs store's,
+    /// exactly as a host-indexed dep leaves it.
+    pub async fn resolve_deps(&self, roots_json: String) -> String {
+        let roots = match serde_json::from_str::<Vec<String>>(&roots_json) {
+            Ok(r) => r,
+            Err(e) => return json_envelope(wire::Error::new(e.to_string())),
+        };
+        self.text(move |tx| event_loop::Msg::ResolveDeps { roots, tx })
+            .await
     }
 
     /// index one dep source file under its module NAME — `deps::index_dep`
@@ -560,6 +692,15 @@ impl RutLsp {
             .spawn_local(event_loop::run(Core::boot(), rx))
             .expect("the loop parks on the fresh pool");
         (RutLsp { tx }, pool)
+    }
+
+    /// the native tests' env seam: hand the loop ANY [`env::Io`] (the
+    /// recording fs wrapper the walk tests drive) through the same
+    /// door `set_env` posts its `JsEnv` — one capability lane, two
+    /// constructors. cfg-gated like `spawn_native`: the wasm face
+    /// builds its `JsEnv` at the bridge, native tests have no JS.
+    pub async fn set_env_io(&self, io: Rc<dyn env::Io>) {
+        let _ = self.rpc(|tx| event_loop::Msg::SetEnv { env: io, tx }).await;
     }
 }
 

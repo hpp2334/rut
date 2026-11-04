@@ -26,7 +26,6 @@
 //! keyword, so the module carries the same content under a spellable
 //! name.
 
-use std::collections::BTreeMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::rc::Rc;
 use std::str::FromStr;
@@ -37,7 +36,7 @@ use futures::StreamExt;
 use ls_types::Uri;
 
 use crate::wire;
-use crate::{env::JsEnv, json_envelope, locations_envelope, Core};
+use crate::{json_envelope, locations_envelope, Core};
 
 /// one ABI call in flight. The `tx` rides IN the message — the handler
 /// replies on it, and the field set is owned data (the bridge copies the
@@ -125,12 +124,19 @@ pub enum Msg {
         tx: Tx,
     },
     /// the injected READ-ONLY host environment (the dep walk's
-    /// capability — `crate::env`). This phase's whole change: the loop
-    /// STORES it; no handler reads it yet (the walk is the next
-    /// phase). Carried by value; the handler wraps it in the `Rc` the
-    /// loop keeps.
+    /// capability — `crate::env`). Carried as the [`env::Io`] trait
+    /// object: the wasm bridge wraps its `JsEnv` in the `Rc` at
+    /// `set_env`, native tests hand over their own `Io` — one
+    /// capability lane, two constructors.
     SetEnv {
-        env: JsEnv,
+        env: Rc<dyn crate::env::Io>,
+        tx: Tx,
+    },
+    /// the read-only dep walk (`crate::walk`): the roots walk NOW, in
+    /// one fast handler turn — no walk task, no awaits. The reply is
+    /// the `WalkOut` envelope.
+    ResolveDeps {
+        roots: Vec<String>,
         tx: Tx,
     },
     AddDefNamed {
@@ -179,10 +185,10 @@ pub enum Reply {
 /// the loop's body — own the core exclusively, answer one message at a
 /// time, never die on a bad handler. The injected read-only host env
 /// (`set_env`) lives beside the core: `None` until the host hands one
-/// over, stored (not read) this phase.
+/// over, read only by the dep walk.
 pub(crate) async fn run(core: Core, mut inbox: UnboundedReceiver<Msg>) {
     let mut core = core;
-    let mut env: Option<Rc<JsEnv>> = None;
+    let mut env: Option<Rc<dyn crate::env::Io>> = None;
     while let Some(msg) = inbox.next().await {
         // panic isolation: one bad handler drops ONE reply channel (the
         // bridge answers its error envelope); the loop never dies. The
@@ -192,10 +198,9 @@ pub(crate) async fn run(core: Core, mut inbox: UnboundedReceiver<Msg>) {
     }
 }
 
-/// the entries' bodies — today's `RutLsp` methods, moved verbatim into
-/// sync arms over `&mut Core` (and the stored env, which only the dep
-/// walk's phase will read). No sender, no await.
-fn handle(core: &mut Core, env: &mut Option<Rc<JsEnv>>, msg: Msg) {
+/// the entries' bodies — sync arms over `&mut Core` (and the stored
+/// env, which only the dep walk reads). No sender, no await.
+fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
     match msg {
         Msg::Legend { tx } => {
             let _ = tx.send(Reply::Text(json_envelope(serde_json::json!(
@@ -376,16 +381,9 @@ fn handle(core: &mut Core, env: &mut Option<Rc<JsEnv>>, msg: Msg) {
             let _ = tx.send(Reply::Text(answer));
         }
         Msg::SetLock { text, tx } => {
-            let answer = match crate::deps::lock_pins(&text) {
-                Ok(pins) => {
-                    let n = pins.len();
-                    core.lock_pins = pins;
-                    json_envelope(wire::Pins { pins: n })
-                }
-                Err(e) => {
-                    core.lock_pins = BTreeMap::new();
-                    json_envelope(wire::Error::new(e))
-                }
+            let answer = match core.set_lock_text(&text) {
+                Ok(n) => json_envelope(wire::Pins { pins: n }),
+                Err(e) => json_envelope(wire::Error::new(e)),
             };
             let _ = tx.send(Reply::Text(answer));
         }
@@ -405,26 +403,32 @@ fn handle(core: &mut Core, env: &mut Option<Rc<JsEnv>>, msg: Msg) {
         }
         Msg::SetEnv { env: e, tx } => {
             // the capability STORE — replace-on-reinject, exactly the
-            // ledger setters' shape. No handler reads it this phase;
-            // the Rc hands the walk (the next phase) a cheap clone of
-            // the same cached functions.
-            *env = Some(Rc::new(e));
+            // ledger setters' shape. The walk (ResolveDeps below) is
+            // the one reader; the Rc hands it the same cached
+            // functions the host injected.
+            *env = Some(e);
             let _ = tx.send(Reply::Done);
         }
+        Msg::ResolveDeps { roots, tx } => {
+            // the read-only walk: one fast handler turn over the
+            // stored env — no walk task, no awaits. An env-less core
+            // answers the loud error envelope, never a silent empty
+            // walk (the demo path never calls this entry).
+            let answer = match env.as_ref() {
+                None => json_envelope(wire::Error::new(
+                    "no host environment — the dep walk reads through the injected env \
+                     (load(bytes, env) / set_env)",
+                )),
+                Some(io) => json_envelope(wire::WalkOut::from(&crate::walk::resolve(
+                    core,
+                    io.as_ref(),
+                    &roots,
+                ))),
+            };
+            let _ = tx.send(Reply::Text(answer));
+        }
         Msg::AddDefNamed { uri, name, src, tx } => {
-            let mut idx = crate::deps::index_dep(
-                &name,
-                &uri,
-                &src,
-                crate::analysis::mode_of(&uri),
-                None,
-                &[],
-            );
-            idx.direct_dep = core.direct_deps.contains(&name);
-            match core.defs.iter().position(|d| d.origin == uri) {
-                Some(slot) => core.defs[slot] = idx,
-                None => core.defs.push(idx),
-            }
+            core.add_def_named_at(&uri, &name, &src);
             let _ = tx.send(Reply::Done);
         }
         Msg::AddDefMod {
@@ -434,32 +438,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<JsEnv>>, msg: Msg) {
             src,
             tx,
         } => {
-            let mut idx = crate::deps::index_dep_mod(
-                &name,
-                &uri,
-                &mod_path,
-                &src,
-                crate::analysis::mode_of(&uri),
-                None,
-                &[],
-            );
-            idx.direct_dep = core.direct_deps.contains(&name);
-            let decls: Vec<wire::ModDecl> = idx
-                .mods
-                .iter()
-                .map(|m| wire::ModDecl {
-                    name: m.name.clone(),
-                    vis: if matches!(m.vis, rut_ast::ast::Vis::Pub) {
-                        "pub"
-                    } else {
-                        "mod"
-                    },
-                })
-                .collect();
-            match core.defs.iter().position(|d| d.origin == uri) {
-                Some(slot) => core.defs[slot] = idx,
-                None => core.defs.push(idx),
-            }
+            let decls = core.add_def_mod_at(&uri, &name, &mod_path, &src);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
         }
         Msg::AddBundle { bytes, tx } => {
