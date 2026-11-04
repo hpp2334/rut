@@ -58,14 +58,16 @@ export class RutLsp {
   }
 
   /** token-type names, in legend index order (the CSS map keys on
-   * these names, never on a hardcoded order) */
-  get legend(): string[] {
+   * these names, never on a hardcoded order). Async — the actor seam:
+   * every bridge call posts to the core's event loop and awaits its
+   * reply. */
+  get legend(): Promise<string[]> {
     return this.core.legend();
   }
 
   /** open / FULL-sync change: store the doc, get diags + tokens in the
-   * one response (the survey's call) */
-  analyze(uri: string, src: string): Analysis {
+   * one response (the survey's call) — async like every bridge */
+  async analyze(uri: string, src: string): Promise<Analysis> {
     return this.core.analyze(uri, src);
   }
 }

@@ -48,17 +48,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // the bytes are the shipped artifact — an invalid/missing file fails
     // init LOUDLY inside the binding, never a silent half-working state
     const rut = await RutLsp.load(bytes);
-    registerAll(context, rut);
+    await registerAll(context, rut);
 }
 
-function registerAll(context: vscode.ExtensionContext, rut: RutLsp): void {
+async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promise<void> {
     const subscriptions = context.subscriptions;
 
     // ---- pushed diagnostics (the wasm twin of publish_diagnostics) ----
     const diagnostics = vscode.languages.createDiagnosticCollection('rut');
     const pending = new Map<string, ReturnType<typeof setTimeout>>();
+    // fire-and-forget async: the bridge resolves through the loop; the
+    // publish lane never awaits it (VS Code's collection takes the result
+    // whenever it lands, LAST-WINS on the debounce)
     const publish = (doc: vscode.TextDocument): void => {
-        diagnostics.set(doc.uri, analyzeDoc(rut, doc).diags.map(toDiagnostic));
+        void analyzeDoc(rut, doc).then((a) => diagnostics.set(doc.uri, a.diags.map(toDiagnostic)));
     };
     const schedule = (doc: vscode.TextDocument): void => {
         if (doc.languageId !== 'rut') {
@@ -90,7 +93,7 @@ function registerAll(context: vscode.ExtensionContext, rut: RutLsp): void {
                 clearTimeout(timer);
                 pending.delete(uri);
             }
-            rut.forget(uri);
+            void rut.forget(uri);
             diagnostics.delete(doc.uri);
         }),
     );
@@ -101,7 +104,8 @@ function registerAll(context: vscode.ExtensionContext, rut: RutLsp): void {
 
     // ---- the language features ----
     subscriptions.push(
-        registerSemanticTokens(rut),
+        // the legend rides one async bridge call before registration
+        await registerSemanticTokens(rut),
         registerDocumentSymbols(rut),
         registerHover(rut),
         registerCompletion(rut),

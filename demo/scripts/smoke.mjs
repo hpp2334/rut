@@ -378,8 +378,8 @@ if (!existsSync(LSP_ARTIFACT)) {
   const lsp = await api.RutLsp.boot(async () => exactAB(readFileSync(LSP_ARTIFACT)));
 
   // the legend: the demo's CSS map keys on these NAMES (index -> name
-  // -> tok-<name>), never on a hardcoded order
-  const legend = lsp.legend;
+  // -> tok-<name>), never on a hardcoded order — an async bridge now
+  const legend = await lsp.legend;
   check(
     legend.length === 16,
     'the legend carries the ABI-reported 16 token types',
@@ -394,7 +394,7 @@ if (!existsSync(LSP_ARTIFACT)) {
   // shipped artifact and the language drift), applied to the demo
   const analyses = new Map();
   for (const c of all) {
-    const a = lsp.analyze(`file:///smoke/${c.id}.rut`, c.source);
+    const a = await lsp.analyze(`file:///smoke/${c.id}.rut`, c.source);
     analyses.set(c.id, a);
     check(
       a.diags.length === 0,

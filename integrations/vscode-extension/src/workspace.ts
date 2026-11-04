@@ -17,7 +17,7 @@ export async function folderPkgName(rut: RutLsp, folder: vscode.Uri): Promise<st
     if (bytes === null) {
         return null;
     }
-    const table = rut.parseManifest(new TextDecoder().decode(bytes));
+    const table = await rut.parseManifest(new TextDecoder().decode(bytes));
     return isEnvelope(table) ? null : table.name;
 }
 
@@ -94,10 +94,10 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             const rel = path.relative(folder.fsPath, path.dirname(file.fsPath));
             const modPath = stripSrcShell(rel);
             if (modPath === null) {
-                rut.addDef(file.toString(), dec.decode(bytes));
+                await rut.addDef(file.toString(), dec.decode(bytes));
                 continue;
             }
-            const stamped = rut.addDefMod(file.toString(), pkg, modPath, dec.decode(bytes));
+            const stamped = await rut.addDefMod(file.toString(), pkg, modPath, dec.decode(bytes));
             if (!isEnvelope(stamped) && stamped.decls.length > 0) {
                 frontier.push({
                     folder,
@@ -109,10 +109,9 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             }
             continue;
         }
-        rut.addDef(file.toString(), dec.decode(bytes));
+        await rut.addDef(file.toString(), dec.decode(bytes));
     }
-    // the declared children, breadth-first: each stamped edge probes
-    // `NAME.rut` beside the declaring file (BOTH spellings is the
+    // the declared children, breadth-first: each stamped edge probes    // `NAME.rut` beside the declaring file (BOTH spellings is the
     // loader's loud ambiguity — hinted once). A child stamps at (pkg,
     // child path) and its own decls enqueue — declarations are the
     // graph, bounded by the dep walk's file budget.
@@ -162,7 +161,12 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             const bytes = await vscode.workspace.fs.readFile(childUri);
             // addDefMod replaces per origin — a dir-form correction overrides
             // the path-shape stamp's bare-relative answer
-            const stamped = rut.addDefMod(childUri.toString(), pkg, childPath, dec.decode(bytes));
+            const stamped = await rut.addDefMod(
+                childUri.toString(),
+                pkg,
+                childPath,
+                dec.decode(bytes),
+            );
             budget--;
             if (!isEnvelope(stamped) && stamped.decls.length > 0) {
                 frontier.push({

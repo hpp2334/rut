@@ -1,8 +1,12 @@
 //! The wasm ABI's own gate — the envelopes and the session state the
 //! extension drives, asserted through the public `RutLsp` binding the
-//! same way the hosts call it (the crates' other tests cover the
-//! queries underneath).
+//! same way the hosts call it — async bridges over the loop, driven on
+//! a deterministic single-threaded `LocalPool` (`RutLsp::spawn_native`,
+//! the native half of the executor seam; the wasm parks the same loop
+//! on `spawn_local`). The crates' other tests cover the queries
+//! underneath.
 
+use futures::executor::LocalPool;
 use rut_lsp_wasm::RutLsp;
 
 const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
@@ -35,19 +39,23 @@ const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/st
 const POUCH_PIN: &str = "63ddd765287243ef45f23105471ff3eae5c5a0ac1d521a3d22636745fd5e72d8";
 
 /// hand a lock spelling `rows` to `set_lock`
-fn set_lock(lsp: &RutLsp, rows: Vec<rut_driver::LockRow>) -> serde_json::Value {
+fn set_lock(
+    lsp: &RutLsp,
+    pool: &mut LocalPool,
+    rows: Vec<rut_driver::LockRow>,
+) -> serde_json::Value {
     let text = rut_driver::render_lock(&rut_driver::LockFile::from_rows(rows));
-    take(lsp.set_lock(&text))
+    take(pool.run_until(lsp.set_lock(text.to_string())))
 }
 
 #[test]
 fn manifest_envelope_spells_the_dep_table() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // the lock WITHOUT a pouch row stands first: the url row answers
     // `sha256: null` — the unpinned refusal, never a guessed pin
-    let out = set_lock(&lsp, vec![]);
+    let out = set_lock(&lsp, &mut pool, vec![]);
     assert_eq!(out["pins"], 0, "{out}");
-    let out = take(lsp.parse_manifest(PLUGIN_SHAPE));
+    let out = take(pool.run_until(lsp.parse_manifest(PLUGIN_SHAPE.to_string())));
     assert_eq!(out["name"], "plugin");
     // the body rides the src/mod.rut convention (the entry keys are repealed)
     assert_eq!(
@@ -76,6 +84,7 @@ fn manifest_envelope_spells_the_dep_table() {
     // field, now LOCK-SOURCED (the manifest itself stays unpinned)
     let out = set_lock(
         &lsp,
+        &mut pool,
         vec![rut_driver::LockRow {
             pkg: "pouch".into(),
             url: POUCH_URL.into(),
@@ -83,7 +92,7 @@ fn manifest_envelope_spells_the_dep_table() {
         }],
     );
     assert_eq!(out["pins"], 1, "{out}");
-    let out = take(lsp.parse_manifest(PLUGIN_SHAPE));
+    let out = take(pool.run_until(lsp.parse_manifest(PLUGIN_SHAPE.to_string())));
     let pouch = out["deps"]
         .as_array()
         .unwrap()
@@ -99,17 +108,15 @@ fn manifest_envelope_spells_the_dep_table() {
 
 #[test]
 fn a_malformed_lock_is_the_error_envelope_and_stands_empty() {
-    let lsp = RutLsp::new();
-    let bad = take(lsp.set_lock(
-        "{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}",
-    ));
+    let (lsp, mut pool) = RutLsp::spawn_native();
+    let bad = take(pool.run_until(lsp.set_lock("{\"format\": \"rutlock\", \"format_version\": 1, \"deps\": [{\"pkg\": \"p\", \"url\": \"https://x/p.rutbundle\", \"sha256\": \"nothex\"}]}".to_string())));
     assert!(
         bad["error"].as_str().unwrap().contains("64 hex digits"),
         "{bad}"
     );
     // the empty ledger stands: the url row answers null (the host
     // shows the unpinned refusal), never half-parsed pins
-    let out = take(lsp.parse_manifest(PLUGIN_SHAPE));
+    let out = take(pool.run_until(lsp.parse_manifest(PLUGIN_SHAPE.to_string())));
     let pouch = out["deps"]
         .as_array()
         .unwrap()
@@ -121,16 +128,16 @@ fn a_malformed_lock_is_the_error_envelope_and_stands_empty() {
 
 #[test]
 fn a_decl_entry_and_the_error_envelope() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     let src = r#"{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }"#;
-    let out = take(lsp.parse_manifest(src));
+    let out = take(pool.run_until(lsp.parse_manifest(src.to_string())));
     assert_eq!(
         out["entries"],
         serde_json::json!([{ "path": "src/surface.d.rut", "mode": "Decl" }]),
         "entry.type indexes in Decl mode"
     );
     // a malformed manifest is the error envelope — the host's hint
-    let bad = take(lsp.parse_manifest("{\"name\": six}"));
+    let bad = take(pool.run_until(lsp.parse_manifest("{\"name\": six}".to_string())));
     assert!(
         bad["error"].as_str().unwrap().starts_with("line 1: "),
         "{bad}"
@@ -139,7 +146,7 @@ fn a_decl_entry_and_the_error_envelope() {
 
 #[test]
 fn complete_in_answers_locals_and_members_at_the_end_of_buffer() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // plan3 phase 1 (A7): the doc ends EXACTLY at the incomplete
     // stmt — the parser ends the block's span at the EOF token, the
     // cursor sits ON `hi`, and before the scope extension the member
@@ -151,7 +158,7 @@ fn complete_in_answers_locals_and_members_at_the_end_of_buffer() {
     let last = doc.rfind('\n').map(|i| i + 1).unwrap_or(0);
     let line = doc[..last].matches('\n').count() as u32;
     let ch = (doc.len() - last) as u32;
-    let items = take(lsp.complete_in(uri, doc, line, ch));
+    let items = take(pool.run_until(lsp.complete_in(uri.to_string(), doc.to_string(), line, ch)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -176,7 +183,7 @@ fn complete_in_answers_locals_and_members_at_the_end_of_buffer() {
     let last = doc.rfind('\n').map(|i| i + 1).unwrap_or(0);
     let line = doc[..last].matches('\n').count() as u32;
     let ch = (doc.len() - last) as u32;
-    let items = take(lsp.complete_in(uri, doc, line, ch));
+    let items = take(pool.run_until(lsp.complete_in(uri.to_string(), doc.to_string(), line, ch)));
     let arr = items.as_array().unwrap();
     let labels: Vec<&str> = arr.iter().map(|i| i["label"].as_str().unwrap()).collect();
     assert!(
@@ -193,12 +200,12 @@ fn complete_in_answers_locals_and_members_at_the_end_of_buffer() {
 
 #[test]
 fn complete_in_answers_the_type_tier_at_an_annotation() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // A3 through the bindgen face: `let v: u⏐` — the primitive table
     // rides the prefix, the keyword table / fns / locals stay off
     let doc = "fn go() -> nil {\n    let v: u\n}\n";
     let uri = "file:///ws/type-tier.rut";
-    let items = take(lsp.complete_in(uri, doc, 1, 12));
+    let items = take(pool.run_until(lsp.complete_in(uri.to_string(), doc.to_string(), 1, 12)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -219,7 +226,7 @@ fn complete_in_answers_the_type_tier_at_an_annotation() {
     }
     // the bare colon boundary — the full tier, no keywords
     let doc = "fn go() -> nil {\n    let v: \n}\n";
-    let items = take(lsp.complete_in(uri, doc, 1, 11));
+    let items = take(pool.run_until(lsp.complete_in(uri.to_string(), doc.to_string(), 1, 11)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -238,22 +245,22 @@ fn complete_in_answers_the_type_tier_at_an_annotation() {
 
 #[test]
 fn the_bare_scope_gates_a_dep_until_used() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // A2 through the bindgen face: a named dep's fn is NOT a plain
     // bare item until the doc `use`s it — the only bare-doc offer
     // rides the import edit, and the direct-dep set gates the tier
     // a root manifest declaring ONLY the doc's own pkg — kitdep is
     // mounted but NOT direct (the transitive-only shape)
-    take(lsp.set_direct_deps("[\"myapp\"]"));
-    lsp.add_def_named(
-        "file:///ws/kitdep/lib.rut",
-        "kitdep",
-        "pub fn tag() -> i32 {\n    return 1;\n}\n",
-    );
+    take(pool.run_until(lsp.set_direct_deps("[\"myapp\"]".to_string())));
+    pool.run_until(lsp.add_def_named(
+        "file:///ws/kitdep/lib.rut".to_string(),
+        "kitdep".to_string(),
+        "pub fn tag() -> i32 {\n    return 1;\n}\n".to_string(),
+    ));
     let doc = "fn main() -> nil {\n}\n";
     let uri = "file:///ws/bare.rut";
-    take(lsp.analyze(uri, doc));
-    let items = take(lsp.complete(uri, 1, 0));
+    take(pool.run_until(lsp.analyze(uri.to_string(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 1, 0)));
     let arr = items.as_array().unwrap();
     assert!(
         arr.iter().all(|i| i["label"] != "tag"),
@@ -263,13 +270,13 @@ fn the_bare_scope_gates_a_dep_until_used() {
 
     // the direct-dep set gains kitdep (the root manifest's row):
     // the bare doc offers `tag` ONLY through the import edit …
-    take(lsp.set_direct_deps("[\"myapp\", \"kitdep\"]"));
-    lsp.add_def_named(
-        "file:///ws/kitdep/lib.rut",
-        "kitdep",
-        "pub fn tag() -> i32 {\n    return 1;\n}\n",
-    );
-    let items = take(lsp.complete(uri, 1, 0));
+    take(pool.run_until(lsp.set_direct_deps("[\"myapp\", \"kitdep\"]".to_string())));
+    pool.run_until(lsp.add_def_named(
+        "file:///ws/kitdep/lib.rut".to_string(),
+        "kitdep".to_string(),
+        "pub fn tag() -> i32 {\n    return 1;\n}\n".to_string(),
+    ));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 1, 0)));
     let arr = items.as_array().unwrap();
     let imp = arr
         .iter()
@@ -286,8 +293,8 @@ fn the_bare_scope_gates_a_dep_until_used() {
     // exactly one, with no edit riding
     let doc = "use kitdep::{ tag };\nfn main() -> nil {\n}\n";
     let uri = "file:///ws/bare-used.rut";
-    take(lsp.analyze(uri, doc));
-    let items = take(lsp.complete(uri, 1, 0));
+    take(pool.run_until(lsp.analyze(uri.to_string(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 1, 0)));
     let arr = items.as_array().unwrap();
     let hits: Vec<&serde_json::Value> = arr.iter().filter(|i| i["label"] == "tag").collect();
     assert_eq!(hits.len(), 1, "one `tag` item: {hits:?}");
@@ -300,7 +307,7 @@ fn the_bare_scope_gates_a_dep_until_used() {
 
 #[test]
 fn definition_on_the_mod_edge_names_the_child_file_top() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // the plan-C lane through the bindgen face: the root file is
     // BOTH a stamped index (its uri carries the (module, mod_path)
     // pair `doc_mods_of` reads) and the analyzed doc; the `helpers`
@@ -309,11 +316,21 @@ fn definition_on_the_mod_edge_names_the_child_file_top() {
     let child = "pub struct Slot {\n    n: i32;\n}\n";
     let ru = "file:///ws/edgemod/mod.rut";
     let cu = "file:///ws/edgemod/helpers/mod.rut";
-    take(lsp.add_def_mod(ru, "edgemod", "", root));
-    take(lsp.add_def_mod(cu, "edgemod", "helpers", child));
-    take(lsp.analyze(ru, root));
+    take(pool.run_until(lsp.add_def_mod(
+        ru.to_string(),
+        "edgemod".to_string(),
+        "".to_string(),
+        root.to_string(),
+    )));
+    take(pool.run_until(lsp.add_def_mod(
+        cu.to_string(),
+        "edgemod".to_string(),
+        "helpers".to_string(),
+        child.to_string(),
+    )));
+    take(pool.run_until(lsp.analyze(ru.to_string(), root.to_string())));
     // the edge ident starts at char 8 (`pub mod `)
-    let locs = take(lsp.definition(ru, 0, 8));
+    let locs = take(pool.run_until(lsp.definition(ru.to_string(), 0, 8)));
     let arr = locs.as_array().unwrap();
     assert_eq!(arr.len(), 1, "exactly one target: {locs}");
     assert!(
@@ -332,8 +349,8 @@ fn definition_on_the_mod_edge_names_the_child_file_top() {
     // an UNSTAMPED doc with the same text misses (the doc context
     // keys the lane — the scratch uri carries no stamp)
     let scratch = "file:///ws/edgemod-scratch.rut";
-    take(lsp.analyze(scratch, root));
-    let none = take(lsp.definition(scratch, 0, 8));
+    take(pool.run_until(lsp.analyze(scratch.to_string(), root.to_string())));
+    let none = take(pool.run_until(lsp.definition(scratch.to_string(), 0, 8)));
     assert!(
         none.as_array().unwrap().is_empty(),
         "unstamped miss: {none}"
@@ -342,21 +359,24 @@ fn definition_on_the_mod_edge_names_the_child_file_top() {
 
 #[test]
 fn add_def_named_feeds_the_use_path_tier() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // a DIFFERENT module than the mod-tree fixture below — each test
     // owns its own instance, but the fixture stays distinct so the
     // two tests' envelopes never read as one pkg
     // a dep source under its module NAME
-    lsp.add_def_named(
-        "file:///ws/toolkit/lib.rut",
-        "toolkit",
-        "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n",
+    pool.run_until(
+        lsp.add_def_named(
+            "file:///ws/toolkit/lib.rut".to_string(),
+            "toolkit".to_string(),
+            "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n"
+                .to_string(),
+        ),
     );
     let doc = "use toolkit::\nfn main() -> nil {\n}\n";
     let uri = "file:///ws/main.rut";
-    take(lsp.analyze(uri, doc));
+    take(pool.run_until(lsp.analyze(uri.to_string(), doc.to_string())));
     // `use toolkit::⏐` — the dep's public names
-    let items = take(lsp.complete(uri, 0, 13));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 0, 13)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -369,7 +389,7 @@ fn add_def_named_feeds_the_use_path_tier() {
     );
     assert!(labels.contains(&"tag"), "the dep fn completes: {labels:?}");
     // `use ⏐` — the module-name tier sees the named index
-    let mods = take(lsp.complete(uri, 0, 4));
+    let mods = take(pool.run_until(lsp.complete(uri.to_string(), 0, 4)));
     let names: Vec<&str> = mods
         .as_array()
         .unwrap()
@@ -384,7 +404,7 @@ fn add_def_named_feeds_the_use_path_tier() {
 
 #[test]
 fn complete_in_syncs_the_doc_and_the_dot_guard_holds() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // ctor inference rides the embedded ink surface: `Logger("h")`
     // types the binding, `log.` lists the impl methods. The stored
     // doc is STALE on purpose (the tail still short the dot — the
@@ -393,8 +413,8 @@ fn complete_in_syncs_the_doc_and_the_dot_guard_holds() {
     let stale = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log\n}\n";
     let fresh = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log.\n}\n";
     let uri = "file:///ws/sync.rut";
-    take(lsp.analyze(uri, stale));
-    let items = take(lsp.complete_in(uri, fresh, 2, 8));
+    take(pool.run_until(lsp.analyze(uri.to_string(), stale.to_string())));
+    let items = take(pool.run_until(lsp.complete_in(uri.to_string(), fresh.to_string(), 2, 8)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -417,18 +437,18 @@ fn complete_in_syncs_the_doc_and_the_dot_guard_holds() {
     // token before the dot is a `)`) answers EMPTY, never the bare
     // keyword/host-fn dump
     let guarded = "fn go() -> nil {\n    let x = probe().\n}\n";
-    let none = take(lsp.complete_in(uri, guarded, 1, 20));
+    let none = take(pool.run_until(lsp.complete_in(uri.to_string(), guarded.to_string(), 1, 20)));
     assert!(none.as_array().unwrap().is_empty(), "{none}");
 }
 
 #[test]
 fn add_bundle_indexes_the_pouch_surface() {
-    let lsp = RutLsp::new();
-    let out = take(lsp.add_bundle(POUCH_BUNDLE));
+    let (lsp, mut pool) = RutLsp::spawn_native();
+    let out = take(pool.run_until(lsp.add_bundle(POUCH_BUNDLE.to_vec())));
     assert_eq!(out["module"], "pouch");
     assert_eq!(out["files"], serde_json::json!(["mod.d.rut"]));
     // a corrupt archive is the error envelope, never silent state
-    let err = take(lsp.add_bundle(b"definitely not a zip"));
+    let err = take(pool.run_until(lsp.add_bundle(b"definitely not a zip".to_vec())));
     assert!(
         err["error"].as_str().unwrap().contains("not a zip"),
         "{err}"
@@ -438,8 +458,8 @@ fn add_bundle_indexes_the_pouch_surface() {
     // indexes — the std surface's true source path AND the bundle's
     let doc = "use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec::new();\n    v.push(1);\n}\n";
     let uri = "file:///ws/uses-pouch.rut";
-    take(lsp.analyze(uri, doc));
-    let locs = take(lsp.definition(uri, 0, 13)); // the use-line `Vec`
+    take(pool.run_until(lsp.analyze(uri.to_string(), doc.to_string())));
+    let locs = take(pool.run_until(lsp.definition(uri.to_string(), 0, 13))); // the use-line `Vec`
     let uris: Vec<&str> = locs
         .as_array()
         .unwrap()
@@ -452,7 +472,7 @@ fn add_bundle_indexes_the_pouch_surface() {
     );
     // and the member surface hovers through the named module
     let push_ch = doc.lines().nth(3).unwrap().find("push").unwrap() as u32;
-    let h = take(lsp.hover(uri, 3, push_ch));
+    let h = take(pool.run_until(lsp.hover(uri.to_string(), 3, push_ch)));
     assert!(
         h["contents"]["value"].as_str().unwrap().contains("push"),
         "{h}"
@@ -468,11 +488,16 @@ fn add_bundle_indexes_the_pouch_surface() {
 /// the corpus lock's foundation.
 #[test]
 fn analyze_runs_the_checker_over_a_stamped_chain() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // the dep: one mod-tree file mounted under its module NAME
     let dep_src = "pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n";
     let dep_uri = "file:///ws/chk/dep/mod.rut";
-    let stamped = take(lsp.add_def_mod(dep_uri, "chkdep", "", dep_src));
+    let stamped = take(pool.run_until(lsp.add_def_mod(
+        dep_uri.to_string(),
+        "chkdep".to_string(),
+        "".to_string(),
+        dep_src.to_string(),
+    )));
     assert!(
         stamped["decls"].as_array().unwrap().is_empty(),
         "{}",
@@ -482,7 +507,12 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
     // workspace indexer stamps it
     let doc = "use chkdep::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n    let t = Task { title: \"x\", completed: false };\n}\n";
     let app_uri = "file:///ws/chk/app/mod.rut";
-    let stamped = take(lsp.add_def_mod(app_uri, "chkapp", "", doc));
+    let stamped = take(pool.run_until(lsp.add_def_mod(
+        app_uri.to_string(),
+        "chkapp".to_string(),
+        "".to_string(),
+        doc.to_string(),
+    )));
     assert!(
         stamped["decls"].as_array().unwrap().is_empty(),
         "{}",
@@ -491,7 +521,7 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
 
     // the analyze lane returns the MERGED diags: both checker sites,
     // `source: "rut"`, each on its own line
-    let a = take(lsp.analyze(app_uri, doc));
+    let a = take(pool.run_until(lsp.analyze(app_uri.to_string(), doc.to_string())));
     let diags = a["diags"].as_array().unwrap();
     let mismatch = diags
         .iter()
@@ -520,7 +550,7 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
     // the parse-only fallback: the SAME text at an UNSTAMPED uri is
     // clean (no package graph assembles for it)
     let plain_uri = "file:///ws/chk/plain.rut";
-    let plain = take(lsp.analyze(plain_uri, doc));
+    let plain = take(pool.run_until(lsp.analyze(plain_uri.to_string(), doc.to_string())));
     assert!(
         plain["diags"].as_array().unwrap().is_empty(),
         "an unstamped doc must stay parse-only: {plain}"
@@ -529,12 +559,17 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
 
 #[test]
 fn add_def_mod_stamps_the_tree_and_feeds_the_use_walk() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     // the root: `pub mod layout;` rides back as the mount walk's
     // next hop (the host reads its children from the envelope)
     let root_src = "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n";
     let uri_root = "file:///ws/gadgets/mod.rut";
-    let out = take(lsp.add_def_mod(uri_root, "gadgets", "", root_src));
+    let out = take(pool.run_until(lsp.add_def_mod(
+        uri_root.to_string(),
+        "gadgets".to_string(),
+        "".to_string(),
+        root_src.to_string(),
+    )));
     assert_eq!(
         out["decls"],
         serde_json::json!([{ "name": "layout", "vis": "pub" }, { "name": "secret", "vis": "mod" }]),
@@ -545,7 +580,12 @@ fn add_def_mod_stamps_the_tree_and_feeds_the_use_walk() {
     let layout_src =
         "pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n";
     let uri_layout = "file:///ws/gadgets/layout/mod.rut";
-    let out = take(lsp.add_def_mod(uri_layout, "gadgets", "layout", layout_src));
+    let out = take(pool.run_until(lsp.add_def_mod(
+        uri_layout.to_string(),
+        "gadgets".to_string(),
+        "layout".to_string(),
+        layout_src.to_string(),
+    )));
     assert!(
         out["decls"].as_array().unwrap().is_empty(),
         "{}",
@@ -556,8 +596,8 @@ fn add_def_mod_stamps_the_tree_and_feeds_the_use_walk() {
     // private `secret` edge walked would be empty)
     let doc = "use gadgets::layout::\nfn main() -> nil {\n}\n";
     let uri = "file:///ws/main.rut";
-    take(lsp.analyze(uri, doc));
-    let items = take(lsp.complete(uri, 0, 21));
+    take(pool.run_until(lsp.analyze(uri.to_string(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 0, 21)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -567,7 +607,7 @@ fn add_def_mod_stamps_the_tree_and_feeds_the_use_walk() {
     assert!(labels.contains(&"Column"), "{labels:?}");
     assert!(labels.contains(&"mk"), "{labels:?}");
     // the root tier offers the pub mod child, never the private one
-    let items = take(lsp.complete(uri, 0, 13));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 0, 13)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -611,9 +651,9 @@ fn kit_bundle() -> Vec<u8> {
 
 #[test]
 fn add_bundle_mounts_a_mod_tree() {
-    let lsp = RutLsp::new();
+    let (lsp, mut pool) = RutLsp::spawn_native();
     let bytes = kit_bundle();
-    let out = take(lsp.add_bundle(&bytes));
+    let out = take(pool.run_until(lsp.add_bundle(bytes.to_vec())));
     assert_eq!(out["module"], "kit");
     assert_eq!(
         out["files"],
@@ -624,8 +664,8 @@ fn add_bundle_mounts_a_mod_tree() {
     // `use kit::layout::⏐` — the mounted child's exports
     let doc = "use kit::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n";
     let uri = "file:///ws/uses-kit.rut";
-    take(lsp.analyze(uri, doc));
-    let items = take(lsp.complete(uri, 0, 16));
+    take(pool.run_until(lsp.analyze(uri.to_string(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 0, 16)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -634,7 +674,7 @@ fn add_bundle_mounts_a_mod_tree() {
         .collect();
     assert!(labels.contains(&"Column"), "{labels:?}");
     // and the segment hover resolves through the dep tree
-    let h = take(lsp.hover(uri, 0, 12)); // the `layout` segment
+    let h = take(pool.run_until(lsp.hover(uri.to_string(), 0, 12))); // the `layout` segment
     let md = h["contents"]["value"].as_str().unwrap();
     assert!(md.contains("file module"), "{md}");
     assert!(md.contains("layout/mod.rut"), "{md}");
@@ -646,8 +686,8 @@ fn add_bundle_mounts_a_mod_tree() {
 /// the mount rule), and the defs store ends the call untouched
 #[test]
 fn extract_bundle_names_the_surface_and_never_indexes() {
-    let lsp = RutLsp::new();
-    let out = take(lsp.extract_bundle(POUCH_BUNDLE));
+    let (lsp, mut pool) = RutLsp::spawn_native();
+    let out = take(pool.run_until(lsp.extract_bundle(POUCH_BUNDLE.to_vec())));
     assert_eq!(out["module"], "pouch");
     assert!(out["namespace"].is_null());
     // the file list mirrors `bundle_sources`' own unpack
@@ -676,8 +716,8 @@ fn extract_bundle_names_the_surface_and_never_indexes() {
     // the index moves only through `add_bundle`
     let doc = "use kit::layout::\nfn main() -> nil {\n}\n";
     let uri = "file:///ws/extract-only.rut";
-    take(lsp.analyze(uri, doc));
-    let items = take(lsp.complete(uri, 0, 16));
+    take(pool.run_until(lsp.analyze(uri.to_string(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri.to_string(), 0, 16)));
     let labels: Vec<&str> = items
         .as_array()
         .unwrap()
@@ -693,7 +733,7 @@ fn extract_bundle_names_the_surface_and_never_indexes() {
     // child its `<path>`); a corrupt archive stays the error
     // envelope, never bytes
     let bytes = kit_bundle();
-    let out = take(lsp.extract_bundle(&bytes));
+    let out = take(pool.run_until(lsp.extract_bundle(bytes.to_vec())));
     let spells: Vec<(&str, &str)> = out["files"]
         .as_array()
         .unwrap()
@@ -702,9 +742,22 @@ fn extract_bundle_names_the_surface_and_never_indexes() {
         .collect();
     assert_eq!(spells, vec![("mod.rut", ""), ("layout/mod.rut", "layout")]);
     let junk = b"definitely not a zip";
-    let err = take(lsp.extract_bundle(junk));
+    let err = take(pool.run_until(lsp.extract_bundle(junk.to_vec())));
     assert!(
         err["error"].as_str().unwrap().contains("not a zip"),
         "{err}"
     );
+}
+
+/// the actor seam's dead-loop law: a dropped pool (the loop task gone
+/// with it) answers the loop-gone ERROR envelope — never a hang, never
+/// a panic, and the bridge resolves so a tearing-down page can move on
+#[test]
+fn a_dropped_loop_answers_the_error_envelope() {
+    let (lsp, pool) = RutLsp::spawn_native();
+    drop(pool);
+    let out = take(futures::executor::block_on(
+        lsp.analyze("file:///ws/gone.rut".into(), "fn main() -> nil {}\n".into()),
+    ));
+    assert!(out["error"].as_str().unwrap().contains("loop"), "{out}");
 }

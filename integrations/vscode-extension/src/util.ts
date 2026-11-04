@@ -77,6 +77,6 @@ export function workspaceHasZipCache(): boolean {
 }
 
 // the module's document key — the same string the Rust side stores
-export function analyzeDoc(rut: RutLsp, doc: vscode.TextDocument): Analysis {
+export async function analyzeDoc(rut: RutLsp, doc: vscode.TextDocument): Promise<Analysis> {
     return rut.analyze(doc.uri.toString(), doc.getText());
 }

@@ -145,7 +145,9 @@ async function walkDeps(rut: RutLsp): Promise<void> {
         // refusal, never stale or guessed pins).
         const lockUri = vscode.Uri.joinPath(folder.uri, 'rut.lock');
         const lockBytes = await readFileNullable(lockUri);
-        const fed = rut.setLock(lockBytes === null ? '' : new TextDecoder().decode(lockBytes));
+        const fed = await rut.setLock(
+            lockBytes === null ? '' : new TextDecoder().decode(lockBytes),
+        );
         if (lockBytes !== null && isEnvelope(fed)) {
             hintOnce(
                 `lock:${lockUri.fsPath}:${fed.error}`,
@@ -222,7 +224,7 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
     if (bytes === null) {
         return; // no manifest here — nothing to parse, nothing to hint
     }
-    const table = ctx.rut.parseManifest(new TextDecoder().decode(bytes));
+    const table = await ctx.rut.parseManifest(new TextDecoder().decode(bytes));
     if (isEnvelope(table)) {
         hintOnce(
             `manifest:${dirKey}:${table.error}`,
@@ -240,7 +242,7 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
     // doc's own package name rides too — uses may spell it. Names
     // accumulate in the wasm's set (multi-folder walks, re-walks).
     if (depth === 1) {
-        const stamped = ctx.rut.setDirectDeps([
+        const stamped = await ctx.rut.setDirectDeps([
             ...(table.name ? [table.name] : []),
             ...table.deps.map((r) => r.name),
             ...table.dev_deps.map((r) => r.name),
@@ -267,7 +269,7 @@ async function walkManifest(ctx: WalkCtx, manifestUri: vscode.Uri, depth: number
             continue; // a manifest naming a missing entry — index what exists
         }
         ctx.files--;
-        ctx.rut.addDefNamed(srcUri.toString(), module, new TextDecoder().decode(src));
+        await ctx.rut.addDefNamed(srcUri.toString(), module, new TextDecoder().decode(src));
     }
     // the mod tree (file modules): the root module's `mod NAME;` edges
     // mount `NAME/mod.rut` recursively — the wasm parses every file
@@ -331,7 +333,7 @@ async function mountModTree(
             return;
         }
         text = new TextDecoder().decode(bytes);
-        const stamped = ctx.rut.addDefMod(rootUri.toString(), module, '', text);
+        const stamped = await ctx.rut.addDefMod(rootUri.toString(), module, '', text);
         if (isEnvelope(stamped)) {
             hintOnce(`mods:${pkgDir.fsPath}`, `rut: ${module} — ${stamped.error}`, true);
             return;
@@ -349,7 +351,7 @@ async function mountModTree(
         }
         text = new TextDecoder().decode(bytes);
         ctx.files--;
-        const stamped = ctx.rut.addDefMod(rootUri.toString(), module, '', text);
+        const stamped = await ctx.rut.addDefMod(rootUri.toString(), module, '', text);
         if (isEnvelope(stamped)) {
             hintOnce(`mods:${pkgDir.fsPath}`, `rut: ${module} — ${stamped.error}`, true);
             return;
@@ -412,7 +414,7 @@ async function mountChildMod(
     }
     ctx.files--;
     const text = new TextDecoder().decode(bytes);
-    const stamped = ctx.rut.addDefMod(childUri.toString(), module, '', text);
+    const stamped = await ctx.rut.addDefMod(childUri.toString(), module, '', text);
     if (isEnvelope(stamped)) {
         hintOnce(`mods:${declaringDir.fsPath}`, `rut: ${module} — ${stamped.error}`, true);
         return;
@@ -514,7 +516,7 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow, depth: number): Promise<vo
     // structurally gone: the wasm-bindgen glue and the .wasm ship as one
     // pair in the package, so the module cannot be older than its lane.)
     const isZip = /\.zip$/.test(cache_path);
-    const extracted = isZip ? ctx.rut.extractSrczip(bytes) : ctx.rut.extractBundle(bytes);
+    const extracted = await (isZip ? ctx.rut.extractSrczip(bytes) : ctx.rut.extractBundle(bytes));
     if (isEnvelope(extracted)) {
         hintOnce(
             `bundle:${url}`,
@@ -564,9 +566,9 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow, depth: number): Promise<vo
                 }
                 const fileUri = vscode.Uri.joinPath(depDir, f.path);
                 if (f.mod_path === null) {
-                    ctx.rut.addDefNamed(fileUri.toString(), tree.module, f.src);
+                    await ctx.rut.addDefNamed(fileUri.toString(), tree.module, f.src);
                 } else {
-                    const stamped = ctx.rut.addDefMod(
+                    const stamped = await ctx.rut.addDefMod(
                         fileUri.toString(),
                         tree.module,
                         f.mod_path,
@@ -606,10 +608,15 @@ async function mountUrlDep(ctx: WalkCtx, row: DepRow, depth: number): Promise<vo
         // `addDefMod` (the envelope spells the path: `''` the root,
         // `<path>` a child), flat files under the module NAME
         if (f.mod_path === null) {
-            ctx.rut.addDefNamed(fileUri.toString(), extracted.module, f.src);
+            await ctx.rut.addDefNamed(fileUri.toString(), extracted.module, f.src);
             continue;
         }
-        const stamped = ctx.rut.addDefMod(fileUri.toString(), extracted.module, f.mod_path, f.src);
+        const stamped = await ctx.rut.addDefMod(
+            fileUri.toString(),
+            extracted.module,
+            f.mod_path,
+            f.src,
+        );
         if (isEnvelope(stamped)) {
             hintOnce(
                 `bundle:${url}`,

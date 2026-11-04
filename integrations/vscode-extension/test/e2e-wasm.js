@@ -135,7 +135,7 @@ async function main() {
 
     // ---- the semantic-token legend (16 types, the extension's map —
     // comments joined the classes, phase 5 added the namespace class) ----
-    const legend = rut.legend();
+    const legend = await rut.legend();
     if (
         !(
             legend.length === 16 &&
@@ -173,7 +173,7 @@ async function main() {
         // module's mode_of picks Decl for the decl surfaces (core.d.rut &
         // co.); a mode mistake here would light them up as diagnostics.
         const uri = `file://${file}`;
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `${path.relative(REPO, file)}: ${a.diags.length} false diagnostic(s), first: ${JSON.stringify(a.diags[0].message)}`,
@@ -195,7 +195,7 @@ async function main() {
     // ---- the fixture: a current-grammar sample, analyzed clean ----
     const fixtureSrc = fs.readFileSync(FIXTURE, 'utf8');
     const fixtureUri = `file://${FIXTURE}`;
-    const fx = rut.analyze(fixtureUri, fixtureSrc);
+    const fx = await rut.analyze(fixtureUri, fixtureSrc);
     if (fx.diags.length !== 0) {
         bad.push(`fixture has ${fx.diags.length} diagnostic(s): ${JSON.stringify(fx.diags[0])}`);
     }
@@ -223,7 +223,7 @@ async function main() {
     // (M4's ty_src arm — the pre-align builds printed `type Maybe = ;`)
     {
         const [line, ch] = posOnLine(fixtureSrc, /^\s*type Maybe = /, 'Maybe');
-        const h = rut.hover(fixtureUri, line, ch);
+        const h = await rut.hover(fixtureUri, line, ch);
         if (!h?.contents.value.includes('type Maybe = ?i32;')) {
             bad.push(
                 `alias hover lost the ?T target: ${h && JSON.stringify(h.contents.value.slice(0, 80))}`,
@@ -235,7 +235,7 @@ async function main() {
     // (the stale e41915d binary said `builtin str`)
     {
         const [line, ch] = posOnLine(fixtureSrc, /^\s*fn tag\(s: str/, 'str');
-        const h = rut.hover(fixtureUri, line, ch);
+        const h = await rut.hover(fixtureUri, line, ch);
         if (!h?.contents.value.includes('primitive str {')) {
             bad.push(
                 `str hover is not the primitive form: ${h && JSON.stringify(h.contents.value.slice(0, 60))}`,
@@ -263,14 +263,14 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `nullable probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const [hline, hch] = posOf(src, 'area', 2); // the call site, not the decl
-        const h = rut.hover(uri, hline, hch);
+        const h = await rut.hover(uri, hline, hch);
         if (
             !h?.contents.value.includes('fn area(self) -> f64') ||
             !h.contents.value.includes('in `Circle`')
@@ -280,7 +280,7 @@ async function main() {
             );
         }
         const [cline, cch] = posOf(src, 'c.');
-        const items = rut.complete(uri, cline, cch + 2);
+        const items = await rut.complete(uri, cline, cch + 2);
         const labels = items.map((i) => i.label);
         for (const want of ['area', 'r']) {
             if (!labels.includes(want))
@@ -298,13 +298,13 @@ async function main() {
     {
         const uri = 'file:///ws/e2e-std.rut';
         const src = 'fn main() -> nil {\n}\n';
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
-        const bareItems = rut.complete(uri, 0, 0);
+        const bareItems = await rut.complete(uri, 0, 0);
         const labels = bareItems.map((i) => i.label);
         // the type-name-law batch: the completion pin offers the family
         // pair — now through the auto-import tier (the alias-row form is
@@ -375,7 +375,7 @@ async function main() {
     {
         const uri = 'file:///ws/e2e-type-tier.rut';
         const src = 'fn go() -> nil {\n    let v: u\n}\n';
-        const items = rut.complete(uri, 1, '    let v: u'.length, src);
+        const items = await rut.complete(uri, 1, '    let v: u'.length, src);
         const labels = items.map((i) => i.label);
         for (const want of ['u8', 'u16', 'u32', 'u64']) {
             if (!labels.includes(want))
@@ -390,7 +390,7 @@ async function main() {
         // char — the extension fires the request on the keystroke)
         const bsrc = 'use pouch::{\nfn main() -> nil {\n}\n';
         const buri = 'file:///ws/e2e-use-brace.rut';
-        const bitems = rut.complete(buri, 0, 'use pouch::{'.length, bsrc);
+        const bitems = await rut.complete(buri, 0, 'use pouch::{'.length, bsrc);
         const blabels = bitems.map((i) => i.label);
         if (!blabels.includes('Vec'))
             bad.push(`use brace form lacks pouch's 'Vec' (got ${blabels.join(', ')})`);
@@ -417,14 +417,14 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `ctor-completion probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const [cline, cch] = posOf(src, 'log.'); // cursor right after the dot
-        const items = rut.complete(uri, cline, cch + 4, src);
+        const items = await rut.complete(uri, cline, cch + 4, src);
         const labels = items.map((i) => i.label);
         for (const want of ['new', 'debug', 'info', 'warn', 'error']) {
             if (!labels.includes(want))
@@ -435,7 +435,7 @@ async function main() {
         // the dot guard: an unresolved receiver answers EMPTY, never the
         // keyword table
         const [uline, uch] = posOf(src, 'someUnknown.');
-        const guarded = rut.complete(uri, uline, uch + 'someUnknown.'.length, src);
+        const guarded = await rut.complete(uri, uline, uch + 'someUnknown.'.length, src);
         if (guarded.length !== 0) {
             bad.push(
                 `dot guard failed: 'someUnknown.' completed ${guarded.length} item(s): ${guarded
@@ -471,7 +471,7 @@ async function main() {
         // member completion at EOF: cursor right after the final dot, the
         // CURRENT text riding the request (the editor's exact call)
         const lastLine = src.slice(src.lastIndexOf('\n') + 1);
-        const items = rut.complete(uri, src.split('\n').length - 1, lastLine.length, src);
+        const items = await rut.complete(uri, src.split('\n').length - 1, lastLine.length, src);
         const labels = items.map((i) => i.label);
         for (const want of ['items', 'count']) {
             if (!labels.includes(want))
@@ -485,7 +485,12 @@ async function main() {
         // (VARIABLE; the extension maps kind - 1, unchanged)
         const lsrc = 'fn go() -> nil {\n    let mut checked: str = " ";\n    che';
         const luri = 'file:///ws/e2e-eof-locals.rut';
-        const litems = rut.complete(luri, 2, lsrc.slice(lsrc.lastIndexOf('\n') + 1).length, lsrc);
+        const litems = await rut.complete(
+            luri,
+            2,
+            lsrc.slice(lsrc.lastIndexOf('\n') + 1).length,
+            lsrc,
+        );
         const checked = litems.find((i) => i.label === 'checked');
         if (!checked)
             bad.push(
@@ -508,7 +513,7 @@ async function main() {
     // decl and its owning struct (the decl layer's token-recovered span) ----
     {
         const [line, ch] = posOnLine(fixtureSrc, /^\s*item: \?Circle;/, 'item');
-        const h = rut.hover(fixtureUri, line, ch);
+        const h = await rut.hover(fixtureUri, line, ch);
         if (
             !h?.contents.value.includes('item: ?Circle') ||
             !h.contents.value.includes('in `Slot`')
@@ -534,14 +539,14 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `inferred-ident probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const [line, ch] = posOnLine(src, /return c\.r;/, 'c');
-        const h = rut.hover(uri, line, ch);
+        const h = await rut.hover(uri, line, ch);
         if (
             !h?.contents.value.includes('let c: Circle') ||
             !h.contents.value.includes('type inferred')
@@ -575,7 +580,7 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `field-read probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
@@ -583,14 +588,14 @@ async function main() {
         }
         // the ident hover: the field-read initializer types the binding
         const [iline, ich] = posOnLine(src, /let big = inner\.grown/, 'inner');
-        const ih = rut.hover(uri, iline, ich);
+        const ih = await rut.hover(uri, iline, ich);
         if (!ih?.contents.value.includes('let inner: Circle')) {
             bad.push(
                 `field-read ident hover missed: ${ih && JSON.stringify(ih.contents.value.slice(0, 80))}`,
             );
         }
         // the member hover THROUGH the field-read receiver
-        const mh = rut.hover(uri, iline, ich + 7); // the `grown` after `inner.`
+        const mh = await rut.hover(uri, iline, ich + 7); // the `grown` after `inner.`
         if (!mh?.contents.value.includes('fn grown(self, k: f64) -> Circle')) {
             bad.push(
                 `field-read receiver member hover missed: ${mh && JSON.stringify(mh.contents.value.slice(0, 80))}`,
@@ -598,14 +603,14 @@ async function main() {
         }
         // the member hover through the CHAINED-CALL receiver (`big.r`)
         const [bline, bch] = posOnLine(src, /return big\.r;/, 'big.r');
-        const bh = rut.hover(uri, bline, bch + 4); // the `r` after `big.`
+        const bh = await rut.hover(uri, bline, bch + 4); // the `r` after `big.`
         if (!bh?.contents.value.includes('r: f64') || !bh.contents.value.includes('in `Circle`')) {
             bad.push(
                 `chained receiver field hover missed: ${bh && JSON.stringify(bh.contents.value.slice(0, 80))}`,
             );
         }
         // member completion through the field-read receiver
-        const items = rut.complete(uri, iline, ich + 6); // right after `inner.`
+        const items = await rut.complete(uri, iline, ich + 6); // right after `inner.`
         const labels = items.map((i) => i.label);
         for (const want of ['r', 'grown']) {
             if (!labels.includes(want))
@@ -632,14 +637,14 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `for-of probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const [pline, pch] = posOnLine(src, /total \+= p\.x;/, 'p');
-        const ph = rut.hover(uri, pline, pch);
+        const ph = await rut.hover(uri, pline, pch);
         if (
             !ph?.contents.value.includes('p: Point') ||
             !ph.contents.value.includes('loop variable')
@@ -648,7 +653,7 @@ async function main() {
                 `for-of ident hover missed: ${ph && JSON.stringify(ph.contents.value.slice(0, 80))}`,
             );
         }
-        const mh = rut.hover(uri, pline, pch + 2); // the `x` after `p.`
+        const mh = await rut.hover(uri, pline, pch + 2); // the `x` after `p.`
         if (!mh?.contents.value.includes('x: f64') || !mh.contents.value.includes('in `Point`')) {
             bad.push(
                 `for-of receiver member hover missed: ${mh && JSON.stringify(mh.contents.value.slice(0, 80))}`,
@@ -662,14 +667,14 @@ async function main() {
     {
         const uri = 'file:///ws/e2e-prim-hover.rut';
         const src = 'fn pick(x: i32, ok: bool) -> i32 {\n    return x;\n}\n';
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `primitive probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const [line, ch] = posOnLine(src, /fn pick\(x: i32, ok: bool\)/, 'i32');
-        const h = rut.hover(uri, line, ch);
+        const h = await rut.hover(uri, line, ch);
         if (
             !h?.contents.value.includes('signed 32-bit') ||
             !h.contents.value.includes('-2147483648 ..= 2147483647')
@@ -679,7 +684,7 @@ async function main() {
             );
         }
         const [bline, bch] = posOnLine(src, /fn pick\(x: i32, ok: bool\)/, 'bool');
-        const bh = rut.hover(uri, bline, bch);
+        const bh = await rut.hover(uri, bline, bch);
         if (!bh?.contents.value.includes('true` / `false')) {
             bad.push(
                 `bool primitive hover missed: ${bh && JSON.stringify(bh.contents.value.slice(0, 80))}`,
@@ -743,7 +748,7 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `def-within probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
@@ -752,17 +757,17 @@ async function main() {
         // `inner` at its use → the declaring ident in `let inner`
         let [dl, dc] = identAt(src, /return inner\.area\(\)/, 'inner');
         let want = { uri, range: identAt(src, /let inner = wrap\.c;/, 'inner'), len: 5 };
-        let locs = rut.definition(uri, dl, dc);
+        let locs = await rut.definition(uri, dl, dc);
         eqRange(locs, want, 'within-file let binding');
         // field read `wrap.c` → the field's decl ident `c` in Wrap
         want = { uri, range: identAt(src, /^\s{4}c: Circle;/, 'c'), len: 1 };
         [dl, dc] = identAt(src, /let inner = wrap\.c;/, 'c');
-        locs = rut.definition(uri, dl, dc);
+        locs = await rut.definition(uri, dl, dc);
         eqRange(locs, want, 'within-file field read');
         // method call `inner.area()` → the impl fn's name ident
         want = { uri, range: identAt(src, /fn area\(self\)/, 'area'), len: 4 };
         [dl, dc] = identAt(src, /return inner\.area\(\)/, 'area');
-        locs = rut.definition(uri, dl, dc);
+        locs = await rut.definition(uri, dl, dc);
         eqRange(locs, want, 'within-file impl method');
         smokes++;
     }
@@ -773,7 +778,7 @@ async function main() {
     {
         const libUri = 'file:///ws/gadgets/lib.rut';
         const libSrc = ['class Widget {', '    id: i32;', '}', ''].join('\n');
-        rut.addDef(libUri, libSrc);
+        await rut.addDef(libUri, libSrc);
         const uri = 'file:///ws/e2e-def-cross.rut';
         const src = [
             'use gadgets::{ Widget };',
@@ -782,7 +787,7 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `def-cross probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
@@ -794,10 +799,13 @@ async function main() {
             len: 6,
         };
         // the use-statement name — the survey's use-graph edge
-        let locs = rut.definition(uri, ...identAt(src, /^use gadgets::\{ Widget \};/, 'Widget'));
+        let locs = await rut.definition(
+            uri,
+            ...identAt(src, /^use gadgets::\{ Widget \};/, 'Widget'),
+        );
         eqRange(locs, want, 'cross-file use name');
         // and a usage site through the same edge
-        locs = rut.definition(uri, ...identAt(src, /let w = Widget\.new\(\);/, 'Widget'));
+        locs = await rut.definition(uri, ...identAt(src, /let w = Widget\.new\(\);/, 'Widget'));
         eqRange(locs, want, 'cross-file usage');
         smokes++;
     }
@@ -814,7 +822,7 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `def-std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
@@ -823,7 +831,7 @@ async function main() {
         const real = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'src', 'mod.rut'), 'utf8');
         const wantUri = path.join('rut', 'pouch', 'src', 'mod.rut');
         const want = { uri: wantUri, range: identAt(real, /^pub class Vec/, 'Vec'), len: 3 };
-        let locs = rut.definition(uri, ...identAt(src, /^use pouch::\{ Vec \};/, 'Vec'));
+        let locs = await rut.definition(uri, ...identAt(src, /^use pouch::\{ Vec \};/, 'Vec'));
         if (!locs.length || locs[0].uri !== wantUri) {
             bad.push(
                 `std jump lost the true source path (got ${JSON.stringify(locs.map((l) => l.uri))})`,
@@ -831,7 +839,7 @@ async function main() {
         } else {
             eqRange(locs, want, 'std use name');
         }
-        locs = rut.definition(uri, ...identAt(src, /let v = Vec\.new\(\);/, 'Vec'));
+        locs = await rut.definition(uri, ...identAt(src, /let v = Vec\.new\(\);/, 'Vec'));
         if (!locs.length || locs[0].uri !== wantUri) {
             bad.push(
                 `std usage jump lost the true source path (got ${JSON.stringify(locs.map((l) => l.uri))})`,
@@ -856,14 +864,14 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `typedef probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const want = { uri, range: identAt(src, /^class Circle \{/, 'Circle'), len: 6 };
-        const locs = rut.typeDefinition(uri, ...identAt(src, /return c\.r;/, 'c'));
+        const locs = await rut.typeDefinition(uri, ...identAt(src, /return c\.r;/, 'c'));
         eqRange(locs, want, 'typeDefinition of a binding');
         smokes++;
     }
@@ -876,13 +884,13 @@ async function main() {
         const digestPath = path.join(REPO, 'examples', '02-digest', 'src', 'mod.rut');
         const digestSrc = fs.readFileSync(digestPath, 'utf8');
         const digestUri = `file://${digestPath}`;
-        const a = rut.analyze(digestUri, digestSrc);
+        const a = await rut.analyze(digestUri, digestSrc);
         if (a.diags.length !== 0) {
             bad.push(
                 `digest inlay probe has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
-        const all = rut.inlayHint(
+        const all = await rut.inlayHint(
             digestUri,
             { line: 0, character: 0 },
             { line: digestSrc.split('\n').length, character: 0 },
@@ -983,7 +991,7 @@ async function main() {
         // hint's type text IS what hover shows for the same binding
         {
             const [line, ch] = posOnLine(digestSrc, /let d = hex_digits\(\);/, 'd');
-            const h = rut.hover(digestUri, line, ch);
+            const h = await rut.hover(digestUri, line, ch);
             const hint = all.find(
                 (x) => x.position.line === line && x.position.character === ch + 1,
             );
@@ -1011,13 +1019,17 @@ async function main() {
         );
         const cgSrc = fs.readFileSync(cgPath, 'utf8');
         const cgUri = `file://${cgPath}`;
-        const a = rut.analyze(cgUri, cgSrc);
+        const a = await rut.analyze(cgUri, cgSrc);
         if (a.diags.length !== 0) {
             bad.push(
                 `closures-generics inlay probe has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
-        const all = rut.inlayHint(cgUri, { line: 0, character: 0 }, { line: 9999, character: 0 });
+        const all = await rut.inlayHint(
+            cgUri,
+            { line: 0, character: 0 },
+            { line: 9999, character: 0 },
+        );
         const hintAt = (lineRe, needle, wantLabel, what) => {
             const [line, ch] = posOnLine(cgSrc, lineRe, needle);
             const h = all.find(
@@ -1064,13 +1076,13 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `inlay probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
-        const all = rut.inlayHint(uri, { line: 0, character: 0 }, { line: 99, character: 0 });
+        const all = await rut.inlayHint(uri, { line: 0, character: 0 }, { line: 99, character: 0 });
         const labels = all.map((h) => `${h.position.line}:${h.label}(k${h.kind})`);
         // exactly two: the unannotated `c` and the exact-arity grown arg —
         // the ANNOTATED `d` is restated by nothing
@@ -1082,7 +1094,11 @@ async function main() {
             bad.push(`inlay tooltip is not the hover markdown: ${JSON.stringify(tip)}`);
         }
         // the range filter: only line 7's hint stays inside [7, 8)
-        const narrow = rut.inlayHint(uri, { line: 7, character: 0 }, { line: 8, character: 0 });
+        const narrow = await rut.inlayHint(
+            uri,
+            { line: 7, character: 0 },
+            { line: 8, character: 0 },
+        );
         if (!(narrow.length === 1 && narrow[0].label === ': Circle')) {
             bad.push(`inlay range filter leaked: ${JSON.stringify(narrow.map((h) => h.label))}`);
         }
@@ -1122,7 +1138,7 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `refs-shadow probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
@@ -1130,7 +1146,7 @@ async function main() {
         }
         // the OUTER decl
         let [dl, dc] = posOf(src, 'let v = 1;', 1);
-        let locs = rut.references(uri, dl, dc + 4, false);
+        let locs = await rut.references(uri, dl, dc + 4, false);
         const want = [refAt(src, 'v > 0'), refAt(src, 'return v;', 2) + 7].sort((x, y) => x - y);
         const got = refOffsets(src, locs, uri);
         if (JSON.stringify(got) !== JSON.stringify(want)) {
@@ -1138,12 +1154,12 @@ async function main() {
         }
         // the INNER decl: exactly its own return
         [dl, dc] = posOf(src, 'let v = 2;', 1);
-        locs = rut.references(uri, dl, dc + 4, false);
+        locs = await rut.references(uri, dl, dc + 4, false);
         if (!(locs.length === 1 && locs[0].range.start.line === 4)) {
             bad.push(`inner v refs leaked: ${JSON.stringify(locs)}`);
         }
         // includeDeclaration appends the declaring ident
-        locs = rut.references(uri, dl, dc + 4, true);
+        locs = await rut.references(uri, dl, dc + 4, true);
         if (
             !(
                 locs.length === 2 &&
@@ -1165,9 +1181,9 @@ async function main() {
         const mainUri = 'file:///ws/e2e-refs-cross.rut';
         const mainSrc =
             'use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n';
-        rut.addDef(libUri, libSrc);
-        rut.addDef(mainUri, mainSrc); // the extension indexes every workspace file
-        const a = rut.analyze(mainUri, mainSrc);
+        await rut.addDef(libUri, libSrc);
+        await rut.addDef(mainUri, mainSrc); // the extension indexes every workspace file
+        const a = await rut.analyze(mainUri, mainSrc);
         if (a.diags.length !== 0) {
             bad.push(
                 `refs-cross probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
@@ -1178,7 +1194,7 @@ async function main() {
         );
         // from the importing doc's usage site
         let [dl, dc] = posOf(mainSrc, 'Widget.new', 1);
-        let locs = rut.references(mainUri, dl, dc, false);
+        let locs = await rut.references(mainUri, dl, dc, false);
         const got = refOffsets(mainSrc, locs, mainUri);
         if (JSON.stringify(got) !== JSON.stringify(want)) {
             bad.push(
@@ -1186,14 +1202,14 @@ async function main() {
             );
         }
         // from the lib's DECL ident: the same two sites, carrying the doc's uri
-        const a2 = rut.analyze(libUri, libSrc);
+        const a2 = await rut.analyze(libUri, libSrc);
         if (a2.diags.length !== 0) {
             bad.push(
                 `refs-cross lib doc has ${a2.diags.length} diagnostic(s): ${JSON.stringify(a2.diags[0])}`,
             );
         }
         [dl, dc] = posOf(libSrc, 'class Widget', 1);
-        locs = rut.references(libUri, dl, dc + 6, false);
+        locs = await rut.references(libUri, dl, dc + 6, false);
         if (!(locs.length === 2 && locs.every((l) => l.uri === mainUri))) {
             bad.push(`cross-file refs (lib side) drifted: ${JSON.stringify(locs)}`);
         }
@@ -1234,14 +1250,14 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = rut.analyze(uri, src);
+        const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `sighelp probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
-        const wantHelp = (pos, wantLabel, wantActive, what) => {
-            const h = rut.signatureHelp(uri, pos[0], pos[1]);
+        const wantHelp = async (pos, wantLabel, wantActive, what) => {
+            const h = await rut.signatureHelp(uri, pos[0], pos[1]);
             if (!h) {
                 bad.push(
                     `${what}: no help (wanted ${JSON.stringify(wantLabel)} slot ${wantActive})`,
@@ -1259,14 +1275,14 @@ async function main() {
             }
         };
         // FIRST arg of a nested call: the innermost unclosed paren wins
-        wantHelp(
+        await wantHelp(
             posOf(src, 'inner(1)', 1).map((v, i) => (i === 1 ? v + 6 : v)),
             'fn inner(a: i32) -> i32',
             0,
             'nested first arg',
         );
         // MIDDLE arg (after the nested call closed): the outer's second slot
-        wantHelp(
+        await wantHelp(
             posOf(src, ', 2);', 1).map((v, i) => (i === 1 ? v + 2 : v)),
             'fn outer(b: i32, c: i32) -> i32',
             1,
@@ -1275,16 +1291,16 @@ async function main() {
         // the outer's FIRST arg (the inner call itself): slot 0
         {
             const [ol, oc] = posOf(src, 'outer(inner', 1);
-            wantHelp([ol, oc + 6], 'fn outer(b: i32, c: i32) -> i32', 0, 'outer first arg');
+            await wantHelp([ol, oc + 6], 'fn outer(b: i32, c: i32) -> i32', 0, 'outer first arg');
         }
         // free call: first arg then second
-        wantHelp(
+        await wantHelp(
             posOf(src, '"a"', 1),
             'fn hex_val(c: str, k: i32) -> i32',
             0,
             'free call first arg',
         );
-        wantHelp(
+        await wantHelp(
             posOf(src, ', x);', 1).map((v, i) => (i === 1 ? v + 2 : v)),
             'fn hex_val(c: str, k: i32) -> i32',
             1,
@@ -1293,7 +1309,7 @@ async function main() {
         // METHOD call through a typed receiver: self never surfaces
         {
             const [ml, mc] = posOf(src, 'grown(2.0)', 1);
-            const h = rut.signatureHelp(uri, ml, mc + 6);
+            const h = await rut.signatureHelp(uri, ml, mc + 6);
             if (
                 h?.signatures[0].label !== 'fn grown(self, k: f64) -> Circle' ||
                 h.activeParameter !== 0
@@ -1309,7 +1325,7 @@ async function main() {
         // a mismatch shows NO help, never wrong help
         {
             const [bl, bc] = posOf(src, '2, 3);', 1);
-            const h = rut.signatureHelp(uri, bl, bc + 5);
+            const h = await rut.signatureHelp(uri, bl, bc + 5);
             if (h !== null) {
                 bad.push(`arity mismatch must show no help: ${JSON.stringify(h)}`);
             }
@@ -1321,13 +1337,13 @@ async function main() {
     // the RFC sweep reworded it — the message names the fix, not a
     // proposal number) ----
     {
-        const b = rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
+        const b = await rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
         if (!(b.diags.length === 1 && b.diags[0].message.includes('postfix spelling'))) {
             bad.push(
                 `postfix T? must give the ONE dedicated postfix-removal diag, got: ${JSON.stringify(b.diags)}`,
             );
         }
-        const g = rut.analyze('file:///ws/e2e-prefix.rut', 'fn g(p: ?i32) -> nil {\n}\n');
+        const g = await rut.analyze('file:///ws/e2e-prefix.rut', 'fn g(p: ?i32) -> nil {\n}\n');
         if (g.diags.length !== 0) {
             bad.push(`?i32 must analyze clean (M1), got: ${JSON.stringify(g.diags)}`);
         }
@@ -1354,7 +1370,7 @@ async function main() {
         // same bytes rut-lsp's dep_table unit test pins
         const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
         const manifest = fs.readFileSync(manifestPath, 'utf8');
-        const table = dep.parseManifest(manifest);
+        const table = await dep.parseManifest(manifest);
         assert.strictEqual(table.name, 'plugin', `manifest name: ${JSON.stringify(table)}`);
         // the body rides the src/mod.rut convention (the entry keys are
         // repealed — the root module is a file under the `src/` shell,
@@ -1430,7 +1446,7 @@ async function main() {
         // entry.type indexes in Decl mode (the envelope spells the variant)
         const hostManifest =
             '{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }';
-        const host = dep.parseManifest(hostManifest);
+        const host = await dep.parseManifest(hostManifest);
         assert.deepStrictEqual(
             host.entries,
             [{ path: 'src/surface.d.rut', mode: 'Decl' }],
@@ -1439,7 +1455,7 @@ async function main() {
         // a malformed manifest is the ERROR envelope — the host's hint
         // (named `manifestErr`, NOT `bad` — that name is the lane's
         // error collector and a shadow here silences every later push)
-        const manifestErr = dep.parseManifest('{"name": six}');
+        const manifestErr = await dep.parseManifest('{"name": six}');
         assert.ok(
             manifestErr.error?.startsWith('line 1: '),
             `error envelope: ${JSON.stringify(manifestErr)}`,
@@ -1452,11 +1468,11 @@ async function main() {
         const gUri = 'file:///ws/gadgets/lib.rut';
         const gSrc =
             'pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n';
-        dep.addDefNamed(gUri, 'gadgets', gSrc);
+        await dep.addDefNamed(gUri, 'gadgets', gSrc);
         const depDoc = 'use gadgets::\nfn main() -> nil {\n}\n';
         const depUri = 'file:///ws/e2e-dep.rut';
-        dep.analyze(depUri, depDoc);
-        const namesTier = dep.complete(depUri, 0, depDoc.indexOf('::') + 2);
+        await dep.analyze(depUri, depDoc);
+        const namesTier = await dep.complete(depUri, 0, depDoc.indexOf('::') + 2);
         const depLabels = namesTier.map((i) => i.label);
         for (const want of ['Widget', 'tag']) {
             if (!depLabels.includes(want))
@@ -1464,7 +1480,7 @@ async function main() {
                     `named dep 'gadgets' lacks '${want}' in use completion (got ${depLabels.join(', ')})`,
                 );
         }
-        const modTier = dep.complete(depUri, 0, 4); // right after `use `
+        const modTier = await dep.complete(depUri, 0, 4); // right after `use `
         if (!modTier.map((i) => i.label).includes('gadgets')) {
             bad.push(`module tier lacks 'gadgets' (got ${modTier.map((i) => i.label).join(', ')})`);
         }
@@ -1474,14 +1490,14 @@ async function main() {
         // offline url-dep fixture) — the envelope names module + entry
         // paths, the surface lands in hover and go-to-definition
         const bundleBytes = fs.readFileSync(path.join(REPO, 'dist', 'std', 'pouch.rutbundle'));
-        const bundle = dep.addBundle(bundleBytes);
+        const bundle = await dep.addBundle(bundleBytes);
         assert.strictEqual(bundle.module, 'pouch', `bundle envelope: ${JSON.stringify(bundle)}`);
         // wire v12: the compiled group ships its GENERATED declaration
         // entry as the editing surface (the .d.ts pattern) — the envelope
         // names the entry, never the compiled mod.rutc body
         assert.deepStrictEqual(bundle.files, ['mod.d.rut']);
         const junk = Buffer.from('definitely not a zip');
-        const bundleErr = dep.addBundle(junk);
+        const bundleErr = await dep.addBundle(junk);
         assert.ok(
             bundleErr.error?.includes('not a zip'),
             `bundle error envelope: ${JSON.stringify(bundleErr)}`,
@@ -1494,8 +1510,8 @@ async function main() {
         const pouchDoc =
             'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n';
         const pouchUri = 'file:///ws/e2e-bundle.rut';
-        dep.analyze(pouchUri, pouchDoc);
-        const vecLocs = dep.definition(pouchUri, 0, pouchDoc.indexOf('Vec'));
+        await dep.analyze(pouchUri, pouchDoc);
+        const vecLocs = await dep.definition(pouchUri, 0, pouchDoc.indexOf('Vec'));
         const targetUris = vecLocs.map((l) => l.uri);
         assert.deepStrictEqual(
             targetUris,
@@ -1503,7 +1519,7 @@ async function main() {
             `bundle go-to-definition targets: ${JSON.stringify(targetUris)}`,
         );
         const pushCh = pouchDoc.split('\n')[3].indexOf('push');
-        const pushHover = dep.hover(pouchUri, 3, pushCh);
+        const pushHover = await dep.hover(pouchUri, 3, pushCh);
         if (!pushHover?.contents.value.includes('push')) {
             bad.push(
                 `bundle member hover missed: ${pushHover && JSON.stringify(pushHover.contents.value.slice(0, 60))}`,
@@ -1525,7 +1541,7 @@ async function main() {
             'extractBundle missing from the binding — rebuild (npm run build:wasm)',
         );
         {
-            const extracted = rut.extractBundle(bundleBytes);
+            const extracted = await rut.extractBundle(bundleBytes);
             assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
             assert.strictEqual(
                 extracted.module,
@@ -1550,7 +1566,9 @@ async function main() {
                 `the body rides the src: ${ef.src.slice(0, 60)}`,
             );
             // a corrupt archive is the error envelope — never a partial tree
-            const badExtract = rut.extractBundle(new TextEncoder().encode('definitely not a zip'));
+            const badExtract = await rut.extractBundle(
+                new TextEncoder().encode('definitely not a zip'),
+            );
             assert.ok(
                 badExtract.error?.includes('not a zip'),
                 `extract error envelope: ${JSON.stringify(badExtract)}`,
@@ -1568,7 +1586,7 @@ async function main() {
             // seam above guarantees the export exists; this proves the round
             // trip.)
             const inkZip = fs.readFileSync(path.join(REPO, 'dist', 'std', 'ink.zip'));
-            const srczip = rut.extractSrczip(new Uint8Array(inkZip));
+            const srczip = await rut.extractSrczip(new Uint8Array(inkZip));
             assert.ok(!srczip.error, `srczip extract envelope: ${JSON.stringify(srczip)}`);
             assert.strictEqual(srczip.module, 'ink', `srczip module: ${JSON.stringify(srczip)}`);
             const inkRoot = srczip.files.find((f) => f.path === 'src/mod.rut');
@@ -1623,14 +1641,14 @@ async function main() {
             for (const f of srczip.files) lay(f.path, f.src);
             for (const e of srczip.embedded) lay(e.path, e.src);
             const mounted = new Set();
-            const walkManifest = (manifestPath) => {
+            const walkManifest = async (manifestPath) => {
                 const dir = path.dirname(manifestPath);
-                const t = rut.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
+                const t = await rut.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
                 assert.ok(!t.error, `the laid manifest parses: ${JSON.stringify(t)}`);
                 if (mounted.has(t.name)) return; // first mount wins
                 mounted.add(t.name);
                 for (const e of t.entries) {
-                    rut.addDefNamed(
+                    await rut.addDefNamed(
                         `file://${path.join(dir, e.path)}`,
                         t.name,
                         fs.readFileSync(path.join(dir, e.path), 'utf8'),
@@ -1638,7 +1656,7 @@ async function main() {
                 }
                 for (const p of t.entries.filter((e) => e.mode === 'Impl').map((e) => e.path)) {
                     const uri = path.join(dir, p);
-                    const stamped = rut.addDefMod(
+                    const stamped = await rut.addDefMod(
                         `file://${uri}`,
                         t.name,
                         '',
@@ -1646,7 +1664,8 @@ async function main() {
                     );
                     assert.ok(!stamped.error, `the root stamps: ${JSON.stringify(stamped)}`);
                 }
-                for (const row of t.deps) walkManifest(path.join(dir, row.source.dir, 'rut.jsonc'));
+                for (const row of t.deps)
+                    await walkManifest(path.join(dir, row.source.dir, 'rut.jsonc'));
             };
             // THE HOP-1 LAW: the lane's OWN files index directly — the zip's
             // published manifest carries no entry rows, so the mini-walk's
@@ -1656,7 +1675,7 @@ async function main() {
             // strands every own-symbol click on the ambient repo-relative
             // answer, which opens nowhere outside the rut repo).
             for (const f of srczip.files) {
-                const stamped = rut.addDefMod(
+                const stamped = await rut.addDefMod(
                     `file://${path.join(depDir, f.path)}`,
                     srczip.module,
                     f.mod_path,
@@ -1667,7 +1686,7 @@ async function main() {
                     `the lane's own file indexes: ${JSON.stringify(stamped)}`,
                 );
             }
-            walkManifest(path.join(depDir, 'rut.jsonc'));
+            await walkManifest(path.join(depDir, 'rut.jsonc'));
             assert.deepStrictEqual(
                 [...mounted].sort(),
                 ['ink', 'ink_host'],
@@ -1675,12 +1694,12 @@ async function main() {
             );
             const inkUri = `file://${path.join(depDir, 'src/mod.rut')}`;
             const inkSrc = fs.readFileSync(path.join(depDir, 'src/mod.rut'), 'utf8');
-            rut.analyze(inkUri, inkSrc);
+            await rut.analyze(inkUri, inkSrc);
             const useLine = inkSrc.split('\n').findIndex((l) => l.includes('use ink_host::'));
             const target = `file://${path.join(depDir, 'deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut')}`;
             for (const needle of ['ink_host', 'create_logger', 'logger_log']) {
                 const c = inkSrc.split('\n')[useLine].indexOf(needle);
-                const hits = rut.definition(inkUri, useLine, c);
+                const hits = await rut.definition(inkUri, useLine, c);
                 assert.strictEqual(hits.length, 1, `hop-2 ${needle}: ${JSON.stringify(hits)}`);
                 assert.strictEqual(
                     hits[0].uri,
@@ -1696,11 +1715,11 @@ async function main() {
             const consumerDoc =
                 'use ink::{ Logger };\nentry fn main() {\n    let log = Logger("hello");\n}\n';
             const consumerUri = `file://${path.join(ws, 'src', 'mod.rut')}`;
-            rut.analyze(consumerUri, consumerDoc);
+            await rut.analyze(consumerUri, consumerDoc);
             const cLines = consumerDoc.split('\n');
             const ctorLine = cLines.findIndex((l) => l.includes('Logger("hello")'));
             const ctorCol = cLines[ctorLine].indexOf('Logger(') + 2;
-            const hop1 = rut.definition(consumerUri, ctorLine, ctorCol);
+            const hop1 = await rut.definition(consumerUri, ctorLine, ctorCol);
             const hop1Own = hop1.filter((l) => l.uri.includes('.rut/deps/ink-'));
             assert.strictEqual(hop1Own.length, 1, `hop-1 Logger targets: ${JSON.stringify(hop1)}`);
             assert.ok(
@@ -1721,12 +1740,12 @@ async function main() {
             // the binding's null-coercion law: an unanalyzed doc answers []
             // (the provider never sees null — the TypeError class dies here)
             assert.deepStrictEqual(
-                rut.definition('file:///nowhere/x.rut', 0, 5),
+                await rut.definition('file:///nowhere/x.rut', 0, 5),
                 [],
                 'null definition coerces to []',
             );
             assert.deepStrictEqual(
-                rut.inlayHint(
+                await rut.inlayHint(
                     'file:///nowhere/x.rut',
                     { line: 0, character: 0 },
                     { line: 1, character: 0 },
@@ -1744,12 +1763,12 @@ async function main() {
             const memberDoc =
                 'use ink::{ Logger };\nentry fn main() {\n    let log = Logger("hello");\n    log.info("hi");\n}\n';
             const memberUri = `file://${path.join(ws, 'src', 'member.rut')}`;
-            rut.analyze(memberUri, memberDoc);
+            await rut.analyze(memberUri, memberDoc);
             const mLines = memberDoc.split('\n');
             const mLine = mLines.findIndex((l) => l.includes('.info'));
-            const mHits = rut
-                .definition(memberUri, mLine, mLines[mLine].indexOf('.info') + 1)
-                .filter((l) => l.uri.includes('.rut/deps/ink-'));
+            const mHits = (
+                await rut.definition(memberUri, mLine, mLines[mLine].indexOf('.info') + 1)
+            ).filter((l) => l.uri.includes('.rut/deps/ink-'));
             assert.strictEqual(mHits.length, 1, `hop-1 .info targets: ${JSON.stringify(mHits)}`);
             assert.strictEqual(
                 mHits[0].uri,
@@ -1778,7 +1797,7 @@ async function main() {
                     const fp = path.join(depDir, xf.path);
                     fs.mkdirSync(path.dirname(fp), { recursive: true });
                     fs.writeFileSync(fp, xf.src);
-                    const stamped = rut.addDefMod(
+                    const stamped = await rut.addDefMod(
                         `file://${fp}`,
                         extracted.module,
                         xf.mod_path,
@@ -1789,7 +1808,7 @@ async function main() {
                 const pdoc =
                     'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n}\n';
                 const puri = 'file:///ws/e2e-deps.rut';
-                const pa = rut.analyze(puri, pdoc);
+                const pa = await rut.analyze(puri, pdoc);
                 assert.strictEqual(
                     pa.diags.length,
                     0,
@@ -1799,13 +1818,13 @@ async function main() {
                 // the LEAF click: exactly one location under the extracted
                 // tree, the declaring `Vec` ident of the body file (read back
                 // from DISK — the target is an openable real file)
-                const depLocs = rut
-                    .definition(puri, ...posOf(pdoc, 'Vec'))
-                    .filter((l) => l.uri.includes('.rut/deps/pouch-'));
+                const depLocs = (await rut.definition(puri, ...posOf(pdoc, 'Vec'))).filter((l) =>
+                    l.uri.includes('.rut/deps/pouch-'),
+                );
                 assert.strictEqual(
                     depLocs.length,
                     1,
-                    `extracted-dir Vec targets: ${JSON.stringify(rut.definition(puri, ...posOf(pdoc, 'Vec')))}`,
+                    `extracted-dir Vec targets: ${JSON.stringify(await rut.definition(puri, ...posOf(pdoc, 'Vec')))}`,
                 );
                 const bodySrc = fs.readFileSync(depLocs[0].uri.replace(/^file:\/\//, ''), 'utf8');
                 assert.ok(
@@ -1823,7 +1842,7 @@ async function main() {
                 );
 
                 // the PKG-HEAD click: the same extracted root file, top
-                const headLocs = rut.definition(puri, ...posOf(pdoc, 'pouch'));
+                const headLocs = await rut.definition(puri, ...posOf(pdoc, 'pouch'));
                 assert.strictEqual(
                     headLocs.length,
                     1,
@@ -1851,14 +1870,14 @@ async function main() {
                 fs.mkdirSync(path.join(toolsDir, 'src', 'layout'), { recursive: true });
                 fs.writeFileSync(path.join(toolsDir, 'src', 'mod.rut'), rootSrc);
                 fs.writeFileSync(path.join(toolsDir, 'src', 'layout', 'mod.rut'), childSrc);
-                let ts = rut.addDefMod(
+                let ts = await rut.addDefMod(
                     `file://${path.join(toolsDir, 'src', 'mod.rut')}`,
                     'tools2',
                     '',
                     rootSrc,
                 );
                 assert.ok(!ts.error, `tools2 root indexes: ${JSON.stringify(ts)}`);
-                ts = rut.addDefMod(
+                ts = await rut.addDefMod(
                     `file://${path.join(toolsDir, 'src', 'layout', 'mod.rut')}`,
                     'tools2',
                     'layout',
@@ -1869,14 +1888,14 @@ async function main() {
                 const mdoc =
                     'use tools2::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n';
                 const muri = 'file:///ws/e2e-dep-mods.rut';
-                const ma = rut.analyze(muri, mdoc);
+                const ma = await rut.analyze(muri, mdoc);
                 assert.strictEqual(
                     ma.diags.length,
                     0,
                     `dep-mods probe doc: ${JSON.stringify(ma.diags)}`,
                 );
                 // the MIDDLE segment: the mounting edge in the root file
-                const midLocs = rut.definition(muri, 0, 'use tools2::'.length);
+                const midLocs = await rut.definition(muri, 0, 'use tools2::'.length);
                 assert.strictEqual(
                     midLocs.length,
                     1,
@@ -1896,7 +1915,7 @@ async function main() {
                     'path-dep middle segment',
                 );
                 // the LEAF: the decl in the child file
-                const leafLocs = rut.definition(muri, ...posOf(mdoc, 'Column'));
+                const leafLocs = await rut.definition(muri, ...posOf(mdoc, 'Column'));
                 assert.strictEqual(leafLocs.length, 1, `leaf targets: ${JSON.stringify(leafLocs)}`);
                 assert.ok(
                     leafLocs[0].uri.endsWith('/tools2/src/layout/mod.rut'),
@@ -1912,7 +1931,7 @@ async function main() {
                     'path-dep leaf',
                 );
                 // and the usage site rides the same edge into the child
-                const usageLocs = rut.definition(muri, ...posOf(mdoc, 'Column { w: 1 }'));
+                const usageLocs = await rut.definition(muri, ...posOf(mdoc, 'Column { w: 1 }'));
                 assert.ok(
                     usageLocs.some((l) => l.uri.endsWith('/tools2/src/layout/mod.rut')),
                     `usage into the child: ${JSON.stringify(usageLocs)}`,
@@ -1924,7 +1943,7 @@ async function main() {
                 // re-derived grid/mod.rut) ----
                 const gridSrc = 'pub fn dig() -> i32 { return 1; }\n';
                 fs.writeFileSync(path.join(toolsDir, 'src', 'layout', 'grid.rut'), gridSrc);
-                ts = rut.addDefMod(
+                ts = await rut.addDefMod(
                     `file://${path.join(toolsDir, 'src', 'layout', 'grid.rut')}`,
                     'tools2',
                     'layout/grid',
@@ -1933,8 +1952,8 @@ async function main() {
                 assert.ok(!ts.error, `tools2 grid.rut indexes: ${JSON.stringify(ts)}`);
 
                 const rootUri = `file://${path.join(toolsDir, 'src', 'mod.rut')}`;
-                rut.analyze(rootUri, rootSrc); // the doc's stamp rides its indexed twin
-                const edgeLocs = rut.definition(rootUri, 0, 'pub mod '.length);
+                await rut.analyze(rootUri, rootSrc); // the doc's stamp rides its indexed twin
+                const edgeLocs = await rut.definition(rootUri, 0, 'pub mod '.length);
                 assert.strictEqual(
                     edgeLocs.length,
                     1,
@@ -1951,8 +1970,8 @@ async function main() {
                 );
 
                 const layoutUri = `file://${path.join(toolsDir, 'src', 'layout', 'mod.rut')}`;
-                rut.analyze(layoutUri, childSrc);
-                const gridLocs = rut.definition(layoutUri, ...posOf(childSrc, 'grid'));
+                await rut.analyze(layoutUri, childSrc);
+                const gridLocs = await rut.definition(layoutUri, ...posOf(childSrc, 'grid'));
                 assert.strictEqual(
                     gridLocs.length,
                     1,
@@ -1981,7 +2000,7 @@ async function main() {
         // lane's earlier flat `gadgets` index stays the transitional shape
         // it was indexed as. ----
         const mRoot = 'pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n';
-        const rootOut = dep.addDefMod('file:///ws/tools/src/mod.rut', 'tools', '', mRoot);
+        const rootOut = await dep.addDefMod('file:///ws/tools/src/mod.rut', 'tools', '', mRoot);
         assert.deepStrictEqual(
             rootOut.decls,
             [
@@ -1992,7 +2011,7 @@ async function main() {
         );
         const mChild =
             'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n';
-        const childOut = dep.addDefMod(
+        const childOut = await dep.addDefMod(
             'file:///ws/tools/src/layout/mod.rut',
             'tools',
             'layout',
@@ -2007,9 +2026,9 @@ async function main() {
         const modDoc =
             'use tools::layout::{ Column };\nfn main() -> nil {\n    let c: Column = Column { w: 1 };\n}\n';
         const modUri = 'file:///ws/e2e-mods.rut';
-        dep.analyze(modUri, modDoc);
+        await dep.analyze(modUri, modDoc);
         // the walked tier: the resolved module's exports
-        const walkTier = dep.complete(modUri, 0, 'use tools::layout::'.length);
+        const walkTier = await dep.complete(modUri, 0, 'use tools::layout::'.length);
         const walkLabels = walkTier.map((i) => i.label);
         for (const want of ['Column', 'mk']) {
             assert.ok(
@@ -2019,7 +2038,7 @@ async function main() {
         }
         // the root tier: the pub mod child offers, the private edge and
         // the child's members never leak
-        const rootTier = dep.complete(modUri, 0, 'use tools::'.length);
+        const rootTier = await dep.complete(modUri, 0, 'use tools::'.length);
         const rootLabels = rootTier.map((i) => i.label);
         assert.ok(
             rootLabels.includes('layout'),
@@ -2034,7 +2053,7 @@ async function main() {
             `child members stay under their path: ${JSON.stringify(rootLabels)}`,
         );
         // the segment hover resolves the mounted module
-        const segHover = dep.hover(modUri, 0, 'use tools::layout::'.length - 3);
+        const segHover = await dep.hover(modUri, 0, 'use tools::layout::'.length - 3);
         assert.ok(
             segHover?.contents.value.includes('layout/mod.rut'),
             `segment hover missed: ${segHover && JSON.stringify(segHover.contents.value.slice(0, 80))}`,
@@ -2054,8 +2073,8 @@ async function main() {
         const syncUri = 'file:///ws/e2e-sync.rut';
         const staleDoc = 'fn go() -> nil {\n    let log = Logger("h");\n    log\n}\n';
         const freshDoc = 'fn go() -> nil {\n    let log = Logger("h");\n    log.\n}\n';
-        dep.analyze(syncUri, staleDoc);
-        const synced = dep.complete(syncUri, 2, 8, freshDoc);
+        await dep.analyze(syncUri, staleDoc);
+        const synced = await dep.complete(syncUri, 2, 8, freshDoc);
         const syncedLabels = synced.map((i) => i.label);
         for (const want of ['new', 'debug', 'info', 'warn', 'error']) {
             assert.ok(
@@ -2069,7 +2088,7 @@ async function main() {
         );
         // the dot guard through the raw entry: `probe().` — [] exactly
         const guardDoc = 'fn go() -> nil {\n    let x = probe().\n}\n';
-        const guarded = dep.complete(syncUri, 1, 20, guardDoc);
+        const guarded = await dep.complete(syncUri, 1, 20, guardDoc);
         assert.deepStrictEqual(
             guarded,
             [],
@@ -2088,7 +2107,12 @@ async function main() {
         {
             const chkDepSrc =
                 'pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n';
-            const chkDep = dep.addDefMod('file:///ws/chk/dep/src/mod.rut', 'chkdep', '', chkDepSrc);
+            const chkDep = await dep.addDefMod(
+                'file:///ws/chk/dep/src/mod.rut',
+                'chkdep',
+                '',
+                chkDepSrc,
+            );
             assert.ok(Array.isArray(chkDep.decls), `chkdep stamps: ${JSON.stringify(chkDep)}`);
             const chkAppSrc = [
                 'use chkdep::{ Task };',
@@ -2100,9 +2124,9 @@ async function main() {
                 '',
             ].join('\n');
             const chkAppUri = 'file:///ws/chk/app/src/mod.rut';
-            const chkApp = dep.addDefMod(chkAppUri, 'chkapp', '', chkAppSrc);
+            const chkApp = await dep.addDefMod(chkAppUri, 'chkapp', '', chkAppSrc);
             assert.ok(Array.isArray(chkApp.decls), `chkapp stamps: ${JSON.stringify(chkApp)}`);
-            const chkMerged = dep.analyze(chkAppUri, chkAppSrc);
+            const chkMerged = await dep.analyze(chkAppUri, chkAppSrc);
             const chkDiags = chkMerged.diags || [];
             const mismatch = chkDiags.find((d) =>
                 (d.message || '').includes('assignment type mismatch'),
@@ -2131,7 +2155,7 @@ async function main() {
                 );
             }
             // the parse-only fallback: the SAME text at an unstamped uri
-            const chkPlain = dep.analyze('file:///ws/chk/plain.rut', chkAppSrc);
+            const chkPlain = await dep.analyze('file:///ws/chk/plain.rut', chkAppSrc);
             if ((chkPlain.diags || []).length !== 0) {
                 bad.push(
                     `unstamped doc must stay parse-only clean: ${JSON.stringify(chkPlain.diags)}`,
@@ -2159,7 +2183,7 @@ async function main() {
         const inst = await RutLsp.load(fs.readFileSync(WASM_PATH));
         // BEFORE any setLock: the url row answers sha256 null — without a
         // lock the unpinned refusal stays honest, never a guessed pin
-        const bare = inst.parseManifest(manifest);
+        const bare = await inst.parseManifest(manifest);
         assert.ok(!bare.error, `unlocked manifest parse: ${JSON.stringify(bare)}`);
         assert.strictEqual(
             bare.deps.find((r) => r.name === 'pouch').source.sha256,
@@ -2170,10 +2194,10 @@ async function main() {
         // from the fixture's rows, never a constant); the re-parse stamps
         // the pin onto the url row — and the pin IS the committed bundle
         // bytes' sha256 (the mount door's law, from fixture bytes alone)
-        const fed = inst.setLock(lock);
+        const fed = await inst.setLock(lock);
         const wantPins = (lock.match(/"pkg"\s*:/g) || []).length;
         assert.deepStrictEqual(fed, { pins: wantPins }, `setLock envelope: ${JSON.stringify(fed)}`);
-        const pinned = inst.parseManifest(manifest);
+        const pinned = await inst.parseManifest(manifest);
         assert.ok(!pinned.error, `pinned manifest parse: ${JSON.stringify(pinned)}`);
         const pouchRow = pinned.deps.find((r) => r.name === 'pouch');
         assert.strictEqual(pouchRow.source.url, pouchUrl);
@@ -2192,7 +2216,7 @@ async function main() {
         // EMPTY after it (the re-parse answers unpinned, never guessed
         // pins); the same holds for the miss lane's empty bytes (a folder
         // with no lock — walkDeps hands over '' to clear the ledger)
-        const badLock = inst.setLock(
+        const badLock = await inst.setLock(
             '{"format": "rutlock", "format_version": 1, "deps": [{"pkg": "p", "url": "https://x/p.rutbundle", "sha256": "nothex"}]}',
         );
         assert.ok(
@@ -2200,13 +2224,16 @@ async function main() {
             `malformed lock envelope: ${JSON.stringify(badLock)}`,
         );
         assert.strictEqual(
-            inst.parseManifest(manifest).deps.find((r) => r.name === 'pouch').source.sha256,
+            (await inst.parseManifest(manifest)).deps.find((r) => r.name === 'pouch').source.sha256,
             null,
             'a malformed lock must clear the ledger, not keep it',
         );
-        assert.ok(inst.setLock('').error, 'the empty-bytes miss lane answers the error envelope');
+        assert.ok(
+            (await inst.setLock('')).error,
+            'the empty-bytes miss lane answers the error envelope',
+        );
         assert.strictEqual(
-            inst.parseManifest(manifest).deps.find((r) => r.name === 'pouch').source.sha256,
+            (await inst.parseManifest(manifest)).deps.find((r) => r.name === 'pouch').source.sha256,
             null,
             'the miss lane must leave the ledger empty',
         );
@@ -2215,7 +2242,7 @@ async function main() {
         // index through addDefMod/addDefNamed (the exact mountUrlDep
         // moves), and the `use` leaf answers the file:// location whose
         // content holds the decl
-        const extracted = inst.extractBundle(bundleBytes);
+        const extracted = await inst.extractBundle(bundleBytes);
         assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
         const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-lock-'));
         try {
@@ -2225,10 +2252,10 @@ async function main() {
                 fs.mkdirSync(path.dirname(fp), { recursive: true });
                 fs.writeFileSync(fp, xf.src);
                 if (xf.mod_path === null) {
-                    inst.addDefNamed(`file://${fp}`, extracted.module, xf.src);
+                    await inst.addDefNamed(`file://${fp}`, extracted.module, xf.src);
                     continue;
                 }
-                const stamped = inst.addDefMod(
+                const stamped = await inst.addDefMod(
                     `file://${fp}`,
                     extracted.module,
                     xf.mod_path,
@@ -2238,19 +2265,19 @@ async function main() {
             }
             const pdoc = 'use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec.new();\n}\n';
             const puri = 'file:///ws/e2e-lock-feed.rut';
-            const pa = inst.analyze(puri, pdoc);
+            const pa = await inst.analyze(puri, pdoc);
             assert.strictEqual(
                 pa.diags.length,
                 0,
                 `lock-feed probe doc: ${JSON.stringify(pa.diags)}`,
             );
-            const leaf = inst
-                .definition(puri, ...posOf(pdoc, 'Vec'))
-                .filter((l) => l.uri.includes(`.rut/deps/pouch-${pin.slice(0, 12)}`));
+            const leaf = (await inst.definition(puri, ...posOf(pdoc, 'Vec'))).filter((l) =>
+                l.uri.includes(`.rut/deps/pouch-${pin.slice(0, 12)}`),
+            );
             assert.strictEqual(
                 leaf.length,
                 1,
-                `lock-fed leaf targets: ${JSON.stringify(inst.definition(puri, ...posOf(pdoc, 'Vec')))}`,
+                `lock-fed leaf targets: ${JSON.stringify(await inst.definition(puri, ...posOf(pdoc, 'Vec')))}`,
             );
             const body = fs.readFileSync(leaf[0].uri.replace(/^file:\/\//, ''), 'utf8');
             assert.ok(body.includes('pub class Vec'), 'the lock-fed target holds the decl');
@@ -2294,7 +2321,7 @@ async function main() {
         const src =
             'class Widget {\n    id: i32;\n}\nfn go(w: Widget) -> i32 {\n    return w.id;\n}\n';
         const uri = 'file:///ws/wire-shape.rut';
-        const analysis = core.analyze(uri, src);
+        const analysis = await core.analyze(uri, src);
         eqKeys(analysis, ['diags', 'symbols', 'tokens'], 'analysis');
         eqKeys(analysis.tokens, ['data'], 'analysis.tokens');
 
@@ -2309,7 +2336,7 @@ async function main() {
         eqKeys(sym.range, ['start', 'end'], 'symbol.range');
         eqKeys(sym.range.start, ['line', 'character'], 'position');
 
-        const broken = core.analyze('file:///ws/wire-diag.rut', 'fn go( {\n}\n');
+        const broken = await core.analyze('file:///ws/wire-diag.rut', 'fn go( {\n}\n');
         assert.ok(broken.diags.length > 0, 'the broken doc carries a parse diag');
         declaredOnly(
             broken.diags[0],
@@ -2327,27 +2354,31 @@ async function main() {
             'diagnostic',
         );
 
-        const hover = core.hover(uri, 0, 6);
+        const hover = await core.hover(uri, 0, 6);
         if (hover) {
             declaredOnly(hover, ['contents', 'range'], 'hover');
             eqKeys(hover.contents, ['kind', 'value'], 'hover.contents');
         }
 
         // completion items and definition targets
-        const items = core.complete(uri, 4, 13, src);
+        const items = await core.complete(uri, 4, 13, src);
         assert.ok(items.length > 0, 'member completion answers');
         declaredOnly(
             items[0],
             ['label', 'kind', 'detail', 'documentation', 'sortText', 'additionalTextEdits'],
             'completion item',
         );
-        const defs = core.definition(uri, 0, 6);
+        const defs = await core.definition(uri, 0, 6);
         assert.ok(defs.length > 0, 'the class name defines');
         eqKeys(defs[0], ['range', 'uri'], 'location');
         eqKeys(defs[0].range, ['start', 'end'], 'location.range');
 
         // inlay hints + signature help
-        for (const h of core.inlayHint(uri, { line: 0, character: 0 }, { line: 5, character: 0 })) {
+        for (const h of await core.inlayHint(
+            uri,
+            { line: 0, character: 0 },
+            { line: 5, character: 0 },
+        )) {
             declaredOnly(
                 h,
                 [
@@ -2366,8 +2397,8 @@ async function main() {
         const call =
             'fn add(a: i32, b: i32) -> i32 {\n    return a + b;\n}\nfn go() -> i32 {\n    return add(1, 2);\n}\n';
         const curi = 'file:///ws/wire-sig.rut';
-        core.analyze(curi, call);
-        const sh = core.signatureHelp(curi, 4, 16);
+        await core.analyze(curi, call);
+        const sh = await core.signatureHelp(curi, 4, 16);
         if (sh) {
             declaredOnly(
                 sh,
@@ -2384,7 +2415,7 @@ async function main() {
 
         // the dep face — the crate's own envelopes, exactly
         const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
-        const table = core.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
+        const table = await core.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
         assert.ok(!table.error, `manifest parse: ${JSON.stringify(table)}`);
         eqKeys(table, ['name', 'entries', 'namespace', 'consts', 'deps', 'dev_deps'], 'dep table');
         eqKeys(table.entries[0], ['path', 'mode'], 'entry source');
@@ -2397,20 +2428,20 @@ async function main() {
         const urlRow = table.deps.find((r) => r.source.kind === 'url');
         if (urlRow)
             eqKeys(urlRow.source, ['kind', 'url', 'sha256', 'cache_path'], 'url dep source');
-        eqKeys(core.parseManifest('{'), ['error'], 'manifest error envelope');
+        eqKeys(await core.parseManifest('{'), ['error'], 'manifest error envelope');
 
         const lockText = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
-        eqKeys(core.setLock(lockText), ['pins'], 'set-lock answer');
+        eqKeys(await core.setLock(lockText), ['pins'], 'set-lock answer');
         eqKeys(
-            core.setLock(
+            await core.setLock(
                 '{"format":"rutlock","format_version":1,"deps":[{"pkg":"p","url":"https://x/p.rutbundle","sha256":"nope"}]}',
             ),
             ['error'],
             'lock error envelope',
         );
-        eqKeys(core.setDirectDeps(['wiremod']), ['direct'], 'direct-deps answer');
+        eqKeys(await core.setDirectDeps(['wiremod']), ['direct'], 'direct-deps answer');
 
-        const stamped = core.addDefMod(
+        const stamped = await core.addDefMod(
             'file:///ws/wire-mod/mod.rut',
             'wiremod',
             '',
@@ -2420,14 +2451,18 @@ async function main() {
         eqKeys(stamped.decls[0], ['name', 'vis'], 'mod decl');
 
         const bundle = fs.readFileSync(path.join(REPO, 'dist', 'std', 'pouch.rutbundle'));
-        eqKeys(core.addBundle(bundle), ['module', 'namespace', 'consts', 'files'], 'bundle index');
-        const extracted = core.extractBundle(bundle);
+        eqKeys(
+            await core.addBundle(bundle),
+            ['module', 'namespace', 'consts', 'files'],
+            'bundle index',
+        );
+        const extracted = await core.extractBundle(bundle);
         eqKeys(extracted, ['module', 'namespace', 'consts', 'files'], 'extract bundle');
         eqKeys(extracted.files[0], ['path', 'src', 'mode', 'mod_path'], 'extracted file');
 
         const zipPath = path.join(REPO, 'dist', 'std', 'calc.zip');
         if (fs.existsSync(zipPath)) {
-            const zip = core.extractSrczip(fs.readFileSync(zipPath));
+            const zip = await core.extractSrczip(fs.readFileSync(zipPath));
             eqKeys(
                 zip,
                 ['module', 'namespace', 'consts', 'files', 'manifest', 'embedded'],

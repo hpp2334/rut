@@ -1,6 +1,8 @@
 // the nine language-feature providers — each a thin body over the
 // wasm's query: pull the answer, map it onto vscode values (mapping.ts),
-// hand it back. VS Code owns scheduling; the debounce lives in
+// hand it back. Every binding call is an async RPC bridge (the actor
+// seam), so every provider is async — VS Code's ProviderResult accepts
+// Thenables. VS Code owns scheduling; the debounce lives in
 // extension.ts's diagnostics lane.
 
 import * as vscode from 'vscode';
@@ -16,13 +18,15 @@ import {
 import { analyzeDoc } from './util';
 import { decodeTokens, type RutLsp } from './wasm';
 
-export function registerSemanticTokens(rut: RutLsp): vscode.Disposable {
-    const legend = new vscode.SemanticTokensLegend(rut.legend(), []);
+export async function registerSemanticTokens(rut: RutLsp): Promise<vscode.Disposable> {
+    const legend = new vscode.SemanticTokensLegend(await rut.legend(), []);
     return vscode.languages.registerDocumentSemanticTokensProvider(
         SELECTOR,
         {
-            provideDocumentSemanticTokens(doc: vscode.TextDocument): vscode.SemanticTokens {
-                const data = analyzeDoc(rut, doc).tokens.data;
+            async provideDocumentSemanticTokens(
+                doc: vscode.TextDocument,
+            ): Promise<vscode.SemanticTokens> {
+                const data = (await analyzeDoc(rut, doc)).tokens.data;
                 const builder = new vscode.SemanticTokensBuilder(legend);
                 // decode the LSP delta encoding into the builder's absolute slots
                 // (one decoder for every host — the binding owns the wire)
@@ -38,19 +42,19 @@ export function registerSemanticTokens(rut: RutLsp): vscode.Disposable {
 
 export function registerDocumentSymbols(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerDocumentSymbolProvider(SELECTOR, {
-        provideDocumentSymbols(doc: vscode.TextDocument): vscode.DocumentSymbol[] {
-            return analyzeDoc(rut, doc).symbols.map(toSymbol);
+        async provideDocumentSymbols(doc: vscode.TextDocument): Promise<vscode.DocumentSymbol[]> {
+            return (await analyzeDoc(rut, doc)).symbols.map(toSymbol);
         },
     });
 }
 
 export function registerHover(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerHoverProvider(SELECTOR, {
-        provideHover(
+        async provideHover(
             doc: vscode.TextDocument,
             position: vscode.Position,
-        ): vscode.Hover | undefined {
-            const h = rut.hover(doc.uri.toString(), position.line, position.character);
+        ): Promise<vscode.Hover | undefined> {
+            const h = await rut.hover(doc.uri.toString(), position.line, position.character);
             if (!h) {
                 return undefined;
             }
@@ -66,17 +70,22 @@ export function registerCompletion(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerCompletionItemProvider(
         SELECTOR,
         {
-            provideCompletionItems(
+            async provideCompletionItems(
                 doc: vscode.TextDocument,
                 position: vscode.Position,
-            ): vscode.CompletionItem[] {
+            ): Promise<vscode.CompletionItem[]> {
                 // the CURRENT text rides the request (the doc-sync entry):
                 // completion fires on the keystroke while the analyze lane
                 // debounces ~200 ms — the stored doc may still be short the `.`
                 // this very request is about
-                return rut
-                    .complete(doc.uri.toString(), position.line, position.character, doc.getText())
-                    .map(toCompletionItem);
+                return (
+                    await rut.complete(
+                        doc.uri.toString(),
+                        position.line,
+                        position.character,
+                        doc.getText(),
+                    )
+                ).map(toCompletionItem);
             },
         },
         '.', // trigger: member completion after a receiver dot
@@ -92,9 +101,12 @@ export function registerCompletion(rut: RutLsp): vscode.Disposable {
 // into the true rut/ sources)
 export function registerDefinition(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerDefinitionProvider(SELECTOR, {
-        provideDefinition(doc: vscode.TextDocument, position: vscode.Position): vscode.Location[] {
+        async provideDefinition(
+            doc: vscode.TextDocument,
+            position: vscode.Position,
+        ): Promise<vscode.Location[]> {
             return resolveLocations(
-                rut.definition(doc.uri.toString(), position.line, position.character),
+                await rut.definition(doc.uri.toString(), position.line, position.character),
                 doc.uri.toString(),
             );
         },
@@ -103,12 +115,12 @@ export function registerDefinition(rut: RutLsp): vscode.Disposable {
 
 export function registerTypeDefinition(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerTypeDefinitionProvider(SELECTOR, {
-        provideTypeDefinition(
+        async provideTypeDefinition(
             doc: vscode.TextDocument,
             position: vscode.Position,
-        ): vscode.Location[] {
+        ): Promise<vscode.Location[]> {
             return resolveLocations(
-                rut.typeDefinition(doc.uri.toString(), position.line, position.character),
+                await rut.typeDefinition(doc.uri.toString(), position.line, position.character),
                 doc.uri.toString(),
             );
         },
@@ -121,8 +133,13 @@ export function registerTypeDefinition(rut: RutLsp): vscode.Disposable {
 // decoration and `editor.inlayHints` toggles it
 export function registerInlayHints(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerInlayHintsProvider(SELECTOR, {
-        provideInlayHints(doc: vscode.TextDocument, range: vscode.Range): vscode.InlayHint[] {
-            return rut.inlayHint(doc.uri.toString(), range.start, range.end).map(toInlayHint);
+        async provideInlayHints(
+            doc: vscode.TextDocument,
+            range: vscode.Range,
+        ): Promise<vscode.InlayHint[]> {
+            return (await rut.inlayHint(doc.uri.toString(), range.start, range.end)).map(
+                toInlayHint,
+            );
         },
     });
 }
@@ -132,13 +149,13 @@ export function registerInlayHints(rut: RutLsp): vscode.Disposable {
 // rides the vscode ReferenceContext through
 export function registerReferences(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerReferenceProvider(SELECTOR, {
-        provideReferences(
+        async provideReferences(
             doc: vscode.TextDocument,
             position: vscode.Position,
             context: vscode.ReferenceContext,
-        ): vscode.Location[] {
+        ): Promise<vscode.Location[]> {
             return resolveLocations(
-                rut.references(
+                await rut.references(
                     doc.uri.toString(),
                     position.line,
                     position.character,
@@ -156,11 +173,15 @@ export function registerSignatureHelp(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerSignatureHelpProvider(
         SELECTOR,
         {
-            provideSignatureHelp(
+            async provideSignatureHelp(
                 doc: vscode.TextDocument,
                 position: vscode.Position,
-            ): vscode.SignatureHelp | undefined {
-                const h = rut.signatureHelp(doc.uri.toString(), position.line, position.character);
+            ): Promise<vscode.SignatureHelp | undefined> {
+                const h = await rut.signatureHelp(
+                    doc.uri.toString(),
+                    position.line,
+                    position.character,
+                );
                 return h ? toSignatureHelp(h) : undefined;
             },
         },

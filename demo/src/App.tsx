@@ -239,38 +239,45 @@ export function App(): JSX.Element {
   // edits both flow through `source`, so this one effect covers both —
   // and the SAME timer is the D-1 auto-run lane (one timer, two
   // consumers; LAST-WINS: a newer edit clears this timer and re-arms —
-  // runs are never queued, a superseded run dies on the token check)
+  // runs are never queued, a superseded run dies on the token check).
+  // The analyze is an async bridge now (the actor seam): one promise,
+  // the stale flag still decides whether its answer may land.
   useEffect(() => {
     if (!lsp) return;
     let stale = false;
     const timer = window.setTimeout(() => {
-      try {
-        const a = lsp.analyze(PLAYGROUND_DOC, source);
+      void (async () => {
+        try {
+          const [a, legend] = await Promise.all([
+            lsp.analyze(PLAYGROUND_DOC, source),
+            lsp.legend,
+          ]);
+          if (stale) return;
+          overlayCache.current = buildOverlayCached(
+            source,
+            decodeTokens(a.tokens.data),
+            legend,
+            a.diags,
+            overlayCache.current,
+          );
+          setHighlight({
+            lines: overlayCache.current.lines,
+            diags: a.diags,
+          });
+        } catch (err) {
+          // a failed analyze must never kill the page — loud in the
+          // console, monochrome in the editor (the honest interim)
+          console.error("rut-lsp analyze failed:", err);
+          if (!stale) setHighlight(null);
+        }
+        // the auto-run consumer — independent of the highlight outcome.
+        // A case switch (or the boot install) skips here: its run was
+        // IMMEDIATE for this exact source and the panes already hold it.
         if (stale) return;
-        overlayCache.current = buildOverlayCached(
-          source,
-          decodeTokens(a.tokens.data),
-          lsp.legend,
-          a.diags,
-          overlayCache.current,
-        );
-        setHighlight({
-          lines: overlayCache.current.lines,
-          diags: a.diags,
-        });
-      } catch (err) {
-        // a failed analyze must never kill the page — loud in the
-        // console, monochrome in the editor (the honest interim)
-        console.error("rut-lsp analyze failed:", err);
-        if (!stale) setHighlight(null);
-      }
-      // the auto-run consumer — independent of the highlight outcome.
-      // A case switch (or the boot install) skips here: its run was
-      // IMMEDIATE for this exact source and the panes already hold it.
-      if (stale) return;
-      const skip = immediateRunSrc.current === source;
-      immediateRunSrc.current = null;
-      if (!skip) runAutoRef.current(source);
+        const skip = immediateRunSrc.current === source;
+        immediateRunSrc.current = null;
+        if (!skip) runAutoRef.current(source);
+      })();
     }, ANALYZE_DEBOUNCE_MS);
     return () => {
       stale = true;

@@ -6,10 +6,17 @@
 //!
 //! wasm-bindgen over the language core (the `rut-wasm` pattern): the
 //! module exports ONE class, [`RutLsp`]; the host constructs it with
-//! `new RutLsp()` and calls its methods. Every string answer is the
-//! JSON envelope; the wasm-bindgen runtime owns the string copies both
-//! ways (the raw-ABI era's `rut_begin`/`rut_alloc` arena and its
-//! ptr/len plumbing are gone — no `unsafe` anywhere in this crate):
+//! `new RutLsp()` and calls its methods. Every method is an ASYNC RPC
+//! bridge (a `Promise` — the actor seam): the call posts one
+//! [`event_loop::Msg`] on the loop's mpsc inbox and awaits a oneshot
+//! reply, while ONE long-lived loop task owns the `Core` exclusively and
+//! answers messages FIFO — sync handlers over `&mut Core` (see
+//! [`event_loop`]). A dropped loop answers the error envelope; a
+//! panicked handler isolates to its own reply channel. Every text
+//! answer is the JSON envelope; the wasm-bindgen runtime owns the
+//! string copies both ways (the raw-ABI era's
+//! `rut_begin`/`rut_alloc` arena and its ptr/len plumbing are gone — no
+//! `unsafe` anywhere in this crate):
 //!
 //!   new RutLsp()                               the language core, with
 //!                                              the std surface pre-indexed
@@ -90,17 +97,17 @@
 //! raw ABI: an LSP serves a long-lived editing session, so the instance
 //! OWNS its session state (open docs + the index) for its lifetime —
 //! the host holds one `RutLsp` per boot and mutates it per request.
-//! Single-threaded JS, one `RefCell` borrow per call: trivially safe,
-//! structurally.
+//! The state lives in `Core`, owned exclusively by the loop task
+//! ([`event_loop`]); the host's `RutLsp` is the inbox handle. Calls
+//! serialize on the loop's FIFO — single-threaded JS makes the order
+//! total, and no caller ever borrows the core.
 
-use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::str::FromStr;
 
 use crate::hover::DefIndex;
-use ls_types::Uri;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+mod event_loop;
 mod wire;
 
 // ---- the language core — the queries and the values ----
@@ -145,6 +152,19 @@ struct Core {
 }
 
 impl Core {
+    /// the core as it boots — the std surface pre-indexed, no session
+    /// state yet. The loop task owns this value exclusively; both
+    /// constructors (`new` the wasm face, `spawn_native` the native
+    /// harness) hand a fresh one to [`event_loop::run`].
+    fn boot() -> Core {
+        Core {
+            docs: HashMap::new(),
+            defs: crate::std_surface::indexes(),
+            lock_pins: BTreeMap::new(),
+            direct_deps: HashSet::new(),
+        }
+    }
+
     /// the open document's file-module context, read off the STAMPED
     /// twin: whichever face indexed the file under its real uri (the
     /// extension's dep walk / workspace indexer) laid down the (module,
@@ -175,10 +195,15 @@ impl Core {
     }
 }
 
-/// the language core as the host holds it — one per editing session
+/// the language core as the host holds it — one per editing session.
+/// Not the state itself: the INBOX HANDLE. The loop task owns `Core`
+/// exclusively; every entry posts one `event_loop::Msg` and awaits the
+/// oneshot reply (the actor seam — the handlers are sync bodies over
+/// `&mut Core`, so no bridge can borrow across an await and no handler
+/// can post).
 #[wasm_bindgen]
 pub struct RutLsp {
-    core: RefCell<Core>,
+    tx: futures::channel::mpsc::UnboundedSender<event_loop::Msg>,
 }
 
 #[wasm_bindgen]
@@ -188,18 +213,45 @@ impl RutLsp {
     #[wasm_bindgen(constructor)]
     pub fn new() -> RutLsp {
         RutLsp {
-            core: RefCell::new(Core {
-                docs: HashMap::new(),
-                defs: crate::std_surface::indexes(),
-                lock_pins: BTreeMap::new(),
-                direct_deps: HashSet::new(),
-            }),
+            tx: event_loop::spawn(Core::boot()),
+        }
+    }
+
+    // ---- the bridges ----
+    //
+    // Every entry: own the arguments (an async future must not borrow —
+    // the JS caller may drop anything between microtasks), post one
+    // message, await the reply. A dropped loop answers the loop-gone
+    // error envelope; a panicked handler answers through its canceled
+    // oneshot the same way.
+
+    /// post one message, await its reply — the shared bridge body. Both
+    /// failure shapes (the inbox refused the post, the reply channel
+    /// dropped) map onto `Canceled`: the loop cannot answer.
+    async fn rpc(
+        &self,
+        build: impl FnOnce(event_loop::Tx) -> event_loop::Msg,
+    ) -> Result<event_loop::Reply, futures::channel::oneshot::Canceled> {
+        let (tx, rx) = futures::channel::oneshot::channel();
+        self.tx
+            .unbounded_send(build(tx))
+            .map_err(|_| futures::channel::oneshot::Canceled)?;
+        rx.await
+    }
+
+    /// the text-envelope bridge: the JSON answer, or the loop-gone
+    /// error envelope
+    async fn text(&self, build: impl FnOnce(event_loop::Tx) -> event_loop::Msg) -> String {
+        match self.rpc(build).await {
+            Ok(event_loop::Reply::Text(s)) => s,
+            Ok(_) => "null".to_string(), // unreachable: these arms answer Text
+            Err(_) => event_loop::loop_gone(),
         }
     }
 
     /// the semantic-token legend (names in token-type index order)
-    pub fn legend(&self) -> String {
-        json_envelope(serde_json::json!(crate::semantic::TokenType::legend()))
+    pub async fn legend(&self) -> String {
+        self.text(|tx| event_loop::Msg::Legend { tx }).await
     }
 
     /// open / FULL-sync change: store the document, return one analysis —
@@ -209,62 +261,30 @@ impl RutLsp {
     /// names it) compiles with its dep closure and the checker's per-file
     /// diags map back through the file stamps. No package context →
     /// parse-only, exactly the pre-B1 answer.
-    pub fn analyze(&self, uri: &str, src: &str) -> String {
-        let mut core = self.core.borrow_mut();
-        core.docs.insert(uri.to_string(), src.to_string());
-        // analyze_at wires related-info URIs + hover provenance, exactly
-        // wired like `analysis::analyze_at`; a degenerate URI still analyzes
-        let a = match Uri::from_str(uri) {
-            Ok(u) => crate::analysis::analyze_at(&u, src, crate::analysis::mode_of(uri)),
-            Err(_) => {
-                let mut a = crate::analysis::analyze(src, crate::analysis::mode_of(uri));
-                a.index.origin = uri.to_string();
-                a
-            }
-        };
-        let diags = {
-            let dm = core.doc_mods_of(uri);
-            let groups = if dm.pkg.is_some() {
-                crate::check::groups_from_defs(&core.defs)
-            } else {
-                Vec::new()
-            };
-            crate::check::merged_doc_diags(uri, src, dm.pkg, dm.mod_path, groups, a.diags)
-        };
-        json_envelope(wire::Analysis {
-            diags,
-            // SemanticTokens serializes `data` to the flat u32 wire format
-            // (the same bytes a stdio face would put on the wire)
-            tokens: ls_types::SemanticTokens {
-                result_id: None,
-                data: a.tokens,
-            },
-            symbols: a.symbols,
-        })
+    pub async fn analyze(&self, uri: String, src: String) -> String {
+        self.text(|tx| event_loop::Msg::Analyze { uri, src, tx })
+            .await
     }
 
-    /// close: drop the document (the workspace/std index stays)
-    pub fn forget(&self, uri: &str) {
-        self.core.borrow_mut().docs.remove(uri);
+    /// close: drop the document (the workspace/std index stays). The
+    /// await is ordering only — this lane answers no payload.
+    pub async fn forget(&self, uri: String) {
+        let _ = self.rpc(|tx| event_loop::Msg::Forget { uri, tx }).await;
     }
 
     /// hover at an LSP position — the doc index first, then std +
     /// workspace; `null` when there's nothing to say
-    pub fn hover(&self, uri: &str, line: u32, ch: u32) -> String {
-        let core = self.core.borrow();
-        let Some(src) = core.docs.get(uri).cloned() else {
-            return "null".to_string();
-        };
-        let doc = core.doc_mods_of(uri);
-        let out = crate::analysis::hover_at(uri, &src, &core.defs, &doc, line, ch);
-        json_envelope(serde_json::json!(out))
+    pub async fn hover(&self, uri: String, line: u32, ch: u32) -> String {
+        self.text(|tx| event_loop::Msg::Hover { uri, line, ch, tx })
+            .await
     }
 
     /// completions at an LSP position (member after `.`, the use-path and
     /// qualified-position tiers) — the doc's file-module context rides
     /// from its stamped twin (see `doc_mods_of`)
-    pub fn complete(&self, uri: &str, line: u32, ch: u32) -> String {
-        self.core.borrow().complete_stored(uri, line, ch)
+    pub async fn complete(&self, uri: String, line: u32, ch: u32) -> String {
+        self.text(|tx| event_loop::Msg::Complete { uri, line, ch, tx })
+            .await
     }
 
     /// completions over the document's CURRENT text — the sync twin of
@@ -274,12 +294,15 @@ impl RutLsp {
     /// fires on the keystroke — the stored-only read raced that window
     /// and answered a stale tail (typing `log.` hit the bare keyword
     /// dump when the stored doc still ended at `log`).
-    pub fn complete_in(&self, uri: &str, src: &str, line: u32, ch: u32) -> String {
-        {
-            let mut core = self.core.borrow_mut();
-            core.docs.insert(uri.to_string(), src.to_string());
-        }
-        self.core.borrow().complete_stored(uri, line, ch)
+    pub async fn complete_in(&self, uri: String, src: String, line: u32, ch: u32) -> String {
+        self.text(|tx| event_loop::Msg::CompleteIn {
+            uri,
+            src,
+            line,
+            ch,
+            tx,
+        })
+        .await
     }
 
     /// definitions at an LSP position — the doc index first, then std +
@@ -289,26 +312,16 @@ impl RutLsp {
     /// resolves it against the workspace). The doc's file-module context
     /// rides from its stamped twin (see `doc_mods_of`) — the mod-edge
     /// clicks and the own-package use lanes key on it.
-    pub fn definition(&self, uri: &str, line: u32, ch: u32) -> String {
-        let core = self.core.borrow();
-        let Some(src) = core.docs.get(uri).cloned() else {
-            return "null".to_string();
-        };
-        let doc = core.doc_mods_of(uri);
-        let locs = crate::analysis::definition_at(uri, &src, &core.defs, &doc, line, ch);
-        locations_envelope(&locs)
+    pub async fn definition(&self, uri: String, line: u32, ch: u32) -> String {
+        self.text(|tx| event_loop::Msg::Definition { uri, line, ch, tx })
+            .await
     }
 
     /// type definitions at an LSP position (an expression -> its type's
     /// declaration) — same shape as `definition`
-    pub fn type_definition(&self, uri: &str, line: u32, ch: u32) -> String {
-        let core = self.core.borrow();
-        let Some(src) = core.docs.get(uri).cloned() else {
-            return "null".to_string();
-        };
-        let doc = core.doc_mods_of(uri);
-        let locs = crate::analysis::type_definition_at(uri, &src, &core.defs, &doc, line, ch);
-        locations_envelope(&locs)
+    pub async fn type_definition(&self, uri: String, line: u32, ch: u32) -> String {
+        self.text(|tx| event_loop::Msg::TypeDefinition { uri, line, ch, tx })
+            .await
     }
 
     /// inlay hints for a document range — the inline inference display:
@@ -316,34 +329,23 @@ impl RutLsp {
     /// call sites. `null` when the doc is unknown, `[]` when nothing
     /// resolves. The hints are full LSP values (position + label + kind +
     /// tooltip); the client renders them.
-    pub fn inlay(
+    pub async fn inlay(
         &self,
-        uri: &str,
+        uri: String,
         start_line: u32,
         start_ch: u32,
         end_line: u32,
         end_ch: u32,
     ) -> String {
-        let core = self.core.borrow();
-        let Some(src) = core.docs.get(uri).cloned() else {
-            return "null".to_string();
-        };
-        let hints = crate::analysis::inlay_hints_at(
+        self.text(|tx| event_loop::Msg::Inlay {
             uri,
-            &src,
-            &core.defs,
-            ls_types::Range {
-                start: ls_types::Position {
-                    line: start_line,
-                    character: start_ch,
-                },
-                end: ls_types::Position {
-                    line: end_line,
-                    character: end_ch,
-                },
-            },
-        );
-        json_envelope(serde_json::json!(hints))
+            start_line,
+            start_ch,
+            end_line,
+            end_ch,
+            tx,
+        })
+        .await
     }
 
     /// references — the definition index read BACKWARDS: every position
@@ -353,22 +355,15 @@ impl RutLsp {
     /// the LSP toggle. `null` when the doc is unknown, `[]` when nothing
     /// resolves — the same `{uri, range}` Location JSON `definition`
     /// speaks.
-    pub fn references(&self, uri: &str, line: u32, ch: u32, include_decl: u32) -> String {
-        let core = self.core.borrow();
-        let Some(src) = core.docs.get(uri).cloned() else {
-            return "null".to_string();
-        };
-        let doc = core.doc_mods_of(uri);
-        let locs = crate::analysis::references_at(
+    pub async fn references(&self, uri: String, line: u32, ch: u32, include_decl: u32) -> String {
+        self.text(|tx| event_loop::Msg::References {
             uri,
-            &src,
-            &core.defs,
-            &doc,
             line,
             ch,
-            include_decl != 0,
-        );
-        locations_envelope(&locs)
+            include_decl,
+            tx,
+        })
+        .await
     }
 
     /// signature help at an LSP position — the callee resolves through the
@@ -377,25 +372,18 @@ impl RutLsp {
     /// signature renders verbatim, the active parameter comes from the
     /// comma/paren depth at the request position. Ambiguity or arity
     /// mismatch → `null` (never wrong help).
-    pub fn signature_help(&self, uri: &str, line: u32, ch: u32) -> String {
-        let core = self.core.borrow();
-        let Some(src) = core.docs.get(uri).cloned() else {
-            return "null".to_string();
-        };
-        let out = crate::analysis::signature_help_at(uri, &src, &core.defs, line, ch);
-        json_envelope(serde_json::json!(out))
+    pub async fn signature_help(&self, uri: String, line: u32, ch: u32) -> String {
+        self.text(|tx| event_loop::Msg::SignatureHelp { uri, line, ch, tx })
+            .await
     }
 
     /// index one workspace file (the host's stand-in for an fs walk —
     /// server's fs walk — the 500-file cap is the caller's). Re-indexing
-    /// a URI replaces its entry.
-    pub fn add_def(&self, uri: &str, src: &str) {
-        let idx = crate::analysis::index_at(uri, src);
-        let mut core = self.core.borrow_mut();
-        match core.defs.iter().position(|d| d.origin == uri) {
-            Some(slot) => core.defs[slot] = idx,
-            None => core.defs.push(idx),
-        }
+    /// a URI replaces its entry. The await is ordering only.
+    pub async fn add_def(&self, uri: String, src: String) {
+        let _ = self
+            .rpc(|tx| event_loop::Msg::AddDef { uri, src, tx })
+            .await;
     }
 
     // ---- the deps face (crate::deps — one engine, no JS-side parsing) ----
@@ -405,12 +393,9 @@ impl RutLsp {
     /// its dep rows with the url rows' cache paths and lock-sourced
     /// pins). A malformed manifest is the error envelope — the host
     /// surfaces it as a hint.
-    pub fn parse_manifest(&self, text: &str) -> String {
-        let core = self.core.borrow();
-        match crate::deps::dep_table_pinned(text, &core.lock_pins) {
-            Ok(t) => json_envelope(wire::DepTable::from(&t)),
-            Err(e) => json_envelope(wire::Error::new(e)),
-        }
+    pub async fn parse_manifest(&self, text: String) -> String {
+        self.text(|tx| event_loop::Msg::ParseManifest { text, tx })
+            .await
     }
 
     /// hand the dep-table face the workspace root's `rut.lock` bytes — the
@@ -420,19 +405,8 @@ impl RutLsp {
     /// malformed lock — the host surfaces it as a hint, and the (empty)
     /// ledger stands so url rows answer `sha256: null` (the unpinned
     /// refusal), never guessed pins.
-    pub fn set_lock(&self, text: &str) -> String {
-        let mut core = self.core.borrow_mut();
-        match crate::deps::lock_pins(text) {
-            Ok(pins) => {
-                let n = pins.len();
-                core.lock_pins = pins;
-                json_envelope(wire::Pins { pins: n })
-            }
-            Err(e) => {
-                core.lock_pins = BTreeMap::new();
-                json_envelope(wire::Error::new(e))
-            }
-        }
+    pub async fn set_lock(&self, text: String) -> String {
+        self.text(|tx| event_loop::Msg::SetLock { text, tx }).await
     }
 
     /// hand the dep face the direct-dep module names — the open
@@ -445,19 +419,9 @@ impl RutLsp {
     /// ACCUMULATE (a set — multi-folder walks and re-walks re-add the
     /// same names). Answers `{"direct": N}` (the set size), or the error
     /// envelope for malformed JSON.
-    pub fn set_direct_deps(&self, names_json: &str) -> String {
-        let mut core = self.core.borrow_mut();
-        match serde_json::from_str::<Vec<String>>(names_json) {
-            Ok(names) => {
-                for n in names {
-                    core.direct_deps.insert(n);
-                }
-                json_envelope(wire::Direct {
-                    direct: core.direct_deps.len(),
-                })
-            }
-            Err(e) => json_envelope(wire::Error::new(e.to_string())),
-        }
+    pub async fn set_direct_deps(&self, names_json: String) -> String {
+        self.text(|tx| event_loop::Msg::SetDirectDeps { names_json, tx })
+            .await
     }
 
     /// index one dep source file under its module NAME — `deps::index_dep`
@@ -467,15 +431,11 @@ impl RutLsp {
     /// `add_def`); namespace/consts have no voice here — a dep
     /// needing them indexes through `add_bundle`, whose manifest is in
     /// the bytes. The direct-dep marker stamps from the host's set.
-    pub fn add_def_named(&self, uri: &str, name: &str, src: &str) {
-        let mut idx =
-            crate::deps::index_dep(name, uri, src, crate::analysis::mode_of(uri), None, &[]);
-        let mut core = self.core.borrow_mut();
-        idx.direct_dep = core.direct_deps.contains(name);
-        match core.defs.iter().position(|d| d.origin == uri) {
-            Some(slot) => core.defs[slot] = idx,
-            None => core.defs.push(idx),
-        }
+    /// The await is ordering only.
+    pub async fn add_def_named(&self, uri: String, name: String, src: String) {
+        let _ = self
+            .rpc(|tx| event_loop::Msg::AddDefNamed { uri, name, src, tx })
+            .await;
     }
 
     /// index one dep source file under its module NAME at a MOD PATH —
@@ -485,35 +445,21 @@ impl RutLsp {
     /// `{ "decls": [{ "name", "vis" }] }` — so the host's mount walk
     /// reads its next hop from the wasm's parse (JS moves bytes, the
     /// module parses; no JS-side rut parsing).
-    pub fn add_def_mod(&self, uri: &str, name: &str, mod_path: &str, src: &str) -> String {
-        let mut idx = crate::deps::index_dep_mod(
-            name,
+    pub async fn add_def_mod(
+        &self,
+        uri: String,
+        name: String,
+        mod_path: String,
+        src: String,
+    ) -> String {
+        self.text(|tx| event_loop::Msg::AddDefMod {
             uri,
+            name,
             mod_path,
             src,
-            crate::analysis::mode_of(uri),
-            None,
-            &[],
-        );
-        let mut core = self.core.borrow_mut();
-        idx.direct_dep = core.direct_deps.contains(name);
-        let decls: Vec<wire::ModDecl> = idx
-            .mods
-            .iter()
-            .map(|m| wire::ModDecl {
-                name: m.name.clone(),
-                vis: if matches!(m.vis, rut_ast::ast::Vis::Pub) {
-                    "pub"
-                } else {
-                    "mod"
-                },
-            })
-            .collect();
-        match core.defs.iter().position(|d| d.origin == uri) {
-            Some(slot) => core.defs[slot] = idx,
-            None => core.defs.push(idx),
-        }
-        json_envelope(wire::ModDecls { decls })
+            tx,
+        })
+        .await
     }
 
     /// unpack one `.rutbundle` — `deps::bundle_sources` reads the
@@ -522,72 +468,10 @@ impl RutLsp {
     /// replace-by-origin like every index). The envelope names the
     /// module + the entry paths indexed, or the error — a
     /// corrupt/foreign archive never lands bytes. The bytes param is
-    /// `&[u8]`: the archive is a zip, not text.
-    pub fn add_bundle(&self, bytes: &[u8]) -> String {
-        let b = match crate::deps::bundle_sources(bytes) {
-            Ok(b) => b,
-            Err(e) => return json_envelope(serde_json::json!({ "error": e })),
-        };
-        let mut paths = Vec::with_capacity(b.files.len());
-        let mut core = self.core.borrow_mut();
-        let direct = core.direct_deps.contains(&b.module);
-        for f in &b.files {
-            let uri = format!("bundle:{}/{}", b.module, f.path);
-            // a mounted mod child rides as `<path>/mod.rut` (a host tree's
-            // as `<path>/mod.d.rut`, the rows lane's root as `mod.rut`) —
-            // its mod path stamps the index in the file's own mode; flat
-            // files keep today's shape. A DECL file is the declaration
-            // entry (wire v12): ONE parse, the inline nesting stamps one
-            // index per module — the consolidated group entry indexes whole.
-            let idxs: Vec<_> = match crate::deps::bundle_file_mod_path(&f.path) {
-                Some(p) if f.mode == rut_parser::Mode::Decl => crate::deps::index_dep_decl_group(
-                    &b.module,
-                    &uri,
-                    &p,
-                    &f.src,
-                    b.namespace.as_deref(),
-                    &b.consts,
-                )
-                .into_iter()
-                .map(|(_, idx)| idx)
-                .collect(),
-                Some(p) => vec![crate::deps::index_dep_mod(
-                    &b.module,
-                    &uri,
-                    &p,
-                    &f.src,
-                    f.mode,
-                    b.namespace.as_deref(),
-                    &b.consts,
-                )],
-                None => vec![crate::deps::index_dep(
-                    &b.module,
-                    &uri,
-                    &f.src,
-                    f.mode,
-                    b.namespace.as_deref(),
-                    &b.consts,
-                )],
-            };
-            for mut idx in idxs {
-                idx.direct_dep = direct;
-                // one uri per module: the shared entry uri for the root
-                // stamp, `#<mod path>` for the nested ones (the (module,
-                // mod_path) pair is the real key; the uri only names the
-                // origin in diagnostics)
-                match core.defs.iter().position(|d| d.origin == uri) {
-                    Some(slot) => core.defs[slot] = idx,
-                    None => core.defs.push(idx),
-                }
-            }
-            paths.push(f.path.clone());
-        }
-        json_envelope(wire::BundleIndex {
-            module: b.module,
-            namespace: b.namespace,
-            consts: b.consts,
-            files: paths,
-        })
+    /// owned (`Vec<u8>`): the archive is a zip, not text.
+    pub async fn add_bundle(&self, bytes: Vec<u8>) -> String {
+        self.text(|tx| event_loop::Msg::AddBundle { bytes, tx })
+            .await
     }
 
     /// unpack one `.rutbundle` into the envelope WITHOUT indexing — the
@@ -601,19 +485,9 @@ impl RutLsp {
     /// mounted child its `<path>`; a flat file stays `null`), so the host
     /// never re-derives the mount rule in TypeScript. A corrupt/foreign
     /// archive is the error envelope, never bytes.
-    pub fn extract_bundle(&self, bytes: &[u8]) -> String {
-        let b = match crate::deps::bundle_sources(bytes) {
-            Ok(b) => b,
-            Err(e) => return json_envelope(serde_json::json!({ "error": e })),
-        };
-        let files: Vec<wire::BundleFile> =
-            b.files.iter().map(wire::BundleFile::from_source).collect();
-        json_envelope(wire::ExtractBundle {
-            module: b.module,
-            namespace: b.namespace,
-            consts: b.consts,
-            files,
-        })
+    pub async fn extract_bundle(&self, bytes: Vec<u8>) -> String {
+        self.text(|tx| event_loop::Msg::ExtractBundle { bytes, tx })
+            .await
     }
 
     /// A SOURCE-ZIP cache entry's extract — the source transport's editor
@@ -622,70 +496,45 @@ impl RutLsp {
     /// → `""` the root, `src/a/mod.rut` → `"a"`, `src/a.rut` → `"a"`).
     /// The embedded `deps/<identity>/` trees belong to other pkgs and stay
     /// out (the consumer's own dep rows cover them).
-    pub fn extract_srczip(&self, bytes: &[u8]) -> String {
-        let b = match crate::deps::srczip_sources(bytes) {
-            Ok(b) => b,
-            Err(e) => return json_envelope(serde_json::json!({ "error": e })),
-        };
-        let files: Vec<wire::BundleFile> = b
-            .files
-            .iter()
-            .map(|f| {
-                let rel = f.path.strip_prefix("src/").unwrap_or(&f.path);
-                let mod_path = if rel == "mod.rut" || rel == "mod.d.rut" {
-                    Some(String::new())
-                } else if let Some(p) = rel.strip_suffix("/mod.rut") {
-                    Some(p.to_string())
-                } else if let Some(p) = rel.strip_suffix("/mod.d.rut") {
-                    Some(p.to_string())
-                } else {
-                    rel.strip_suffix(".rut").map(|p| p.to_string())
-                };
-                wire::BundleFile {
-                    path: f.path.clone(),
-                    src: f.src.clone(),
-                    mode: wire::mode_str(f.mode),
-                    mod_path,
-                }
-            })
-            .collect();
-        json_envelope(wire::ExtractSrczip {
-            module: b.module,
-            namespace: b.namespace,
-            consts: b.consts,
-            files,
-            // the unpack law's ingredients: the archive's own manifest (the
-            // host lays it beside the files and the pkg's own rows mount
-            // through the ordinary dir lane) and the embedded
-            // `deps/<identity>/` entries (the ride-along groups, laid under
-            // the tree; first mount wins)
-            manifest: b.manifest,
-            embedded: b
-                .embedded
-                .iter()
-                .map(|(path, src)| wire::Embedded {
-                    path: path.clone(),
-                    src: src.clone(),
-                })
-                .collect(),
-        })
+    pub async fn extract_srczip(&self, bytes: Vec<u8>) -> String {
+        self.text(|tx| event_loop::Msg::ExtractSrczip { bytes, tx })
+            .await
     }
 
     /// an open doc's stored text length — the smoke test's round-trip
-    /// check
-    pub fn doc_len(&self, uri: &str) -> u32 {
-        self.core
-            .borrow()
-            .docs
-            .get(uri)
-            .map(|s| s.len() as u32)
-            .unwrap_or(0)
+    /// check. A dropped loop answers 0 — the doc's length is unknowable,
+    /// which is already this entry's unknown-doc answer.
+    pub async fn doc_len(&self, uri: String) -> u32 {
+        match self.rpc(|tx| event_loop::Msg::DocLen { uri, tx }).await {
+            Ok(event_loop::Reply::Len(n)) => n,
+            _ => 0,
+        }
     }
 }
 
 impl Default for RutLsp {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// the native ABI harness — the executor seam's native half (cfg-gated:
+/// the pool never ships in the wasm). The loop + its bridges over a
+/// deterministic single-threaded `LocalPool`; tests drive
+/// `pool.run_until(bridge)` and own the ordering. (A wasm `RutLsp`
+/// parks its loop on `spawn_local` instead — one cfg seam, two
+/// executors.)
+#[cfg(not(target_family = "wasm"))]
+#[doc(hidden)]
+impl RutLsp {
+    pub fn spawn_native() -> (RutLsp, futures::executor::LocalPool) {
+        use futures::task::LocalSpawnExt;
+        let (tx, rx) = event_loop::pair();
+        let pool = futures::executor::LocalPool::new();
+        pool.spawner()
+            .spawn_local(event_loop::run(Core::boot(), rx))
+            .expect("the loop parks on the fresh pool");
+        (RutLsp { tx }, pool)
     }
 }
 

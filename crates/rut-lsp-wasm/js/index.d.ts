@@ -192,7 +192,12 @@ export interface SrczipExtracted extends BundleExtracted {
 
 // ---- the binding ----
 
-/** the language core as the host holds it — one per editing session */
+/**
+ * the language core as the host holds it — one per editing session.
+ * Every method is an async RPC bridge over the core's event loop (the
+ * actor seam): hosts await everything, and the loop's FIFO keeps
+ * concurrent calls resolving in send order.
+ */
 export class RutLsp {
   /** use {@link RutLsp.load} — the core needs an instantiated wasm */
   private constructor();
@@ -204,16 +209,16 @@ export class RutLsp {
   static load(bytes: Uint8Array | ArrayBuffer): Promise<RutLsp>;
 
   /** the semantic-token legend, names in token-type index order */
-  legend(): string[];
+  legend(): Promise<string[]>;
 
   /** open / FULL-sync change: store the doc, answer diags + tokens + symbols */
-  analyze(uri: string, src: string): Analysis;
+  analyze(uri: string, src: string): Promise<Analysis>;
 
   /** close: drop the doc (the workspace/std index stays) */
-  forget(uri: string): void;
+  forget(uri: string): Promise<void>;
 
   /** hover at an LSP position — `null` when there is nothing to say */
-  hover(uri: string, line: number, character: number): LspHover | null;
+  hover(uri: string, line: number, character: number): Promise<LspHover | null>;
 
   /**
    * completions at an LSP position (`[]` when nothing resolves). Pass
@@ -221,16 +226,21 @@ export class RutLsp {
    * doc-sync lane: completion fires on the keystroke, an analyze
    * debounce may still be pending).
    */
-  complete(uri: string, line: number, character: number, src?: string): LspCompletionItem[];
+  complete(
+    uri: string,
+    line: number,
+    character: number,
+    src?: string
+  ): Promise<LspCompletionItem[]>;
 
   /** go-to-definition at an LSP position — `[]` when nothing resolves */
-  definition(uri: string, line: number, character: number): LspLocation[];
+  definition(uri: string, line: number, character: number): Promise<LspLocation[]>;
 
   /** go-to-type-definition at an LSP position — `[]` when nothing resolves */
-  typeDefinition(uri: string, line: number, character: number): LspLocation[];
+  typeDefinition(uri: string, line: number, character: number): Promise<LspLocation[]>;
 
   /** inlay hints for a document range — `[]` when nothing resolves */
-  inlayHint(uri: string, start: LspPosition, end: LspPosition): LspInlayHint[];
+  inlayHint(uri: string, start: LspPosition, end: LspPosition): Promise<LspInlayHint[]>;
 
   /** find references at an LSP position — `[]` when nothing resolves */
   references(
@@ -238,37 +248,37 @@ export class RutLsp {
     line: number,
     character: number,
     includeDeclaration: boolean
-  ): LspLocation[];
+  ): Promise<LspLocation[]>;
 
   /** signature help at an LSP position — `null` when there is none */
-  signatureHelp(uri: string, line: number, character: number): LspSignatureHelp | null;
+  signatureHelp(uri: string, line: number, character: number): Promise<LspSignatureHelp | null>;
 
   /** index one workspace file (the host's stand-in for the fs walk) */
-  addDef(uri: string, src: string): void;
+  addDef(uri: string, src: string): Promise<void>;
 
   /** parse one `rut.jsonc` — the dep table, or the error envelope */
-  parseManifest(text: string): DepTable | Envelope;
+  parseManifest(text: string): Promise<DepTable | Envelope>;
 
   /** hand the core the workspace root's `rut.lock` — the pin ledger */
-  setLock(text: string): { pins: number } | Envelope;
+  setLock(text: string): Promise<{ pins: number } | Envelope>;
 
   /** hand the core the direct-dep module names (the auto-import gate) */
-  setDirectDeps(names: string[]): { direct: number } | Envelope;
+  setDirectDeps(names: string[]): Promise<{ direct: number } | Envelope>;
 
   /** index one dep source file under its module NAME */
-  addDefNamed(uri: string, name: string, src: string): void;
+  addDefNamed(uri: string, name: string, src: string): Promise<void>;
 
   /** index one dep source file under its module NAME at a MOD PATH */
-  addDefMod(uri: string, name: string, modPath: string, src: string): ModDecls | Envelope;
+  addDefMod(uri: string, name: string, modPath: string, src: string): Promise<ModDecls | Envelope>;
 
   /** index one `.rutbundle` (the archive's own manifest names the module) */
-  addBundle(bytes: Uint8Array): BundleIndexed | Envelope;
+  addBundle(bytes: Uint8Array): Promise<BundleIndexed | Envelope>;
 
   /** unpack one `.rutbundle` WITHOUT indexing — the host owns the disk */
-  extractBundle(bytes: Uint8Array): BundleExtracted | Envelope;
+  extractBundle(bytes: Uint8Array): Promise<BundleExtracted | Envelope>;
 
   /** unpack one SOURCE ZIP without indexing — the source transport's twin */
-  extractSrczip(bytes: Uint8Array): SrczipExtracted | Envelope;
+  extractSrczip(bytes: Uint8Array): Promise<SrczipExtracted | Envelope>;
 }
 
 /** one decoded semantic token — absolute 0-based LSP coordinates */
