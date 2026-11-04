@@ -1,14 +1,13 @@
 {
   // the dep-walk fixture manifest — RENDERED by the host test
-  // (test/runTest.js): the placeholder below becomes the localhost
-  // fixture server's row, first with a deliberately WRONG pin (the
-  // refusal scenario), then with the real one. The comments ride the
-  // JSONC front stage — the walk parses comments from the same bytes
-  // the editor's validation schema describes.
-  "format": "rutbundle",
-  "format_version": 11,
+  // (test/runTest.js): the placeholder below becomes the url row (a
+  // rut.jsonc row carries NO pin — the pins live in the workspace's
+  // rut.lock, which the test renders beside this file). The comments
+  // ride the JSONC front stage — the walk parses comments from the
+  // same bytes the editor's validation schema describes. The app's
+  // root module is the default `src/mod.rut` (the entry key is
+  // repealed; no entry row needs spelling).
   "name": "app",
-  "entry": { "lib": "./app.rut" },
   "deps": {
     "gadgets": { "path": "../outside/gadgets" },
 __POUCH_ROW__

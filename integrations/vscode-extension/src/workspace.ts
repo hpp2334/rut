@@ -6,9 +6,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { MANIFEST_NAME, MAX_DEP_FILES, MAX_WORKSPACE_FILES } from './constants';
+import { MANIFEST_NAME, MAX_WORKSPACE_FILES } from './constants';
 import { hintOnce, readFileNullable } from './util';
 import { isEnvelope, type RutLsp } from './wasm';
+
+// the mod-tree child budget — this scan's own cap (the walk's caps
+// live Rust-side, in the crate that owns the walk)
+const MAX_MOD_FILES = 200;
 
 // the folder-level package's name (its manifest parses in the wasm) —
 // `null` when the folder has no manifest or a broken one
@@ -111,11 +115,12 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
         }
         await rut.addDef(file.toString(), dec.decode(bytes));
     }
-    // the declared children, breadth-first: each stamped edge probes    // `NAME.rut` beside the declaring file (BOTH spellings is the
+    // the declared children, breadth-first: each stamped edge probes
+    // `NAME.rut` beside the declaring file (BOTH spellings is the
     // loader's loud ambiguity — hinted once). A child stamps at (pkg,
     // child path) and its own decls enqueue — declarations are the
-    // graph, bounded by the dep walk's file budget.
-    let budget = MAX_DEP_FILES;
+    // graph, bounded by this scan's own file budget.
+    let budget = MAX_MOD_FILES;
     while (frontier.length > 0 && budget > 0) {
         // the loop guard guarantees a node — shift() only answers
         // undefined on an empty frontier

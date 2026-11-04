@@ -6,10 +6,12 @@ document-symbol outline, hover, completions (with auto-import),
 go-to-definition (plus type definition), references, inlay hints, and
 signature help — powered by the language core running **as an
 in-process wasm module**. No server process, no per-platform binaries:
-one `rut-lsp.wasm` serves every platform. The extension also reads your
-project's `rut.jsonc`: path deps mount from anywhere on disk, pinned
-url deps fetch with their `sha256` verified and extract to editable
-files, and the manifest gets schema-validated hovers.
+one `rut-lsp.wasm` serves every platform. The extension also injects a
+read-only filesystem capability so the crate's own dep walk can read
+your project's `rut.jsonc`: path deps mount from anywhere on disk and
+url deps mount from the global dep store (`rut install`'s) — the
+editor itself NEVER fetches and NEVER writes — and the manifest gets
+schema-validated hovers.
 
 ## Try it
 
@@ -46,6 +48,20 @@ are already LSP values, serialized by serde_json. The workspace is
 indexed with `workspace.findFiles` and pushed into the module
 (`add_def`) — the same scan the CLI's own lanes bound.
 
+The dep walk lives in the crate too, behind the actor ABI: the
+extension injects a **read-only host environment** (`src/env.ts` —
+`read`/`readDir`/`isDir`/`notify` over `node:fs` sync calls; no write,
+no delete, no fetch exists on the capability) and stirs the
+crate-shipped **dep engine** (`depEngine` — debounce + one-run-in-
+flight + rerun-once over `resolveDeps`). The engine walks every
+workspace root per run: the root `rut.lock` feeds the pin ledger and
+the root `rut.jsonc`'s rows mount — path deps from their directories,
+url deps from the global dep store (`$RUT_HOME/deps/<name>@<sha256[:16]>`,
+the same address `rut install` publishes to) when its `meta.json`
+vouches the lock pin. A cold or drifted store is ONE hint per dep
+naming `rut install` (the rust-analyzer contract); the extension's
+whole dep lane is watchers + `stir()`.
+
 The module IS the language core: the queries (`analysis`, `hover`,
 `completion`, `definition`, `check`, …) live in the same crate as this
 ABI (`crates/rut-lsp-wasm`), so a feature lands on the editor face as
@@ -69,10 +85,11 @@ The extension rides the same model:
   — a nested package's own manifest keeps it out of the parent's tree —
   then follows each stamped file's `mod` decls to stamp the
   single-file `NAME.rut` children at their child paths.
-- The **dep walk** mounts each path dep's tree from its root module's
-  declarations (the wasm parses; the walk only reads the files the
-  decls name, probing `NAME/mod.rut` then `NAME.rut` per edge, inside
-  the package's `src/` shell), so
+- The **dep walk** (in the crate, over the injected env) mounts each
+  path dep's tree from its root module's declarations (the wasm
+  parses; the walk only reads the files the decls name, probing
+  `NAME/mod.rut` then `NAME.rut` per edge, inside the package's
+  `src/` shell), so
   hover/completion see mod-carrying deps.
 - **Completion** walks the tree: after `pkg::` the dep's `pub mod`
   children ride along (never a bare `mod`), deeper `::` segments walk
@@ -107,39 +124,42 @@ file outside a package's `src/` shell — keeps today's parse-only
 diagnostics. The check lane never
 makes an editor worse than the compiler-less lane it extends.
 
-## Deps — the extension reads rut.jsonc
+## Deps — the crate's read-only walk, the editor's store
 
-After the workspace scan the extension hands each workspace folder's
-root `rut.jsonc` to the wasm (`rut_parse_manifest` — the wasm parses
-manifests, JS only moves bytes) and walks its dependency rows:
+The dep lane is the crate's, not the extension's: after the workspace
+scan the extension stirs the crate-shipped dep engine, and one
+`resolveDeps(roots)` run walks every workspace folder — the wasm
+parses the root `rut.jsonc` and its whole dep closure over the
+injected read-only env, mounting everything into the same defs store
+the scan fills. The extension NEVER fetches and NEVER writes: the
+capability it injects (`src/env.ts` — sync `read`/`readDir`/`isDir`
+plus a `notify` hint lane) has no write, no delete, and no fetch on
+it, by construction.
 
 - **Path deps** (`"gadgets": { "path": "../gadgets" }`) resolve
   against the manifest's directory — **a dep outside the workspace
   folder mounts like any other** (the real gap a plain workspace scan
   can never close). The walk recurses transitively, cycle-safe, under
-  a depth/file budget; every indexed source keeps its real on-disk
-  URI, so F12 jumps land in the dep's file.
-- **Url deps** (`"pouch": { "url": "…", "sha256": "…" }`) are
-  **cache-first**: the entry under `.rut/cache/` (the same directory
-  the CLI fills — the cache filename is the Rust-computed
-  `sha256` of the url) is read before any network, and a hit is
-  verified against the pin. On a miss the extension fetches
-  in-extension, hashes the bytes (`crypto.webcrypto`), and extracts
-  them only when the hash matches; the entry then lands in the cache
-  atomically (tmp + rename). A poisoned entry evicts and re-fetches,
-  like the CLI's healing loop.
-- **Source zips unpack whole** (the CLI's unpack law): the tree lays
-  down with the archive's own manifest beside the files and the
-  embedded `deps/<identity>/` groups under it, then the pkg's own dep
-  rows mount through the ordinary path-dep lane — so `ink` brings its
-  host surface `ink_host` along with zero manifest rows of your own,
-  and ctrl+click on `use ink_host::{ … }` inside the extracted ink
-  source lands in the embedded group's real file. First mount wins: a
-  name your manifest (or an earlier group) already mounted never
-  re-mounts from a ride-along.
-- **The pin is law at the mount door**: fetched or cached, bytes mount
-  only with their `sha256` verified. An unpinned url row never mounts
-  from the editor — one error hint, no silent unpinned bytes.
+  the crate's depth/file budgets; every indexed source keeps its real
+  on-disk path, so F12 jumps land in the dep's file.
+- **Url deps** (`"pouch": { "url": "…" }`) mount from the **global
+  dep store** — `$RUT_HOME/deps/<name>@<sha256[:16]>/`, the same
+  address `rut install` publishes to (the wasm sandbox cannot read
+  env vars, so its store spelling arrives relative and the env adapter
+  anchors it at the real `$RUT_HOME`/`~/.rut`). A dir whose
+  `meta.json` vouches the `rut.lock` pin mounts through the same dir
+  lanes path deps use — its `unpack/` tree, embedded
+  `deps/<identity>/` groups included, so `ink` brings its host surface
+  `ink_host` along with zero manifest rows of your own. First mount
+  wins: a name your manifest (or an earlier group) already mounted
+  never re-mounts from a ride-along.
+- **The pin is law at the mount door**: the pin's only source is the
+  walk root's `rut.lock`, and a reader never re-hashes the artifact —
+  the store dir's `meta.json` (written at install time, the only hash
+  pass) must vouch the pin. Absent, unpinned, or drifted is ONE hint
+  per dep naming `rut install` (the rust-analyzer contract: the
+  editor points at the tool that owns the fix), plus a `missing` row
+  in the walk's answer. No silent wrong mount, no network, ever.
 - **File modules mount like the loader runs**: a dep package's root
   module (`src/mod.rut`; the entry lib while the
   transitional key stands) mounts its `mod NAME;` tree recursively —
@@ -150,22 +170,20 @@ manifests, JS only moves bytes) and walks its dependency rows:
   `pub? mod NAME;` decl hovers its kind, mounted file, and child
   count; and after `modname::` / `modname.` in a package's own file
   the module's members complete by visibility tier. The wasm parses
-  every file (`rut_add_def_mod` answers the declared children) — JS
-  only moves bytes. `**/mod.rut` watchers re-mount a moved tree.
+  every file (`rut_add_def_mod` answers the declared children) — the
+  env only moves bytes. `**/mod.rut` watchers re-mount a moved tree.
 - **Ctrl+click walks the whole use path into the dep** — every
   segment of `use A::B::…::Z` lands in real files: path deps in their
-  on-disk sources, pinned url deps in the tree their verified bytes
-  extract to, `<folder>/.rut/deps/<module>-<pin12>/`
-  (content-addressed — the same pin reuses its tree untouched, a
-  bumped pin writes a sibling the stale sweep prunes), indexed
-  through the same lane path deps use, over `file://` uris — no
-  virtual `bundle:` documents. The pkg segment opens the dep's root
-  module at the top (the extracted root `mod.rut`, or the `.d.rut`
-  surface when that is all there is), a middle segment lands on its
-  `pub mod` edge, the leaf on its declaration (the body file, when a
-  package ships both a `.d.rut` surface and a `mod.rut` body) —
-  `pouch` → the extracted root, `Vec` → the `pub class Vec` line;
-  `layout` → `pub mod layout;`, `Column` → the child file's struct.
+  on-disk sources, url deps in the store's `unpack/` tree under
+  `$RUT_HOME` — indexed through the same lane path deps use, over
+  `file://` uris — no virtual `bundle:` documents. The pkg segment
+  opens the dep's root module at the top (the unpacked root
+  `mod.rut`, or the `.d.rut` surface when that is all there is), a
+  middle segment lands on its `pub mod` edge, the leaf on its
+  declaration (the body file, when a package ships both a `.d.rut`
+  surface and a `mod.rut` body) — `pouch` → the unpacked root,
+  `Vec` → the `pub class Vec` line; `layout` → `pub mod layout;`,
+  `Column` → the child file's struct.
   Own-package paths ride the same lanes keyed on the doc's place in
   its package: `use app::…` (the package's own name) opens the root
   module, `use helpers::…` (an own `mod` edge) opens the module's
@@ -174,32 +192,28 @@ manifests, JS only moves bytes) and walks its dependency rows:
   the module's members by visibility tier. A `pub? mod NAME;` decl is
   clickable too: ctrl+click opens the mounted child (`NAME/mod.rut`,
   or the file-form `NAME.rut`) at its top.
-- **`.rut/` is scratch, not source**: the CLI's cache (`.rut/cache/`)
-  and the extension's extracted dep trees (`.rut/deps/`) both live
-  there — keep `.rut/` in your project's `.gitignore`; everything
-  under it is re-fetchable and re-extractable.
-- **Offline / failure** shows one info hint per dep naming the CLI
-  alternative (`rut fetch` warms the cache) — never spam, never silent
-  wrong results. The mount door also carries a **capability seam**: a
-  dep whose cache entry is a source zip mounting against a wasm that
-  predates the source-zip transport (a same-version install older than
-  the lane) is one hint naming the extension reinstall — and a dead
-  ctrl+click whose only target is the embedded std surface says the
-  same when that signature holds — never a silent dead dep.
+- **No project-local scratch**: the walk never writes beside your
+  project (the old `.rut/deps/` extraction trees are gone; the
+  editor-side `.rut/` writer no longer exists). What `rut run` may
+  leave under `.rut/unpacked/` is the CLI's own scratch — keep `.rut/`
+  in your project's `.gitignore`.
 - The manifest and its dep tables re-walk on change
-  (`**/rut.jsonc` and `.rut/cache/**` watchers, debounced), and a
-  workspace-folder change restarts the whole index.
-- **One engine, one face** — the dep tables (`crates/rut-lsp-wasm/src/deps.rs`)
-  are the CLI's own parsers; the extension is the face that fetches
-  (a miss is a hint naming `rut fetch`/`rut install`), never a
-  silent wrong mount.
+  (`**/rut.jsonc` and `**/mod.rut` watchers, debounced by the engine),
+  a workspace-folder change restarts the whole index, and the
+  `rut.reindexDeps` palette command stirs the engine on demand — the
+  extension's whole dep lane is watchers + `stir()`.
+- **One engine, one face** — the dep tables
+  (`crates/rut-lsp-wasm/src/deps.rs`) are the CLI's own parsers and
+  the walk (`crates/rut-lsp-wasm/src/walk.rs`) is the crate's; the
+  extension injects the read-only capability and surfaces the hints,
+  nothing more.
 - Auto-import completions offer foreign public names with the
   `use mod::Name;` insert (`additionalTextEdits`) and sort after the
   locals (`sortText`) — accepting an item never ungates members, the
   engine's law; the extension only maps the edits through. The tier
   is gated to the open document's DIRECT deps: the root manifest's
-  rows are handed to the wasm (`rut_set_direct_deps`) when the walk
-  parses it, and a transitive-only dep never offers — the compiler's
+  rows are stamped into the wasm (`rut_set_direct_deps`) when the
+  walk parses it, and a transitive-only dep never offers — the compiler's
   closure check refuses `use` of a mounted-but-undeclared package,
   so completing one would write a D5 error. The std surface rides
   every chain as the ambient dep lane. The bare list itself stays
@@ -271,7 +285,7 @@ npm run test:e2e       # through-wasm e2e gate: the SHIPPED bin/rut-lsp.wasm
                        # cross-file reverse edge), signature help
                        # (verbatim signature, active slot, mismatch -> no
                        # help), the dep clicks — a url dep's
-                       # extracted-tree leaf + pkg head, a path dep's
+                       # store-mounted leaf + pkg head, a path dep's
                        # `pub mod` middle segment + child-file leaf — and
                        # the check lane: a stamped doc's package compiles
                        # with its dep closure and the checker's type
@@ -300,10 +314,11 @@ same symbols and semantic tokens on machines with `code`.
 
 `test/fixtures/dep-walk/` is the manifest-deps fixture the host suite
 renders: a workspace whose path dep (`outside/gadgets`) lives OUTSIDE
-the folder boundary, plus a url dep served by a localhost fixture
-server — the pin refusal, the pinned fetch + atomic cache write, the
-auto-import insert, and the offline hint all assert there (needs
-`code`; the lane skips loudly without it).
+the folder boundary, plus a url dep pinned by the rendered `rut.lock`
+— the cold-store refusal (one hint naming `rut install`), the
+store-hit mount (a dep dir published under a temp `$RUT_HOME`, its
+meta vouching the lock pin), and the auto-import insert all assert
+there (needs `code`; the lane skips loudly without it).
 
 The wasm module itself is gated by `crates/rut-lsp-wasm/smoke.js`
 (`node crates/rut-lsp-wasm/smoke.js` from the repo root after

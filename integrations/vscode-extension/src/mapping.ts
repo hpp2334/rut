@@ -6,7 +6,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { hintOnce, workspaceHasZipCache } from './util';
+import { resolveHostPath } from './env';
+import { hintOnce } from './util';
 import type {
     LspCompletionItem,
     LspDiag,
@@ -18,14 +19,18 @@ import type {
 } from './wasm';
 
 // a definition target -> a vscode Location. A target with a scheme
-// parses as-is; a repo-relative path (the embedded std surface's true
-// source, e.g. `rut/pouch/src/mod.rut`) resolves against the workspace
-// folders — a workspace that is the rut repo gets a real jump into the
-// stdlib. Nowhere to resolve: dropped (never a wrong jump). A FULLY
-// dropped answer — the wasm resolved the symbol but every target is
-// unopenable (a url dep not extracted yet, mostly) — hints once per
-// document instead of a silent dead ctrl+click; an empty input stays
-// silent (an honest miss — nothing resolved at all).
+// parses as-is; a walk origin (the crate's `/`-joined rooted string —
+// absolute, or the global store's `.rut/deps/…` spelling) resolves
+// through the same env path law (`..` collapses, the store anchors at
+// the real `$RUT_HOME`); a repo-relative path (the embedded std
+// surface's true source, e.g. `rut/pouch/src/mod.rut`) resolves
+// against the workspace folders — a workspace that is the rut repo
+// gets a real jump into the stdlib. Nowhere to resolve: dropped
+// (never a wrong jump). A FULLY dropped answer — the wasm resolved
+// the symbol but every target is unopenable (a url dep the store
+// never served, mostly) — hints once per document instead of a silent
+// dead ctrl+click; an empty input stays silent (an honest miss —
+// nothing resolved at all).
 export function resolveLocations(locs: LspLocation[], srcUri: string): vscode.Location[] {
     const out: vscode.Location[] = [];
     for (const l of locs) {
@@ -35,25 +40,17 @@ export function resolveLocations(locs: LspLocation[], srcUri: string): vscode.Lo
         }
     }
     if (locs.length > 0 && out.length === 0) {
-        hintOnce(`def-dropped:${srcUri}`, defDropHint(locs), false);
+        hintOnce(`def-dropped:${srcUri}`, defDropHint(), false);
     }
     return out;
 }
 
-// the drop hint names the LIKELIEST cause, not just the generic one.
-// A relative `rut/…` target is the embedded std surface answering for a
-// dep that never mounted; when the workspace's cache carries source
-// zips, `rut install` already ran and reloading cannot help — the
-// definition lives in the rut repo sources, so the hint says so.
-function defDropHint(locs: LspLocation[]): string {
-    if (locs.every((l) => l.uri.startsWith('rut/')) && workspaceHasZipCache()) {
-        return (
-            'rut: definition target not openable — the resolved definition lives in the rut ' +
-            'repo sources, which are not in this workspace; reload the window if the dep was just installed'
-        );
-    }
+// the drop hint names the LIKELIEST cause: a url dep the global store
+// never served — the editor never fetches, so the fix is the CLI's
+// install lane (the rust-analyzer contract), never the editor's.
+function defDropHint(): string {
     return (
-        'rut: definition target not openable — a dep may not be extracted yet; ' +
+        'rut: definition target not openable — a dep may not be in the global store; ' +
         'run `rut install`, then reload the window'
     );
 }
@@ -61,6 +58,14 @@ function defDropHint(locs: LspLocation[]): string {
 export function toTargetUri(raw: string): vscode.Uri | undefined {
     if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
         return vscode.Uri.parse(raw);
+    }
+    // the walk's rooted origins: the crate joins with `/` and never
+    // normalizes, and its global-store spelling is relative — the env
+    // path law maps both onto a real path (never a wrong jump: the
+    // file must exist)
+    const rooted = resolveHostPath(raw);
+    if (path.isAbsolute(rooted) && fs.existsSync(rooted)) {
+        return vscode.Uri.file(rooted);
     }
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
         const p = path.join(folder.uri.fsPath, raw);

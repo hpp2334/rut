@@ -6,18 +6,20 @@
 // bin/rut-lsp.wasm the TextMate grammar still colors the basics and an
 // info message points at `npm run build:wasm`.
 //
-// Layout: `constants` (the budgets) → `util` (byte reads, the cache
-// write, the hint gate) → `mapping` (LSP JSON → vscode values),
-// `providers` (the nine language features), `workspace` (the fs scan),
-// `deps` (the manifest walk) — this file is the lifecycle that wires
-// them: one long-lived `RutLsp` instance, loaded once, shared by every
-// closure below.
+// Layout: `constants` (the budgets) → `util` (byte reads, the hint
+// gate) → `mapping` (LSP JSON → vscode values), `providers` (the nine
+// language features), `workspace` (the fs scan), `env` (the read-only
+// host environment the crate's dep walk reads through) — this file is
+// the lifecycle that wires them: one long-lived `RutLsp` instance,
+// loaded once, shared by every closure below. The dep walk itself
+// lives IN the crate (`resolveDeps` + the crate-shipped `depEngine`);
+// the extension only injects the capability, watches, and stirs.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { ANALYSIS_DEBOUNCE_MS } from './constants';
-import { scheduleDepWalk, watchDeps } from './deps';
+import { ANALYSIS_DEBOUNCE_MS, MANIFEST_NAME } from './constants';
+import { hostEnv } from './env';
 import { toDiagnostic } from './mapping';
 import {
     registerCompletion,
@@ -31,7 +33,7 @@ import {
     registerTypeDefinition,
 } from './providers';
 import { analyzeDoc } from './util';
-import { RutLsp } from './wasm';
+import { depEngine, RutLsp } from './wasm';
 import { indexWorkspace } from './workspace';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -116,19 +118,77 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
         registerSignatureHelp(rut),
     );
 
+    // the crate-shipped dep engine: debounce + one-run-in-flight +
+    // rerun-once-if-stirred over `resolveDeps` — the extension's whole
+    // dep lane. `roots` is re-read at every run (the folders the host
+    // sees NOW), and `env` re-injects the read-only capability before
+    // each run; the engine itself is a disposable the host retires.
+    const engine = depEngine(rut, {
+        env: hostEnv,
+        roots: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
+    });
+    subscriptions.push(engine);
+
     // the palette's manual re-index — the same lane activation and the
     // folder-change hook ride, on demand: covers watcher misses (a mount
     // a glob never saw, a walk that raced an edit)
     subscriptions.push(
         vscode.commands.registerCommand('rut.reindexDeps', () => {
-            void indexWorkspace(rut).then(() => scheduleDepWalk(rut));
+            engine.stir();
         }),
     );
 
     // workspace index off the hot activation path — hover/completion may
     // briefly resolve against the std surface + open docs only. The dep
-    // walk rides after it: the root `rut.jsonc`'s rows mount the deps
-    // (path dirs, extracted pinned url bundles) into the same index.
-    watchDeps(context, rut);
-    void indexWorkspace(rut).then(() => scheduleDepWalk(rut));
+    // walk rides after it: the crate's read-only walk mounts the root
+    // manifests' rows (path dirs, store-mounted url deps) into the same
+    // index, through the injected env.
+    watchDeps(context, rut, engine);
+    void indexWorkspace(rut).then(() => engine.stir());
+}
+
+// `**/rut.jsonc` + `**/mod.rut` re-run the walk (a manifest landing or
+// a mod tree moving re-mounts it); a workspace-folder change restarts
+// the whole index (watchers re-arm over the new folder set, the scan +
+// engine stir re-run — re-indexing is replace-by-origin, so this is
+// idempotent). The extension is a pure READER: no write feedback loops
+// exist anymore, so one debounce window is all the dynamics there are.
+function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, engine: { stir(): void }): void {
+    const watchers: vscode.Disposable[] = [];
+    const watchFolder = (folder: vscode.WorkspaceFolder): void => {
+        for (const pattern of [`**/${MANIFEST_NAME}`, '**/mod.rut']) {
+            const watcher = vscode.workspace.createFileSystemWatcher(
+                new vscode.RelativePattern(folder, pattern),
+            );
+            watchers.push(
+                watcher,
+                watcher.onDidChange(() => engine.stir()),
+                watcher.onDidCreate(() => engine.stir()),
+                watcher.onDidDelete(() => engine.stir()),
+            );
+        }
+    };
+    const rearm = (): void => {
+        for (const w of watchers) {
+            w.dispose();
+        }
+        watchers.length = 0;
+        for (const folder of vscode.workspace.workspaceFolders ?? []) {
+            watchFolder(folder);
+        }
+    };
+    rearm();
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            rearm();
+            void indexWorkspace(rut).then(() => engine.stir());
+        }),
+        {
+            dispose: () => {
+                watchers.forEach((w) => {
+                    w.dispose();
+                });
+            },
+        },
+    );
 }

@@ -2169,11 +2169,11 @@ async function main() {
     // the dep walk feeds from the workspace root's rut.lock BEFORE its
     // manifest parses. Drives the REAL pair (examples/03-plugin's
     // committed rut.jsonc + rut.lock) through the BINDING (the exact
-    // calls src/extension.ts's walkDeps/mountUrlDep make) on a fresh
+    // feed the crate's read-only walk gives each root) on a fresh
     // instance: the unlocked parse answers sha256 null (the honest
     // unpinned refusal), the fed parse stamps the pin, and the whole
-    // url-dep chain lands go-to-definition in the extracted .rut/deps
-    // tree — the chain the editor lane was missing. ----
+    // url-dep chain lands go-to-definition in the mounted dep tree
+    // — the chain the editor lane was missing. ----
     {
         const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
         const manifest = fs.readFileSync(manifestPath, 'utf8');
@@ -2239,9 +2239,9 @@ async function main() {
         );
         // the whole chain: extract the PINNED bundle under
         // .rut/deps/<module>-<pin12>/ — pin12 from the LOCK-SOURCED row —
-        // index through addDefMod/addDefNamed (the exact mountUrlDep
-        // moves), and the `use` leaf answers the file:// location whose
-        // content holds the decl
+        // index through addDefMod/addDefNamed (the same lanes the
+        // crate's store mount rides), and the `use` leaf answers the
+        // file:// location whose content holds the decl
         const extracted = await inst.extractBundle(bundleBytes);
         assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
         const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-lock-'));

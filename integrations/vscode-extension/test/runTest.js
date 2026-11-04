@@ -5,7 +5,6 @@
 const assert = require('node:assert');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const http = require('node:http');
 const os = require('node:os');
 const { join } = require('node:path');
 
@@ -87,78 +86,82 @@ async function run() {
     assert.strictEqual(diags[0].severity, vscode.DiagnosticSeverity.Error);
     log(`diagnostics: "${diags[0].message.slice(0, 48)}..." (source=rut)`);
 
-    // 6. the dep walk — the extension reads rut.jsonc
+    // 6. the dep walk — the crate's read-only walk through the injected env
     await depWalkChecks(log);
 
     log('ALL CHECKS PASSED');
 }
 
-// ---- the dep walk (the manifest-deps phase) ----
+// ---- the dep walk (the store lane) ----
 //
 // A fixture workspace whose path dep lives OUTSIDE the folder boundary
 // (invisible to findFiles, visible only to the walk) plus a url dep
-// served by a localhost fixture server — the CLI tests' offline-remote
-// pattern (one payload, any path; closed = the offline simulation).
-// Scenarios, in order (the pin refusal MUST precede the good mount —
-// the wasm session keeps mounted indexes, so a not-mounted assertion
-// is only honest before any mount):
+// pinned by the workspace's `rut.lock` and served from the GLOBAL dep
+// store — a temp `$RUT_HOME` the env adapter anchors the walk's store
+// spelling at. The editor never fetches and never writes: a cold
+// store is ONE error hint naming `rut install` (the rust-analyzer
+// contract). Scenarios, in order (the miss MUST precede the hit — the
+// wasm session keeps mounted indexes, so a not-mounted assertion is
+// only honest before any mount):
 //   (a) out-of-folder path dep completes (`use gadgets::` tier);
-//   (b) a WRONG pin → the one error hint, the bundle never mounts;
-//   (c) the real pin → fetched, pinned, atomically cached (the CLI's
-//       `.rut/cache/<sha256(url)>.rutbundle`), mounted — the bundle's
-//       own index answers go-to-definition (`bundle:` targets);
+//   (b) the cold store → the one error hint naming `rut install`,
+//       the dep never mounts (no store-path definition target);
+//   (c) the store hit (a dep dir whose meta.json vouches the lock
+//       pin) → mounted, go-to-definition lands in the store's real
+//       `unpack/` file;
 //   (d) auto-import: the bare `Wi` probe completes Widget with the
-//       `use gadgets::Widget;` insert after the last leading `use`;
-//   (e) server down + cache evicted → ONE info hint naming `rut fetch`,
-//       no crash, the mounted dep still resolves.
+//       `use gadgets::Widget;` insert after the last leading `use`.
 async function depWalkChecks(log) {
-    const EXT = join(__dirname, '..');
-    const REPO = join(EXT, '..', '..');
+    const vscode = require('vscode');
+    const REPO = join(__dirname, '..', '..', '..');
     const FIXTURES = join(__dirname, 'fixtures', 'dep-walk');
 
-    // the url-dep fixture: the committed pouch bundle (the offline
-    // url-dep fixture the CLI tests and the wasm e2e use) + its pin
+    // the url identity + its pin: the committed pouch bundle's bytes
+    // hash (nothing reads the artifact here — the store's meta vouches
+    // the pin; install-time verification is the only hash pass). The
+    // probe name `VecPouch` exists ONLY in the fixture store tree, so
+    // no std-twin can answer for it.
     const bundleBytes = fs.readFileSync(join(REPO, 'dist', 'std', 'pouch.rutbundle'));
     const pin = crypto.createHash('sha256').update(bundleBytes).digest('hex');
-    const badPin = '0'.repeat(64);
-
-    const server = http.createServer((_req, res) => {
-        res.writeHead(200, {
-            'Content-Type': 'application/octet-stream',
-            'Content-Length': bundleBytes.length,
-        });
-        res.end(bundleBytes);
-    });
-    const port = await new Promise((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(0, '127.0.0.1', () => resolve(server.address().port));
-    });
-    const url = `http://127.0.0.1:${port}/pouch.rutbundle`;
+    const url = 'https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.rutbundle';
 
     // the scratch world: ws/ becomes a workspace folder; outside/ sits
-    // beside it — outside the folder boundary by construction
+    // beside it — outside the folder boundary by construction; home/
+    // is the temp global store the adapter anchors `.rut/deps/…` at
     const tmp = fs.mkdtempSync(join(os.tmpdir(), 'rut-depwalk-'));
     const ws = join(tmp, 'ws');
     fs.mkdirSync(ws);
     fs.cpSync(join(FIXTURES, 'outside'), join(tmp, 'outside'), { recursive: true });
-    fs.copyFileSync(join(FIXTURES, 'workspace', 'app.rut'), join(ws, 'app.rut'));
-    // the cache filename is sha256 of the URL STRING (Rust-computed in
-    // the real walk; the same constant here)
-    const cacheEntry = join(
-        ws,
-        '.rut',
-        'cache',
-        `${crypto.createHash('sha256').update(url).digest('hex')}.rutbundle`,
-    );
-    const renderManifest = (pouchRow) => {
+    // the app package: root module at the default `src/mod.rut` (the
+    // entry key is repealed — a bare name carries the default entry)
+    fs.mkdirSync(join(ws, 'src'), { recursive: true });
+    fs.copyFileSync(join(FIXTURES, 'workspace', 'src', 'mod.rut'), join(ws, 'src', 'mod.rut'));
+    // the manifest carries NO pin (the inline sha256 key is retired);
+    // the lock is the pin's only source. The salt comment renders
+    // distinct bytes (a LEADING comment — every JSONC parser's first
+    // lesson), so a re-render always fires the `**/rut.jsonc` watcher.
+    const render = (salt) => {
         const template = fs.readFileSync(join(FIXTURES, 'workspace', 'rut.jsonc.template'), 'utf8');
-        fs.writeFileSync(join(ws, 'rut.jsonc'), template.replaceAll('__POUCH_ROW__', pouchRow));
+        fs.writeFileSync(
+            join(ws, 'rut.jsonc'),
+            `// ${salt}\n${template.replaceAll('__POUCH_ROW__', `    "pouch": { "url": "${url}" }`)}`,
+        );
+        fs.writeFileSync(
+            join(ws, 'rut.lock'),
+            `${JSON.stringify(
+                {
+                    format: 'rutlock',
+                    format_version: 1,
+                    deps: [{ pkg: 'pouch', url, sha256: pin }],
+                },
+                null,
+                2,
+            )}\n`,
+        );
     };
-    const badPinRow = `    "pouch": { "url": "${url}", "sha256": "${badPin}" }`;
-    const goodPinRow = `    "pouch": { "url": "${url}", "sha256": "${pin}" }`;
 
-    // capture the walk's hints (once-per-reason per session — the
-    // assertions below each clear the array first)
+    // capture the hints (both lanes: the walk's notify → the error
+    // messages, the mapping's def-drop → the info messages)
     const messages = [];
     const realError = vscode.window.showErrorMessage;
     const realInfo = vscode.window.showInformationMessage;
@@ -171,8 +174,10 @@ async function depWalkChecks(log) {
         return Promise.resolve(undefined);
     };
 
+    const prevHome = process.env.RUT_HOME;
     try {
-        renderManifest(badPinRow);
+        process.env.RUT_HOME = join(tmp, 'home');
+        render('cold');
         assert.ok(
             vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders.length, 0, {
                 uri: vscode.Uri.file(ws),
@@ -196,59 +201,68 @@ async function depWalkChecks(log) {
         });
         log('dep walk: out-of-folder path dep `gadgets` completes');
 
-        // (b) the wrong pin: the walk ran (the hint proves it — it may
-        // have arrived while (a) polled, so the array is NOT cleared), the
-        // error names the mismatch, and the bundle never mounts
+        // (b) the cold store: the walk refused the url row — ONE error
+        // hint naming `rut install` — and no store-path target exists
+        // (the probe name only the fixture store could answer)
+        const pouchLine = 'use pouch::{ VecPouch };';
         const pouchProbe = await vscode.workspace.openTextDocument({
             language: 'rut',
-            content:
-                'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n',
+            content: `${pouchLine}\nfn main() -> nil {\n}\n`,
         });
-        const bundleTargets = async () => {
+        const at = pouchLine.indexOf('VecPouch');
+        const storeTargets = async () => {
             const locs = await vscode.commands.executeCommand(
                 'vscode.executeDefinitionProvider',
                 pouchProbe.uri,
-                new vscode.Position(0, 13), // the use-line `Vec`
+                new vscode.Position(0, at),
             );
-            return locs.filter((l) => l.uri.toString().startsWith('bundle:'));
+            return locs.filter((l) => l.uri.fsPath.includes(join('deps', 'pouch@')));
         };
-        const refusal = await poll('pin-mismatch hint', async () => {
-            const m = messages.find((x) => x.includes('sha256 pin mismatch'));
-            if (!m) return null;
-            assert.ok(m.includes(url), `the refusal names the url: ${m}`);
-            assert.ok(m.includes(badPin), `the refusal names the pin: ${m}`);
-            return m;
-        });
-        log(`dep walk: bad pin refused — "${refusal.slice(0, 60)}..."`);
-        // the negative is honest only against an ANALYZED probe: wait for
-        // the std surface's own pouch answer first, then demand that the
-        // bundle added none
-        await poll('std pouch answers (probe analyzed)', async () =>
-            (
-                await vscode.commands.executeCommand(
-                    'vscode.executeDefinitionProvider',
-                    pouchProbe.uri,
-                    new vscode.Position(0, 13),
-                )
-            ).length > 0
-                ? true
-                : null,
+        const refusal = await poll(
+            'cold-store hint',
+            () => messages.find((x) => x.includes('not in the dep store')) || null,
         );
+        assert.ok(
+            refusal.includes('rut install'),
+            `the refusal names the install lane: ${refusal}`,
+        );
+        assert.ok(refusal.includes(url), `the refusal names the url: ${refusal}`);
         assert.strictEqual(
-            (await bundleTargets()).length,
+            (await storeTargets()).length,
             0,
-            'a bad pin must never mount the bundle',
+            'a cold store must never mount the dep',
         );
+        log(`dep walk: cold store refused — "${refusal.slice(0, 60)}..."`);
 
-        // (c) the real pin: fetched + cached + mounted — the bundle's own
-        // index answers go-to-definition beside the std surface's
-        messages.length = 0;
-        renderManifest(goodPinRow);
-        await poll('url dep mounted (bundle: go-to-def)', async () =>
-            (await bundleTargets()).length > 0 ? true : null,
+        // (c) the store hit: publish the dep dir the walk derives
+        // (`<name>@<pin16>` under `$RUT_HOME/deps` — rut-driver's
+        // address, the same one `rut install` writes) with a meta.json
+        // vouching the lock pin, then stir the engine through the
+        // palette command — the dep mounts, go-to-definition lands in
+        // the store's real `unpack/` file
+        const depDir = join(process.env.RUT_HOME, 'deps', `pouch@${pin.slice(0, 16)}`);
+        fs.mkdirSync(join(depDir, 'unpack', 'src'), { recursive: true });
+        fs.writeFileSync(
+            join(depDir, 'meta.json'),
+            JSON.stringify({
+                name: 'pouch',
+                url,
+                sha256: pin,
+                format: 'rutbundle',
+                format_version: 1,
+            }),
         );
-        await poll('cache entry landed', () => (fs.existsSync(cacheEntry) ? true : null));
-        log(`dep walk: pinned url dep mounted + cached (${cacheEntry.length} char path)`);
+        fs.writeFileSync(join(depDir, 'unpack', 'rut.jsonc'), JSON.stringify({ name: 'pouch' }));
+        fs.writeFileSync(
+            join(depDir, 'unpack', 'src', 'mod.rut'),
+            'pub class VecPouch {\n    n: i32;\n}\n',
+        );
+        await vscode.commands.executeCommand('rut.reindexDeps');
+        const mounted = await poll('store dep mounted (store go-to-def)', async () => {
+            const targets = await storeTargets();
+            return targets.length > 0 ? targets : null;
+        });
+        log(`dep walk: store dep mounted (${mounted[0].uri.fsPath.slice(-48)}...)`);
 
         // (d) auto-import: the bare `Wi` probe offers Widget with the
         // insert after the last leading `use`, sorted after the locals
@@ -290,27 +304,14 @@ async function depWalkChecks(log) {
         );
         assert.ok(imp.sortText?.startsWith('~'), `the tier sorts after locals: ${imp.sortText}`);
         log('dep walk: auto-import inserts `use gadgets::Widget;` after the leading use');
-
-        // (e) server down + cache evicted: the walk re-runs (the cache
-        // watcher fires on the delete), ONE info hint names the CLI
-        // alternative, nothing crashes, the mounted dep still resolves
-        messages.length = 0;
-        await new Promise((resolve) => server.close(resolve));
-        fs.unlinkSync(cacheEntry);
-        const hint = await poll(
-            'fetch-fail hint',
-            () => messages.find((x) => x.includes('rut fetch')) || null,
-        );
-        assert.ok(hint.includes('pouch'), `the hint names the dep: ${hint}`);
-        assert.ok(
-            (await bundleTargets()).length > 0,
-            'the mounted dep outlives the cache eviction',
-        );
-        log(`dep walk: offline + cache miss → "${hint.slice(0, 60)}..."`);
     } finally {
+        if (prevHome === undefined) {
+            delete process.env.RUT_HOME;
+        } else {
+            process.env.RUT_HOME = prevHome;
+        }
         vscode.window.showErrorMessage = realError;
         vscode.window.showInformationMessage = realInfo;
-        server.close();
     }
 }
 

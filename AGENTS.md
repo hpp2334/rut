@@ -119,6 +119,18 @@ order:
   split is gone; the stdio face lives only in git history). Add a
   feature to the queries and wire it into `src/lib.rs`'s ABI methods —
   there is no second shell.
+- **The read-only env law (dep lane)**: the extension injects a
+  READ-ONLY fs capability (`src/env.ts` — sync `read`/`readDir`/
+  `isDir`/`notify` over `node:fs`; no write, no delete, no fetch
+  exists on the `HostEnv` contract in the crate's `js/index.d.ts`)
+  and the crate's event loop owns ALL dep logic — the walk
+  (`resolveDeps`) and its scheduler (`depEngine`) ship in the crate;
+  the extension's whole dep lane is watchers + `stir()`. Url deps
+  mount from the global store (`$RUT_HOME` — the wasm cannot read env
+  vars, so its store spelling arrives relative and the adapter anchors
+  it at the real home); a cold store is ONE hint per dep naming
+  `rut install` (the rust-analyzer contract). The extension writes
+  NOTHING, anywhere — a pure reader.
 - **The ABI face lives in the crate**: `crates/rut-lsp-wasm/js/index.js`
   (the envelope parsing) and `js/index.d.ts` (every LSP/wire shape) are
   assembled into the wasm package by `scripts/build-lsp-pkg.mjs` (run by

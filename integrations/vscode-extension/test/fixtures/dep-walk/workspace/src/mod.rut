@@ -1,0 +1,15 @@
+// app — the dep-walk fixture consumer, and the package's root module
+// (the manifest's default entry `src/mod.rut`; the entry key is
+// repealed). The host test renders rut.jsonc + rut.lock beside the
+// `src/` shell: gadgets points OUTSIDE the workspace folder (the
+// walk's whole point), pouch is a url dep the rut.lock pins and the
+// GLOBAL dep store serves (the editor never fetches — a cold store is
+// one `rut install` hint). The bare `Wi` below is the auto-import
+// probe: completing it must offer Widget with the `use
+// gadgets::Widget;` insert after the last leading `use`.
+use gadgets::{ tag };
+
+fn main() -> nil {
+    let t = tag();
+    let w = Wi;
+}

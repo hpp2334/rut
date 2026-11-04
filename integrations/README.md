@@ -5,7 +5,13 @@ queries (semantic tokens, diagnostics, hover, completion, definition,
 references, inlay hints, signature help, the check lane) and the
 wasm-bindgen face that serves them. The VS Code extension runs it
 in-process — no server process, no per-platform binaries; the
-playground bundles the same module. See
+playground bundles the same module. The extension's dep lane is the
+crate's too: it injects a read-only filesystem capability (the
+`HostEnv` the crate's walk reads through) and stirs the crate-shipped
+engine — the editor NEVER fetches and NEVER writes; url deps mount
+from the global dep store (`$RUT_HOME`, `rut install`'s address), and
+a cold store is one hint naming `rut install` (the rust-analyzer
+contract). See
 [`vscode-extension/README.md`](vscode-extension/README.md).
 
 There is no first-party stdio server today: an earlier native face
@@ -65,10 +71,10 @@ What the editor face provides (the LSP slice landed early; the
   sources included: every segment of a use path is clickable — the pkg
   segment opens the dep's root module, a middle segment its `pub mod`
   edge, the leaf its declaration (a dep with both a `.d.rut` surface
-  and a `mod.rut` body answers from the body; cached url deps answer
-  into their `bundle:` origin — the VS Code extension is the face that
-  extracts them to real files). Ambiguity = a candidate list, never a
-  wrong silent jump
+  and a `mod.rut` body answers from the body; url deps answer in the
+  global dep store's real files — the crate's read-only walk mounts
+  them from `$RUT_HOME`, the address `rut install` publishes to).
+  Ambiguity = a candidate list, never a wrong silent jump
 - **references** — a declaration's uses, shadow-aware within the file,
   cross-file through the use graph; member and local targets stay
   in-file (locals can't escape, imports carry type/fn names)
