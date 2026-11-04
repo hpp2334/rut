@@ -17,6 +17,7 @@ pub mod lock;
 pub mod mods;
 pub mod pack;
 pub mod run;
+pub mod store;
 
 pub use bundle::{parse_manifest, Manifest};
 pub use compile::{
@@ -51,3 +52,11 @@ pub use rut_lir::check::{ModInputs, ModScope};
 /// the FS/archive lanes can name the mount core's parameter.
 pub use rut_parser::Mode;
 pub use session::HostRow;
+/// The global dep store's derivation core — addresses, file names,
+/// the meta shape (`$RUT_HOME` resolution included): one helper set,
+/// shared by the CLI's writer and every reader.
+pub use store::{
+    deps_dir, parse_store_meta, run_cache_path, rut_home, store_artifact_name, store_dir,
+    store_format, store_meta_json, StoreMeta, StoreMetaError, ARTIFACT_STEM, DEPS_DIR, META_NAME,
+    RUN_DIR, STORE_META_FORMAT_VERSION, UNPACK_DIR,
+};

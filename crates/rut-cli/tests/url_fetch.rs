@@ -1,10 +1,10 @@
 //! The url-dep lane end to end, through the `rut` binary — ONE
 //! localhost TcpListener (offline: no external network), the real
-//! cache policy, the real eviction law:
+//! store policy, the real eviction law:
 //!
-//! run cold (cache miss ⇒ REFUSAL, no GET) → install (the GET) →
-//! run ⇒ cache hit → run offline (server silent ⇒ still a cache hit)
-//! → poisoned cache entry ⇒ pin refusal, eviction, exit 2 → install
+//! run cold (store miss ⇒ REFUSAL, no GET) → install (the GET) →
+//! run ⇒ store hit → run offline (server silent ⇒ still a hit)
+//! → poisoned artifact ⇒ pin refusal, eviction, exit 2 → install
 //! re-fetches ⇒ healed. Plus `rut fetch` as the CI warm-up.
 //!
 //! The pin law itself is the loader's (mount door, every load — see
@@ -82,11 +82,11 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
     format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}"{extra}}}"#)
 }
 
-/// `rut <args>` with this test's cache dir, env-cleaned (no XDG/HOME
+/// `rut <args>` with this test's rut home, env-cleaned (no XDG/HOME
 /// surprises): returns (exit code, stderr).
-fn rut(cache: &Path, args: &[&str]) -> (i32, String) {
+fn rut(home: &Path, args: &[&str]) -> (i32, String) {
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_rut"))
-        .env("RUT_CACHE_DIR", cache)
+        .env("RUT_HOME", home)
         .env_remove("XDG_CACHE_HOME")
         .args(args)
         .output()
@@ -95,6 +95,12 @@ fn rut(cache: &Path, args: &[&str]) -> (i32, String) {
         out.status.code().unwrap_or(-1),
         String::from_utf8_lossy(&out.stderr).into_owned(),
     )
+}
+
+/// The store dir a pinned dep lands in
+/// (`<RUT_HOME>/deps/<spec>@<sha[:16]>/`) — the pin IS the address.
+fn store_dir_for(home: &Path, spec: &str, pin: &str) -> PathBuf {
+    home.join("deps").join(format!("{spec}@{}", &pin[..16]))
 }
 
 /// The consumer world: `util` served by url, pinned by the `rut.lock`
@@ -147,52 +153,50 @@ fn install_first_run_refusal_pin_refusal_and_eviction() {
     let pin = rut_driver::sha256_hex(&bytes);
     let root = consumer_world("consumer", &url, &pin);
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
+    let entry = store_dir_for(&home, "util", &pin);
 
     // 1. cold run: a missing url dep is a hard refusal BEFORE any GET
     // — run never downloads; the refusal names the fix and the dep
     server.set_up(false);
-    let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
+    let (code, err) = rut(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 2, "a cold run must refuse: {err}");
     assert!(err.contains("run `rut install` first"), "{err}");
     assert!(err.contains("util"), "{err}");
 
-    // 2. install: the downloading lane — the GET lands, the cache
+    // 2. install: the downloading lane — the GET lands, the store
     // fills, and the run passes with the server already silent (a hit
     // NEVER touches the network)
     server.set_up(true);
-    let (code, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install must download and pin: {err}");
     server.set_up(false);
-    let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
-    assert_eq!(code, 0, "offline run must hit the cache: {err}");
+    let (code, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "offline run must hit the store: {err}");
 
-    // 3. poisoned cache entry: the bytes no longer match the pin — the
-    // mount door refuses naming dep + url + both hashes, and the CLI
-    // evicts, exiting 2
-    let entry = cache.join(format!(
-        "{}.rutbundle",
-        rut_driver::sha256_hex(url.as_bytes())
-    ));
-    assert!(entry.is_file(), "the cache entry must exist");
-    std::fs::write(&entry, b"garbage").unwrap();
-    let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
+    // 3. poisoned store artifact: the bytes no longer match the pin —
+    // the mount door refuses naming dep + url + both hashes, and the
+    // CLI evicts the store dir, exiting 2
+    let artifact = entry.join("artifact.rutbundle");
+    assert!(artifact.is_file(), "the store artifact must exist");
+    std::fs::write(&artifact, b"garbage").unwrap();
+    let (code, err) = rut(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 2, "a pin refusal exits 2: {err}");
     assert!(err.contains("sha256 pin mismatch"), "{err}");
     assert!(err.contains(url.as_str()), "{err}");
     // the pin's SOURCE is the lock now (the manifest row is unpinned)
     assert!(err.contains("rut.lock pins"), "{err}");
-    assert!(!entry.exists(), "the poisoned entry must be evicted");
+    assert!(!entry.exists(), "the poisoned store dir must be evicted");
 
     // 4. healed: serve again — `rut install` re-fetches (run never
     // does), and the run passes offline
     server.set_up(true);
-    let (code, err) = rut(&cache, &["install", app.to_str().unwrap()]);
-    assert_eq!(code, 0, "install heals the cache: {err}");
+    let (code, err) = rut(&home, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install heals the store: {err}");
     server.set_up(false);
-    let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
-    assert_eq!(code, 0, "the healed cache answers offline: {err}");
-    assert!(entry.is_file(), "re-fetched");
+    let (code, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "the healed store answers offline: {err}");
+    assert!(artifact.is_file(), "re-fetched");
 }
 
 #[test]
@@ -232,7 +236,7 @@ fn cold_run_names_every_missing_dep_at_once() {
     write(&app, "src/mod.rut", "entry fn main() -> nil { return; }\n");
 
     server.set_up(false);
-    let (code, err) = rut(&root.join("cache"), &["run", app.to_str().unwrap()]);
+    let (code, err) = rut(&root.join("home"), &["run", app.to_str().unwrap()]);
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("2 url deps not in the bundle cache"), "{err}");
     assert!(err.contains("run `rut install` first"), "{err}");
@@ -241,28 +245,25 @@ fn cold_run_names_every_missing_dep_at_once() {
 }
 
 #[test]
-fn rut_fetch_warms_the_cache_for_offline_run() {
+fn rut_fetch_warms_the_store_for_offline_run() {
     let bytes = leaf_bundle("warml leaf");
     let server = TestServer::serve(bytes.clone());
     let url = server.url("util.rutbundle");
     let pin = rut_driver::sha256_hex(&bytes);
     let root = consumer_world("warm consumer", &url, &pin);
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
-    // fetch: load with the cache-first fetcher, discard the session
-    let (code, err) = rut(&cache, &["fetch", app.to_str().unwrap()]);
+    // fetch: load with the store-first fetcher, discard the session
+    let (code, err) = rut(&home, &["fetch", app.to_str().unwrap()]);
     assert_eq!(code, 0, "fetch must succeed: {err}");
-    let entry = cache.join(format!(
-        "{}.rutbundle",
-        rut_driver::sha256_hex(url.as_bytes())
-    ));
-    assert!(entry.is_file(), "fetch must populate the cache");
+    let artifact = store_dir_for(&home, "util", &pin).join("artifact.rutbundle");
+    assert!(artifact.is_file(), "fetch must populate the store");
 
     // the offline run — the server never serves a byte
     server.set_up(false);
-    let (code, err) = rut(&cache, &["run", app.to_str().unwrap()]);
-    assert_eq!(code, 0, "the warmed cache answers offline: {err}");
+    let (code, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "the warmed store answers offline: {err}");
 }
 
 #[test]
@@ -272,7 +273,7 @@ fn fetch_refuses_non_directories() {
     let root = scratch("refuse");
     let bundle = root.join("x.rutbundle");
     std::fs::write(&bundle, b"not really a bundle").unwrap();
-    let (code, err) = rut(&root.join("cache"), &["fetch", bundle.to_str().unwrap()]);
+    let (code, err) = rut(&root.join("home"), &["fetch", bundle.to_str().unwrap()]);
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("not a module directory"), "{err}");
 }

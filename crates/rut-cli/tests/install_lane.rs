@@ -1,6 +1,6 @@
 //! The `rut install` lane end to end, through the `rut` binary — ONE
 //! localhost server (offline: no external network), scratch worlds,
-//! `RUT_CACHE_DIR`-env'd runs. The seven laws:
+//! `RUT_HOME`-env'd runs against the global dep store. The seven laws:
 //!
 //! 1. install writes a DETERMINISTIC lock (byte-identical on re-run);
 //! 2. `--locked` passes when the lock is fresh;
@@ -11,8 +11,8 @@
 //!    bytes — the `~` row names the url and BOTH hashes; the lock file
 //!    stays untouched on disk);
 //! 6. install refuses a `.rutbundle` input (bundles are closed);
-//! 7. the progress chatter rides stderr (`downloading` / `downloaded` /
-//!    `cache hit`), the summaries ride stdout — asserted strictly,
+//! 7. the progress chatter rides stderr (`downloading` / `downloaded`
+//!    / `cache hit`), the summaries ride stdout — asserted strictly,
 //!    stderr loosely (wording-tweak-proof).
 //!
 //! The drift/diff LAW itself is install.rs's (phase 3); what this file
@@ -107,12 +107,12 @@ fn manifest(name: &str, deps: &str) -> String {
     )
 }
 
-/// `rut <args>` with this lane's cache dir, env-cleaned (no XDG/HOME
+/// `rut <args>` with this lane's rut home, env-cleaned (no XDG/HOME
 /// surprises): returns (exit code, stdout, stderr) — the summaries are
 /// stdout's, the progress chatter stderr's, so the lane reads both.
-fn rut(cache: &Path, args: &[&str]) -> (i32, String, String) {
+fn rut(home: &Path, args: &[&str]) -> (i32, String, String) {
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_rut"))
-        .env("RUT_CACHE_DIR", cache)
+        .env("RUT_HOME", home)
         .env_remove("XDG_CACHE_HOME")
         .args(args)
         .output()
@@ -126,9 +126,9 @@ fn rut(cache: &Path, args: &[&str]) -> (i32, String, String) {
 
 /// The same binary lane, spawned IN a working directory — `rut
 /// install` with no `<dir>` acts on the cwd.
-fn rut_in(cache: &Path, cwd: &Path, args: &[&str]) -> (i32, String, String) {
+fn rut_in(home: &Path, cwd: &Path, args: &[&str]) -> (i32, String, String) {
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_rut"))
-        .env("RUT_CACHE_DIR", cache)
+        .env("RUT_HOME", home)
         .env_remove("XDG_CACHE_HOME")
         .current_dir(cwd)
         .args(args)
@@ -170,13 +170,11 @@ fn one_dep(url: &str) -> String {
     format!(r#""util": {{"url": "{url}"}}"#)
 }
 
-/// The cache entry a url lands in (`.rut/cache/<sha256(url)>.rutbundle`)
-/// — the content-drift test must clear it, the fetcher is cache-first.
-fn cache_entry(cache: &Path, url: &str) -> PathBuf {
-    cache.join(format!(
-        "{}.rutbundle",
-        rut_driver::sha256_hex(url.as_bytes())
-    ))
+/// The store dir a pinned dep lands in
+/// (`<RUT_HOME>/deps/<spec>@<sha[:16]>/`) — the content-drift test
+/// must clear it, the fetcher is store-first.
+fn store_dir_for(home: &Path, spec: &str, pin: &str) -> PathBuf {
+    home.join("deps").join(format!("{spec}@{}", &pin[..16]))
 }
 
 // -- 1 ----------------------------------------------------------------
@@ -195,9 +193,9 @@ fn install_writes_a_deterministic_lock() {
     let root = consumer_world("det consumer", &one_dep(&url));
     let app = root.join("app");
     let lock = app.join("rut.lock");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
-    let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "first install must succeed: {err}");
     assert!(lock.is_file(), "install writes rut.lock");
     assert!(
@@ -208,7 +206,7 @@ fn install_writes_a_deterministic_lock() {
 
     // re-run: the lock is BYTE-IDENTICAL (render_lock's determinism
     // law, through the wire) and the summary says so
-    let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "re-install must succeed: {err}");
     assert!(
         out.contains("rut.lock unchanged (1 rows, no drift)"),
@@ -242,9 +240,9 @@ fn install_defaults_to_the_working_directory() {
     let url = server.url("util.rutbundle");
     let root = consumer_world("cwd consumer", &one_dep(&url));
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
-    let (code, out, err) = rut_in(&cache, &app, &["install"]);
+    let (code, out, err) = rut_in(&home, &app, &["install"]);
     assert_eq!(code, 0, "dirless install must succeed: {err}");
     assert!(app.join("rut.lock").is_file(), "the lock lands in the cwd");
     assert!(
@@ -253,7 +251,7 @@ fn install_defaults_to_the_working_directory() {
     );
 
     // --locked rides the same default
-    let (code, out, err) = rut_in(&cache, &app, &["install", "--locked"]);
+    let (code, out, err) = rut_in(&home, &app, &["install", "--locked"]);
     assert_eq!(code, 0, "dirless --locked must verify: {err}");
     assert!(out.contains("verified against rut.lock"), "{out}");
 }
@@ -271,11 +269,11 @@ fn locked_passes_when_fresh() {
     let url = server.url("util.rutbundle");
     let root = consumer_world("fresh consumer", &one_dep(&url));
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
-    let (code, _, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install first: {err}");
-    let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap(), "--locked"]);
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
     assert_eq!(code, 0, "--locked must pass on a fresh lock: {err}");
     assert!(
         out.contains(
@@ -300,10 +298,10 @@ fn locked_without_a_lock_names_the_fix() {
     let url = server.url("util.rutbundle");
     let root = consumer_world("nolock consumer", &one_dep(&url));
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
     // no install ran — no rut.lock exists, and --locked never writes one
-    let (code, _, err) = rut(&cache, &["install", app.to_str().unwrap(), "--locked"]);
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
     assert_eq!(code, 2, "--locked with no lock refuses: {err}");
     assert!(
         err.contains("no rut.lock"),
@@ -352,9 +350,9 @@ fn locked_refuses_manifest_set_drift() {
         ),
     );
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
-    let (code, _, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install the two-dep world: {err}");
     let lock = std::fs::read_to_string(app.join("rut.lock")).unwrap();
 
@@ -371,7 +369,7 @@ fn locked_refuses_manifest_set_drift() {
             ),
         ),
     );
-    let (code, _, err) = rut(&cache, &["install", app.to_str().unwrap(), "--locked"]);
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
     assert_eq!(code, 2, "an added dep is set drift: {err}");
     assert!(err.contains(&format!("+ {more_url}")), "{err}");
     assert!(err.contains("has no rut.lock row"), "{err}");
@@ -389,7 +387,7 @@ fn locked_refuses_manifest_set_drift() {
         "rut.jsonc",
         &manifest("app", &format!(r#""extra": {{"url": "{extra_url}"}}"#)),
     );
-    let (code, _, err) = rut(&cache, &["install", app.to_str().unwrap(), "--locked"]);
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
     assert_eq!(code, 2, "a removed dep is set drift: {err}");
     assert!(err.contains(&format!("- {util_url}")), "{err}");
     assert!(err.contains("no dep names this url anymore"), "{err}");
@@ -415,9 +413,9 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
     let url = server.url("util.rutbundle");
     let root = consumer_world("drift consumer", &one_dep(&url));
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
-    let (code, _, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install first: {err}");
     let lock = std::fs::read_to_string(app.join("rut.lock")).unwrap();
     // the lock holds the pin install computed from the FIRST bytes
@@ -427,7 +425,7 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
     assert_eq!(stale_pin, rut_driver::sha256_hex(&bytes));
 
     // the CDN re-serves different bytes: swap the payload AND clear the
-    // cache entry (the fetcher is cache-first — a warm entry would
+    // store dir (the fetcher is store-first — a warm entry would
     // never see the new bytes)
     let fresh = leaf_bundle(
         "drift leaf b",
@@ -437,11 +435,11 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
     let fresh_pin = rut_driver::sha256_hex(&fresh);
     assert_ne!(stale_pin, fresh_pin);
     server.re_serve("util.rutbundle", fresh);
-    let entry = cache_entry(&cache, &url);
-    assert!(entry.is_file(), "the install warmed the cache");
-    std::fs::remove_file(&entry).unwrap();
+    let entry = store_dir_for(&home, "util", &stale_pin);
+    assert!(entry.is_dir(), "the install warmed the store");
+    std::fs::remove_dir_all(&entry).unwrap();
 
-    let (code, _, err) = rut(&cache, &["install", app.to_str().unwrap(), "--locked"]);
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
     assert_eq!(code, 2, "content drift refuses: {err}");
     // the `~` row names the url and BOTH hashes: the lock's pin, then
     // what the re-served bytes hash to
@@ -461,6 +459,25 @@ fn locked_refuses_content_drift_and_never_touches_the_lock() {
         lock,
         "--locked never rewrites, never evicts"
     );
+    // verify-then-publish atomicity: the drifted bytes entered the
+    // store NOWHERE — no dir at the fresh address, no tmp siblings
+    assert!(
+        !store_dir_for(&home, "util", &fresh_pin).exists(),
+        "drifted bytes publish nothing"
+    );
+    let deps = home.join("deps");
+    let leftovers: Vec<String> = match std::fs::read_dir(&deps) {
+        Ok(rd) => rd
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with('.'))
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    assert!(
+        leftovers.is_empty(),
+        "no tmp siblings survive: {leftovers:?}"
+    );
 }
 
 // -- 6 ----------------------------------------------------------------
@@ -471,7 +488,7 @@ fn install_refuses_a_bundle() {
     let root = scratch("refuse");
     let bundle = root.join("x.rutbundle");
     std::fs::write(&bundle, b"not really a bundle").unwrap();
-    let (code, _, err) = rut(&root.join("cache"), &["install", bundle.to_str().unwrap()]);
+    let (code, _, err) = rut(&root.join("home"), &["install", bundle.to_str().unwrap()]);
     assert_eq!(code, 2, "{err}");
     assert!(err.contains("not a module directory"), "{err}");
 }
@@ -492,11 +509,11 @@ fn progress_on_stderr_summaries_on_stdout() {
     let url = server.url("util.rutbundle");
     let root = consumer_world("chatter consumer", &one_dep(&url));
     let app = root.join("app");
-    let cache = root.join("cache");
+    let home = root.join("home");
 
     // cold cache: the downloading chatter rides STDERR; the summaries
     // ride STDOUT (asserted strictly — the stdout lane is the stable one)
-    let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains(&format!("install: util — downloading {url}")),
@@ -516,7 +533,7 @@ fn progress_on_stderr_summaries_on_stdout() {
 
     // warm cache: one cache-hit line, no fake re-download flash, and
     // the unchanged lock is never rewritten
-    let (code, out, err) = rut(&cache, &["install", app.to_str().unwrap()]);
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "{err}");
     assert!(err.contains("install: util — cache hit ("), "{err}");
     assert!(

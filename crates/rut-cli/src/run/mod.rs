@@ -29,8 +29,8 @@ pub(crate) struct RunArgs {
     #[arg(long, value_name = "FILE")]
     symbols: Option<String>,
     /// force the miss path — recompile the whole program from source
-    /// even on a cache hit; the fresh archive still refreshes the
-    /// `.rut/cache` entry (alias: --repack)
+    /// even on a cache hit; the fresh archive still refreshes the run
+    /// cache entry (alias: --repack)
     #[arg(long, visible_alias = "repack")]
     no_cache: bool,
 }
@@ -99,7 +99,7 @@ pub(crate) fn run(args: &RunArgs) {
     // identically by construction; a bundle-lane bug crashes the
     // FIRST run, never only the cache hit.
     let remote = cache::offline_remote_for(p);
-    if let Err(e) = cache::ensure_deps_cached(p, "run", &remote) {
+    if let Err(e) = cache::ensure_deps_cached("run", &remote) {
         eprintln!("{e}");
         std::process::exit(2);
     }
@@ -107,7 +107,7 @@ pub(crate) fn run(args: &RunArgs) {
         Ok(x) => x,
         Err(e) => {
             eprintln!("{e}");
-            cache::evict_poisoned_cache(p, &e);
+            cache::evict_poisoned_cache(&e);
             std::process::exit(2);
         }
     };

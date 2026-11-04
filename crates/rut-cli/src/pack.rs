@@ -53,7 +53,7 @@ pub(crate) fn pack(args: &PackArgs) {
         std::process::exit(2);
     }
     let remote = cache::offline_remote_for(p);
-    if let Err(e) = cache::ensure_deps_cached(p, "pack", &remote) {
+    if let Err(e) = cache::ensure_deps_cached("pack", &remote) {
         eprintln!("{e}");
         std::process::exit(2);
     }
@@ -64,11 +64,11 @@ pub(crate) fn pack(args: &PackArgs) {
             &remote,
         )) {
             Ok(b) => b,
-            Err(e) => pack_failed(p, e),
+            Err(e) => pack_failed(e),
         },
         PackMode::Source => match cache::block_on(rut_native::pack_dir_zip_with(p, &remote)) {
             Ok(b) => (b, None),
-            Err(e) => pack_failed(p, e),
+            Err(e) => pack_failed(e),
         },
     };
     let out = out.map(std::path::PathBuf::from).unwrap_or_else(|| {
@@ -105,8 +105,8 @@ pub(crate) fn pack(args: &PackArgs) {
 
 /// A pack failure: the message, the poisoned-cache eviction when the
 /// pin law names one, exit 2.
-fn pack_failed(p: &std::path::Path, e: rut_driver::pack::PackError) -> ! {
+fn pack_failed(e: rut_driver::pack::PackError) -> ! {
     eprintln!("pack: {e}");
-    cache::evict_poisoned_cache(p, &e.to_string());
+    cache::evict_poisoned_cache(&e.to_string());
     std::process::exit(2);
 }

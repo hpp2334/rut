@@ -1,4 +1,4 @@
-//! the `fetch` subcommand: warm the bundle cache, discard the run.
+//! the `fetch` subcommand: warm the global dep store, discard the run.
 
 use crate::{cache, install};
 
@@ -9,11 +9,12 @@ pub(crate) struct FetchArgs {
     dir: String,
 }
 
-/// `rut fetch <dir>` — pre-populate the bundle cache: download the
-/// closure's url deps through the shared progress loop, then load the
-/// directory's graph with the cache-first fetcher — every fetch a
-/// cache hit now — and discard the run. CI warms the cache while
-/// the network is up; the later offline `run` hits only the cache. A
+/// `rut fetch <dir>` — pre-populate the dep store: download the
+/// closure's url deps through the shared progress loop (store-hit
+/// first, else GET → verify → publish), then load the directory's
+/// graph with the store-backed cache-only remote — every fetch a
+/// store hit now — and discard the run. CI warms the store while
+/// the network is up; the later offline `run` hits only the store. A
 /// `.rutbundle` input is refused: bundles are closed — there is
 /// nothing to fetch.
 pub(crate) fn fetch_cmd(args: &FetchArgs) {
@@ -25,10 +26,10 @@ pub(crate) fn fetch_cmd(args: &FetchArgs) {
         );
         std::process::exit(2);
     }
-    // the progress loop: per-dep stderr lines, the misses downloaded —
-    // so the load below rides cache hits only
-    let remote = cache::online_remote_for(p);
-    if let Err(e) = install::progress_loop("fetch", p, &remote) {
+    // the progress loop: per-dep stderr lines, the misses downloaded
+    // and published — so the load below rides store hits only
+    let remote = cache::get_remote();
+    if let Err(e) = install::progress_loop("fetch", p, &remote, false) {
         eprintln!("fetch: {e}");
         std::process::exit(2);
     }
@@ -39,7 +40,7 @@ pub(crate) fn fetch_cmd(args: &FetchArgs) {
         ),
         Err(e) => {
             eprintln!("{e}");
-            cache::evict_poisoned_cache(p, &e);
+            cache::evict_poisoned_cache(&e);
             std::process::exit(2);
         }
     }

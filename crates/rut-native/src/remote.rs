@@ -186,6 +186,22 @@ impl HttpRemote {
     /// (any executor works, noop-waker `block_on` included).
     #[cfg(feature = "http")]
     fn get(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
+        let bytes = self.get_bytes(url)?;
+        let joined_url = url.to_string();
+        // write the cache back atomically — a half-fetched entry never
+        // masquerades as a hit (the same law the CLI's fetcher had)
+        DepRemote::write(self, &joined_url, &bytes)?;
+        Ok(bytes)
+    }
+
+    /// The bare GET — the transport only, NO cache write: redirects
+    /// on, loud status errors, the size cap, the hard timeouts (10 s
+    /// connect, 60 s whole-request), run to completion on a private
+    /// worker thread. The lanes that verify-then-publish themselves
+    /// (the global store's `rut install` / `rut fetch`) call this — a
+    /// blind cache write would publish bytes no pin has vouched for.
+    #[cfg(feature = "http")]
+    pub fn get_bytes(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
         let url = url.to_string();
         let client = self.client.clone();
         let joined_url = url.clone();
@@ -231,16 +247,20 @@ impl HttpRemote {
             .map_err(|e| {
                 RemoteError::new(format!("{joined_url}: cannot spawn the fetch thread: {e}"))
             })?;
-        let bytes = match handle.join() {
+        match handle.join() {
             Ok(r) => r,
             Err(_) => Err(RemoteError::new(format!(
                 "{joined_url}: the fetch thread panicked"
             ))),
-        }?;
-        // write the cache back atomically — a half-fetched entry never
-        // masquerades as a hit (the same law the CLI's fetcher had)
-        DepRemote::write(self, &joined_url, &bytes)?;
-        Ok(bytes)
+        }
+    }
+
+    /// The bare GET without the wire feature: loud, naming the fix.
+    #[cfg(not(feature = "http"))]
+    pub fn get_bytes(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
+        Err(RemoteError::new(format!(
+            "{url}: this build does not network — build with the `http` feature"
+        )))
     }
 
     /// The offline miss: loud — the cache has no such entry and this

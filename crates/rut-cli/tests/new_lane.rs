@@ -39,11 +39,11 @@ fn rut() -> &'static str {
     env!("CARGO_BIN_EXE_rut")
 }
 
-/// `rut <args>` with this lane's cache dir, env-cleaned (no XDG/HOME
+/// `rut <args>` with this lane's rut home, env-cleaned (no XDG/HOME
 /// surprises).
-fn rut_cmd(cache: &Path, args: &[&str]) -> Output {
+fn rut_cmd(home: &Path, args: &[&str]) -> Output {
     Command::new(rut())
-        .env("RUT_CACHE_DIR", cache)
+        .env("RUT_HOME", home)
         .env_remove("XDG_CACHE_HOME")
         .args(args)
         .output()
@@ -51,11 +51,11 @@ fn rut_cmd(cache: &Path, args: &[&str]) -> Output {
 }
 
 /// Scaffold `<root>/<name>` and assert the creation succeeded; the
-/// cache rides under the scratch root.
+/// rut home rides under the scratch root.
 fn scaffold(tag: &str, name: &str) -> (PathBuf, PathBuf) {
     let root = scratch(tag);
     let dir = root.join(name);
-    let out = rut_cmd(&root.join("cache"), &["new", dir.to_str().unwrap()]);
+    let out = rut_cmd(&root.join("home"), &["new", dir.to_str().unwrap()]);
     assert!(
         out.status.success(),
         "scaffold must succeed: {}",
@@ -159,7 +159,7 @@ fn scaffold_refuses_to_clobber() {
         std::fs::create_dir_all(seeded_path.parent().unwrap()).unwrap();
         std::fs::write(&seeded_path, "// precious\n").unwrap();
 
-        let out = rut_cmd(&root.join("cache"), &["new", dir.to_str().unwrap()]);
+        let out = rut_cmd(&root.join("home"), &["new", dir.to_str().unwrap()]);
         assert_eq!(
             out.status.code(),
             Some(2),
@@ -181,7 +181,7 @@ fn scaffold_refuses_to_clobber() {
 fn scaffold_refuses_an_illegal_name() {
     let root = scratch("illegal");
     let dir = root.join("my-app");
-    let out = rut_cmd(&root.join("cache"), &["new", dir.to_str().unwrap()]);
+    let out = rut_cmd(&root.join("home"), &["new", dir.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("my-app"), "{stderr}");
@@ -194,7 +194,7 @@ fn scaffold_refuses_an_illegal_name() {
 fn template_is_fmt_clean() {
     let (root, dir) = scaffold("fmt-clean", "hello");
     let out = rut_cmd(
-        &root.join("cache"),
+        &root.join("home"),
         &["fmt", dir.to_str().unwrap(), "--check"],
     );
     assert_eq!(
@@ -334,7 +334,7 @@ fn scaffolded_project_runs_against_a_local_server() {
 
     // the install-first law: run never downloads — install warms the
     // cache from the local server (and confirms the lock is fresh)
-    let out = rut_cmd(&root.join("cache"), &["install", dir.to_str().unwrap()]);
+    let out = rut_cmd(&root.join("home"), &["install", dir.to_str().unwrap()]);
     assert!(
         out.status.success(),
         "the scaffold install must succeed: {}\nstdout: {}",
@@ -346,7 +346,7 @@ fn scaffolded_project_runs_against_a_local_server() {
     // deps are legal (host pkgs merge inert unless the program mounts
     // their pkg), so no
     // unused-dep diagnostics, and the output is the book's
-    let out = rut_cmd(&root.join("cache"), &["run", dir.to_str().unwrap()]);
+    let out = rut_cmd(&root.join("home"), &["run", dir.to_str().unwrap()]);
     assert!(
         out.status.success(),
         "the scaffolded hello must run: {}\nstdout: {}",

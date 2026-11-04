@@ -1,11 +1,11 @@
 //! The cache-first `rut run <dir>`: ONE execution lane — the driven
 //! artifact is always the packed archive (the miss packs fresh and
 //! runs those exact bytes, the hit mounts the cached bundle) — so a
-//! run may emit its archive into `.rut/cache/` keyed by the closure's
-//! content, and every later run of the SAME closure mounts the cached
-//! bundle. The debug door (`--no-cache`, alias `--repack`) forces the
-//! miss path; the entry still refreshes. A corrupt entry self-heals:
-//! the hit falls through to the miss and rewrites it.
+//! run may emit its archive into `$RUT_HOME/run/` keyed by the
+//! closure's content, and every later run of the SAME closure mounts
+//! the cached bundle. The debug door (`--no-cache`, alias `--repack`)
+//! forces the miss path; the entry still refreshes. A corrupt entry
+//! self-heals: the hit falls through to the miss and rewrites it.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -31,8 +31,11 @@ fn rut() -> &'static str {
     env!("CARGO_BIN_EXE_rut")
 }
 
-fn rut_run(args: &[&str]) -> (i32, String) {
+/// `rut run <args>` with a fresh scratch rut home — the run cache and
+/// the dep store both live under it; nothing ever touches `~/.rut`.
+fn rut_run(home: &Path, args: &[&str]) -> (i32, String) {
     let out = Command::new(rut())
+        .env("RUT_HOME", home)
         .args(args)
         .output()
         .expect("run the rut binary");
@@ -55,32 +58,47 @@ fn hello_world(tag: &str) -> PathBuf {
     root
 }
 
-fn cache_entries(dir: &Path) -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = std::fs::read_dir(dir.join(".rut").join("cache"))
+fn cache_entries(home: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = std::fs::read_dir(home.join("run"))
         .map(|rd| rd.filter_map(|e| e.ok()).map(|e| e.path()).collect())
         .unwrap_or_default();
     out.sort();
     out
 }
 
+/// The store dir a pinned dep lands in
+/// (`<RUT_HOME>/deps/<spec>@<sha[:16]>/`) — the pin IS the address.
+fn store_dir_for(home: &Path, spec: &str, pin: &str) -> PathBuf {
+    home.join("deps").join(format!("{spec}@{}", &pin[..16]))
+}
+
 #[test]
 fn run_dir_writes_the_cache_and_the_second_run_hits_it() {
     let root = hello_world("hit");
     let dir = root.join("hello");
+    let home = root.join("home");
 
     // miss: the reference compile runs and emits the archive
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
-    let entries = cache_entries(&dir);
+    let entries = cache_entries(&home);
     assert_eq!(entries.len(), 1, "one cache entry after the miss");
     assert!(entries[0].extension().is_some_and(|e| e == "rutbundle"));
+    // the entry lives under $RUT_HOME/run — the shared run cache
+    assert_eq!(
+        entries[0]
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str()),
+        Some("run")
+    );
 
     // hit: the same closure mounts the cached archive — the entry is
     // untouched (a miss would rewrite it through the pack lane)
     let before = std::fs::read(&entries[0]).unwrap();
     let stamp = std::fs::metadata(&entries[0]).unwrap().modified().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "second run: {err}");
     assert_eq!(
         std::fs::metadata(&entries[0]).unwrap().modified().unwrap(),
@@ -95,10 +113,11 @@ fn run_dir_writes_the_cache_and_the_second_run_hits_it() {
 fn an_edited_closure_keys_a_fresh_entry() {
     let root = hello_world("keyed");
     let dir = root.join("hello");
+    let home = root.join("home");
 
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
-    assert_eq!(cache_entries(&dir).len(), 1);
+    assert_eq!(cache_entries(&home).len(), 1);
 
     // the source is part of the key: the edit lands a SECOND entry and
     // the run still succeeds (the new closure compiles fresh)
@@ -107,9 +126,9 @@ fn an_edited_closure_keys_a_fresh_entry() {
         "src/mod.rut",
         "entry fn main() -> nil {\n    let n = 6 * 7;\n    return;\n}\n",
     );
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "edited run: {err}");
-    assert_eq!(cache_entries(&dir).len(), 2, "one entry per closure");
+    assert_eq!(cache_entries(&home).len(), 2, "one entry per closure");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -117,15 +136,16 @@ fn an_edited_closure_keys_a_fresh_entry() {
 fn no_cache_forces_the_miss_but_refreshes_the_entry() {
     let root = hello_world("nocache");
     let dir = root.join("hello");
+    let home = root.join("home");
 
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
-    let entry = cache_entries(&dir).remove(0);
+    let entry = cache_entries(&home).remove(0);
 
     // corrupt the entry: a plain run self-heals — the hit falls
     // through to the miss and the fresh archive rewrites the entry
     std::fs::write(&entry, b"garbage").unwrap();
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap()]);
     assert_eq!(code, 0, "the corrupt entry never fails a run: {err}");
     assert_ne!(
         std::fs::read(&entry).unwrap(),
@@ -138,14 +158,14 @@ fn no_cache_forces_the_miss_but_refreshes_the_entry() {
     // reference engine just produced)
     let stamp = std::fs::metadata(&entry).unwrap().modified().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap(), "--no-cache"]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap(), "--no-cache"]);
     assert_eq!(code, 0, "--no-cache run: {err}");
     assert!(
         std::fs::metadata(&entry).unwrap().modified().unwrap() != stamp,
         "--no-cache rewrites the entry"
     );
     // the visible alias spells the same door
-    let (code, err) = rut_run(&["run", dir.to_str().unwrap(), "--repack"]);
+    let (code, err) = rut_run(&home, &["run", dir.to_str().unwrap(), "--repack"]);
     assert_eq!(code, 0, "--repack run: {err}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -171,16 +191,17 @@ fn a_dir_with_a_path_dep_caches_one_closed_entry() {
         "src/mod.rut",
         "pub fn seven() -> i64 { return 7; }\n",
     );
+    let home = root.join("home");
 
-    let (code, err) = rut_run(&["run", hello.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", hello.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
     // the whole closure packs into ONE closed entry, and the second
     // run mounts it (untouched — a miss would rewrite it)
-    let entries = cache_entries(&hello);
+    let entries = cache_entries(&home);
     assert_eq!(entries.len(), 1, "the whole closure packs into ONE entry");
     let stamp = std::fs::metadata(&entries[0]).unwrap().modified().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
-    let (code, err) = rut_run(&["run", hello.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", hello.to_str().unwrap()]);
     assert_eq!(code, 0, "second run: {err}");
     assert_eq!(
         std::fs::metadata(&entries[0]).unwrap().modified().unwrap(),
@@ -273,12 +294,12 @@ fn gen_app_manifest(dep: &str, url: Option<&str>) -> String {
     )
 }
 
-fn assert_miss_then_hit(app: &Path) {
+fn assert_miss_then_hit(home: &Path, app: &Path) {
     // miss: the fresh archive IS the run — the mirror stub materializes
     // at load and the program exits clean
-    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    let (code, err) = rut_run(home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
-    let bundles: Vec<PathBuf> = cache_entries(app)
+    let bundles: Vec<PathBuf> = cache_entries(home)
         .into_iter()
         .filter(|e| e.extension().is_some_and(|e| e == "rutbundle"))
         .collect();
@@ -287,7 +308,7 @@ fn assert_miss_then_hit(app: &Path) {
     // hit: the cached archive replays through the same lane — the
     // second run must behave exactly like the first, the entry untouched
     let before = std::fs::read(&bundles[0]).unwrap();
-    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    let (code, err) = rut_run(home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "second run: {err}");
     assert_eq!(
         std::fs::read(&bundles[0]).unwrap(),
@@ -306,7 +327,8 @@ fn a_generic_path_dep_runs_identically_on_the_miss_and_the_hit() {
   "name": "gen"
 }"#,
     );
-    assert_miss_then_hit(&app);
+    let home = root.join("home");
+    assert_miss_then_hit(&home, &app);
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -318,6 +340,7 @@ fn a_generic_url_dep_runs_identically_on_the_miss_and_the_hit() {
   "name": "gen"
 }"#,
     );
+    let home = root.join("home");
     // the dep rides the url lane as a SOURCE ZIP — the std-v14 shape,
     // whose group mounts as source at load
     let zip = rut_native::pack_dir_zip(&root.join("gen")).expect("pack gen source zip");
@@ -332,25 +355,22 @@ fn a_generic_url_dep_runs_identically_on_the_miss_and_the_hit() {
             rut_driver::LockRow {
                 pkg: "gen".into(),
                 url: url.clone(),
-                sha256: pin,
+                sha256: pin.clone(),
             },
         ])),
     );
 
-    // install first: run never downloads
-    let (code, err) = rut_run(&["install", app.to_str().unwrap()]);
+    // install first: run never downloads — the store warms instead
+    let (code, err) = rut_run(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install: {err}");
 
-    let url_entry = app
-        .join(".rut")
-        .join("cache")
-        .join(format!("{}.zip", rut_driver::sha256_hex(url.as_bytes())));
-    assert!(url_entry.is_file(), "the url dep's cache entry lands");
-    assert_miss_then_hit(&app);
+    let artifact = store_dir_for(&home, "gen", &pin).join("artifact.zip");
+    assert!(artifact.is_file(), "the url dep's store artifact lands");
+    assert_miss_then_hit(&home, &app);
     assert_eq!(
-        std::fs::read(&url_entry).unwrap(),
+        std::fs::read(&artifact).unwrap(),
         zip,
-        "a hit never rewrites the url entry"
+        "a hit never rewrites the store artifact"
     );
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -423,7 +443,7 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
             rut_driver::LockRow {
                 pkg: "util".into(),
                 url: url.clone(),
-                sha256: pin,
+                sha256: pin.clone(),
             },
         ])),
     );
@@ -433,54 +453,43 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
         "use util::{twice};\nentry fn main() {\n    let x = twice(21);\n    return;\n}\n",
     );
 
-    // install first: run never downloads — the install warms the url
-    // entry (and leaves the identical lock as-is)
-    let (code, err) = rut_run(&["install", app.to_str().unwrap()]);
+    // install first: run never downloads — the install warms the
+    // store (and leaves the identical lock as-is)
+    let home = root.join("home");
+    let (code, err) = rut_run(&home, &["install", app.to_str().unwrap()]);
     assert_eq!(code, 0, "install: {err}");
 
-    // run 1 (warm): the cache holds exactly the url entry + ONE
-    // run-cache entry keyed on the resolved bytes. No dead
-    // `<uncached>` entry beside them.
-    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    // run 1 (warm): the store holds the dep artifact, the run cache
+    // exactly ONE entry keyed on the resolved bytes. No dead
+    // `<uncached>` entry beside it.
+    let (code, err) = rut_run(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "first run: {err}");
-    let url_entry = app.join(".rut").join("cache").join(format!(
-        "{}.rutbundle",
-        rut_driver::sha256_hex(url.as_bytes())
-    ));
-    assert!(url_entry.is_file(), "the url dep's cache entry lands");
-    let run_entries: Vec<PathBuf> = cache_entries(&app)
-        .into_iter()
-        .filter(|e| *e != url_entry)
-        .collect();
+    let artifact = store_dir_for(&home, "util", &pin).join("artifact.rutbundle");
+    assert!(artifact.is_file(), "the url dep's store artifact lands");
     assert_eq!(
-        run_entries.len(),
+        cache_entries(&home).len(),
         1,
         "one run-cache entry, keyed on the resolved bytes — no dead pre-fetch entry"
     );
+    let run_entry = cache_entries(&home).remove(0);
 
     // run 2: the same closure keys the same resolved bytes — the hit
     // mounts the cached archive and neither entry is rewritten (a miss
     // would rewrite through the pack lane)
-    let stamp = std::fs::metadata(&run_entries[0])
-        .unwrap()
-        .modified()
-        .unwrap();
-    let url_stamp = std::fs::metadata(&url_entry).unwrap().modified().unwrap();
+    let stamp = std::fs::metadata(&run_entry).unwrap().modified().unwrap();
+    let url_stamp = std::fs::metadata(&artifact).unwrap().modified().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
-    let (code, err) = rut_run(&["run", app.to_str().unwrap()]);
+    let (code, err) = rut_run(&home, &["run", app.to_str().unwrap()]);
     assert_eq!(code, 0, "second run: {err}");
     assert_eq!(
-        std::fs::metadata(&run_entries[0])
-            .unwrap()
-            .modified()
-            .unwrap(),
+        std::fs::metadata(&run_entry).unwrap().modified().unwrap(),
         stamp,
         "a hit never rewrites the run-cache entry"
     );
     assert_eq!(
-        std::fs::metadata(&url_entry).unwrap().modified().unwrap(),
+        std::fs::metadata(&artifact).unwrap().modified().unwrap(),
         url_stamp,
-        "a hit never rewrites the url entry"
+        "a hit never rewrites the store artifact"
     );
     let _ = std::fs::remove_dir_all(&util_root);
     let _ = std::fs::remove_dir_all(&root);
