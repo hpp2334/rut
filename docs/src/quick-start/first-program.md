@@ -63,13 +63,17 @@ hello, rut!
 
 The run works from ANY directory — nothing about it assumes a clone of
 the toolchain's repo. The url row names the package on jsDelivr;
-`rut install` fetched it once into the project's cache (`.rut/cache`)
-and pinned its sha256 in `hello/rut.lock` — the lock rides beside the
-manifest, committed, and every load verifies the fetched bytes against
-it (an unpinned url refuses at the door: `run `rut install``). Every
-later run is a pure cache hit, `rut install hello --locked` re-verifies
-the lock without writing (the CI lane), and `rut fetch hello` re-warms
-the cache without running anything.
+`rut install` fetched it once into the **global dep store** and pinned
+its sha256 in `hello/rut.lock` — the lock rides beside the manifest,
+committed, and every load verifies the fetched bytes against it (an
+unpinned url refuses at the door: `run `rut install``). The store is
+content-addressed under `$RUT_HOME` (`~/.rut` by default), one
+`deps/<name>@<sha256[:16]>/` dir per pinned dep, shared by every
+project — the project's own directory carries no cache at all (a
+project is `rut.jsonc` + `rut.lock` + `src/`). Every later run is a
+pure store hit, `rut install hello --locked` re-verifies the lock
+without writing (the CI lane), and `rut fetch hello` re-warms the
+store without running anything.
 
 Three things to notice:
 
@@ -96,12 +100,12 @@ the CLI scaffolds it in one step: `rut new <dir>` writes exactly those
 three files — the manifest with the derived name (and, unlike the
 walkthrough above, the whole swappable std set as url deps), the
 matching `rut.lock` (the std set's pins), and the same `src/mod.rut`.
-`rut install <dir>` warms the cache once (run never downloads —
+`rut install <dir>` fills the store once (run never downloads —
 [the rut CLI](../reference/cli.md)), then `rut run <dir>` runs it:
 
 ```sh
 rut new hello      # hello/rut.jsonc (the std set) + hello/rut.lock + hello/src/mod.rut
-rut install hello  # fetch the std set into hello/.rut/cache (with progress)
+rut install hello  # fetch the std set into the global dep store (with progress)
 rut run hello
 ```
 

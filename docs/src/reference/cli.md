@@ -42,16 +42,18 @@ loose-file shape:
 
 | input | pipeline |
 |---|---|
-| `dir` (a module directory with `rut.jsonc`) | **cache-first**: the run key is sha256 over the closure's sources, manifests, `rut.lock` pins, and the toolchain version — a hit in `.rut/cache/<key>.rutbundle` mounts the cached archive; a miss is the whole-program compile (the deterministic reference — [the compilation model](compilation-model.md)), whose archive then emits into the cache. `--no-cache` (alias `--repack`) forces the miss path; the fresh archive still refreshes the entry. A host-rooted directory never reaches the cache (it refuses at the door — a host root is a declaration leaf, nothing to run) |
+| `dir` (a module directory with `rut.jsonc`) | **cache-first**: the run key is sha256 over the closure's sources, manifests, `rut.lock` pins, and the toolchain version — a hit in the run cache (`$RUT_HOME/run/<key>.rutbundle`, shared across projects) mounts the cached archive; a miss is the whole-program compile (the deterministic reference — [the compilation model](compilation-model.md)), whose archive then emits into the run cache. `--no-cache` (alias `--repack`) forces the miss path; the fresh archive still refreshes the entry. A host-rooted directory never reaches the cache (it refuses at the door — a host root is a declaration leaf, nothing to run) |
 | `mod.rutbundle` | the packed form of the same contract — decoded directly, no cache lane ([module bundles](bundles.md)) |
 
 The **install-first law**: `run` and `pack` never download. Before the
-walk, every url dep the closure declares must already sit in the cache
-— a missing set is one aggregated refusal (exit 2) naming each dep and
-the fix: `run: N url deps not in the bundle cache — run `rut install`
-first`. [`install`](#install) and [`fetch`](#fetch) are the only
-downloading lanes; everything after the gate — the walk, the mount
-door's pin check, the compile, the drive — is cache-only and hermetic.
+walk, every url dep the closure declares must already sit in the
+global dep store — a missing set is one aggregated refusal (exit 2)
+naming each dep and the fix: ``run: 1 url dep not in the global dep
+store — run `rut install` first:`` (one `spec — url` line per dep).
+[`install`](#install) and [`fetch`](#fetch) are the only downloading
+lanes; everything after the gate — the walk, the mount door's pin
+check, the compile, the drive — reads the store only, cache-only and
+hermetic.
 
 Anything else is refused at the door (exit 2): a loose `.rut` file is
 not a runnable unit — give the directory a `rut.jsonc` naming the
@@ -99,8 +101,8 @@ manifest with the full swappable std set as **unpinned** url deps, the
 matching `rut.lock` (the std set's pins), and the root module
 `src/mod.rut` — the same bytes as
 [your first rut program](../quick-start/first-program.md).
-`rut install hello` warms the cache once (nine source zips), then
-`rut run hello` prints `hello, rut!`.
+`rut install hello` fills the global dep store once (nine source zips),
+then `rut run hello` prints `hello, rut!`.
 
 Behavior:
 
@@ -110,7 +112,7 @@ Behavior:
 | clobber refusal | a target already holding a `rut.jsonc`, a `src/mod.rut`, or a `rut.lock` is refused (exit 2, naming the file) — other pre-existing files are fine |
 | parents | created as needed — `rut new a/b/hello` works |
 | files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v15` tag (source zips); `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello |
-| first run | **refuses**: `rut run`/`rut pack` never download — `rut install <dir>` fetches the std set (9 source zips) into `<dir>/.rut/cache` (with progress), `rut fetch <dir>` pre-warms the same way; then every run is cache-only |
+| first run | **refuses**: `rut run`/`rut pack` never download — `rut install <dir>` fetches the std set (9 source zips) into the global dep store (with progress), `rut fetch <dir>` pre-warms the same way; then every run reads the store only |
 
 The three created files, for `rut new hello` — all verbatim:
 
@@ -330,31 +332,33 @@ useful for inspecting a host surface's slots.
 ## `fetch`
 
 ```sh
-rut fetch app/            # CI: warm the cache while the network is up
+rut fetch app/            # CI: warm the global dep store while the network is up
 ```
 
-Walks a module **directory** with the wire-armed remote and discards
-the result — every `deps` url is fetched (or found in the cache) and the
-graph is then loaded and thrown away, so a later offline `run` hits
-only the cache. The load is the same law every load obeys: the walk
-root's `rut.lock` must pin every collected url row, so `rut fetch` is
-the *re*-warm lane — [`install`](#install) is the lane that writes the
+Walks a module **directory** and fills the global dep store: the same
+progress loop [`install`](#install) runs — store-hit first, else GET →
+verify → publish — then the graph is loaded over the store-backed
+cache-only remote and thrown away, so a later offline `run` hits only
+the store. The load is the same law every load obeys: the walk root's
+`rut.lock` must pin every collected url row, so `rut fetch` is the
+*re*-warm lane — [`install`](#install) is the lane that writes the
 lock a fetch (and every run) travels with. A `.rutbundle` argument is
 refused (exit 2): bundles are closed — there is nothing to fetch.
-The cache, the download policy, and the eviction law are `install`'s —
-the online lanes; `run`/`pack` ride the same cache with the wire off:
+The store, the download policy, and the eviction law are `install`'s —
+the online lanes; `run`/`pack` read the same store with the wire off:
 
 | item | behavior |
 |---|---|
-| cache root | `<project>/.rut/cache` — project-local, hermetic; `$RUT_CACHE_DIR` overrides the root (CLI-side only — the walk never reads env). Entries named `<sha256(url)>.zip` or `<sha256(url)>.rutbundle` — the extension follows the url's own artifact kind |
-| cache-first | a hit never touches the network — offline reloads are the point |
-| miss (install/fetch) | GET (redirects on) under hard timeouts (10 s connect, 60 s whole-request — a stalled host fails loudly, never hangs), non-2xx is a loud error, a size cap refuses without buffering, the write is atomic (tmp + rename) |
+| store root | `$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree). Projects carry no local cache — a project is `rut.jsonc` + `rut.lock` + `src/` |
+| run cache | `$RUT_HOME/run/<key>.rutbundle` — the whole-program archive cache `run` replays ([`run`](#run)) |
+| store-first | a hit never touches the network — offline reloads are the point |
+| miss (install/fetch) | GET (redirects on) under hard timeouts (10 s connect, 60 s whole-request — a stalled host fails loudly, never hangs), non-2xx is a loud error, a size cap refuses without buffering; the publish is verify-then-rename — the whole dep dir (artifact + meta + unpack tree) fills a tmp sibling and lands by ONE atomic rename, so a reader never sees a partial dep |
 | miss (run/pack) | the loud install-first refusal — run and pack never download |
-| poisoned entry | the pin is the loader's law at the mount door — the pin's source is the root's `rut.lock`; when the door refuses, the CLI maps the url back to its cache path, deletes the entry, and exits 2 — the next `install` (or `fetch`) re-fetches and heals |
+| poisoned entry | the pin is the loader's law at the mount door — the pin's source is the root's `rut.lock`; when the door refuses, the CLI deletes the store dir whose meta names that url and exits 2 — the next `install` (or `fetch`) re-fetches and heals |
 
 The wire is `rut-native`'s `http` feature (default on) — a build with
 `default-features = false` (the wasm graphs) has no transport at all:
-a cache miss errors loudly instead of networking.
+a store miss on the download lanes errors loudly instead of networking.
 
 ## Declaration mode
 
@@ -371,7 +375,7 @@ The file extension selects the parser mode:
 |---|---|
 | `0` | success |
 | `1` | compile diagnostics; no binary emitted; binary decode or verify failure; VM boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt --check` found drift; a `pack` output-write failure |
-| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; a url dep missing from the bundle cache (the install-first refusal — `run`/`pack` never download); `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned cache entry is evicted); `install`/`fetch` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`src/mod.rut`/`rut.lock`, or an illegal package name; a `pack` refusal — `--strip` without `--mode bin`, a `.rut` outside the `src/` shell, an undeclared `.rut` under `src/`, a host root in bin mode, a url dep the lock does not pin |
+| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; a url dep missing from the global dep store (the install-first refusal — `run`/`pack` never download); `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned store entry is evicted); `install`/`fetch` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`src/mod.rut`/`rut.lock`, or an illegal package name; a `pack` refusal — `--strip` without `--mode bin`, a `.rut` outside the `src/` shell, an undeclared `.rut` under `src/`, a host root in bin mode, a url dep the lock does not pin |
 
 Diagnostics go to stderr; the success summaries (`pack`'s packed line,
 `install`/`fetch`'s resolved/verified lines and lock reports) go to

@@ -109,13 +109,14 @@ bundle (the compiled wire):
   what make packs reproducible, and `--locked` verifies the pair
   before anything runs.
 - The CLI lane: **the install-first law** — `rut run`/`rut pack` never
-  download. They ride the cache-only standard remote
-  (`<project>/.rut/cache`, `$RUT_CACHE_DIR` overrides; a hit never
-  touches the network), a missing dep is one aggregated refusal naming
-  `rut install`, and a pin refusal evicts the poisoned cache entry so
-  the next `install` heals. `rut install <dir>` resolves + fetches +
+  download. They read the global dep store cache-only
+  (`$RUT_HOME/deps/<name>@<sha256[:16]>/`; `RUT_HOME` overrides,
+  `~/.rut` the default; a hit never touches the network), a missing
+  dep is one aggregated refusal naming `rut install`, and a pin
+  refusal evicts the poisoned store dir so the next `install` heals.
+  `rut install <dir>` resolves + fetches + publishes into the store +
   writes the lock (`--locked` verifies without writing — the CI lane),
-  and `rut fetch <dir>` re-warms the cache without running anything
+  and `rut fetch <dir>` re-warms the store without running anything
   ([The rut CLI](cli.md)).
 
 ### The std tree on jsDelivr

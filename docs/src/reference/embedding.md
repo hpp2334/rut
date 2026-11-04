@@ -254,8 +254,10 @@ when the dep walk actually reaches a url row. Url-free projects and
 
 The standard remote is **`rut_native::HttpRemote`** — cache-first, and
 **cache-only by default**: a hit NEVER touches the network, and a miss
-is the loud offline error (prime the cache with `rut install`, `rut
-fetch`, or an embedder's `DepRemote::write`). Networking is the
+is the loud offline error (prime it with an embedder's
+`DepRemote::write`; the CLI's own `install`/`fetch` lanes fill the
+global dep store under `$RUT_HOME` — a different address law, and the
+two never cross). Networking is the
 EXPLICIT `online_local` / `online` choice: a miss GETs (redirects on,
 loud status errors, a size cap, hard timeouts — 10 s to connect, 60 s
 for the whole request) on the remote's own private worker thread and

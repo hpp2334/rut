@@ -83,7 +83,10 @@ Delivery is THREE ACTS with one boundary — no script ever types `git commit`:
    files — and commit. This is the review point.
 3. **Publish**: `node scripts/publish-std.cjs` — the gates, then
    `git tag -a <tag>` + push, then a jsDelivr sha-verify of all 9 urls,
-   then the e2e: `rut new → install → run` must print `hello, rut!`.
+   then the e2e: `rut new → install → run` against a scratch `RUT_HOME`
+   (the proof never touches a real store — install fills
+   `$RUT_HOME/deps`, run/pack read it cache-only) must print
+   `hello, rut!`.
 
 Gate modes (no act; each gate dies loudly on drift): `node
 scripts/pack-std.cjs --check` is the offline, CI-shaped gate (repacks to a

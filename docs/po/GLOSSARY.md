@@ -116,7 +116,12 @@ source text by design; a partially translated book is a valid book.
 | remote (policy) | 远程（策略） | the remote policy → 远程策略；`DepRemote`/`HttpRemote`/`Loader`/`Loaded` stay code |
 | cache-first | 缓存优先 | a hit never touches the network → 命中则绝不触碰网络 |
 | offline remote | 离线远程 | `HttpRemote::offline` — cache-only → 只用缓存；prime the cache → 预热缓存 |
-| poisoned entry | 被污染的缓存条目 | the eviction law → 驱逐法则 |
+| poisoned entry | 被污染的条目 | the eviction law → 驱逐法则；the poisoned store dir → 被污染的存储目录（meta 点名该 url 的目录整体删除，下一次 `install` 重新取回自愈） |
+| global dep store | 全局依赖存储 | `$RUT_HOME` 下按内容寻址的依赖存储（`deps/<name>@<sha256[:16]>/`）；store 统一译作存储（git 仓库才是仓库）；fills the store → 填充存储；a store hit → 存储命中；re-warms the store → 再预热存储；projects carry no local cache → 项目不携带本地缓存 |
+| run cache | 运行缓存 | `$RUT_HOME/run/<key>.rutbundle`——`run` 重放的整程序归档缓存，跨项目共享；`RUT_HOME` overrides → `RUT_HOME` 可覆盖（默认 `~/.rut`） |
+| the pin IS the address | 固定值即地址 | `<name>@<sha256[:16]>`——清单行的名字 + 锁固定值的前 16 位十六进制；content-addressed → 按内容寻址 |
+| verify-then-publish | 先校验后发布 | install/fetch 的发布协议：整个依赖目录（工件 + meta + 解包树）填进 tmp 兄弟目录，一次原子改名落位（verify-then-rename → 先校验后改名）；readers never re-hash → 读取者绝不重新哈希（安装期校验是唯一一次哈希） |
+| store-first | 存储优先 | 对照 cache-first → 缓存优先；store root → 存储根目录 |
 | mount door | 挂载门 | the loader's mount point where the pin is law — 每次加载都校验 |
 | rode-along group | 随行组 | a url dep's groups riding a consumer's pack |
 | nameability | 可命名性 | the declaration-scoped use law → 可命名性按声明划定（nameability is declaration-scoped）：一个包只能 `use` 自己清单点名的头（`deps` ∪ 根上的 `dev-deps` ∪ `core`）；transitive mount ≠ nameable → 传递挂载不等于可命名；D5 stays code |

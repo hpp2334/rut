@@ -7,8 +7,9 @@ integrations/vscode-extension/bin
 integrations/vscode-extension/dist
 *.vsix
 
-# the project-local caches (url-dep bundles and the run cache live in
-# `.rut/cache/` beside a project root)
+# `.rut/` scratch under a workspace (the editor dep-walk's extracted
+# trees; the CLI's own caches are global under `$RUT_HOME`, never
+# beside a project)
 .rut/
 
 # mdbook build output
