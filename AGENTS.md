@@ -134,6 +134,19 @@ order:
   it at the real home); a cold store is ONE hint per dep naming
   `rut install` (the rust-analyzer contract). The extension writes
   NOTHING, anywhere — a pure reader.
+- **The three-lane ABI law**: `crates/rut-lsp-wasm`'s public surface
+  is exactly three lanes — the provider queries (`analyze`, `hover`,
+  `complete` with src, definition/inlay/references/signature-help,
+  `legend`, `forget`), the workspace-scan push (`addDef`/
+  `addDefMod`/`parseManifest` — the host's `findFiles` respects
+  editor ignore semantics the env cannot), and the dep pull
+  (`setEnv` + `resolveDeps`). No entry may bypass the env capability
+  to mutate dep state: the old push family (`setLock`,
+  `setDirectDeps`, `addDefNamed`, `addBundle`, `extractBundle`,
+  `extractSrczip`, `docLen`, the stored-`complete` variant) is
+  deleted; its behaviors live in the walk and its tests. The
+  `complete` entry takes the source ALWAYS (the doc-sync law — a
+  stored-only read races the analyze debounce).
 - **The ABI face lives in the crate**: `crates/rut-lsp-wasm/js/index.js`
   (the envelope parsing) and `js/index.d.ts` (every LSP/wire shape) are
   assembled into the wasm package by `scripts/build-lsp-pkg.mjs` (run by

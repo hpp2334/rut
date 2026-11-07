@@ -211,9 +211,9 @@ it, by construction.
   `use mod::Name;` insert (`additionalTextEdits`) and sort after the
   locals (`sortText`) — accepting an item never ungates members, the
   engine's law; the extension only maps the edits through. The tier
-  is gated to the open document's DIRECT deps: the root manifest's
-  rows are stamped into the wasm (`rut_set_direct_deps`) when the
-  walk parses it, and a transitive-only dep never offers — the compiler's
+  is gated to the open document's DIRECT deps: the walk stamps the
+  root manifest's rows into the core when it parses them, and a
+  transitive-only dep never offers — the compiler's
   closure check refuses `use` of a mounted-but-undeclared package,
   so completing one would write a D5 error. The std surface rides
   every chain as the ambient dep lane. The bare list itself stays
