@@ -12,6 +12,12 @@ impl Span {
     pub fn new(lo: u32, hi: u32) -> Span {
         Span { lo, hi }
     }
+    /// THE JOIN (the artifact law v3): the text a span indexes, sliced
+    /// out of the CALLER's src — the exact normalized text the parse
+    /// produced (`Parsed.src`), never a raw input.
+    pub fn text(self, src: &str) -> &str {
+        &src[self.lo as usize..self.hi as usize]
+    }
     pub fn to(self, other: Span) -> Span {
         Span {
             lo: self.lo.min(other.lo),

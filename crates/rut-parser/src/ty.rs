@@ -2,7 +2,10 @@
 //! scan_is_lambda ( ( ... ) then => ) and scan_is_generic_args
 //! ( < ... > then ( or . ). Read-only lookahead; no backtracking.
 
-use rut_ast::ast::*;
+use rut_ast::{
+    PathSeg, TyArrayNode, TyConstNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode,
+    TyUnionNode,
+};
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
@@ -15,35 +18,30 @@ pub(crate) struct TypeFrame {
     lo: Span,
     /// A completed type continues on `|` as a union bound —
     /// only where unions are legal (the alias target and `requires`
-    /// bounds); elsewhere `|` stays the binary operator (`x as u32 | y`)
+    /// bounds); elsewhere `|` stays the binary operator
     allow_union: bool,
     stage: TyStage,
 }
 
 enum TyStage {
     Init,
-    /// `?T` — the nullable: the ONE spelling, prefix-only,
-    /// binding the following type term (`[?T]` is an array of
-    /// nullables, `??T` chains, `?[T]` a nullable array)
+    /// `?T` — the nullable
     Opt,
-    /// `*T` — the removed pointer spelling: parsed for the friendly
-    /// diagnostic, the element type is the recovered result (the Diag
-    /// already fails the compile)
+    /// `*T` — the removed pointer spelling, recovered
     LegacyPtr,
     /// `[T]` — the array type
     Bracket,
-    /// `(A, B)` / `(T)` — tuple, grouping; `()` is rejected —
-    /// the empty type is spelled `nil` (v1.2)
+    /// `(A, B)` / `(T)` — tuple, grouping
     Tuple {
-        elems: Vec<NodeHandle<AnyTy>>,
+        elems: Vec<TyRef>,
     },
     /// `fn(...)`: collecting parameter types
     FnParams {
-        params: Vec<NodeHandle<AnyTy>>,
+        params: Vec<TyRef>,
     },
     /// `fn(...) ->`: waiting for the return type
     FnRet {
-        params: Vec<NodeHandle<AnyTy>>,
+        params: Vec<TyRef>,
     },
     /// a path type, possibly mid-dot-chain
     Path {
@@ -52,13 +50,12 @@ enum TyStage {
     /// inside a `<..>` after a segment name
     GenArgs {
         segs: Vec<PathSeg>,
-        seg_name: IdentId,
-        args: Vec<NodeHandle<AnyTy>>,
+        seg_name: rut_ast::IdentId,
+        args: Vec<TyRef>,
     },
-    /// `A | B` — a union bound: members collected after a
-    /// completed type saw a `|`
+    /// `A | B` — a union bound
     Union {
-        elems: Vec<NodeHandle<AnyTy>>,
+        elems: Vec<TyRef>,
     },
 }
 
@@ -84,15 +81,12 @@ impl TypeFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         match self.stage {
             TyStage::Init => {
-                // `?T` — the nullable type: prefix, binds
-                // tightest (replaces the old `*T` stage)
+                // `?T` — the nullable type: prefix, binds tightest
                 if p.eat_punct(Tok::Question) {
                     self.stage = TyStage::Opt;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
                 // the removed pointer spelling `*T`: diagnose and recover
-                // with the element type — the parser no longer ACCEPTS it
-                // (the Diag fails the compile), the sweep points at `?T`
                 if matches!(p.tok(), Tok::Star) {
                     p.err_here("the pointer spelling `*T` was renamed — write `?T`");
                     p.bump();
@@ -104,21 +98,19 @@ impl TypeFrame {
                     self.stage = TyStage::Bracket;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
-                // tuple type `(A, B)` / grouping `(T)`; `()`
-                // is the nil type and must be spelled `nil` (v1.2)
+                // tuple type `(A, B)` / grouping `(T)`
                 if p.eat_punct(Tok::LParen) {
                     self.stage = TyStage::Tuple { elems: Vec::new() };
                     return self.tuple_top(p);
                 }
-                // fn type: `fn(Store, P) -> R` — params are bare types
+                // fn type: `fn(Store, P) -> R`
                 if p.at_kw("fn") && matches!(p.peek(1).tok, Tok::LParen) {
                     p.bump();
                     p.expect(Tok::LParen);
                     self.stage = TyStage::FnParams { params: Vec::new() };
                     return self.fnparams_top(p);
                 }
-                // a trait name in type position is the object type —
-                // the engine decides dispatch
+                // a trait name in type position is the object type
                 self.stage = TyStage::Path { segs: Vec::new() };
                 self.path_run(p)
             }
@@ -127,14 +119,13 @@ impl TypeFrame {
     }
 
     /// `::`-separated path segments; generic args pause at a child frame
-    /// and resume through `genargs_done` — the loop is iterative (C2)
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
             let Some(name) = p.expect_ident("a type name") else {
                 return Step::Pop(Done::Failed);
             };
             if matches!(p.tok(), Tok::Lt) {
-                // type position: `<` is always generic args — no ambiguity
+                // type position: `<` is always generic args
                 p.bump();
                 let segs = match &mut self.stage {
                     TyStage::Path { segs } => std::mem::take(segs),
@@ -142,14 +133,14 @@ impl TypeFrame {
                 };
                 self.stage = TyStage::GenArgs {
                     segs,
-                    seg_name: name,
+                    seg_name: name.id,
                     args: Vec::new(),
                 };
                 return self.genargs_top(p);
             }
             if let TyStage::Path { segs, .. } = &mut self.stage {
                 segs.push(PathSeg {
-                    name,
+                    name: name.id,
                     generics: Vec::new(),
                 });
             }
@@ -159,7 +150,6 @@ impl TypeFrame {
         }
     }
 
-    /// resume after a generic-argument list completed one segment
     fn path_resume(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::Colon2) {
             self.path_run(p)
@@ -173,16 +163,17 @@ impl TypeFrame {
             TyStage::Path { segs } => std::mem::take(segs),
             _ => unreachable!(),
         };
-        let t = p.typ(TypeKind::TyPath { segs }, self.lo.to(p.span()));
+        let t = TyPathNode {
+            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            segs,
+        }
+        .allocate(&mut p.ast);
         self.pop_or_union(p, t)
     }
 
     /// A completed type either pops — or a `|` follows and it continues
-    /// as a union bound (`type U = A | B;`, `T requires A | B`).
-    /// A single member never becomes a `TyUnion` node. A trailing
-    /// postfix `?` is the removed spelling: diagnosed, then recovered
-    /// with the bare type (the Diag already fails the compile).
-    fn pop_or_union(&mut self, p: &mut Parser, t: NodeHandle<AnyTy>) -> Step {
+    /// as a union bound. A trailing postfix `?` is the removed spelling.
+    fn pop_or_union(&mut self, p: &mut Parser, t: TyRef) -> Step {
         while matches!(p.tok(), Tok::Question) {
             p.err_here("the postfix spelling `T?` was removed — write `?T`");
             p.bump();
@@ -195,7 +186,7 @@ impl TypeFrame {
     }
 
     /// a union member completed: continue on `|`, else build the node
-    fn union_absorb(&mut self, p: &mut Parser, t: NodeHandle<AnyTy>) -> Step {
+    fn union_absorb(&mut self, p: &mut Parser, t: TyRef) -> Step {
         let elems = match &mut self.stage {
             TyStage::Union { elems } => elems,
             _ => unreachable!("union absorb at the wrong stage"),
@@ -205,9 +196,12 @@ impl TypeFrame {
             return Step::Push(Frame::Type(TypeFrame::new(p)));
         }
         let elems = std::mem::take(elems);
-        Step::Pop(Done::Ty(
-            p.typ(TypeKind::TyUnion { elems }, self.lo.to(p.span())),
-        ))
+        let node = TyUnionNode {
+            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            elems,
+        }
+        .allocate(&mut p.ast);
+        Step::Pop(Done::Ty(node))
     }
 
     fn genargs_top(&mut self, p: &mut Parser) -> Step {
@@ -250,8 +244,7 @@ impl TypeFrame {
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
-    /// tuple type element list: elements separate on commas, one-element
-    /// `(T)` is a grouping; `()` is the nil type — spelled `nil`, not `()`
+    /// tuple type element list: `()` is the nil type — spelled `nil`
     fn tuple_top(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::RParen) {
             p.err_here("`()` is not a type — the empty type is spelled `nil` (v1.2)");
@@ -260,17 +253,16 @@ impl TypeFrame {
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
-    fn nil_ty(&mut self, p: &mut Parser) -> NodeHandle<AnyTy> {
+    fn nil_ty(&mut self, p: &mut Parser) -> TyRef {
         let nil = sym::NIL;
-        p.typ(
-            TypeKind::TyPath {
-                segs: vec![PathSeg {
-                    name: nil,
-                    generics: Vec::new(),
-                }],
-            },
-            self.lo.to(p.span()),
-        )
+        TyPathNode {
+            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            segs: vec![PathSeg {
+                name: nil,
+                generics: Vec::new(),
+            }],
+        }
+        .allocate(&mut p.ast)
     }
 
     /// the parameter list closed (or failed): optional `->` then the
@@ -281,18 +273,14 @@ impl TypeFrame {
             _ => unreachable!(),
         };
         if !p.eat_punct(Tok::Arrow) {
-            let nil = sym::NIL;
-            let ret = p.typ(
-                TypeKind::TyPath {
-                    segs: vec![PathSeg {
-                        name: nil,
-                        generics: Vec::new(),
-                    }],
-                },
-                self.lo.to(p.span()),
-            );
+            let ret = self.nil_ty(p);
             self.stage = TyStage::Init;
-            let t = p.typ(TypeKind::TyFn { params, ret }, self.lo.to(p.span()));
+            let t = TyFnNode {
+                span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                params,
+                ret,
+            }
+            .allocate(&mut p.ast);
             return self.pop_or_union(p, t);
         }
         self.stage = TyStage::FnRet { params };
@@ -304,20 +292,25 @@ impl TypeFrame {
             Done::Ty(t) => match &mut self.stage {
                 TyStage::Union { .. } => self.union_absorb(p, t),
                 TyStage::Opt => {
-                    let t = p.typ(TypeKind::TyOpt { inner: t }, self.lo.to(p.span()));
-                    self.pop_or_union(p, t)
+                    let node = TyOptNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        inner: t,
+                    }
+                    .allocate(&mut p.ast);
+                    self.pop_or_union(p, node)
                 }
                 TyStage::LegacyPtr => {
-                    // `*T` recovery: the element type IS the result — the
-                    // diagnostic emitted at the `*` already fails the compile
+                    // `*T` recovery: the element type IS the result
                     Step::Pop(Done::Ty(t))
                 }
                 TyStage::Bracket => {
                     p.expect(Tok::RBracket);
-                    // `[T]` — the array type; resolved
-                    // directly, with no surface name behind it
-                    let t = p.typ(TypeKind::TyArray { elem: t }, self.lo.to(p.span()));
-                    self.pop_or_union(p, t)
+                    let node = TyArrayNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        elem: t,
+                    }
+                    .allocate(&mut p.ast);
+                    self.pop_or_union(p, node)
                 }
                 TyStage::Tuple { elems } => {
                     elems.push(t);
@@ -331,8 +324,12 @@ impl TypeFrame {
                         let t = elems.into_iter().next().unwrap();
                         return self.pop_or_union(p, t);
                     }
-                    let t = p.typ(TypeKind::TyTuple { elems }, self.lo.to(p.span()));
-                    self.pop_or_union(p, t)
+                    let node = TyTupleNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        elems,
+                    }
+                    .allocate(&mut p.ast);
+                    self.pop_or_union(p, node)
                 }
                 TyStage::FnParams { params } => {
                     params.push(t);
@@ -345,8 +342,13 @@ impl TypeFrame {
                 }
                 TyStage::FnRet { params } => {
                     let params = std::mem::take(params);
-                    let t = p.typ(TypeKind::TyFn { params, ret: t }, self.lo.to(p.span()));
-                    self.pop_or_union(p, t)
+                    let node = TyFnNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        params,
+                        ret: t,
+                    }
+                    .allocate(&mut p.ast);
+                    self.pop_or_union(p, node)
                 }
                 TyStage::GenArgs { args, .. } => {
                     args.push(t);
@@ -363,7 +365,13 @@ impl TypeFrame {
                 // const-generic argument
                 match &mut self.stage {
                     TyStage::GenArgs { args, .. } => {
-                        args.push(p.typ(TypeKind::TyConst(e), p.span()));
+                        args.push(
+                            TyConstNode {
+                                span: e.span(&p.ast),
+                                expr: e,
+                            }
+                            .allocate(&mut p.ast),
+                        );
                     }
                     _ => unreachable!("type frame received an expression at the wrong stage"),
                 }
@@ -436,9 +444,7 @@ impl Parser {
 
     /// §4.2 scan 2: from a `<` (at `self.pos`), is this a generic-argument
     /// list? Commits iff angle depth returns to 0 and the next token
-    /// continues a generic use (`(` call — TypeScript's rule —or `::`
-    /// path continuation, which the corpus needs for `MyMap<K, V>::new` /
-    /// `Option<T>::Some`). `>>` counts as two closers (span arithmetic).
+    /// continues a generic use.
     pub(crate) fn scan_is_generic_args(&self, _in_pattern: bool) -> bool {
         let mut depth = 1i32; // the `<` at self.pos
         let mut i = self.pos + 1;
@@ -448,8 +454,6 @@ impl Parser {
                 Tok::Shl => depth += 2,
                 Tok::Gt => depth -= 1,
                 Tok::Shr => depth -= 2,
-                // a `[T]` argument nests — an unmatched `]` (depth underflow)
-                // still means this was never a generic list
                 Tok::LBracket => depth += 1,
                 Tok::RBracket => {
                     depth -= 1;
@@ -457,11 +461,6 @@ impl Parser {
                         return false;
                     }
                 }
-                // `(A, B)` and `fn(A) -> R` arguments nest the same way —
-                // the parens INSIDE a generic list are type syntax,
-                // tracked like the
-                // brackets above; an unmatched `)` means the `<` was a
-                // comparison all along
                 Tok::LParen => depth += 1,
                 Tok::RParen => {
                     depth -= 1;
@@ -474,11 +473,6 @@ impl Parser {
             }
             i += 1;
             if depth == 0 {
-                // the commit followers: `(` (TypeScript's call rule),
-                // `::` (path continuation — `MyMap<K, V>::new`), and ` { `
-                // (the generic record literal — `Source<str> { .. }`). A comparison never sees one of the three
-                // directly after its `>`: the block brace trails a
-                // condition at depth 0 only when the `<` opened a type.
                 return matches!(
                     self.toks.get(i).map(|t| &t.tok),
                     Some(Tok::LParen) | Some(Tok::Colon2) | Some(Tok::LBrace)

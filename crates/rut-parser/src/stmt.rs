@@ -1,30 +1,36 @@
 //! Statements, blocks, `when` heads, and patterns: frames
 //! for the statement grammar — keyword-led dispatch (peek 1), shared
 //! when-heads for statement and expression positions, and the pattern
-//! grammar (literals, paths, constructors).
+//! grammar. Blocks fence broken statements as `StmtRef::Error` slots
+//! beside the survivors.
 
-use rut_ast::ast::*;
+use rut_ast::{
+    BlockNode, BreakNode, ContinueNode, ElseBranch, ExprRef, ForCNode, ForOfNode, Handle, IfNode,
+    PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode, PathSeg, ReturnNode,
+    StmtRef, TyRef, WhenArmNode, WhenStmtNode, WhileNode,
+};
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
 use crate::expr::{AtomFrame, AtomMode, ExprFrame, ExprMode};
 use crate::frame::{Done, Frame, Step};
 use crate::ty::TypeFrame;
-use crate::Parser;
+use crate::{Name, Parser};
 
 // ---- blocks ----
 
 pub(crate) struct BlockFrame {
     lo: u32,
-    /// a strict block bails when `{` is missing (v1's `parse_block_stmt`
-    /// `?`); a lax one diagnoses and continues (v1's fn/method bodies had
-    /// already expected the brace themselves)
+    /// a strict block bails when `{` is missing; a lax one diagnoses
+    /// and continues (v1's fn/method bodies had already expected the
+    /// brace themselves)
     lax: bool,
-    stmts: Vec<NodeHandle<AnyStmt>>,
+    stmts: Vec<StmtRef>,
     /// the tail expression: the last statement closed by the block's
     /// `}` (no `;`) — the block's implicit value, Rust-style
-    tail: Option<NodeHandle<AnyExpr>>,
+    tail: Option<ExprRef>,
     before: usize,
+    dmark: usize,
 }
 
 impl BlockFrame {
@@ -35,11 +41,11 @@ impl BlockFrame {
             stmts: Vec::new(),
             tail: None,
             before: p.pos,
+            dmark: p.mark(),
         }
     }
     /// a lax block expects its own `{` but keeps the caller's `lo` for
-    /// the span — v1's fn/method bodies were `parse_block_body(lo)` with
-    /// the `fn` token's lo and the brace pre-expected by the caller
+    /// the span
     pub(crate) fn lax(p: &Parser, lo: u32) -> Self {
         BlockFrame {
             lo,
@@ -47,12 +53,18 @@ impl BlockFrame {
             stmts: Vec::new(),
             tail: None,
             before: p.pos,
+            dmark: p.mark(),
         }
     }
     /// the degraded block of the NEST_MAX budget (C3): empty, so the
     /// enclosing item can still complete
-    pub(crate) fn empty(&self, p: &mut Parser) -> NodeHandle<BlockNode> {
-        p.block(Vec::new(), Span::new(self.lo, p.span().hi))
+    pub(crate) fn empty(&self, p: &mut Parser) -> Handle<BlockNode> {
+        BlockNode {
+            span: Span::new(self.lo, p.span().hi),
+            stmts: Vec::new(),
+            tail: None,
+        }
+        .alloc_plain(&mut p.ast)
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -68,29 +80,33 @@ impl BlockFrame {
 
     fn next_stmt(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::RBrace) || p.at_eof() {
-            let stmts = std::mem::take(&mut self.stmts);
-            let tail = self.tail.take();
-            return Step::Pop(Done::Block(p.block_with_tail(
-                stmts,
-                tail,
-                Span::new(self.lo, p.span().hi),
-            )));
+            let node = BlockNode {
+                span: Span::new(self.lo, p.span().hi),
+                stmts: std::mem::take(&mut self.stmts),
+                tail: self.tail.take(),
+            }
+            .alloc_plain(&mut p.ast);
+            return Step::Pop(Done::Block(node));
         }
         self.before = p.pos;
+        self.dmark = p.mark();
         Step::Push(Frame::Stmt(StmtFrame::new()))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
             Done::Stmt(s) => self.stmts.push(s),
-            Done::If(h) => self.stmts.push(h.into()),
+            Done::If(h) => self.stmts.push(StmtRef::If(h)),
             Done::TailExpr(e) => self.tail = Some(e),
             Done::Failed => {
-                // v1: no progress guarantees a bump, then resync
+                // the stmt-level fence: guarantee progress, resync, the
+                // region becomes an ErrorNode IN the block
                 if p.pos == self.before {
                     p.bump();
                 }
                 p.sync_stmt();
+                let (before, mark) = (self.before, self.dmark);
+                self.stmts.push(StmtRef::Error(p.fence(before, mark)));
             }
             _ => unreachable!("block frame receives statements"),
         }
@@ -104,7 +120,10 @@ pub(crate) struct StmtFrame {
     lo: Span,
     stage: StmtStage,
     /// the `while` condition, held between its expression and its body
-    while_cond: Option<NodeHandle<AnyExpr>>,
+    while_cond: Option<ExprRef>,
+    /// the stmt start + diag watermark (the init-hole fence's extent)
+    before: usize,
+    dmark: usize,
 }
 
 enum StmtStage {
@@ -112,54 +131,51 @@ enum StmtStage {
     /// `let` — waiting for the optional type
     LetTy {
         is_mut: bool,
-        name: IdentId,
-        destructure: Option<Vec<IdentId>>,
+        name: Name,
+        destructure: Option<Vec<rut_ast::IdentId>>,
     },
     /// `let` — waiting for the initializer
     LetInit {
         is_mut: bool,
-        name: IdentId,
-        destructure: Option<Vec<IdentId>>,
-        ty: Option<NodeHandle<AnyTy>>,
+        name: Name,
+        destructure: Option<Vec<rut_ast::IdentId>>,
+        ty: Option<TyRef>,
     },
     WhileCond,
     WhileBody,
     ForIter {
-        var: IdentId,
+        var: Name,
         is_mut: bool,
     },
     ForInit {
-        var: IdentId,
+        var: Name,
         is_mut: bool,
     },
     ForCond {
-        var: IdentId,
+        var: Name,
         is_mut: bool,
-        init: NodeHandle<AnyExpr>,
+        init: ExprRef,
     },
     ForUpdate {
-        var: IdentId,
+        var: Name,
         is_mut: bool,
-        init: NodeHandle<AnyExpr>,
-        cond: NodeHandle<AnyExpr>,
+        init: ExprRef,
+        cond: ExprRef,
     },
     ForBodyOf {
-        var: IdentId,
+        var: Name,
         is_mut: bool,
-        iter: NodeHandle<AnyExpr>,
+        iter: ExprRef,
     },
     ForBodyC {
-        var: IdentId,
+        var: Name,
         is_mut: bool,
-        init: NodeHandle<AnyExpr>,
-        cond: NodeHandle<AnyExpr>,
-        update: NodeHandle<AnyExpr>,
+        init: ExprRef,
+        cond: ExprRef,
+        update: ExprRef,
     },
-    /// `return` — waiting for the value
     RetVal,
-    /// a bare expression statement
     Expr,
-    /// `when` — waiting for the head
     When,
 }
 
@@ -169,11 +185,15 @@ impl StmtFrame {
             lo: Span::new(0, 0),
             stage: StmtStage::Dispatch,
             while_cond: None,
+            before: 0,
+            dmark: 0,
         }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         self.lo = p.span();
+        self.before = p.pos;
+        self.dmark = p.mark();
         match p.tok().clone() {
             Tok::Ident(kw) => match kw.as_str() {
                 "let" => {
@@ -190,7 +210,7 @@ impl StmtFrame {
                             let Some(n) = p.expect_ident("a binding name") else {
                                 return Step::Pop(Done::Failed);
                             };
-                            names.push(n);
+                            names.push(n.id);
                             if !p.eat_punct(Tok::Comma) {
                                 break;
                             }
@@ -204,7 +224,15 @@ impl StmtFrame {
                         None
                     };
                     let name = match &destructure {
-                        Some(names) => names[0],
+                        Some(_) => {
+                            // the destructure list's first name is the row's
+                            // binding name (v1's shape); its span rides
+                            let _ = p.span();
+                            match p.expect_ident("a binding name") {
+                                Some(n) => n,
+                                None => return Step::Pop(Done::Failed),
+                            }
+                        }
                         None => {
                             let Some(name) = p.expect_ident("a binding name") else {
                                 return Step::Pop(Done::Failed);
@@ -235,7 +263,11 @@ impl StmtFrame {
                     if matches!(p.tok(), Tok::Semi) {
                         p.expect(Tok::Semi);
                         return Step::Pop(Done::Stmt(
-                            p.stmt(StmtKind::Return { value: None }, self.lo.to(p.span())),
+                            ReturnNode {
+                                span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                                value: None,
+                            }
+                            .allocate(&mut p.ast),
                         ));
                     }
                     self.stage = StmtStage::RetVal;
@@ -248,12 +280,22 @@ impl StmtFrame {
                 "break" => {
                     p.bump();
                     p.expect(Tok::Semi);
-                    Step::Pop(Done::Stmt(p.stmt(StmtKind::Break, self.lo)))
+                    Step::Pop(Done::Stmt(
+                        BreakNode {
+                            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        }
+                        .allocate(&mut p.ast),
+                    ))
                 }
                 "continue" => {
                     p.bump();
                     p.expect(Tok::Semi);
-                    Step::Pop(Done::Stmt(p.stmt(StmtKind::Continue, self.lo)))
+                    Step::Pop(Done::Stmt(
+                        ContinueNode {
+                            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        }
+                        .allocate(&mut p.ast),
+                    ))
                 }
                 _ => self.expr_stmt(p),
             },
@@ -270,9 +312,9 @@ impl StmtFrame {
         &mut self,
         p: &mut Parser,
         is_mut: bool,
-        name: IdentId,
-        destructure: Option<Vec<IdentId>>,
-        ty: Option<NodeHandle<AnyTy>>,
+        name: Name,
+        destructure: Option<Vec<rut_ast::IdentId>>,
+        ty: Option<TyRef>,
     ) -> Step {
         p.expect(Tok::Eq);
         self.stage = StmtStage::LetInit {
@@ -284,26 +326,44 @@ impl StmtFrame {
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn let_done(
         &mut self,
         p: &mut Parser,
         is_mut: bool,
-        name: IdentId,
-        destructure: Option<Vec<IdentId>>,
-        ty: Option<NodeHandle<AnyTy>>,
-        init: NodeHandle<AnyExpr>,
+        name: Name,
+        destructure: Option<Vec<rut_ast::IdentId>>,
+        ty: Option<TyRef>,
+        init: ExprRef,
     ) -> Step {
         p.expect(Tok::Semi);
-        Step::Pop(Done::Stmt(p.stmt(
-            StmtKind::LetStmt {
-                is_mut,
-                name,
-                destructure,
-                ty,
-                init,
-            },
-            self.lo.to(p.span()),
-        )))
+        let node = rut_ast::LetStmtNode {
+            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            is_mut,
+            name: name.id,
+            name_span: name.span,
+            destructure,
+            ty,
+            init,
+        }
+        .allocate(&mut p.ast);
+        Step::Pop(Done::Stmt(node))
+    }
+
+    fn let_hole(
+        &mut self,
+        p: &mut Parser,
+        is_mut: bool,
+        name: Name,
+        destructure: Option<Vec<rut_ast::IdentId>>,
+        ty: Option<TyRef>,
+    ) -> Step {
+        // the ladder's part tier: the init failed — the LET survives
+        // with an Error slot
+        p.sync_stmt();
+        let (before, mark) = (self.before, self.dmark);
+        let hole = ExprRef::Error(p.fence(before, mark));
+        self.let_done(p, is_mut, name, destructure, ty, hole)
     }
 
     fn for_header(&mut self, p: &mut Parser) -> Step {
@@ -315,8 +375,6 @@ impl StmtFrame {
             return Step::Pop(Done::Failed);
         }
         p.bump();
-        // `mut` gates writes through the loop variable (the same
-        // mut-binding law as a plain `let`)
         let is_mut = p.at_kw("mut") && {
             p.bump();
             true
@@ -324,7 +382,7 @@ impl StmtFrame {
         let Some(var) = p.expect_ident("a loop variable") else {
             return Step::Pop(Done::Failed);
         };
-        // for-of vs for-c: peek `of` vs `=` (peek 4)
+        // for-of vs for-c: peek `of` vs `=`
         if p.at_kw("of") {
             p.bump();
             self.stage = StmtStage::ForIter { var, is_mut };
@@ -354,6 +412,16 @@ impl StmtFrame {
                 },
                 Done::Expr(e),
             ) => self.let_done(p, is_mut, name, destructure, ty, e),
+            // the failed init: the let survives with an Error slot
+            (
+                StmtStage::LetInit {
+                    is_mut,
+                    name,
+                    destructure,
+                    ty,
+                },
+                Done::Failed,
+            ) => self.let_hole(p, is_mut, name, destructure, ty),
             (StmtStage::WhileCond, Done::Expr(cond)) => {
                 p.expect(Tok::RParen);
                 self.while_cond = Some(cond);
@@ -363,7 +431,12 @@ impl StmtFrame {
             (StmtStage::WhileBody, Done::Block(body)) => {
                 let cond = self.while_cond.take().expect("while without a condition");
                 Step::Pop(Done::Stmt(
-                    p.stmt(StmtKind::While { cond, body }, self.lo.to(p.span())),
+                    WhileNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        cond,
+                        body,
+                    }
+                    .allocate(&mut p.ast),
                 ))
             }
             (StmtStage::ForIter { var, is_mut }, Done::Expr(iter)) => {
@@ -406,15 +479,17 @@ impl StmtFrame {
                 Step::Push(Frame::Block(BlockFrame::strict(p)))
             }
             (StmtStage::ForBodyOf { var, is_mut, iter }, Done::Block(body)) => {
-                Step::Pop(Done::Stmt(p.stmt(
-                    StmtKind::ForOf {
-                        var,
+                Step::Pop(Done::Stmt(
+                    ForOfNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        var: var.id,
+                        name_span: var.span,
                         is_mut,
                         iter,
                         body,
-                    },
-                    self.lo.to(p.span()),
-                )))
+                    }
+                    .allocate(&mut p.ast),
+                ))
             }
             (
                 StmtStage::ForBodyC {
@@ -425,47 +500,54 @@ impl StmtFrame {
                     update,
                 },
                 Done::Block(body),
-            ) => Step::Pop(Done::Stmt(p.stmt(
-                StmtKind::ForC {
-                    var,
+            ) => Step::Pop(Done::Stmt(
+                ForCNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    var: var.id,
+                    name_span: var.span,
                     is_mut,
                     init,
                     cond,
                     update,
                     body,
-                },
-                self.lo.to(p.span()),
-            ))),
+                }
+                .allocate(&mut p.ast),
+            )),
             (StmtStage::RetVal, Done::Expr(v)) => {
                 p.expect(Tok::Semi);
                 Step::Pop(Done::Stmt(
-                    p.stmt(StmtKind::Return { value: Some(v) }, self.lo.to(p.span())),
+                    ReturnNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        value: Some(v),
+                    }
+                    .allocate(&mut p.ast),
                 ))
             }
             (StmtStage::Expr, Done::Expr(e)) => {
                 // the tail law: the `;` decides. A `}` IMMEDIATELY after
                 // the expression makes it the block's tail (no `;` — the
                 // implicit value, Rust-style); anything else still
-                // demands the `;` (the diagnostic is preserved).
+                // demands the `;`
                 if matches!(p.tok(), Tok::RBrace) {
                     return Step::Pop(Done::TailExpr(e));
                 }
                 p.expect(Tok::Semi);
-                Step::Pop(Done::Stmt(
-                    p.stmt(StmtKind::ExprStmt(e), self.lo.to(p.span())),
-                ))
+                Step::Pop(Done::Stmt(StmtRef::Expr(e)))
             }
             (StmtStage::When, Done::WhenParts { scrut, arms }) => Step::Pop(Done::Stmt(
-                p.stmt(StmtKind::WhenStmt { scrut, arms }, self.lo.to(p.span())),
+                WhenStmtNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    scrut,
+                    arms,
+                }
+                .allocate(&mut p.ast),
             )),
             // the `if` child (pushed from Dispatch) completes the statement.
             // The `;` decides (the expression law): a trailing `;` after
-            // the statement form only ever DISCARDS — the statement form
-            // keeps no value — so it eats quietly instead of stranding
-            // (the fmt prints statement-ifs without one; round-trip stable)
+            // the statement form only ever DISCARDS
             (StmtStage::Dispatch, Done::If(h)) => {
                 p.eat_punct(Tok::Semi);
-                Step::Pop(Done::Stmt(h.into()))
+                Step::Pop(Done::Stmt(StmtRef::If(h)))
             }
             (_, Done::Failed) => Step::Pop(Done::Failed),
             (_, d) => unreachable!("statement frame received the wrong child: {:?}", d),
@@ -478,8 +560,8 @@ impl StmtFrame {
 pub(crate) struct IfFrame {
     lo: u32,
     stage: IfStage,
-    cond: Option<NodeHandle<AnyExpr>>,
-    then: Option<NodeHandle<BlockNode>>,
+    cond: Option<ExprRef>,
+    then: Option<Handle<BlockNode>>,
 }
 
 enum IfStage {
@@ -550,12 +632,14 @@ impl IfFrame {
     fn finish(&mut self, p: &mut Parser, els: Option<ElseBranch>) -> Step {
         let cond = self.cond.take().expect("if without a condition");
         let then = self.then.take().expect("if without a then-block");
-        Step::Pop(Done::If(p.if_stmt(
+        let node = IfNode {
+            span: Span::new(self.lo, p.prev_end.max(self.lo)),
             cond,
             then,
             els,
-            Span::new(self.lo, p.span().hi),
-        )))
+        }
+        .alloc_plain(&mut p.ast);
+        Step::Pop(Done::If(node))
     }
 }
 
@@ -564,21 +648,20 @@ impl IfFrame {
 pub(crate) struct WhenFrame {
     lo: Span,
     stage: WhenStage,
-    scrut: Option<NodeHandle<AnyExpr>>,
-    arms: Vec<NodeHandle<AnyArm>>,
+    scrut: Option<ExprRef>,
+    arms: Vec<Handle<WhenArmNode>>,
     /// the arm under construction
     arm_sp: Span,
-    arm_pats: Vec<NodeHandle<AnyPat>>,
+    arm_pats: Vec<PatRef>,
     arm_is_block: bool,
     before: usize,
+    dmark: usize,
 }
 
 enum WhenStage {
     Scrut,
     Arms,
-    /// collecting the arm's patterns (comma list until `->`)
     Pats,
-    /// waiting for the arm body (block or expression)
     Body,
 }
 
@@ -593,6 +676,7 @@ impl WhenFrame {
             arm_pats: Vec::new(),
             arm_is_block: false,
             before: 0,
+            dmark: 0,
         }
     }
 
@@ -629,8 +713,12 @@ impl WhenFrame {
                         self.step_body(p)
                     }
                 }
-                // v1: a failed pattern breaks the pattern list
-                Done::Failed => self.step_body(p),
+                // a failed pattern fences its slot; the arm continues
+                Done::Failed => {
+                    let (before, mark) = (self.before, self.dmark);
+                    self.arm_pats.push(PatRef::Error(p.fence(before, mark)));
+                    self.step_body(p)
+                }
                 _ => unreachable!("when-arm patterns are patterns"),
             },
             WhenStage::Body => self.arm_body(p, d),
@@ -645,6 +733,7 @@ impl WhenFrame {
             return Step::Pop(Done::WhenParts { scrut, arms });
         }
         self.before = p.pos;
+        self.dmark = p.mark();
         self.arm_sp = p.span();
         self.arm_pats = Vec::new();
         self.stage = WhenStage::Pats;
@@ -666,7 +755,7 @@ impl WhenFrame {
     fn arm_body(&mut self, p: &mut Parser, d: Done) -> Step {
         let body = match d {
             Done::Expr(e) => e,
-            Done::Block(b) => b.into(),
+            Done::Block(b) => ExprRef::Block(b),
             Done::Failed => return Step::Pop(Done::Failed),
             _ => unreachable!("when arm body is an expression or block"),
         };
@@ -676,13 +765,12 @@ impl WhenFrame {
         if !self.arm_is_block && !had_comma && !matches!(p.tok(), Tok::RBrace) {
             p.err_here("expression arms must be comma-separated");
         }
-        let node = p.arm(
-            ArmKind::WhenArm {
-                pats: std::mem::take(&mut self.arm_pats),
-                body,
-            },
-            p.span(),
-        );
+        let node = WhenArmNode {
+            span: p.span(),
+            pats: std::mem::take(&mut self.arm_pats),
+            body,
+        }
+        .alloc_plain(&mut p.ast);
         self.arms.push(node);
         if p.pos == self.before {
             p.bump(); // guarantee progress
@@ -698,8 +786,8 @@ pub(crate) struct PatternFrame {
     sp: Span,
     stage: PatStage,
     segs: Vec<PathSeg>,
-    genargs: Vec<NodeHandle<AnyTy>>,
-    ctor_args: Vec<Option<IdentId>>,
+    genargs: Vec<TyRef>,
+    ctor_args: Vec<Option<rut_ast::IdentId>>,
 }
 
 enum PatStage {
@@ -710,7 +798,7 @@ enum PatStage {
     /// building a (possibly dotted, possibly generic) path
     Path,
     /// inside the path's `<..>`
-    GenArgs { seg_name: IdentId },
+    GenArgs { seg_name: rut_ast::IdentId },
 }
 
 impl PatternFrame {
@@ -738,11 +826,15 @@ impl PatternFrame {
             }
             Tok::Ident(kw) if kw == "else" => {
                 p.bump();
-                Step::Pop(Done::Pat(p.pat(PatKind::PatElse, self.sp)))
+                Step::Pop(Done::Pat(
+                    PatElseNode { span: self.sp }.allocate(&mut p.ast),
+                ))
             }
             Tok::Ident(name) if name == "_" => {
                 p.bump();
-                Step::Pop(Done::Pat(p.pat(PatKind::PatWild, self.sp)))
+                Step::Pop(Done::Pat(
+                    PatWildNode { span: self.sp }.allocate(&mut p.ast),
+                ))
             }
             Tok::Ident(_) => {
                 // path, possibly with generic args, possibly a constructor
@@ -759,22 +851,21 @@ impl PatternFrame {
 
     /// `::`-separated path segments; generic args pause at a child frame
     /// and resume through `genargs_done` — the loops are iterative (C2).
-    /// `self.sp` extends as segments land so the node span covers the
-    /// whole path (spans on every node).
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
             let ident_sp = p.span();
             let Some(name) = p.expect_ident("a pattern name") else {
                 return Step::Pop(Done::Failed);
             };
-            self.sp = self.sp.to(ident_sp);
+            let _ = ident_sp;
+            self.sp = self.sp.to(name.span);
             if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(true) {
                 p.bump();
-                self.stage = PatStage::GenArgs { seg_name: name };
+                self.stage = PatStage::GenArgs { seg_name: name.id };
                 return self.genargs_top(p);
             }
             self.segs.push(PathSeg {
-                name,
+                name: name.id,
                 generics: Vec::new(),
             });
             if !p.eat_punct(Tok::Colon2) {
@@ -798,7 +889,13 @@ impl PatternFrame {
             self.ctor_loop(p)
         } else {
             let segs = std::mem::take(&mut self.segs);
-            Step::Pop(Done::Pat(p.pat(PatKind::PatPath { segs }, self.sp)))
+            Step::Pop(Done::Pat(
+                PatPathNode {
+                    span: self.sp,
+                    segs,
+                }
+                .allocate(&mut p.ast),
+            ))
         }
     }
 
@@ -817,9 +914,9 @@ impl PatternFrame {
                     self.ctor_args.push(None);
                 }
                 Tok::Ident(b) => {
-                    p.bump();
-                    self.sp = self.sp.to(arg_sp);
-                    self.ctor_args.push(Some(p.interner.intern(&b)));
+                    let sp = p.bump().span;
+                    self.sp = self.sp.to(sp);
+                    self.ctor_args.push(Some(p.ast.intern(&b)));
                 }
                 _ => {
                     let found = p.peek(0).describe();
@@ -842,7 +939,14 @@ impl PatternFrame {
     fn ctor_pop(&mut self, p: &mut Parser) -> Step {
         let segs = std::mem::take(&mut self.segs);
         let args = std::mem::take(&mut self.ctor_args);
-        Step::Pop(Done::Pat(p.pat(PatKind::PatCtor { segs, args }, self.sp)))
+        Step::Pop(Done::Pat(
+            PatCtorNode {
+                span: self.sp,
+                segs,
+                args,
+            }
+            .allocate(&mut p.ast),
+        ))
     }
 
     fn genargs_top(&mut self, p: &mut Parser) -> Step {
@@ -869,9 +973,13 @@ impl PatternFrame {
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
             Done::Expr(e) => match self.stage {
-                PatStage::Lit | PatStage::NegLit => {
-                    Step::Pop(Done::Pat(p.pat(PatKind::PatLit(e), self.sp)))
-                }
+                PatStage::Lit | PatStage::NegLit => Step::Pop(Done::Pat(
+                    PatLitNode {
+                        span: self.sp,
+                        expr: e,
+                    }
+                    .allocate(&mut p.ast),
+                )),
                 _ => unreachable!("pattern frame received a stray expression"),
             },
             Done::Ty(t) => {
