@@ -80,7 +80,8 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let normalized = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&normalized);
     let (ast, _) = rut_parser::parse(&normalized, rut_parser::Mode::Impl);
-    let mut doc_idx = rut_lsp_wasm::hover::index(&normalized, &ast, &toks);
+    let mut doc_idx =
+        rut_lsp_wasm::hover::index(&normalized, &ast, &toks, &comments_of(&normalized));
     let doc_uri = "file:///t/main.rut";
     doc_idx.origin = doc_uri.to_string();
     let idxs = indexes();
@@ -119,7 +120,8 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     let normalized = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&normalized);
     let (ast, _) = rut_parser::parse(&normalized, rut_parser::Mode::Impl);
-    let mut doc_idx = rut_lsp_wasm::hover::index(&normalized, &ast, &toks);
+    let mut doc_idx =
+        rut_lsp_wasm::hover::index(&normalized, &ast, &toks, &comments_of(&normalized));
     let doc_uri = "file:///t/main.rut";
     doc_idx.origin = doc_uri.to_string();
     let idxs = indexes();
@@ -242,4 +244,11 @@ fn nmapset_lane_classes_reachable_bare() {
             .any(|i| i.fns.iter().any(|f| f.name == "map_entry")),
         "std surface still offers nmap_host's map_entry — the probing core's lanes are deleted"
     );
+}
+
+/// the collected comment table — the same lane the facade rides
+/// (tests lex through the dev-dep seam)
+fn comments_of(src: &str) -> Vec<rut_lsp_wasm::semantic::Comment> {
+    let (_, _, comments) = rut_lexer::lexer::lex_normalized(src, true);
+    comments
 }

@@ -40,7 +40,7 @@ fn analysis_of(doc: &rut_semantic::ParsedDoc) -> Analysis {
             .collect(),
         tokens: encode(&doc.spans, src, &doc.lines),
         symbols: to_document_symbols(doc.symbols.clone(), src, &doc.lines),
-        index: hover::index(src, &doc.ast, &doc.toks),
+        index: hover::index(src, &doc.ast, &doc.toks, &doc.comments),
     }
 }
 
@@ -186,7 +186,7 @@ fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
     // the uri) and the hover index builds over its parts — the old
     // shape parsed the same text twice (its own parse + index_at's)
     let d = rut_semantic::ParsedDoc::parse(uri, src);
-    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
+    let mut idx = hover::index(d.src(), &d.ast, &d.toks, &d.comments);
     idx.origin = uri.to_string();
     let rut_semantic::ParsedDoc { ast, toks, .. } = d;
     // one String clone per query — the consumers want the text and the
@@ -197,7 +197,7 @@ fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
 /// the definition index for one document (origin stamped with `uri`)
 pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
     let d = rut_semantic::ParsedDoc::parse(uri, src);
-    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
+    let mut idx = hover::index(d.src(), &d.ast, &d.toks, &d.comments);
     idx.origin = uri.to_string();
     idx
 }

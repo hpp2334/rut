@@ -18,7 +18,7 @@ type PendingLet = (
     Span,
 );
 use rut_semantic::Span;
-use rut_semantic::{Tok, Token};
+use rut_semantic::{Comment, Tok, Token};
 
 use super::bindings::ident_span;
 use super::infer;
@@ -32,25 +32,45 @@ fn line_of(src: &str, lo: u32) -> u32 {
     1 + src[..lo as usize].matches('\n').count() as u32
 }
 
-/// doc comment lines directly above `lo`: consecutive `//` lines with no
-/// blank line between them and the decl (comments are not tokens — the
-/// lexer skips them, so this scans the source itself)
-fn doc_before(src: &str, lo: u32) -> Vec<String> {
+/// doc comment lines directly above `lo` — from the LEXER's collected
+/// table (the artifact's side data; the old whole-line text scan is
+/// gone). The rules are byte-identical to the scan it replaced:
+/// - a LINE comment counts only when it stands line-initial (only
+///   whitespace before it on its line) — a trailing comment after code
+///   is not doc
+/// - the nearest one attaches when only whitespace separates it from
+///   `lo` (blank lines before the decl are trimmed away too)
+/// - the chain continues upward while consecutive comment LINES stand —
+///   a blank line between comments splits the run
+/// - any `//` line counts (plain or `///` — the collected `doc` flag
+///   rides for a future rustc-style gate, not applied here)
+fn doc_before(comments: &[Comment], src: &str, lo: u32) -> Vec<String> {
+    let line_initial = |c: &Comment| {
+        let line_start = src[..c.span.lo as usize]
+            .rfind('\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        src[line_start..c.span.lo as usize].trim().is_empty()
+    };
     let mut out = Vec::new();
-    // walk whole lines upward from the line containing `lo`
-    let mut end = src[..lo as usize].trim_end().len();
-    loop {
-        let start = src[..end].rfind('\n').map(|i| i + 1).unwrap_or(0);
-        let line = src[start..end].trim();
-        if let Some(rest) = line.strip_prefix("//") {
-            out.push(rest.trim_start().to_string());
-        } else {
+    let mut bound = lo;
+    let mut first = true;
+    while let Some(c) = comments
+        .iter()
+        .rev()
+        .find(|c| {
+            c.span.hi <= bound && src[c.span.lo as usize..].starts_with("//") && line_initial(c)
+        })
+    {
+        let gap = &src[c.span.hi as usize..bound as usize];
+        let attaches =
+            gap.chars().all(char::is_whitespace) && (first || gap.matches('\n').count() <= 1);
+        if !attaches {
             break;
         }
-        if start == 0 {
-            break;
-        }
-        end = start - 1;
+        out.push(c.text.trim_start().to_string());
+        bound = c.span.lo;
+        first = false;
     }
     out.reverse();
     out
@@ -86,6 +106,7 @@ fn sig_src(
 }
 
 fn member(
+    comments: &[Comment],
     src: &str,
     toks: &[Token],
     name: &str,
@@ -98,12 +119,13 @@ fn member(
         src: sig,
         ty,
         name_span: ident_span(toks, span, name),
-        doc: doc_before(src, span.lo),
+        doc: doc_before(comments, src, span.lo),
         line: line_of(src, span.lo),
     }
 }
 
 fn members_of(
+    comments: &[Comment],
     src: &str,
     ast: &Ast,
     toks: &[Token],
@@ -126,7 +148,15 @@ fn members_of(
             }
             let sig = format!("{pre}{}", sig_src(src, ast, toks, sp, d.body));
             let name = ast.name(d.name);
-            member(src, toks, name, sig, d.ret.map(|r| ty_src(ast, r)), sp)
+            member(
+                comments,
+                src,
+                toks,
+                name,
+                sig,
+                d.ret.map(|r| ty_src(ast, r)),
+                sp,
+            )
         })
         .collect()
 }
@@ -170,6 +200,7 @@ fn strip_member_mods(mut s: &str) -> &str {
 /// field member list: the decl slice carries the modifiers (the field
 /// span starts before them) —strip, then re-render from the flags
 fn field_members(
+    comments: &[Comment],
     src: &str,
     ast: &Ast,
     toks: &[Token],
@@ -196,7 +227,7 @@ fn field_members(
             .to_string();
             let decl = format!("{vis}{body}");
             let name = ast.name(d.name);
-            member(src, toks, name, decl, Some(ty_src(ast, d.ty)), sp)
+            member(comments, src, toks, name, decl, Some(ty_src(ast, d.ty)), sp)
         })
         .collect()
 }
@@ -245,6 +276,7 @@ fn enum_members(
 
 #[allow(clippy::too_many_arguments)]
 fn ty_def(
+    comments: &[Comment],
     src: &str,
     toks: &[Token],
     name: &str,
@@ -268,7 +300,7 @@ fn ty_def(
         fields,
         methods,
         alias_target: None,
-        doc: doc_before(src, span.lo),
+        doc: doc_before(comments, src, span.lo),
         span,
         line: line_of(src, span.lo),
     }
@@ -294,8 +326,8 @@ fn param_names(ast: &Ast, params: &[NodeHandle<AnyParam>]) -> Vec<String> {
 /// Build the index for one document. `toks` is the same lex the parser
 /// consumed — the decl layer's name-span recovery rides it (no re-lex,
 /// no parser changes).
-pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
-    index_items(src, ast, toks, ast.module_items(ast.root))
+pub fn index(src: &str, ast: &Ast, toks: &[Token], comments: &[Comment]) -> DefIndex {
+    index_items(src, ast, toks, ast.module_items(ast.root), comments)
 }
 
 /// [`index`] over a GIVEN item list — one module slice of a document.
@@ -308,6 +340,7 @@ pub fn index_items(
     ast: &Ast,
     toks: &[Token],
     items: &[NodeHandle<AnyItem>],
+    comments: &[Comment],
 ) -> DefIndex {
     let mut idx = DefIndex::default();
     let mut pending_lets: Vec<PendingLet> = Vec::new();
@@ -322,9 +355,10 @@ pub fn index_items(
                 methods,
                 ..
             } => {
-                let fs = field_members(src, ast, toks, fields);
-                let ms = members_of(src, ast, toks, methods);
+                let fs = field_members(comments, src, ast, toks, fields);
+                let ms = members_of(comments, src, ast, toks, methods);
                 idx.types.push(ty_def(
+                    comments,
                     src,
                     toks,
                     ast.name(*name),
@@ -344,9 +378,10 @@ pub fn index_items(
                 methods,
                 ..
             } => {
-                let fs = field_members(src, ast, toks, fields);
-                let ms = members_of(src, ast, toks, methods);
+                let fs = field_members(comments, src, ast, toks, fields);
+                let ms = members_of(comments, src, ast, toks, methods);
                 idx.types.push(ty_def(
+                    comments,
                     src,
                     toks,
                     ast.name(*name),
@@ -365,8 +400,9 @@ pub fn index_items(
                 methods,
                 ..
             } => {
-                let ms = members_of(src, ast, toks, methods);
+                let ms = members_of(comments, src, ast, toks, methods);
                 idx.types.push(ty_def(
+                    comments,
                     src,
                     toks,
                     ast.name(*name),
@@ -385,6 +421,7 @@ pub fn index_items(
                 // span (the recovery the old comment deferred)
                 let ms = enum_members(src, ast, toks, span, members);
                 idx.types.push(ty_def(
+                    comments,
                     src,
                     toks,
                     ast.name(*name),
@@ -416,7 +453,7 @@ pub fn index_items(
                         src: sig_src(src, ast, toks, sp, d.body),
                         ret: d.ret.map(|r| ty_src(ast, r)),
                         params: param_names(ast, &d.params),
-                        doc: doc_before(src, sp.lo),
+                        doc: doc_before(comments, src, sp.lo),
                         vis: d.vis.unwrap_or(Vis::Pub),
                         ambient: false,
                         owner: Some(target_head.clone()),
@@ -432,7 +469,7 @@ pub fn index_items(
                     src: sig_src(src, ast, toks, span, Some(d.body)),
                     ret: d.ret.map(|r| ty_src(ast, r)),
                     params: param_names(ast, &d.params),
-                    doc: doc_before(src, span.lo),
+                    doc: doc_before(comments, src, span.lo),
                     vis: d.vis,
                     ambient: false,
                     owner: None,
@@ -458,7 +495,7 @@ pub fn index_items(
                     src: sig_src(src, ast, toks, span, None),
                     ret: None,
                     params: param_names(ast, params),
-                    doc: doc_before(src, span.lo),
+                    doc: doc_before(comments, src, span.lo),
                     vis: *vis,
                     // the ambient spelling (`prelude builtin fn`) binds
                     // in every unit — completion offers it bare
@@ -478,8 +515,9 @@ pub fn index_items(
                 if !ambient {
                     idx.pub_gated.push(ast.name(*name).to_string());
                 }
-                let ms = members_of(src, ast, toks, members);
+                let ms = members_of(comments, src, ast, toks, members);
                 let mut def = ty_def(
+                    comments,
                     src,
                     toks,
                     ast.name(*name),
@@ -503,8 +541,9 @@ pub fn index_items(
                 if !ambient {
                     idx.pub_gated.push(ast.name(*name).to_string());
                 }
-                let ms = members_of(src, ast, toks, members);
+                let ms = members_of(comments, src, ast, toks, members);
                 let mut def = ty_def(
+                    comments,
                     src,
                     toks,
                     ast.name(*name),
@@ -519,8 +558,9 @@ pub fn index_items(
                 idx.types.push(def);
             }
             ItemKind::SurfaceStruct { name, fields, .. } => {
-                let fs = field_members(src, ast, toks, fields);
+                let fs = field_members(comments, src, ast, toks, fields);
                 idx.types.push(ty_def(
+                    comments,
                     src,
                     toks,
                     ast.name(*name),
@@ -550,7 +590,7 @@ pub fn index_items(
                     generics: Vec::new(),
                     fields: Vec::new(),
                     methods: Vec::new(),
-                    doc: doc_before(src, span.lo),
+                    doc: doc_before(comments, src, span.lo),
                     span,
                     line: line_of(src, span.lo),
                     alias_target: Some(ty_src(ast, d.target)),
@@ -618,7 +658,7 @@ pub fn index_items(
                     name: ast.name(*name).to_string(),
                     name_span: ident_span(toks, span, ast.name(*name)),
                     vis: *vis,
-                    doc: doc_before(src, span.lo),
+                    doc: doc_before(comments, src, span.lo),
                     span,
                     line: line_of(src, span.lo),
                 });
@@ -632,7 +672,7 @@ pub fn index_items(
                     name: ast.name(*name).to_string(),
                     name_span: ident_span(toks, span, ast.name(*name)),
                     vis: *vis,
-                    doc: doc_before(src, span.lo),
+                    doc: doc_before(comments, src, span.lo),
                     span,
                     line: line_of(src, span.lo),
                 });
@@ -661,7 +701,7 @@ pub fn index_items(
             name_span: ident_span(toks, span, ast.name(name)),
             ty: ty_text,
             src: src[span.lo as usize..hi as usize].trim_end().to_string(),
-            doc: doc_before(src, span.lo),
+            doc: doc_before(comments, src, span.lo),
             vis,
             span,
             line: line_of(src, span.lo),

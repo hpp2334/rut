@@ -21,7 +21,7 @@ fn doc_at(uri: &str, src: &str) -> Doc {
     let src = normalize(src);
     let (toks, _) = lex(&src);
     let (ast, _) = parse(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
+    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks, &comments_of(&src));
     index.origin = uri.to_string();
     Doc {
         src,
@@ -810,7 +810,7 @@ fn the_explicit_module_name_beats_the_path_derivation() {
     let s = normalize(src);
     let (toks, _) = lex(&s);
     let (ast, _) = parse(&s, Mode::Impl);
-    let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     idx.origin = "file:///ws/gadgets/lib.rut".to_string();
     idx.src_path = Some("somewhere/else/lib.rut".to_string());
     idx.module = Some("pouch".to_string());
@@ -830,7 +830,7 @@ fn the_unnamed_fallback_stays_verbatim() {
     let s = normalize(src);
     let (toks, _) = lex(&s);
     let (ast, _) = parse(&s, Mode::Impl);
-    let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     idx.origin = "file:///ws/gadgets/lib.rut".to_string();
     assert!(matches_pkg(&idx, "gadgets"), "the file stem still resolves");
     idx.src_path = Some("rut/pouch/mod.rut".to_string());
@@ -949,4 +949,11 @@ fn misses_stay_misses() {
     let src3 = "entry fn main() -> nil {\n    let x = mystery();\n}\n";
     let d3 = doc(src3);
     assert!(def(&d3, at(&d3.src, "mystery", 1), &[]).is_empty());
+}
+
+/// the collected comment table — the same lane the facade rides
+/// (tests lex through the dev-dep seam)
+fn comments_of(src: &str) -> Vec<rut_lsp_wasm::semantic::Comment> {
+    let (_, _, comments) = rut_lexer::lexer::lex_normalized(src, true);
+    comments
 }

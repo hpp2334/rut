@@ -7,7 +7,7 @@ fn complete_after(src: &str, needle: &str) -> Vec<CompletionOut> {
     let s = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let idx = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let idxs = [&idx];
     let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
     complete(&idxs, &toks, &ast, pos, &s, &DocMods::default())
@@ -46,13 +46,13 @@ fn member_completion_gates_foreign_interface_members() {
     let s2 = rut_lexer::lexer::normalize(surf_src);
     let (stoks, _) = rut_lexer::lexer::lex(&s2);
     let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Impl);
-    let surf = rut_lsp_wasm::hover::index(&s2, &sast, &stoks);
+    let surf = rut_lsp_wasm::hover::index(&s2, &sast, &stoks, &comments_of(&s2));
 
     let mk = |doc: &str| {
         let d2 = rut_lexer::lexer::normalize(doc);
         let (toks, _) = rut_lexer::lexer::lex(&d2);
         let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-        let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+        let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks, &comments_of(&d2));
         let idxs = [&di, &surf];
         let pos = d2.rfind("g.").unwrap() as u32 + 2;
         complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
@@ -75,7 +75,7 @@ fn member_completion_gates_foreign_interface_members() {
     let d2 = rut_lexer::lexer::normalize(own);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
     let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks, &comments_of(&d2));
     let idxs = [&di];
     let pos = d2.rfind("l.").unwrap() as u32 + 2;
     assert!(
@@ -132,7 +132,7 @@ fn bare_completion_gates_pub_builtin_core_names() {
     let c2 = rut_lexer::lexer::normalize(core_src);
     let (ctoks, _) = rut_lexer::lexer::lex(&c2);
     let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
-    let mut core = rut_lsp_wasm::hover::index(&c2, &cast, &ctoks);
+    let mut core = rut_lsp_wasm::hover::index(&c2, &cast, &ctoks, &comments_of(&c2));
     // the manifest module name — the stamp every face lays down
     // (deps::index_dep, std_surface), and what the bare tier's
     // `(name, pkg)` imported gate matches against
@@ -142,7 +142,7 @@ fn bare_completion_gates_pub_builtin_core_names() {
         let d2 = rut_lexer::lexer::normalize(doc);
         let (toks, _) = rut_lexer::lexer::lex(&d2);
         let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-        let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+        let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks, &comments_of(&d2));
         let idxs = [&di, &core];
         let pos = d2.len() as u32;
         complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
@@ -221,7 +221,7 @@ fn complete_with_dep(doc: &str, dep: &DefIndex) -> Vec<CompletionOut> {
     let d2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
     let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks, &comments_of(&d2));
     let idxs = [&di, dep];
     complete(
         &idxs,
@@ -348,13 +348,13 @@ fn string_receiver_completes_str_surface() {
     let c2 = rut_lexer::lexer::normalize(core_src);
     let (ctoks, _) = rut_lexer::lexer::lex(&c2);
     let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
-    let core = rut_lsp_wasm::hover::index(&c2, &cast, &ctoks);
+    let core = rut_lsp_wasm::hover::index(&c2, &cast, &ctoks, &comments_of(&c2));
 
     let doc = "fn f(s: str) -> i32 { return s. }\n";
     let d2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
     let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks, &comments_of(&d2));
     let idxs = [&di, &core];
     let pos = d2.rfind("s.").unwrap() as u32 + 2;
     let items = complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default());
@@ -369,7 +369,7 @@ fn complete_over_std(doc: &str, needle: &str) -> Vec<CompletionOut> {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let std = rut_lsp_wasm::std_surface::indexes();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -435,7 +435,7 @@ fn use_path_completion_lists_the_dep_namespace_shape() {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let idxs = [&di, &calc];
     let items = complete(&idxs, &toks, &ast, s.len() as u32, &s, &DocMods::default());
     let ls = labels(&items);
@@ -464,7 +464,7 @@ fn gadget_dep() -> Vec<DefIndex> {
         let s = rut_lexer::lexer::normalize(src);
         let (toks, _) = rut_lexer::lexer::lex(&s);
         let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-        let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+        let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
         idx.module = Some("gadgets".to_string());
         idx.mod_path = Some(mod_path.to_string());
         idx
@@ -485,7 +485,7 @@ fn complete_over_gadgets(doc: &str, needle: &str, doc_mods: DocMods) -> Vec<Comp
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let dep = gadget_dep();
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(dep.iter());
@@ -763,7 +763,7 @@ fn colon2_completion_lists_the_namespace_statics() {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let idxs = [&di, &calc];
     let pos = s.rfind("Math::").unwrap() as u32 + "Math::".len() as u32;
     let items = complete(&idxs, &toks, &ast, pos, &s, &DocMods::default());
@@ -951,14 +951,14 @@ fn the_type_tier_offers_the_ambient_and_imported_foreign_types() {
     let c2 = rut_lexer::lexer::normalize(core_src);
     let (ctoks, _) = rut_lexer::lexer::lex(&c2);
     let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
-    let mut core = rut_lsp_wasm::hover::index(&c2, &cast, &ctoks);
+    let mut core = rut_lsp_wasm::hover::index(&c2, &cast, &ctoks, &comments_of(&c2));
     core.module = Some("core".to_string());
 
     let mk = |doc: &str| {
         let d2 = rut_lexer::lexer::normalize(doc);
         let (toks, _) = rut_lexer::lexer::lex(&d2);
         let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-        let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+        let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks, &comments_of(&d2));
         let idxs = [&di, &core];
         let pos = d2.rfind("let e:").unwrap() as u32 + "let e:".len() as u32;
         complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
@@ -999,7 +999,7 @@ fn auto_import_offers_foreign_names_with_the_insert_edit() {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let std = rut_lsp_wasm::std_surface::indexes();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -1027,7 +1027,7 @@ fn auto_import_lands_after_the_last_leading_use() {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let std = rut_lsp_wasm::std_surface::indexes();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -1047,7 +1047,7 @@ fn auto_import_skips_leading_comments() {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let std = rut_lsp_wasm::std_surface::indexes();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -1066,7 +1066,7 @@ fn already_imported_names_are_not_re_offered() {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks, &comments_of(&s));
     let std = rut_lsp_wasm::std_surface::indexes();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -1375,4 +1375,11 @@ fn the_end_of_buffer_extension_never_leaks_a_closed_block() {
         !ls.contains(&"alpha"),
         "the closed fn's local stays in: {ls:?}"
     );
+}
+
+/// the collected comment table — the same lane the facade rides
+/// (tests lex through the dev-dep seam)
+fn comments_of(src: &str) -> Vec<rut_lsp_wasm::semantic::Comment> {
+    let (_, _, comments) = rut_lexer::lexer::lex_normalized(src, true);
+    comments
 }

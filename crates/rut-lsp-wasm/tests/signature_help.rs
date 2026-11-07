@@ -19,7 +19,7 @@ fn doc(src: &str) -> Doc {
     let src = normalize(src);
     let (toks, _) = lex(&src);
     let (ast, _) = parse(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
+    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks, &comments_of(&src));
     index.origin = DOC.to_string();
     Doc {
         src,
@@ -361,4 +361,11 @@ fn doc_lines_render_as_documentation() {
         Some(Documentation::MarkupContent(m)) => assert_eq!(m.value, "hex digit value"),
         other => panic!("doc markdown expected, got {other:?}"),
     }
+}
+
+/// the collected comment table — the same lane the facade rides
+/// (tests lex through the dev-dep seam)
+fn comments_of(src: &str) -> Vec<rut_lsp_wasm::semantic::Comment> {
+    let (_, _, comments) = rut_lexer::lexer::lex_normalized(src, true);
+    comments
 }

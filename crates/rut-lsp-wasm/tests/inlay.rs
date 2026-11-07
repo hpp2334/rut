@@ -21,7 +21,7 @@ fn doc(src: &str) -> Doc {
     let src = normalize(src);
     let (toks, _) = lex(&src);
     let (ast, _) = parse(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
+    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks, &comments_of(&src));
     index.origin = DOC.to_string();
     let lines = LineIndex::new(&src);
     Doc {
@@ -467,4 +467,11 @@ fn range_filters_hints() {
     assert_eq!(pos(&hs[0]).0, 1);
     // a range before everything is empty, never wrong
     assert!(hints(&w1.cx(), 0, 0).is_empty());
+}
+
+/// the collected comment table — the same lane the facade rides
+/// (tests lex through the dev-dep seam)
+fn comments_of(src: &str) -> Vec<rut_lsp_wasm::semantic::Comment> {
+    let (_, _, comments) = rut_lexer::lexer::lex_normalized(src, true);
+    comments
 }
