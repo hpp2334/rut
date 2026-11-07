@@ -9,6 +9,7 @@ use std::path::Path;
 use rut_driver::{sha256_hex, LockFile, LockRow};
 
 use crate::cache;
+use crate::install_lock;
 
 /// the `install` arg surface.
 #[derive(clap::Args)]
@@ -160,6 +161,18 @@ pub(crate) fn install(args: &InstallArgs) {
         );
         std::process::exit(2);
     }
+    // the per-project mutex, acquired ONCE at entry — every mode, before
+    // any download or rut.lock write. The guard rides this scope (Drop
+    // releases; process death releases too — the kernel owns the lock),
+    // and nothing below ever re-acquires (flock is non-reentrant): a
+    // concurrent install on this project waits, announced, then proceeds.
+    let _install_lock = match install_lock::acquire(p) {
+        Ok(guard) => guard,
+        Err(e) => {
+            eprintln!("install: {e}");
+            std::process::exit(2);
+        }
+    };
     if args.locked {
         install_locked(p);
     } else {
@@ -239,8 +252,11 @@ fn install_plain(p: &Path) {
         return;
     }
     let text = rut_driver::render_lock(&LockFile::from_rows(rows));
-    // atomic: the lock lands whole or not at all (the store entry law)
-    let tmp = lock_path.with_file_name(".rut.lock.tmp");
+    // atomic: the lock lands whole or not at all (the store entry law).
+    // The tmp name carries the pid — unique per writer, so even a
+    // future caller bypassing the per-project mutex cannot interleave
+    // write/rename on one tmp path and tear the file
+    let tmp = lock_path.with_file_name(format!(".rut.lock.tmp.{}", std::process::id()));
     if let Err(e) = std::fs::write(&tmp, &text) {
         eprintln!("install: cannot write {}: {e}", tmp.display());
         std::process::exit(2);

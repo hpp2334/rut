@@ -28874,6 +28874,35 @@ msgstr ""
 "任何漂移都会打印 `install: --locked found drift, rut.lock untouched:` 和 diff 块；磁盘上的锁文件与之前逐字节相同。"
 
 
+#: src/reference/cli.md:240
+msgid ""
+"**Concurrent installs serialize per project.** Before touching anything — "
+"every mode, `--locked` included — `install` takes an exclusive, "
+"kernel-enforced lock at `$RUT_HOME/locks/<sha256(canonical project "
+"path)[:16]>.lock` (the canonical dir's hash, so symlinked spellings share "
+"one lock; different projects install in parallel). A second install on the "
+"same project waits, announcing it on stderr —"
+msgstr ""
+"**并发安装按项目串行。** 在触碰任何东西之前——所有模式，包括 `--locked`——`install` 在 "
+"`$RUT_HOME/locks/<sha256(canonical project path)[:16]>.lock` 取得一把独占的、内核强制的锁"
+"（规范化目录的哈希，因此符号链接的拼法共享同一把锁；不同项目并行安装）。同一项目上的第二个"
+"安装会等待，并在 stderr 上宣告——"
+
+
+#: src/reference/cli.md:252
+msgid ""
+"— and proceeds when the holder finishes (a crashed or Ctrl-C'd holder "
+"releases automatically; the lock rides the file descriptor). A holder that "
+"outstays **10 minutes** fails the wait loudly, naming the holder's pid and "
+"command as recorded in the lockfile. Readers never lock: `run`/`pack` and "
+"the editor read the store lock-free — content addressing makes concurrent "
+"reads safe by construction."
+msgstr ""
+"——并在持有者结束后继续（崩溃或 Ctrl-C 的持有者自动释放；锁搭载在文件描述符上）。超过 "
+"**10 分钟** 的持有者会让等待响亮失败，点名锁文件里记录的持有者 pid 与命令。读取者绝不加锁："
+"`run`/`pack` 与编辑器无锁地读存储——按内容寻址让并发读取天然安全。"
+
+
 #: src/reference/cli.md:235 src/reference/cli.md:363
 msgid "`fmt`"
 msgstr "`fmt`"
@@ -29074,6 +29103,23 @@ msgstr "运行缓存"
 msgid ""
 "`$RUT_HOME/run/<key>.rutbundle` — the whole-program archive cache `run` replays ([`run`](#run))"
 msgstr "`$RUT_HOME/run/<key>.rutbundle`——`run` 重放的整程序归档缓存（[`run`](#run)）"
+
+
+#: src/reference/cli.md:249
+msgid "install locks"
+msgstr "安装锁"
+
+#: src/reference/cli.md:249
+msgid ""
+"`$RUT_HOME/locks/<sha256(canonical project path)[:16]>.lock` — `install`'s "
+"per-project kernel-enforced mutex (stable files, created if missing; a "
+"future `--gc` prunes the accumulation). Readers never lock, and the store "
+"itself stays lock-free — content addressing + idempotent publishes make "
+"concurrent installs on DIFFERENT projects safe in parallel"
+msgstr ""
+"`$RUT_HOME/locks/<sha256(canonical project path)[:16]>.lock`——`install` 的每项目内核强制互斥锁"
+"（稳定的文件，缺失即创建；未来的 `--gc` 修剪累积）。读取者绝不加锁，存储本身保持无锁——"
+"按内容寻址 + 幂等发布让**不同**项目上的并发安装安全并行"
 
 
 

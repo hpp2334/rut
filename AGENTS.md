@@ -86,7 +86,10 @@ Delivery is THREE ACTS with one boundary — no script ever types `git commit`:
    then the e2e: `rut new → install → run` against a scratch `RUT_HOME`
    (the proof never touches a real store — install fills
    `$RUT_HOME/deps`, run/pack read it cache-only) must print
-   `hello, rut!`.
+   `hello, rut!`. Install serializes per project via a kernel-enforced
+   lock under `$RUT_HOME/locks/` (10-minute wait, holder named);
+   readers never lock; the global store stays lock-free by content
+   addressing.
 
 Gate modes (no act; each gate dies loudly on drift): `node
 scripts/pack-std.cjs --check` is the offline, CI-shaped gate (repacks to a

@@ -56,7 +56,7 @@ pub use session::HostRow;
 /// the meta shape (`$RUT_HOME` resolution included): one helper set,
 /// shared by the CLI's writer and every reader.
 pub use store::{
-    deps_dir, parse_store_meta, run_cache_path, rut_home, store_artifact_name, store_dir,
-    store_format, store_meta_json, StoreMeta, StoreMetaError, ARTIFACT_STEM, DEPS_DIR, META_NAME,
-    RUN_DIR, STORE_META_FORMAT_VERSION, UNPACK_DIR,
+    deps_dir, install_lock_path, parse_store_meta, run_cache_path, rut_home, store_artifact_name,
+    store_dir, store_format, store_meta_json, StoreMeta, StoreMetaError, ARTIFACT_STEM, DEPS_DIR,
+    LOCKS_DIR, META_NAME, RUN_DIR, STORE_META_FORMAT_VERSION, UNPACK_DIR,
 };

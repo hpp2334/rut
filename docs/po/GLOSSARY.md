@@ -122,6 +122,7 @@ source text by design; a partially translated book is a valid book.
 | the pin IS the address | 固定值即地址 | `<name>@<sha256[:16]>`——清单行的名字 + 锁固定值的前 16 位十六进制；content-addressed → 按内容寻址 |
 | verify-then-publish | 先校验后发布 | install/fetch 的发布协议：整个依赖目录（工件 + meta + 解包树）填进 tmp 兄弟目录，一次原子改名落位（verify-then-rename → 先校验后改名）；readers never re-hash → 读取者绝不重新哈希（安装期校验是唯一一次哈希） |
 | store-first | 存储优先 | 对照 cache-first → 缓存优先；store root → 存储根目录 |
+| per-project install lock | 每项目安装锁 | `rut install` 的内核强制（kernel-enforced）互斥锁，落位 `$RUT_HOME/locks/<sha256(canonical project path)[:16]>.lock`；holder → 持有者（锁文件里记录 pid/启动时间/命令，仅供等待者宣报）；the lock rides the file descriptor → 锁搭载在文件描述符上（崩溃或 Ctrl-C 自动释放，绝无残留锁清理代码）；readers never lock → 读取者绝不加锁；lock-free → 无锁（存储靠按内容寻址保持无锁）；wait → 等待（10 分钟期限，超时点名持有者响亮失败） |
 | mount door | 挂载门 | the loader's mount point where the pin is law — 每次加载都校验 |
 | rode-along group | 随行组 | a url dep's groups riding a consumer's pack |
 | nameability | 可命名性 | the declaration-scoped use law → 可命名性按声明划定（nameability is declaration-scoped）：一个包只能 `use` 自己清单点名的头（`deps` ∪ 根上的 `dev-deps` ∪ `core`）；transitive mount ≠ nameable → 传递挂载不等于可命名；D5 stays code |

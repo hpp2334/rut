@@ -237,6 +237,25 @@ hits only the store.
 Any drift prints `install: --locked found drift, rut.lock untouched:`
 and the diff block; the lock file on disk is byte-for-byte what it was.
 
+**Concurrent installs serialize per project.** Before touching
+anything — every mode, `--locked` included — `install` takes an
+exclusive, kernel-enforced lock at
+`$RUT_HOME/locks/<sha256(canonical project path)[:16]>.lock` (the
+canonical dir's hash, so symlinked spellings share one lock; different
+projects install in parallel). A second install on the same project
+waits, announcing it on stderr —
+
+```text
+rut: waiting — another install holds this project (pid 1234, started 14:03)
+```
+
+— and proceeds when the holder finishes (a crashed or Ctrl-C'd holder
+releases automatically; the lock rides the file descriptor). A holder
+that outstays **10 minutes** fails the wait loudly, naming the holder's
+pid and command as recorded in the lockfile. Readers never lock:
+`run`/`pack` and the editor read the store lock-free — content
+addressing makes concurrent reads safe by construction.
+
 ### The global dep store
 
 `install` fills the store — the online lane; `run`/`pack` read the
@@ -246,6 +265,7 @@ same store with the wire off:
 |---|---|
 | store root | `$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree). No dep cache lands beside a project — the walk's one local write is the `.rut/unpacked/<sha-of-bytes>/` scratch where `.zip` deps unpack once (content-addressed, gitignored — [loading](loading.md)) |
 | run cache | `$RUT_HOME/run/<key>.rutbundle` — the whole-program archive cache `run` replays ([`run`](#run)) |
+| install locks | `$RUT_HOME/locks/<sha256(canonical project path)[:16]>.lock` — `install`'s per-project kernel-enforced mutex (stable files, created if missing; a future `--gc` prunes the accumulation). Readers never lock, and the store itself stays lock-free — content addressing + idempotent publishes make concurrent installs on DIFFERENT projects safe in parallel |
 | store-first | a hit never touches the network — offline reloads are the point |
 | miss (install) | GET (redirects on) under hard timeouts (10 s connect, 60 s whole-request — a stalled host fails loudly, never hangs), non-2xx is a loud error, a size cap refuses without buffering; the publish is verify-then-rename — the whole dep dir (artifact + meta + unpack tree) fills a tmp sibling and lands by ONE atomic rename, so a reader never sees a partial dep |
 | miss (run/pack) | the loud install-first refusal — run and pack never download |

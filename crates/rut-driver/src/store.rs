@@ -14,6 +14,7 @@
 //!     meta.json                         # the verification surface (below)
 //!     unpack/                           # the extracted tree
 //! $RUT_HOME/run/<key>.rutbundle         # the run-key cache
+//! $RUT_HOME/locks/<project-hash>.lock   # `rut install`'s per-project mutex
 //! ```
 //!
 //! The `<name>@<sha256[:16]>` address is derived from the manifest
@@ -30,12 +31,16 @@
 use serde_json::Value;
 
 use crate::bundle::cache_ext;
+use crate::loader::sha256_hex;
 
 /// The store root under the rut home: every pinned dep dir.
 pub const DEPS_DIR: &str = "deps";
 
 /// The run-key cache root under the rut home.
 pub const RUN_DIR: &str = "run";
+
+/// The per-project install locks' root under the rut home.
+pub const LOCKS_DIR: &str = "locks";
 
 /// Inside a dep dir: the pinned bytes as downloaded — the extension
 /// follows the url's own artifact kind ([`store_artifact_name`]).
@@ -101,6 +106,19 @@ pub fn store_format(url: &str) -> &str {
 /// content hash; same key ⇒ byte-identical bundle).
 pub fn run_cache_path(key: &str) -> String {
     format!("{}/{RUN_DIR}/{key}.rutbundle", rut_home())
+}
+
+/// `<rut_home>/locks/<sha256(canonical project path)[:16]>.lock` — the
+/// per-project INSTALL lock: `rut install`'s kernel-enforced mutual
+/// exclusion (readers never lock; the global store stays lock-free).
+/// The input must be the project dir's CANONICAL spelling (the caller
+/// canonicalizes) so symlinked paths share one lockfile. The file is a
+/// STABLE flock target — created if missing, never renamed or deleted
+/// (locking rut.lock itself is broken by its own tmp+rename write),
+/// and accumulation is accepted (a future `--gc` prunes).
+pub fn install_lock_path(canonical_project: &str) -> String {
+    let hash = sha256_hex(canonical_project.as_bytes());
+    format!("{}/{LOCKS_DIR}/{}.lock", rut_home(), &hash[..16])
 }
 
 /// One dep dir's `meta.json` — the verification surface for readers:
@@ -255,6 +273,21 @@ mod tests {
         std::env::remove_var("HOME");
         // degenerate: no override, no home — beside the cwd
         assert_eq!(rut_home(), ".rut");
+    }
+
+    #[test]
+    // Env mutation is safe under nextest's one-process-per-test model
+    // (the suite's runner): this test owns its process's environment.
+    fn the_install_lock_names_the_canonical_project() {
+        // the derivation: sha256 over the canonical path, first 16 hex
+        // digits, under locks/ — one stable file per project
+        std::env::set_var("RUT_HOME", "/store-home");
+        let want = format!("/store-home/locks/{}.lock", &sha256_hex(b"/proj/app")[..16]);
+        assert_eq!(install_lock_path("/proj/app"), want);
+        // a different project is a different lock — installs on other
+        // projects never wait on this one
+        assert_ne!(install_lock_path("/proj/other"), want);
+        std::env::remove_var("RUT_HOME");
     }
 
     // ---- the artifact name + kind ----

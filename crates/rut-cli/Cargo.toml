@@ -14,6 +14,10 @@ path = "src/main.rs"
 # hand-rolled door served fine at 3 flags, but -h/--help and honest
 # parse errors earn it)
 clap = { version = "4.5", features = ["derive"] }
+# the per-project install lock's primitive: flock on Unix, LockFileEx
+# on Windows — a kernel-owned advisory lock the OS releases when the
+# holder dies (no stale-lock cleanup code)
+fd-lock = "4"
 rut-driver = { path = "../rut-driver" }
 # the walk + the remotes + the pack lanes (the native host half)
 rut-native = { path = "../rut-native" }
