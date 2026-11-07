@@ -62,12 +62,6 @@ pub enum Msg {
     },
     Complete {
         uri: String,
-        line: u32,
-        ch: u32,
-        tx: Tx,
-    },
-    CompleteIn {
-        uri: String,
         src: String,
         line: u32,
         ch: u32,
@@ -115,14 +109,6 @@ pub enum Msg {
         text: String,
         tx: Tx,
     },
-    SetLock {
-        text: String,
-        tx: Tx,
-    },
-    SetDirectDeps {
-        names_json: String,
-        tx: Tx,
-    },
     /// the injected READ-ONLY host environment (the dep walk's
     /// capability — `crate::env`). Carried as the [`env::Io`] trait
     /// object: the wasm bridge wraps its `JsEnv` in the `Rc` at
@@ -139,33 +125,11 @@ pub enum Msg {
         roots: Vec<String>,
         tx: Tx,
     },
-    AddDefNamed {
-        uri: String,
-        name: String,
-        src: String,
-        tx: Tx,
-    },
     AddDefMod {
         uri: String,
         name: String,
         mod_path: String,
         src: String,
-        tx: Tx,
-    },
-    AddBundle {
-        bytes: Vec<u8>,
-        tx: Tx,
-    },
-    ExtractBundle {
-        bytes: Vec<u8>,
-        tx: Tx,
-    },
-    ExtractSrczip {
-        bytes: Vec<u8>,
-        tx: Tx,
-    },
-    DocLen {
-        uri: String,
         tx: Tx,
     },
 }
@@ -174,11 +138,10 @@ pub enum Msg {
 pub type Tx = Sender<Reply>;
 
 /// what a handler answers. `Text` is the JSON envelope every query and
-/// parse entry speaks; `Len` is `doc_len`'s count; `Done` is the void
-/// entries' completion (the bridge awaits it for ORDERING, not payload).
+/// parse entry speaks; `Done` is the void entries' completion (the
+/// bridge awaits it for ORDERING, not payload).
 pub enum Reply {
     Text(String),
-    Len(u32),
     Done,
 }
 
@@ -257,11 +220,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             };
             let _ = tx.send(Reply::Text(answer));
         }
-        Msg::Complete { uri, line, ch, tx } => {
-            let answer = core.complete_stored(&uri, line, ch);
-            let _ = tx.send(Reply::Text(answer));
-        }
-        Msg::CompleteIn {
+        Msg::Complete {
             uri,
             src,
             line,
@@ -380,27 +339,6 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             };
             let _ = tx.send(Reply::Text(answer));
         }
-        Msg::SetLock { text, tx } => {
-            let answer = match core.set_lock_text(&text) {
-                Ok(n) => json_envelope(wire::Pins { pins: n }),
-                Err(e) => json_envelope(wire::Error::new(e)),
-            };
-            let _ = tx.send(Reply::Text(answer));
-        }
-        Msg::SetDirectDeps { names_json, tx } => {
-            let answer = match serde_json::from_str::<Vec<String>>(&names_json) {
-                Ok(names) => {
-                    for n in names {
-                        core.direct_deps.insert(n);
-                    }
-                    json_envelope(wire::Direct {
-                        direct: core.direct_deps.len(),
-                    })
-                }
-                Err(e) => json_envelope(wire::Error::new(e.to_string())),
-            };
-            let _ = tx.send(Reply::Text(answer));
-        }
         Msg::SetEnv { env: e, tx } => {
             // the capability STORE — replace-on-reinject, exactly the
             // ledger setters' shape. The walk (ResolveDeps below) is
@@ -427,10 +365,6 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             };
             let _ = tx.send(Reply::Text(answer));
         }
-        Msg::AddDefNamed { uri, name, src, tx } => {
-            core.add_def_named_at(&uri, &name, &src);
-            let _ = tx.send(Reply::Done);
-        }
         Msg::AddDefMod {
             uri,
             name,
@@ -440,151 +374,6 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
         } => {
             let decls = core.add_def_mod_at(&uri, &name, &mod_path, &src);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
-        }
-        Msg::AddBundle { bytes, tx } => {
-            let b = match crate::deps::bundle_sources(&bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    let _ = tx.send(Reply::Text(json_envelope(
-                        serde_json::json!({ "error": e }),
-                    )));
-                    return;
-                }
-            };
-            let mut paths = Vec::with_capacity(b.files.len());
-            let direct = core.direct_deps.contains(&b.module);
-            for f in &b.files {
-                let uri = format!("bundle:{}/{}", b.module, f.path);
-                // a mounted mod child rides as `<path>/mod.rut` (a host tree's
-                // as `<path>/mod.d.rut`, the rows lane's root as `mod.rut`) —
-                // its mod path stamps the index in the file's own mode; flat
-                // files keep today's shape. A DECL file is the declaration
-                // entry (wire v12): ONE parse, the inline nesting stamps one
-                // index per module — the consolidated group entry indexes whole.
-                let idxs: Vec<_> = match crate::deps::bundle_file_mod_path(&f.path) {
-                    Some(p) if f.mode == rut_parser::Mode::Decl => {
-                        crate::deps::index_dep_decl_group(
-                            &b.module,
-                            &uri,
-                            &p,
-                            &f.src,
-                            b.namespace.as_deref(),
-                            &b.consts,
-                        )
-                        .into_iter()
-                        .map(|(_, idx)| idx)
-                        .collect()
-                    }
-                    Some(p) => vec![crate::deps::index_dep_mod(
-                        &b.module,
-                        &uri,
-                        &p,
-                        &f.src,
-                        f.mode,
-                        b.namespace.as_deref(),
-                        &b.consts,
-                    )],
-                    None => vec![crate::deps::index_dep(
-                        &b.module,
-                        &uri,
-                        &f.src,
-                        f.mode,
-                        b.namespace.as_deref(),
-                        &b.consts,
-                    )],
-                };
-                for mut idx in idxs {
-                    idx.direct_dep = direct;
-                    // one uri per module: the shared entry uri for the root
-                    // stamp, `#<mod path>` for the nested ones (the (module,
-                    // mod_path) pair is the real key; the uri only names the
-                    // origin in diagnostics)
-                    match core.defs.iter().position(|d| d.origin == uri) {
-                        Some(slot) => core.defs[slot] = idx,
-                        None => core.defs.push(idx),
-                    }
-                }
-                paths.push(f.path.clone());
-            }
-            let answer = json_envelope(wire::BundleIndex {
-                module: b.module,
-                namespace: b.namespace,
-                consts: b.consts,
-                files: paths,
-            });
-            let _ = tx.send(Reply::Text(answer));
-        }
-        Msg::ExtractBundle { bytes, tx } => {
-            let answer = match crate::deps::bundle_sources(&bytes) {
-                Ok(b) => {
-                    let files: Vec<wire::BundleFile> =
-                        b.files.iter().map(wire::BundleFile::from_source).collect();
-                    json_envelope(wire::ExtractBundle {
-                        module: b.module,
-                        namespace: b.namespace,
-                        consts: b.consts,
-                        files,
-                    })
-                }
-                Err(e) => json_envelope(serde_json::json!({ "error": e })),
-            };
-            let _ = tx.send(Reply::Text(answer));
-        }
-        Msg::ExtractSrczip { bytes, tx } => {
-            let answer = match crate::deps::srczip_sources(&bytes) {
-                Ok(b) => {
-                    let files: Vec<wire::BundleFile> = b
-                        .files
-                        .iter()
-                        .map(|f| {
-                            let rel = f.path.strip_prefix("src/").unwrap_or(&f.path);
-                            let mod_path = if rel == "mod.rut" || rel == "mod.d.rut" {
-                                Some(String::new())
-                            } else if let Some(p) = rel.strip_suffix("/mod.rut") {
-                                Some(p.to_string())
-                            } else if let Some(p) = rel.strip_suffix("/mod.d.rut") {
-                                Some(p.to_string())
-                            } else {
-                                rel.strip_suffix(".rut").map(|p| p.to_string())
-                            };
-                            wire::BundleFile {
-                                path: f.path.clone(),
-                                src: f.src.clone(),
-                                mode: wire::mode_str(f.mode),
-                                mod_path,
-                            }
-                        })
-                        .collect();
-                    json_envelope(wire::ExtractSrczip {
-                        module: b.module,
-                        namespace: b.namespace,
-                        consts: b.consts,
-                        files,
-                        // the unpack law's ingredients: the archive's own
-                        // manifest (the host lays it beside the files and the
-                        // pkg's own rows mount through the ordinary dir lane)
-                        // and the embedded `deps/<identity>/` entries (the
-                        // ride-along groups, laid under the tree; first mount
-                        // wins)
-                        manifest: b.manifest,
-                        embedded: b
-                            .embedded
-                            .iter()
-                            .map(|(path, src)| wire::Embedded {
-                                path: path.clone(),
-                                src: src.clone(),
-                            })
-                            .collect(),
-                    })
-                }
-                Err(e) => json_envelope(serde_json::json!({ "error": e })),
-            };
-            let _ = tx.send(Reply::Text(answer));
-        }
-        Msg::DocLen { uri, tx } => {
-            let _ = tx.send(Reply::Len(
-                core.docs.get(&uri).map(|s| s.len() as u32).unwrap_or(0),
-            ));
         }
     }
 }

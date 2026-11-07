@@ -280,7 +280,7 @@ async function main() {
             );
         }
         const [cline, cch] = posOf(src, 'c.');
-        const items = await rut.complete(uri, cline, cch + 2);
+        const items = await rut.complete(uri, cline, cch + 2, src);
         const labels = items.map((i) => i.label);
         for (const want of ['area', 'r']) {
             if (!labels.includes(want))
@@ -304,7 +304,7 @@ async function main() {
                 `std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
-        const bareItems = await rut.complete(uri, 0, 0);
+        const bareItems = await rut.complete(uri, 0, 0, src);
         const labels = bareItems.map((i) => i.label);
         // the type-name-law batch: the completion pin offers the family
         // pair — now through the auto-import tier (the alias-row form is
@@ -403,7 +403,7 @@ async function main() {
     // surface's class (the ctor-call inference), `log.` offers the impl
     // methods — and NEVER the bare tier's keyword/host-fn dump. The
     // CURRENT text rides the request (rut.complete's src argument →
-    // rut_complete_in), so the dot is fresh without the analyze debounce. ----
+    // the doc-sync complete), so the dot is fresh without the debounce. ----
     {
         const uri = 'file:///ws/e2e-ctor-completion.rut';
         // the member NAMES after each dot keep the doc parsing clean; the
@@ -610,7 +610,7 @@ async function main() {
             );
         }
         // member completion through the field-read receiver
-        const items = await rut.complete(uri, iline, ich + 6); // right after `inner.`
+        const items = await rut.complete(uri, iline, ich + 6, src); // right after `inner.`
         const labels = items.map((i) => i.label);
         for (const want of ['r', 'grown']) {
             if (!labels.includes(want))
@@ -1462,404 +1462,59 @@ async function main() {
         );
         smokes++;
 
-        // rut_add_def_named: a dep indexed under its module NAME feeds the
-        // `use <name>::` tier — the module tier lists the name, the names
-        // tier lists the dep's public surface
-        const gUri = 'file:///ws/gadgets/lib.rut';
-        const gSrc =
-            'pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n';
-        await dep.addDefNamed(gUri, 'gadgets', gSrc);
-        const depDoc = 'use gadgets::\nfn main() -> nil {\n}\n';
-        const depUri = 'file:///ws/e2e-dep.rut';
-        await dep.analyze(depUri, depDoc);
-        const namesTier = await dep.complete(depUri, 0, depDoc.indexOf('::') + 2);
-        const depLabels = namesTier.map((i) => i.label);
-        for (const want of ['Widget', 'tag']) {
-            if (!depLabels.includes(want))
-                bad.push(
-                    `named dep 'gadgets' lacks '${want}' in use completion (got ${depLabels.join(', ')})`,
-                );
-        }
-        const modTier = await dep.complete(depUri, 0, 4); // right after `use `
-        if (!modTier.map((i) => i.label).includes('gadgets')) {
-            bad.push(`module tier lacks 'gadgets' (got ${modTier.map((i) => i.label).join(', ')})`);
-        }
-        smokes++;
-
-        // rut_add_bundle: the COMMITTED pouch bundle (the CLI tests'
-        // offline url-dep fixture) — the envelope names module + entry
-        // paths, the surface lands in hover and go-to-definition
-        const bundleBytes = fs.readFileSync(path.join(REPO, 'dist', 'std', 'pouch.rutbundle'));
-        const bundle = await dep.addBundle(bundleBytes);
-        assert.strictEqual(bundle.module, 'pouch', `bundle envelope: ${JSON.stringify(bundle)}`);
-        // wire v12: the compiled group ships its GENERATED declaration
-        // entry as the editing surface (the .d.ts pattern) — the envelope
-        // names the entry, never the compiled mod.rutc body
-        assert.deepStrictEqual(bundle.files, ['mod.d.rut']);
-        const junk = Buffer.from('definitely not a zip');
-        const bundleErr = await dep.addBundle(junk);
-        assert.ok(
-            bundleErr.error?.includes('not a zip'),
-            `bundle error envelope: ${JSON.stringify(bundleErr)}`,
-        );
-        // the indexed surface resolves: the MOUNTED bundle outranks the
-        // ambient std embed (prefer_bodies — the embed is the zero-fetch
-        // fallback, never the answer when the real thing is mounted), so
-        // the use name jumps to the bundle's declaration entry — exactly
-        // one target — and a member hover answers through the named module
-        const pouchDoc =
-            'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n    v.push(1);\n}\n';
-        const pouchUri = 'file:///ws/e2e-bundle.rut';
-        await dep.analyze(pouchUri, pouchDoc);
-        const vecLocs = await dep.definition(pouchUri, 0, pouchDoc.indexOf('Vec'));
-        const targetUris = vecLocs.map((l) => l.uri);
-        assert.deepStrictEqual(
-            targetUris,
-            ['bundle:pouch/mod.d.rut'],
-            `bundle go-to-definition targets: ${JSON.stringify(targetUris)}`,
-        );
-        const pushCh = pouchDoc.split('\n')[3].indexOf('push');
-        const pushHover = await dep.hover(pouchUri, 3, pushCh);
-        if (!pushHover?.contents.value.includes('push')) {
-            bad.push(
-                `bundle member hover missed: ${pushHover && JSON.stringify(pushHover.contents.value.slice(0, 60))}`,
-            );
-        }
-        smokes++;
-
-        // ---- plan2 phase 3 (deps face): EXTRACT-TO-DISK — the extension's
-        // url-dep mount lane: rut_extract_bundle unpacks WITHOUT indexing,
-        // the host writes the files under .rut/deps/<module>-<pin12>/
-        // (content-addressed by the byte pin) and re-indexes them through
-        // rut_add_def_mod with real file:// origins — go-to-definition
-        // lands in REAL files, never bundle: URIs. The BINDING drives the
-        // lane (the exact call src/extension.ts mountUrlDep makes), the
-        // files are read back from disk. ----
-        assert.strictEqual(
-            typeof dep.extractBundle,
-            'function',
-            'extractBundle missing from the binding — rebuild (npm run build:wasm)',
-        );
+        // ---- the named-dep use-path tier through the WALK (the old
+        // push lane is gone from the ABI): a PATH dep read through the
+        // injected env — resolveDeps mounts it, then the `use <name>::`
+        // tier lists the dep's public surface and `use ⏐` the name ----
         {
-            const extracted = await rut.extractBundle(bundleBytes);
-            assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
-            assert.strictEqual(
-                extracted.module,
-                'pouch',
-                `extracted module: ${JSON.stringify(extracted.module)}`,
-            );
-            assert.strictEqual(
-                extracted.files.length,
-                1,
-                `extracted files: ${JSON.stringify(extracted.files.map((f) => f.path))}`,
-            );
-            const [ef] = extracted.files;
-            assert.strictEqual(ef.path, 'mod.d.rut');
-            assert.strictEqual(ef.mode, 'Decl');
-            assert.strictEqual(
-                ef.mod_path,
-                '',
-                `the root rides mod path '': ${JSON.stringify(ef.mod_path)}`,
-            );
+            const gfiles = new Map([
+                [
+                    '/ws/gproj/rut.jsonc',
+                    '{\n  "name": "gproj",\n  "deps": { "gadgets": { "path": "../gadgets" } }\n}\n',
+                ],
+                ['/ws/gproj/src/mod.rut', 'fn main() -> nil {\n}\n'],
+                ['/ws/gadgets/rut.jsonc', '{\n  "name": "gadgets"\n}\n'],
+                [
+                    '/ws/gadgets/src/mod.rut',
+                    'pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n',
+                ],
+            ]);
+            const norm = (rp) => rp.replace(/\/[^/]+\/\.\./g, '').replace('//', '/');
+            const genc = new TextEncoder();
+            const wrut = await RutLsp.load(fs.readFileSync(WASM_PATH), {
+                read: (rp) => {
+                    const v = gfiles.get(norm(rp));
+                    return v === undefined ? null : genc.encode(v);
+                },
+                readDir: () => null,
+                isDir: () => false,
+                notify: () => {},
+            });
+            const wout = await wrut.resolveDeps(['/ws/gproj']);
             assert.ok(
-                ef.src.includes('pub class Vec'),
-                `the body rides the src: ${ef.src.slice(0, 60)}`,
+                !wout.error && wout.missing.length === 0,
+                `walk answer: ${JSON.stringify(wout)}`,
             );
-            // a corrupt archive is the error envelope — never a partial tree
-            const badExtract = await rut.extractBundle(
-                new TextEncoder().encode('definitely not a zip'),
-            );
-            assert.ok(
-                badExtract.error?.includes('not a zip'),
-                `extract error envelope: ${JSON.stringify(badExtract)}`,
-            );
-
-            // ---- the source-zip transport's extract, through the SAME
-            // binding mountUrlDep drives (the std set ships as source zips —
-            // `src/` shells + source-zip deps): `rut_extract_srczip` unpacks
-            // the package's own `src/**` files with their mod paths, and the
-            // Logger class the scaffold's `use ink::{ Logger }` jumps to rides
-            // the body. The unpack law's ingredients ride beside: the
-            // archive's own manifest (the walk lays it beside the files) and
-            // the embedded `deps/` groups (the transitive host pkgs a
-            // scaffold never spells — ink carries ink_host). (The capability
-            // seam above guarantees the export exists; this proves the round
-            // trip.)
-            const inkZip = fs.readFileSync(path.join(REPO, 'dist', 'std', 'ink.zip'));
-            const srczip = await rut.extractSrczip(new Uint8Array(inkZip));
-            assert.ok(!srczip.error, `srczip extract envelope: ${JSON.stringify(srczip)}`);
-            assert.strictEqual(srczip.module, 'ink', `srczip module: ${JSON.stringify(srczip)}`);
-            const inkRoot = srczip.files.find((f) => f.path === 'src/mod.rut');
-            assert.ok(inkRoot, `srczip files: ${JSON.stringify(srczip.files.map((f) => f.path))}`);
-            assert.strictEqual(inkRoot.mode, 'Impl', 'the source body indexes in Impl mode');
-            assert.strictEqual(
-                inkRoot.mod_path,
-                '',
-                `the src/ shell root answers mod path '': ${JSON.stringify(inkRoot.mod_path)}`,
-            );
-            assert.ok(
-                inkRoot.src.includes('pub class Logger'),
-                'the Logger class rides the srczip body',
-            );
-            assert.ok(
-                !srczip.files.some((f) => f.path.startsWith('deps/')),
-                `other pkgs' embedded dep trees stay out of THIS pkg's files: ${JSON.stringify(srczip.files.map((f) => f.path))}`,
-            );
-            // the unpack ingredients: the own manifest verbatim, the embedded
-            // group's entries verbatim (paths stay archive-relative — the
-            // walk lays them under the tree and the pkg's own path rows
-            // resolve INTO them)
-            assert.ok(srczip.manifest.includes('"name": "ink"'), 'the own manifest text rides');
-            const groupManifest = srczip.embedded.find(
-                (e) => e.path === 'deps/ink_host@7e9a5d738fbd9797/rut.jsonc',
-            );
-            assert.ok(
-                groupManifest,
-                `the embedded group's manifest rides: ${JSON.stringify(srczip.embedded.map((e) => e.path))}`,
-            );
-            assert.ok(groupManifest.src.includes('"name": "ink_host"'), 'the group names itself');
-            const groupSurface = srczip.embedded.find(
-                (e) => e.path === 'deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut',
-            );
-            assert.ok(
-                groupSurface?.src.includes('pub host fn create_logger'),
-                'the host surface rides the group',
-            );
-            // THE HOP-2 LAW, through the shipped artifact: mount the laid
-            // tree the way the walk does, then the ink source's `use
-            // ink_host::{ … }` lands IN the embedded group — head and leaves,
-            // all real file:// origins (the ambient embed's repo-relative
-            // answer would drop outside any scaffold)
-            const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-srczip-'));
-            const depDir = path.join(ws, '.rut', 'deps', 'ink-eb2b568316ef');
-            const lay = (rel, src) => {
-                const p = path.join(depDir, rel);
-                fs.mkdirSync(path.dirname(p), { recursive: true });
-                fs.writeFileSync(p, src);
-            };
-            lay('rut.jsonc', srczip.manifest);
-            for (const f of srczip.files) lay(f.path, f.src);
-            for (const e of srczip.embedded) lay(e.path, e.src);
-            const mounted = new Set();
-            const walkManifest = async (manifestPath) => {
-                const dir = path.dirname(manifestPath);
-                const t = await rut.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
-                assert.ok(!t.error, `the laid manifest parses: ${JSON.stringify(t)}`);
-                if (mounted.has(t.name)) return; // first mount wins
-                mounted.add(t.name);
-                for (const e of t.entries) {
-                    await rut.addDefNamed(
-                        `file://${path.join(dir, e.path)}`,
-                        t.name,
-                        fs.readFileSync(path.join(dir, e.path), 'utf8'),
+            const depDoc = 'use gadgets::\nfn main() -> nil {\n}\n';
+            const depUri = 'file:///ws/e2e-dep.rut';
+            await wrut.analyze(depUri, depDoc);
+            const namesTier = await wrut.complete(depUri, 0, depDoc.indexOf('::') + 2, depDoc);
+            const depLabels = namesTier.map((i) => i.label);
+            for (const want of ['Widget', 'tag']) {
+                if (!depLabels.includes(want))
+                    bad.push(
+                        `walked dep 'gadgets' lacks '${want}' in use completion (got ${depLabels.join(', ')})`,
                     );
-                }
-                for (const p of t.entries.filter((e) => e.mode === 'Impl').map((e) => e.path)) {
-                    const uri = path.join(dir, p);
-                    const stamped = await rut.addDefMod(
-                        `file://${uri}`,
-                        t.name,
-                        '',
-                        fs.readFileSync(uri, 'utf8'),
-                    );
-                    assert.ok(!stamped.error, `the root stamps: ${JSON.stringify(stamped)}`);
-                }
-                for (const row of t.deps)
-                    await walkManifest(path.join(dir, row.source.dir, 'rut.jsonc'));
-            };
-            // THE HOP-1 LAW: the lane's OWN files index directly — the zip's
-            // published manifest carries no entry rows, so the mini-walk's
-            // entries loop cannot see them; the mod path rides the envelope
-            // ('' the root) and the uri is the laid file (the mountUrlDep
-            // zip lane writes AND indexes tree.files — dropping either half
-            // strands every own-symbol click on the ambient repo-relative
-            // answer, which opens nowhere outside the rut repo).
-            for (const f of srczip.files) {
-                const stamped = await rut.addDefMod(
-                    `file://${path.join(depDir, f.path)}`,
-                    srczip.module,
-                    f.mod_path,
-                    f.src,
-                );
-                assert.ok(
-                    !stamped.error,
-                    `the lane's own file indexes: ${JSON.stringify(stamped)}`,
-                );
             }
-            await walkManifest(path.join(depDir, 'rut.jsonc'));
-            assert.deepStrictEqual(
-                [...mounted].sort(),
-                ['ink', 'ink_host'],
-                'the embedded group mounts with its parent',
-            );
-            const inkUri = `file://${path.join(depDir, 'src/mod.rut')}`;
-            const inkSrc = fs.readFileSync(path.join(depDir, 'src/mod.rut'), 'utf8');
-            await rut.analyze(inkUri, inkSrc);
-            const useLine = inkSrc.split('\n').findIndex((l) => l.includes('use ink_host::'));
-            const target = `file://${path.join(depDir, 'deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut')}`;
-            for (const needle of ['ink_host', 'create_logger', 'logger_log']) {
-                const c = inkSrc.split('\n')[useLine].indexOf(needle);
-                const hits = await rut.definition(inkUri, useLine, c);
-                assert.strictEqual(hits.length, 1, `hop-2 ${needle}: ${JSON.stringify(hits)}`);
-                assert.strictEqual(
-                    hits[0].uri,
-                    target,
-                    `hop-2 ${needle} lands in the embedded group`,
-                );
-            }
-            smokes++;
+            const modTier = await wrut.complete(depUri, 0, 4, depDoc);
+            if (!modTier.map((i) => i.label).includes('gadgets'))
+                bad.push('the module-name tier lacks the walked dep');
+        }
+        smokes++;
 
-            // hop-1, the scaffold's actual gesture: a consumer's `Logger(`
-            // click lands IN the laid tree's own src/mod.rut — a real
-            // openable file:// — never the ambient `rut/ink/...` answer
-            const consumerDoc =
-                'use ink::{ Logger };\nentry fn main() {\n    let log = Logger("hello");\n}\n';
-            const consumerUri = `file://${path.join(ws, 'src', 'mod.rut')}`;
-            await rut.analyze(consumerUri, consumerDoc);
-            const cLines = consumerDoc.split('\n');
-            const ctorLine = cLines.findIndex((l) => l.includes('Logger("hello")'));
-            const ctorCol = cLines[ctorLine].indexOf('Logger(') + 2;
-            const hop1 = await rut.definition(consumerUri, ctorLine, ctorCol);
-            const hop1Own = hop1.filter((l) => l.uri.includes('.rut/deps/ink-'));
-            assert.strictEqual(hop1Own.length, 1, `hop-1 Logger targets: ${JSON.stringify(hop1)}`);
-            assert.ok(
-                !hop1.some((l) => l.uri.startsWith('rut/')),
-                `no ambient repo-relative answer beside the mounted tree: ${JSON.stringify(hop1)}`,
-            );
-            assert.strictEqual(
-                hop1Own[0].uri,
-                `file://${path.join(depDir, 'src/mod.rut')}`,
-                'hop-1 lands in the laid tree',
-            );
-            assert.ok(
-                fs
-                    .readFileSync(hop1Own[0].uri.replace(/^file:\/\//, ''), 'utf8')
-                    .includes('pub class Logger'),
-                'the hop-1 target is the Logger body, read back from disk',
-            );
-            // the binding's null-coercion law: an unanalyzed doc answers []
-            // (the provider never sees null — the TypeError class dies here)
-            assert.deepStrictEqual(
-                await rut.definition('file:///nowhere/x.rut', 0, 5),
-                [],
-                'null definition coerces to []',
-            );
-            assert.deepStrictEqual(
-                await rut.inlayHint(
-                    'file:///nowhere/x.rut',
-                    { line: 0, character: 0 },
-                    { line: 1, character: 0 },
-                ),
-                [],
-                'null inlay coerces to []',
-            );
-
-            // the member click rides the same law: the mounted class's
-            // inherent impl method answers through the dep index (the
-            // engine's impl fallback) — the scaffold's `log.info(…)` gesture.
-            // The member sits on ITS OWN line; the position is the member
-            // ident after the dot (a column mathed off another line clicks
-            // garbage and honestly misses).
-            const memberDoc =
-                'use ink::{ Logger };\nentry fn main() {\n    let log = Logger("hello");\n    log.info("hi");\n}\n';
-            const memberUri = `file://${path.join(ws, 'src', 'member.rut')}`;
-            await rut.analyze(memberUri, memberDoc);
-            const mLines = memberDoc.split('\n');
-            const mLine = mLines.findIndex((l) => l.includes('.info'));
-            const mHits = (
-                await rut.definition(memberUri, mLine, mLines[mLine].indexOf('.info') + 1)
-            ).filter((l) => l.uri.includes('.rut/deps/ink-'));
-            assert.strictEqual(mHits.length, 1, `hop-1 .info targets: ${JSON.stringify(mHits)}`);
-            assert.strictEqual(
-                mHits[0].uri,
-                `file://${path.join(depDir, 'src/mod.rut')}`,
-                'the .info click lands in the laid tree',
-            );
-            assert.ok(
-                fs
-                    .readFileSync(mHits[0].uri.replace(/^file:\/\//, ''), 'utf8')
-                    .includes('pub fn info'),
-                'the .info target is the impl method in the laid tree',
-            );
-            smokes++;
-
-            // the mount: <tmp>/.rut/deps/pouch-<pin12>/ — the pin prefix IS
-            // the content address (same bytes ⇒ same dir, a bump ⇒ a sibling)
-            const pin12 = crypto
-                .createHash('sha256')
-                .update(bundleBytes)
-                .digest('hex')
-                .slice(0, 12);
-            const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-deps-'));
+        {
+            const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-walk-'));
             try {
-                const depDir = path.join(wsRoot, '.rut', 'deps', `pouch-${pin12}`);
-                for (const xf of extracted.files) {
-                    const fp = path.join(depDir, xf.path);
-                    fs.mkdirSync(path.dirname(fp), { recursive: true });
-                    fs.writeFileSync(fp, xf.src);
-                    const stamped = await rut.addDefMod(
-                        `file://${fp}`,
-                        extracted.module,
-                        xf.mod_path,
-                        xf.src,
-                    );
-                    assert.ok(!stamped.error, `extracted file indexes: ${JSON.stringify(stamped)}`);
-                }
-                const pdoc =
-                    'use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec.new();\n}\n';
-                const puri = 'file:///ws/e2e-deps.rut';
-                const pa = await rut.analyze(puri, pdoc);
-                assert.strictEqual(
-                    pa.diags.length,
-                    0,
-                    `extracted-deps probe doc: ${JSON.stringify(pa.diags)}`,
-                );
-
-                // the LEAF click: exactly one location under the extracted
-                // tree, the declaring `Vec` ident of the body file (read back
-                // from DISK — the target is an openable real file)
-                const depLocs = (await rut.definition(puri, ...posOf(pdoc, 'Vec'))).filter((l) =>
-                    l.uri.includes('.rut/deps/pouch-'),
-                );
-                assert.strictEqual(
-                    depLocs.length,
-                    1,
-                    `extracted-dir Vec targets: ${JSON.stringify(await rut.definition(puri, ...posOf(pdoc, 'Vec')))}`,
-                );
-                const bodySrc = fs.readFileSync(depLocs[0].uri.replace(/^file:\/\//, ''), 'utf8');
-                assert.ok(
-                    bodySrc.includes('pub class Vec'),
-                    'the extracted target is the body file',
-                );
-                eqRange(
-                    depLocs,
-                    {
-                        uri: depLocs[0].uri,
-                        range: identAt(bodySrc, /^pub class Vec/, 'Vec'),
-                        len: 3,
-                    },
-                    'extracted pouch leaf (body preferred)',
-                );
-
-                // the PKG-HEAD click: the same extracted root file, top
-                const headLocs = await rut.definition(puri, ...posOf(pdoc, 'pouch'));
-                assert.strictEqual(
-                    headLocs.length,
-                    1,
-                    `pkg head targets: ${JSON.stringify(headLocs)}`,
-                );
-                assert.ok(
-                    headLocs[0].uri.includes('.rut/deps/pouch-') &&
-                        headLocs[0].uri.endsWith('/mod.d.rut'),
-                    `pkg head lands in the extracted tree: ${headLocs[0].uri}`,
-                );
-                assert.deepStrictEqual(
-                    headLocs[0].range,
-                    { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-                    `pkg head opens the file top: ${JSON.stringify(headLocs[0].range)}`,
-                );
-                smokes++;
-
                 // ---- the path-dep lane: a mod-tree dep's REAL files — the
                 // middle segment lands on the `pub mod layout;` edge, the leaf
                 // in the child file ----
@@ -2028,7 +1683,7 @@ async function main() {
         const modUri = 'file:///ws/e2e-mods.rut';
         await dep.analyze(modUri, modDoc);
         // the walked tier: the resolved module's exports
-        const walkTier = await dep.complete(modUri, 0, 'use tools::layout::'.length);
+        const walkTier = await dep.complete(modUri, 0, 'use tools::layout::'.length, modDoc);
         const walkLabels = walkTier.map((i) => i.label);
         for (const want of ['Column', 'mk']) {
             assert.ok(
@@ -2038,7 +1693,7 @@ async function main() {
         }
         // the root tier: the pub mod child offers, the private edge and
         // the child's members never leak
-        const rootTier = await dep.complete(modUri, 0, 'use tools::'.length);
+        const rootTier = await dep.complete(modUri, 0, 'use tools::'.length, modDoc);
         const rootLabels = rootTier.map((i) => i.label);
         assert.ok(
             rootLabels.includes('layout'),
@@ -2060,7 +1715,7 @@ async function main() {
         );
         smokes++;
 
-        // ---- the completion lane's doc-sync ABI (rut_complete_in): the
+        // ---- the completion lane's doc-sync ABI (complete with src): the
         // CURRENT text is stored BEFORE the tiers run, so a stale stored doc
         // (the tail still short the dot — the analyze debounce's window)
         // cannot mask the member tier, and the dot guard holds through the
@@ -2163,133 +1818,6 @@ async function main() {
             }
             smokes++;
         }
-    }
-
-    // ---- plan6 phase 1 (the lock feed): rut_set_lock — the pin ledger
-    // the dep walk feeds from the workspace root's rut.lock BEFORE its
-    // manifest parses. Drives the REAL pair (examples/03-plugin's
-    // committed rut.jsonc + rut.lock) through the BINDING (the exact
-    // feed the crate's read-only walk gives each root) on a fresh
-    // instance: the unlocked parse answers sha256 null (the honest
-    // unpinned refusal), the fed parse stamps the pin, and the whole
-    // url-dep chain lands go-to-definition in the mounted dep tree
-    // — the chain the editor lane was missing. ----
-    {
-        const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
-        const manifest = fs.readFileSync(manifestPath, 'utf8');
-        const lock = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
-        const pouchUrl = manifest.match(/"pouch"\s*:\s*\{\s*"url"\s*:\s*"([^"]+)"/)[1];
-        assert.ok(pouchUrl, 'the fixture manifest carries a pouch url dep');
-        const inst = await RutLsp.load(fs.readFileSync(WASM_PATH));
-        // BEFORE any setLock: the url row answers sha256 null — without a
-        // lock the unpinned refusal stays honest, never a guessed pin
-        const bare = await inst.parseManifest(manifest);
-        assert.ok(!bare.error, `unlocked manifest parse: ${JSON.stringify(bare)}`);
-        assert.strictEqual(
-            bare.deps.find((r) => r.name === 'pouch').source.sha256,
-            null,
-            'the unlocked parse must leave the url row unpinned',
-        );
-        // setLock(<real rut.lock bytes>) answers the ledger size (derived
-        // from the fixture's rows, never a constant); the re-parse stamps
-        // the pin onto the url row — and the pin IS the committed bundle
-        // bytes' sha256 (the mount door's law, from fixture bytes alone)
-        const fed = await inst.setLock(lock);
-        const wantPins = (lock.match(/"pkg"\s*:/g) || []).length;
-        assert.deepStrictEqual(fed, { pins: wantPins }, `setLock envelope: ${JSON.stringify(fed)}`);
-        const pinned = await inst.parseManifest(manifest);
-        assert.ok(!pinned.error, `pinned manifest parse: ${JSON.stringify(pinned)}`);
-        const pouchRow = pinned.deps.find((r) => r.name === 'pouch');
-        assert.strictEqual(pouchRow.source.url, pouchUrl);
-        const lockPouch = lock.match(/\{[^{}]*"pkg"\s*:\s*"pouch"[^{}]*\}/)[0];
-        const pin = lockPouch.match(/"sha256"\s*:\s*"([0-9a-f]{64})"/)[1];
-        assert.strictEqual(pouchRow.source.sha256, pin, 'the lock-sourced pin rides the url row');
-        const bundleBytes = fs.readFileSync(
-            path.join(REPO, 'dist', pouchUrl.match(/rut@([^/]+)\//)[1], 'pouch.rutbundle'),
-        );
-        assert.strictEqual(
-            crypto.createHash('sha256').update(bundleBytes).digest('hex'),
-            pin,
-            'the lock pin matches the committed bundle bytes',
-        );
-        // a malformed lock is the error envelope — and the ledger stands
-        // EMPTY after it (the re-parse answers unpinned, never guessed
-        // pins); the same holds for the miss lane's empty bytes (a folder
-        // with no lock — walkDeps hands over '' to clear the ledger)
-        const badLock = await inst.setLock(
-            '{"format": "rutlock", "format_version": 1, "deps": [{"pkg": "p", "url": "https://x/p.rutbundle", "sha256": "nothex"}]}',
-        );
-        assert.ok(
-            badLock.error?.includes('64 hex digits'),
-            `malformed lock envelope: ${JSON.stringify(badLock)}`,
-        );
-        assert.strictEqual(
-            (await inst.parseManifest(manifest)).deps.find((r) => r.name === 'pouch').source.sha256,
-            null,
-            'a malformed lock must clear the ledger, not keep it',
-        );
-        assert.ok(
-            (await inst.setLock('')).error,
-            'the empty-bytes miss lane answers the error envelope',
-        );
-        assert.strictEqual(
-            (await inst.parseManifest(manifest)).deps.find((r) => r.name === 'pouch').source.sha256,
-            null,
-            'the miss lane must leave the ledger empty',
-        );
-        // the whole chain: extract the PINNED bundle under
-        // .rut/deps/<module>-<pin12>/ — pin12 from the LOCK-SOURCED row —
-        // index through addDefMod/addDefNamed (the same lanes the
-        // crate's store mount rides), and the `use` leaf answers the
-        // file:// location whose content holds the decl
-        const extracted = await inst.extractBundle(bundleBytes);
-        assert.ok(!extracted.error, `extract envelope: ${JSON.stringify(extracted)}`);
-        const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rut-e2e-lock-'));
-        try {
-            const depDir = path.join(wsRoot, '.rut', 'deps', `pouch-${pin.slice(0, 12)}`);
-            for (const xf of extracted.files) {
-                const fp = path.join(depDir, xf.path);
-                fs.mkdirSync(path.dirname(fp), { recursive: true });
-                fs.writeFileSync(fp, xf.src);
-                if (xf.mod_path === null) {
-                    await inst.addDefNamed(`file://${fp}`, extracted.module, xf.src);
-                    continue;
-                }
-                const stamped = await inst.addDefMod(
-                    `file://${fp}`,
-                    extracted.module,
-                    xf.mod_path,
-                    xf.src,
-                );
-                assert.ok(!stamped.error, `extracted file indexes: ${JSON.stringify(stamped)}`);
-            }
-            const pdoc = 'use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec.new();\n}\n';
-            const puri = 'file:///ws/e2e-lock-feed.rut';
-            const pa = await inst.analyze(puri, pdoc);
-            assert.strictEqual(
-                pa.diags.length,
-                0,
-                `lock-feed probe doc: ${JSON.stringify(pa.diags)}`,
-            );
-            const leaf = (await inst.definition(puri, ...posOf(pdoc, 'Vec'))).filter((l) =>
-                l.uri.includes(`.rut/deps/pouch-${pin.slice(0, 12)}`),
-            );
-            assert.strictEqual(
-                leaf.length,
-                1,
-                `lock-fed leaf targets: ${JSON.stringify(await inst.definition(puri, ...posOf(pdoc, 'Vec')))}`,
-            );
-            const body = fs.readFileSync(leaf[0].uri.replace(/^file:\/\//, ''), 'utf8');
-            assert.ok(body.includes('pub class Vec'), 'the lock-fed target holds the decl');
-            eqRange(
-                leaf,
-                { uri: leaf[0].uri, range: identAt(body, /^pub class Vec/, 'Vec'), len: 3 },
-                'lock-fed extracted leaf',
-            );
-        } finally {
-            fs.rmSync(wsRoot, { recursive: true, force: true });
-        }
-        smokes++;
     }
 
     // ---- dep-walk-into-crate phase 2: the injected READ-ONLY env —
@@ -2669,48 +2197,6 @@ async function main() {
             eqKeys(urlRow.source, ['kind', 'url', 'sha256', 'cache_path'], 'url dep source');
         eqKeys(await core.parseManifest('{'), ['error'], 'manifest error envelope');
 
-        const lockText = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
-        eqKeys(await core.setLock(lockText), ['pins'], 'set-lock answer');
-        eqKeys(
-            await core.setLock(
-                '{"format":"rutlock","format_version":1,"deps":[{"pkg":"p","url":"https://x/p.rutbundle","sha256":"nope"}]}',
-            ),
-            ['error'],
-            'lock error envelope',
-        );
-        eqKeys(await core.setDirectDeps(['wiremod']), ['direct'], 'direct-deps answer');
-
-        const stamped = await core.addDefMod(
-            'file:///ws/wire-mod/mod.rut',
-            'wiremod',
-            '',
-            'pub mod child;\nmod hidden;\n',
-        );
-        eqKeys(stamped, ['decls'], 'mod decls');
-        eqKeys(stamped.decls[0], ['name', 'vis'], 'mod decl');
-
-        const bundle = fs.readFileSync(path.join(REPO, 'dist', 'std', 'pouch.rutbundle'));
-        eqKeys(
-            await core.addBundle(bundle),
-            ['module', 'namespace', 'consts', 'files'],
-            'bundle index',
-        );
-        const extracted = await core.extractBundle(bundle);
-        eqKeys(extracted, ['module', 'namespace', 'consts', 'files'], 'extract bundle');
-        eqKeys(extracted.files[0], ['path', 'src', 'mode', 'mod_path'], 'extracted file');
-
-        const zipPath = path.join(REPO, 'dist', 'std', 'calc.zip');
-        if (fs.existsSync(zipPath)) {
-            const zip = await core.extractSrczip(fs.readFileSync(zipPath));
-            eqKeys(
-                zip,
-                ['module', 'namespace', 'consts', 'files', 'manifest', 'embedded'],
-                'extract srczip',
-            );
-            eqKeys(zip.files[0], ['path', 'src', 'mode', 'mod_path'], 'srczip file');
-            if (zip.embedded.length > 0) eqKeys(zip.embedded[0], ['path', 'src'], 'embedded group');
-        }
-
         // the dep walk's envelope — the env-less core above answers the
         // loud error envelope; an env-carrying core answers WalkOut's
         // exact key set (a roots-everywhere-miss world: no rows, but
@@ -2739,11 +2225,11 @@ async function main() {
             `def-within/def-cross/def-std/typeDefinition/` +
             `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
             `refs-shadow/refs-cross/sighelp/` +
-            `manifest-dep-table/manifest-decl+error/named-dep-use-tier/bundle-pouch-surface/` +
-            `extract-deps-leaf+head/path-dep-segments/` +
+            `manifest-dep-table/manifest-decl+error/walked-dep-use-tier/` +
+            `path-dep-segments/` +
             `eof-member+locals/` +
-            `complete-in-doc-sync/check-lane-mismatch+missing-field/` +
-            `lock-feed-unpinned+pinned+extract-leaf/env-injected+env-less/` +
+            `complete-doc-sync/check-lane-mismatch+missing-field/` +
+            `env-injected+env-less/` +
             `dep-walk-store-mount+missing-row+once-hint/dep-engine-debounce+rerun+dispose/wire-shape) ` +
             `through bin/rut-lsp.wasm`,
     );

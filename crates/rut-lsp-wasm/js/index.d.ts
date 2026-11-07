@@ -174,40 +174,6 @@ export interface ModDecls {
   decls: Array<{ name: string; vis: 'pub' | 'mod' }>;
 }
 
-/** `addBundle`'s success envelope */
-export interface BundleIndexed {
-  module: string;
-  namespace: string | null;
-  consts: Array<[string, number]>;
-  files: string[];
-}
-
-/** one extracted file — the unpack WITHOUT indexing */
-export interface BundleExtractedFile {
-  path: string;
-  src: string;
-  mode: 'Decl' | 'Impl';
-  mod_path: string | null;
-}
-
-/** `extractBundle`'s success envelope */
-export interface BundleExtracted {
-  module: string;
-  namespace: string | null;
-  consts: Array<[string, number]>;
-  files: BundleExtractedFile[];
-}
-
-/**
- * `extractSrczip`'s success envelope — the source zip's own package
- * files plus the unpack law's ingredients: the archive's manifest text
- * and the embedded `deps/<identity>/` groups
- */
-export interface SrczipExtracted extends BundleExtracted {
-  manifest: string;
-  embedded: Array<{ path: string; src: string }>;
-}
-
 /**
  * one url dep the read-only walk refused to mount — the informational
  * hint row a host surfaces (the `rut install` recipe itself already
@@ -269,12 +235,7 @@ export class RutLsp {
    * doc-sync lane: completion fires on the keystroke, an analyze
    * debounce may still be pending).
    */
-  complete(
-    uri: string,
-    line: number,
-    character: number,
-    src?: string
-  ): Promise<LspCompletionItem[]>;
+  complete(uri: string, line: number, character: number, src: string): Promise<LspCompletionItem[]>;
 
   /** go-to-definition at an LSP position — `[]` when nothing resolves */
   definition(uri: string, line: number, character: number): Promise<LspLocation[]>;
@@ -302,26 +263,8 @@ export class RutLsp {
   /** parse one `rut.jsonc` — the dep table, or the error envelope */
   parseManifest(text: string): Promise<DepTable | Envelope>;
 
-  /** hand the core the workspace root's `rut.lock` — the pin ledger */
-  setLock(text: string): Promise<{ pins: number } | Envelope>;
-
-  /** hand the core the direct-dep module names (the auto-import gate) */
-  setDirectDeps(names: string[]): Promise<{ direct: number } | Envelope>;
-
-  /** index one dep source file under its module NAME */
-  addDefNamed(uri: string, name: string, src: string): Promise<void>;
-
-  /** index one dep source file under its module NAME at a MOD PATH */
+  /** index one source file under its module NAME at a MOD PATH (the scan lane) */
   addDefMod(uri: string, name: string, modPath: string, src: string): Promise<ModDecls | Envelope>;
-
-  /** index one `.rutbundle` (the archive's own manifest names the module) */
-  addBundle(bytes: Uint8Array): Promise<BundleIndexed | Envelope>;
-
-  /** unpack one `.rutbundle` WITHOUT indexing — the host owns the disk */
-  extractBundle(bytes: Uint8Array): Promise<BundleExtracted | Envelope>;
-
-  /** unpack one SOURCE ZIP without indexing — the source transport's twin */
-  extractSrczip(bytes: Uint8Array): Promise<SrczipExtracted | Envelope>;
 
   /**
    * re-inject the read-only host environment (replace-on-reinject —

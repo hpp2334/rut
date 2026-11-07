@@ -38,7 +38,6 @@ fn go(g: Greeter) -> str {
   assert.deepStrictEqual(a.diags, [], `diags: ${JSON.stringify(a.diags)}`);
   assert.ok(Array.isArray(a.tokens.data) && a.tokens.data.length >= 100, "token stream");
   assert.ok(a.symbols.some((sym) => sym.name === "Greeter"), "document symbols");
-  assert.strictEqual(await core.doc_len(URI), SRC.length, "doc round-trip");
 
   // hover over the `Greeter` type annotation
   const hover = JSON.parse(await core.hover(URI, 6, lines[6].indexOf("Greeter")));
@@ -46,7 +45,7 @@ fn go(g: Greeter) -> str {
   assert.ok(hover.range, "hover range");
 
   // member completion after `g.` — impl method + field
-  const items = JSON.parse(await core.complete(URI, 7, lines[7].indexOf("g.") + 2));
+  const items = JSON.parse(await core.complete(URI, SRC, 7, lines[7].indexOf("g.") + 2));
   const labels = items.map((i) => i.label);
   assert.ok(labels.includes("greet"), `methods complete: ${labels}`);
   assert.ok(labels.includes("name"), `fields complete: ${labels}`);
@@ -56,10 +55,10 @@ fn go(g: Greeter) -> str {
   // the document already uses; a foreign plain offer the compile
   // would reject is a trap, so an unused foreign name never offers)
   await core.add_def("file:///ws/gadgets/lib.rut", "class Widget {\n    id: i32;\n}\n");
-  const honest = JSON.parse(await core.complete(URI, 0, 0));
+  const honest = JSON.parse(await core.complete(URI, SRC, 0, 0));
   assert.ok(!honest.map((i) => i.label).includes("Widget"), "bare tier stays honest without a use");
   JSON.parse(await core.analyze(URI, "use gadgets::{ Widget };\n" + SRC));
-  const bare = JSON.parse(await core.complete(URI, 0, 0));
+  const bare = JSON.parse(await core.complete(URI, "use gadgets::{ Widget };\n" + SRC, 0, 0));
   assert.ok(bare.map((i) => i.label).includes("Widget"), "used workspace name completes");
 
   // a broken doc publishes rut-sourced errors
@@ -99,7 +98,11 @@ fn go(g: Greeter) -> str {
 
   // forget: a closed doc is gone (run last — it closes the main doc)
   await core.forget(URI);
-  assert.strictEqual(await core.doc_len(URI), 0, "doc forgotten");
+  assert.strictEqual(
+    await core.hover(URI, 6, lines[6].indexOf("Greeter")),
+    "null",
+    "doc forgotten — hover answers null"
+  );
 
   console.log("smoke: ALL CHECKS PASSED");
 })().catch((err) => {

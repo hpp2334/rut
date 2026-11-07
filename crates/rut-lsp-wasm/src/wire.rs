@@ -39,18 +39,6 @@ pub struct Analysis {
     pub symbols: Vec<DocumentSymbol>,
 }
 
-/// `set_lock`'s answer — the number of url→pin rows the ledger carried.
-#[derive(Serialize)]
-pub struct Pins {
-    pub pins: usize,
-}
-
-/// `set_direct_deps`'s answer — the accumulated set's size.
-#[derive(Serialize)]
-pub struct Direct {
-    pub direct: usize,
-}
-
 /// one `mod NAME;` declaration a stamped file carries — the host's
 /// mount walk reads its next hop from these.
 #[derive(Serialize)]
@@ -117,56 +105,6 @@ pub struct DepTable {
     pub consts: Vec<(String, f64)>,
     pub deps: Vec<DepRow>,
     pub dev_deps: Vec<DepRow>,
-}
-
-/// one extracted source file: where it lands, its text, the mode it
-/// indexes in, and the mod path it mounts at (`null` for a flat file).
-#[derive(Serialize)]
-pub struct BundleFile {
-    pub path: String,
-    pub src: String,
-    pub mode: &'static str,
-    pub mod_path: Option<String>,
-}
-
-/// `add_bundle`'s answer — the module, its qualified-access head, its
-/// constants, and the entry paths the call indexed.
-#[derive(Serialize)]
-pub struct BundleIndex {
-    pub module: String,
-    pub namespace: Option<String>,
-    pub consts: Vec<(String, f64)>,
-    pub files: Vec<String>,
-}
-
-/// `extract_bundle`'s answer — the editable surface, never an index
-/// write (the host owns the disk).
-#[derive(Serialize)]
-pub struct ExtractBundle {
-    pub module: String,
-    pub namespace: Option<String>,
-    pub consts: Vec<(String, f64)>,
-    pub files: Vec<BundleFile>,
-}
-
-/// one archive-embedded `deps/<identity>/` entry (a source zip's
-/// ride-along group), laid under the extracted tree by the host.
-#[derive(Serialize)]
-pub struct Embedded {
-    pub path: String,
-    pub src: String,
-}
-
-/// `extract_srczip`'s answer — the bundle surface plus the unpack law's
-/// ingredients: the archive's own manifest text and the embedded groups.
-#[derive(Serialize)]
-pub struct ExtractSrczip {
-    pub module: String,
-    pub namespace: Option<String>,
-    pub consts: Vec<(String, f64)>,
-    pub files: Vec<BundleFile>,
-    pub manifest: String,
-    pub embedded: Vec<Embedded>,
 }
 
 /// one url dep the read-only walk refused to mount — the
@@ -258,21 +196,6 @@ impl From<&crate::deps::DepTable> for DepTable {
             consts: t.consts.clone(),
             deps: t.deps.iter().map(DepRow::from).collect(),
             dev_deps: t.dev_deps.iter().map(DepRow::from).collect(),
-        }
-    }
-}
-
-impl BundleFile {
-    /// one `bundle_sources` file at the host's mount lane: the mod path
-    /// rides `bundle_file_mod_path` (the rows-lane root spells `""`, a
-    /// mounted child its `<path>`; a flat file stays `null`), so the
-    /// host never re-derives the mount rule in TypeScript.
-    pub fn from_source(f: &crate::deps::BundleFile) -> BundleFile {
-        BundleFile {
-            path: f.path.clone(),
-            src: f.src.clone(),
-            mode: mode_str(f.mode),
-            mod_path: crate::deps::bundle_file_mod_path(&f.path),
         }
     }
 }

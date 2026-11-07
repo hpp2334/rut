@@ -82,16 +82,13 @@ export class RutLsp {
   }
 
   /**
-   * completions at an LSP position. `src` — the document's CURRENT text
-   * — rides the doc-sync entry (`complete_in`): the text is stored
-   * before the tiers run, so the `.` the user just typed is in the text
-   * they lex even while an analyze debounce is pending.
+   * completions at an LSP position over the document's CURRENT text —
+   * the source always rides the call (the doc-sync law): the text is
+   * stored before the tiers run, so the `.` the user just typed is in
+   * the text they lex even while an analyze debounce is pending.
    */
   async complete(uri, line, character, src) {
-    if (src !== undefined) {
-      return JSON.parse(await this.core.complete_in(uri, src, line, character));
-    }
-    return JSON.parse(await this.core.complete(uri, line, character));
+    return JSON.parse(await this.core.complete(uri, src, line, character));
   }
 
   /** go-to-definition at an LSP position — [] when nothing resolves */
@@ -137,39 +134,9 @@ export class RutLsp {
     return JSON.parse(await this.core.parse_manifest(text));
   }
 
-  /** hand the core the workspace root's `rut.lock` — the pin ledger */
-  async setLock(text) {
-    return JSON.parse(await this.core.set_lock(text));
-  }
-
-  /** hand the core the direct-dep module names (the auto-import gate) */
-  async setDirectDeps(names) {
-    return JSON.parse(await this.core.set_direct_deps(JSON.stringify(names)));
-  }
-
-  /** index one dep source file under its module NAME */
-  async addDefNamed(uri, name, src) {
-    await this.core.add_def_named(uri, name, src);
-  }
-
   /** index one dep source file under its module NAME at a MOD PATH */
   async addDefMod(uri, name, modPath, src) {
     return JSON.parse(await this.core.add_def_mod(uri, name, modPath, src));
-  }
-
-  /** index one `.rutbundle` (the archive's own manifest names the module) */
-  async addBundle(bytes) {
-    return JSON.parse(await this.core.add_bundle(bytes));
-  }
-
-  /** unpack one `.rutbundle` WITHOUT indexing — JS owns the disk */
-  async extractBundle(bytes) {
-    return JSON.parse(await this.core.extract_bundle(bytes));
-  }
-
-  /** unpack one SOURCE ZIP without indexing — the source transport's twin */
-  async extractSrczip(bytes) {
-    return JSON.parse(await this.core.extract_srczip(bytes));
   }
 
   /**

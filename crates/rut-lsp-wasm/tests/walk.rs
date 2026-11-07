@@ -779,7 +779,7 @@ fn direct_deps_accumulate_across_roots() {
     let uri = "file:///ws/walkbare.rut".to_string();
     let doc = "fn main() -> nil {\n}\n";
     take(pool.run_until(lsp.analyze(uri.clone(), doc.to_string())));
-    let items = take(pool.run_until(lsp.complete(uri, 1, 0)));
+    let items = take(pool.run_until(lsp.complete(uri.clone(), doc.to_string(), 1, 0)));
     let arr = items.as_array().unwrap();
     for want in ["alpha_tag", "beta_tag"] {
         let hit = arr
@@ -797,6 +797,28 @@ fn direct_deps_accumulate_across_roots() {
         arr.iter().all(|i| i["label"] != "gamma_tag"),
         "a transitive-only dep never offers: {:?}",
         arr.iter().map(|i| &i["label"]).collect::<Vec<_>>()
+    );
+
+    // … and once the doc `use`s a dep, its fn is a PLAIN bare item —
+    // exactly one offer, no import edit riding (the old push-lane
+    // bare-scope law, re-homed through the walk)
+    let used = "use alpha::{ alpha_tag };
+fn main() -> nil {
+}
+";
+    take(pool.run_until(lsp.analyze(uri.clone(), used.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri, used.to_string(), 1, 0)));
+    let hits: Vec<&serde_json::Value> = items
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["label"] == "alpha_tag")
+        .collect();
+    assert_eq!(hits.len(), 1, "one `alpha_tag` item: {hits:?}");
+    assert!(
+        hits[0]["additionalTextEdits"].is_null(),
+        "the imported fn completes plain: {}",
+        hits[0]
     );
 }
 
@@ -1070,4 +1092,165 @@ fn resolve_twice_answers_the_same_world() {
         "the embedded group stays singular: {twice:?}"
     );
     assert_eq!(io.notes.borrow().len(), 0, "a clean world stays silent");
+}
+
+// ---- the pruned push lane's behaviors, re-homed through the walk ----
+
+/// the named-dep use-path tier (the old `add_def_named` ABI test): a
+/// PATH dep's public names complete at `use toolkit::⏐`, and the
+/// module name itself at `use ⏐` — everything through the env, zero
+/// push entries
+#[test]
+fn a_path_dep_feeds_the_use_path_tier() {
+    let ws = scratch("pathtier");
+    let proj = ws.join("proj");
+    project(
+        &proj,
+        "walkapp",
+        None,
+        "{\"toolkit\": {\"path\": \"../toolkit\"}}",
+        "fn main() -> nil {\n}\n",
+    );
+    put(&ws.join("toolkit"), "rut.jsonc", &manifest("toolkit", ""));
+    put(
+        &ws.join("toolkit"),
+        "src/mod.rut",
+        "pub class Widget {\n    id: i32;\n}\npub fn tag() -> i32 {\n    return 1;\n}\n",
+    );
+    let (lsp, mut pool, io) = boot(&ws.join("store"));
+
+    let out = resolve(&lsp, &mut pool, &[proj.to_str().unwrap()]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+    assert_eq!(io.notes.borrow().len(), 0, "{:?}", io.notes.borrow());
+
+    // `use toolkit::⏐` — the dep's public names
+    let uri = "file:///ws/main.rut".to_string();
+    let doc = "use toolkit::\nfn main() -> nil {\n}\n";
+    take(pool.run_until(lsp.analyze(uri.clone(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri.clone(), doc.to_string(), 0, 13)));
+    let labels: Vec<&str> = items
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["label"].as_str().unwrap())
+        .collect();
+    assert!(
+        labels.contains(&"Widget"),
+        "the dep type completes: {labels:?}"
+    );
+    assert!(labels.contains(&"tag"), "the dep fn completes: {labels:?}");
+    // `use ⏐` — the module-name tier sees the walked dep
+    let mods = take(pool.run_until(lsp.complete(uri, doc.to_string(), 0, 4)));
+    let names: Vec<&str> = mods
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["label"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.contains(&"toolkit"),
+        "the module name completes: {names:?}"
+    );
+}
+
+/// the real std transport through the store (the old `add_bundle`
+/// pouch test): a `.zip` dep whose `unpack/` is exactly what
+/// install's read_srczip lane lays — the surface type-checks and F12
+/// lands in the REAL tree, never a `bundle:` origin
+const POUCH_ZIP: &[u8] = include_bytes!("../../../dist/std/pouch.zip");
+const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip";
+/// self-consistent only — readers never re-hash (meta vouches the pin)
+const POUCH_PIN: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+
+#[test]
+fn a_std_zip_store_dep_mounts_the_pouch_surface() {
+    let ws = scratch("pouch");
+    let home = ws.join("store");
+    let proj = ws.join("proj");
+    project(
+        &proj,
+        "walkapp",
+        Some(&lock_text(vec![("pouch", POUCH_URL, POUCH_PIN)])),
+        &format!("{{\"pouch\": {{\"url\": \"{POUCH_URL}\"}}}}"),
+        "fn main() -> nil {\n}\n",
+    );
+    let dir = store_dep(&home, "pouch", POUCH_PIN, POUCH_URL);
+    for (rel, bytes) in rut_driver::bundle::read_srczip(POUCH_ZIP).expect("the pouch zip unpacks") {
+        let p = dir.join(rut_driver::UNPACK_DIR).join(&rel);
+        std::fs::create_dir_all(p.parent().expect("a parent")).expect("the parent creates");
+        std::fs::write(p, bytes).expect("the file writes");
+    }
+
+    let (lsp, mut pool, io) = boot(&home);
+    let out = resolve(&lsp, &mut pool, &[proj.to_str().unwrap()]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+    assert_eq!(io.notes.borrow().len(), 0, "{:?}", io.notes.borrow());
+
+    // the surface resolves and type-checks through the store mount
+    let uri = "file:///ws/uses-pouch.rut".to_string();
+    let doc = "use pouch::{ Vec };\nfn main() -> nil {\n    let v: Vec<i32> = Vec::new();\n    v.push(1);\n}\n";
+    let a = take(pool.run_until(lsp.analyze(uri, doc.to_string())));
+    assert_eq!(
+        a["diags"].as_array().unwrap().len(),
+        0,
+        "the store surface type-checks: {a}"
+    );
+    // F12 lands in the REAL unpack tree
+    let targets = def_uris(&lsp, &mut pool, doc, "Vec");
+    assert!(!targets.is_empty(), "Vec resolves");
+    let prefix = file_uri(walk_path(
+        &home,
+        &format!(
+            "deps/{}/{}",
+            rut_driver::store_dir("pouch", POUCH_PIN),
+            rut_driver::UNPACK_DIR
+        ),
+    ));
+    assert!(
+        targets.iter().all(|u| u.starts_with(&prefix)),
+        "definitions land under the store's unpack tree: {targets:?}"
+    );
+}
+
+/// the store-mounted mod tree feeds completion AND the segment hover
+/// (the old `add_bundle_mounts_a_mod_tree` law, re-homed)
+#[test]
+fn a_store_mounted_mod_tree_feeds_completion_and_hover() {
+    let ws = scratch("storemods");
+    let home = ws.join("store");
+    let proj = ws.join("proj");
+    project(
+        &proj,
+        "walkapp",
+        Some(&lock_text(vec![("kit", KIT_URL, KIT_PIN)])),
+        &format!("{{\"kit\": {{\"url\": \"{KIT_URL}\"}}}}"),
+        "fn main() -> nil {\n}\n",
+    );
+    kit_store(&home);
+    let (lsp, mut pool, _io) = boot(&home);
+
+    let out = resolve(&lsp, &mut pool, &[proj.to_str().unwrap()]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+
+    // `use kit::extra::⏐` — the mounted child's exports
+    let uri = "file:///ws/uses-kit.rut".to_string();
+    let doc = "use kit::extra::\nfn main() -> nil {\n}\n";
+    take(pool.run_until(lsp.analyze(uri.clone(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri.clone(), doc.to_string(), 0, 16)));
+    let labels: Vec<&str> = items
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["label"].as_str().unwrap())
+        .collect();
+    assert!(labels.contains(&"kit_extra"), "{labels:?}");
+    // the segment hover resolves through the mounted tree (the
+    // well-formed use — the typing-state doc above is completion's)
+    pool.run_until(lsp.forget(uri.clone()));
+    let used = "use kit::extra::{ kit_extra };\nfn main() -> nil {\n}\n";
+    take(pool.run_until(lsp.analyze(uri.clone(), used.to_string())));
+    let h = take(pool.run_until(lsp.hover(uri, 0, 11))); // inside `extra`
+    let md = h["contents"]["value"].as_str().unwrap();
+    assert!(md.contains("file module"), "{md}");
+    assert!(md.contains("extra/mod.rut"), "{md}");
 }

@@ -40,13 +40,13 @@
 //!                                              {diags, tokens, symbols}
 //!   forget(uri)                                drop a closed doc
 //!   hover(uri, line, ch) -> String             LSP Hover JSON or null
-//!   complete(uri, line, ch) -> String          LSP CompletionItem array
-//!   complete_in(uri, src, line, ch) -> String  the same array over the
-//!                                              CURRENT text (stored
-//!                                              first — the doc-sync
-//!                                              lane; completion fires
-//!                                              on the keystroke, the
-//!                                              analyze lane debounces)
+//!   complete(uri, src, line, ch) -> String     LSP CompletionItem array
+//!                                              over the doc's CURRENT
+//!                                              text (stored first — the
+//!                                              doc-sync lane; completion
+//!                                              fires on the keystroke,
+//!                                              the analyze lane
+//!                                              debounces)
 //!   definition(uri, line, ch) -> String        LSP Location array or null
 //!   type_definition(uri, line, ch) -> String   same shape
 //!   inlay(uri, sl, sc, el, ec) -> String       LSP InlayHint array or null
@@ -56,37 +56,13 @@
 //!   parse_manifest(text) -> String             rut.jsonc bytes -> the
 //!                                              dep-table JSON (or the
 //!                                              error envelope)
-//!   set_lock(text) -> String                   rut.lock bytes -> the
-//!                                              url→pin ledger
-//!                                              parse_manifest stamps
-//!                                              onto url rows
-//!   set_direct_deps(names) -> String           the root manifest's dep
-//!                                              names (JSON array) — the
-//!                                              direct-dep stamp the dep
-//!                                              indexes carry (the
-//!                                              auto-import tier's gate)
-//!   add_def_named(uri, name, src)              index a dep source file
-//!                                              under its module NAME
-//!   add_def_mod(uri, name, path, src)          index a dep source at a
-//!                                              MOD PATH; the envelope
+//!   add_def_mod(uri, name, path, src)          index a source file at a
+//!                                              MOD PATH (the workspace
+//!                                              scan lane); the envelope
 //!                                              names the file's own mod
-//!                                              decls (the host's mount
+//!                                              decls (the scan's mount
 //!                                              walk reads its next hop
 //!                                              from them)
-//!   add_bundle(bytes) -> String                .rutbundle bytes -> index
-//!                                              the bundle's own sources;
-//!                                              envelope names module +
-//!                                              entry paths (or the error)
-//!   extract_bundle(bytes) -> String            .rutbundle bytes -> the
-//!                                              editable surface envelope
-//!                                              {module, namespace,
-//!                                              consts, files:[{path,
-//!                                              src, mode, mod_path}]}
-//!                                              — NO indexing, JS owns
-//!                                              the disk
-//!   doc_len(uri) -> u32                        an open doc's stored
-//!                                              length (the smoke's
-//!                                              round-trip check)
 //!
 //! The package the hosts consume is `pkg/`: `wasm-pack build --target
 //! web` writes the generated glue there, then `scripts/build-lsp-pkg.mjs`
@@ -97,16 +73,17 @@
 //! and the JS face's d.ts mirror, locked by `tsc` in every host and by
 //! the extension's wire-shape e2e block.
 //!
-//! These are the deps face: the manifest/bundle plumbing runs through
-//! [`crate::deps`] (pure — bytes in, values out) into the SAME
-//! `state.defs` store `add_def` writes, so a dep's surface resolves
-//! in hover/completion/definition exactly like a workspace file — one
-//! index, no drift. `extract_bundle` is the same plumbing's extract
-//! lane — bytes in, the surface envelope out, NO index write (JS owns
-//! the disk; re-indexing goes back through `add_def`/`add_def_mod`).
-//! `parse_manifest`/`add_bundle`/`extract_bundle` answer with an error
-//! envelope (`{"error": …}`) on bad bytes; the host surfaces it as a
-//! hint, never silent unparsed state.
+//! THE SURFACE LAW — the ABI is exactly three lanes: the provider
+//! queries above; the workspace-scan push (`add_def`/`add_def_mod`/
+//! `parse_manifest` — the host's `findFiles` sees editor ignore
+//! semantics the env cannot); and the dep pull (`set_env` +
+//! `resolve_deps`). NO entry mutates dep state except through the
+//! injected env — the lock feed, the direct-dep stamp, and the named
+//! index lanes are Core internals the walk drives, not messages. The
+//! old push family (`set_lock`, `set_direct_deps`, `add_def_named`,
+//! `add_bundle`, `extract_bundle`, `extract_srczip`, `doc_len`) lived
+//! in the blind-wasm era and is gone; its behaviors survive through
+//! the walk (see `walk` and its tests).
 //!
 //! One deviation from `rut-wasm`'s one-shot model carries over from the
 //! raw ABI: an LSP serves a long-lived editing session, so the instance
@@ -195,7 +172,7 @@ impl Core {
     // same code, so a walked dep and a host-indexed dep can never
     // drift) ----
 
-    /// [`event_loop::Msg::SetLock`]'s body: parse one `rut.lock` into
+    /// the walk's per-root lock feed: parse one `rut.lock` into
     /// the url→pin ledger. Ok = the row count and the ledger standing;
     /// Err = the ledger CLEARED (the honest unpinned refusal, never
     /// half-parsed or stale pins) and the error for the caller to
@@ -214,7 +191,7 @@ impl Core {
         }
     }
 
-    /// [`event_loop::Msg::AddDefNamed`]'s body: index one dep source
+    /// the walk's named-dep index lane: index one dep source
     /// file under its module NAME (replace-by-origin), the direct-dep
     /// marker stamped from the set the way it is at this call.
     pub(crate) fn add_def_named_at(&mut self, uri: &str, name: &str, src: &str) {
@@ -395,23 +372,15 @@ impl RutLsp {
             .await
     }
 
-    /// completions at an LSP position (member after `.`, the use-path and
-    /// qualified-position tiers) — the doc's file-module context rides
-    /// from its stamped twin (see `doc_mods_of`)
-    pub async fn complete(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Complete { uri, line, ch, tx })
-            .await
-    }
-
-    /// completions over the document's CURRENT text — the sync twin of
-    /// `complete`, `analyze`'s uri+src shape: the text is stored FIRST,
-    /// so the tiers lex the text the cursor sits in, dot included.
-    /// The extension debounces `analyze` (~200 ms) while completion
-    /// fires on the keystroke — the stored-only read raced that window
-    /// and answered a stale tail (typing `log.` hit the bare keyword
-    /// dump when the stored doc still ended at `log`).
-    pub async fn complete_in(&self, uri: String, src: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::CompleteIn {
+    /// completions over the document's CURRENT text — `analyze`'s
+    /// uri+src shape: the text is stored FIRST, so the tiers lex the
+    /// text the cursor sits in, dot included. The extension debounces
+    /// `analyze` (~200 ms) while completion fires on the keystroke — a
+    /// stored-only read would race that window and answer a stale tail
+    /// (typing `log.` would hit the bare keyword dump when the stored
+    /// doc still ended at `log`), so the source always rides the call.
+    pub async fn complete(&self, uri: String, src: String, line: u32, ch: u32) -> String {
+        self.text(|tx| event_loop::Msg::Complete {
             uri,
             src,
             line,
@@ -514,32 +483,6 @@ impl RutLsp {
             .await
     }
 
-    /// hand the dep-table face the workspace root's `rut.lock` bytes — the
-    /// url→pin ledger `parse_manifest` stamps onto url rows (the lock is
-    /// the pin's only source; the manifest grammar retired `sha256`).
-    /// Answers `{"pins": N}`, or the `{"error": …}` envelope for a
-    /// malformed lock — the host surfaces it as a hint, and the (empty)
-    /// ledger stands so url rows answer `sha256: null` (the unpinned
-    /// refusal), never guessed pins.
-    pub async fn set_lock(&self, text: String) -> String {
-        self.text(|tx| event_loop::Msg::SetLock { text, tx }).await
-    }
-
-    /// hand the dep face the direct-dep module names — the open
-    /// document's own package name plus every dep row its ROOT manifest
-    /// declares. Every dep index named here stamps `direct_dep` (the
-    /// auto-import tier's gate): `add_def_named` / `add_def_mod`
-    /// / `add_bundle` consult the set at index time, so the host
-    /// calls this once per root manifest BEFORE mounting its rows. The
-    /// text is a JSON array of names (`["pouch", "calc"]`); names
-    /// ACCUMULATE (a set — multi-folder walks and re-walks re-add the
-    /// same names). Answers `{"direct": N}` (the set size), or the error
-    /// envelope for malformed JSON.
-    pub async fn set_direct_deps(&self, names_json: String) -> String {
-        self.text(|tx| event_loop::Msg::SetDirectDeps { names_json, tx })
-            .await
-    }
-
     /// hand the core the READ-ONLY host environment — one object
     /// carrying `read` / `readDir` / `isDir` / `notify` (the JS face's
     /// `HostEnv`, `js/index.d.ts`). The four functions are cached off
@@ -563,7 +506,7 @@ impl RutLsp {
     /// moved into the crate): one JSON array of workspace-root paths
     /// in, the walk's answer out. Per root: its `rut.lock` feeds the
     /// pin ledger, its `rut.jsonc` walks — entries and mod trees index
-    /// through the SAME lanes `add_def_named` / `add_def_mod` run, path
+    /// through the SAME index lanes the workspace scan uses, path
     /// rows recurse cycle-safe under the depth/file budgets, and url
     /// rows mount from the global dep store (`$RUT_HOME/deps`, the
     /// address rut-driver derives) when its `meta.json` vouches the
@@ -579,20 +522,6 @@ impl RutLsp {
         };
         self.text(move |tx| event_loop::Msg::ResolveDeps { roots, tx })
             .await
-    }
-
-    /// index one dep source file under its module NAME — `deps::index_dep`
-    /// into the same store `add_def` writes (re-indexing an origin
-    /// replaces its entry), so `use <name>::` resolves it like any index.
-    /// The mode rides the URI convention (`mode_of`, identical to
-    /// `add_def`); namespace/consts have no voice here — a dep
-    /// needing them indexes through `add_bundle`, whose manifest is in
-    /// the bytes. The direct-dep marker stamps from the host's set.
-    /// The await is ordering only.
-    pub async fn add_def_named(&self, uri: String, name: String, src: String) {
-        let _ = self
-            .rpc(|tx| event_loop::Msg::AddDefNamed { uri, name, src, tx })
-            .await;
     }
 
     /// index one dep source file under its module NAME at a MOD PATH —
@@ -617,55 +546,6 @@ impl RutLsp {
             tx,
         })
         .await
-    }
-
-    /// unpack one `.rutbundle` — `deps::bundle_sources` reads the
-    /// archive's own manifest, then each entry source indexes under the
-    /// module NAME the bundle carries (origin `bundle:<module>/<path>`,
-    /// replace-by-origin like every index). The envelope names the
-    /// module + the entry paths indexed, or the error — a
-    /// corrupt/foreign archive never lands bytes. The bytes param is
-    /// owned (`Vec<u8>`): the archive is a zip, not text.
-    pub async fn add_bundle(&self, bytes: Vec<u8>) -> String {
-        self.text(|tx| event_loop::Msg::AddBundle { bytes, tx })
-            .await
-    }
-
-    /// unpack one `.rutbundle` into the envelope WITHOUT indexing — the
-    /// pure-extract twin of `add_bundle`: bytes in, the editable
-    /// surface out as `{ module, namespace, consts, files: [{ path, src,
-    /// mode, mod_path }] }`. JS owns the disk: the extension writes the
-    /// files and re-indexes them through `add_def`/`add_def_mod`
-    /// (real `file://` origins, the go-to-definition face), so this lane
-    /// has NO index side effect. `mod_path` rides per file
-    /// (`deps::bundle_file_mod_path` — the rows-lane root spells `""`, a
-    /// mounted child its `<path>`; a flat file stays `null`), so the host
-    /// never re-derives the mount rule in TypeScript. A corrupt/foreign
-    /// archive is the error envelope, never bytes.
-    pub async fn extract_bundle(&self, bytes: Vec<u8>) -> String {
-        self.text(|tx| event_loop::Msg::ExtractBundle { bytes, tx })
-            .await
-    }
-
-    /// A SOURCE-ZIP cache entry's extract — the source transport's editor
-    /// face: the zip's own package files (`src/**`) as the editable tree,
-    /// each with its mod path derived from the `src/` shell (`src/mod.rut`
-    /// → `""` the root, `src/a/mod.rut` → `"a"`, `src/a.rut` → `"a"`).
-    /// The embedded `deps/<identity>/` trees belong to other pkgs and stay
-    /// out (the consumer's own dep rows cover them).
-    pub async fn extract_srczip(&self, bytes: Vec<u8>) -> String {
-        self.text(|tx| event_loop::Msg::ExtractSrczip { bytes, tx })
-            .await
-    }
-
-    /// an open doc's stored text length — the smoke test's round-trip
-    /// check. A dropped loop answers 0 — the doc's length is unknowable,
-    /// which is already this entry's unknown-doc answer.
-    pub async fn doc_len(&self, uri: String) -> u32 {
-        match self.rpc(|tx| event_loop::Msg::DocLen { uri, tx }).await {
-            Ok(event_loop::Reply::Len(n)) => n,
-            _ => 0,
-        }
     }
 }
 
