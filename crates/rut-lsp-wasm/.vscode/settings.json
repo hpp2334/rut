@@ -1,0 +1,12 @@
+{
+    // The WASM32 view of this crate: opening THIS folder as the
+    // workspace root analyzes it for the target it actually ships as
+    // — the spawn_local half lights up, the native test seams
+    // (spawn_native / set_env_io) grey instead. Opening the REPO ROOT
+    // stays native (the 236-test lane); this file is inert there.
+    //
+    // Deliberately NOT `.cargo/config.toml`: that would retarget CLI
+    // cargo runs under this dir too (cargo nextest here would build
+    // wasm32 and the native tests could not run). Editor-scoped only.
+    "rust-analyzer.cargo.target": "wasm32-unknown-unknown"
+}
