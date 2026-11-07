@@ -8,5 +8,6 @@ use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
     let p = parse_with_recover(src, mode, ParseOpts::default());
-    (p.ast, p.ast.errors().to_vec())
+    let diags = p.ast.errors().to_vec();
+    (p.ast, diags)
 }

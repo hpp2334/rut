@@ -202,7 +202,10 @@ impl StmtFrame {
                         p.bump();
                         true
                     };
-                    // `let (a, b) = ..` — tuple destructuring
+                    // `let (a, b) = ..` — tuple destructuring; the row's
+                    // binding name is the FIRST list member (no extra
+                    // token is consumed — v1's shape)
+                    let mut destructure_first: Option<Name> = None;
                     let destructure = if matches!(p.tok(), Tok::LParen) {
                         p.bump();
                         let mut names = Vec::new();
@@ -210,6 +213,9 @@ impl StmtFrame {
                             let Some(n) = p.expect_ident("a binding name") else {
                                 return Step::Pop(Done::Failed);
                             };
+                            if destructure_first.is_none() {
+                                destructure_first = Some(n);
+                            }
                             names.push(n.id);
                             if !p.eat_punct(Tok::Comma) {
                                 break;
@@ -223,16 +229,8 @@ impl StmtFrame {
                     } else {
                         None
                     };
-                    let name = match &destructure {
-                        Some(_) => {
-                            // the destructure list's first name is the row's
-                            // binding name (v1's shape); its span rides
-                            let _ = p.span();
-                            match p.expect_ident("a binding name") {
-                                Some(n) => n,
-                                None => return Step::Pop(Done::Failed),
-                            }
-                        }
+                    let name = match destructure_first {
+                        Some(n) => n,
                         None => {
                             let Some(name) = p.expect_ident("a binding name") else {
                                 return Step::Pop(Done::Failed);
