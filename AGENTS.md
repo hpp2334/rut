@@ -14,6 +14,31 @@ and `cargo nextest run`. Practical consequences:
   `#[allow(...)]` with a one-line reason is the house style (grep for
   existing examples before inventing wording).
 
+## Frontend layering: one parse entry, lsp-wasm talks only to rut-semantic
+
+**Call the layer whose abstraction you consume.** Document semantics
+(classify, symbols, mode derivation, position math) → `rut-semantic`.
+Syntax only (reprint, transform) → the AST facade
+`rut_parser::parse_opts` (fmt does exactly this). Nobody outside
+`rut-parser` drives `normalize → lex → parse` by hand.
+
+- **The AST artifact law**: `Ast` stores only what is NOT a pure
+  function of its parts — the nodes and the text its spans index
+  (`ast.src`, normalized; the tree is self-contained). The leaf layer
+  (tokens + comments) is `rut_lexer::lexer::lex_normalized(&src,
+  collect)` away, one deterministic linear pass. `parse_opts`'s
+  `recover` (default OFF — `fail_fast ≡ !recover`) buys the total tree
+  + every diag; off = first diag only, no tree.
+- **`rut-lsp-wasm`'s `[dependencies]` carries NO `rut-lexer` /
+  `rut-parser`** — that list is the law's enforcement. Its ONLY
+  frontend is `rut-semantic` (`ParsedDoc::parse(uri, src)` — mode
+  derived, editor opts baked); `rut-ast` stays as shared tree
+  vocabulary, `rut-driver`/`rut-core` are other lanes. The grammar/
+  corpus tests may drive the parser via `[dev-dependencies]` (the
+  sanctioned seam, like the futures LocalPool). `rut_parser::parse`
+  (the `{recover: true}` shorthand) has no callers outside its own
+  crate's tests.
+
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 
 When a task needs a REAL browser (driving the demo playground, the

@@ -208,7 +208,6 @@ fn tag_dep() -> DefIndex {
         "gadgets",
         "file:///deps/gadgets/lib.rut",
         "pub struct Widget {\nid: i32;\n}\npub fn tag() -> i32 { return 1; }\n",
-        rut_parser::Mode::Impl,
         None,
         &[],
     );
@@ -429,7 +428,6 @@ fn use_path_completion_lists_the_dep_namespace_shape() {
         "calc",
         "file:///deps/calc.d.rut",
         src,
-        rut_parser::Mode::Decl,
         Some("Math"),
         &consts,
     );
@@ -758,7 +756,6 @@ fn colon2_completion_lists_the_namespace_statics() {
         "calc",
         "file:///deps/calc.d.rut",
         src,
-        rut_parser::Mode::Decl,
         Some("Math"),
         &consts,
     );

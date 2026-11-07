@@ -29,12 +29,12 @@ use ls_types::{
 };
 
 use rut_ast::ast::*;
-use rut_lexer::token::Token;
+use rut_semantic::Token;
 
 use crate::hover::lookup::{self, recv_type};
 use crate::hover::types::{head_of_ty, DefIndex, FnDef};
 use crate::hover::{bindings, infer, BindKind, Binding};
-use crate::line_index::LineIndex;
+use rut_semantic::LineIndex;
 
 /// everything one inlay query needs — the same `doc_ctx` pipeline the
 /// other queries ride, plus the line index (byte spans ⇄ LSP positions

@@ -24,13 +24,15 @@ crate-type = ["cdylib", "rlib"]
 # run in the workspace's native nextest lane — and wasm32-clean,
 # proven by the CI lane.
 [dependencies]
-# the frontend: tokens, ast, parser, the classifier, and the checker's
-# run chain (`query/check` assembles RutRun package groups)
-rut-core = { path = "../rut-core" }
-rut-lexer = { path = "../rut-lexer" }
-rut-ast = { path = "../rut-ast" }
-rut-parser = { path = "../rut-parser" }
+# THE LAYER LAW — this crate's ONLY frontend is rut-semantic (the
+# document layer: ParsedDoc, classify, symbols, mode derivation, the
+# position math). NO rut-lexer / rut-parser: nobody here drives
+# normalize → lex → parse by hand. rut-ast stays as shared tree
+# VOCABULARY (hover walks trees); rut-driver carries the manifest/
+# bundle bytes; rut-core the checker's run chain.
 rut-semantic = { path = "../rut-semantic" }
+rut-ast = { path = "../rut-ast" }
+rut-core = { path = "../rut-core" }
 # the manifest/bundle bridge (`deps`): parse_manifest + the STORE-only
 # zip reader live here, and the crate is wasm32-clean (rut-wasm already
 # builds it for the shim) — pure bytes in, values out
@@ -69,6 +71,11 @@ wasm-bindgen-futures = "0.4"
 futures = { version = "0.3", features = ["executor"] }
 
 [dev-dependencies]
+# the TEST seam: the grammar/corpus tests drive the parser directly —
+# production code never may (the [dependencies] block above is the law;
+# this block is the sanctioned exception, like the futures LocalPool)
+rut-parser = { path = "../rut-parser" }
+rut-lexer = { path = "../rut-lexer" }
 # the mod-carrying bundle fixture is packed through the same writer the
 # CLI uses (wasm32-clean — it rides the main graph already)
 rut-driver = { path = "../rut-driver" }

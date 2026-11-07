@@ -4,21 +4,16 @@
 
 use ls_types::*;
 use rut_ast::ast::Ast;
-use rut_lexer::diag::Diag;
-use rut_lexer::lexer::{lex, normalize};
-use rut_lexer::span::Span;
-use rut_lexer::token::Token;
-use rut_parser::{parse, Mode};
+use rut_semantic::{Diag, LineIndex, Span, Token};
 use std::str::FromStr;
 
 use crate::completion;
 use crate::definition;
 use crate::hover;
 use crate::inlay;
-use crate::line_index::LineIndex;
 use crate::references;
-use crate::semantic::{self, RawSymbol, SymKind, TokenType};
 use crate::signature_help;
+use rut_semantic::{RawSymbol, SymKind, TokenType};
 
 pub struct Analysis {
     pub diags: Vec<Diagnostic>,
@@ -33,24 +28,29 @@ pub struct Analysis {
 /// convention); re-exported so the internal callers keep their spelling
 pub use rut_semantic::mode_of;
 
-pub fn analyze(src: &str, mode: Mode) -> Analysis {
-    let src = normalize(src);
-    let (toks, _) = lex(&src);
-    let (ast, diags) = parse(&src, mode);
-    let index = LineIndex::new(&src);
-    let spans = semantic::classify(&toks, &ast);
-    let tokens = encode(&spans, &src, &index);
-    let symbols = to_document_symbols(semantic::symbols(&toks, &ast), &src, &index);
-    let diags = diags
-        .iter()
-        .map(|d| to_diagnostic(d, &src, &index))
-        .collect();
+/// one ParsedDoc → the LSP `Analysis` envelope (no URI wiring — the
+/// stamped twin below owns that)
+fn analysis_of(doc: &rut_semantic::ParsedDoc) -> Analysis {
+    let src = doc.src();
     Analysis {
-        diags,
-        tokens,
-        symbols,
-        index: hover::index(&src, &ast, &toks),
+        diags: doc
+            .diags
+            .iter()
+            .map(|d| to_diagnostic(d, src, &doc.lines))
+            .collect(),
+        tokens: encode(&doc.spans, src, &doc.lines),
+        symbols: to_document_symbols(doc.symbols.clone(), src, &doc.lines),
+        index: hover::index(src, &doc.ast, &doc.toks),
     }
+}
+
+/// the degenerate-URI fallback (a uri that fails to parse as `Uri`
+/// still analyzes — origin stamped from the raw string, no related-info
+/// wiring)
+pub fn analyze_unstamped(uri: &str, src: &str) -> Analysis {
+    let mut a = analysis_of(&rut_semantic::ParsedDoc::parse(uri, src));
+    a.index.origin = uri.to_string();
+    a
 }
 
 // ---- spans -> LSP ranges ----
@@ -166,8 +166,8 @@ pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnos
 
 /// The server's entry point: `analyze` + URI wiring for related info
 /// and hover provenance.
-pub fn analyze_at(uri: &Uri, src: &str, mode: Mode) -> Analysis {
-    let mut a = analyze(src, mode);
+pub fn analyze_at(uri: &Uri, src: &str) -> Analysis {
+    let mut a = analysis_of(&rut_semantic::ParsedDoc::parse(uri.as_str(), src));
     set_related_uri(&mut a.diags, uri);
     a.index.origin = uri.as_str().to_string();
     a
@@ -182,19 +182,22 @@ pub fn analyze_at(uri: &Uri, src: &str, mode: Mode) -> Analysis {
 /// per-query pipeline: normalize → lex → parse → the document's index
 /// (origin stamped). The queries below only add position + lookup.
 fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
-    let normalized = normalize(src);
-    let (toks, _) = lex(&normalized);
-    let (ast, _) = parse(&normalized, mode_of(uri));
-    let doc = index_at(uri, src);
-    (normalized, toks, ast, doc)
+    // ONE derivation per query: the facade parses (mode derived from
+    // the uri) and the hover index builds over its parts — the old
+    // shape parsed the same text twice (its own parse + index_at's)
+    let d = rut_semantic::ParsedDoc::parse(uri, src);
+    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
+    idx.origin = uri.to_string();
+    let rut_semantic::ParsedDoc { ast, toks, .. } = d;
+    // one String clone per query — the consumers want the text and the
+    // tree as separate values (the parse itself dwarfs this)
+    (ast.src.clone(), toks, ast, idx)
 }
 
 /// the definition index for one document (origin stamped with `uri`)
 pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
-    let normalized = normalize(src);
-    let (toks, _) = lex(&normalized);
-    let (ast, _) = parse(&normalized, mode_of(uri));
-    let mut idx = hover::index(&normalized, &ast, &toks);
+    let d = rut_semantic::ParsedDoc::parse(uri, src);
+    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
     idx.origin = uri.to_string();
     idx
 }
@@ -321,9 +324,7 @@ pub fn type_definition_at(
 /// files over their indexed source (doc-sized files; the per-query
 /// re-parse is the house style — hover already rides it)
 pub(crate) fn parse_at(uri: &str, src: &str) -> (Vec<Token>, Ast) {
-    let normalized = normalize(src);
-    let (toks, _) = lex(&normalized);
-    let (ast, _) = parse(&normalized, mode_of(uri));
+    let rut_semantic::ParsedDoc { ast, toks, .. } = rut_semantic::ParsedDoc::parse(uri, src);
     (toks, ast)
 }
 

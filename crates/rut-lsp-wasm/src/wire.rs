@@ -145,10 +145,10 @@ impl From<&crate::walk::WalkOut> for WalkOut {
 
 /// the entry-source mode as the envelope spells it (the variant name —
 /// the manifest's entry key decided it, `entry.type` → Decl).
-pub fn mode_str(m: rut_parser::Mode) -> &'static str {
+pub fn mode_str(m: rut_semantic::Mode) -> &'static str {
     match m {
-        rut_parser::Mode::Decl => "Decl",
-        rut_parser::Mode::Impl => "Impl",
+        rut_semantic::Mode::Decl => "Decl",
+        rut_semantic::Mode::Impl => "Impl",
     }
 }
 

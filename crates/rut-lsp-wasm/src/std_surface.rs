@@ -71,92 +71,34 @@ pub fn indexes() -> Vec<DefIndex> {
         (
             CORE_LABEL,
             CORE,
-            rut_parser::Mode::Decl,
             "rut/core/src/core.d.rut",
             &[] as &[StdFile],
         ),
-        (
-            "calc_host",
-            CALC_HOST,
-            rut_parser::Mode::Decl,
-            "rut/calc_host/src/calc.d.rut",
-            &[],
-        ),
-        (
-            "calc",
-            CALC,
-            rut_parser::Mode::Impl,
-            "rut/calc/src/mod.rut",
-            &[],
-        ),
-        (
-            "nmap_host",
-            NMAP_HOST,
-            rut_parser::Mode::Decl,
-            "rut/nmap_host/src/nmap.d.rut",
-            &[],
-        ),
-        (
-            "ink_host",
-            INK_HOST,
-            rut_parser::Mode::Decl,
-            "rut/ink_host/src/ink_host.d.rut",
-            &[],
-        ),
+        ("calc_host", CALC_HOST, "rut/calc_host/src/calc.d.rut", &[]),
+        ("calc", CALC, "rut/calc/src/mod.rut", &[]),
+        ("nmap_host", NMAP_HOST, "rut/nmap_host/src/nmap.d.rut", &[]),
+        ("ink_host", INK_HOST, "rut/ink_host/src/ink_host.d.rut", &[]),
         (
             "bench_cross",
             BENCH_CROSS,
-            rut_parser::Mode::Decl,
             "rut/bench-cross/src/bench_cross.d.rut",
             &[],
         ),
         (
             "strbuild_host",
             STRBUILD_HOST,
-            rut_parser::Mode::Decl,
             "rut/strbuild_host/src/strbuild_host.d.rut",
             &[],
         ),
-        (
-            "pouch",
-            POUCH,
-            rut_parser::Mode::Impl,
-            "rut/pouch/src/mod.rut",
-            &[],
-        ),
-        (
-            "nmapset",
-            NMAPSET,
-            rut_parser::Mode::Impl,
-            "rut/nmapset/src/mod.rut",
-            &[],
-        ),
-        (
-            "json",
-            JSON,
-            rut_parser::Mode::Impl,
-            "rut/json/src/mod.rut",
-            &[],
-        ),
-        (
-            "ink",
-            INK,
-            rut_parser::Mode::Impl,
-            "rut/ink/src/mod.rut",
-            &[],
-        ),
-        (
-            "strbuild",
-            STRBUILD,
-            rut_parser::Mode::Impl,
-            "rut/strbuild/src/mod.rut",
-            &[],
-        ),
+        ("pouch", POUCH, "rut/pouch/src/mod.rut", &[]),
+        ("nmapset", NMAPSET, "rut/nmapset/src/mod.rut", &[]),
+        ("json", JSON, "rut/json/src/mod.rut", &[]),
+        ("ink", INK, "rut/ink/src/mod.rut", &[]),
+        ("strbuild", STRBUILD, "rut/strbuild/src/mod.rut", &[]),
         // the host-surface mod tree: root + each child Decl file
         (
             "myhost",
             MYHOST,
-            rut_parser::Mode::Decl,
             "rut/myhost/src/myhost.d.rut",
             &[
                 StdFile {
@@ -173,19 +115,13 @@ pub fn indexes() -> Vec<DefIndex> {
         ),
     ]
     .into_iter()
-    .flat_map(|(origin, src, mode, src_path, children)| {
+    .flat_map(|(origin, src, src_path, children)| {
         let mut out = Vec::with_capacity(1 + children.len());
         // the root file's index (mod_path None answers the root)
-        out.push(std_index(origin, src, mode, src_path, None));
+        out.push(std_index(origin, src, src_path, None));
         // each child Decl file, its mod path stamped
         for f in children {
-            out.push(std_index(
-                origin,
-                f.src,
-                rut_parser::Mode::Decl,
-                f.src_path,
-                Some(f.mod_path),
-            ));
+            out.push(std_index(origin, f.src, f.src_path, Some(f.mod_path)));
         }
         out
     })
@@ -195,17 +131,11 @@ pub fn indexes() -> Vec<DefIndex> {
 /// One std pkg file's definition index — the ordinary hover pass, the
 /// origin stamped with the pkg's TRUE repo-relative source path, the
 /// (module, mod_path) pair naming where it stands.
-fn std_index(
-    origin: &str,
-    src: &str,
-    mode: rut_parser::Mode,
-    src_path: &str,
-    mod_path: Option<&str>,
-) -> DefIndex {
-    let src = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&src);
-    let (ast, _) = rut_parser::parse(&src, mode);
-    let mut idx = hover::index(&src, &ast, &toks);
+fn std_index(origin: &str, src: &str, src_path: &str, mod_path: Option<&str>) -> DefIndex {
+    // the mode derives from the src_path — every std file obeys the
+    // filename convention; the table's explicit column was redundancy
+    let doc = rut_semantic::ParsedDoc::parse(src_path, src);
+    let mut idx = hover::index(doc.src(), &doc.ast, &doc.toks);
     // the std surface is the PUBLIC face (the hashmap-surface
     // batch): nmapset's internals stay off it — its lane classes
     // are `pub`-less in the source now, and a pub-less type never
@@ -223,10 +153,9 @@ fn std_index(
     idx.module = Some(origin.to_string());
     idx.mod_path = mod_path.map(|p| p.to_string());
     // the mode rides too — `Decl` for the `.d.rut` surfaces, `Impl`
-    // for the root-module bodies (the same split `analysis::mode_of`
-    // speaks for open documents); the definition layer's
-    // body-over-decl preference reads it
-    idx.mode = Some(mode);
+    // for the root-module bodies (the filename convention's own split);
+    // the definition layer's body-over-decl preference reads it
+    idx.mode = Some(rut_semantic::mode_of(src_path));
     // the std surface rides every chain as an ambient DEP lane: the
     // auto-import tier offers its names wherever the doc's manifest
     // stands (the editor's std is the dist's public face — the same

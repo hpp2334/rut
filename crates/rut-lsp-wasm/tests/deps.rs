@@ -403,7 +403,6 @@ pub host fn sqrt(x: f64) -> f64;
         "calc",
         "file:///deps/calc.d.rut",
         src,
-        Mode::Decl,
         Some("Math"),
         &consts,
     );
@@ -446,7 +445,6 @@ fn index_dep_without_namespace_mints_nothing() {
         "pouch",
         "file:///deps/pouch.rut",
         "class Vec<T> {\n}\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -462,7 +460,6 @@ fn index_dep_mod_stamps_the_mod_path() {
         "file:///deps/gadgets/layout/mod.rut",
         "layout",
         "pub struct Column {\n    w: i32;\n}\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -474,7 +471,6 @@ fn index_dep_mod_stamps_the_mod_path() {
         "file:///deps/gadgets/mod.rut",
         "",
         "pub mod layout;\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -500,15 +496,7 @@ fn dep_impl_methods_ride_the_dep_index() {
         "    pub fn info(self, msg: str) -> nil { logger_log(self.internal, 1, msg); }\n",
         "}\n",
     );
-    let idx = index_dep_mod(
-        "ink",
-        "file:///deps/ink/src/mod.rut",
-        "",
-        INK,
-        Mode::Impl,
-        None,
-        &[],
-    );
+    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK, None, &[]);
     let info = idx.fns.iter().find(|f| f.name == "info");
     assert_eq!(
         info.map(|f| f.owner.as_deref()),

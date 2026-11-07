@@ -2,8 +2,8 @@
 //! verbatim signature slices, doc lines, and spans for rendering.
 
 use rut_ast::ast::{AnyTy, Ast, NodeHandle, TypeKind, Vis};
-use rut_lexer::span::Span;
-use rut_parser::Mode;
+use rut_semantic::Mode;
+use rut_semantic::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TyForm {
@@ -47,7 +47,7 @@ impl TyForm {
     }
 }
 
-use crate::line_index::LineIndex;
+use rut_semantic::LineIndex;
 
 #[derive(Debug, Clone)]
 pub struct MemberSrc {

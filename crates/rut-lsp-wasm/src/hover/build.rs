@@ -17,15 +17,15 @@ type PendingLet = (
     Vis,
     Span,
 );
-use rut_lexer::span::Span;
-use rut_lexer::token::{Tok, Token};
+use rut_semantic::Span;
+use rut_semantic::{Tok, Token};
 
 use super::bindings::ident_span;
 use super::infer;
 use super::types::{
     ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef,
 };
-use crate::line_index::LineIndex;
+use rut_semantic::LineIndex;
 
 /// `line` of a byte offset, 1-based
 fn line_of(src: &str, lo: u32) -> u32 {
@@ -221,7 +221,7 @@ fn enum_members(
             continue;
         }
         let Tok::Ident(text) = &t.tok else { continue };
-        if rut_parser::is_reserved_kw(text) {
+        if rut_semantic::is_reserved_kw(text) {
             continue;
         }
         if k < expected.len() && text == expected[k] {
@@ -584,7 +584,7 @@ pub fn index_items(
                         continue;
                     }
                     let Tok::Ident(text) = &t.tok else { continue };
-                    if rut_parser::is_reserved_kw(text) {
+                    if rut_semantic::is_reserved_kw(text) {
                         continue;
                     }
                     if segs_left > 0 {

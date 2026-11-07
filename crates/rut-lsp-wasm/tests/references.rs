@@ -3,8 +3,8 @@ use rut_lexer::token::Token;
 use rut_lsp_wasm::definition;
 use rut_lsp_wasm::definition::DefLocation;
 use rut_lsp_wasm::hover::DefIndex;
-use rut_lsp_wasm::line_index::LineIndex;
 use rut_lsp_wasm::references::*;
+use rut_lsp_wasm::LineIndex;
 use rut_parser::{parse, Mode};
 
 const DOC: &str = "file:///t/main.rut";

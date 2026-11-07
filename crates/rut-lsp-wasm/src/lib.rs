@@ -118,9 +118,12 @@ pub use query::{analysis, check, completion, definition, inlay, references, sign
 pub mod deps;
 pub mod env;
 pub mod hover;
-pub mod line_index;
+pub use rut_semantic::LineIndex;
 pub mod mods;
-pub mod semantic;
+// the classifier/document layer — re-exported under the crate's
+// historical `semantic` path so the queries keep one spelling (the
+// crate's ONLY frontend: no lexer/parser dep, see Cargo.toml)
+pub use rut_semantic as semantic;
 pub mod std_surface;
 
 // ---- the language core's state (one instance per editing session) ----
@@ -195,8 +198,7 @@ impl Core {
     /// file under its module NAME (replace-by-origin), the direct-dep
     /// marker stamped from the set the way it is at this call.
     pub(crate) fn add_def_named_at(&mut self, uri: &str, name: &str, src: &str) {
-        let mut idx =
-            crate::deps::index_dep(name, uri, src, crate::analysis::mode_of(uri), None, &[]);
+        let mut idx = crate::deps::index_dep(name, uri, src, None, &[]);
         idx.direct_dep = self.direct_deps.contains(name);
         self.replace_by_origin(uri, idx);
     }
@@ -213,15 +215,7 @@ impl Core {
         mod_path: &str,
         src: &str,
     ) -> Vec<wire::ModDecl> {
-        let mut idx = crate::deps::index_dep_mod(
-            name,
-            uri,
-            mod_path,
-            src,
-            crate::analysis::mode_of(uri),
-            None,
-            &[],
-        );
+        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, None, &[]);
         idx.direct_dep = self.direct_deps.contains(name);
         let decls: Vec<wire::ModDecl> = idx
             .mods

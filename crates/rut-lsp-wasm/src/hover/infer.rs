@@ -9,7 +9,7 @@
 //! A miss is `None` — never wrong text.
 
 use rut_ast::ast::*;
-use rut_lexer::token::IntSuffix;
+use rut_semantic::IntSuffix;
 
 use super::bindings::{elem_ty, resolve, Binding};
 use super::lookup::find_ty;
@@ -224,10 +224,10 @@ fn int_suffix(sfx: IntSuffix) -> &'static str {
     }
 }
 
-fn float_suffix(sfx: rut_lexer::token::FloatSuffix) -> &'static str {
+fn float_suffix(sfx: rut_semantic::FloatSuffix) -> &'static str {
     match sfx {
-        rut_lexer::token::FloatSuffix::F32 => "f32",
-        rut_lexer::token::FloatSuffix::F64 => "f64",
+        rut_semantic::FloatSuffix::F32 => "f32",
+        rut_semantic::FloatSuffix::F64 => "f64",
     }
 }
 

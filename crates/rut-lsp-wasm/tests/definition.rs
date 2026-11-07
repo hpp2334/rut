@@ -3,8 +3,8 @@ use rut_lexer::lexer::{lex, normalize};
 use rut_lexer::token::Token;
 use rut_lsp_wasm::definition::*;
 use rut_lsp_wasm::hover::DefIndex;
-use rut_lsp_wasm::line_index::LineIndex;
 use rut_lsp_wasm::mods::DocMods;
+use rut_lsp_wasm::LineIndex;
 use rut_parser::parse;
 use rut_parser::Mode;
 
@@ -335,7 +335,6 @@ fn a_both_files_dep_answers_from_the_body() {
         "pkg",
         "file:///deps/pkg/pkg.d.rut",
         "pub host fn make() -> i32;\n",
-        Mode::Decl,
         None,
         &[],
     );
@@ -344,7 +343,6 @@ fn a_both_files_dep_answers_from_the_body() {
         "file:///deps/pkg/mod.rut",
         "",
         "pub fn make() -> i32 { return 1; }\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -379,7 +377,6 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
         "calc",
         "file:///deps/calc/calc.d.rut",
         "pub host fn sqrt(x: f64) -> f64;\n",
-        Mode::Decl,
         None,
         &[],
     );
@@ -412,7 +409,6 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
         "ink_host",
         "rut/ink_host/src/ink_host.d.rut",
         "pub host fn create_logger(name: str) -> opaque;\n",
-        Mode::Decl,
         None,
         &[],
     );
@@ -420,7 +416,6 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
         "ink_host",
         "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut",
         "pub host fn create_logger(name: str) -> opaque;\n",
-        Mode::Decl,
         None,
         &[],
     );
@@ -574,7 +569,6 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
         "file:///deps/gadgets/mod.rut",
         "",
         "pub mod layout;\npub fn tag() -> i32 { return 1; }\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -583,7 +577,6 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
         "file:///deps/gadgets/layout/mod.rut",
         "layout",
         "pub struct Column {\n    w: i32;\n}\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -626,7 +619,6 @@ fn app_helpers() -> DefIndex {
         "file:///ws/app/helpers/mod.rut",
         "helpers",
         "pub struct Slot {\n    n: i32;\n}\n",
-        Mode::Impl,
         None,
         &[],
     )
@@ -680,7 +672,6 @@ fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
         "file:///ws/app/helpers/deep.rut",
         "helpers/deep",
         "pub fn dig() -> i32 { return 1; }\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -706,7 +697,6 @@ fn an_edge_click_never_leaks_across_packages() {
         "file:///ws/other/helpers/mod.rut",
         "helpers",
         "pub struct Slot {\n    n: i32;\n}\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -728,7 +718,6 @@ fn an_own_pkg_use_path_resolves_intra_package() {
         "file:///ws/app/on-disk/mod.rut",
         "",
         "mod helpers;\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -774,7 +763,6 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
         "file:///ws/app/helpers/mod.rut",
         "helpers",
         "mod deep;\npub struct Slot {\n    n: i32;\n}\n",
-        Mode::Impl,
         None,
         &[],
     );
@@ -783,7 +771,6 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
         "file:///ws/app/helpers/deep.rut",
         "helpers/deep",
         "pub struct Gem {\n    g: i32;\n}\n",
-        Mode::Impl,
         None,
         &[],
     );

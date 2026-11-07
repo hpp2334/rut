@@ -6,8 +6,8 @@
 use std::collections::HashSet;
 
 use rut_ast::ast::{Ast, ItemKind};
-use rut_lexer::span::Span;
-use rut_lexer::token::{Tok, Token};
+use rut_semantic::Span;
+use rut_semantic::{Tok, Token};
 
 use super::bindings::{self, Binding};
 use super::infer::is_cap;
@@ -98,7 +98,7 @@ pub fn hover(
     }
 
     // type position: capitalized or primitive names
-    if is_cap(name) || rut_parser::is_primitive_ty(name) {
+    if is_cap(name) || rut_semantic::is_primitive_ty(name) {
         if let Some((i, ty)) = find_ty(idxs, name) {
             return Some(HoverOut {
                 markdown: render_ty(i, ty),
@@ -329,7 +329,7 @@ pub(crate) fn recv_type(
     match recv {
         "self" | "Self" => enclosing_type(idxs, pos).map(|(_, t)| t.name.clone()),
         _ if is_cap(recv) => Some(recv.to_string()),
-        _ if rut_parser::is_primitive_ty(recv) => Some(recv.to_string()),
+        _ if rut_semantic::is_primitive_ty(recv) => Some(recv.to_string()),
         _ => bindings::resolve(binds, pos, recv)
             .and_then(|b| b.ty_head())
             .or_else(|| super::infer::module_let_ty(idxs, recv)),

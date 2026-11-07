@@ -4,8 +4,8 @@
 //! every Impl file yields symbols; `.d.rut` parses in `Mode::Decl`.
 //! Mirrors rut-parser's corpus test from the LSP side.
 
-use rut_lsp_wasm::line_index::LineIndex;
 use rut_lsp_wasm::semantic::{classify, symbols, TokenType};
+use rut_lsp_wasm::LineIndex;
 use rut_parser::{is_reserved_kw, Mode};
 
 fn corpus() -> Vec<std::path::PathBuf> {

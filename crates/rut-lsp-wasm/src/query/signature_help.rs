@@ -31,7 +31,7 @@ use ls_types::{
 };
 
 use rut_ast::ast::Ast;
-use rut_lexer::token::{Tok, Token};
+use rut_semantic::{Tok, Token};
 
 use crate::hover::lookup::{self, recv_type};
 use crate::hover::types::FnDef;

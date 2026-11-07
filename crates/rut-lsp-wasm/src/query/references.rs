@@ -28,8 +28,8 @@
 use std::collections::HashSet;
 
 use rut_ast::ast::Ast;
-use rut_lexer::span::Span;
-use rut_lexer::token::{Tok, Token};
+use rut_semantic::Span;
+use rut_semantic::{Tok, Token};
 
 use crate::definition::{self, DefLocation};
 use crate::hover::lookup;

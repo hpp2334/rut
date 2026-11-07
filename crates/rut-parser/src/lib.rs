@@ -47,11 +47,10 @@ pub enum Mode {
 /// (AST dump, fused typecheck) do — the cap keeps trees they visit shallow.
 pub(crate) const EXPR_MAX: u32 = 64;
 
-/// parse one source. The LEGACY best-effort entry — always recovers
-/// (a total tree + every diag); the tower's shorthand for
-/// `parse_opts(src, mode, ParseOpts { recover: true })`.
-/// Retired once every caller sits on `parse_opts` (the layering plan's
-/// phase 3).
+/// parse one source. The LEGACY `{recover: true}` shorthand — a total
+/// tree + every diag. NO callers outside this crate's own tests (the
+/// layer law: everyone else sits on `parse_opts`); kept for the 161
+/// in-crate grammar-test call sites.
 pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
     let p = parse_opts(src, mode, ParseOpts { recover: true });
     (

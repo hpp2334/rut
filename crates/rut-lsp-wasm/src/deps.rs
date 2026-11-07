@@ -28,14 +28,14 @@ use rut_ast::ast::Vis;
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
 use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
 use rut_driver::bundle::{parse_bundle, Manifest};
-use rut_lexer::span::Span;
+use rut_semantic::Span;
 
 /// A bundle's rows head: the owning spec plus its mounted sources.
 type ModHead = (
     String,
     std::collections::BTreeMap<String, rut_driver::ModSource>,
 );
-use rut_parser::Mode;
+use rut_semantic::Mode;
 use sha2::{Digest, Sha256};
 
 use crate::hover::types::{MemberSrc, TyDef, TyForm};
@@ -216,10 +216,11 @@ pub fn dep_table_compat(manifest_text: &str) -> Result<DepTable, String> {
 fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     let mut entries = Vec::new();
     // the decl surface indexes in Decl mode; the body in Impl mode —
-    // the same split `analysis::mode_of` speaks for open documents.
-    // On a host pkg with no spelled surface, `src/mod.d.rut` under the
-    // shell IS the root (the loader's default-root discovery
-    // mirrored) — an unreadable row simply indexes nothing.
+    // the same split the filename convention (`rut_semantic::mode_of`)
+    // speaks for every document. On a host pkg with no spelled
+    // surface, `src/mod.d.rut` under the shell IS the root (the
+    // loader's default-root discovery mirrored) — an unreadable row
+    // simply indexes nothing.
     match &m.entry.type_path {
         Some(ty) => entries.push(EntrySource {
             path: rut_driver::bundle::src_rel(ty),
@@ -841,24 +842,18 @@ pub fn index_dep(
     name: &str,
     uri: &str,
     src: &str,
-    mode: Mode,
     namespace: Option<&str>,
     consts: &[(String, f64)],
 ) -> DefIndex {
-    // the ordinary index pass — but the MODE comes from the manifest's
-    // entry key (the authoritative spelling), not the `.d.rut`
-    // filename convention `analysis::mode_of` speaks for open documents
-    let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&normalized);
-    let (ast, _) = rut_parser::parse(&normalized, mode);
-    let mut idx = crate::hover::index(&normalized, &ast, &toks);
+    // the ordinary index pass — the mode derives from the uri (the
+    // filename convention; every caller already spelled it that way)
+    let doc = rut_semantic::ParsedDoc::parse(uri, src);
+    let mut idx = crate::hover::index(doc.src(), &doc.ast, &doc.toks);
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
     // the parse mode rides the index — the definition layer's
-    // body-over-decl preference reads it (the manifest's entry key is
-    // the authoritative spelling, not the `.d.rut` filename convention
-    // `analysis::mode_of` speaks for open documents)
-    idx.mode = Some(mode);
+    // body-over-decl preference reads it
+    idx.mode = Some(rut_semantic::mode_of(uri));
     mint_pkg_rows(&mut idx, namespace, consts);
     idx
 }
@@ -871,11 +866,10 @@ pub fn index_dep_mod(
     uri: &str,
     mod_path: &str,
     src: &str,
-    mode: Mode,
     namespace: Option<&str>,
     consts: &[(String, f64)],
 ) -> DefIndex {
-    let mut idx = index_dep(name, uri, src, mode, namespace, consts);
+    let mut idx = index_dep(name, uri, src, namespace, consts);
     idx.mod_path = Some(mod_path.to_string());
     idx
 }
@@ -896,11 +890,9 @@ pub fn index_dep_decl_group(
     namespace: Option<&str>,
     consts: &[(String, f64)],
 ) -> Vec<(String, DefIndex)> {
-    // the ordinary parse once — the mode is the caller's (Decl: the
-    // declaration entry lane)
-    let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&normalized);
-    let (ast, _) = rut_parser::parse(&normalized, Mode::Decl);
+    // the ordinary parse once — the uri's `.d.rut` suffix IS the
+    // declaration entry lane's mode (the filename convention)
+    let rut_semantic::ParsedDoc { ast, toks, .. } = rut_semantic::ParsedDoc::parse(uri, src);
     // the module slices: the root's items, then each inline module's,
     // path-stamped, first-wins (the loader's own edge law)
     let mut modules: Vec<(String, Vec<rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>>)> =
@@ -909,7 +901,7 @@ pub fn index_dep_decl_group(
     modules
         .into_iter()
         .map(|(path, items)| {
-            let mut idx = crate::hover::index_items(&normalized, &ast, &toks, &items);
+            let mut idx = crate::hover::index_items(&ast.src, &ast, &toks, &items);
             // the entry uri for the file's own module; a `#<mod path>`
             // suffix for the nested ones — one index per module, one
             // origin each (the faces' defs store dedups by origin), the
@@ -922,7 +914,7 @@ pub fn index_dep_decl_group(
             idx.module = Some(name.to_string());
             // the parse mode rides the index — the definition layer's
             // body-over-decl preference reads it
-            idx.mode = Some(Mode::Decl);
+            idx.mode = Some(rut_semantic::mode_of(uri));
             idx.mod_path = Some(path.clone());
             // the manifest's head rows mint on the pkg root only
             if path == mod_path {

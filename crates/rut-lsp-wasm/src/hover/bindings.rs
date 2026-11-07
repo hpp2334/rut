@@ -21,8 +21,8 @@
 //! heuristic); `Binding::ty_head` cuts it to the lookup head.
 
 use rut_ast::ast::*;
-use rut_lexer::span::Span;
-use rut_lexer::token::{Tok, Token};
+use rut_semantic::Span;
+use rut_semantic::{Tok, Token};
 
 use super::infer;
 use super::lookup::contains;
@@ -512,7 +512,7 @@ pub(crate) fn ident_span(toks: &[Token], span: Span, name: &str) -> Option<Span>
     toks.iter()
         .filter(|t| t.span.lo >= span.lo && t.span.hi <= span.hi)
         .find_map(|t| match &t.tok {
-            Tok::Ident(s) if s == name && !rut_parser::is_reserved_kw(s) => Some(t.span),
+            Tok::Ident(s) if s == name && !rut_semantic::is_reserved_kw(s) => Some(t.span),
             _ => None,
         })
 }

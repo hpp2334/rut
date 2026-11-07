@@ -1,21 +1,27 @@
 use ls_types::*;
 use rut_lexer::lexer::normalize;
 use rut_lexer::span::Span;
+use rut_lsp_wasm::analysis::analyze_unstamped;
 use rut_lsp_wasm::analysis::*;
+
+/// the modeless analyze died with the mode leak — these tests pin
+/// grammar behavior through the unstamped facade entry, the uri
+/// spelling the mode (the filename convention)
+const IMPL_URI: &str = "file:///t/x.rut";
 use rut_lsp_wasm::check;
 use rut_lsp_wasm::check::{FileSrc, PkgFiles};
-use rut_lsp_wasm::line_index::LineIndex;
+use rut_lsp_wasm::LineIndex;
 use rut_parser::Mode;
 use std::collections::BTreeMap;
 
 #[test]
 fn analyze_end_to_end() {
-    let a = analyze("entry fn main() -> nil {\n    let x = ;\n}\n", Mode::Impl);
+    let a = analyze_unstamped(IMPL_URI, "entry fn main() -> nil {\n    let x = ;\n}\n");
     assert!(!a.diags.is_empty(), "parse error must surface");
     assert!(a.diags[0].severity == Some(DiagnosticSeverity::ERROR));
     assert_eq!(a.diags[0].source.as_deref(), Some("rut"));
 
-    let clean = analyze("enum Color { Red }\n", Mode::Impl);
+    let clean = analyze_unstamped(IMPL_URI, "enum Color { Red }\n");
     assert!(clean.diags.is_empty());
     assert_eq!(clean.symbols.len(), 1);
     assert_eq!(clean.symbols[0].name, "Color");
@@ -24,7 +30,7 @@ fn analyze_end_to_end() {
 #[test]
 fn encode_is_delta_correct() {
     let src = "enum Color { Red }\nfn f(x: i32) -> nil {}\n";
-    let a = analyze(src, Mode::Impl);
+    let a = analyze_unstamped(IMPL_URI, src);
     // decode back: every token's absolute (line, char, len) must land
     // on the exact text it classified
     let mut line = 0u32;
@@ -107,7 +113,7 @@ fn merge_dedupes_true_duplicates_only() {
 #[test]
 fn no_package_context_is_parse_only() {
     let src = "entry fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze(src, Mode::Impl).diags;
+    let parse = analyze_unstamped(IMPL_URI, src).diags;
     assert!(!parse.is_empty());
     let merged = check::merged_doc_diags(
         "file:///ws/p.rut",
@@ -126,7 +132,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // surfaces through the checker with the range the editor highlights
     let src = "use kit::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n}\n";
     let uri = "file:///ws/app/mod.rut";
-    let parse = analyze(src, Mode::Impl).diags;
+    let parse = analyze_unstamped(IMPL_URI, src).diags;
     assert!(parse.is_empty(), "the doc parses clean: {parse:?}");
     let dep = group(
         "kit",
@@ -190,7 +196,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // a parse error is NOT doubled: the check lane re-parses the doc,
     // and the merge collapses the true duplicate
     let bad = "fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze(bad, Mode::Impl).diags;
+    let parse = analyze_unstamped(IMPL_URI, bad).diags;
     assert_eq!(parse.len(), 1);
     let app = group("app", file(uri, bad));
     let merged = check::merged_doc_diags(
@@ -231,7 +237,7 @@ fn unattributable_spans_skip() {
         ),
     );
     let app = group("app3", file(uri, doc));
-    let parse = analyze(doc, Mode::Impl).diags;
+    let parse = analyze_unstamped(IMPL_URI, doc).diags;
     assert!(parse.is_empty(), "{parse:?}");
     let merged = check::merged_doc_diags(
         uri,

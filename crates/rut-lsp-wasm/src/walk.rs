@@ -212,7 +212,7 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
     let entry_paths: Vec<String> = table
         .entries
         .iter()
-        .filter(|e| e.mode == rut_parser::Mode::Impl)
+        .filter(|e| e.mode == rut_semantic::Mode::Impl)
         .map(|e| e.path.clone())
         .collect();
     mount_mod_tree(ctx, core, dir, &module, &entry_paths, depth);

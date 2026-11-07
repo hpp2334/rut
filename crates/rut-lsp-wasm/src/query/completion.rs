@@ -26,12 +26,12 @@ use std::collections::HashSet;
 
 use ls_types::Range;
 use rut_ast::ast::{Ast, ItemKind};
-use rut_lexer::token::{Tok, Token};
+use rut_semantic::{Tok, Token};
 
 use crate::hover::lookup::{find_ty, used_ifaces};
 use crate::hover::types::{DefIndex, TyDef, TyForm};
-use crate::line_index::LineIndex;
 use crate::mods::{self, DocMods};
+use rut_semantic::LineIndex;
 
 /// One completion item — plain data; the server maps it to LSP types.
 #[derive(Debug, Clone)]
@@ -370,7 +370,7 @@ fn local_completions(binds: &[crate::hover::Binding], pos: u32) -> Vec<Completio
 /// not named bare.
 fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
-    for kw in rut_parser::RESERVED_KW {
+    for kw in rut_semantic::RESERVED_KW {
         out.push(CompletionOut::plain(
             (*kw).to_string(),
             String::new(),
@@ -451,7 +451,7 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
         let t = &toks[j];
         match &t.tok {
             // the anchor: the reserved `use`
-            Tok::Ident(s) if rut_parser::is_reserved_kw(s) => {
+            Tok::Ident(s) if rut_semantic::is_reserved_kw(s) => {
                 if s != "use" {
                     return None;
                 }
@@ -485,7 +485,7 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
         path_seg
             .iter()
             .filter_map(|t| match &t.tok {
-                Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => Some(s.clone()),
+                Tok::Ident(s) if !rut_semantic::is_reserved_kw(s) => Some(s.clone()),
                 _ => None,
             })
             .collect()
@@ -500,7 +500,7 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
         tok: Tok::Ident(s), ..
     }) = path_seg.last()
     {
-        if !rut_parser::is_reserved_kw(s) {
+        if !rut_semantic::is_reserved_kw(s) {
             segments.pop();
         }
     }
@@ -508,7 +508,7 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
         Some(Token {
             tok: Tok::Ident(s),
             span,
-        }) if !rut_parser::is_reserved_kw(s) => {
+        }) if !rut_semantic::is_reserved_kw(s) => {
             let end = (pos as usize).min(span.hi as usize).max(span.lo as usize);
             s.get(..end - span.lo as usize).unwrap_or(s).to_string()
         }
@@ -684,7 +684,7 @@ fn qualified_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, Strin
     let mut j = i;
     loop {
         match &toks[j].tok {
-            Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => run.insert(0, &toks[j]),
+            Tok::Ident(s) if !rut_semantic::is_reserved_kw(s) => run.insert(0, &toks[j]),
             Tok::Colon | Tok::Colon2 => run.insert(0, &toks[j]),
             // the anchor — anything else (including reserved keywords)
             _ => break,
@@ -751,7 +751,7 @@ fn annotation_boundary_before(toks: &[Token], pos: u32) -> Option<String> {
     let i = toks.iter().rposition(|t| t.span.lo < pos)?;
     match &toks[i].tok {
         Tok::Colon | Tok::Arrow => Some(String::new()),
-        Tok::Ident(s) if !rut_parser::is_reserved_kw(s) && i >= 1 => {
+        Tok::Ident(s) if !rut_semantic::is_reserved_kw(s) && i >= 1 => {
             // the ident's predecessor must be the boundary itself
             if !(toks[i - 1].tok == Tok::Colon || toks[i - 1].tok == Tok::Arrow) {
                 return None;
@@ -772,7 +772,7 @@ fn annotation_boundary_before(toks: &[Token], pos: u32) -> Option<String> {
 /// locals stay off: values never ride a type position.
 fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut> {
     let mut out: Vec<CompletionOut> = Vec::new();
-    for p in rut_parser::PRIMITIVE_TYS {
+    for p in rut_semantic::PRIMITIVE_TYS {
         push_item(
             &mut out,
             CompletionOut::plain(
@@ -1135,7 +1135,7 @@ fn bare_prefix(toks: &[Token], pos: u32) -> String {
         return String::new();
     };
     match &t.tok {
-        Tok::Ident(s) if !rut_parser::is_reserved_kw(s) => {
+        Tok::Ident(s) if !rut_semantic::is_reserved_kw(s) => {
             let end = (pos as usize)
                 .min(t.span.hi as usize)
                 .max(t.span.lo as usize);

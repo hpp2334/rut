@@ -177,12 +177,8 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             // analyze_at wires related-info URIs + hover provenance, exactly
             // wired like `analysis::analyze_at`; a degenerate URI still analyzes
             let a = match Uri::from_str(&uri) {
-                Ok(u) => crate::analysis::analyze_at(&u, &src, crate::analysis::mode_of(&uri)),
-                Err(_) => {
-                    let mut a = crate::analysis::analyze(&src, crate::analysis::mode_of(&uri));
-                    a.index.origin = uri.clone();
-                    a
-                }
+                Ok(u) => crate::analysis::analyze_at(&u, &src),
+                Err(_) => crate::analysis::analyze_unstamped(&uri, &src),
             };
             let diags = {
                 let dm = core.doc_mods_of(&uri);
