@@ -171,7 +171,7 @@ rut --help
 ```
 
 ```text
-the rut toolchain's temporary-run lane: run, scaffold, install, format, pack, fetch, inspect
+the rut toolchain's temporary-run lane: run, scaffold, install, format, pack, inspect
 
 Usage: rut <COMMAND>
 
@@ -181,7 +181,6 @@ Commands:
   install  resolve the url deps and pin them in rut.lock
   fmt      the source formatter — canonical house layout, rewrite in place
   pack     pack a package directory into a deterministic `.rutbundle` archive
-  fetch    pre-warm the global dep store for offline runs
   dump     the AST + IR readbacks for one file
   help     Print this message or the help of the given subcommand(s)
 
@@ -244,8 +243,8 @@ where `.zip` deps unpack once as gitignored machine output) and pinned
 its sha256 in `hello/rut.lock` — the lock every later load verifies
 against, committed alongside the manifest (same manifest + same
 `rut.lock` ⇒ identical resolved world). `rut install --locked`
-re-verifies the pair without writing (the CI lane); `rut fetch hello`
-re-warms the store without running anything.
+re-verifies the pair without writing, re-warming the store on a miss
+(the CI lane).
 
 The hand-typed walkthrough is the lesson — the manifest is what you
 are learning. When it is routine, `rut new hello` is the one-step

@@ -1,6 +1,6 @@
 //! The global dep store's CLI lanes: `$RUT_HOME` resolution, the
 //! store-backed CACHE-ONLY remote run/pack read through, the
-//! verify-then-publish writer `install`/`fetch` share, poisoned-entry
+//! verify-then-publish writer `install` owns, poisoned-entry
 //! eviction, and the run-key cache.
 //!
 //! The store lives at `$RUT_HOME/deps/<name>@<sha256[:16]>/` (the
@@ -120,7 +120,7 @@ impl DepRemote for StoreRemote {
             Some(bytes) => Box::pin(std::future::ready(Ok(bytes))),
             None => Box::pin(std::future::ready(Err(RemoteError::new(format!(
                 "{url} is not in the dep store and this remote is cache-only — \
-                 run `rut install` first (or `rut fetch <dir>` to pre-warm)"
+                 run `rut install` first (or `rut install --locked` to pre-warm)"
             ))))),
         }
     }
@@ -146,7 +146,7 @@ fn store_meta_of(dir: &std::path::Path) -> Option<StoreMeta> {
 
 /// The store hit: the dir present AND its meta vouches the pin (the
 /// full sha256, the same check the dir's 16-hex suffix abbreviates)
-/// ⇒ the artifact bytes. `install`/`fetch` warm through here — a hit
+/// ⇒ the artifact bytes. `install` warms through here — a hit
 /// never touches the wire and never re-hashes.
 pub(crate) fn store_hit(spec: &str, url: &str, pin: &str) -> Option<Vec<u8>> {
     let dir = store_dep_dir(spec, pin);
@@ -318,10 +318,10 @@ pub(crate) fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-/// The fetched load lane for `run`/`fetch`: a module dir or a
+/// The fetched load lane for `run`: a module dir or a
 /// `.rutbundle`, with url deps served by the store-backed CACHE-ONLY
-/// remote — every dep is already in the store (run/fetch never
-/// download; the gate ran, or the warm loop just primed).
+/// remote — every dep is already in the store (run never
+/// downloads; the gate ran, or an install just primed).
 pub(crate) fn load_offline(path: &std::path::Path) -> Result<rut_driver::Walk, String> {
     let remote = offline_remote_for(path);
     block_on(rut_native::load_path_session_with(path, &remote)).map_err(|e| e.to_string())

@@ -1,8 +1,7 @@
 //! the `install` subcommand: resolve the closure's url deps and fill
 //! the GLOBAL dep store — store-hit first, else GET → verify → unpack
 //! → publish (one atomic rename) — and write `rut.lock`, the pin
-//! ledger the walk travels with. Also home of the progress loop
-//! `fetch` shares.
+//! ledger the walk travels with.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -62,7 +61,7 @@ fn law_pins(dir: &Path) -> BTreeMap<String, String> {
         .unwrap_or_default()
 }
 
-/// The progress loop `install` and `fetch` share — the walk owns WHAT
+/// The progress loop `install` runs — the walk owns WHAT
 /// (the closure's rows, via `rut_native::url_dep_rows`), the CLI owns
 /// the chatter and the store: per-dep lines on stderr (`{cmd}: {spec}
 /// — downloading {url}` / `— downloaded (N bytes)` for a miss, one `—

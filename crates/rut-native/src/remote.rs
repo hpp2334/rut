@@ -2,8 +2,8 @@
 //! cached. [`DepRemote`] is the trait — all bytes-level, no paths
 //! cross it; [`HttpRemote`] is the standard implementation —
 //! cache-first (a hit NEVER touches the network). THE DEFAULT IS
-//! CACHE-ONLY: a miss errors loudly — the `rut install` / `rut fetch`
-//! door (or an embedder's [`DepRemote::write`] priming) fills the
+//! CACHE-ONLY: a miss errors loudly — the `rut install` door (or
+//! an embedder's [`DepRemote::write`] priming) fills the
 //! cache; run/pack-style loads never download. Networking is the
 //! EXPLICIT [`HttpRemote::online`]/[`HttpRemote::online_local`]
 //! choice: a miss GETs on a private worker thread and writes the
@@ -66,7 +66,7 @@ pub trait DepRemote {
 
 /// The standard remote: cache-first, and CACHE-ONLY by default —
 /// `project_local` / `at` never network (a miss is the loud offline
-/// error; prime the cache with `rut install`, `rut fetch`, or an
+/// error; prime the cache with `rut install` or an
 /// embedder's `DepRemote::write`). `online_local` / `online` are the
 /// explicit wire-on flavors: a miss GETs, under hard timeouts.
 pub struct HttpRemote {
@@ -198,7 +198,7 @@ impl HttpRemote {
     /// on, loud status errors, the size cap, the hard timeouts (10 s
     /// connect, 60 s whole-request), run to completion on a private
     /// worker thread. The lanes that verify-then-publish themselves
-    /// (the global store's `rut install` / `rut fetch`) call this — a
+    /// (the global store's `rut install`) call this — a
     /// blind cache write would publish bytes no pin has vouched for.
     #[cfg(feature = "http")]
     pub fn get_bytes(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
@@ -268,7 +268,7 @@ impl HttpRemote {
     fn get_offline(&self, url: &str) -> Result<Vec<u8>, RemoteError> {
         Err(RemoteError::new(format!(
             "{url} is not in the bundle cache and this remote is cache-only — \
-             run `rut install` first (or `rut fetch <dir>` to pre-warm; an \
+             run `rut install` first (or `rut install --locked` to pre-warm; an \
              embedder primes via `DepRemote::write`)"
         )))
     }

@@ -384,7 +384,7 @@ fn a_generic_url_dep_runs_identically_on_the_miss_and_the_hit() {
 // the resolved one.
 
 /// One-shot HTTP server on 127.0.0.1:0 serving ONE fixed payload at
-/// any path (the url_fetch harness, trimmed to the serving half). The
+/// any path (the install_lane harness, trimmed to the serving half). The
 /// listener rides the detached accept loop — it lives as long as the
 /// test process.
 fn serve(payload: Vec<u8>) -> u16 {

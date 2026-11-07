@@ -1,6 +1,6 @@
 //! The global dep store's derivation core — the ONE place the store's
 //! addresses, file names, and meta shape are spelled. rut-cli (the
-//! writer: `rut install` / `rut fetch`; the readers: `run` / `pack`)
+//! writer: `rut install`; the readers: `run` / `pack`)
 //! and the editor hosts both sit on these helpers, so no second table
 //! can drift — the address is DERIVED, never tabulated (the same law
 //! rut.lock's pin table lives by).

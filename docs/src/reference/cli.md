@@ -21,7 +21,6 @@ rut new <dir>
 rut install [<dir>] [--locked]
 rut fmt <file.rut | dir> [--check]
 rut pack <dir> [-o out] [--mode source|bin] [--strip]
-rut fetch <dir>
 rut dump <file.rut>
 ```
 
@@ -50,8 +49,8 @@ walk, every url dep the closure declares must already sit in the
 global dep store — a missing set is one aggregated refusal (exit 2)
 naming each dep and the fix: ``run: 1 url dep not in the global dep
 store — run `rut install` first:`` (one `spec — url` line per dep).
-[`install`](#install) and [`fetch`](#fetch) are the only downloading
-lanes; everything after the gate — the walk, the mount door's pin
+[`install`](#install) is the only downloading lane; everything after
+the gate — the walk, the mount door's pin
 check, the compile, the drive — reads the store only, cache-only and
 hermetic.
 
@@ -112,7 +111,7 @@ Behavior:
 | clobber refusal | a target already holding a `rut.jsonc`, a `src/mod.rut`, or a `rut.lock` is refused (exit 2, naming the file) — other pre-existing files are fine |
 | parents | created as needed — `rut new a/b/hello` works |
 | files written | `rut.jsonc` — the derived name plus the whole swappable std set (nine packages) as unpinned url deps at the `@std-v15` tag (source zips); `rut.lock` — the set's pins, rendered through the lock grammar ([`install`](#install) is its re-writer); `src/mod.rut` — the ink hello |
-| first run | **refuses**: `rut run`/`rut pack` never download — `rut install <dir>` fetches the std set (9 source zips) into the global dep store (with progress), `rut fetch <dir>` pre-warms the same way; then every run reads the store only |
+| first run | **refuses**: `rut run`/`rut pack` never download — `rut install <dir>` fetches the std set (9 source zips) into the global dep store (with progress; `--locked` re-warms the same set without writing the lock); then every run reads the store only |
 
 The three created files, for `rut new hello` — all verbatim:
 
@@ -220,7 +219,11 @@ identical lock prints `rut.lock unchanged (1 rows, no drift)` and
 writes nothing).
 
 `--locked` never writes and never evicts: it fetches the same closure
-and verifies every row against the existing lock — the CI gate.
+and verifies every row against the existing lock — the CI gate. A
+store miss still downloads (the same verify-then-publish), so
+`--locked` also warms the store on misses without writing the lock —
+the CI warm-up while the network is up, and the later offline `run`
+hits only the store.
 
 | `--locked` case | behavior |
 |---|---|
@@ -233,6 +236,24 @@ and verifies every row against the existing lock — the CI gate.
 
 Any drift prints `install: --locked found drift, rut.lock untouched:`
 and the diff block; the lock file on disk is byte-for-byte what it was.
+
+### The global dep store
+
+`install` fills the store — the online lane; `run`/`pack` read the
+same store with the wire off:
+
+| item | behavior |
+|---|---|
+| store root | `$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree). No dep cache lands beside a project — the walk's one local write is the `.rut/unpacked/<sha-of-bytes>/` scratch where `.zip` deps unpack once (content-addressed, gitignored — [loading](loading.md)) |
+| run cache | `$RUT_HOME/run/<key>.rutbundle` — the whole-program archive cache `run` replays ([`run`](#run)) |
+| store-first | a hit never touches the network — offline reloads are the point |
+| miss (install) | GET (redirects on) under hard timeouts (10 s connect, 60 s whole-request — a stalled host fails loudly, never hangs), non-2xx is a loud error, a size cap refuses without buffering; the publish is verify-then-rename — the whole dep dir (artifact + meta + unpack tree) fills a tmp sibling and lands by ONE atomic rename, so a reader never sees a partial dep |
+| miss (run/pack) | the loud install-first refusal — run and pack never download |
+| poisoned entry | the pin is the loader's law at the mount door — the pin's source is the root's `rut.lock`; when the door refuses, the CLI deletes the store dir whose meta names that url and exits 2 — the next `install` re-fetches and heals |
+
+The wire is `rut-native`'s `http` feature (default on) — a build with
+`default-features = false` (the wasm graphs) has no transport at all:
+a store miss on the download lane errors loudly instead of networking.
 
 ## `fmt`
 
@@ -329,37 +350,6 @@ Compilation is the same offered-world pipeline `run` uses, minus
 execution and verification. `.d.rut` inputs dump in declaration mode —
 useful for inspecting a host surface's slots.
 
-## `fetch`
-
-```sh
-rut fetch app/            # CI: warm the global dep store while the network is up
-```
-
-Walks a module **directory** and fills the global dep store: the same
-progress loop [`install`](#install) runs — store-hit first, else GET →
-verify → publish — then the graph is loaded over the store-backed
-cache-only remote and thrown away, so a later offline `run` hits only
-the store. The load is the same law every load obeys: the walk root's
-`rut.lock` must pin every collected url row, so `rut fetch` is the
-*re*-warm lane — [`install`](#install) is the lane that writes the
-lock a fetch (and every run) travels with. A `.rutbundle` argument is
-refused (exit 2): bundles are closed — there is nothing to fetch.
-The store, the download policy, and the eviction law are `install`'s —
-the online lanes; `run`/`pack` read the same store with the wire off:
-
-| item | behavior |
-|---|---|
-| store root | `$RUT_HOME/deps/<name>@<sha256[:16]>/` — the global dep store: `RUT_HOME` overrides the home (`~/.rut` the default), the pin IS the address (the manifest row's name + the lock pin's first 16 hex digits). Each dep dir holds `artifact.<zip\|rutbundle>` (the pinned bytes as downloaded), `meta.json` (the full sha256, url, and artifact kind — readers never re-hash), and `unpack/` (the extracted tree). No dep cache lands beside a project — the walk's one local write is the `.rut/unpacked/<sha-of-bytes>/` scratch where `.zip` deps unpack once (content-addressed, gitignored — [loading](loading.md)) |
-| run cache | `$RUT_HOME/run/<key>.rutbundle` — the whole-program archive cache `run` replays ([`run`](#run)) |
-| store-first | a hit never touches the network — offline reloads are the point |
-| miss (install/fetch) | GET (redirects on) under hard timeouts (10 s connect, 60 s whole-request — a stalled host fails loudly, never hangs), non-2xx is a loud error, a size cap refuses without buffering; the publish is verify-then-rename — the whole dep dir (artifact + meta + unpack tree) fills a tmp sibling and lands by ONE atomic rename, so a reader never sees a partial dep |
-| miss (run/pack) | the loud install-first refusal — run and pack never download |
-| poisoned entry | the pin is the loader's law at the mount door — the pin's source is the root's `rut.lock`; when the door refuses, the CLI deletes the store dir whose meta names that url and exits 2 — the next `install` (or `fetch`) re-fetches and heals |
-
-The wire is `rut-native`'s `http` feature (default on) — a build with
-`default-features = false` (the wasm graphs) has no transport at all:
-a store miss on the download lanes errors loudly instead of networking.
-
 ## Declaration mode
 
 The file extension selects the parser mode:
@@ -375,10 +365,10 @@ The file extension selects the parser mode:
 |---|---|
 | `0` | success |
 | `1` | compile diagnostics; no binary emitted; binary decode or verify failure; VM boot failure; a trap at run; `fmt` refuses a file that does not parse; `fmt --check` found drift; a `pack` output-write failure |
-| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; a url dep missing from the global dep store (the install-first refusal — `run`/`pack` never download); `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned store entry is evicted); `install`/`fetch` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`src/mod.rut`/`rut.lock`, or an illegal package name; a `pack` refusal — `--strip` without `--mode bin`, a `.rut` outside the `src/` shell, an undeclared `.rut` under `src/`, a host root in bin mode, a url dep the lock does not pin |
+| `2` | usage errors (missing arguments); unreadable input file; `run` on a `.d.rut`; `run` on an input that is neither a module directory nor a `.rutbundle`; a url dep missing from the global dep store (the install-first refusal — `run`/`pack` never download); `fmt` finds no `.rut` files under a directory; a url dep the root's `rut.lock` does not pin, or whose fetched bytes break the lock's pin (the poisoned store entry is evicted); `install` on a `.rutbundle`; `install --locked` drift, including the missing-lock refusal; `install` on a directory whose graph fails to mount against the computed pins; `new` onto an existing `rut.jsonc`/`src/mod.rut`/`rut.lock`, or an illegal package name; a `pack` refusal — `--strip` without `--mode bin`, a `.rut` outside the `src/` shell, an undeclared `.rut` under `src/`, a host root in bin mode, a url dep the lock does not pin |
 
 Diagnostics go to stderr; the success summaries (`pack`'s packed line,
-`install`/`fetch`'s resolved/verified lines and lock reports) go to
+`install`'s resolved/verified lines and lock reports) go to
 stdout.
 
 ## Notes

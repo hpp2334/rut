@@ -1,6 +1,6 @@
 //! The `rut install` lane end to end, through the `rut` binary — ONE
 //! localhost server (offline: no external network), scratch worlds,
-//! `RUT_HOME`-env'd runs against the global dep store. The seven laws:
+//! `RUT_HOME`-env'd runs against the global dep store. The nine laws:
 //!
 //! 1. install writes a DETERMINISTIC lock (byte-identical on re-run);
 //! 2. `--locked` passes when the lock is fresh;
@@ -13,7 +13,14 @@
 //! 6. install refuses a `.rutbundle` input (bundles are closed);
 //! 7. the progress chatter rides stderr (`downloading` / `downloaded`
 //!    / `cache hit`), the summaries ride stdout — asserted strictly,
-//!    stderr loosely (wording-tweak-proof).
+//!    stderr loosely (wording-tweak-proof);
+//! 8. `--locked` WARMS a cold store: a miss is downloaded (verified
+//!    against the lock, published) with the lock never written — the
+//!    CI warm lane, and the later offline run hits only the store;
+//! 9. the poisoned-entry loop: a store artifact whose bytes no longer
+//!    match the pin refuses at the run's mount door (naming url and
+//!    BOTH hashes) and is EVICTED — `install --locked` re-downloads
+//!    (the heal) and the offline run passes again.
 //!
 //! The drift/diff LAW itself is install.rs's (phase 3); what this file
 //! proves is the wire-side behavior an editor or CI would see.
@@ -22,15 +29,19 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// One localhost HTTP server serving fixed payloads by path — the tail
 /// after `host:port/` (a query string is tolerated and ignored); 404
 /// for anything the table does not name. `re_serve` swaps a payload —
-/// the content-drift simulation (the "CDN re-served the file").
+/// the content-drift simulation (the "CDN re-served the file") — and
+/// `set_up(false)` closes connections at once — the offline
+/// simulation — without unbinding the port.
 struct TestServer {
     port: u16,
     payloads: Arc<Mutex<BTreeMap<String, Vec<u8>>>>,
+    up: Arc<AtomicBool>,
 }
 
 impl TestServer {
@@ -39,9 +50,14 @@ impl TestServer {
         let port = listener.local_addr().unwrap().port();
         let payloads = Arc::new(Mutex::new(payloads));
         let served = payloads.clone();
+        let up = Arc::new(AtomicBool::new(true));
+        let up_thread = up.clone();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { continue };
+                if !up_thread.load(Ordering::SeqCst) {
+                    continue; // "offline": accept nothing, close at once
+                }
                 // read the request head (a GET has no body worth reading)
                 let mut buf = [0u8; 4096];
                 let n = stream.read(&mut buf).unwrap_or(0);
@@ -70,7 +86,7 @@ impl TestServer {
                 let _ = stream.flush();
             }
         });
-        TestServer { port, payloads }
+        TestServer { port, payloads, up }
     }
 
     fn url(&self, name: &str) -> String {
@@ -83,6 +99,11 @@ impl TestServer {
             .lock()
             .unwrap()
             .insert(name.to_string(), bytes);
+    }
+
+    /// the wire's kill switch — `false` and no connection is served
+    fn set_up(&self, up: bool) {
+        self.up.store(up, Ordering::SeqCst);
     }
 }
 
@@ -550,4 +571,126 @@ fn progress_on_stderr_summaries_on_stdout() {
         out.contains("rut.lock unchanged (1 rows, no drift)"),
         "{out}"
     );
+}
+
+// -- 8 ----------------------------------------------------------------
+
+#[test]
+fn locked_warms_a_cold_store_for_the_offline_run() {
+    // the CI warm lane `--locked` owns: a cold store entry is
+    // DOWNLOADed (verified against the lock, published) while the
+    // lock itself is never written — then the offline run hits only
+    // the store
+    let bytes = leaf_bundle(
+        "warm leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
+    let mut payloads = BTreeMap::new();
+    payloads.insert("util.rutbundle".to_string(), bytes);
+    let server = TestServer::serve(payloads);
+    let url = server.url("util.rutbundle");
+    let root = consumer_world("warm consumer", &one_dep(&url));
+    let app = root.join("app");
+    let home = root.join("home");
+
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install first: {err}");
+    let lock = std::fs::read_to_string(app.join("rut.lock")).unwrap();
+    let pin = rut_driver::parse_lock(&lock).unwrap().deps()[0]
+        .sha256
+        .clone();
+
+    // the cold store: the entry vanishes (the CI machine's first
+    // `--locked`), and the verify pass re-downloads it
+    std::fs::remove_dir_all(store_dir_for(&home, "util", &pin)).unwrap();
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
+    assert_eq!(code, 0, "--locked warms a cold store: {err}");
+    assert!(
+        out.contains(
+            "install: 1 url deps verified against rut.lock — 1 downloaded, 0 cache hits, 0 drift"
+        ),
+        "the warm summary, strictly: {out}"
+    );
+    assert!(
+        store_dir_for(&home, "util", &pin)
+            .join("artifact.rutbundle")
+            .is_file(),
+        "the download published into the store"
+    );
+    assert_eq!(
+        std::fs::read_to_string(app.join("rut.lock")).unwrap(),
+        lock,
+        "warming never writes the lock"
+    );
+
+    // the offline run — the server never serves a byte
+    server.set_up(false);
+    let (code, _, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "the warmed store answers offline: {err}");
+}
+
+// -- 9 ----------------------------------------------------------------
+
+#[test]
+fn a_poisoned_entry_refuses_evicts_and_locked_install_heals() {
+    // the healing loop around the downloading lane: a poisoned store
+    // artifact (the bytes no longer match the pin its meta vouches)
+    // refuses at the run's mount door — naming the url and BOTH
+    // hashes — and the CLI EVICTS the store dir; `install --locked`
+    // re-downloads the entry (the heal), and the offline run passes
+    let bytes = leaf_bundle(
+        "poison leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
+    let mut payloads = BTreeMap::new();
+    payloads.insert("util.rutbundle".to_string(), bytes);
+    let server = TestServer::serve(payloads);
+    let url = server.url("util.rutbundle");
+    let root = consumer_world("poison consumer", &one_dep(&url));
+    let app = root.join("app");
+    let home = root.join("home");
+
+    let (code, _, err) = rut(&home, &["install", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "install first: {err}");
+    let lock = std::fs::read_to_string(app.join("rut.lock")).unwrap();
+    let pin = rut_driver::parse_lock(&lock).unwrap().deps()[0]
+        .sha256
+        .clone();
+    let entry = store_dir_for(&home, "util", &pin);
+
+    // the offline run answers from the warm store
+    server.set_up(false);
+    let (code, _, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "the warm store answers offline: {err}");
+
+    // poisoned: the artifact bytes no longer match the pin — the
+    // mount door refuses naming the url and both hashes, and the CLI
+    // evicts the store dir, exiting 2
+    let artifact = entry.join("artifact.rutbundle");
+    assert!(artifact.is_file(), "the store artifact must exist");
+    std::fs::write(&artifact, b"garbage").unwrap();
+    let (code, _, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 2, "a pin refusal exits 2: {err}");
+    assert!(err.contains("sha256 pin mismatch"), "{err}");
+    assert!(err.contains(url.as_str()), "{err}");
+    assert!(err.contains("rut.lock pins"), "{err}");
+    assert!(!entry.exists(), "the poisoned store dir must be evicted");
+
+    // healed: serve again — `install --locked` re-downloads (run
+    // never does), and the run passes with the server silent
+    server.set_up(true);
+    let (code, out, err) = rut(&home, &["install", app.to_str().unwrap(), "--locked"]);
+    assert_eq!(code, 0, "--locked heals the store: {err}");
+    assert!(
+        out.contains(
+            "install: 1 url deps verified against rut.lock — 1 downloaded, 0 cache hits, 0 drift"
+        ),
+        "the heal is a download, strictly: {out}"
+    );
+    assert!(artifact.is_file(), "re-fetched");
+    server.set_up(false);
+    let (code, _, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 0, "the healed store answers offline: {err}");
 }

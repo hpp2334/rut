@@ -73,9 +73,8 @@ project — no dep cache lands beside the project. (One piece of local
 scratch does: mounting a `.zip` dep unpacks it once under
 `.rut/unpacked/<sha-of-bytes>/` — content-addressed, gitignored,
 machine-managed; [loading](../reference/loading.md).) Every later run
-is a pure store hit, `rut install hello --locked` re-verifies the lock
-without writing (the CI lane), and `rut fetch hello` re-warms the
-store without running anything.
+is a pure store hit, and `rut install hello --locked` re-verifies the
+lock without writing, re-warming the store on a miss (the CI lane).
 
 Three things to notice:
 

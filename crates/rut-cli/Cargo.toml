@@ -3,7 +3,7 @@ name = "rut-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "the `rut` binary — run / pack / fetch"
+description = "the `rut` binary — run / pack / install"
 
 [[bin]]
 name = "rut"

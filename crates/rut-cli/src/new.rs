@@ -89,7 +89,7 @@ pub(crate) fn new(args: &NewArgs) {
     }
     println!("created {dir} — rut.jsonc + rut.lock + src/mod.rut (the std set as deps, pinned by the lock, the ink hello)");
     println!("install first: rut install {dir} — fetches the 9 std bundles into the global dep store at $RUT_HOME/deps (run and pack never download)");
-    println!("then run it: rut run {dir} — after a dep edit, rut install re-pins rut.lock; rut fetch {dir} pre-warms the same set");
+    println!("then run it: rut run {dir} — after a dep edit, rut install re-pins rut.lock; rut install --locked re-warms the store without writing it");
 }
 
 /// The scaffolded manifest: the template with `__NAME__` substituted —

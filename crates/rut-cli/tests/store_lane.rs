@@ -1,5 +1,5 @@
 //! The global dep store's binary laws — the wire-side behavior an
-//! editor or CI sees after `rut install` / `rut fetch`, ONE localhost
+//! editor or CI sees after `rut install`, ONE localhost
 //! server (offline: no external network), scratch worlds, every run
 //! `RUT_HOME`-env'd at a scratch root (never the real `~/.rut`):
 //!
@@ -14,9 +14,10 @@
 //! 3. the zip transport's layout: the unpacked tree rides `unpack/`
 //!    verbatim (manifest, `src/`, embedded dep groups), and the
 //!    offline run mounts it;
-//! 4. the unpinned refusal: a url row without a lock row is the loud
-//!    refusal at the run gate (the aggregated `rut install` fix) and
-//!    at the fetch walk (the `is not pinned` law).
+//! 4. the cold-store refusal: a missing dep set (pinned or not) is
+//!    ONE aggregated refusal at the run gate naming every dep and
+//!    the `rut install` fix — the walk's own `is not pinned`
+//!    mount-door law is rut-driver's (its url_deps tests).
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -315,7 +316,7 @@ fn a_zip_dep_publishes_the_unpacked_tree_and_runs_offline() {
 // -- 3 ----------------------------------------------------------------
 
 #[test]
-fn unpinned_rows_refuse_loudly_at_the_gate_and_the_walk() {
+fn unpinned_rows_refuse_loudly_at_the_gate() {
     let bytes = leaf_bundle(
         "unpinned leaf",
         "util",
@@ -340,15 +341,57 @@ fn unpinned_rows_refuse_loudly_at_the_gate_and_the_walk() {
     assert!(err.contains("not in the global dep store"), "{err}");
     assert!(err.contains("run `rut install` first"), "{err}");
     assert!(err.contains("util — "), "{err}");
+}
 
-    // the fetch walk: the bytes warm into the store (the plain lane),
-    // then the loader refuses — a url without a lock row is not the
-    // install law yet, loudly
-    server.set_up(true);
-    let (code, _out, err) = rut(&home, &["fetch", app.to_str().unwrap()]);
-    assert_eq!(code, 2, "an unpinned dep refuses the fetch load: {err}");
-    assert!(err.contains("is not pinned"), "{err}");
-    assert!(err.contains("rut.lock has no row for it"), "{err}");
-    assert!(err.contains("run `rut install`"), "{err}");
-    assert!(!app.join("rut.lock").exists(), "fetch never writes a lock");
+// -- 4 ----------------------------------------------------------------
+
+#[test]
+fn cold_run_names_every_missing_dep_at_once() {
+    // two url deps pinned by the lock, neither cached — ONE aggregated
+    // refusal lists both (not a first-miss mid-walk), and the server's
+    // silence proves run never even tried to GET
+    let bytes = leaf_bundle(
+        "agg leaf",
+        "util",
+        "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
+    );
+    let mut payloads = BTreeMap::new();
+    payloads.insert("a.rutbundle".to_string(), bytes.clone());
+    payloads.insert("b.rutbundle".to_string(), bytes);
+    let server = TestServer::serve(payloads);
+    let url_a = server.url("a.rutbundle");
+    let url_b = server.url("b.rutbundle");
+    // the pins are never consulted — the store is cold, the gate
+    // refuses before any mount door opens
+    let pin = rut_driver::sha256_hex(b"same bytes, two names");
+    let (root, app) = consumer_world(
+        "agg consumer",
+        &format!(r#""a": {{"url": "{url_a}"}}, "b": {{"url": "{url_b}"}}"#),
+        "entry fn main() -> nil { return; }\n",
+    );
+    let lock = rut_driver::LockFile::from_rows(vec![
+        rut_driver::LockRow {
+            pkg: "a".into(),
+            url: url_a,
+            sha256: pin.clone(),
+        },
+        rut_driver::LockRow {
+            pkg: "b".into(),
+            url: url_b,
+            sha256: pin,
+        },
+    ]);
+    write(&app, "rut.lock", &rut_driver::render_lock(&lock));
+    let home = root.join("home");
+
+    server.set_up(false);
+    let (code, _out, err) = rut(&home, &["run", app.to_str().unwrap()]);
+    assert_eq!(code, 2, "{err}");
+    assert!(
+        err.contains("2 url deps not in the global dep store"),
+        "{err}"
+    );
+    assert!(err.contains("run `rut install` first"), "{err}");
+    assert!(err.contains("a — "), "{err}");
+    assert!(err.contains("b — "), "{err}");
 }

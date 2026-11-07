@@ -253,7 +253,7 @@ fn pins_match_the_frozen_std_snapshot() {
 /// A localhost HTTP server serving fixed payloads by path — the tail
 /// after `host:port/` (a query string is tolerated and ignored);
 /// 404 for anything the table does not name. Shaped after
-/// tests/url_fetch.rs's one-payload server, times N.
+/// tests/install_lane.rs's payload server, times N.
 struct BundleServer {
     port: u16,
 }

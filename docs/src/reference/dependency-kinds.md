@@ -115,8 +115,8 @@ bundle (the compiled wire):
   dep is one aggregated refusal naming `rut install`, and a pin
   refusal evicts the poisoned store dir so the next `install` heals.
   `rut install <dir>` resolves + fetches + publishes into the store +
-  writes the lock (`--locked` verifies without writing — the CI lane),
-  and `rut fetch <dir>` re-warms the store without running anything
+  writes the lock (`--locked` verifies without writing and re-warms
+  the store on a miss — the CI lane)
   ([The rut CLI](cli.md)).
 
 ### The std tree on jsDelivr
