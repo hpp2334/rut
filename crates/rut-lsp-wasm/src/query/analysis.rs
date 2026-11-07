@@ -29,15 +29,9 @@ pub struct Analysis {
     pub index: hover::DefIndex,
 }
 
-/// `.d.rut` parses in declaration mode; everything else is
-/// full `Mode::Impl`.
-pub fn mode_of(path: &str) -> Mode {
-    if path.ends_with(".d.rut") {
-        Mode::Decl
-    } else {
-        Mode::Impl
-    }
-}
+/// moved to `rut-semantic` (the document layer owns the filename
+/// convention); re-exported so the internal callers keep their spelling
+pub use rut_semantic::mode_of;
 
 pub fn analyze(src: &str, mode: Mode) -> Analysis {
     let src = normalize(src);

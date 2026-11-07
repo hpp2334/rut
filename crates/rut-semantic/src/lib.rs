@@ -10,6 +10,7 @@
 //! `namespace`, never properties); value access after `.` rides the
 //! Field/Method nodes and keeps its own classes.
 
+mod doc;
 mod legend;
 mod names;
 mod recover;
@@ -17,19 +18,26 @@ mod symbols;
 mod tokens;
 
 use rut_ast::ast::Ast;
-use rut_lexer::span::Span;
-use rut_lexer::token::Token;
 
 use self::names::classify_ast;
 use self::recover::finalize;
 use self::tokens::{classify_token, flatten_holes};
 
+pub use self::doc::{mode_of, ParsedDoc};
 pub use self::legend::{is_keyword, is_primitive_ty, TokenType, ALL};
-pub use self::source::classify_source;
 pub use self::symbols::{symbols, RawSymbol, SymKind};
 pub use self::tokens::token_type;
 
-mod source;
+mod line_index;
+pub use self::line_index::LineIndex;
+
+// the document layer's vocabulary re-exports — ONLY what this crate's
+// own API hands out, so the layer above (`rut-lsp-wasm`) needs no
+// direct frontend Cargo dep to spell what ParsedDoc/classify return
+pub use rut_lexer::diag::Diag;
+pub use rut_lexer::span::Span;
+pub use rut_lexer::token::{Comment, Tok, Token};
+pub use rut_parser::{Mode, ParseOpts};
 
 /// Classify a whole document: token-level classes, then AST-level name
 /// classes (which win at equal positions). Output is sorted by start and

@@ -2,10 +2,17 @@
 
 use rut_lexer::span::Span;
 use rut_lexer::token::Token;
-use rut_parser::{parse, Mode};
+use rut_parser::{parse, parse_opts, Mode, ParseOpts};
 
 use super::recover::push_name;
 use super::*;
+
+fn classify_in(src: &str, mode: Mode) -> Vec<(Span, TokenType)> {
+    let (toks, _) = rut_lexer::lexer::lex(src);
+    let p = parse_opts(src, mode, ParseOpts { recover: true });
+    let ast = p.ast.expect("the recovering parse always yields a tree");
+    classify(&toks, &ast)
+}
 
 fn classify_src(src: &str) -> Vec<(Span, TokenType)> {
     let (toks, _) = rut_lexer::lexer::lex(src);
@@ -273,7 +280,7 @@ fn mod_decl_names_classify_as_namespace() {
     // their file-form edges) classify the same — the consolidated
     // declaration entry parses to exactly this shape
     let src = "mod net {\n    mod stream;\n}\n";
-    let spans = classify_source(src, Mode::Decl);
+    let spans = classify_in(src, Mode::Decl);
     assert_eq!(find(src, &spans, "net"), vec![TokenType::Namespace]);
     assert_eq!(find(src, &spans, "stream"), vec![TokenType::Namespace]);
 }
@@ -353,93 +360,134 @@ fn multi_seg_use_paths_classify_each_lane() {
 }
 
 #[test]
-fn line_comments_color_exactly_and_stop_at_newline() {
+fn line_comments_collect_exactly_and_stop_at_newline() {
+    // the comment LAWS ride ParsedDoc now (the collected side table —
+    // `classify_source`'s gap tiling is gone with the API): a leading
+    // and a trailing line comment, spans slicing exactly, the trailing
+    // one stopping BEFORE the newline
     let src = "// lead\nlet x = 1; // trail\nlet y = 2;\n";
-    let spans = classify_source(src, Mode::Impl);
-    assert_eq!(
-        find(src, &spans, "// lead"),
-        vec![TokenType::Comment],
-        "the leading line comment is one comment span"
-    );
-    assert_eq!(
-        find(src, &spans, "// trail"),
-        vec![TokenType::Comment],
-        "the trailing line comment stops before the newline"
-    );
-    assert_eq!(
-        spans
-            .iter()
-            .filter(|(_, t)| *t == TokenType::Comment)
-            .count(),
-        2
-    );
+    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let texts: Vec<&str> = doc
+        .comments
+        .iter()
+        .map(|c| &doc.src()[c.span.lo as usize..c.span.hi as usize])
+        .collect();
+    assert_eq!(texts, vec!["// lead", "// trail"]);
 }
 
 #[test]
-fn block_comments_color_and_unterminated_clamps() {
+fn block_comments_collect_and_the_unterminated_clamps_at_eof() {
     let src = "let x = 1; /* mid */ let y = 2; /* never closed";
-    let spans = classify_source(src, Mode::Impl);
-    assert_eq!(find(src, &spans, "/* mid */"), vec![TokenType::Comment]);
-    let unclosed: Vec<&str> = spans
+    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let texts: Vec<&str> = doc
+        .comments
         .iter()
-        .filter(|(_, t)| *t == TokenType::Comment)
-        .filter(|(sp, _)| span_text(src, *sp).starts_with("/* never"))
-        .map(|(sp, _)| span_text(src, *sp))
+        .map(|c| &doc.src()[c.span.lo as usize..c.span.hi as usize])
         .collect();
     assert_eq!(
-        unclosed,
-        vec!["/* never closed"],
-        "an unterminated block comment clamps at the gap's end"
+        texts,
+        vec!["/* mid */", "/* never closed"],
+        "an unterminated block comment clamps at EOF"
     );
+    assert!(doc.diags.iter().any(|d| d.msg.contains("unterminated")));
 }
 
 #[test]
-fn comments_do_not_touch_adjacent_strings() {
+fn comments_never_touch_adjacent_strings() {
+    // a `//` inside a string literal is TOKEN interior — the string keeps
+    // its class in the spans, the collected comments are exactly the two
+    // real ones, and comments never overlap a classified span
     let src = "let s = \"a\"/*c*/;\nlet t = \"// not a comment\"; // real\n";
-    let spans = classify_source(src, Mode::Impl);
-    // the string keeps its class; the gap comment is its own span; the
-    // run stays sorted and disjoint
-    let mut prev_hi = 0;
-    for (sp, _) in &spans {
-        assert!(sp.lo >= prev_hi, "overlap at {}", sp.lo);
-        prev_hi = sp.hi;
-    }
+    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let texts: Vec<&str> = doc
+        .comments
+        .iter()
+        .map(|c| &doc.src()[c.span.lo as usize..c.span.hi as usize])
+        .collect();
+    assert_eq!(texts, vec!["/*c*/", "// real"]);
     assert_eq!(
-        find(src, &spans, "\"// not a comment\""),
+        find(doc.src(), &doc.spans, "\"// not a comment\""),
         vec![TokenType::String]
     );
-    assert_eq!(find(src, &spans, "/*c*/"), vec![TokenType::Comment]);
-    assert_eq!(find(src, &spans, "// real"), vec![TokenType::Comment]);
+    for c in &doc.comments {
+        assert!(
+            doc.spans
+                .iter()
+                .all(|(sp, _)| sp.hi <= c.span.lo || c.span.hi <= sp.lo),
+            "a comment overlaps a classified span: {:?}",
+            c.span
+        );
+    }
 }
 
 #[test]
-fn classify_source_tiles_sorted_and_disjoint() {
-    // comments at the very start, between every construct, and at the end
+fn parsed_doc_spans_stay_sorted_and_disjoint() {
+    // comments at the very start, between every construct, and at the
+    // end — the classified spans stay sorted, disjoint, in-file, and
+    // the collected comments interleave disjointly between them
     let src = "// top\n/* banner */\nlet a = 1; // one\nfn f(x: i32) -> i32 { x } /* tail */\n";
-    let spans = classify_source(src, Mode::Impl);
+    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
     let mut prev_hi = 0;
-    for (sp, _) in &spans {
+    for (sp, _) in &doc.spans {
         assert!(sp.lo < sp.hi, "empty span at {}", sp.lo);
         assert!(sp.lo >= prev_hi, "overlap at {}", sp.lo);
-        assert!(sp.hi as usize <= src.len(), "out of file");
+        assert!(sp.hi as usize <= doc.src().len(), "out of file");
         prev_hi = sp.hi;
     }
-    assert!(spans.iter().any(|(_, t)| *t == TokenType::Comment));
-    assert!(spans.iter().any(|(_, t)| *t == TokenType::Keyword));
+    let mut all: Vec<_> = doc
+        .spans
+        .iter()
+        .map(|(sp, _)| *sp)
+        .chain(doc.comments.iter().map(|c| c.span))
+        .collect();
+    all.sort_by_key(|s| s.lo);
+    assert!(
+        all.windows(2).all(|w| w[0].hi <= w[1].lo),
+        "comments interleave disjointly with spans"
+    );
+    assert!(doc.spans.iter().any(|(_, t)| *t == TokenType::Keyword));
+    assert_eq!(doc.comments.len(), 4);
 }
 
 #[test]
-fn broken_source_still_classifies_with_comments() {
-    // missing closing brace — the recovery AST simply yields fewer names;
-    // `entry` is token-owned by text now, so like the reserved words
-    // (`let`, `fn`) it never drops its class
+fn broken_source_still_classifies_and_collects() {
+    // missing closing brace — the recovery tree simply yields fewer
+    // names; `entry` is token-owned by text now, so like the reserved
+    // words it never drops its class; the comment still collects
     let src = "// still colored\nentry fn main( {\n  let x = ;\n";
-    let spans = classify_source(src, Mode::Impl);
+    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    assert!(!doc.diags.is_empty(), "the break is diagnosed");
     assert_eq!(
-        find(src, &spans, "// still colored"),
-        vec![TokenType::Comment]
+        find(doc.src(), &doc.spans, "entry"),
+        vec![TokenType::Keyword]
     );
-    assert_eq!(find(src, &spans, "entry"), vec![TokenType::Keyword]);
-    assert_eq!(find(src, &spans, "let"), vec![TokenType::Keyword]);
-    assert_eq!(find(src, &spans, "fn"), vec![TokenType::Keyword]);
+    assert_eq!(find(doc.src(), &doc.spans, "let"), vec![TokenType::Keyword]);
+    assert_eq!(find(doc.src(), &doc.spans, "fn"), vec![TokenType::Keyword]);
+    assert_eq!(doc.comments.len(), 1);
+}
+
+#[test]
+fn parsed_doc_derives_the_mode_from_the_uri() {
+    // the filename convention, THE authority: a `.d.rut` uri parses in
+    // declaration mode (bodies forbidden — the surface's own diag),
+    // everything else full Impl
+    let doc = ParsedDoc::parse(
+        "file:///ws/surface.d.rut",
+        "class Box {\n    fn make();\n}\n",
+    );
+    assert!(doc.diags.is_empty(), "{:?}", doc.diags);
+    assert_eq!(mode_of("file:///ws/surface.d.rut"), Mode::Decl);
+    assert_eq!(mode_of("file:///ws/main.rut"), Mode::Impl);
+
+    let bad = ParsedDoc::parse(
+        "file:///ws/surface.d.rut",
+        "class Box {\n    fn make() -> i32 { return 0; }\n}\n",
+    );
+    assert!(
+        !bad.diags.is_empty(),
+        "Decl mode forbids bodies — the body brace is a parse error: {:?}",
+        bad.diags
+    );
+    // the editor law: recovering — the tree is present regardless
+    assert!(!bad.ast.nodes.is_empty());
 }
