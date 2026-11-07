@@ -510,7 +510,15 @@ impl RutRun {
             // today's check)
             if let MountedBody::Source { text, is_decl } = &pkg.body {
                 let mode = if *is_decl { Mode::Decl } else { Mode::Impl };
-                let (ast, diags) = rut_parser::parse(text, mode);
+                let p = rut_parser::parse_opts(
+                    text,
+                    mode,
+                    // recovering: the closure check wants the whole file's
+                    // `use` heads even beside syntax diags
+                    rut_parser::ParseOpts { recover: true },
+                );
+                let diags = p.diags;
+                let ast = p.ast.expect("the recovering parse always yields a tree");
                 if diags.is_empty() {
                     let layout = layout_for("");
                     for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &ast) {
@@ -524,7 +532,15 @@ impl RutRun {
             // statements join the same closure check — whatever the
             // body kind (a compiled root's children still ride source)
             for m in pkg.mods.values() {
-                let (ast, diags) = rut_parser::parse(&m.text, Mode::Impl);
+                let p = rut_parser::parse_opts(
+                    &m.text,
+                    Mode::Impl,
+                    // recovering: a file beside its syntax diags still
+                    // joins the closure check
+                    rut_parser::ParseOpts { recover: true },
+                );
+                let diags = p.diags;
+                let ast = p.ast.expect("the recovering parse always yields a tree");
                 if !diags.is_empty() {
                     continue; // the compile reports the syntax
                 }

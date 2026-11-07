@@ -124,9 +124,15 @@ fn run_case_keep_vm(
 fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
     use rut_ast::dump as ast_dump;
     let combined = with_logger_use(src);
-    let (ast, diags) = rut_parser::parse(&combined, rut_parser::Mode::Impl);
+    let p = rut_parser::parse_opts(
+        &combined,
+        rut_parser::Mode::Impl,
+        rut_parser::ParseOpts { recover: true },
+    );
+    let ast = p.ast.expect("the recovering parse always yields a tree");
+    let diags = p.diags;
     let tree = ast_dump::to_dump_tree(&ast);
-    let ast_dump = ast_dump::render_text(&tree, &combined);
+    let ast_dump = ast_dump::render_text(&tree, &ast.src);
     let ast_json = ast_dump::render_json(&tree);
     if !diags.is_empty() {
         return rut_driver::CompileOutput {

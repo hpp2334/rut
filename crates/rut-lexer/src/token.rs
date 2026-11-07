@@ -107,6 +107,22 @@ pub struct Token {
     pub span: Span,
 }
 
+/// One comment, collected when the caller opts in (`lex_collect`).
+/// A SIDE TABLE over the token stream — the parser never sees comments,
+/// and a comment inside an f-string HOLE interior is not collected (the
+/// `FStr` token owns those bytes; only main-scan comments between
+/// tokens are document trivia). `doc` follows the rustc convention:
+/// `///` and `/** … */` are outer doc comments, `//!` and `/*! … */`
+/// inner ones (`////` and `/**/` are plain). `text` is the interior
+/// with only the MARKER delimiters stripped — leading `*`s and spacing
+/// stay for the renderer to trim.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Comment {
+    pub span: Span,
+    pub doc: bool,
+    pub text: String,
+}
+
 impl Token {
     /// Human-readable description for diagnostics ("expected X, found Y").
     pub fn describe(&self) -> String {

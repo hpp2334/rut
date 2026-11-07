@@ -10,7 +10,7 @@
 
 use crate::diag::Diag;
 use crate::span::{Span, NEST_MAX};
-use crate::token::{FPart, FStrTok, FloatSuffix, IntSuffix, Tok, Token};
+use crate::token::{Comment, FPart, FStrTok, FloatSuffix, IntSuffix, Tok, Token};
 
 /// CRLF -> LF normalization. Spans index the normalized text,
 /// so every consumer that maps spans back to positions (the LSP's line
@@ -32,10 +32,28 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 /// token vocabulary as `.rut` source — the reserved-word law
 /// (a closed three-word list) is mode-independent.
 pub fn lex_mode(src: &str) -> (Vec<Token>, Vec<Diag>) {
+    let (toks, diags, _) = lex_collect(src, false);
+    (toks, diags)
+}
+
+/// The collecting twin of `lex_mode`: when `collect` is set, every
+/// main-scan comment lands in the side table (see [`crate::token::Comment`])
+/// — the skip the lexer performs anyway, promoted to data. The token
+/// stream and diags are IDENTICAL to `lex_mode`'s either way.
+pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
     let normalized = normalize(src);
-    let mut lx = Lexer::new(&normalized);
+    lex_normalized(&normalized, collect)
+}
+
+/// Lex ALREADY-normalized text (an artifact's `ast.src`) — the path
+/// that normalizes once and shares: `parse_opts` and every consumer
+/// re-deriving the leaf layer over a `Parsed` artifact. `lex`/
+/// `lex_collect`/`lex_mode` normalize internally; passing their output
+/// here would only re-copy it.
+pub fn lex_normalized(normalized: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
+    let mut lx = Lexer::new(normalized, collect);
     lx.run();
-    (lx.toks, lx.diags)
+    (lx.toks, lx.diags, lx.comments)
 }
 
 struct Lexer<'a> {
@@ -43,17 +61,21 @@ struct Lexer<'a> {
     pos: usize,
     pub toks: Vec<Token>,
     pub diags: Vec<Diag>,
+    comments: Vec<Comment>,
+    collect: bool,
     depth: u32,
     depth_reported: bool,
 }
 
 impl<'a> Lexer<'a> {
-    fn new(src: &'a str) -> Lexer<'a> {
+    fn new(src: &'a str, collect: bool) -> Lexer<'a> {
         let mut lx = Lexer {
             src: src.as_bytes(),
             pos: 0,
             toks: Vec::new(),
             diags: Vec::new(),
+            comments: Vec::new(),
+            collect,
             depth: 0,
             depth_reported: false,
         };
@@ -96,6 +118,42 @@ impl<'a> Lexer<'a> {
         self.diags.push(Diag::new(span, msg));
     }
 
+    /// Record the comment the scanner just skipped, `lo` at its marker
+    /// and `self.pos` at its end (`\n`-exclusive for lines, past `*/`
+    /// for closed blocks, EOF for unterminated ones). Called from both
+    /// skip sites ONLY when collecting — the token stream never moves.
+    fn note_comment(&mut self, lo: usize, closed: bool) {
+        if !self.collect {
+            return;
+        }
+        let line = self.src.get(lo + 1) == Some(&b'/');
+        // the rustc doc convention: `///` `//!` `/**` `/*!` are doc
+        // comments; `////` and the empty `/**/` are plain — read at the
+        // comment START (`self.pos` is already at its end)
+        let at = |off: usize| self.src.get(lo + off).copied().unwrap_or(0);
+        let doc = if line {
+            (at(2) == b'/' && at(3) != b'/') || at(2) == b'!'
+        } else {
+            (at(2) == b'*' && at(3) != b'/') || at(2) == b'!'
+        };
+        let mut hi = self.pos;
+        if line {
+            // trim the comment's own trailing spaces (the fmt crate's
+            // printable-span law — the pad re-adds one deterministic one)
+            while hi > lo && self.src[hi - 1] == b' ' {
+                hi -= 1;
+            }
+        }
+        let text_lo = lo + if doc { 3 } else { 2 };
+        let text_hi = if !line && closed { hi - 2 } else { hi };
+        let text = String::from_utf8_lossy(&self.src[text_lo..text_hi]).into_owned();
+        self.comments.push(Comment {
+            span: Span::new(lo as u32, hi as u32),
+            doc,
+            text,
+        });
+    }
+
     fn run(&mut self) {
         while !self.at_end() {
             let lo = self.pos;
@@ -108,6 +166,7 @@ impl<'a> Lexer<'a> {
                     while !self.at_end() && self.peek() != b'\n' {
                         self.pos += 1;
                     }
+                    self.note_comment(lo, true);
                 }
                 b'/' if self.peek2() == b'*' => {
                     self.pos += 2;
@@ -123,6 +182,7 @@ impl<'a> Lexer<'a> {
                     if !closed {
                         self.err(self.span(lo), "unterminated block comment");
                     }
+                    self.note_comment(lo, closed);
                 }
                 b'"' => {
                     self.pos += 1;

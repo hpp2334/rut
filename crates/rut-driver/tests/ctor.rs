@@ -421,10 +421,12 @@ fn unknown_words_name_the_three_designated_surfaces() {
 fn markers_outside_inherent_bodies_stay_parse_rejects() {
     // Law 4's pin: parse_member_marker only runs in the inherent arm —
     // an interface member's marker dies at the parser
-    let (_, diags) = rut_parser::parse(
+    let p = rut_parser::parse_opts(
         "interface I { [constructor] fn make() -> i32; }",
         Mode::Impl,
+        rut_parser::ParseOpts { recover: true },
     );
+    let diags = p.diags;
     assert!(
         diags
             .iter()

@@ -32,26 +32,31 @@ use rut_parser::Mode;
 
 /// Format one rut source.
 ///
-/// `src` may carry `\r\n` — the lexer's normalization law rides first
-/// (`rut_lexer::lexer::normalize`), and spans index the NORMALIZED text,
-/// so the comment scan and the printer see the same offsets.
+/// `src` may carry `\r\n` — the facade's normalization law rides first
+/// (`parse_opts`), and spans index the NORMALIZED text, so the comment
+/// reattachment and the printer see the same offsets.
 ///
 /// Errors are the frontend's own diagnostics (lex + parse), spans into
 /// the normalized text: a source with diags is refused, never guessed
 /// at — the formatter's input is a parsed-clean module. The caller
 /// renders them (`rut fmt` labels the group with the real path).
 pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<Diag>> {
-    let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, diags) = rut_lexer::lexer::lex_mode(&normalized);
-    if !diags.is_empty() {
-        return Err(diags);
+    let parsed = rut_parser::parse_opts(
+        src,
+        mode,
+        // recovering: the refusal below reports EVERY diag, not the first
+        rut_parser::ParseOpts { recover: true },
+    );
+    if !parsed.diags.is_empty() {
+        return Err(parsed.diags);
     }
-    let (ast, diags) = rut_parser::parse(&normalized, mode);
-    if !diags.is_empty() {
-        return Err(diags);
-    }
-    let runs = comments::scan_comment_runs(&normalized, &toks);
-    let p = printer::P::new(&ast, &normalized, &toks, style, runs);
+    let ast = parsed
+        .ast
+        .expect("the recovering parse always yields a tree");
+    // the leaf layer on demand: tokens + comments in one linear pass
+    let (toks, _, comments) = rut_lexer::lexer::lex_normalized(&ast.src, true);
+    let runs = comments::runs_from_comments(&comments, &toks, &ast.src);
+    let p = printer::P::new(&ast, &ast.src, &toks, style, runs);
     Ok(p.print_module())
 }
 

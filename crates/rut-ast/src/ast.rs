@@ -105,6 +105,16 @@ pub struct Ast {
     pub nodes: Vec<Node>,
     pub interner: Interner,
     pub root: NodeHandle<ModuleNode>,
+    /// the NORMALIZED text every span in this tree indexes (CRLF → LF —
+    /// the caller's raw bytes may differ). The tree is SELF-CONTAINED:
+    /// slice text at spans through this field, never through the input.
+    ///
+    /// THE ARTIFACT LAW — the tree stores only what is NOT a pure
+    /// function of its parts: the nodes, and the text its spans index.
+    /// The LEAF layer (the token stream, and comments when wanted) is
+    /// `rut_lexer::lexer::lex_normalized(&src, collect)` away — one
+    /// deterministic linear pass — and is therefore never stored here.
+    pub src: String,
 }
 
 impl Ast {

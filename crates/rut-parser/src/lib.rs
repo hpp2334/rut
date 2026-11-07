@@ -47,8 +47,59 @@ pub enum Mode {
 /// (AST dump, fused typecheck) do — the cap keeps trees they visit shallow.
 pub(crate) const EXPR_MAX: u32 = 64;
 
+/// parse one source. The LEGACY best-effort entry — always recovers
+/// (a total tree + every diag); the tower's shorthand for
+/// `parse_opts(src, mode, ParseOpts { recover: true })`.
+/// Retired once every caller sits on `parse_opts` (the layering plan's
+/// phase 3).
 pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
-    let (toks, mut diags) = rut_lexer::lexer::lex_mode(src);
+    let p = parse_opts(src, mode, ParseOpts { recover: true });
+    (
+        p.ast.expect("the recovering parse always yields a tree"),
+        p.diags,
+    )
+}
+
+/// The AST layer's opts — one knob, default OFF (`derive(Default)`;
+/// `fail_fast ≡ !recover`, and `recover` is the term of art).
+/// Comments are NOT a parse concern: the leaf layer (tokens + comments
+/// together — no consumer wants trivia without tokens) is
+/// `lex_normalized(&ast.src, true)` away for the tooling that wants it,
+/// so the artifact stays a pure tree + its text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ParseOpts {
+    /// best-effort recovery: a total tree + ALL diags. Off = fail fast:
+    /// the FIRST diag (lexer or parser) stops the parse, `ast` is `None`,
+    /// `diags` carries exactly one row.
+    pub recover: bool,
+}
+
+/// The AST layer's artifact: the tree — SELF-CONTAINED, the single
+/// owner of the text its spans index (`ast.src`) — plus the diags.
+/// Nothing beside the `Ast` re-stores derivable data; a fail-fast stop
+/// carries no tree at all (the first diag only).
+pub struct Parsed {
+    /// `None` ⇔ `recover: false` stopped at the first diag
+    pub ast: Option<Ast>,
+    pub diags: Vec<Diag>,
+}
+
+/// The AST facade: normalize → lex → parse. Nothing outside this crate
+/// drives those steps by hand; the token stream is consumed here and
+/// re-derived on demand (`lex_normalized`) by the consumers that want
+/// the leaf layer.
+pub fn parse_opts(src: &str, mode: Mode, opts: ParseOpts) -> Parsed {
+    let normalized = rut_lexer::lexer::normalize(src);
+    let (toks, mut diags, _) = rut_lexer::lexer::lex_normalized(&normalized, false);
+    // fail fast: a lex diag stops the parse before it starts
+    if !opts.recover {
+        if let Some(first) = diags.first().cloned() {
+            return Parsed {
+                ast: None,
+                diags: vec![first],
+            };
+        }
+    }
     let mut p = Parser {
         toks,
         pos: 0,
@@ -66,12 +117,22 @@ pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
     };
     let root = p.run();
     diags.append(&mut p.diags);
+    if !opts.recover && !diags.is_empty() {
+        return Parsed {
+            ast: None,
+            diags: vec![diags.remove(0)],
+        };
+    }
     let ast = Ast {
         nodes: p.nodes,
         interner: p.interner,
         root,
+        src: normalized,
     };
-    (ast, diags)
+    Parsed {
+        ast: Some(ast),
+        diags,
+    }
 }
 
 pub(crate) struct Parser {
