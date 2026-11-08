@@ -71,7 +71,7 @@ macro_rules! arenas {
             // ---- reads ----
             /// the root's Copy handle — the walk door
             pub fn root(&self) -> Handle<crate::item::ModuleNode> {
-                self.root.expect("parse_opts always sets the root")
+                self.root.expect("the parse lane always sets the root")
             }
             /// a name's spelling — the interner read
             pub fn name(&self, id: IdentId) -> &str {

@@ -45,11 +45,12 @@ pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comm
     lex_normalized(&normalized, collect)
 }
 
-/// Lex ALREADY-normalized text (an artifact's `ast.src`) — the path
-/// that normalizes once and shares: `parse_opts` and every consumer
-/// re-deriving the leaf layer over a `Parsed` artifact. `lex`/
-/// `lex_collect`/`lex_mode` normalize internally; passing their output
-/// here would only re-copy it.
+/// Lex ALREADY-normalized text — the path that normalizes once and
+/// shares: the parser's entry pair (`rut_parser::parse` /
+/// `parse_with_recover`) and every consumer re-deriving the leaf
+/// layer over a `Parsed` artifact ride `p.src` (the normalized text
+/// every span indexes). `lex`/`lex_collect`/`lex_mode` normalize
+/// internally; passing their output here would only re-copy it.
 pub fn lex_normalized(normalized: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
     let mut lx = Lexer::new(normalized, collect);
     lx.run();

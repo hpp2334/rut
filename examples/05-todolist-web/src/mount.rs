@@ -90,7 +90,7 @@ const BIZ_APP: &str = include_str!("../rut/biz/src/app/mod.rut");
 
 /// One mounted child module — the mirror's `mod NAME;` edge, spelled
 /// as the loader would mount it (the vis carried faithfully).
-fn child_mod(path: &str, vis: rut_ast::ast::Vis, text: &str) -> (String, rut_driver::ModSource) {
+fn child_mod(path: &str, vis: rut_ast::Vis, text: &str) -> (String, rut_driver::ModSource) {
     (
         path.to_string(),
         rut_driver::ModSource {
@@ -152,11 +152,11 @@ pub(crate) fn biz_manifest() -> rut_driver::Manifest {
 /// same declaration the walk reads.
 pub fn ui_pkg() -> Mounted {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
-        child_mod("store", rut_ast::ast::Vis::Pub, UI_STORE),
-        child_mod("widget", rut_ast::ast::Vis::Pub, UI_WIDGET),
-        child_mod("lowering", rut_ast::ast::Vis::Pub, UI_LOWERING),
-        child_mod("diff", rut_ast::ast::Vis::Pub, UI_DIFF),
-        child_mod("components", rut_ast::ast::Vis::Pub, UI_COMPONENTS),
+        child_mod("store", rut_ast::Vis::Pub, UI_STORE),
+        child_mod("widget", rut_ast::Vis::Pub, UI_WIDGET),
+        child_mod("lowering", rut_ast::Vis::Pub, UI_LOWERING),
+        child_mod("diff", rut_ast::Vis::Pub, UI_DIFF),
+        child_mod("components", rut_ast::Vis::Pub, UI_COMPONENTS),
     ]
     .into();
     let base = Mounted::source("ui", UI_ROOT).manifest(ui_manifest());
@@ -176,9 +176,9 @@ pub fn ui_pkg() -> Mounted {
 /// modules `use`.
 pub fn biz_pkg() -> Mounted {
     let mods: std::collections::BTreeMap<String, rut_driver::ModSource> = [
-        child_mod("domain", rut_ast::ast::Vis::Pub, BIZ_DOMAIN),
-        child_mod("world", rut_ast::ast::Vis::Pub, BIZ_WORLD),
-        child_mod("app", rut_ast::ast::Vis::Self_, BIZ_APP),
+        child_mod("domain", rut_ast::Vis::Pub, BIZ_DOMAIN),
+        child_mod("world", rut_ast::Vis::Pub, BIZ_WORLD),
+        child_mod("app", rut_ast::Vis::Self_, BIZ_APP),
     ]
     .into();
     let base = Mounted::source("app", BIZ_ROOT).manifest(biz_manifest());
