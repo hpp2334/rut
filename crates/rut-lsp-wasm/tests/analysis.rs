@@ -72,7 +72,7 @@ fn file(uri: &str, text: &str) -> FileSrc {
         uri: uri.to_string(),
         text: rut_lexer::lexer::normalize(text),
         mode: Mode::Impl,
-        vis: rut_ast::ast::Vis::Pub,
+        vis: rut_ast::Vis::Pub,
     }
 }
 
@@ -157,13 +157,15 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
         merged[0].message
     );
     assert_eq!(merged[0].source.as_deref(), Some("rut"));
-    // the range covers the offending assignment (line 3, `checked = true`)
+    // the range covers the offending assignment (line 3) — the v2
+    // exact-span law: an assignment node ends at its VALUE (the
+    // statement's own `;` is the terminator, never the expression's)
     let norm = rut_lexer::lexer::normalize(src);
-    let lo = norm.find("checked = true;").expect("the assignment") as u32;
+    let lo = norm.find("checked = true").expect("the assignment") as u32;
     let want = range_of(
         &LineIndex::new(&norm),
         &norm,
-        Span::new(lo, lo + "checked = true;".len() as u32),
+        Span::new(lo, lo + "checked = true".len() as u32),
     );
     assert_eq!(merged[0].range, want, "{:?}", merged[0].range);
 
@@ -194,10 +196,14 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     assert_eq!(merged[0].range.start.line, 2, "the Task literal's line");
 
     // a parse error is NOT doubled: the check lane re-parses the doc,
-    // and the merge collapses the true duplicate
+    // and the merge collapses the true duplicate. (The v2 recovery
+    // ladder emits TWO rows for this degenerate body — the init hole
+    // and the missing `;` — so the law is pinned as "the check lane
+    // adds nothing", not as a v1 row count.)
     let bad = "fn main() -> nil {\n    let x = ;\n}\n";
     let parse = analyze_unstamped(IMPL_URI, bad).diags;
-    assert_eq!(parse.len(), 1);
+    assert!(!parse.is_empty());
+    let n_parse = parse.len();
     let app = group("app", file(uri, bad));
     let merged = check::merged_doc_diags(
         uri,
@@ -209,8 +215,8 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     );
     assert_eq!(
         merged.len(),
-        1,
-        "the parse diag publishes exactly once: {merged:?}"
+        n_parse,
+        "the check lane adds nothing to a parse-error doc: {merged:?}"
     );
 }
 

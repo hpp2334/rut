@@ -25,7 +25,7 @@
 use std::collections::HashSet;
 
 use ls_types::Range;
-use rut_ast::ast::{Ast, ItemKind};
+use rut_ast::{Ast, ItemRef, Vis};
 use rut_semantic::{Tok, Token};
 
 use crate::hover::lookup::{find_ty, used_ifaces};
@@ -594,7 +594,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     for i in &scope {
         // the walkable children — pub edges only (cross-package law)
         for m in &i.mods {
-            if m.vis != rut_ast::ast::Vis::Pub {
+            if m.vis != Vis::Pub {
                 continue;
             }
             let child = mods::child_path(&path, &m.name);
@@ -636,7 +636,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
             // a walked path binds through the compiler's qualified-use
             // gate: only `pub` names cross. The flat spelling keeps
             // today's ungated shape (the deps-batch law)
-            if crossed && f.vis != rut_ast::ast::Vis::Pub {
+            if crossed && f.vis != Vis::Pub {
                 continue;
             }
             push_item(
@@ -650,7 +650,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
             );
         }
         for l in &i.lets {
-            if crossed && l.vis != rut_ast::ast::Vis::Pub {
+            if crossed && l.vis != Vis::Pub {
                 continue;
             }
             push_item(
@@ -1063,7 +1063,7 @@ fn auto_import_completions(
         .iter()
         .flat_map(|i| i.pub_gated.iter().map(|s| s.as_str()))
         .collect();
-    let insert = import_insert(src, ast, toks);
+    let insert = import_insert(src, ast);
     let mut out: Vec<CompletionOut> = Vec::new();
     for i in idxs.iter().skip(1) {
         let Some(m) = &i.module else { continue };
@@ -1153,9 +1153,9 @@ fn bare_prefix(toks: &[Token], pos: u32) -> String {
 /// rides) plus which side the newline goes on: after a use the text
 /// leads with `\n` (the line continues below), at the body top it
 /// trails with `\n`.
-fn import_insert(src: &str, ast: &Ast, toks: &[Token]) -> (Range, bool) {
+fn import_insert(src: &str, ast: &Ast) -> (Range, bool) {
     let lines = LineIndex::new(src);
-    let after_use = leading_use_end(ast, toks);
+    let after_use = leading_use_end(ast);
     let (offset, newline_first) = match after_use {
         Some(off) => (off, true),
         None => (body_start(src), false),
@@ -1177,25 +1177,15 @@ fn import_insert(src: &str, ast: &Ast, toks: &[Token]) -> (Range, bool) {
 }
 
 /// the source end of the last `use` in the leading Use run — `None`
-/// when the module opens with anything else. Statement spans end at
-/// the NEXT token (the parser's convention), so the verbatim end is
-/// the item's own `;` (the build pass's cut, mirrored here)
-fn leading_use_end(ast: &Ast, toks: &[Token]) -> Option<u32> {
+/// when the module opens with anything else. A use item's span is
+/// EXACT (v2's own-terminator law): it ends at the statement's own `;`
+fn leading_use_end(ast: &Ast) -> Option<u32> {
     let mut last: Option<u32> = None;
-    for h in ast.module_items(ast.root) {
-        match ast.item(*h) {
-            ItemKind::Use { .. } => {
-                let span = ast.span(h.id());
-                let hi = toks
-                    .iter()
-                    .filter(|t| t.span.lo >= span.lo && t.span.hi <= span.hi && t.tok == Tok::Semi)
-                    .map(|t| t.span.hi)
-                    .next_back()
-                    .unwrap_or(span.hi);
-                last = Some(hi);
-            }
-            // the run ends at the first item that isn't a use
-            _ => break,
+    for item in ast.root().items(ast) {
+        if let ItemRef::Use(h) = item {
+            last = Some(h.span(ast).hi);
+        } else {
+            break; // the run ends at the first item that isn't a use
         }
     }
     last

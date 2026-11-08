@@ -222,7 +222,7 @@ impl Core {
             .iter()
             .map(|m| wire::ModDecl {
                 name: m.name.clone(),
-                vis: if matches!(m.vis, rut_ast::ast::Vis::Pub) {
+                vis: if matches!(m.vis, rut_ast::Vis::Pub) {
                     "pub"
                 } else {
                     "mod"

@@ -2,22 +2,19 @@
 
 use rut_lexer::span::Span;
 use rut_lexer::token::Token;
-use rut_parser::{parse, parse_opts, Mode, ParseOpts};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use super::recover::push_name;
 use super::*;
 
 fn classify_in(src: &str, mode: Mode) -> Vec<(Span, TokenType)> {
     let (toks, _) = rut_lexer::lexer::lex(src);
-    let p = parse_opts(src, mode, ParseOpts { recover: true });
-    let ast = p.ast.expect("the recovering parse always yields a tree");
-    classify(&toks, &ast)
+    let p = parse_with_recover(src, mode, ParseOpts::default());
+    classify(&toks, &p.ast)
 }
 
 fn classify_src(src: &str) -> Vec<(Span, TokenType)> {
-    let (toks, _) = rut_lexer::lexer::lex(src);
-    let (ast, _) = parse(src, Mode::Impl);
-    classify(&toks, &ast)
+    classify_in(src, Mode::Impl)
 }
 
 fn span_text(src: &str, sp: Span) -> &str {
@@ -226,8 +223,8 @@ fn bare_calls_color_their_callee_as_function() {
 fn symbols_outline() {
     let src = "interface Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\nentry fn main() -> nil {}\n";
     let (toks, _) = rut_lexer::lexer::lex(src);
-    let (ast, _) = parse(src, Mode::Impl);
-    let syms = symbols(&toks, &ast);
+    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    let syms = symbols(&toks, &p.ast);
     let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, vec!["Drawable", "impl Circle", "Color", "main"]);
     assert_eq!(syms[0].kind, SymKind::Interface);
@@ -359,18 +356,21 @@ fn multi_seg_use_paths_classify_each_lane() {
     assert_eq!(find(src, &spans, "http_send"), vec![TokenType::Function]);
 }
 
+/// the collected comment side table, derived the way the parse lane
+/// derives it (the leaf layer's own law — ParsedDoc no longer carries
+/// the table; the doc chains live on the decl nodes)
+fn comments_of(src: &str) -> Vec<Comment> {
+    rut_lexer::lexer::lex_collect(src, true).2
+}
+
 #[test]
 fn line_comments_collect_exactly_and_stop_at_newline() {
-    // the comment LAWS ride ParsedDoc now (the collected side table —
-    // `classify_source`'s gap tiling is gone with the API): a leading
-    // and a trailing line comment, spans slicing exactly, the trailing
-    // one stopping BEFORE the newline
+    // a leading and a trailing line comment, spans slicing exactly, the
+    // trailing one stopping BEFORE the newline
     let src = "// lead\nlet x = 1; // trail\nlet y = 2;\n";
-    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
-    let texts: Vec<&str> = doc
-        .comments
+    let texts: Vec<&str> = comments_of(src)
         .iter()
-        .map(|c| &doc.src()[c.span.lo as usize..c.span.hi as usize])
+        .map(|c| &src[c.span.lo as usize..c.span.hi as usize])
         .collect();
     assert_eq!(texts, vec!["// lead", "// trail"]);
 }
@@ -378,18 +378,18 @@ fn line_comments_collect_exactly_and_stop_at_newline() {
 #[test]
 fn block_comments_collect_and_the_unterminated_clamps_at_eof() {
     let src = "let x = 1; /* mid */ let y = 2; /* never closed";
-    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
-    let texts: Vec<&str> = doc
-        .comments
+    let texts: Vec<&str> = comments_of(src)
         .iter()
-        .map(|c| &doc.src()[c.span.lo as usize..c.span.hi as usize])
+        .map(|c| &src[c.span.lo as usize..c.span.hi as usize])
         .collect();
     assert_eq!(
         texts,
         vec!["/* mid */", "/* never closed"],
         "an unterminated block comment clamps at EOF"
     );
-    assert!(doc.diags.iter().any(|d| d.msg.contains("unterminated")));
+    assert!(comments_of(src)
+        .iter()
+        .any(|c| c.text.contains("never closed")));
 }
 
 #[test]
@@ -398,18 +398,17 @@ fn comments_never_touch_adjacent_strings() {
     // its class in the spans, the collected comments are exactly the two
     // real ones, and comments never overlap a classified span
     let src = "let s = \"a\"/*c*/;\nlet t = \"// not a comment\"; // real\n";
-    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
-    let texts: Vec<&str> = doc
-        .comments
+    let texts: Vec<&str> = comments_of(src)
         .iter()
-        .map(|c| &doc.src()[c.span.lo as usize..c.span.hi as usize])
+        .map(|c| &src[c.span.lo as usize..c.span.hi as usize])
         .collect();
     assert_eq!(texts, vec!["/*c*/", "// real"]);
+    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
     assert_eq!(
         find(doc.src(), &doc.spans, "\"// not a comment\""),
         vec![TokenType::String]
     );
-    for c in &doc.comments {
+    for c in &comments_of(src) {
         assert!(
             doc.spans
                 .iter()
@@ -438,7 +437,7 @@ fn parsed_doc_spans_stay_sorted_and_disjoint() {
         .spans
         .iter()
         .map(|(sp, _)| *sp)
-        .chain(doc.comments.iter().map(|c| c.span))
+        .chain(comments_of(doc.src()).iter().map(|c| c.span))
         .collect();
     all.sort_by_key(|s| s.lo);
     assert!(
@@ -446,7 +445,7 @@ fn parsed_doc_spans_stay_sorted_and_disjoint() {
         "comments interleave disjointly with spans"
     );
     assert!(doc.spans.iter().any(|(_, t)| *t == TokenType::Keyword));
-    assert_eq!(doc.comments.len(), 4);
+    assert_eq!(comments_of(doc.src()).len(), 4);
 }
 
 #[test]
@@ -456,14 +455,29 @@ fn broken_source_still_classifies_and_collects() {
     // words it never drops its class; the comment still collects
     let src = "// still colored\nentry fn main( {\n  let x = ;\n";
     let doc = ParsedDoc::parse("file:///ws/x.rut", src);
-    assert!(!doc.diags.is_empty(), "the break is diagnosed");
+    assert!(!doc.diags().is_empty(), "the break is diagnosed");
     assert_eq!(
         find(doc.src(), &doc.spans, "entry"),
         vec![TokenType::Keyword]
     );
     assert_eq!(find(doc.src(), &doc.spans, "let"), vec![TokenType::Keyword]);
     assert_eq!(find(doc.src(), &doc.spans, "fn"), vec![TokenType::Keyword]);
-    assert_eq!(doc.comments.len(), 1);
+    assert_eq!(comments_of(doc.src()).len(), 1);
+}
+
+#[test]
+fn doc_chains_graft_onto_decl_nodes() {
+    // the editor law ParsedDoc bakes: include_comments is ON, so the
+    // doc chain lands on the decl node itself (D7) — the hover lane's
+    // table scan is gone, the node field is the truth
+    let src = "// the total\n// in two lines\nlet TOTAL = 10;\n";
+    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let item = doc.ast.root().items(&doc.ast)[0];
+    let rut_ast::ItemRef::ModuleLet(h) = item else {
+        panic!("the module let survived the parse: {item:?}");
+    };
+    let lines: Vec<&str> = h.get(&doc.ast).doc.lines(doc.src()).collect();
+    assert_eq!(lines, vec!["the total", "in two lines"]);
 }
 
 #[test]
@@ -475,7 +489,7 @@ fn parsed_doc_derives_the_mode_from_the_uri() {
         "file:///ws/surface.d.rut",
         "class Box {\n    fn make();\n}\n",
     );
-    assert!(doc.diags.is_empty(), "{:?}", doc.diags);
+    assert!(doc.diags().is_empty(), "{:?}", doc.diags());
     assert_eq!(mode_of("file:///ws/surface.d.rut"), Mode::Decl);
     assert_eq!(mode_of("file:///ws/main.rut"), Mode::Impl);
 
@@ -484,10 +498,10 @@ fn parsed_doc_derives_the_mode_from_the_uri() {
         "class Box {\n    fn make() -> i32 { return 0; }\n}\n",
     );
     assert!(
-        !bad.diags.is_empty(),
+        !bad.diags().is_empty(),
         "Decl mode forbids bodies — the body brace is a parse error: {:?}",
-        bad.diags
+        bad.diags()
     );
     // the editor law: recovering — the tree is present regardless
-    assert!(!bad.ast.nodes.is_empty());
+    assert!(!bad.ast.root().items(&bad.ast).is_empty());
 }

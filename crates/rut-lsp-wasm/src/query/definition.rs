@@ -35,7 +35,7 @@
 use std::collections::HashMap;
 
 use ls_types::Range;
-use rut_ast::ast::Ast;
+use rut_ast::Ast;
 use rut_semantic::Mode;
 use rut_semantic::Span;
 use rut_semantic::{Tok, Token};

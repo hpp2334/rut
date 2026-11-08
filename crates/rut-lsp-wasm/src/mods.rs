@@ -18,7 +18,7 @@
 //!   declared edge walks; the LEAF members tier-gate by visibility
 //!   (`vis_allows` — the `vis_crosses` predicate verbatim).
 
-use rut_ast::ast::Vis;
+use rut_ast::Vis;
 
 use crate::hover::types::DefIndex;
 

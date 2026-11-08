@@ -6,6 +6,21 @@
 
 use rut_lexer::token::{Tok, Token};
 use rut_lsp_wasm::hover::*;
+use rut_parser::Mode;
+
+/// parse with doc grafting ON — the editor lane's shape (hover's index
+/// reads doc chains off the decl nodes) and the recovering entry (the
+/// tree survives broken snippets)
+fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
+    rut_parser::parse_with_recover(
+        src,
+        mode,
+        rut_parser::ParseOpts {
+            include_comments: true,
+        },
+    )
+    .ast
+}
 
 fn hover_at(src: &str, needle: &str) -> Option<String> {
     hover_nth(src, needle, 0)
@@ -20,8 +35,8 @@ fn hover_nth(src: &str, needle: &str, n: usize) -> Option<String> {
 fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<HoverOut> {
     let src2 = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&src2);
-    let (ast, _) = rut_parser::parse(&src2, rut_parser::Mode::Impl);
-    let idx = index(&src2, &ast, &toks, &comments_of(&src2));
+    let ast = doc_ast(&src2, Mode::Impl);
+    let idx = index(&src2, &ast, &toks);
     let idxs = [&idx];
     let pos = find_ident_pos(&toks, needle, n)?;
     hover(
@@ -167,8 +182,8 @@ fn ambiguity_lists_candidates() {
     let mk = |origin: &str| {
         let f = rut_lexer::lexer::normalize("fn helper() -> nil { }\n");
         let (ftoks, _) = rut_lexer::lexer::lex(&f);
-        let (fa, _) = rut_parser::parse(&f, rut_parser::Mode::Impl);
-        let mut i = index(&f, &fa, &ftoks, &comments_of(&f));
+        let fa = doc_ast(&f, Mode::Impl);
+        let mut i = index(&f, &fa, &ftoks);
         i.origin = origin.to_string();
         i
     };
@@ -178,8 +193,8 @@ fn ambiguity_lists_candidates() {
     let src = "fn go() -> nil { let h = helper(); }\n";
     let s = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&s);
-    let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let mut doc = index(&s, &ast, &toks, &comments_of(&s));
+    let ast = doc_ast(&s, Mode::Impl);
+    let mut doc = index(&s, &ast, &toks);
     doc.origin = "main.rut".to_string();
     let idxs = [&doc, &a, &b];
     let pos = find_ident_pos(&toks, "helper", 0).unwrap();
@@ -201,16 +216,16 @@ fn host_fn_surface_favors_own_methods() {
     // std-style surface index ahead of the doc
     let surf_src = "pub host fn string_join(s: [str]) -> i32;\n";
     let s2 = rut_lexer::lexer::normalize(surf_src);
-    let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Decl);
+    let sast = doc_ast(&s2, Mode::Decl);
     let (stoks, _) = rut_lexer::lexer::lex(&s2);
-    let mut surf = index(&s2, &sast, &stoks, &comments_of(&s2));
+    let mut surf = index(&s2, &sast, &stoks);
     surf.origin = "core".to_string();
 
     let doc = "fn main() -> i32 { return string_join([]); }\n";
     let d2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
-    let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-    let mut di = index(&d2, &ast, &toks, &comments_of(&d2));
+    let ast = doc_ast(&d2, Mode::Impl);
+    let mut di = index(&d2, &ast, &toks);
     di.origin = "main.rut".to_string();
     let idxs = [&di, &surf];
     let pos = find_ident_pos(&toks, "string_join", 0).unwrap();
@@ -295,16 +310,16 @@ fn foreign_interface_member_requires_use() {
     // interface's members need the use
     let surf_src = "interface Greeter {\nfn greet(self) -> nil;\n}\n";
     let s2 = rut_lexer::lexer::normalize(surf_src);
-    let (sast, _) = rut_parser::parse(&s2, rut_parser::Mode::Impl);
+    let sast = doc_ast(&s2, Mode::Impl);
     let (stoks, _) = rut_lexer::lexer::lex(&s2);
-    let mut surf = index(&s2, &sast, &stoks, &comments_of(&s2));
+    let mut surf = index(&s2, &sast, &stoks);
     surf.origin = "greets.rut".to_string();
 
     let mk = |doc: &str| {
         let d2 = rut_lexer::lexer::normalize(doc);
         let (toks, _) = rut_lexer::lexer::lex(&d2);
-        let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-        let mut di = index(&d2, &ast, &toks, &comments_of(&d2));
+        let ast = doc_ast(&d2, Mode::Impl);
+        let mut di = index(&d2, &ast, &toks);
         di.origin = "main.rut".to_string();
         let idxs = [&di, &surf];
         let pos = find_ident_pos(&toks, "greet", 0).unwrap();
@@ -654,8 +669,8 @@ fn binding_decl_span_is_byte_exact() {
     let src = "fn go() -> nil {\n    let total = 1;\n    let u = total;\n}\n";
     let src2 = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&src2);
-    let (ast, _) = rut_parser::parse(&src2, rut_parser::Mode::Impl);
-    let idx = index(&src2, &ast, &toks, &comments_of(&src2));
+    let ast = doc_ast(&src2, Mode::Impl);
+    let idx = index(&src2, &ast, &toks);
     let idxs = [&idx];
     let binds = bindings::collect(&ast, &toks, &idxs);
     let total = bindings::resolve(&binds, src2.rfind("total").unwrap() as u32, "total").unwrap();
@@ -713,13 +728,13 @@ fn surface_primitives_keep_their_rich_hover() {
     let core_src = "prelude builtin primitive str {\nfn len(self) -> i32;\n}\n";
     let c2 = rut_lexer::lexer::normalize(core_src);
     let (ctoks, _) = rut_lexer::lexer::lex(&c2);
-    let (cast, _) = rut_parser::parse(&c2, rut_parser::Mode::Decl);
-    let core = index(&c2, &cast, &ctoks, &comments_of(&c2));
+    let cast = doc_ast(&c2, Mode::Decl);
+    let core = index(&c2, &cast, &ctoks);
     let doc = "fn f(s: str) -> str { return s; }\n";
     let d2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
-    let (ast, _) = rut_parser::parse(&d2, rut_parser::Mode::Impl);
-    let di = index(&d2, &ast, &toks, &comments_of(&d2));
+    let ast = doc_ast(&d2, Mode::Impl);
+    let di = index(&d2, &ast, &toks);
     let idxs = [&di, &core];
     let pos = find_ident_pos(&toks, "str", 0).unwrap();
     let md = hover(
@@ -777,8 +792,8 @@ return rr;
 fn dep_index(pkg: &str, mod_path: &str, src: &str) -> DefIndex {
     let s = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&s);
-    let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let mut idx = index(&s, &ast, &toks, &comments_of(&s));
+    let ast = doc_ast(&s, Mode::Impl);
+    let mut idx = index(&s, &ast, &toks);
     idx.module = Some(pkg.to_string());
     idx.mod_path = Some(mod_path.to_string());
     idx
@@ -788,8 +803,8 @@ fn dep_index(pkg: &str, mod_path: &str, src: &str) -> DefIndex {
 fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
     let doc2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&doc2);
-    let (ast, _) = rut_parser::parse(&doc2, rut_parser::Mode::Impl);
-    let idx = index(&doc2, &ast, &toks, &comments_of(&doc2));
+    let ast = doc_ast(&doc2, Mode::Impl);
+    let idx = index(&doc2, &ast, &toks);
     let dep = [
         dep_index(
             "gadgets",
@@ -888,8 +903,8 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     let surf_src = "pub host fn abs(x: f64) -> f64;\npub host fn ceil(x: f64) -> f64;\n";
     let s = rut_lexer::lexer::normalize(surf_src);
     let (toks, _) = rut_lexer::lexer::lex(&s);
-    let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Decl);
-    let idx = index(&s, &ast, &toks, &comments_of(&s));
+    let ast = doc_ast(&s, Mode::Decl);
+    let idx = index(&s, &ast, &toks);
     // the surface decl span starts at `fn` (`pub` rides before it) — the
     // old slice was `host fn abs(x: f64) -> f64;\npub`
     assert_eq!(
@@ -912,8 +927,8 @@ fn host_fn_hover_via_the_calc_surface_has_no_next_decl_artifact() {
     let doc = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
-    let (ast, _) = rut_parser::parse(&s, rut_parser::Mode::Impl);
-    let di = index(&s, &ast, &toks, &comments_of(&s));
+    let ast = doc_ast(&s, Mode::Impl);
+    let di = index(&s, &ast, &toks);
     let std = rut_lsp_wasm::std_surface::indexes();
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -932,11 +947,4 @@ fn host_fn_hover_via_the_calc_surface_has_no_next_decl_artifact() {
         "{md}"
     );
     assert!(!md.contains(";pub"), "the next-decl artifact leaked: {md}");
-}
-
-/// the collected comment table — the same lane the facade rides
-/// (tests lex through the dev-dep seam)
-fn comments_of(src: &str) -> Vec<rut_lsp_wasm::semantic::Comment> {
-    let (_, _, comments) = rut_lexer::lexer::lex_normalized(src, true);
-    comments
 }

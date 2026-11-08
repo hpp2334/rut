@@ -24,7 +24,7 @@
 //!   access, and the member machinery resolves both through the minted
 //!   row).
 
-use rut_ast::ast::Vis;
+use rut_ast::Vis;
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
 use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
 use rut_driver::bundle::{parse_bundle, Manifest};
@@ -848,7 +848,7 @@ pub fn index_dep(
     // the ordinary index pass — the mode derives from the uri (the
     // filename convention; every caller already spelled it that way)
     let doc = rut_semantic::ParsedDoc::parse(uri, src);
-    let mut idx = crate::hover::index(doc.src(), &doc.ast, &doc.toks, &doc.comments);
+    let mut idx = crate::hover::index(doc.src(), &doc.ast, &doc.toks);
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
     // the parse mode rides the index — the definition layer's
@@ -892,21 +892,17 @@ pub fn index_dep_decl_group(
 ) -> Vec<(String, DefIndex)> {
     // the ordinary parse once — the uri's `.d.rut` suffix IS the
     // declaration entry lane's mode (the filename convention)
-    let rut_semantic::ParsedDoc {
-        ast,
-        toks,
-        comments,
-        ..
-    } = rut_semantic::ParsedDoc::parse(uri, src);
+    let doc = rut_semantic::ParsedDoc::parse(uri, src);
+    let (ast, toks, src) = (doc.ast, doc.toks, doc.src.clone());
     // the module slices: the root's items, then each inline module's,
     // path-stamped, first-wins (the loader's own edge law)
-    let mut modules: Vec<(String, Vec<rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>>)> =
-        vec![(String::new(), ast.module_items(ast.root).to_vec())];
-    collect_inline_modules(&ast, ast.module_items(ast.root), mod_path, &mut modules);
+    let mut modules: Vec<(String, Vec<rut_ast::ItemRef>)> =
+        vec![(String::new(), ast.root().items(&ast).to_vec())];
+    collect_inline_modules(&ast, ast.root().items(&ast), mod_path, &mut modules);
     modules
         .into_iter()
         .map(|(path, items)| {
-            let mut idx = crate::hover::index_items(&ast.src, &ast, &toks, &items, &comments);
+            let mut idx = crate::hover::index_items(&src, &ast, &toks, &items);
             // the entry uri for the file's own module; a `#<mod path>`
             // suffix for the nested ones — one index per module, one
             // origin each (the faces' defs store dedups by origin), the
@@ -934,21 +930,17 @@ pub fn index_dep_decl_group(
 /// under `prefix`. First-wins: a repeated inline edge never mounts
 /// twice.
 fn collect_inline_modules(
-    ast: &rut_ast::ast::Ast,
-    items: &[rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>],
+    ast: &rut_ast::Ast,
+    items: &[rut_ast::ItemRef],
     prefix: &str,
-    out: &mut Vec<(String, Vec<rut_ast::ast::NodeHandle<rut_ast::ast::AnyItem>>)>,
+    out: &mut Vec<(String, Vec<rut_ast::ItemRef>)>,
 ) {
     for &it in items {
-        let rut_ast::ast::ItemKind::ModInline {
-            name,
-            items: nested,
-            ..
-        } = ast.item(it)
-        else {
+        let rut_ast::ItemRef::ModInline(h) = it else {
             continue;
         };
-        let name = ast.name(*name).to_string();
+        let d = h.get(ast);
+        let name = ast.name(d.name).to_string();
         let path = if prefix.is_empty() {
             name
         } else {
@@ -957,8 +949,9 @@ fn collect_inline_modules(
         if out.iter().any(|(p, _)| *p == path) {
             continue; // first mount wins
         }
+        let nested = h.items(ast).to_vec();
         out.push((path.clone(), nested.clone()));
-        collect_inline_modules(ast, nested, &path, out);
+        collect_inline_modules(ast, &nested, &path, out);
     }
 }
 
