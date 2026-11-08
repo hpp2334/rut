@@ -130,9 +130,9 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
         rut_parser::Mode::Impl,
         rut_parser::ParseOpts::default(),
     );
-    let diags = p.ast.errors().to_vec();
-    let tree = rut_ast::to_dump_tree(&p.ast);
-    let ast_dump = rut_ast::render_text(&tree, &p.src);
+    let diags = p.ast().errors().to_vec();
+    let tree = rut_ast::to_dump_tree(p.ast());
+    let ast_dump = rut_ast::render_text(&tree, p.src());
     let ast_json = rut_ast::render_json(&tree);
     if !diags.is_empty() {
         return rut_driver::CompileOutput {

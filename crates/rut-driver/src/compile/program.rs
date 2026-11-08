@@ -270,7 +270,7 @@ fn compile_program_inner(
     // the pair artifact IS the unit's text: `src` is the NORMALIZED
     // text every span indexes (the renders and the line/col table
     // slice it — never a caller's raw input)
-    let rut_parser::Parsed { ast, src: text } = pre;
+    let (ast, text) = pre.into_parts();
     let mut diags: Vec<Diag> = Vec::new();
     let (ast_dump, ast_json) = if want_dumps {
         let tree = to_dump_tree(&ast);

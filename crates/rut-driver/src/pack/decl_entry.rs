@@ -404,15 +404,15 @@ fn ty_ast_text(ast: &Ast, t: TyRef) -> String {
 /// mean equal surfaces.
 pub fn facts_of_text(text: &str) -> Result<std::collections::BTreeSet<String>, String> {
     let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
-    if !p.ast.is_clean() {
-        let msgs: Vec<String> = p.ast.errors().iter().map(|d| d.msg.clone()).collect();
+    if !p.ast().is_clean() {
+        let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(
             "the declaration entry does not parse: {}",
             msgs.join("; ")
         ));
     }
     let mut facts = std::collections::BTreeSet::new();
-    facts_of_items(&p.ast, p.ast.root().items(&p.ast), &mut facts);
+    facts_of_items(p.ast(), p.ast().root().items(p.ast()), &mut facts);
     Ok(facts)
 }
 
@@ -592,16 +592,16 @@ fn splice_tree(
     mods: &std::collections::BTreeMap<String, crate::mods::ModSource>,
 ) -> Result<String, String> {
     let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
-    if !p.ast.is_clean() {
-        let msgs: Vec<String> = p.ast.errors().iter().map(|d| d.msg.clone()).collect();
+    if !p.ast().is_clean() {
+        let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!("the surface does not parse: {}", msgs.join("; ")));
     }
-    let ast = p.ast;
+    let (ast, src) = p.into_parts();
     // v2's exact item spans already end at the decl's own terminator
     // (`mod NAME;` ends at its semi), so the splice range is the span
     // itself; the token scan stays as the belt-and-braces locator over
-    // the SAME normalized text the spans index (`p.src`)
-    let (toks, _) = rut_lexer::lexer::lex_mode(&p.src);
+    // the SAME normalized text the spans index (`src`)
+    let (toks, _) = rut_lexer::lexer::lex_mode(&src);
     let semi_hi = |span_lo: u32, span_hi: u32| -> u32 {
         toks.iter()
             .find(|t| {
@@ -643,7 +643,7 @@ fn splice_tree(
     }
     // splice descending — spans stay valid
     edits.sort_by_key(|e| std::cmp::Reverse(e.0));
-    let mut out = p.src;
+    let mut out = src;
     for (lo, hi, replacement) in edits {
         out.replace_range(lo as usize..hi as usize, &replacement);
     }

@@ -55,10 +55,29 @@ pub struct ParseOpts {
 
 /// The pair artifact: the tree + ITS exact text. `src` is the
 /// NORMALIZED text every span indexes — the join target, never the
-/// caller's raw input.
+/// caller's raw input. The halves ride named doors (the capsule law):
+/// reads borrow, `into_parts` moves.
 pub struct Parsed {
-    pub ast: rut_ast::Ast,
-    pub src: String,
+    ast: rut_ast::Ast,
+    src: String,
+}
+
+impl Parsed {
+    /// the tree half
+    pub fn ast(&self) -> &rut_ast::Ast {
+        &self.ast
+    }
+
+    /// the text half — the NORMALIZED text every span indexes
+    pub fn src(&self) -> &str {
+        &self.src
+    }
+
+    /// the consuming door — both halves as owned values (the lanes
+    /// that store the pair's parts)
+    pub fn into_parts(self) -> (rut_ast::Ast, String) {
+        (self.ast, self.src)
+    }
 }
 
 /// The fail-fast entry: `Err` carries the FIRST diag and no tree was

@@ -12,7 +12,7 @@ const IMPL: Mode = Mode::Impl;
 fn fail_fast_is_err_first_diag_no_tree() {
     // clean source: Ok, and Ok implies clean
     let p = parse("fn main() -> nil {\n}\n", IMPL, ParseOpts::default()).unwrap();
-    assert!(p.ast.is_clean());
+    assert!(p.ast().is_clean());
 
     // broken source: Err IS the first diag
     let err = match parse(
@@ -46,7 +46,7 @@ fn fenced_fixture_three_homes() {
         "/* never closed\n", // E3: LEX — unterminated comment
     );
     let p = parse_with_recover(src, IMPL, ParseOpts::default());
-    let ast = &p.ast;
+    let ast = p.ast();
 
     assert!(!ast.is_clean());
     // the flat view carries every row, lex first
@@ -103,16 +103,16 @@ fn fenced_fixture_three_homes() {
     let e = eh.get(ast);
     assert!(!e.diags.is_empty());
     assert!(
-        e.span.text(&p.src).starts_with("fn ("),
+        e.span.text(p.src()).starts_with("fn ("),
         "the fence covers the whole construct: {:?}",
-        e.span.text(&p.src)
+        e.span.text(p.src())
     );
 
     // the lex row's root-level home: pre-seeded, span at EOF
     let ItemRef::Error(lx) = items[0] else {
         panic!()
     };
-    assert!(lx.get(ast).span.text(&p.src).contains("never closed"));
+    assert!(lx.get(ast).span.text(p.src()).contains("never closed"));
 }
 
 // ---- the RECOVERED fixture: part damage → member slots ----
@@ -131,7 +131,7 @@ fn recovered_fixture_member_slots() {
         "}\n",
     );
     let p = parse_with_recover(src, IMPL, ParseOpts::default());
-    let ast = &p.ast;
+    let ast = p.ast();
     assert!(!ast.is_clean());
 
     let items = ast.root().items(ast);
@@ -175,7 +175,7 @@ fn recovered_fixture_member_slots() {
 fn enum_members_fence_in_the_list() {
     let src = "enum Color {\n    Red,\n    3,\n    Green,\n}\n";
     let p = parse_with_recover(src, IMPL, ParseOpts::default());
-    let ast = &p.ast;
+    let ast = p.ast();
     let items = ast.root().items(ast);
     let ItemRef::Enum(eh) = items[0] else {
         panic!()
@@ -205,42 +205,42 @@ fn docs_ride_the_tree_and_views_borrow() {
             include_comments: true,
         },
     );
-    let ast = &p.ast;
+    let ast = p.ast();
     let items = ast.root().items(ast);
     let ItemRef::Fn(h) = items[0] else { panic!() };
     let f = h.get(ast);
     assert_eq!(
-        f.doc.lines(&p.src).collect::<Vec<_>>(),
+        f.doc.lines(p.src()).collect::<Vec<_>>(),
         vec!["adds one"],
         "the Go-convention chain, borrowed views"
     );
     // the name verdict — recorded, not recovered
-    assert_eq!(f.name_span.text(&p.src), "inc");
+    assert_eq!(f.name_span.text(p.src()), "inc");
     // spans are exact: the fn ends at its own `}`
     assert!(
-        f.span.text(&p.src).ends_with("}"),
+        f.span.text(p.src()).ends_with("}"),
         "{:?}",
-        f.span.text(&p.src)
+        f.span.text(p.src())
     );
 
     // and WITHOUT the opt the tree carries no docs
     let p2 = parse_with_recover(src, IMPL, ParseOpts::default());
-    let ItemRef::Fn(h2) = p2.ast.root().items(&p2.ast)[0] else {
+    let ItemRef::Fn(h2) = p2.ast().root().items(p2.ast())[0] else {
         panic!()
     };
-    assert!(h2.get(&p2.ast).doc.is_empty());
+    assert!(h2.get(p2.ast()).doc.is_empty());
     // default opts also collect no comments ⇒ no behavior change
-    assert!(p2.ast.is_clean());
+    assert!(p2.ast().is_clean());
 }
 
 #[test]
 fn the_pair_artifact_is_the_normalized_text() {
     // CRLF input: spans index the NORMALIZED text the pair carries
     let p = parse_with_recover("fn main() -> nil {\r}\r\n", IMPL, ParseOpts::default());
-    assert_eq!(p.src, "fn main() -> nil {\n}\n");
-    let items = p.ast.root().items(&p.ast);
+    assert_eq!(p.src(), "fn main() -> nil {\n}\n");
+    let items = p.ast().root().items(p.ast());
     let ItemRef::Fn(h) = items[0] else { panic!() };
-    assert_eq!(h.get(&p.ast).span.text(&p.src), "fn main() -> nil {\n}");
+    assert_eq!(h.get(p.ast()).span.text(p.src()), "fn main() -> nil {\n}");
 }
 
 #[test]
@@ -251,7 +251,7 @@ fn broken_init_is_a_slot_not_a_lost_let() {
         IMPL,
         ParseOpts::default(),
     );
-    let ast = &p.ast;
+    let ast = p.ast();
     let items = ast.root().items(ast);
     let ItemRef::Fn(h) = items[0] else { panic!() };
     let stmts = &h.get(ast).body.get(ast).stmts;

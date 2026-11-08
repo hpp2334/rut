@@ -553,9 +553,12 @@ impl<'a> GraphCompiler<'a> {
         let layout = mod_inputs_of(module, files);
         let mode = if is_decl { Mode::Decl } else { Mode::Impl };
         let parsed = parse_with_recover(&combined, mode, ParseOpts::default());
-        if !parsed.ast.is_clean() {
-            self.diags
-                .extend(attribute_diags(parsed.ast.errors().to_vec(), spec, &layout));
+        if !parsed.ast().is_clean() {
+            self.diags.extend(attribute_diags(
+                parsed.ast().errors().to_vec(),
+                spec,
+                &layout,
+            ));
             return None;
         }
         // phase-2 plumbing: collect the pkg's mounted module set —
@@ -581,7 +584,7 @@ impl<'a> GraphCompiler<'a> {
         // module; the own lane walks the consumer's own mod tree and
         // gates its leaves under the crossing predicate. The validated
         // dep heads ensure; the own bindings ride the compile.
-        let (uses, own_uses) = self.validate_qualified_uses(spec, module, &parsed.ast, &layout)?;
+        let (uses, own_uses) = self.validate_qualified_uses(spec, module, parsed.ast(), &layout)?;
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays
         // legal but redundant for them), while the `pub builtin`

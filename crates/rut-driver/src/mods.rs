@@ -135,7 +135,7 @@ pub fn mount_mod_children(
     read: &mut dyn FnMut(&str, &str) -> Result<ChildLookup, String>,
 ) -> Result<BTreeMap<String, ModSource>, String> {
     let p = parse_with_recover(root_text, mode, ParseOpts::default());
-    if !p.ast.is_clean() {
+    if !p.ast().is_clean() {
         return Ok(BTreeMap::new()); // the compile reports the syntax, loudly
     }
     let mut out = BTreeMap::new();
@@ -143,7 +143,7 @@ pub fn mount_mod_children(
     mount_rec(
         "",
         child_file,
-        &p.ast,
+        p.ast(),
         mode,
         child_file,
         read,
@@ -202,11 +202,11 @@ fn mount_rec(
                 // the child parses to its OWN module root — recurse
                 // into its declarations, never splice it here
                 let cp = parse_with_recover(&text, mode, ParseOpts::default());
-                if cp.ast.is_clean() {
+                if cp.ast().is_clean() {
                     mount_rec(
                         &child_path,
                         &file,
-                        &cp.ast,
+                        cp.ast(),
                         mode,
                         child_file,
                         read,
@@ -343,16 +343,16 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
         MountedBody::Source { text, is_decl } => {
             let m = if *is_decl { Mode::Decl } else { Mode::Impl };
             let p = parse_with_recover(text, m, ParseOpts::default());
-            if !p.ast.is_clean() {
+            if !p.ast().is_clean() {
                 problems.extend(
-                    p.ast
+                    p.ast()
                         .errors()
                         .iter()
                         .map(|d| format!("`{spec}` (mod.rut): {}", d.msg)),
                 );
                 BTreeMap::new()
             } else {
-                let decls = decl_rows(&p.ast);
+                let decls = decl_rows(p.ast());
                 let declared: BTreeMap<String, Vis> = decls
                     .iter()
                     .filter(|d| d.kind == DeclKind::Mod)
@@ -360,7 +360,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .collect();
                 set.units.push(ModuleUnit {
                     path: String::new(),
-                    ast: p.ast,
+                    ast: p.into_parts().0,
                     decls,
                 });
                 declared
@@ -371,16 +371,16 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             ..
         } => {
             let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
-            if !p.ast.is_clean() {
+            if !p.ast().is_clean() {
                 problems.extend(
-                    p.ast
+                    p.ast()
                         .errors()
                         .iter()
                         .map(|d| format!("`{spec}` ({child_file}): {}", d.msg)),
                 );
                 BTreeMap::new()
             } else {
-                let decls = decl_rows(&p.ast);
+                let decls = decl_rows(p.ast());
                 let declared: BTreeMap<String, Vis> = decls
                     .iter()
                     .filter(|d| d.kind == DeclKind::Mod)
@@ -388,7 +388,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .collect();
                 set.units.push(ModuleUnit {
                     path: String::new(),
-                    ast: p.ast,
+                    ast: p.into_parts().0,
                     decls,
                 });
                 declared
@@ -400,9 +400,9 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     let mut child_decls: BTreeMap<String, BTreeMap<String, Vis>> = BTreeMap::new();
     for (path, m) in &pkg.mods {
         let p = parse_with_recover(&m.text, mode, ParseOpts::default());
-        if !p.ast.is_clean() {
+        if !p.ast().is_clean() {
             problems.extend(
-                p.ast
+                p.ast()
                     .errors()
                     .iter()
                     .map(|d| format!("`{spec}` ({path}/{child_file}): {}", d.msg)),
@@ -410,12 +410,12 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             child_decls.insert(path.clone(), BTreeMap::new());
             set.units.push(ModuleUnit {
                 path: path.clone(),
-                ast: p.ast,
+                ast: p.into_parts().0,
                 decls: vec![],
             });
             continue;
         }
-        let decls = decl_rows(&p.ast);
+        let decls = decl_rows(p.ast());
         let declared: BTreeMap<String, Vis> = decls
             .iter()
             .filter(|d| d.kind == DeclKind::Mod)
@@ -424,7 +424,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
         child_decls.insert(path.clone(), declared);
         set.units.push(ModuleUnit {
             path: path.clone(),
-            ast: p.ast,
+            ast: p.into_parts().0,
             decls,
         });
     }

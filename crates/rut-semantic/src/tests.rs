@@ -10,7 +10,7 @@ use super::*;
 fn classify_in(src: &str, mode: Mode) -> Vec<(Span, TokenType)> {
     let (toks, _) = rut_lexer::lexer::lex(src);
     let p = parse_with_recover(src, mode, ParseOpts::default());
-    classify(&toks, &p.ast)
+    classify(&toks, p.ast())
 }
 
 fn classify_src(src: &str) -> Vec<(Span, TokenType)> {
@@ -224,7 +224,7 @@ fn symbols_outline() {
     let src = "interface Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\nentry fn main() -> nil {}\n";
     let (toks, _) = rut_lexer::lexer::lex(src);
     let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
-    let syms = symbols(&toks, &p.ast);
+    let syms = symbols(&toks, p.ast());
     let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, vec!["Drawable", "impl Circle", "Color", "main"]);
     assert_eq!(syms[0].kind, SymKind::Interface);
@@ -405,12 +405,12 @@ fn comments_never_touch_adjacent_strings() {
     assert_eq!(texts, vec!["/*c*/", "// real"]);
     let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
     assert_eq!(
-        find(doc.src(), &doc.spans, "\"// not a comment\""),
+        find(doc.src(), doc.spans(), "\"// not a comment\""),
         vec![TokenType::String]
     );
     for c in &comments_of(src) {
         assert!(
-            doc.spans
+            doc.spans()
                 .iter()
                 .all(|(sp, _)| sp.hi <= c.span.lo || c.span.hi <= sp.lo),
             "a comment overlaps a classified span: {:?}",
@@ -427,14 +427,14 @@ fn parsed_doc_spans_stay_sorted_and_disjoint() {
     let src = "// top\n/* banner */\nlet a = 1; // one\nfn f(x: i32) -> i32 { x } /* tail */\n";
     let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
     let mut prev_hi = 0;
-    for (sp, _) in &doc.spans {
+    for (sp, _) in doc.spans() {
         assert!(sp.lo < sp.hi, "empty span at {}", sp.lo);
         assert!(sp.lo >= prev_hi, "overlap at {}", sp.lo);
         assert!(sp.hi as usize <= doc.src().len(), "out of file");
         prev_hi = sp.hi;
     }
     let mut all: Vec<_> = doc
-        .spans
+        .spans()
         .iter()
         .map(|(sp, _)| *sp)
         .chain(comments_of(doc.src()).iter().map(|c| c.span))
@@ -444,7 +444,7 @@ fn parsed_doc_spans_stay_sorted_and_disjoint() {
         all.windows(2).all(|w| w[0].hi <= w[1].lo),
         "comments interleave disjointly with spans"
     );
-    assert!(doc.spans.iter().any(|(_, t)| *t == TokenType::Keyword));
+    assert!(doc.spans().iter().any(|(_, t)| *t == TokenType::Keyword));
     assert_eq!(comments_of(doc.src()).len(), 4);
 }
 
@@ -457,11 +457,14 @@ fn broken_source_still_classifies_and_collects() {
     let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
     assert!(!doc.diags().is_empty(), "the break is diagnosed");
     assert_eq!(
-        find(doc.src(), &doc.spans, "entry"),
+        find(doc.src(), doc.spans(), "entry"),
         vec![TokenType::Keyword]
     );
-    assert_eq!(find(doc.src(), &doc.spans, "let"), vec![TokenType::Keyword]);
-    assert_eq!(find(doc.src(), &doc.spans, "fn"), vec![TokenType::Keyword]);
+    assert_eq!(
+        find(doc.src(), doc.spans(), "let"),
+        vec![TokenType::Keyword]
+    );
+    assert_eq!(find(doc.src(), doc.spans(), "fn"), vec![TokenType::Keyword]);
     assert_eq!(comments_of(doc.src()).len(), 1);
 }
 
@@ -472,11 +475,11 @@ fn doc_chains_graft_onto_decl_nodes() {
     // table scan is gone, the node field is the truth
     let src = "// the total\n// in two lines\nlet TOTAL = 10;\n";
     let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
-    let item = doc.ast.root().items(&doc.ast)[0];
+    let item = doc.ast().root().items(doc.ast())[0];
     let rut_ast::ItemRef::ModuleLet(h) = item else {
         panic!("the module let survived the parse: {item:?}");
     };
-    let lines: Vec<&str> = h.get(&doc.ast).doc.lines(doc.src()).collect();
+    let lines: Vec<&str> = h.get(doc.ast()).doc.lines(doc.src()).collect();
     assert_eq!(lines, vec!["the total", "in two lines"]);
 }
 
@@ -503,5 +506,5 @@ fn parsed_doc_takes_the_mode_mode_of_spells() {
         bad.diags()
     );
     // the editor law: recovering — the tree is present regardless
-    assert!(!bad.ast.root().items(&bad.ast).is_empty());
+    assert!(!bad.ast().root().items(bad.ast()).is_empty());
 }

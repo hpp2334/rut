@@ -74,11 +74,11 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 fn declared_names() -> DeclSurfaces {
     let p = parse_with_recover(CORE_DECL, Mode::Decl, ParseOpts::default());
     assert!(
-        p.ast.is_clean(),
+        p.ast().is_clean(),
         "core.d.rut must parse cleanly: {:?}",
-        p.ast.errors()
+        p.ast().errors()
     );
-    let ast = p.ast;
+    let (ast, _) = p.into_parts();
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
     let mut plain_ifaces = Vec::new();

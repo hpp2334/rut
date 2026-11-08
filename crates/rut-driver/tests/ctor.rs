@@ -426,7 +426,7 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
         Mode::Impl,
         rut_parser::ParseOpts::default(),
     );
-    let diags = p.ast.errors().to_vec();
+    let diags = p.ast().errors().to_vec();
     assert!(
         diags
             .iter()
@@ -441,9 +441,9 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
         rut_parser::ParseOpts::default(),
     );
     assert!(
-        !p.ast.is_clean(),
+        !p.ast().is_clean(),
         "a free-fn marker must diagnose: {:?}",
-        p.ast.errors()
+        p.ast().errors()
     );
     // the trait-impl spelling is gone entirely — the marker never
     // reaches a `for` body
@@ -455,12 +455,12 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
         rut_parser::ParseOpts::default(),
     );
     assert!(
-        p.ast
+        p.ast()
             .errors()
             .iter()
             .any(|d| d.msg.contains("expected {, found `for`")),
         "the trait-impl spelling dies at the parser: {:?}",
-        p.ast.errors()
+        p.ast().errors()
     );
 }
 

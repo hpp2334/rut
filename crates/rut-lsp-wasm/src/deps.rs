@@ -848,7 +848,7 @@ pub fn index_dep(
     // the ordinary index pass — `mode_of(uri)` spells the filename
     // convention (every caller already derived it that way)
     let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
-    let mut idx = crate::hover::index(doc.src(), &doc.ast, &doc.toks);
+    let mut idx = crate::hover::index(doc.src(), doc.ast(), doc.toks());
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
     // the parse mode rides the index — the definition layer's
@@ -893,16 +893,16 @@ pub fn index_dep_decl_group(
     // the ordinary parse once — `mode_of(uri)`: the `.d.rut` suffix IS
     // the declaration entry lane's mode (the filename convention)
     let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
-    let (ast, toks, src) = (doc.ast, doc.toks, doc.src.clone());
+    let (ast, toks, src) = (doc.ast(), doc.toks(), doc.src());
     // the module slices: the root's items, then each inline module's,
     // path-stamped, first-wins (the loader's own edge law)
     let mut modules: Vec<(String, Vec<rut_ast::ItemRef>)> =
-        vec![(String::new(), ast.root().items(&ast).to_vec())];
-    collect_inline_modules(&ast, ast.root().items(&ast), mod_path, &mut modules);
+        vec![(String::new(), ast.root().items(ast).to_vec())];
+    collect_inline_modules(ast, ast.root().items(ast), mod_path, &mut modules);
     modules
         .into_iter()
         .map(|(path, items)| {
-            let mut idx = crate::hover::index_items(&src, &ast, &toks, &items);
+            let mut idx = crate::hover::index_items(src, ast, toks, &items);
             // the entry uri for the file's own module; a `#<mod path>`
             // suffix for the nested ones — one index per module, one
             // origin each (the faces' defs store dedups by origin), the

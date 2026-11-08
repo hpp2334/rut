@@ -302,13 +302,6 @@ fn targets<'a>(ctx: &definition::Ctx<'a>, pos: u32, name: &str) -> Vec<Target<'a
     out
 }
 
-/// one parsed candidate file — the doc reuses the query pipeline's
-/// tokens/AST; the other files lex+parse their indexed source once
-struct Parsed {
-    toks: Vec<Token>,
-    ast: rut_ast::Ast,
-}
-
 /// a declaring ident never doubles as a reference to a DIFFERENT
 /// declaration of the same name — at such a token definition's bare-name
 /// layers answer with the ambiguity peek (every same-named fn/type), and
@@ -349,6 +342,10 @@ fn decl_ident_spans(
     out
 }
 
+/// the scan over every candidate file — the non-doc candidates
+/// lex+parse their indexed source once (doc-sized files; the per-query
+/// re-parse is the house style — hover already rides it; the capsule's
+/// read doors hand the parts out)
 fn scan_files(
     ctx: &definition::Ctx,
     files: &[&DefIndex],
@@ -359,13 +356,12 @@ fn scan_files(
 ) {
     // parse the non-doc candidates once (doc-sized files; the per-query
     // re-parse is the house style — hover already rides it)
-    let mut parsed: Vec<(&DefIndex, Parsed)> = Vec::new();
+    let mut parsed: Vec<(&DefIndex, rut_semantic::ParsedDoc)> = Vec::new();
     for f in files {
         if std::ptr::eq(*f, ctx.doc()) {
             continue;
         }
-        let (toks, ast) = crate::analysis::parse_at(f.origin.as_str(), &f.src);
-        parsed.push((f, Parsed { toks, ast }));
+        parsed.push((f, crate::analysis::parse_at(f.origin.as_str(), &f.src)));
     }
 
     for f in files {
@@ -378,7 +374,7 @@ fn scan_files(
         // files ride their per-file parse
         let (toks, ast): (&[Token], &rut_ast::Ast) =
             match parsed.iter().find(|(i, _)| std::ptr::eq(*i, *f)) {
-                Some(p) => (&p.1.toks, &p.1.ast),
+                Some(p) => (p.1.toks(), p.1.ast()),
                 None if is_doc => (ctx.toks, ctx.ast),
                 None => unreachable!("every non-doc candidate was parsed above"),
             };

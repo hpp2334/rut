@@ -19,7 +19,8 @@ fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
             include_comments: true,
         },
     )
-    .ast
+    .into_parts()
+    .0
 }
 
 fn hover_at(src: &str, needle: &str) -> Option<String> {

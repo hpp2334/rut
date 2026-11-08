@@ -45,12 +45,12 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     // NORMALIZED text every span indexes — the renders slice it, never
     // the caller's raw input (the pair-artifact law, v2)
     let p = parse_with_recover(src, mode, ParseOpts::default());
-    let tree = to_dump_tree(&p.ast);
-    let ast_dump = ast_render_text(&tree, &p.src);
+    let tree = to_dump_tree(p.ast());
+    let ast_dump = ast_render_text(&tree, p.src());
     let ast_json = ast_render_json(&tree);
-    if !p.ast.is_clean() {
+    if !p.ast().is_clean() {
         return CompileOutput {
-            diags: p.ast.errors().to_vec(),
+            diags: p.ast().errors().to_vec(),
             ast_dump,
             ast_json,
             ir_dump: String::new(),

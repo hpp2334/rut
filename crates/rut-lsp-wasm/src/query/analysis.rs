@@ -4,8 +4,7 @@
 //! identity at construction. The server layer only routes and publishes.
 
 use ls_types::*;
-use rut_ast::Ast;
-use rut_semantic::{Diag, LineIndex, Span, Token};
+use rut_semantic::{Diag, LineIndex, Span};
 use std::str::FromStr;
 
 use crate::completion;
@@ -16,13 +15,51 @@ use crate::references;
 use crate::signature_help;
 use rut_semantic::{RawSymbol, SymKind, TokenType};
 
+/// the analysis envelope — a capsule: ONE construction lane (below),
+/// every part read through named doors; the server lane moves the
+/// rows via `into_parts`.
 pub struct Analysis {
-    pub diags: Vec<Diagnostic>,
-    pub tokens: Vec<SemanticToken>,
-    pub symbols: Vec<DocumentSymbol>,
+    diags: Vec<Diagnostic>,
+    tokens: Vec<SemanticToken>,
+    symbols: Vec<DocumentSymbol>,
     /// the hover definition index (origin stamped at construction from
     /// the document's URI)
-    pub index: hover::DefIndex,
+    index: hover::DefIndex,
+}
+
+impl Analysis {
+    /// the parse + check diagnostics
+    pub fn diags(&self) -> &[Diagnostic] {
+        &self.diags
+    }
+
+    /// the semantic tokens, delta-encoded
+    pub fn tokens(&self) -> &[SemanticToken] {
+        &self.tokens
+    }
+
+    /// the document-symbol tree
+    pub fn symbols(&self) -> &[DocumentSymbol] {
+        &self.symbols
+    }
+
+    /// the hover definition index (origin stamped)
+    pub fn index(&self) -> &hover::DefIndex {
+        &self.index
+    }
+
+    /// the consuming door — the rows as owned values (the server lane
+    /// hands them to the wire)
+    pub fn into_parts(
+        self,
+    ) -> (
+        Vec<Diagnostic>,
+        Vec<SemanticToken>,
+        Vec<DocumentSymbol>,
+        hover::DefIndex,
+    ) {
+        (self.diags, self.tokens, self.symbols, self.index)
+    }
 }
 
 /// moved to `rut-semantic` (the document layer owns the filename
@@ -34,16 +71,16 @@ pub use rut_semantic::mode_of;
 /// degenerate twin below rides the placeholder)
 fn analysis_of(doc: &rut_semantic::ParsedDoc, uri: &Uri) -> Analysis {
     let src = doc.src();
-    let mut index = hover::index(src, &doc.ast, &doc.toks);
+    let mut index = hover::index(src, doc.ast(), doc.toks());
     index.origin = uri.as_str().to_string();
     Analysis {
         diags: doc
             .diags()
             .iter()
-            .map(|d| to_diagnostic(d, src, &doc.lines, uri))
+            .map(|d| to_diagnostic(d, src, doc.lines(), uri))
             .collect(),
-        tokens: encode(&doc.spans, src, &doc.lines),
-        symbols: to_document_symbols(doc.symbols.clone(), src, &doc.lines),
+        tokens: encode(doc.spans(), src, doc.lines()),
+        symbols: to_document_symbols(doc.symbols(), src, doc.lines()),
         index,
     }
 }
@@ -181,25 +218,23 @@ pub fn analyze_at(uri: &Uri, src: &str) -> Analysis {
 // once, so no host can grow its own dialect.
 
 /// per-query pipeline: normalize → lex → parse → the document's index
-/// (origin stamped). The queries below only add position + lookup.
-fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
+/// (origin stamped). The queries below only add position + lookup —
+/// they hold the doc and borrow its parts (the capsule's read doors).
+fn doc_ctx(uri: &str, src: &str) -> (rut_semantic::ParsedDoc, hover::DefIndex) {
     // ONE derivation per query: the facade parses (mode from the
     // filename convention) and the hover index builds over its parts —
     // the old shape parsed the same text twice (its own parse +
     // index_at's)
     let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
-    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
+    let mut idx = hover::index(d.src(), d.ast(), d.toks());
     idx.origin = uri.to_string();
-    let rut_semantic::ParsedDoc { ast, toks, src, .. } = d;
-    // one String clone per query — the consumers want the text and the
-    // tree as separate values (the parse itself dwarfs this)
-    (src, toks, ast, idx)
+    (d, idx)
 }
 
 /// the definition index for one document (origin stamped with `uri`)
 pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
     let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
-    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
+    let mut idx = hover::index(d.src(), d.ast(), d.toks());
     idx.origin = uri.to_string();
     idx
 }
@@ -231,15 +266,15 @@ pub fn hover_at(
     line: u32,
     ch: u32,
 ) -> Option<Hover> {
-    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let (d, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
-    let h = hover::hover(&idxs, &toks, &ast, dm, byte_at(&normalized, line, ch))?;
+    let h = hover::hover(&idxs, d.toks(), d.ast(), dm, byte_at(d.src(), line, ch))?;
     Some(Hover {
         contents: HoverContents::Markup(MarkupContent {
             kind: MarkupKind::Markdown,
             value: h.markdown,
         }),
-        range: Some(range_of(&LineIndex::new(&normalized), &normalized, h.span)),
+        range: Some(range_of(d.lines(), d.src(), h.span)),
     })
 }
 
@@ -257,14 +292,14 @@ pub fn complete_at(
     ch: u32,
     doc: &crate::mods::DocMods,
 ) -> Vec<CompletionItem> {
-    let (normalized, toks, ast, doc_index) = doc_ctx(uri, src);
+    let (d, doc_index) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc_index, extra);
     completion::complete(
         &idxs,
-        &toks,
-        &ast,
-        byte_at(&normalized, line, ch),
-        &normalized,
+        d.toks(),
+        d.ast(),
+        byte_at(d.src(), line, ch),
+        d.src(),
         doc,
     )
     .into_iter()
@@ -288,16 +323,16 @@ pub fn definition_at(
     line: u32,
     ch: u32,
 ) -> Vec<definition::DefLocation> {
-    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let (d, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
         doc_uri: uri,
-        toks: &toks,
-        ast: &ast,
+        toks: d.toks(),
+        ast: d.ast(),
         idxs: &idxs,
         doc_mods: dm,
     };
-    definition::definition(&ctx, byte_at(&normalized, line, ch))
+    definition::definition(&ctx, byte_at(d.src(), line, ch))
 }
 
 /// type definitions at an LSP position: the expression's type head →
@@ -310,25 +345,23 @@ pub fn type_definition_at(
     line: u32,
     ch: u32,
 ) -> Vec<definition::DefLocation> {
-    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let (d, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
         doc_uri: uri,
-        toks: &toks,
-        ast: &ast,
+        toks: d.toks(),
+        ast: d.ast(),
         idxs: &idxs,
         doc_mods: dm,
     };
-    definition::type_definition(&ctx, byte_at(&normalized, line, ch))
+    definition::type_definition(&ctx, byte_at(d.src(), line, ch))
 }
 
-/// the token + AST half of `doc_ctx` — `references` re-parses candidate
-/// files over their indexed source (doc-sized files; the per-query
-/// re-parse is the house style — hover already rides it)
-pub(crate) fn parse_at(uri: &str, src: &str) -> (Vec<Token>, Ast) {
-    let rut_semantic::ParsedDoc { ast, toks, .. } =
-        rut_semantic::ParsedDoc::parse(mode_of(uri), src);
-    (toks, ast)
+/// the doc itself — `references` re-parses candidate files over their
+/// indexed source (doc-sized files; the per-query re-parse is the
+/// house style — hover already rides it)
+pub(crate) fn parse_at(uri: &str, src: &str) -> rut_semantic::ParsedDoc {
+    rut_semantic::ParsedDoc::parse(mode_of(uri), src)
 }
 
 /// inlay hints over a document range (the survey §4.3): TYPE hints on
@@ -342,19 +375,19 @@ pub fn inlay_hints_at(
     extra: &[hover::DefIndex],
     range: Range,
 ) -> Vec<InlayHint> {
-    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let (d, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
-    let index = LineIndex::new(&normalized);
+    let index = d.lines();
     let ctx = inlay::Ctx {
-        ast: &ast,
-        toks: &toks,
+        ast: d.ast(),
+        toks: d.toks(),
         doc: &doc,
         idxs: &idxs,
-        index: &index,
-        src: &normalized,
+        index,
+        src: d.src(),
     };
-    let lo = index.byte(&normalized, range.start.line, range.start.character);
-    let hi = index.byte(&normalized, range.end.line, range.end.character);
+    let lo = index.byte(d.src(), range.start.line, range.start.character);
+    let hi = index.byte(d.src(), range.end.line, range.end.character);
     inlay::hints(&ctx, lo, hi)
 }
 
@@ -372,16 +405,16 @@ pub fn references_at(
     ch: u32,
     include_declaration: bool,
 ) -> Vec<definition::DefLocation> {
-    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let (d, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = definition::Ctx {
         doc_uri: uri,
-        toks: &toks,
-        ast: &ast,
+        toks: d.toks(),
+        ast: d.ast(),
         idxs: &idxs,
         doc_mods: dm,
     };
-    references::references(&ctx, byte_at(&normalized, line, ch), include_declaration)
+    references::references(&ctx, byte_at(d.src(), line, ch), include_declaration)
 }
 
 /// signature help at an LSP position (the survey §4.4): the callee
@@ -397,20 +430,20 @@ pub fn signature_help_at(
     line: u32,
     ch: u32,
 ) -> Option<SignatureHelp> {
-    let (normalized, toks, ast, doc) = doc_ctx(uri, src);
+    let (d, doc) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc, extra);
     let ctx = signature_help::Ctx {
-        toks: &toks,
-        ast: &ast,
+        toks: d.toks(),
+        ast: d.ast(),
         idxs: &idxs,
     };
-    signature_help::signature_help(&ctx, byte_at(&normalized, line, ch))
+    signature_help::signature_help(&ctx, byte_at(d.src(), line, ch))
 }
 
 // ---- symbols ----
 
-fn to_document_symbols(raw: Vec<RawSymbol>, src: &str, index: &LineIndex) -> Vec<DocumentSymbol> {
-    raw.into_iter().map(|r| convert(r, src, index)).collect()
+fn to_document_symbols(raw: &[RawSymbol], src: &str, index: &LineIndex) -> Vec<DocumentSymbol> {
+    raw.iter().map(|r| convert(r.clone(), src, index)).collect()
 }
 
 #[allow(deprecated)] // `DocumentSymbol::deprecated` — kept for older clients; tags are the modern way
@@ -435,7 +468,7 @@ fn convert(r: RawSymbol, src: &str, index: &LineIndex) -> DocumentSymbol {
         children: if r.children.is_empty() {
             None
         } else {
-            Some(to_document_symbols(r.children, src, index))
+            Some(to_document_symbols(&r.children, src, index))
         },
     }
 }

@@ -56,11 +56,11 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
         let mode = mode_of(f);
         // the parser's own gate first — the formatter's input law
         let base = parse_with_recover(&src, mode, ParseOpts::default());
-        if !base.ast.is_clean() {
+        if !base.ast().is_clean() {
             failures.push(format!(
                 "{}: does not parse at base ({} diags)",
                 f.display(),
-                base.ast.errors().len()
+                base.ast().errors().len()
             ));
             continue;
         }
@@ -76,11 +76,11 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
             }
         };
         let reparsed = parse_with_recover(&out, mode, ParseOpts::default());
-        if !reparsed.ast.is_clean() {
+        if !reparsed.ast().is_clean() {
             failures.push(format!(
                 "{}: FORMATTED text does not reparse: {}",
                 f.display(),
-                reparsed.ast.errors()[0].msg
+                reparsed.ast().errors()[0].msg
             ));
             continue;
         }
@@ -245,16 +245,16 @@ fn corpus_dump_trees_match_through_format() {
         let mode = mode_of(f);
         let p1 = parse_with_recover(&src, mode, ParseOpts::default());
         let want = norm_lits(&span_free(&rut_ast::render_text(
-            &rut_ast::to_dump_tree(&p1.ast),
-            &p1.src,
+            &rut_ast::to_dump_tree(p1.ast()),
+            p1.src(),
         )));
         let Ok(out) = rut_fmt::format(&src, mode, &rut_fmt::Style::default()) else {
             continue; // covered by the other test's message
         };
         let p2 = parse_with_recover(&out, mode, ParseOpts::default());
         let got = norm_lits(&span_free(&rut_ast::render_text(
-            &rut_ast::to_dump_tree(&p2.ast),
-            &p2.src,
+            &rut_ast::to_dump_tree(p2.ast()),
+            p2.src(),
         )));
         if got != want {
             // find the first differing line for a readable failure
@@ -305,9 +305,9 @@ impl Circle {
 ";
     let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
     assert!(
-        p.ast.is_clean(),
+        p.ast().is_clean(),
         "the fixture must parse clean: {:?}",
-        p.ast.errors()
+        p.ast().errors()
     );
     let out = rut_fmt::format(src, Mode::Impl, &rut_fmt::Style::default()).expect("fmt accepts it");
     assert!(
@@ -325,9 +325,9 @@ impl Circle {
     );
     let q = parse_with_recover(&out, Mode::Impl, ParseOpts::default());
     assert!(
-        q.ast.is_clean(),
+        q.ast().is_clean(),
         "the formatted text must reparse clean: {:?}",
-        q.ast.errors()
+        q.ast().errors()
     );
     let out2 =
         rut_fmt::format(&out, Mode::Impl, &rut_fmt::Style::default()).expect("fmt(fmt) accepts it");

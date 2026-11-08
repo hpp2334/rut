@@ -181,6 +181,8 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
                 Ok(u) => crate::analysis::analyze_at(&u, &src),
                 Err(_) => crate::analysis::analyze_unstamped(&uri, &src),
             };
+            // the envelope's rows move to the wire via the consuming door
+            let (a_diags, a_tokens, a_symbols, _) = a.into_parts();
             let diags = {
                 let dm = core.doc_mods_of(&uri);
                 let groups = if dm.pkg.is_some() {
@@ -188,7 +190,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
                 } else {
                     Vec::new()
                 };
-                crate::check::merged_doc_diags(&uri, &src, dm.pkg, dm.mod_path, groups, a.diags)
+                crate::check::merged_doc_diags(&uri, &src, dm.pkg, dm.mod_path, groups, a_diags)
             };
             let answer = json_envelope(wire::Analysis {
                 diags,
@@ -196,9 +198,9 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
                 // (the same bytes a stdio face would put on the wire)
                 tokens: ls_types::SemanticTokens {
                     result_id: None,
-                    data: a.tokens,
+                    data: a_tokens,
                 },
-                symbols: a.symbols,
+                symbols: a_symbols,
             });
             let _ = tx.send(Reply::Text(answer));
         }

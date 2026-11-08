@@ -120,14 +120,14 @@ pub fn lower_decl_module(
     origin: &str,
 ) -> Result<Mounted, String> {
     let p = parse_with_recover(src, Mode::Decl, ParseOpts::default());
-    if !p.ast.is_clean() {
-        let msgs: Vec<String> = p.ast.errors().iter().map(|d| d.msg.clone()).collect();
+    if !p.ast().is_clean() {
+        let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(
             "{origin}: the surface does not parse: {}",
             msgs.join("; ")
         ));
     }
-    let ast = p.ast;
+    let (ast, _) = p.into_parts();
     let mut host_funcs: Vec<HostRow> = Vec::new();
     // first mount wins, mirrored in the lowering: a repeated
     // `mod NAME;` names the same mounted child — lower it once
@@ -256,14 +256,15 @@ fn lower_module(
                     continue; // first mount wins — one lowering per child
                 }
                 let cp = parse_with_recover(&child.text, Mode::Decl, ParseOpts::default());
-                if !cp.ast.is_clean() {
-                    let msgs: Vec<String> = cp.ast.errors().iter().map(|d| d.msg.clone()).collect();
+                if !cp.ast().is_clean() {
+                    let msgs: Vec<String> =
+                        cp.ast().errors().iter().map(|d| d.msg.clone()).collect();
                     return Err(format!(
                         "{child_path}/{DECL_CHILD_FILE}: the surface does not parse: {}",
                         msgs.join("; ")
                     ));
                 }
-                lower_module(&cp.ast, &child_path, children, origin, rows, lowered)?;
+                lower_module(cp.ast(), &child_path, children, origin, rows, lowered)?;
             }
             ItemRef::ModInline(h) => {
                 let d = h.get(ast);
@@ -341,11 +342,11 @@ fn join_path(path: &str, name: &str) -> String {
 /// come from the host lane's own lowering.
 pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
     let p = parse_with_recover(src, Mode::Decl, ParseOpts::default());
-    if !p.ast.is_clean() {
+    if !p.ast().is_clean() {
         return Ok(()); // non-parsing surfaces stay inert (doc-only)
     }
     let mut rows: Vec<HostRow> = Vec::new();
-    if lower_rows(&p.ast, "", origin, &mut rows).is_err() {
+    if lower_rows(p.ast(), "", origin, &mut rows).is_err() {
         return Ok(()); // a non-crossing signature is the host lane's error, not this law's
     }
     if let Some(row) = rows.first() {

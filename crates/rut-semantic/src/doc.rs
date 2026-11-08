@@ -36,21 +36,23 @@ pub fn mode_of(path: &str) -> Mode {
     }
 }
 
-/// the editor's per-document bundle — see the module doc.
+/// the editor's per-document bundle — see the module doc. A capsule:
+/// ONE construction lane (`parse`), every part read through named
+/// doors; consumers hold the doc and borrow (`&ParsedDoc` parts).
 pub struct ParsedDoc {
     /// the AST artifact — self-contained structure (the capsule store;
     /// the text lives in `src`, the pair's other half)
-    pub ast: Ast,
+    ast: Ast,
     /// the NORMALIZED text every span indexes
-    pub src: String,
+    src: String,
     /// the leaf layer, lexed once
-    pub toks: Vec<Token>,
+    toks: Vec<Token>,
     /// byte offset ⇄ (line, UTF-16 column) over `src`
-    pub lines: LineIndex,
+    lines: LineIndex,
     /// `classify` over (toks, ast), once — the semantic-token spans
-    pub spans: Vec<(Span, TokenType)>,
+    spans: Vec<(Span, TokenType)>,
     /// `symbols` over (toks, ast), once — the document-symbol tree
-    pub symbols: Vec<RawSymbol>,
+    symbols: Vec<RawSymbol>,
 }
 
 impl ParsedDoc {
@@ -65,18 +67,44 @@ impl ParsedDoc {
                 include_comments: true,
             },
         );
-        let (toks, _, _) = lex_normalized(&p.src, false);
-        let spans = classify(&toks, &p.ast);
-        let syms = symbols(&toks, &p.ast);
-        let lines = LineIndex::new(&p.src);
+        let (toks, _, _) = lex_normalized(p.src(), false);
+        let spans = classify(&toks, p.ast());
+        let syms = symbols(&toks, p.ast());
+        let lines = LineIndex::new(p.src());
+        let (ast, src) = p.into_parts();
         ParsedDoc {
-            ast: p.ast,
+            ast,
             toks,
             lines,
             spans,
             symbols: syms,
-            src: p.src,
+            src,
         }
+    }
+
+    /// the AST artifact — the capsule store (the text lives in `src`)
+    pub fn ast(&self) -> &Ast {
+        &self.ast
+    }
+
+    /// the leaf layer, lexed once
+    pub fn toks(&self) -> &[Token] {
+        &self.toks
+    }
+
+    /// byte offset ⇄ (line, UTF-16 column) over `src`
+    pub fn lines(&self) -> &LineIndex {
+        &self.lines
+    }
+
+    /// `classify` over (toks, ast), once — the semantic-token spans
+    pub fn spans(&self) -> &[(Span, TokenType)] {
+        &self.spans
+    }
+
+    /// `symbols` over (toks, ast), once — the document-symbol tree
+    pub fn symbols(&self) -> &[RawSymbol] {
+        &self.symbols
     }
 
     /// the artifact's own normalized text — every span indexes this

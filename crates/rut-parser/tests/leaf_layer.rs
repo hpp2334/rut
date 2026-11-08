@@ -16,8 +16,8 @@ use rut_parser::{parse_with_recover, Mode, ParseOpts};
 fn the_leaf_layer_is_one_call_away_and_deterministic() {
     let src = "fn main() -> nil {\n    let x = 1;\n}\n";
     let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
-    let (toks_a, diags, comments) = lex_normalized(&p.src, true);
-    let (toks_b, _, _) = lex_normalized(&p.src, false);
+    let (toks_a, diags, comments) = lex_normalized(p.src(), true);
+    let (toks_b, _, _) = lex_normalized(p.src(), false);
     assert!(diags.is_empty());
     assert!(comments.is_empty(), "no comments in the fixture");
     assert_eq!(
@@ -29,7 +29,7 @@ fn the_leaf_layer_is_one_call_away_and_deterministic() {
     let ident_spans: Vec<&str> = toks_a
         .iter()
         .filter(|t| matches!(t.tok, Tok::Ident(_)))
-        .map(|t| &p.src[t.span.lo as usize..t.span.hi as usize])
+        .map(|t| &p.src()[t.span.lo as usize..t.span.hi as usize])
         .collect();
     for want in ["fn", "main", "nil", "let", "x"] {
         assert!(ident_spans.contains(&want), "{want}: {ident_spans:?}");
@@ -50,7 +50,7 @@ fn comments_collect_with_the_rustc_doc_convention() {
         "fn main() -> nil {\n}\n",
     );
     let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
-    let (_, diags, comments) = lex_normalized(&p.src, true);
+    let (_, diags, comments) = lex_normalized(p.src(), true);
     assert!(diags.is_empty(), "{diags:?}");
     assert_eq!(comments.len(), 9, "{comments:#?}");
     let doc_flags: Vec<bool> = comments.iter().map(|c| c.doc).collect();
@@ -70,7 +70,7 @@ fn comments_collect_with_the_rustc_doc_convention() {
     // spans are in byte order and slice to the marker
     assert!(comments.windows(2).all(|w| w[0].span.hi <= w[1].span.lo));
     assert_eq!(
-        &p.src[comments[0].span.lo as usize..comments[0].span.hi as usize],
+        &p.src()[comments[0].span.lo as usize..comments[0].span.hi as usize],
         "/// doc line"
     );
 }
@@ -82,16 +82,16 @@ fn trailing_spaces_trim_off_line_comment_spans_only() {
         Mode::Impl,
         ParseOpts::default(),
     );
-    let (_, _, comments) = lex_normalized(&p.src, true);
+    let (_, _, comments) = lex_normalized(p.src(), true);
     assert_eq!(comments.len(), 2);
     // the line comment's hi stops at the last non-space (the fmt
     // printable-span law); the block keeps its closing `*/`
     assert_eq!(
-        &p.src[comments[0].span.lo as usize..comments[0].span.hi as usize],
+        &p.src()[comments[0].span.lo as usize..comments[0].span.hi as usize],
         "// trailing spaces"
     );
     assert_eq!(
-        &p.src[comments[1].span.lo as usize..comments[1].span.hi as usize],
+        &p.src()[comments[1].span.lo as usize..comments[1].span.hi as usize],
         "/* keep  */"
     );
 }
@@ -102,7 +102,7 @@ fn fstring_hole_interiors_are_not_document_trivia() {
     // bytes belong to the token, not to the document trivia table
     let src = "fn main() -> nil {\n    let s = f\"{ x /* hole */ }\";\n}\n";
     let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
-    let (_, _, comments) = lex_normalized(&p.src, true);
+    let (_, _, comments) = lex_normalized(p.src(), true);
     assert!(
         comments.is_empty(),
         "hole interiors never collect: {comments:?}"
@@ -113,7 +113,7 @@ fn fstring_hole_interiors_are_not_document_trivia() {
 fn an_unterminated_block_comment_collects_and_diagnoses() {
     let src = "fn main() -> nil {\n}\n/* never closed";
     let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
-    let (_, diags, comments) = lex_normalized(&p.src, true);
+    let (_, diags, comments) = lex_normalized(p.src(), true);
     assert!(
         diags
             .iter()
@@ -122,6 +122,6 @@ fn an_unterminated_block_comment_collects_and_diagnoses() {
     );
     // the span still collects (to EOF) — printable trivia beats lost bytes
     assert_eq!(comments.len(), 1, "{comments:?}");
-    assert_eq!(comments[0].span.hi as usize, p.src.len());
+    assert_eq!(comments[0].span.hi as usize, p.src().len());
     assert_eq!(comments[0].text, " never closed");
 }

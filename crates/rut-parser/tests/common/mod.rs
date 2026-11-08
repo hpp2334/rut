@@ -8,8 +8,9 @@ use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
     let p = parse_with_recover(src, mode, ParseOpts::default());
-    let diags = p.ast.errors().to_vec();
-    (p.ast, diags)
+    let diags = p.ast().errors().to_vec();
+    let (ast, _) = p.into_parts();
+    (ast, diags)
 }
 
 /// the FIRST fn item's body block (clean parses — the grammar tests'

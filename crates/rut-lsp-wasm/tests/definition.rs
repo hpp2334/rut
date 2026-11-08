@@ -18,7 +18,8 @@ fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
             include_comments: true,
         },
     )
-    .ast
+    .into_parts()
+    .0
 }
 
 const DOC: &str = "file:///t/main.rut";

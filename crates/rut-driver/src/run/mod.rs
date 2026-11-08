@@ -514,9 +514,9 @@ impl RutRun {
                 // whole file's `use` heads even beside syntax diags
                 let p =
                     rut_parser::parse_with_recover(text, mode, rut_parser::ParseOpts::default());
-                if p.ast.is_clean() {
+                if p.ast().is_clean() {
                     let layout = layout_for("");
-                    for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &p.ast)
+                    for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, p.ast())
                     {
                         if let Err(e) = session.resolve_use(spec, &name, &root) {
                             return Err(RunError::law(e.to_string()));
@@ -535,11 +535,11 @@ impl RutRun {
                     Mode::Impl,
                     rut_parser::ParseOpts::default(),
                 );
-                if !p.ast.is_clean() {
+                if !p.ast().is_clean() {
                     continue; // the compile reports the syntax
                 }
                 let layout = layout_for(&m.path);
-                for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &p.ast) {
+                for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, p.ast()) {
                     if let Err(e) = session.resolve_use(spec, &name, &root) {
                         return Err(RunError::law(format!("`{}` ({}): {e}", pkg.spec, m.path)));
                     }
