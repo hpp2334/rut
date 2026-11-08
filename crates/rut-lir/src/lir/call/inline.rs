@@ -22,10 +22,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         dname: IdentId,
         class_args: Vec<TypeId>,
         self_ty: TypeId,
-        mnode: NodeHandle<MethodDeclNode>,
+        mnode: Handle<MethodDeclNode>,
         rreg: u16,
-        generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        generics: Vec<TyRef>,
+        args: Vec<ExprRef>,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -40,11 +40,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .collect(),
             None => vec![],
         };
-        let md = self.ctx.ast.method_decl(mnode).clone();
-        let mut_self = matches!(
-            md.params.first().map(|p| self.ctx.ast.param(*p)),
-            Some(MemberKind::SelfParam(SelfParamData { is_mut: true }))
-        );
+        let md = mnode.get(self.ctx.ast).clone();
+        let mut_self = md
+            .params
+            .first()
+            .is_some_and(|p| self.ctx.self_param_mut(*p) == Some(true));
         let (params, ret, mname) = (md.params, md.ret, md.name);
         let _ = mut_self;
         // the method's own generics: explicit site arguments first
@@ -83,13 +83,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let saved_self = self.self_ty;
         let saved_subst = std::mem::replace(&mut self.subst, subst.clone());
         self.self_ty = Some(self_ty);
-        let param_nodes: Vec<Option<NodeHandle<AnyTy>>> = params
+        let param_nodes: Vec<Option<TyRef>> = params
             .iter()
             .skip(1)
-            .map(|p| match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => Some(*t),
-                _ => None,
-            })
+            .map(|p| self.ctx.param_ty(*p))
             .collect();
         // the unannotated-lambda diagnosis (v1): a lambda whose
         // parameters spell no types cannot drive the method's inference
@@ -102,23 +99,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if free.is_empty() {
                 continue;
             }
-            if let ExprKind::Lambda {
-                params: lps,
-                ret: lret,
-                ..
-            } = self.ctx.ast.expr(*a)
-            {
+            if let ExprRef::Lambda(lh) = *a {
+                let ln = lh.get(self.ctx.ast);
+                let (lps, lret) = (ln.params.clone(), ln.ret);
                 // FULLY unannotated: no parameter types and no return
                 // type — nothing in the lambda's shape can bind the
                 // generic (a partially annotated one — the store's
                 // `lift(fn (c) -> i64 ..)` — still binds through the
                 // annotated half)
-                let fully_unannotated = lps.iter().all(|p| {
-                    matches!(
-                        self.ctx.ast.param(*p),
-                        MemberKind::Param(ParamData { ty: None, .. })
-                    )
-                }) && lret.is_none();
+                let fully_unannotated =
+                    lps.iter().all(|p| self.ctx.param_ty(*p).is_none()) && lret.is_none();
                 if fully_unannotated {
                     let free_names = free
                         .iter()
@@ -145,7 +135,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // env) rides fresh placeholder types for the unbound rest.
         // The annotations resolve in the TYPE's module (phase 3).
         let saved_hint_mod = self.ctx.cur_mod.clone();
-        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.span(self.ctx.ast)).to_string();
         let hints: Vec<Option<TypeId>> = param_nodes
             .iter()
             .map(|tn| match tn {
@@ -181,7 +171,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // structural unification binds the method's remaining generics —
         // the annotations read in the TYPE's module (phase 3)
         let saved_unify_mod = self.ctx.cur_mod.clone();
-        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.span(self.ctx.ast)).to_string();
         for (i, tn) in param_nodes.iter().enumerate() {
             if let Some(tn) = tn {
                 self.unify_generic_val(
@@ -208,7 +198,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // method's bounds and signature resolve in the TYPE's module
         // (the placement law puts the impl there — phase 3).
         let saved_mod = self.ctx.cur_mod.clone();
-        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.span(self.ctx.ast)).to_string();
         self.ctx.admit_bounds(&md.bounds, &subst, sp);
         // final param/ret types under the completed substitution —
         // through the FnCompiler resolver, so `Self` in the method's
@@ -228,7 +218,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (i, _) in args.iter().enumerate() {
             if !self.widens_val(args[i], arg_tys[i], ptys[i]) {
                 self.ctx.err(
-                    self.ctx.ast.span(args[i].id()),
+                    args[i].span(self.ctx.ast),
                     format!(
                         "argument {} is `{}`, `{}` expected",
                         i + 1,
@@ -315,7 +305,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         dname: IdentId,
         class_subst: &[(IdentId, TypeId)],
         self_ty: TypeId,
-        mnode: NodeHandle<MethodDeclNode>,
+        mnode: Handle<MethodDeclNode>,
         mname: IdentId,
         mut_self: bool,
         recv: u16,
@@ -351,7 +341,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn try_inline_free_fn(
         &mut self,
         name: IdentId,
-        fnode: NodeHandle<FnNode>,
+        fnode: Handle<FnNode>,
         subst: &[(IdentId, TypeId)],
         aregs: &[u16],
         ptys: &[TypeId],
@@ -374,15 +364,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         {
             return false;
         }
-        let fd = self.ctx.ast.fn_decl(fnode).clone();
+        let fd = fnode.get(self.ctx.ast).clone();
         if fd.is_async {
             return false; // `async` is diagnosed when the body is compiled
         }
         let body = fd.body;
-        let stmts = match self.ctx.ast.kind(body.id()) {
-            Kind::Expr(ExprKind::Block { stmts, .. }) => stmts.clone(),
-            _ => return false,
-        };
+        let stmts = body.get(self.ctx.ast).stmts.clone();
         if stmts.len() > MAX_STMTS {
             return false;
         }
@@ -401,30 +388,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.current_class = None;
         self.ret_ty = ret_ty;
         let base = self.locals.len();
-        let params: Vec<NodeHandle<AnyParam>> = fd.params.clone();
+        let params: Vec<ParamRef> = fd.params.clone();
         let mut ai = 0usize;
         for p in &params {
-            if let MemberKind::Param(ParamData {
+            let ParamRef::Param(ph) = *p else {
+                continue;
+            };
+            let (pname, is_mut, ty) = {
+                let n = ph.get(self.ctx.ast);
+                (n.name, n.is_mut, n.ty)
+            };
+            self.locals.push(Local {
                 name: pname,
+                reg: aregs[ai],
+                ty: ptys[ai],
                 is_mut,
-                ty,
-                ..
-            }) = self.ctx.ast.param(*p)
-            {
-                self.locals.push(Local {
-                    name: *pname,
-                    reg: aregs[ai],
-                    ty: ptys[ai],
-                    is_mut: *is_mut,
-                    loop_var: false,
-                    loop_for_c: false,
-                    origins: Vec::new(),
-                    field: NO_FIELD,
-                    cell: None,
-                });
-                self.note_union_binding(*pname, *ty);
-                ai += 1;
-            }
+                loop_var: false,
+                loop_for_c: false,
+                origins: Vec::new(),
+                field: NO_FIELD,
+                cell: None,
+            });
+            self.note_union_binding(pname, ty);
+            ai += 1;
         }
         let res = self.new_reg(ret_ty);
         let l_end = self.new_label();
@@ -436,7 +422,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // A nil tail (or a tail-if whose arms all return) answers
         // through the fallback: nothing to move.
         let diag_mark = self.ctx.diags.len();
-        let tail_res = self.compile_block_value(body.id(), Some(ret_ty));
+        let tail_res = self.compile_block_value(body, Some(ret_ty));
         if let Ok(Some(t)) = &tail_res {
             if *t != TY_NIL {
                 self.mov_slot(res, self.last_reg, *t, sp.lo);

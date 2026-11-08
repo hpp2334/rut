@@ -66,7 +66,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         i: Intrinsic,
         recv_ty: TypeId,
         recv_reg: u16,
-        rhs: NodeHandle<AnyExpr>,
+        rhs: ExprRef,
         sp: Span,
     ) -> TcResult<TypeId> {
         let who = intrinsic_name(i);
@@ -98,7 +98,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         recv_ty: TypeId,
         recv_reg: u16,
-        rhs: NodeHandle<AnyExpr>,
+        rhs: ExprRef,
         sp: Span,
         who: &str,
     ) -> TcResult<(TypeId, PrimTy, u16, u16)> {
@@ -140,7 +140,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         ns: IdentId,
         member: IdentId,
-        args: &[NodeHandle<AnyExpr>],
+        args: &[ExprRef],
         _expected: Option<TypeId>,
         sp: Span,
     ) -> TcResult<TypeId> {
@@ -167,7 +167,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(*a, Some(ef.params[i]))?;
             if !self.widens(t, ef.params[i]) {
                 self.ctx.err(
-                    self.ctx.ast.span(a.id()),
+                    a.span(self.ctx.ast),
                     format!(
                         "argument {} is `{}`, `{}` expected",
                         i + 1,

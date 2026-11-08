@@ -77,6 +77,14 @@ macro_rules! arenas {
             pub fn name(&self, id: IdentId) -> &str {
                 self.interner.name(id)
             }
+            /// the whole vocabulary, by reference — the middle-end's
+            /// door: its `Ctx` CLONES the interner (extending it with
+            /// synthesized names and moving the result into the emitted
+            /// `Program`), so it needs the store itself, not per-name
+            /// reads. Read-only — interning stays the parse lane's.
+            pub fn interner(&self) -> &Interner {
+                &self.interner
+            }
             /// the FLAT error view, source order (the panel). The
             /// positional view is the ErrorNodes in the streams.
             pub fn errors(&self) -> &[Diag] {

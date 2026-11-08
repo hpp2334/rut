@@ -8,7 +8,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `bytes(n)` — a zeroed immutable buffer of `n` octets.
     pub(crate) fn compile_bytes_alloc(
         &mut self,
-        args: Vec<NodeHandle<AnyExpr>>,
+        args: Vec<ExprRef>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let len_reg = match args.len() {
@@ -108,10 +108,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_static_call(
         &mut self,
         base: IdentId,
-        base_generics: Vec<NodeHandle<AnyTy>>,
+        base_generics: Vec<TyRef>,
         member: IdentId,
-        member_generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        member_generics: Vec<TyRef>,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -213,7 +213,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let t = self.compile_expr(args[0], Some(TY_U32))?;
                 if t != TY_U32 {
                     self.ctx.err(
-                        self.ctx.ast.span(args[0].id()),
+                        args[0].span(self.ctx.ast),
                         format!(
                             "str.from_code takes a `u32`, found `{}`",
                             self.ctx.type_name(t)
@@ -362,8 +362,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // dial like any member — the `[constructor]` sugar
                 // (`Type(..)`) lowers through this very arm, so the
                 // construction seal rides the member's `pub` too
-                let mvis = self.ctx.ast.method_decl(fmnode).vis;
-                if let Some(msg) = self.ctx.member_vis_err(dname, fmnode.id(), member, mvis) {
+                let mvis = fmnode.get(self.ctx.ast).vis;
+                if let Some(msg) =
+                    self.ctx
+                        .member_vis_err(dname, fmnode.span(self.ctx.ast), member, mvis)
+                {
                     self.ctx.err(sp, msg);
                     return Err(());
                 }
@@ -374,7 +377,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // is repealed), so the explicit-arguments arm instanti-
                 // ates it directly and the inference arm follows the
                 // expected type's own instantiation.
-                let mint: (IdentId, DataDecl, NodeHandle<MethodDeclNode>, Vec<TypeId>) =
+                let mint: (IdentId, DataDecl, Handle<MethodDeclNode>, Vec<TypeId>) =
                     if !base_generics.is_empty() {
                         let args: Vec<TypeId> = base_generics
                             .iter()
@@ -542,8 +545,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((_, mnode)) = e.methods.iter().find(|(m, _)| *m == member).cloned() {
                 // the member-visibility law: enum members take the
                 // `pub` dial like a class's
-                let mvis = self.ctx.ast.method_decl(mnode).vis;
-                if let Some(msg) = self.ctx.member_vis_err(base, mnode.id(), member, mvis) {
+                let mvis = mnode.get(self.ctx.ast).vis;
+                if let Some(msg) =
+                    self.ctx
+                        .member_vis_err(base, mnode.span(self.ctx.ast), member, mvis)
+                {
                     self.ctx.err(sp, msg);
                     return Err(());
                 }

@@ -2,6 +2,13 @@
 
 use super::*;
 
+/// which declaration an `Inst` compiles (v2's typed-handle dispatch —
+/// the two body-bearing decl shapes share the compile driver)
+enum FoundDecl {
+    Fn(Handle<FnNode>),
+    Method(Handle<MethodDeclNode>),
+}
+
 impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Compile one instantiation into `ctx.funcs[fid]`.
     #[allow(clippy::result_unit_err)] // TcResult's unit marks "diag recorded"
@@ -10,12 +17,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // node names the file, the span names the module. Bare names
         // and qualified heads from here on walk that module's scope.
         match &inst.key {
-            FnKey::Lambda(n) | FnKey::AsyncBlock(n) => ctx.cur_mod = ctx.mod_of(*n).to_string(),
-            FnKey::ForOfEmit { body, .. } => ctx.cur_mod = ctx.mod_of(*body).to_string(),
+            FnKey::Lambda(n) => ctx.cur_mod = ctx.mod_of(n.span(ctx.ast)).to_string(),
+            FnKey::AsyncBlock(n) => ctx.cur_mod = ctx.mod_of(n.span(ctx.ast)).to_string(),
+            FnKey::ForOfEmit { body, .. } => {
+                ctx.cur_mod = ctx.mod_of(body.span(ctx.ast)).to_string()
+            }
             FnKey::HostThunk(_) => {}
             FnKey::Free(name) => {
                 if let Some((_, node)) = ctx.fn_nodes.iter().find(|(n, _)| *n == *name) {
-                    ctx.cur_mod = ctx.mod_of(node.id()).to_string();
+                    ctx.cur_mod = ctx.mod_of(node.span(ctx.ast)).to_string();
                 }
             }
             FnKey::Method { data, .. } => {
@@ -25,12 +35,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .datas
                     .iter()
                     .find(|(n, _)| *n == *data)
-                    .map(|(_, d)| d.node.id())
+                    .map(|(_, d)| d.node.span(ctx.ast))
                     .or_else(|| {
                         ctx.enums
                             .iter()
                             .find(|(n, _)| *n == *data)
-                            .map(|(_, e)| e.node)
+                            .map(|(_, e)| e.node.span(ctx.ast))
                     });
                 if let Some(dn) = dn {
                     ctx.cur_mod = ctx.mod_of(dn).to_string();
@@ -56,11 +66,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let FnKey::AsyncBlock(node) = inst.key {
             return super::asyncfn::compile_async_block_fn(ctx, fid, node);
         }
-        let (node, self_ty, is_method, class_name) = match &inst.key {
+        // (fn decl handle | method decl handle, self_ty, is_method,
+        // class_name) — the FnNode/MethodDeclNode halves dispatch below
+        let (found, self_ty, is_method, class_name, fn_sp) = match &inst.key {
             // handled by the early return above
             FnKey::ForOfEmit { .. } => unreachable!(),
             FnKey::Free(name) => {
-                let Some(n) = ctx
+                let Some(fh) = ctx
                     .fn_nodes
                     .iter()
                     .find(|(n, _)| n == name)
@@ -68,7 +80,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 else {
                     return Ok(()); // unknown fn —already diagnosed
                 };
-                (n.id(), None, false, None)
+                (FoundDecl::Fn(fh), None, false, None, fh.span(ctx.ast))
             }
             FnKey::Method { data, name } => {
                 let found = if let Some((_, d)) = ctx.datas.iter().find(|(n, _)| n == data) {
@@ -92,9 +104,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                         .unwrap_or(TY_I32)
                                 })
                                 .collect();
-                            ctx.mk_data_inst(*data, args, ctx.ast.span(m.id()))
+                            ctx.mk_data_inst(*data, args, m.span(ctx.ast))
                         };
-                        (m.id(), Some(self_ty), true, Some(*data))
+                        (m, Some(self_ty), true, Some(*data))
                     })
                 } else if let Some((_, e)) = ctx.enums.iter().find(|(n, _)| n == data) {
                     // an enum's inherent method: concrete, no generics —
@@ -104,22 +116,27 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     e.methods
                         .iter()
                         .find(|(n, _)| n == name)
-                        .map(|(_, m)| (m.id(), Some(e.ty), true, None))
+                        .map(|(_, m)| (*m, Some(e.ty), true, None))
                 } else {
                     None
                 };
-                let Some((node, self_ty, has_self, cname)) = found else {
+                let Some((mh, self_ty, has_self, cname)) = found else {
                     return Ok(());
                 };
-                (node, self_ty, has_self, cname)
+                (
+                    FoundDecl::Method(mh),
+                    self_ty,
+                    has_self,
+                    cname,
+                    mh.span(ctx.ast),
+                )
             }
             FnKey::Lambda(_) | FnKey::AsyncBlock(_) => unreachable!(),
             FnKey::HostThunk(_) => unreachable!(),
         };
-        let is_async = match ctx.ast.kind(node) {
-            Kind::Item(ItemKind::Fn(f)) => f.is_async,
-            Kind::Member(MemberKind::MethodDecl(m)) => m.is_async,
-            _ => return Ok(()),
+        let is_async = match found {
+            FoundDecl::Fn(fh) => fh.get(ctx.ast).is_async,
+            FoundDecl::Method(mh) => mh.get(ctx.ast).is_async,
         };
         if is_async {
             // the landing: free async fns weave into the
@@ -127,29 +144,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // loop's tasks are free fns in v1 — join lands later)
             if !matches!(inst.key, FnKey::Free(_)) {
                 ctx.err(
-                    ctx.ast.span(node),
+                    fn_sp,
                     "async methods are not woven in this build — the loop's tasks are async free fns",
                 );
                 return Err(());
             }
             return super::asyncfn::compile_async_fn(ctx, inst, fid);
         }
-        let (params, ret, generics, body, fn_name) = match ctx.ast.kind(node) {
-            Kind::Item(ItemKind::Fn(f)) => (
-                f.params.clone(),
-                f.ret,
-                f.generics.clone(),
-                f.body.id(), // Fn bodies are always blocks
-                f.name,
-            ),
-            Kind::Member(MemberKind::MethodDecl(m)) => (
-                m.params.clone(),
-                m.ret,
-                m.generics.clone(),
-                m.body.map(|b| b.id()).unwrap_or(node), // bodiless shouldn't be queued
-                m.name,
-            ),
-            _ => return Ok(()),
+        let (params, ret, generics, body, fn_name) = match found {
+            // Fn bodies are always blocks
+            FoundDecl::Fn(fh) => {
+                let f = fh.get(ctx.ast);
+                (f.params.clone(), f.ret, f.generics.clone(), f.body, f.name)
+            }
+            FoundDecl::Method(mh) => {
+                let m = mh.get(ctx.ast);
+                let Some(b) = m.body else {
+                    return Ok(()); // bodiless shouldn't be queued
+                };
+                (m.params.clone(), m.ret, m.generics.clone(), b, m.name)
+            }
         };
         // Type-union bounds in scope for THIS instantiation (native-fastpath
         // phase 1): the item's own bounds plus — for a
@@ -157,26 +171,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // bounds register: a trait bound stays admission-only, and its
         // method calls keep resolving per instantiation (the
         // single-trait `K requires Trait` law).
-        let mut union_bounds: std::collections::HashMap<IdentId, NodeHandle<AnyTy>> =
+        let mut union_bounds: std::collections::HashMap<IdentId, TyRef> =
             std::collections::HashMap::new();
-        match ctx.ast.kind(node) {
-            Kind::Item(ItemKind::Fn(f)) => {
-                let bounds = f.bounds.clone();
-                for (g, b) in bounds {
-                    if ctx.bound_is_union(b) {
-                        union_bounds.insert(g, b);
-                    }
+        {
+            let bounds: Vec<(IdentId, TyRef)> = match found {
+                FoundDecl::Fn(fh) => fh.get(ctx.ast).bounds.clone(),
+                FoundDecl::Method(mh) => mh.get(ctx.ast).bounds.clone(),
+            };
+            for (g, b) in bounds {
+                if ctx.bound_is_union(b) {
+                    union_bounds.insert(g, b);
                 }
             }
-            Kind::Member(MemberKind::MethodDecl(m)) => {
-                let mbounds = m.bounds.clone();
-                for (g, b) in mbounds {
-                    if ctx.bound_is_union(b) {
-                        union_bounds.insert(g, b);
-                    }
-                }
-            }
-            _ => {}
         }
         // the class's own bounds when this method is one of a generic
         // class's (its methods or a trait impl over the class)
@@ -197,10 +203,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut iface_bounds: std::collections::HashMap<IdentId, Vec<u32>> =
             std::collections::HashMap::new();
         {
-            let bounds: Vec<(IdentId, NodeHandle<AnyTy>)> = match ctx.ast.kind(node) {
-                Kind::Item(ItemKind::Fn(f)) => f.bounds.clone(),
-                Kind::Member(MemberKind::MethodDecl(m)) => m.bounds.clone(),
-                _ => Vec::new(),
+            let bounds: Vec<(IdentId, TyRef)> = match found {
+                FoundDecl::Fn(fh) => fh.get(ctx.ast).bounds.clone(),
+                FoundDecl::Method(mh) => mh.get(ctx.ast).bounds.clone(),
             };
             for (g, b) in &bounds {
                 let members = ctx.resolve_bound_members(*b, &[]);
@@ -260,24 +265,26 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         // the capture law's pre-pass: names first (a fn-level walk over
         // the body), promotion at each `bind_local` once types resolve
-        c.capture_pre_pass(body);
+        c.capture_pre_pass(ExprRef::Block(body));
         // signature: params (self first for methods), resolved under subst.
         let mut param_tys: Vec<TypeId> = Vec::new();
         for p in &params {
-            let ty = match c.ctx.ast.param(*p) {
-                MemberKind::SelfParam(_) => self_ty.unwrap_or(TY_NIL),
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
-                MemberKind::Param(ParamData { ty: None, name, .. }) => {
-                    c.ctx.err(
-                        c.ctx.ast.span(p.id()),
-                        format!(
-                            "parameter `{}` needs a type annotation here",
-                            c.ctx.name(*name)
-                        ),
-                    );
-                    TY_I32
-                }
-                _ => TY_I32,
+            let ty = match *p {
+                ParamRef::SelfParam(_) => self_ty.unwrap_or(TY_NIL),
+                ParamRef::Param(ph) => match ph.get(c.ctx.ast).ty {
+                    Some(t) => c.resolve_type_now(t),
+                    None => {
+                        c.ctx.err(
+                            p.span(c.ctx.ast),
+                            format!(
+                                "parameter `{}` needs a type annotation here",
+                                c.ctx.name(ph.get(c.ctx.ast).name)
+                            ),
+                        );
+                        TY_I32
+                    }
+                },
+                ParamRef::Error(_) => TY_I32,
             };
             param_tys.push(ty);
         }
@@ -291,8 +298,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // bind params as locals — argv maps positionally onto the callee's
         // registers, so the parameter registers stay contiguous here
         for (i, p) in params.iter().enumerate() {
-            match c.ctx.ast.param(*p) {
-                MemberKind::SelfParam(SelfParamData { is_mut }) => {
+            match *p {
+                ParamRef::SelfParam(sh) => {
+                    let is_mut = sh.get(c.ctx.ast).is_mut;
                     let reg = c.new_reg(param_tys[i]);
                     // bind `self` (well-known symbol): the local is only ever
                     // FOUND where the body spells `self`, so binding it
@@ -301,7 +309,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         name: sym::SELF,
                         reg,
                         ty: param_tys[i],
-                        is_mut: *is_mut,
+                        is_mut,
                         loop_var: false,
                         loop_for_c: false,
                         origins: Vec::new(),
@@ -309,7 +317,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         cell: None,
                     });
                 }
-                MemberKind::Param(ParamData { name, is_mut, .. }) => {
+                ParamRef::Param(ph) => {
+                    let (name, is_mut, ty_node) = {
+                        let n = ph.get(c.ctx.ast);
+                        (n.name, n.is_mut, n.ty)
+                    };
                     let reg = c.new_reg(param_tys[i]);
                     // trait-typed parameters: the Inst carries this call's
                     // concrete origin (a trait parameter IS an implicit
@@ -327,14 +339,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     // declared type NODE spells a union-bounded generic
                     // records that generic — method calls on it gate on
                     // every member of the bound
-                    if let MemberKind::Param(ParamData { ty: Some(tn), .. }) = c.ctx.ast.param(*p) {
-                        c.note_union_binding(*name, Some(*tn));
+                    if let Some(tn) = ty_node {
+                        c.note_union_binding(name, Some(tn));
                     }
                     c.locals.push(Local {
-                        name: *name,
+                        name,
                         reg,
                         ty: param_tys[i],
-                        is_mut: *is_mut,
+                        is_mut,
                         loop_var: false,
                         loop_for_c: false,
                         origins,
@@ -342,7 +354,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         cell: None,
                     });
                 }
-                _ => {}
+                ParamRef::Error(_) => {}
             }
         }
         // the capture law: params promote too (a captured param
@@ -369,13 +381,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // end in Ret") — and the diagnostic aborts the run before
         // anything executes. `-> nil` fns keep the implicit return;
         // entry fns ride this same path and are covered.
-        let body_is_block = matches!(c.ctx.ast.kind(body), Kind::Expr(ExprKind::Block { .. }));
+        // fn bodies are always blocks (the body handle IS one)
+        let body_is_block = true;
         if body_is_block && !c.terminated && ret_ty != TY_NIL {
             // the AST carries no ident span — anchor at the `-> T` the
             // message quotes (the fn node otherwise)
             let sp = match ret {
-                Some(r) => c.ctx.ast.span(r.id()),
-                None => c.ctx.ast.span(node),
+                Some(r) => r.span(c.ctx.ast),
+                None => fn_sp,
             };
             c.ctx.err(
                 sp,
@@ -421,13 +434,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         ctx: &mut Ctx<'a>,
         inst: &Inst,
         fid: u32,
-        lambda_node: NodeId,
+        lambda_node: Handle<LambdaNode>,
     ) -> TcResult<()> {
         // the capture list was recorded when the MakeClosure was emitted;
         // the node we keyed on is the lambda BODY
-        let (params, ret, body) = match ctx.ast.expr(NodeHandle::new(lambda_node)) {
-            ExprKind::Lambda { params, ret, body } => (params.clone(), *ret, *body),
-            _ => return Ok(()),
+        let (params, ret, body) = {
+            let n = lambda_node.get(ctx.ast);
+            (n.params.clone(), n.ret, n.body)
         };
         let caps = ctx.lambda_info.get(&fid).cloned().unwrap_or_default();
         let mut c = FnCompiler {
@@ -482,12 +495,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // fallback (and agrees wherever the env is empty anyway).
         let mut param_tys = Vec::new();
         for (i, p) in params.iter().enumerate() {
-            let ty = match c.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => saved
+            let ty = match c.ctx.param_ty(*p) {
+                Some(t) => saved
                     .as_ref()
                     .and_then(|s| s.0.get(i).copied())
-                    .unwrap_or_else(|| c.resolve_type_now(*t)),
-                _ => saved
+                    .unwrap_or_else(|| c.resolve_type_now(t)),
+                None => saved
                     .as_ref()
                     .and_then(|s| s.0.get(i).copied())
                     .unwrap_or(TY_I32),
@@ -502,16 +515,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         c.ret_ty = ret_ty;
         // the lambda body's own pre-pass: this frame promotes its own
         // bindings (nested closure sites under the body)
-        c.capture_pre_pass(body.id());
+        c.capture_pre_pass(body);
         // bind params then captures
         for (i, p) in params.iter().enumerate() {
-            if let MemberKind::Param(ParamData { name, is_mut, .. }) = c.ctx.ast.param(*p) {
+            if let ParamRef::Param(ph) = *p {
+                let (name, is_mut) = {
+                    let n = ph.get(c.ctx.ast);
+                    (n.name, n.is_mut)
+                };
                 let reg = c.new_reg(param_tys[i]);
                 c.locals.push(Local {
-                    name: *name,
+                    name,
                     reg,
                     ty: param_tys[i],
-                    is_mut: *is_mut,
+                    is_mut,
                     loop_var: false,
                     loop_for_c: false,
                     origins: Vec::new(),
@@ -548,12 +565,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let n_caps = caps.len() as u32;
         // body: block or single expression (arrows)
-        if let Some(block) = c.ctx.ast.narrow_block(body) {
+        if let Some(block) = body.as_block() {
             // the block's TAIL is the lambda's answer (Rust-style
             // implicit return — the same law as a fn body)
             let tail_ty = c.compile_block_value(block, Some(ret_ty))?;
             if let Some(t) = tail_ty {
-                c.emit_body_tail(block.id(), t, ret_ty);
+                c.emit_body_tail(block, t, ret_ty);
             }
             // the same definite-return law as compile_fn: the lambda's
             // BLOCK form falls through exactly like a fn body when no
@@ -562,7 +579,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // for IR well-formedness
             if !c.terminated && ret_ty != TY_NIL {
                 c.ctx.err(
-                    c.ctx.ast.span(block.id()),
+                    block.span(c.ctx.ast),
                     format!(
                     "missing return: `lambda` is `-> {}` but a path reaches the end of the body",
                     c.ctx.type_name(ret_ty)
@@ -574,7 +591,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = c.compile_expr(body, Some(ret_ty))?;
             if t != ret_ty {
                 c.ctx.err(
-                    c.ctx.ast.span(body.id()),
+                    body.span(c.ctx.ast),
                     format!(
                         "lambda returns `{}` but is typed `{}`",
                         c.ctx.type_name(t),
@@ -595,7 +612,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let Pools { argv, labels, .. } = pools;
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
-            name: c.ctx.intern(&format!("lambda@{}", body.id().0)),
+            name: c.ctx.intern(&format!("lambda@{}", lambda_node.index())),
             params: param_tys,
             ret: ret_ty,
             is_method: false,
@@ -629,7 +646,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn compile_for_of_emit_fn(
         ctx: &mut Ctx<'a>,
         fid: u32,
-        body: NodeId,
+        body: Handle<BlockNode>,
         var: IdentId,
     ) -> TcResult<()> {
         let Some((elem_ty, caps, var_cell, is_mut)) = ctx.for_of_sigs.get(&fid).cloned() else {
@@ -670,7 +687,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         // the emit closure's own pre-pass: its frame promotes its own
         // bindings (nested lambdas / for-of bodies under the loop body)
-        c.capture_pre_pass(body);
+        c.capture_pre_pass(ExprRef::Block(body));
         // the incoming element: the desugar's per-iteration store source
         let preg = c.new_reg(elem_ty);
         if let Some(cty) = var_cell {
@@ -738,8 +755,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 cell: *by_cell,
             });
         }
-        let block: NodeHandle<BlockNode> = NodeHandle::new(body);
-        if c.compile_block(block).is_err() {
+        if c.compile_block(body).is_err() {
             return Err(());
         }
         let t = c.new_reg(TY_BOOL);
@@ -758,7 +774,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let regs = c.regs;
         let fc = rut_core::binary::FuncCode {
-            name: c.ctx.intern(&format!("forof@{}", body.0)),
+            name: c.ctx.intern(&format!("forof@{}", body.index())),
             params: param_tys,
             ret: TY_BOOL,
             is_method: false,

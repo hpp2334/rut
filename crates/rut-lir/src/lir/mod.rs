@@ -4,7 +4,7 @@
 //! register bytecode per function, monomorphized.
 
 use crate::check::{Capture, Ctx, FnKey, Inst, TcResult};
-use rut_ast::ast::*;
+use rut_ast::*;
 use rut_core::binary::ConstVal;
 use rut_core::ops::*;
 use rut_core::sym;
@@ -204,7 +204,7 @@ pub struct FnCompiler<'a, 'b> {
     /// generic class — the class's own `requires`, filtered to
     /// union-SPELLED bounds (trait bounds stay admission-only). Read by
     /// the method-call capability gate.
-    union_bounds: HashMap<IdentId, NodeHandle<AnyTy>>,
+    union_bounds: HashMap<IdentId, TyRef>,
     /// interface bounds in scope: generic param ident → the interfaces
     /// the bound spells (a union admits either; the carried-member law
     /// picks the descriptor declaring the member)
@@ -724,7 +724,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         );
     }
 
-    pub(crate) fn resolve_type_now(&mut self, node: NodeHandle<AnyTy>) -> TypeId {
+    pub(crate) fn resolve_type_now(&mut self, node: TyRef) -> TypeId {
         // `Self` (bare or under `?`, at any structural depth — the
         // rut-json batch phase 1) binds to the enclosing type inside
         // method bodies

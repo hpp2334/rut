@@ -6,14 +6,15 @@ use crate::lir::*;
 impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_field(
         &mut self,
-        recv: NodeHandle<AnyExpr>,
+        recv: ExprRef,
         name: IdentId,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         // `<namespace>.CONST` — a used namespace's constant (checked
         // before the receiver is compiled, since the head is not a value).
         // Name-generic: routed by the bound head.
-        if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
+        if let ExprRef::Path(ph) = recv {
+            let segs = &ph.get(self.ctx.ast).segs;
             if segs.len() == 1 && self.ctx.is_extern_namespace(segs[0].name) {
                 if let Some((ty, bits)) = self.ctx.extern_const(name) {
                     let reg = self.new_reg(ty);
@@ -88,29 +89,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// either), or a direct data field whose declared type node spells
     /// the generic (`self.k` in a class body). Pure AST + declared-shape
     /// question — the receiver does not need compiling twice.
-    pub(crate) fn union_provenance(
-        &mut self,
-        recv: NodeHandle<AnyExpr>,
-    ) -> Option<(IdentId, NodeHandle<AnyTy>)> {
-        match self.ctx.ast.expr(recv).clone() {
-            ExprKind::Path { segs } if segs.len() == 1 => {
-                let g = *self.union_syms.get(&segs[0].name)?;
+    pub(crate) fn union_provenance(&mut self, recv: ExprRef) -> Option<(IdentId, TyRef)> {
+        match recv {
+            ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
+                let g = *self.union_syms.get(&ph.get(self.ctx.ast).segs[0].name)?;
                 self.union_bounds.get(&g).map(|&b| (g, b))
             }
-            ExprKind::Field { recv: base, name } => {
-                let ExprKind::Path { segs } = self.ctx.ast.expr(base) else {
+            ExprRef::Field(fh) => {
+                let (base, name) = {
+                    let n = fh.get(self.ctx.ast);
+                    (n.recv, n.name)
+                };
+                let ExprRef::Path(ph) = base else {
                     return None;
                 };
+                let segs = &ph.get(self.ctx.ast).segs;
                 if segs.len() != 1 || !segs[0].generics.is_empty() {
                     return None;
                 }
                 let base_ty = self.lookup(segs[0].name)?.ty;
                 let field_ty_node = self.declared_field_ty_node(base_ty, name)?;
-                match self.ctx.ast.ty(field_ty_node) {
-                    TypeKind::TyPath { segs, .. }
-                        if segs.len() == 1 && segs[0].generics.is_empty() =>
+                match field_ty_node {
+                    TyRef::Path(th)
+                        if th.get(self.ctx.ast).segs.len() == 1
+                            && th.get(self.ctx.ast).segs[0].generics.is_empty() =>
                     {
-                        let g = segs[0].name;
+                        let g = th.get(self.ctx.ast).segs[0].name;
                         self.union_bounds.get(&g).map(|&b| (g, b))
                     }
                     _ => None,
@@ -123,8 +127,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// The declared type NODE of field `name` on a data value of `ty` —
     /// the instantiation's substitute types are concrete, but the
     /// capability gate spells the GENERIC through the original decl.
-    fn declared_field_ty_node(&self, base_ty: TypeId, name: IdentId) -> Option<NodeHandle<AnyTy>> {
-        let decl_node: NodeHandle<AnyItem> = match self.ctx.inst_data.get(&base_ty).cloned() {
+    fn declared_field_ty_node(&self, base_ty: TypeId, name: IdentId) -> Option<TyRef> {
+        let decl_node: ItemRef = match self.ctx.inst_data.get(&base_ty).cloned() {
             Some((dname, _)) => self.ctx.find_data(dname)?.node,
             None => {
                 self.ctx
@@ -135,12 +139,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .node
             }
         };
-        let fields = match self.ctx.ast.item(decl_node) {
-            ItemKind::Class { fields, .. } | ItemKind::Struct { fields, .. } => fields.clone(),
+        let fields = match decl_node {
+            ItemRef::Class(h) => h.get(self.ctx.ast).fields.clone(),
+            ItemRef::Struct(h) => h.get(self.ctx.ast).fields.clone(),
             _ => return None,
         };
         fields.iter().find_map(|&f| {
-            let fd = self.ctx.ast.field_decl(f);
+            let FieldRef::Field(fh) = f else {
+                return None;
+            };
+            let fd = fh.get(self.ctx.ast);
             (fd.name == name).then_some(fd.ty)
         })
     }
@@ -148,15 +156,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Record (or clear) the union provenance of a freshly bound local:
     /// the declared type NODE spells a union-bounded generic of this
     /// frame — otherwise the name binds without one.
-    pub(crate) fn note_union_binding(&mut self, name: IdentId, ty: Option<NodeHandle<AnyTy>>) {
+    pub(crate) fn note_union_binding(&mut self, name: IdentId, ty: Option<TyRef>) {
         match ty {
-            Some(tn) => match self.ctx.ast.ty(tn) {
-                TypeKind::TyPath { segs, .. }
-                    if segs.len() == 1
-                        && segs[0].generics.is_empty()
-                        && self.union_bounds.contains_key(&segs[0].name) =>
+            Some(tn) => match tn {
+                TyRef::Path(th)
+                    if th.get(self.ctx.ast).segs.len() == 1
+                        && th.get(self.ctx.ast).segs[0].generics.is_empty()
+                        && self
+                            .union_bounds
+                            .contains_key(&th.get(self.ctx.ast).segs[0].name) =>
                 {
-                    self.union_syms.insert(name, segs[0].name);
+                    self.union_syms
+                        .insert(name, th.get(self.ctx.ast).segs[0].name);
                 }
                 _ => {
                     self.union_syms.remove(&name);
@@ -175,7 +186,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// union law.
     pub(crate) fn arm_union_bounds(
         &mut self,
-        bounds: &[(IdentId, NodeHandle<AnyTy>)],
+        bounds: &[(IdentId, TyRef)],
         class_name: Option<IdentId>,
     ) {
         for (g, b) in bounds {
@@ -206,7 +217,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// still binds its own impl below.
     pub(crate) fn check_union_capability(
         &mut self,
-        recv: NodeHandle<AnyExpr>,
+        recv: ExprRef,
         name: IdentId,
         sp: rut_lexer::span::Span,
     ) {

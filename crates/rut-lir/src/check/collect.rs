@@ -9,17 +9,19 @@ impl<'a> Ctx<'a> {
     // ---- collection ----
 
     pub fn collect(&mut self) {
-        let items = self.ast.module_items(self.ast.root).to_vec();
+        let items = self.ast.root().items(self.ast).to_vec();
         // pass 0: the use rows — `used`, `use_sites`, the first-spell
         // citations, the duplicate-name law — recorded BEFORE anything
         // resolves (a pass-1b field type may name a used generic, and
         // the per-file gate reads these rows). Each row is keyed by the
         // file whose `use` wrote it.
         for it in &items {
-            let ItemKind::Use { path, names } = self.ast.item(*it) else {
+            let ItemRef::Use(uh) = *it else {
                 continue;
             };
-            self.cur_mod = self.mod_of(it.id()).to_string();
+            let d = uh.get(self.ast);
+            let (path, names) = (d.path.clone(), d.names.clone());
+            self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
             // THE PER-FILE DUPLICATE-NAME LAW: a leaf name
             // spelled by MORE THAN ONE use leaf in the SAME
             // file — regardless of head or package, including
@@ -28,12 +30,12 @@ impl<'a> Ctx<'a> {
             // already binds it in this file). `use a::{x}; use
             // a::{y}` is fine: the NAME is the rule, not the
             // package.
-            let sp = self.ast.span(it.id());
+            let sp = it.span(self.ast);
             let head = path
                 .first()
                 .map(|&h| self.name(h).to_string())
                 .unwrap_or_default();
-            for n in names {
+            for n in &names {
                 let key = (self.cur_mod.clone(), *n);
                 if let Some((prev_head, _)) = self.use_first_spell.get(&key) {
                     self.err(
@@ -55,7 +57,7 @@ impl<'a> Ctx<'a> {
             // FILE — each name records the module whose file bound it
             // (a flat package records one module, `""`, and gates
             // exactly as before).
-            for n in names {
+            for n in &names {
                 self.used.insert(*n);
                 let sites = self.use_sites.entry(*n).or_default();
                 if !sites.contains(&self.cur_mod) {
@@ -66,7 +68,7 @@ impl<'a> Ctx<'a> {
             // compilation; without it, use statements
             // are a compile error only when the names are used
             if !self.allow_uses {
-                for n in names {
+                for n in &names {
                     self.err(
                         sp,
                         format!(
@@ -83,54 +85,49 @@ impl<'a> Ctx<'a> {
         for it in &items {
             // each file's decls resolve in THEIR module (phase 3): the
             // item's span names its file
-            self.cur_mod = self.mod_of(it.id()).to_string();
-            match self.ast.item(*it) {
-                ItemKind::Enum { vis, name, members } => {
-                    self.collect_enum(it.id(), *vis, *name, members)
+            self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
+            match *it {
+                ItemRef::Enum(h) => {
+                    let d = h.get(self.ast);
+                    let members: Vec<IdentId> = d
+                        .members
+                        .iter()
+                        .filter_map(|m| match m {
+                            MemberRef::Member(mh) => Some(mh.get(self.ast).name),
+                            MemberRef::Error(_) => None,
+                        })
+                        .collect();
+                    self.collect_enum(*it, d.vis, d.name, &members)
                 }
-                ItemKind::Struct {
-                    vis,
-                    name,
-                    generics,
-                    methods,
-                    ..
-                } => {
+                ItemRef::Struct(h) => {
+                    let d = h.get(self.ast).clone();
                     self.declare_data(
-                        it.id(),
+                        *it,
                         DataKind::Struct,
-                        *vis,
-                        *name,
-                        generics,
+                        d.vis,
+                        d.name,
+                        &d.generics,
                         &[],
-                        methods,
+                        &d.methods,
                     );
                 }
-                ItemKind::Class {
-                    vis,
-                    name,
-                    generics,
-                    requires,
-                    methods,
-                    ..
-                } => {
+                ItemRef::Class(h) => {
+                    let d = h.get(self.ast).clone();
                     self.declare_data(
-                        it.id(),
+                        *it,
                         DataKind::Class,
-                        *vis,
-                        *name,
-                        generics,
-                        requires,
-                        methods,
+                        d.vis,
+                        d.name,
+                        &d.generics,
+                        &d.requires,
+                        &d.methods,
                     );
                 }
-                ItemKind::Interface {
-                    vis,
-                    name,
-                    generics,
-                    methods,
-                    ..
-                } => self.declare_iface(it.id(), *vis, *name, generics, methods),
-                ItemKind::Alias(d) => self.declare_alias(it.id(), d),
+                ItemRef::Interface(h) => {
+                    let d = h.get(self.ast).clone();
+                    self.declare_iface(*it, d.vis, d.name, &d.generics, &d.methods)
+                }
+                ItemRef::Alias(h) => self.declare_alias(*it, h.get(self.ast)),
                 _ => {}
             }
         }
@@ -140,57 +137,67 @@ impl<'a> Ctx<'a> {
         // self/forward/mutual references are legal (recursive
         // shapes)
         for it in &items {
-            if let ItemKind::Alias(d) = self.ast.item(*it) {
-                self.cur_mod = self.mod_of(it.id()).to_string();
-                self.validate_alias(d.name);
+            if let ItemRef::Alias(h) = *it {
+                self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
+                self.validate_alias(h.get(self.ast).name);
             }
         }
         for it in &items {
-            self.cur_mod = self.mod_of(it.id()).to_string();
-            match self.ast.item(*it) {
-                ItemKind::Struct { name, fields, .. } | ItemKind::Class { name, fields, .. } => {
-                    // generic records instantiate on use (mk_data_inst), so
-                    // their field types resolve under the PARAMETER
-                    // PLACEHOLDERS here — the template row crosses the
-                    // surface complete, and a consumer lays a concrete
-                    // instantiation out by substituting the placeholders
-                    let is_generic = self
-                        .find_data(*name)
-                        .map(|d| !d.generics.is_empty())
-                        .unwrap_or(false);
-                    if is_generic {
-                        self.resolve_template_fields(*name, fields);
-                    } else {
-                        self.resolve_data_fields(*name, fields);
-                    }
+            self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
+            let data_decl: Option<(IdentId, Vec<FieldRef>)> = match *it {
+                ItemRef::Struct(h) => {
+                    let d = h.get(self.ast);
+                    Some((d.name, d.fields.clone()))
                 }
-                ItemKind::Interface { name, methods, .. } => {
-                    self.resolve_iface_sigs(it.id(), *name, methods)
+                ItemRef::Class(h) => {
+                    let d = h.get(self.ast);
+                    Some((d.name, d.fields.clone()))
                 }
-                _ => {}
+                _ => None,
+            };
+            if let Some((name, fields)) = data_decl {
+                // generic records instantiate on use (mk_data_inst), so
+                // their field types resolve under the PARAMETER
+                // PLACEHOLDERS here — the template row crosses the
+                // surface complete, and a consumer lays a concrete
+                // instantiation out by substituting the placeholders
+                let is_generic = self
+                    .find_data(name)
+                    .map(|d| !d.generics.is_empty())
+                    .unwrap_or(false);
+                if is_generic {
+                    self.resolve_template_fields(name, &fields);
+                } else {
+                    self.resolve_data_fields(name, &fields);
+                }
+            }
+            if let ItemRef::Interface(h) = *it {
+                let (name, methods) = {
+                    let d = h.get(self.ast);
+                    (d.name, d.methods.clone())
+                };
+                self.resolve_iface_sigs(*it, name, &methods)
             }
         }
         // pass 2: impls, fns, lets
         for it in &items {
-            self.cur_mod = self.mod_of(it.id()).to_string();
-            match self.ast.item(*it) {
+            self.cur_mod = self.mod_of(it.span(self.ast)).to_string();
+            match *it {
                 // the one impl form: inherent
-                ItemKind::Impl {
-                    generics,
-                    target,
-                    methods,
-                    ..
-                } => {
-                    let methods = methods.clone();
-                    let generics = generics.clone();
-                    self.collect_impl(it.id(), &generics, *target, &methods)
+                ItemRef::Impl(h) => {
+                    let (generics, target, methods) = {
+                        let d = h.get(self.ast);
+                        (d.generics.clone(), d.target, d.methods.clone())
+                    };
+                    self.collect_impl(it.span(self.ast), &generics, target, &methods)
                 }
-                ItemKind::Fn(f) => {
+                ItemRef::Fn(fh) => {
+                    let f = fh.get(self.ast).clone();
                     let is_pub = f.vis == Vis::Pub;
                     if self.fn_index.contains(&f.name) {
                         let msg = match self.fn_nodes.iter().find(|(n, _)| *n == f.name) {
-                            Some((_, node)) if self.mod_of(node.id()) != self.cur_mod => {
-                                let home = self.mod_of(node.id()).to_string();
+                            Some((_, node)) if self.mod_of(node.span(self.ast)) != self.cur_mod => {
+                                let home = self.mod_of(node.span(self.ast)).to_string();
                                 format!(
                                     "duplicate fn `{}` — already declared in module `{}` ({})",
                                     self.name(f.name),
@@ -200,10 +207,10 @@ impl<'a> Ctx<'a> {
                             }
                             _ => format!("duplicate fn `{}`", self.name(f.name)),
                         };
-                        self.err(self.ast.span(it.id()), msg);
+                        self.err(it.span(self.ast), msg);
                     }
                     self.fn_index.push(f.name);
-                    self.fn_nodes.push((f.name, NodeHandle::new(it.id())));
+                    self.fn_nodes.push((f.name, fh));
                     // `entry fn` — the host-callable surface;
                     // signature checked against the crossing rule below
                     if f.entry {
@@ -214,14 +221,9 @@ impl<'a> Ctx<'a> {
                         self.exports.push((f.name, u32::MAX));
                     }
                 }
-                ItemKind::ModuleLet {
-                    name,
-                    ty,
-                    init,
-                    vis,
-                    ..
-                } => {
-                    self.lets.push((*name, *ty, *init, *vis));
+                ItemRef::ModuleLet(h) => {
+                    let d = h.get(self.ast);
+                    self.lets.push((d.name, d.ty, d.init, d.vis));
                 }
                 _ => {}
             }
@@ -230,12 +232,12 @@ impl<'a> Ctx<'a> {
 
     pub(crate) fn collect_enum(
         &mut self,
-        node: NodeId,
+        node: ItemRef,
         _vis: Vis,
         name: IdentId,
         members: &[IdentId],
     ) {
-        let sp = self.ast.node(node).span;
+        let sp = node.span(self.ast);
         if self.find_enum(name).is_some()
             || self.find_data(name).is_some()
             || self.find_iface(name).is_some()
@@ -273,15 +275,15 @@ impl<'a> Ctx<'a> {
     #[allow(clippy::too_many_arguments)] // the arity IS the pass's shape — plumbing, not an API to nest
     pub(crate) fn declare_data(
         &mut self,
-        node: NodeId,
+        node: ItemRef,
         kind: DataKind,
         _vis: Vis,
         name: IdentId,
         generics: &[IdentId],
-        requires: &[(IdentId, NodeHandle<AnyTy>)],
-        methods: &[NodeHandle<MethodDeclNode>],
+        requires: &[(IdentId, TyRef)],
+        methods: &[MethodRef],
     ) {
-        let sp = self.ast.span(node);
+        let sp = node.span(self.ast);
         if self.find_data(name).is_some()
             || self.find_enum(name).is_some()
             || self.find_iface(name).is_some()
@@ -292,10 +294,10 @@ impl<'a> Ctx<'a> {
         }
         // the positional spelling rides the decl — the call
         // construction's arming flag (structs and braced classes: false)
-        let newtype = matches!(
-            self.ast.item(rut_ast::ast::NodeHandle::new(node)),
-            ItemKind::Class { newtype: true, .. }
-        );
+        let newtype = match node {
+            ItemRef::Class(h) => h.get(self.ast).newtype,
+            _ => false,
+        };
         // the instantiation ledger's owner anchor: this decl's bodies
         // live in this unit — every decl's origin IS its module (no
         // source crosses a boundary)
@@ -306,16 +308,19 @@ impl<'a> Ctx<'a> {
             name,
             kind: TyKind::Data { fields: vec![] },
         });
-        let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
+        let mut mths: Vec<(IdentId, Handle<MethodDeclNode>)> = Vec::new();
         for m in methods {
-            mths.push((self.ast.method_decl(*m).name, *m));
+            let MethodRef::Method(mh) = *m else {
+                continue;
+            };
+            mths.push((mh.get(self.ast).name, mh));
         }
         self.datas.push((
             name,
             DataDecl {
                 kind,
                 ty: placeholder,
-                node: NodeHandle::new(node),
+                node,
                 fields: vec![],
                 methods: mths,
                 generics: generics.to_vec(),
@@ -333,11 +338,7 @@ impl<'a> Ctx<'a> {
     /// the placeholders, without the declaring body in sight. The
     /// concrete instantiations still enter at `mk_data_inst`, which
     /// re-reads the declaration under the caller's substitution.
-    pub(crate) fn resolve_template_fields(
-        &mut self,
-        name: IdentId,
-        fields: &[NodeHandle<FieldDeclNode>],
-    ) {
+    pub(crate) fn resolve_template_fields(&mut self, name: IdentId, fields: &[FieldRef]) {
         let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
             return;
         };
@@ -349,7 +350,10 @@ impl<'a> Ctx<'a> {
             .collect();
         let mut resolved: Vec<FieldInfo> = Vec::new();
         for f in fields {
-            let fd = self.ast.field_decl(*f);
+            let FieldRef::Field(fh) = *f else {
+                continue;
+            };
+            let fd = fh.get(self.ast);
             let fty = self.resolve_type(fd.ty, &env);
             resolved.push(FieldInfo {
                 name: fd.name,
@@ -362,21 +366,20 @@ impl<'a> Ctx<'a> {
 
     /// Pass 1b — resolve a declared record's field types, stamp the payload
     /// layout, and fill the `DataDecl`'s field list.
-    pub(crate) fn resolve_data_fields(
-        &mut self,
-        name: IdentId,
-        fields: &[NodeHandle<FieldDeclNode>],
-    ) {
+    pub(crate) fn resolve_data_fields(&mut self, name: IdentId, fields: &[FieldRef]) {
         let Some(idx) = self.datas.iter().position(|(n, _)| *n == name) else {
             return;
         };
         let placeholder = self.datas[idx].1.ty;
         let mut resolved: Vec<FieldInfo> = Vec::new();
         for f in fields {
-            let fd = self.ast.field_decl(*f);
+            let FieldRef::Field(fh) = *f else {
+                continue;
+            };
+            let fd = fh.get(self.ast);
             if fd.is_static {
                 self.err(
-                    self.ast.span(f.id()),
+                    fh.span(self.ast),
                     "`static` fields do not exist — there is no mutable module state; thread state explicitly or hold it in an `opaque` container the host passes back",
                 );
             }
@@ -396,7 +399,10 @@ impl<'a> Ctx<'a> {
         // collect fields with initializers + methods for the compiler
         let mut flds: Vec<FieldRow> = Vec::new();
         for f in fields {
-            let fd = self.ast.field_decl(*f);
+            let FieldRef::Field(fh) = *f else {
+                continue;
+            };
+            let fd = fh.get(self.ast);
             let fty = resolved
                 .iter()
                 .find(|x| x.name == fd.name)
@@ -414,8 +420,9 @@ impl<'a> Ctx<'a> {
     /// four-way, exactly like the enum/data/trait declare sites. The
     /// target validates in pass 1b (`validate_alias`), so forward
     /// references are legal.
-    pub(crate) fn declare_alias(&mut self, node: NodeId, d: &AliasData) {
-        let sp = self.ast.span(node);
+    pub(crate) fn declare_alias(&mut self, node: ItemRef, h: &AliasNode) {
+        let d = h;
+        let sp = node.span(self.ast);
         if self.find_alias(d.name).is_some()
             || self.find_data(d.name).is_some()
             || self.find_enum(d.name).is_some()
@@ -437,13 +444,13 @@ impl<'a> Ctx<'a> {
     /// are resolved in pass 1b, once every type name is in scope.
     pub(crate) fn declare_iface(
         &mut self,
-        node: NodeId,
+        node: ItemRef,
         vis: Vis,
         name: IdentId,
         generics: &[NodeId2],
-        _methods: &[NodeHandle<MethodDeclNode>],
+        _methods: &[MethodRef],
     ) {
-        let sp = self.ast.span(node);
+        let sp = node.span(self.ast);
         if self.find_iface(name).is_some()
             || self.find_data(name).is_some()
             || self.find_enum(name).is_some()
@@ -478,34 +485,38 @@ impl<'a> Ctx<'a> {
     /// Pass 1b — resolve a declared trait's method signatures.
     pub(crate) fn resolve_iface_sigs(
         &mut self,
-        _node: NodeId,
+        _node: ItemRef,
         name: IdentId,
-        methods: &[NodeHandle<MethodDeclNode>],
+        methods: &[MethodRef],
     ) {
         let Some(id) = self.iface_id_of(name) else {
             return;
         };
         let mut tms = Vec::new();
         for m in methods {
-            let md = self.ast.method_decl(*m);
+            let MethodRef::Method(mh) = *m else {
+                continue;
+            };
+            let md = mh.get(self.ast);
             let mut ptys = Vec::new();
             for (i, p) in md.params.iter().enumerate() {
-                match self.ast.param(*p) {
-                    MemberKind::SelfParam(_) if i == 0 => {} // receiver — resolved at the impl
-                    MemberKind::SelfParam(_) => {
-                        self.err(self.ast.span(p.id()), "`self` must be the first parameter");
+                match *p {
+                    ParamRef::SelfParam(_) if i == 0 => {} // receiver — resolved at the impl
+                    ParamRef::SelfParam(_) => {
+                        self.err(p.span(self.ast), "`self` must be the first parameter");
                     }
-                    MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                        ptys.push(self.resolve_iface_sig_ty(*t, id, &[]));
+                    ParamRef::Param(ph) if ph.get(self.ast).ty.is_some() => {
+                        ptys.push(self.resolve_iface_sig_ty(
+                            ph.get(self.ast).ty.expect("checked"),
+                            id,
+                            &[],
+                        ));
                     }
-                    MemberKind::Param(ParamData { ty: None, .. }) => {
-                        self.err(
-                            self.ast.span(p.id()),
-                            "interface method parameters need types",
-                        );
+                    ParamRef::Param(_) => {
+                        self.err(p.span(self.ast), "interface method parameters need types");
                         ptys.push(TY_I32);
                     }
-                    _ => ptys.push(TY_I32),
+                    ParamRef::Error(_) => ptys.push(TY_I32),
                 }
             }
             let rty = md.ret.map(|r| self.resolve_iface_sig_ty(r, id, &[]));
@@ -533,7 +544,7 @@ impl<'a> Ctx<'a> {
     /// `Self` is the trait's object type.
     fn resolve_iface_sig_ty(
         &mut self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         iface_id: u32,
         env: &[(IdentId, TypeId)],
     ) -> TypeId {
@@ -589,8 +600,8 @@ impl<'a> Ctx<'a> {
             .cloned()
             .zip(args.iter().cloned())
             .collect();
-        let methods = match self.ast.item(rut_ast::ast::NodeHandle::new(info.node)) {
-            ItemKind::Interface { methods, .. } => methods.clone(),
+        let methods: Vec<MethodRef> = match info.node {
+            ItemRef::Interface(h) => h.get(self.ast).methods.clone(),
             _ => Vec::new(),
         };
         let mut desc = IfaceDesc {
@@ -598,11 +609,16 @@ impl<'a> Ctx<'a> {
             methods: vec![],
         };
         for m in &methods {
-            let md = self.ast.method_decl(*m);
+            let MethodRef::Method(mh) = *m else {
+                continue;
+            };
+            let md = mh.get(self.ast);
             let mut ptys = Vec::new();
             for p in md.params.iter() {
-                if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ast.param(*p) {
-                    ptys.push(self.resolve_iface_sig_ty(*t, id, &subst));
+                if let ParamRef::Param(ph) = *p {
+                    if let Some(t) = ph.get(self.ast).ty {
+                        ptys.push(self.resolve_iface_sig_ty(t, id, &subst));
+                    }
                 }
             }
             let rty = md.ret.map(|r| self.resolve_iface_sig_ty(r, id, &subst));
@@ -699,19 +715,23 @@ impl<'a> Ctx<'a> {
         // resolve in the DECL's module (phase 3) — a call site in any
         // other module substitutes into the declaration's own scope.
         let saved_mod = self.cur_mod.clone();
-        self.cur_mod = self.mod_of(decl.node.id()).to_string();
+        self.cur_mod = self.mod_of(decl.node.span(self.ast)).to_string();
         self.admit_bounds(&decl.requires, &env, sp);
-        let field_nodes: Vec<NodeHandle<FieldDeclNode>> = match self.ast.item(decl.node) {
-            ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+        let field_nodes: Vec<FieldRef> = match decl.node {
+            ItemRef::Struct(h) => h.get(self.ast).fields.clone(),
+            ItemRef::Class(h) => h.get(self.ast).fields.clone(),
             _ => Vec::new(),
         };
 
         let mut resolved: Vec<FieldInfo> = Vec::new();
         for f in &field_nodes {
-            let fd = self.ast.field_decl(*f);
+            let FieldRef::Field(fh) = *f else {
+                continue;
+            };
+            let fd = fh.get(self.ast);
             if fd.is_static {
                 self.err(
-                    self.ast.span(f.id()),
+                    fh.span(self.ast),
                     "`static` fields do not exist — there is no mutable module state; thread state explicitly or hold it in an `opaque` container the host passes back",
                 );
             }

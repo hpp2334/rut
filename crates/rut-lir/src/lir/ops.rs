@@ -10,14 +10,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_binary(
         &mut self,
-        _node: NodeHandle<AnyExpr>,
-        op: rut_ast::ast::BinOp,
-        lhs: NodeHandle<AnyExpr>,
-        rhs: NodeHandle<AnyExpr>,
+        _node: ExprRef,
+        op: rut_ast::BinOp,
+        lhs: ExprRef,
+        rhs: ExprRef,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        use rut_ast::ast::BinOp::*;
+        use rut_ast::BinOp::*;
         if matches!(op, And | Or) {
             return self.compile_shortcircuit(op, lhs, rhs, sp);
         }
@@ -56,7 +56,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // hint, typing as `?T` for the identity null-slot compare.
         let rhs_hint = match (op, self.ctx.types.kind(lt).clone()) {
             (Eq | Ne, TyKind::Opt { elem }) => {
-                if matches!(self.ctx.ast.expr(rhs), ExprKind::Lit(Lit::Nil)) {
+                let rhs_is_nil = match rhs {
+                    ExprRef::Lit(lh) => matches!(lh.get(self.ctx.ast).lit, Lit::Nil),
+                    _ => false,
+                };
+                if rhs_is_nil {
                     Some(lt)
                 } else {
                     Some(elem)
@@ -225,9 +229,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_shortcircuit(
         &mut self,
-        op: rut_ast::ast::BinOp,
-        lhs: NodeHandle<AnyExpr>,
-        rhs: NodeHandle<AnyExpr>,
+        op: rut_ast::BinOp,
+        lhs: ExprRef,
+        rhs: ExprRef,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let lt = self.compile_expr(lhs, Some(TY_BOOL))?;
@@ -249,12 +253,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let l_rhs = self.new_label();
         let l_end = self.new_label();
         match op {
-            rut_ast::ast::BinOp::And => self.br(lreg, l_rhs, l_short),
+            rut_ast::BinOp::And => self.br(lreg, l_rhs, l_short),
             _ => self.br(lreg, l_short, l_rhs),
         }
         self.bind(l_short);
         let short_reg = self.new_reg(TY_BOOL);
-        let is_and = op == rut_ast::ast::BinOp::And;
+        let is_and = op == rut_ast::BinOp::And;
         self.emit(
             Op::ConstRaw {
                 dst: short_reg,
@@ -299,14 +303,18 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_assign(
         &mut self,
-        _node: NodeHandle<AnyExpr>,
-        op: Option<rut_ast::ast::BinOp>,
-        target: NodeHandle<AnyExpr>,
-        value: NodeHandle<AnyExpr>,
+        _node: ExprRef,
+        op: Option<rut_ast::BinOp>,
+        target: ExprRef,
+        value: ExprRef,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
-        match self.ctx.ast.expr(target).clone() {
-            ExprKind::Path { segs } if segs.len() >= 2 => {
+        let target_segs: Option<Vec<PathSeg>> = match target {
+            ExprRef::Path(h) => Some(h.get(self.ctx.ast).segs.clone()),
+            _ => None,
+        };
+        if let Some(segs) = target_segs {
+            if segs.len() >= 2 {
                 // `p.x = 4`: the head must be a local; build the GetF chain,
                 // assign the last field
                 if segs[0].generics.is_empty() {
@@ -467,8 +475,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 self.ctx.err(sp, "invalid assignment target");
                 Err(())
-            }
-            ExprKind::Path { segs } if segs.len() == 1 => {
+            } else if segs.len() == 1 {
                 let name = segs[0].name;
                 let Some(l) = self.lookup(name).cloned() else {
                     if self.ctx.poisoned(name) {
@@ -576,153 +583,161 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
                 Ok(())
-            }
-            ExprKind::Field { recv, name } => {
-                if !self.check_recv_mut(recv, sp, "field assignment") {
-                    return Err(());
-                }
-                let rt = self.compile_expr(recv, None)?;
-                let rreg = self.last_reg;
-                // `p.f = ..` through a nullable auto-derefs —
-                // so does `arr[i].f = ..` when the elements are `?T`
-                let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
-                let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() else {
-                    self.ctx
-                        .err(sp, "field assignment needs a struct/class receiver");
-                    return Err(());
-                };
-                let Some(fidx) = fields.iter().position(|f| f.name == name) else {
-                    self.ctx.err(
-                        sp,
-                        format!(
-                            "`{}` has no field `{}`",
-                            self.ctx.type_name(rt),
-                            self.ctx.name(name)
-                        ),
-                    );
-                    return Err(());
-                };
-                // the member-visibility law: the postfix write takes the
-                // dial like the path form (structs exempt by law)
-                if let Some(msg) = self.ctx.field_vis_err(rt, name) {
-                    self.ctx.err(sp, msg);
-                    return Err(());
-                }
-                let fty = fields[fidx].ty;
-                match op {
-                    None => {
-                        let t = self.compile_expr(value, Some(fty))?;
-                        if !self.same_ty(t, fty) {
-                            self.ctx.err(sp, "field assignment type mismatch");
-                        }
-                        self.emit(
-                            Op::SetF {
-                                obj: rreg,
-                                field: fidx as u32,
-                                val: self.last_reg,
-                                repr: self.ctx.types.repr_of(fty),
-                            },
-                            sp.lo,
-                        );
-                    }
-                    Some(bin) => {
-                        let cur = self.new_reg(fty);
-                        self.emit(
-                            Op::GetF {
-                                dst: cur,
-                                obj: rreg,
-                                field: fidx as u32,
-                                repr: self.ctx.types.repr_of(fty),
-                            },
-                            sp.lo,
-                        );
-                        // a `?T` field computes at T: the
-                        // accumulator derefs, the result re-boxes
-                        let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
-                        let t = self.compile_expr(value, Some(cty))?;
-                        if !self.same_ty(t, cty) {
-                            self.ctx.err(sp, "assignment type mismatch");
-                        }
-                        let val_reg = self.last_reg;
-                        let res = self.new_reg(cty);
-                        self.emit_compound(bin, cty, cur, val_reg, res, sp)?;
-                        let res = self.coerce_to(cty, fty, res, sp.lo);
-                        self.emit(
-                            Op::SetF {
-                                obj: rreg,
-                                field: fidx as u32,
-                                val: res,
-                                repr: self.ctx.types.repr_of(fty),
-                            },
-                            sp.lo,
-                        );
-                    }
-                }
-                Ok(())
-            }
-            ExprKind::Index { recv, idx } => {
-                if !self.check_recv_mut(recv, sp, "index assignment") {
-                    return Err(());
-                }
-                let rt = self.compile_expr(recv, None)?;
-                let rreg = self.last_reg;
-                // `xs[i] = ..` through a pointer auto-derefs
-                let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
-                let Some(info) = self.slice_info(rt) else {
-                    self.ctx
-                        .err(sp, "index assignment needs a sequence (Vec or Array)");
-                    return Err(());
-                };
-                let elem = info.elem;
-                let it = self.compile_expr(idx, Some(TY_I32))?;
-                if it != TY_I32 {
-                    self.ctx.err(sp, "index must be i32");
-                }
-                let ireg = self.last_reg;
-                match op {
-                    None => {
-                        let t = self.compile_expr(value, Some(elem))?;
-                        if !self.same_ty(t, elem) {
-                            self.ctx.err(sp, "element assignment type mismatch");
-                        }
-                        let vreg = self.last_reg;
-                        self.emit_slice_set(rreg, ireg, vreg, &info, sp.lo)?;
-                    }
-                    Some(bin) => {
-                        let cur = self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
-                        // a `?T` element computes at T: the
-                        // accumulator derefs, the result re-boxes
-                        let (cty, cur) = self.deref_for_use(elem, cur, sp.lo);
-                        let t = self.compile_expr(value, Some(cty))?;
-                        if !self.same_ty(t, cty) {
-                            self.ctx.err(sp, "element assignment type mismatch");
-                        }
-                        let val_reg = self.last_reg;
-                        let res = self.new_reg(cty);
-                        self.emit_compound(bin, cty, cur, val_reg, res, sp)?;
-                        let res = self.coerce_to(cty, elem, res, sp.lo);
-                        self.emit_slice_set(rreg, ireg, res, &info, sp.lo)?;
-                    }
-                }
-                Ok(())
-            }
-            _ => {
+            } else {
                 self.ctx.err(sp, "invalid assignment target");
                 Err(())
             }
+        } else if let ExprRef::Field(fh) = target {
+            let (recv, name) = {
+                let f = fh.get(self.ctx.ast);
+                (f.recv, f.name)
+            };
+            if !self.check_recv_mut(recv, sp, "field assignment") {
+                return Err(());
+            }
+            let rt = self.compile_expr(recv, None)?;
+            let rreg = self.last_reg;
+            // `p.f = ..` through a nullable auto-derefs —
+            // so does `arr[i].f = ..` when the elements are `?T`
+            let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+            let TyKind::Data { fields } = self.ctx.types.kind(rt).clone() else {
+                self.ctx
+                    .err(sp, "field assignment needs a struct/class receiver");
+                return Err(());
+            };
+            let Some(fidx) = fields.iter().position(|f| f.name == name) else {
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "`{}` has no field `{}`",
+                        self.ctx.type_name(rt),
+                        self.ctx.name(name)
+                    ),
+                );
+                return Err(());
+            };
+            // the member-visibility law: the postfix write takes the
+            // dial like the path form (structs exempt by law)
+            if let Some(msg) = self.ctx.field_vis_err(rt, name) {
+                self.ctx.err(sp, msg);
+                return Err(());
+            }
+            let fty = fields[fidx].ty;
+            match op {
+                None => {
+                    let t = self.compile_expr(value, Some(fty))?;
+                    if !self.same_ty(t, fty) {
+                        self.ctx.err(sp, "field assignment type mismatch");
+                    }
+                    self.emit(
+                        Op::SetF {
+                            obj: rreg,
+                            field: fidx as u32,
+                            val: self.last_reg,
+                            repr: self.ctx.types.repr_of(fty),
+                        },
+                        sp.lo,
+                    );
+                }
+                Some(bin) => {
+                    let cur = self.new_reg(fty);
+                    self.emit(
+                        Op::GetF {
+                            dst: cur,
+                            obj: rreg,
+                            field: fidx as u32,
+                            repr: self.ctx.types.repr_of(fty),
+                        },
+                        sp.lo,
+                    );
+                    // a `?T` field computes at T: the
+                    // accumulator derefs, the result re-boxes
+                    let (cty, cur) = self.deref_for_use(fty, cur, sp.lo);
+                    let t = self.compile_expr(value, Some(cty))?;
+                    if !self.same_ty(t, cty) {
+                        self.ctx.err(sp, "assignment type mismatch");
+                    }
+                    let val_reg = self.last_reg;
+                    let res = self.new_reg(cty);
+                    self.emit_compound(bin, cty, cur, val_reg, res, sp)?;
+                    let res = self.coerce_to(cty, fty, res, sp.lo);
+                    self.emit(
+                        Op::SetF {
+                            obj: rreg,
+                            field: fidx as u32,
+                            val: res,
+                            repr: self.ctx.types.repr_of(fty),
+                        },
+                        sp.lo,
+                    );
+                }
+            }
+            Ok(())
+        } else if let ExprRef::Index(ih) = target {
+            let (recv, idx) = {
+                let f = ih.get(self.ctx.ast);
+                (f.recv, f.idx)
+            };
+            if !self.check_recv_mut(recv, sp, "index assignment") {
+                return Err(());
+            }
+            let rt = self.compile_expr(recv, None)?;
+            let rreg = self.last_reg;
+            // `xs[i] = ..` through a pointer auto-derefs
+            let (rt, rreg) = self.deref_for_use(rt, rreg, sp.lo);
+            let Some(info) = self.slice_info(rt) else {
+                self.ctx
+                    .err(sp, "index assignment needs a sequence (Vec or Array)");
+                return Err(());
+            };
+            let elem = info.elem;
+            let it = self.compile_expr(idx, Some(TY_I32))?;
+            if it != TY_I32 {
+                self.ctx.err(sp, "index must be i32");
+            }
+            let ireg = self.last_reg;
+            match op {
+                None => {
+                    let t = self.compile_expr(value, Some(elem))?;
+                    if !self.same_ty(t, elem) {
+                        self.ctx.err(sp, "element assignment type mismatch");
+                    }
+                    let vreg = self.last_reg;
+                    self.emit_slice_set(rreg, ireg, vreg, &info, sp.lo)?;
+                }
+                Some(bin) => {
+                    let cur = self.emit_slice_get(rreg, ireg, &info, sp.lo)?;
+                    // a `?T` element computes at T: the
+                    // accumulator derefs, the result re-boxes
+                    let (cty, cur) = self.deref_for_use(elem, cur, sp.lo);
+                    let t = self.compile_expr(value, Some(cty))?;
+                    if !self.same_ty(t, cty) {
+                        self.ctx.err(sp, "element assignment type mismatch");
+                    }
+                    let val_reg = self.last_reg;
+                    let res = self.new_reg(cty);
+                    self.emit_compound(bin, cty, cur, val_reg, res, sp)?;
+                    let res = self.coerce_to(cty, elem, res, sp.lo);
+                    self.emit_slice_set(rreg, ireg, res, &info, sp.lo)?;
+                }
+            }
+            Ok(())
+        } else {
+            self.ctx.err(sp, "invalid assignment target");
+            Err(())
         }
     }
 
     pub(crate) fn emit_compound(
         &mut self,
-        bin: rut_ast::ast::BinOp,
+        bin: rut_ast::BinOp,
         ty: TypeId,
         a: u16,
         b: u16,
         dst: u16,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
-        use rut_ast::ast::BinOp::*;
+        use rut_ast::BinOp::*;
         let prim = if let TyKind::Prim(p) = self.ctx.types.kind(ty) {
             Some(*p)
         } else {

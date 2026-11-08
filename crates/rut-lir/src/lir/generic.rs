@@ -10,7 +10,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// generic params in a type node that are not yet bound
     pub(crate) fn free_generics(
         &self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         decl_generics: &[IdentId],
         subst: &[(IdentId, TypeId)],
     ) -> Vec<IdentId> {
@@ -21,14 +21,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn collect_free(
         &self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         decl_generics: &[IdentId],
         subst: &[(IdentId, TypeId)],
         out: &mut Vec<IdentId>,
     ) {
-        match self.ctx.ast.ty(node) {
-            TypeKind::TyPath { segs, .. } => {
-                for seg in segs {
+        match node {
+            TyRef::Path(h) => {
+                let segs = h.get(self.ctx.ast).segs.clone();
+                for seg in &segs {
                     if decl_generics.contains(&seg.name)
                         && !subst.iter().any(|(n, _)| *n == seg.name)
                         && !out.contains(&seg.name)
@@ -40,14 +41,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
             }
-            TypeKind::TyFn { params, ret } => {
+            TyRef::Fn(h) => {
+                let n = h.get(self.ctx.ast);
+                let (params, ret) = (n.params.clone(), n.ret);
                 for p in params {
-                    self.collect_free(*p, decl_generics, subst, out);
+                    self.collect_free(p, decl_generics, subst, out);
                 }
-                self.collect_free(*ret, decl_generics, subst, out);
+                self.collect_free(ret, decl_generics, subst, out);
             }
-            TypeKind::TyArray { elem } => {
-                self.collect_free(*elem, decl_generics, subst, out);
+            TyRef::Array(h) => {
+                self.collect_free(h.get(self.ctx.ast).elem, decl_generics, subst, out);
             }
             _ => {}
         }
@@ -62,7 +65,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// values from the completed argument.
     pub(crate) fn hint_with_placeholders(
         &mut self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         decl_generics: &[IdentId],
         subst: &[(IdentId, TypeId)],
     ) -> TypeId {
@@ -85,7 +88,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// structural unification: bind generic params from an argument's type
     pub(crate) fn unify_generic(
         &mut self,
-        param_node: NodeHandle<AnyTy>,
+        param_node: TyRef,
         arg_ty: TypeId,
         decl_generics: &[IdentId],
         subst: &mut Vec<(IdentId, TypeId)>,
@@ -99,8 +102,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// tracked origin names the compared concrete type answers there).
     pub(crate) fn unify_generic_val(
         &mut self,
-        param_node: NodeHandle<AnyTy>,
-        arg_node: Option<NodeHandle<AnyExpr>>,
+        param_node: TyRef,
+        arg_node: Option<ExprRef>,
         arg_ty: TypeId,
         decl_generics: &[IdentId],
         subst: &mut Vec<(IdentId, TypeId)>,
@@ -113,8 +116,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 subst.push((name, ty));
             }
         };
-        match self.ctx.ast.ty(param_node).clone() {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
+        // the TyPath arms' guard inputs, pre-read once (the slot match
+        // cannot re-borrow the node in its guards)
+        let path_segs: Option<Vec<PathSeg>> = match param_node {
+            TyRef::Path(h) => Some(h.get(self.ctx.ast).segs.clone()),
+            _ => None,
+        };
+        match param_node {
+            TyRef::Path(_)
+                if path_segs
+                    .as_ref()
+                    .is_some_and(|s| s.len() == 1 && s[0].generics.is_empty()) =>
+            {
+                let segs = path_segs.expect("guard checked");
                 let name = segs[0].name;
                 if decl_generics.contains(&name) {
                     if let Some(&(_, prev)) = subst.iter().find(|(n, _)| *n == name) {
@@ -154,9 +168,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            TypeKind::TyArray { elem } => {
+            TyRef::Array(ah) => {
                 // `[T]` against an array argument — unify element-wise
                 //: `fn f<T>(xs: [T])`
+                let elem = ah.get(self.ctx.ast).elem;
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 if let TyKind::Array { elem: arg_elem } = arg_kind {
                     self.unify_generic(elem, arg_elem, decl_generics, subst, sp)
@@ -171,14 +186,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     Err(())
                 }
             }
-            TypeKind::TyPath { segs, .. }
-                if segs.len() == 1
-                    && !segs[0].generics.is_empty()
-                    && segs[0].name == rut_core::sym::FUTURE
-                    && !self
-                        .free_generics(param_node, decl_generics, subst)
-                        .is_empty() =>
+            TyRef::Path(_)
+                if path_segs.as_ref().is_some_and(|s| {
+                    s.len() == 1 && !s[0].generics.is_empty() && s[0].name == rut_core::sym::FUTURE
+                }) && !self
+                    .free_generics(param_node, decl_generics, subst)
+                    .is_empty() =>
             {
+                let segs = path_segs.expect("guard checked");
                 // the closed `Future<T>` handle (v20): a generic handle
                 // parameter against a future argument unifies through
                 // the element — `fn launch<T>(f: Future<T>)` over
@@ -213,18 +228,20 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            TypeKind::TyPath { segs, .. }
-                if segs.len() == 1
-                    && !segs[0].generics.is_empty()
-                    && self
-                        .ctx
-                        .find_iface(segs[0].name)
-                        .map(|t| !t.generics.is_empty())
-                        .unwrap_or(false)
-                    && !self
-                        .free_generics(param_node, decl_generics, subst)
-                        .is_empty() =>
+            TyRef::Path(_)
+                if path_segs.as_ref().is_some_and(|s| {
+                    s.len() == 1
+                        && !s[0].generics.is_empty()
+                        && self
+                            .ctx
+                            .find_iface(s[0].name)
+                            .map(|t| !t.generics.is_empty())
+                            .unwrap_or(false)
+                }) && !self
+                    .free_generics(param_node, decl_generics, subst)
+                    .is_empty() =>
             {
+                let segs = path_segs.expect("guard checked");
                 // a generic trait's instantiation against a concrete
                 // argument (`fn read_id<T>(a: Readable<T>)` over
                 // `Source<str>`): the widening's trait args come from the
@@ -291,7 +308,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            TypeKind::TyPath { .. } => {
+            TyRef::Path(_) => {
                 // builtin containers (`opaque`): resolve and compare — the
                 // core names, gated on the use statement like everywhere
                 // else (an unused name falls through to `resolve_type`,
@@ -311,8 +328,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     Ok(())
                 }
             }
-            TypeKind::TyFn { params, ret } => {
+            TyRef::Fn(fh) => {
                 // fn(P1, P2) -> R against the arg's fn type
+                let (params, ret) = {
+                    let n = fh.get(self.ctx.ast);
+                    (n.params.clone(), n.ret)
+                };
                 let arg_kind = self.ctx.types.kind(arg_ty).clone();
                 if let TyKind::Fn {
                     params: aps,

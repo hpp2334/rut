@@ -28,15 +28,16 @@ mod trait_static;
 impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_call(
         &mut self,
-        node: NodeHandle<AnyExpr>,
-        callee: NodeHandle<AnyExpr>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        node: ExprRef,
+        callee: ExprRef,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let _ = node;
         // fn-typed local call: `f(x)` where f is a param/local of fn type
-        if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
+        if let ExprRef::Path(cph) = callee {
+            let segs = cph.get(self.ctx.ast).segs.clone();
             if segs.len() == 1 && self.lookup(segs[0].name).is_some() {
                 let ft = self.compile_expr(callee, None)?;
                 // the callee derefs: `let f =
@@ -55,8 +56,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     }
                 }
             }
-        }
-        if let ExprKind::Path { segs } = self.ctx.ast.expr(callee).clone() {
             return self.compile_path_call(segs, args, expected, sp);
         }
         // fn-typed value call: `f(x)` where f: fn(T) -> U — the callee
@@ -79,7 +78,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn finish_call_fn(
         &mut self,
         freg: u16,
-        args: Vec<NodeHandle<AnyExpr>>,
+        args: Vec<ExprRef>,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -104,7 +103,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens_val(*a, t, ptys[i]) {
                 self.ctx.err(
-                    self.ctx.ast.span(a.id()),
+                    a.span(self.ctx.ast),
                     format!(
                         "argument {} is `{}`, `{}` expected",
                         i + 1,
@@ -138,7 +137,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_path_call(
         &mut self,
         segs: Vec<PathSeg>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -468,7 +467,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     return Err(());
                 }
                 let t = self.compile_expr(args[0], None)?;
-                self.check_formattable(t, self.ctx.ast.span(args[0].id()))?;
+                self.check_formattable(t, args[0].span(self.ctx.ast))?;
                 let src = self.last_reg;
                 let dst = self.new_reg(TY_STR);
                 {
@@ -501,7 +500,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(target) = self.ctx.own_use_target(name) {
             if let Some(fnode) = self.ctx.fn_in(&target, name) {
                 let from = self.ctx.cur_mod.clone();
-                let vis = self.ctx.ast.fn_decl(fnode).vis;
+                let vis = fnode.get(self.ctx.ast).vis;
                 if !self.ctx.vis_crosses(&from, &target, vis) {
                     self.ctx.err(
                         sp,
@@ -616,7 +615,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let t = self.compile_expr(*a, Some(ef.params[i]))?;
                 if !self.widens_val(*a, t, ef.params[i]) {
                     self.ctx.err(
-                        self.ctx.ast.span(a.id()),
+                        a.span(self.ctx.ast),
                         format!(
                             "argument {} is `{}`, `{}` expected",
                             i + 1,
@@ -790,8 +789,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         segs: &[PathSeg],
         name: IdentId,
-        generics: &[NodeHandle<AnyTy>],
-        args: &[NodeHandle<AnyExpr>],
+        generics: &[TyRef],
+        args: &[ExprRef],
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> Option<TcResult<TypeId>> {
@@ -901,7 +900,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         };
         if let Some(fnode) = self.ctx.fn_in(&m, name) {
-            if let Some(msg) = vis_gate(self.ctx, name, self.ctx.ast.fn_decl(fnode).vis) {
+            if let Some(msg) = vis_gate(self.ctx, name, fnode.get(self.ctx.ast).vis) {
                 self.ctx.err(sp, msg);
                 return Some(Err(()));
             }
@@ -1051,12 +1050,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// merge of boxes, an untracked arrival) proves nothing: the honest
     /// structural refusal. `node` names the value expression; the bare
     /// path carries its binding's origins.
-    pub(crate) fn widens_val(
-        &mut self,
-        node: NodeHandle<AnyExpr>,
-        from: TypeId,
-        to: TypeId,
-    ) -> bool {
+    pub(crate) fn widens_val(&mut self, node: ExprRef, from: TypeId, to: TypeId) -> bool {
         if from == to {
             return true;
         }
@@ -1094,7 +1088,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// The boxed pass behind [`Self::widens_val`].
-    fn widen_boxed(&mut self, node: NodeHandle<AnyExpr>, from: TypeId, to_if: u32) -> bool {
+    fn widen_boxed(&mut self, node: ExprRef, from: TypeId, to_if: u32) -> bool {
         let origins = self.origins_of_expr(node);
         let sp = rut_lexer::span::Span::new(self.span, self.span);
         if origins.is_empty() {
@@ -1130,9 +1124,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     /// The origin set of a VALUE EXPRESSION (origin counting): a bare
     /// path carries its binding's origins; anything else is untracked.
-    fn origins_of_expr(&self, node: NodeHandle<AnyExpr>) -> Vec<TypeId> {
-        match self.ctx.ast.expr(node) {
-            ExprKind::Path { segs } if segs.len() == 1 => self.origins_of(segs[0].name),
+    fn origins_of_expr(&self, node: ExprRef) -> Vec<TypeId> {
+        match node {
+            ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
+                self.origins_of(ph.get(self.ctx.ast).segs[0].name)
+            }
             _ => Vec::new(),
         }
     }
@@ -1146,12 +1142,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn check_recv_mut(
         &mut self,
-        recv: NodeHandle<AnyExpr>,
+        recv: ExprRef,
         sp: rut_lexer::span::Span,
         what: &str,
     ) -> bool {
-        match self.ctx.ast.expr(recv).clone() {
-            ExprKind::Path { segs } if segs.len() == 1 => {
+        match recv {
+            ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
+                let segs = &ph.get(self.ctx.ast).segs;
                 if let Some(l) = self.lookup(segs[0].name) {
                     // the mut-binding law is uniform under the by-reference
                     // regime: every binding shares its cell, so
@@ -1175,8 +1172,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 true
             }
-            ExprKind::Field { recv: inner, .. } | ExprKind::Index { recv: inner, .. } => {
-                self.check_recv_mut(inner, sp, what)
+            ExprRef::Field(inner_fh) => {
+                self.check_recv_mut(inner_fh.get(self.ctx.ast).recv, sp, what)
+            }
+            ExprRef::Index(inner_fh) => {
+                self.check_recv_mut(inner_fh.get(self.ctx.ast).recv, sp, what)
             }
             _ => true,
         }

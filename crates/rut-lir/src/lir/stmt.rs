@@ -8,7 +8,7 @@ use crate::check::{float_suffix_ty, int_suffix_ty, TcResult};
 /// One decl's member surface: `(decl name, method rows, generic params)`.
 type DeclMemberRow = (
     IdentId,
-    Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+    Vec<(IdentId, Handle<MethodDeclNode>)>,
     Vec<IdentId>,
 );
 
@@ -50,20 +50,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// arms all terminate — their `return`s ARE the answers).
     pub(crate) fn compile_block_value(
         &mut self,
-        h: impl Into<NodeId>,
+        h: Handle<BlockNode>,
         expected: Option<TypeId>,
     ) -> TcResult<Option<TypeId>> {
-        let id = h.into();
-        self.span = self.ctx.ast.span(id).lo;
-        let (stmts, tail) = match self.ctx.ast.kind(id) {
-            Kind::Expr(ExprKind::Block { stmts, tail }) => (stmts.clone(), *tail),
-            _ => return Ok(None),
+        self.span = h.span(self.ctx.ast).lo;
+        let (stmts, tail) = {
+            let n = h.get(self.ctx.ast);
+            (n.stmts.clone(), n.tail)
         };
         // a trailing `if` STATEMENT with an else is tail position too
         let if_tail = tail.is_none()
-            && stmts.last().is_some_and(|s| {
-                matches!(self.ctx.ast.stmt(*s), StmtKind::If { els: Some(_), .. })
-            });
+            && stmts.last().is_some_and(
+                |s| matches!(s, StmtRef::If(ih) if ih.get(self.ctx.ast).els.is_some()),
+            );
         let split = if if_tail {
             stmts.len() - 1
         } else {
@@ -102,14 +101,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(e, expected)?;
             Some((Some(t), self.last_reg))
         } else if if_tail {
-            let last = stmts[stmts.len() - 1];
-            match self.ctx.ast.stmt(last) {
-                StmtKind::If { cond, then, els } => {
-                    let t = self.compile_if_value(last, *cond, *then, *els, expected)?;
-                    Some((t, self.last_reg))
-                }
-                _ => unreachable!("the tail-if shape was checked"),
-            }
+            let StmtRef::If(ih) = stmts[stmts.len() - 1] else {
+                unreachable!("the tail-if shape was checked")
+            };
+            let n = ih.get(self.ctx.ast);
+            let t = self.compile_if_value(StmtRef::If(ih), n.cond, n.then, n.els, expected)?;
+            Some((t, self.last_reg))
         } else {
             None
         };
@@ -141,9 +138,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// stays valueless.
     fn compile_if_value(
         &mut self,
-        node: NodeHandle<AnyStmt>,
-        cond: NodeHandle<AnyExpr>,
-        then: NodeHandle<BlockNode>,
+        node: StmtRef,
+        cond: ExprRef,
+        then: Handle<BlockNode>,
         els: Option<ElseBranch>,
         expected: Option<TypeId>,
     ) -> TcResult<Option<TypeId>> {
@@ -152,7 +149,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.compile_stmt(node)?;
             return Ok(None);
         };
-        let sp = self.ctx.ast.span(node.id());
+        let sp = node.span(self.ctx.ast);
         // definite-return: the if terminates iff BOTH arms do (the
         // statement form's law, per-arm snapshot/clear)
         let saved = self.terminated;
@@ -172,13 +169,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let t = self.compile_block_value(b, expected)?;
                         (t, self.terminated)
                     }
-                    ElseBranch::If(h) => match self.ctx.ast.stmt(h.into()).clone() {
-                        StmtKind::If { cond, then, els } => {
-                            let t = self.compile_if_value(h.into(), cond, then, els, expected)?;
-                            (t, self.terminated)
-                        }
-                        _ => unreachable!("ElseBranch::If is an if statement"),
-                    },
+                    ElseBranch::If(h) => {
+                        let n = h.get(self.ctx.ast);
+                        let t =
+                            self.compile_if_value(StmtRef::If(h), n.cond, n.then, n.els, expected)?;
+                        (t, self.terminated)
+                    }
                 }
             };
             self.terminated = saved || term;
@@ -209,13 +205,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let (t2, r2) = match els {
             ElseBranch::Block(b) => (self.compile_block_value(b, expected)?, self.last_reg),
             // an else-if chain: the nested if STATEMENT is the value
-            ElseBranch::If(h) => match self.ctx.ast.stmt(h.into()).clone() {
-                StmtKind::If { cond, then, els } => {
-                    let t = self.compile_if_value(h.into(), cond, then, els, expected)?;
-                    (t, self.last_reg)
-                }
-                _ => unreachable!("ElseBranch::If is an if statement"),
-            },
+            ElseBranch::If(h) => {
+                let n = h.get(self.ctx.ast);
+                let t = self.compile_if_value(StmtRef::If(h), n.cond, n.then, n.els, expected)?;
+                (t, self.last_reg)
+            }
         };
         let else_term = self.terminated;
         self.terminated = saved || (then_term && else_term);
@@ -226,8 +220,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             (Some(a), Some(b)) => {
                 if a != b {
                     let sp = match els {
-                        ElseBranch::Block(b) => self.ctx.ast.span(b.id()),
-                        ElseBranch::If(h) => self.ctx.ast.span(h.id()),
+                        ElseBranch::Block(b) => b.span(self.ctx.ast),
+                        ElseBranch::If(h) => h.span(self.ctx.ast),
                     };
                     self.ctx.err(
                         sp,
@@ -294,8 +288,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// any path (both arms terminated).
     pub(crate) fn compile_if_expr(
         &mut self,
-        cond: NodeHandle<AnyExpr>,
-        then: NodeHandle<BlockNode>,
+        cond: ExprRef,
+        then: Handle<BlockNode>,
         els: Option<ElseBranch>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
@@ -310,7 +304,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let saved = self.terminated;
             self.terminated = false;
             let value = if bits != 0 {
-                let raw = self.compile_expr(then.into(), expected)?;
+                let raw = self.compile_expr(ExprRef::Block(then), expected)?;
                 if self.terminated {
                     None
                 } else {
@@ -319,19 +313,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             } else {
                 match els {
                     Some(ElseBranch::Block(b)) => {
-                        let raw = self.compile_expr(b.into(), expected)?;
+                        let raw = self.compile_expr(ExprRef::Block(b), expected)?;
                         if self.terminated {
                             None
                         } else {
                             Some(raw)
                         }
                     }
-                    Some(ElseBranch::If(h)) => match self.ctx.ast.stmt(h.into()).clone() {
-                        StmtKind::If { cond, then, els } => {
-                            self.compile_if_expr(cond, then, els, expected, sp)?
-                        }
-                        _ => unreachable!("ElseBranch::If is an if statement"),
-                    },
+                    Some(ElseBranch::If(h)) => {
+                        let n = h.get(self.ctx.ast);
+                        self.compile_if_expr(n.cond, n.then, n.els, expected, sp)?
+                    }
                     None => None,
                 }
             };
@@ -346,7 +338,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // per-arm snapshot/clear: the arm's `return` verdict is its own
         let saved = self.terminated;
         self.terminated = false;
-        let raw1 = self.compile_expr(then.into(), expected)?;
+        let raw1 = self.compile_expr(ExprRef::Block(then), expected)?;
         let r1 = self.last_reg;
         let then_term = self.terminated;
         self.terminated = false;
@@ -366,7 +358,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.bind(l_else);
         let t2 = match els {
             Some(ElseBranch::Block(b)) => {
-                let t = self.compile_expr(b.into(), expected)?;
+                let t = self.compile_expr(ExprRef::Block(b), expected)?;
                 let term = self.terminated;
                 if term {
                     None
@@ -378,13 +370,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // its own all-arms-terminated verdict IS the contribution
             // (None — the chain's `return`s are the answers)
             Some(ElseBranch::If(h)) => {
-                let sp2 = self.ctx.ast.span(h.id());
-                match self.ctx.ast.stmt(h.into()).clone() {
-                    StmtKind::If { cond, then, els } => {
-                        self.compile_if_expr(cond, then, els, expected, sp2)?
-                    }
-                    _ => unreachable!("ElseBranch::If is an if statement"),
-                }
+                let sp2 = h.span(self.ctx.ast);
+                let n = h.get(self.ctx.ast);
+                self.compile_if_expr(n.cond, n.then, n.els, expected, sp2)?
             }
             // no `else`: the implicit else arm is the nil value
             None => Some(TY_NIL),
@@ -399,8 +387,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             (Some(a), Some(b)) => {
                 if a != b {
                     let esp = match els {
-                        Some(ElseBranch::Block(b)) => self.ctx.ast.span(b.id()),
-                        Some(ElseBranch::If(h)) => self.ctx.ast.span(h.id()),
+                        Some(ElseBranch::Block(b)) => b.span(self.ctx.ast),
+                        Some(ElseBranch::If(h)) => h.span(self.ctx.ast),
                         None => sp,
                     };
                     self.ctx.err(
@@ -463,10 +451,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// computes and DISCARDS (statement position — the tail's own
     /// errors still diagnose). A tail-position `if` statement compiles
     /// as the plain statement form here (its value, if any, is nobody's).
-    pub(crate) fn compile_block(&mut self, h: impl Into<NodeId>) -> TcResult<()> {
-        let (stmts, tail) = match self.ctx.ast.kind(h.into()) {
-            Kind::Expr(ExprKind::Block { stmts, tail }) => (stmts.clone(), *tail),
-            _ => return Ok(()),
+    pub(crate) fn compile_block(&mut self, h: Handle<BlockNode>) -> TcResult<()> {
+        let (stmts, tail) = {
+            let n = h.get(self.ctx.ast);
+            (n.stmts.clone(), n.tail)
         };
         let base = self.locals.len();
         // sibling recovery (see compile_block_value): a failing
@@ -503,11 +491,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// remainder: the binding never happened, so a later use must not
     /// read as a mysterious unknown — the cause is already on the
     /// diag list. Records every name the statement would have bound.
-    fn poison_let_names(&mut self, s: NodeHandle<AnyStmt>, out: &mut Vec<rut_core::IdentId>) {
-        let (name, destructure) = match self.ctx.ast.stmt(s) {
-            StmtKind::LetStmt {
-                name, destructure, ..
-            } => (*name, destructure.clone()),
+    fn poison_let_names(&mut self, s: StmtRef, out: &mut Vec<rut_core::IdentId>) {
+        let (name, destructure) = match s {
+            StmtRef::Let(h) => {
+                let n = h.get(self.ctx.ast);
+                (n.name, n.destructure.clone())
+            }
             _ => return,
         };
         if destructure.is_none() && self.ctx.poisoned.insert(name) {
@@ -537,19 +526,22 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// definite-return law. (`None` tails — no tail, or a tail-position
     /// `if` whose arms all `return` — never reach here; their
     /// `terminated` verdict rides the compile itself.)
-    pub(crate) fn emit_body_tail(&mut self, body: NodeId, tail_ty: TypeId, ret_ty: TypeId) {
+    pub(crate) fn emit_body_tail(
+        &mut self,
+        body: Handle<BlockNode>,
+        tail_ty: TypeId,
+        ret_ty: TypeId,
+    ) {
         // the tail's spelling (the widening law's origin probe and the
         // diagnostic anchor): the explicit tail expr, else the
         // tail-position `if` statement
-        let (value, sp_lo) = match self.ctx.ast.kind(body) {
-            Kind::Expr(ExprKind::Block { tail, stmts, .. }) => match tail {
-                Some(e) => (Some(*e), self.ctx.ast.span(e.id()).lo),
-                None => match stmts.last() {
-                    Some(s) => (None, self.ctx.ast.span(s.id()).lo),
-                    None => (None, self.ctx.ast.span(body).lo),
-                },
+        let n = body.get(self.ctx.ast);
+        let (value, sp_lo) = match n.tail {
+            Some(e) => (Some(e), e.span(self.ctx.ast).lo),
+            None => match n.stmts.last() {
+                Some(s) => (None, s.span(self.ctx.ast).lo),
+                None => (None, body.span(self.ctx.ast).lo),
             },
-            _ => return,
         };
         if tail_ty == TY_NIL {
             if ret_ty != TY_NIL {
@@ -588,17 +580,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         self.terminated = true;
     }
 
-    pub(crate) fn compile_stmt(&mut self, node: NodeHandle<AnyStmt>) -> TcResult<()> {
-        let sp = self.ctx.ast.span(node.id());
+    pub(crate) fn compile_stmt(&mut self, node: StmtRef) -> TcResult<()> {
+        let sp = node.span(self.ctx.ast);
         self.span = sp.lo;
-        match self.ctx.ast.stmt(node).clone() {
-            StmtKind::LetStmt {
-                is_mut,
-                name,
-                destructure,
-                ty,
-                init,
-            } => {
+        match node {
+            StmtRef::Let(h) => {
+                let LetStmtNode {
+                    is_mut,
+                    name,
+                    destructure,
+                    ty,
+                    init,
+                    ..
+                } = h.get(self.ctx.ast).clone();
                 let ty_node = ty; // the annotation node (shadowed below)
                 let expected = ty.map(|t| self.resolve_type_now(t));
                 let t = self.compile_expr(init, expected)?;
@@ -630,7 +624,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                             // a widening let: the initializer's concrete type
                             // is the single origin
                             vec![t]
-                        } else if let ExprKind::Path { segs } = self.ctx.ast.expr(init) {
+                        } else if let ExprRef::Path(ph) = init {
+                            let segs = &ph.get(self.ctx.ast).segs;
                             if segs.len() == 1 {
                                 self.origins_of(segs[0].name)
                             } else {
@@ -653,10 +648,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         if let Some(tn) = ty_node {
                             self.note_union_binding(name, Some(tn));
                         } else {
-                            let copied = match self.ctx.ast.expr(init) {
-                                ExprKind::Path { segs } if segs.len() == 1 => {
-                                    self.union_syms.get(&segs[0].name).copied()
-                                }
+                            let copied = match init {
+                                ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => self
+                                    .union_syms
+                                    .get(&ph.get(self.ctx.ast).segs[0].name)
+                                    .copied(),
                                 _ => self.union_provenance(init).map(|(g, _)| g),
                             };
                             match copied {
@@ -715,7 +711,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            StmtKind::If { cond, then, els } => {
+            StmtRef::If(h) => {
+                let IfNode {
+                    cond, then, els, ..
+                } = h.get(self.ctx.ast).clone();
                 // definite-return: the if terminates iff BOTH arms do —
                 // a missing `else` leaves the condition-false path open.
                 // Per-arm snapshot/clear: each arm's verdict is read off
@@ -739,7 +738,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         term = self.terminated;
                     } else if let Some(e) = els {
                         match e {
-                            ElseBranch::If(h) => self.compile_stmt(h.into())?,
+                            ElseBranch::If(ih) => self.compile_stmt(StmtRef::If(ih))?,
                             ElseBranch::Block(b) => self.compile_block(b)?,
                         }
                         term = self.terminated;
@@ -761,7 +760,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let Some(e) = els {
                     self.bind(else_label);
                     match e {
-                        ElseBranch::If(h) => self.compile_stmt(h.into())?,
+                        ElseBranch::If(ih) => self.compile_stmt(StmtRef::If(ih))?,
                         ElseBranch::Block(b) => {
                             self.compile_block(b)?;
                         }
@@ -772,7 +771,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.bind(l_end);
                 Ok(())
             }
-            StmtKind::While { cond, body } => {
+            StmtRef::While(h) => {
+                let WhileNode { cond, body, .. } = h.get(self.ctx.ast).clone();
                 // Loops keep the conservative rule — the condition can
                 // be false on the first test, so the body's returns
                 // stay inside it — EXCEPT the `while (true)` scan-loop:
@@ -801,27 +801,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = saved || self.while_never_falls_through(cond, body);
                 Ok(())
             }
-            StmtKind::ForOf {
-                var,
-                is_mut,
-                iter,
-                body,
-            } => {
+            StmtRef::ForOf(h) => {
+                let ForOfNode {
+                    var,
+                    is_mut,
+                    iter,
+                    body,
+                    ..
+                } = h.get(self.ctx.ast).clone();
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
-                let r = self.compile_for_of(node.id(), var, is_mut, iter, body, sp);
+                let r = self.compile_for_of(var, is_mut, iter, body, sp);
                 self.terminated = saved;
                 r
             }
-            StmtKind::ForC {
-                var,
-                is_mut,
-                init,
-                cond,
-                update,
-                body,
-            } => {
+            StmtRef::ForC(h) => {
+                let ForCNode {
+                    var,
+                    is_mut,
+                    init,
+                    cond,
+                    update,
+                    body,
+                    ..
+                } = h.get(self.ctx.ast).clone();
                 // loops never terminate (see `While`)
                 let saved = self.terminated;
                 self.terminated = false;
@@ -852,7 +856,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = saved;
                 Ok(())
             }
-            StmtKind::Return { value } => {
+            StmtRef::Return(h) => {
+                let value = h.get(self.ctx.ast).value;
                 // every return shape below ends this statement — the
                 // inlined-method jump, the async frame's retire, the
                 // plain ABI ret
@@ -980,7 +985,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(())
             }
-            StmtKind::WhenStmt { scrut, arms } => {
+            StmtRef::When(h) => {
+                let (scrut, arms) = {
+                    let n = h.get(self.ctx.ast);
+                    (n.scrut, n.arms.clone())
+                };
                 // definite-return: an exhaustive `when` (exhaustiveness
                 // was enforced inside compile_when before the arms ran)
                 // terminates iff every arm does. compile_when writes the
@@ -992,7 +1001,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated |= saved;
                 Ok(())
             }
-            StmtKind::Break => {
+            StmtRef::Break(_) => {
                 // inside a desugared `for..of` emit closure,
                 // stopping the iteration IS returning `false`
                 // (the desugar's own shape — no definite-return flag:
@@ -1013,7 +1022,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = true;
                 Ok(())
             }
-            StmtKind::Continue => {
+            StmtRef::Continue(_) => {
                 // skipping to the next element IS returning `true`
                 // (the emit-closure desugar — see `Break`)
                 if self.emit_closure {
@@ -1030,9 +1039,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.terminated = true;
                 Ok(())
             }
-            StmtKind::ExprStmt(e) => {
+            StmtRef::Expr(e) => {
                 self.compile_expr(e, None)?;
                 Ok(())
+            }
+            StmtRef::Error(_) => {
+                // a broken tree never lowers — the compile lanes refuse
+                // on !ast.is_clean() first; unreachable in practice
+                self.ctx.err(sp, "malformed statement");
+                Err(())
             }
         }
     }
@@ -1047,52 +1062,54 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// `async {}` bodies are their own fn frames — nothing inside binds
     /// to this loop (their `break`s diagnose there, their `return`s
     /// answer their own fn) — so the walk stops at their edges.
-    fn while_never_falls_through(
-        &self,
-        cond: NodeHandle<AnyExpr>,
-        body: NodeHandle<BlockNode>,
-    ) -> bool {
-        if !matches!(self.ctx.ast.expr(cond), ExprKind::Lit(Lit::Bool(true))) {
+    fn while_never_falls_through(&self, cond: ExprRef, body: Handle<BlockNode>) -> bool {
+        let cond_is_true = match cond {
+            ExprRef::Lit(lh) => matches!(lh.get(self.ctx.ast).lit, Lit::Bool(true)),
+            _ => false,
+        };
+        if !cond_is_true {
             return false;
         }
-        !self.binds_break(body.id(), 0)
+        !self.binds_break_in_expr(ExprRef::Block(body), 0)
     }
 
     /// Does any `break` at relative loop `depth` appear under this
     /// statement subtree? A nested loop deepens the count — a `break`
     /// one level down belongs to the nested loop, never to the loop
     /// being asked about.
-    fn binds_break(&self, node: NodeId, depth: u32) -> bool {
-        match self.ctx.ast.kind(node) {
-            Kind::Stmt(StmtKind::Break) => depth == 0,
-            // a block IS an expression kind here: fn/loop/if bodies are
-            // blocks, so the statement walk resumes through them (the
-            // tail rides — a `break` under it binds the same way)
-            Kind::Expr(ExprKind::Block { stmts, tail }) => {
-                stmts.iter().any(|s| self.binds_break(s.id(), depth))
-                    || tail.is_some_and(|t| self.binds_break_in_expr(t.id(), depth))
-            }
+    fn binds_break_stmt(&self, s: StmtRef, depth: u32) -> bool {
+        match s {
+            StmtRef::Break(_) => depth == 0,
             // loops deepen: their breaks bind to them
-            Kind::Stmt(StmtKind::While { body, .. })
-            | Kind::Stmt(StmtKind::ForOf { body, .. })
-            | Kind::Stmt(StmtKind::ForC { body, .. }) => self.binds_break(body.id(), depth + 1),
-            Kind::Stmt(StmtKind::If { then, els, .. }) => {
-                if self.binds_break(then.id(), depth) {
+            StmtRef::While(h) => {
+                self.binds_break_in_expr(ExprRef::Block(h.get(self.ctx.ast).body), depth + 1)
+            }
+            StmtRef::ForOf(h) => {
+                self.binds_break_in_expr(ExprRef::Block(h.get(self.ctx.ast).body), depth + 1)
+            }
+            StmtRef::ForC(h) => {
+                self.binds_break_in_expr(ExprRef::Block(h.get(self.ctx.ast).body), depth + 1)
+            }
+            StmtRef::If(h) => {
+                let n = h.get(self.ctx.ast);
+                if self.binds_break_in_expr(ExprRef::Block(n.then), depth) {
                     return true;
                 }
-                match els {
-                    Some(ElseBranch::If(h)) => self.binds_break(h.id(), depth),
-                    Some(ElseBranch::Block(b)) => self.binds_break(b.id(), depth),
+                match n.els {
+                    Some(ElseBranch::If(ih)) => self.binds_break_stmt(StmtRef::If(ih), depth),
+                    Some(ElseBranch::Block(b)) => {
+                        self.binds_break_in_expr(ExprRef::Block(b), depth)
+                    }
                     None => false,
                 }
             }
-            Kind::Stmt(StmtKind::WhenStmt { arms, .. }) => {
-                arms.iter().any(|a| self.binds_break_in_arm(a.id(), depth))
-            }
-            Kind::Stmt(StmtKind::LetStmt { init, .. }) => {
-                self.binds_break_in_expr(init.id(), depth)
-            }
-            Kind::Stmt(StmtKind::ExprStmt(e)) => self.binds_break_in_expr(e.id(), depth),
+            StmtRef::When(h) => h
+                .get(self.ctx.ast)
+                .arms
+                .iter()
+                .any(|a| self.binds_break_in_arm(*a, depth)),
+            StmtRef::Let(h) => self.binds_break_in_expr(h.get(self.ctx.ast).init, depth),
+            StmtRef::Expr(e) => self.binds_break_in_expr(e, depth),
             _ => false,
         }
     }
@@ -1101,26 +1118,34 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// statement-bearing shapes can carry a `break` — block
     /// expressions, `when` arms, and the if ATOM's branch blocks; a
     /// lambda or `async {}` body is its own fn frame and stops the walk.
-    fn binds_break_in_expr(&self, node: NodeId, depth: u32) -> bool {
-        match self.ctx.ast.kind(node) {
-            Kind::Expr(ExprKind::Block { stmts, tail }) => {
-                stmts.iter().any(|s| self.binds_break(s.id(), depth))
-                    || tail.is_some_and(|t| self.binds_break_in_expr(t.id(), depth))
+    /// (v2: the block arms route through the statement walk — a block
+    /// IS a statement bearer here, exactly the v1 `Kind` walk's shape.)
+    fn binds_break_in_expr(&self, node: ExprRef, depth: u32) -> bool {
+        match node {
+            ExprRef::Block(bh) => {
+                let n = bh.get(self.ctx.ast);
+                n.stmts.iter().any(|s| self.binds_break_stmt(*s, depth))
+                    || n.tail.is_some_and(|t| self.binds_break_in_expr(t, depth))
             }
-            Kind::Expr(ExprKind::WhenExpr { arms, .. }) => {
-                arms.iter().any(|a| self.binds_break_in_arm(a.id(), depth))
-            }
+            ExprRef::WhenExpr(h) => h
+                .get(self.ctx.ast)
+                .arms
+                .iter()
+                .any(|a| self.binds_break_in_arm(*a, depth)),
             // the if ATOM: the branch blocks are statement bearers (the
             // condition cannot be — expressions carry no `break` outside
             // blocks). `else if` links are if STATEMENTS — the statement
             // walk resumes through them
-            Kind::Expr(ExprKind::If { then, els, .. }) => {
-                if self.binds_break(then.id(), depth) {
+            ExprRef::If(h) => {
+                let n = h.get(self.ctx.ast);
+                if self.binds_break_in_expr(ExprRef::Block(n.then), depth) {
                     return true;
                 }
-                match els {
-                    Some(ElseBranch::If(h)) => self.binds_break(h.id(), depth),
-                    Some(ElseBranch::Block(b)) => self.binds_break(b.id(), depth),
+                match n.els {
+                    Some(ElseBranch::If(ih)) => self.binds_break_stmt(StmtRef::If(ih), depth),
+                    Some(ElseBranch::Block(b)) => {
+                        self.binds_break_in_expr(ExprRef::Block(b), depth)
+                    }
                     None => false,
                 }
             }
@@ -1128,19 +1153,16 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    fn binds_break_in_arm(&self, arm: NodeId, depth: u32) -> bool {
-        match self.ctx.ast.arm(NodeHandle::new(arm)) {
-            ArmKind::WhenArm { body, .. } => self.binds_break_in_expr(body.id(), depth),
-        }
+    fn binds_break_in_arm(&self, arm: Handle<WhenArmNode>, depth: u32) -> bool {
+        self.binds_break_in_expr(arm.get(self.ctx.ast).body, depth)
     }
 
     pub(crate) fn compile_for_of(
         &mut self,
-        node: NodeId,
         var: IdentId,
         is_mut: bool,
-        iter: NodeHandle<AnyExpr>,
-        body: NodeHandle<BlockNode>,
+        iter: ExprRef,
+        body: Handle<BlockNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
         let it = self.compile_expr(iter, None)?;
@@ -1316,7 +1338,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         );
         self.jmp(l_head);
         self.bind(l_end);
-        let _ = node;
         Ok(())
     }
 
@@ -1357,14 +1378,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         for (n, methods, generics) in locals {
             for (mname, mnode) in &methods {
-                let md = self.ctx.ast.method_decl(*mnode);
+                let md = mnode.get(self.ctx.ast);
                 if md.marker != Some(iterable_marker) {
                     continue;
                 }
                 // designated members take the `pub` dial: the weave's
                 // `xs.<member>(emit)` binds HERE, at the for-of site —
                 // the site's module must see the declaring module
-                if let Some(msg) = self.ctx.member_vis_err(n, mnode.id(), *mname, md.vis) {
+                if let Some(msg) =
+                    self.ctx
+                        .member_vis_err(n, mnode.span(self.ctx.ast), *mname, md.vis)
+                {
                     self.ctx.err(sp, msg);
                     return Some(Err(()));
                 }
@@ -1372,7 +1396,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     generics.iter().cloned().zip(args.iter().cloned()).collect();
                 let Some(elem) = self.marker_emit_elem(&md.params, &env) else {
                     self.ctx.err(
-                        self.ctx.ast.span(mnode.id()),
+                        mnode.span(self.ctx.ast),
                         format!(
                             "`[iterable] {}` needs an emit parameter — `fn {}(self, emit: fn(E) -> bool)` (the element type falls out of the marked member's signature)",
                             self.ctx.name(*mname),
@@ -1398,12 +1422,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// parameter must be `fn(E) -> bool` — `E` resolved under `env`.
     fn marker_emit_elem(
         &mut self,
-        params: &[NodeHandle<AnyParam>],
+        params: &[ParamRef],
         env: &[(IdentId, TypeId)],
     ) -> Option<TypeId> {
         for p in params {
-            if let MemberKind::Param(ParamData { ty: Some(t), .. }) = self.ctx.ast.param(*p) {
-                let ty = self.ctx.resolve_sig_ty(*t, env, None);
+            if let Some(t) = self.ctx.param_ty(*p) {
+                let ty = self.ctx.resolve_sig_ty(t, env, None);
                 if let TyKind::Fn { params: fps, ret } = self.ctx.types.kind(ty).clone() {
                     if fps.len() == 1 && ret == TY_BOOL {
                         return Some(fps[0]);
@@ -1518,14 +1542,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         src: IterSource,
         elem_ty: TypeId,
         is_mut: bool,
-        body: NodeHandle<BlockNode>,
+        body: Handle<BlockNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
         // captures: the body's enclosing locals; the capture inherits
         // the binding's mutability (writes through a captured `let mut`
         // stay legal)
         let mut referenced = Vec::new();
-        self.scan_names(body.id(), &mut referenced);
+        self.scan_names_expr(ExprRef::Block(body), &mut referenced);
         let mut caps: Vec<Capture> = Vec::new();
         let mut cap_regs: Vec<u16> = Vec::new();
         for n in referenced {
@@ -1601,10 +1625,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             var_cell_reg = Some(crec);
         }
         let emit = crate::check::Inst {
-            key: crate::check::FnKey::ForOfEmit {
-                body: body.id(),
-                var,
-            },
+            key: crate::check::FnKey::ForOfEmit { body, var },
             subst: self.subst.clone(),
             iface_origins: vec![],
         };
@@ -1690,8 +1711,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_when(
         &mut self,
-        scrut: NodeHandle<AnyExpr>,
-        arms: &[NodeHandle<AnyArm>],
+        scrut: ExprRef,
+        arms: &[Handle<WhenArmNode>],
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
         // the statement form: the all-arms-terminate verdict is written
@@ -1710,9 +1731,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         } else {
             let mut t = TY_NIL;
             for a in arms {
-                t = match self.ctx.ast.arm(*a) {
-                    ArmKind::WhenArm { body, .. } => self.expr_type_hint(*body),
-                };
+                t = self.expr_type_hint(a.get(self.ctx.ast).body);
                 if t != TY_NIL {
                     break;
                 }
@@ -1733,7 +1752,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let mut all_terminate = !arms.is_empty();
         for arm in arms {
             let arm = *arm;
-            let ArmKind::WhenArm { pats, body } = self.ctx.ast.arm(arm);
+            let (pats, body) = {
+                let n = arm.get(self.ctx.ast);
+                (n.pats.clone(), n.body)
+            };
             let l_arm = self.new_label();
             let l_next_arm = self.new_label();
             // alternatives chain within the arm: `1, 2, 3 -> ..`
@@ -1757,7 +1779,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // → compile_block_value); a nil-context block still compiles
             // as statements
             let bt = self.compile_expr(
-                *body,
+                body,
                 if result_ty != TY_NIL {
                     Some(result_ty)
                 } else {
@@ -1769,7 +1791,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if result_ty != TY_NIL {
                 if bt != result_ty {
                     self.ctx.err(
-                        self.ctx.ast.span(body.id()),
+                        body.span(self.ctx.ast),
                         format!(
                             "`when` arms must agree: `{}` vs `{}`",
                             self.ctx.type_name(result_ty),
@@ -1820,24 +1842,31 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
     }
 
-    pub(crate) fn expr_type_hint(&mut self, node: NodeHandle<AnyExpr>) -> TypeId {
+    pub(crate) fn expr_type_hint(&mut self, node: ExprRef) -> TypeId {
         // best-effort type for when-arm unification without full inference:
         // literals only; otherwise first arm decides later via compile
-        match self.ctx.ast.expr(node) {
-            ExprKind::Lit(Lit::Int(_, s)) => s.map(int_suffix_ty).unwrap_or(TY_I32),
-            ExprKind::Lit(Lit::Float(_, s)) => s.map(float_suffix_ty).unwrap_or(TY_F32),
-            ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => TY_STR,
-            ExprKind::Lit(Lit::Bool(_)) => TY_BOOL,
+        match node {
+            ExprRef::Lit(lh) => match &lh.get(self.ctx.ast).lit {
+                Lit::Int(_, s) => s.map(int_suffix_ty).unwrap_or(TY_I32),
+                Lit::Float(_, s) => s.map(float_suffix_ty).unwrap_or(TY_F32),
+                Lit::Str(_) | Lit::RawStr(_) => TY_STR,
+                Lit::Bool(_) => TY_BOOL,
+                Lit::Nil => TY_NIL,
+            },
             // a block hints at its tail (the block value law)
-            ExprKind::Block { tail, .. } => tail.map_or(TY_NIL, |t| self.expr_type_hint(t)),
+            ExprRef::Block(bh) => bh
+                .get(self.ctx.ast)
+                .tail
+                .map_or(TY_NIL, |t| self.expr_type_hint(t)),
             // an if ATOM hints at its then arm's tail (the completing-arm
             // law; the compile-time agreement check does the rest)
-            ExprKind::If { then, .. } => self
-                .ctx
-                .ast
-                .block_tail(*then)
+            ExprRef::If(ih) => ih
+                .get(self.ctx.ast)
+                .then
+                .get(self.ctx.ast)
+                .tail
                 .map_or(TY_NIL, |t| self.expr_type_hint(t)),
-            ExprKind::Struct { ty, .. } => self.resolve_type_now(*ty),
+            ExprRef::Struct(sh) => self.resolve_type_now(sh.get(self.ctx.ast).ty),
             _ => TY_NIL,
         }
     }
@@ -1845,37 +1874,39 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn check_when_exhaustive(
         &mut self,
         scrut_ty: TypeId,
-        arms: &[NodeHandle<AnyArm>],
+        arms: &[Handle<WhenArmNode>],
         sp: rut_lexer::span::Span,
     ) -> TcResult<()> {
         let mut has_else = false;
         let mut seen: Vec<String> = Vec::new();
         for a in arms {
-            let ArmKind::WhenArm { pats, .. } = self.ctx.ast.arm(*a);
-            for p in pats {
-                let key = match self.ctx.ast.pat(*p) {
-                    PatKind::PatElse => {
+            for p in a.get(self.ctx.ast).pats.clone() {
+                let key = match p {
+                    PatRef::Else(_) => {
                         has_else = true;
                         "else".to_string()
                     }
-                    PatKind::PatLit(l) => format!("{:?}", l),
-                    PatKind::PatPath { segs } => segs
+                    PatRef::Lit(lh) => format!("{:?}", lh.get(self.ctx.ast).expr),
+                    PatRef::Path(ph) => ph
+                        .get(self.ctx.ast)
+                        .segs
                         .iter()
                         .map(|s| self.ctx.name(s.name).to_string())
                         .collect::<Vec<_>>()
                         .join("::"),
-                    PatKind::PatCtor { segs, .. } => segs
+                    PatRef::Ctor(ch) => ch
+                        .get(self.ctx.ast)
+                        .segs
                         .iter()
                         .map(|s| self.ctx.name(s.name).to_string())
                         .collect::<Vec<_>>()
                         .join("::"),
-                    PatKind::PatWild => "_".to_string(),
+                    PatRef::Wild(_) => "_".to_string(),
+                    PatRef::Error(_) => continue,
                 };
                 if seen.contains(&key) && key != "else" {
-                    self.ctx.err(
-                        self.ctx.ast.span(p.id()),
-                        format!("duplicate pattern `{key}`"),
-                    );
+                    self.ctx
+                        .err(p.span(self.ctx.ast), format!("duplicate pattern `{key}`"));
                 }
                 seen.push(key);
             }
@@ -1923,21 +1954,21 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// Emit the match test for one pattern; returns the bool reg.
     pub(crate) fn compile_pattern_test(
         &mut self,
-        p: NodeHandle<AnyPat>,
+        p: PatRef,
         scrut_ty: TypeId,
         scrut_reg: u16,
         sp: rut_lexer::span::Span,
     ) -> TcResult<u16> {
-        match self.ctx.ast.pat(p).clone() {
-            PatKind::PatElse | PatKind::PatWild => {
+        match p {
+            PatRef::Else(_) | PatRef::Wild(_) => {
                 let r = self.new_reg(TY_BOOL);
                 self.emit(Op::ConstRaw { dst: r, bits: 1 }, sp.lo);
                 Ok(r)
             }
-            PatKind::PatLit(lit_node) => {
+            PatRef::Lit(lh) => {
                 // the pattern holds a literal expression node
-                let lit = match self.ctx.ast.expr(lit_node) {
-                    ExprKind::Lit(l) => l.clone(),
+                let lit = match lh.get(self.ctx.ast).expr {
+                    ExprRef::Lit(eh) => eh.get(self.ctx.ast).lit.clone(),
                     _ => {
                         self.ctx.err(sp, "pattern literal expected");
                         return Err(());
@@ -1967,7 +1998,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(r)
             }
-            PatKind::PatPath { segs } => {
+            PatRef::Path(ph) => {
+                let segs = &ph.get(self.ctx.ast).segs;
                 // enum member
                 if segs.len() == 2 {
                     let ename = segs[0].name;
@@ -2097,11 +2129,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 Err(())
             }
-            PatKind::PatCtor { .. } => {
+            PatRef::Ctor { .. } => {
                 self.ctx.err(
                     sp,
                     "constructor patterns (Ok(x), Some(y)) are not supported in this build",
                 );
+                Err(())
+            }
+            PatRef::Error(_) => {
+                // a broken tree never lowers — the compile lanes refuse
+                // on !ast.is_clean() first; unreachable in practice
+                self.ctx.err(sp, "malformed pattern");
                 Err(())
             }
         }

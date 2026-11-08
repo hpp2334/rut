@@ -40,7 +40,7 @@ pub(crate) struct MemberReq {
 /// instantiation).
 pub(crate) enum MemberSrc {
     Local {
-        node: NodeHandle<MethodDeclNode>,
+        node: Handle<MethodDeclNode>,
         env: Vec<(IdentId, TypeId)>,
         /// the decl name the member's Inst keys under (`Vec` for a
         /// `Vec<i64>` member)
@@ -202,20 +202,27 @@ impl<'a> Ctx<'a> {
             .cloned()
         {
             let obj = self.mk_iface_obj(iface_id);
-            let methods = match self.ast.item(rut_ast::ast::NodeHandle::new(info.node)) {
-                ItemKind::Interface { methods, .. } => methods.clone(),
+            let methods: Vec<MethodRef> = match info.node {
+                ItemRef::Interface(h) => h.get(self.ast).methods.clone(),
                 _ => Vec::new(),
             };
             let mut out = Vec::new();
             for m in &methods {
-                let md = self.ast.method_decl(*m);
+                let MethodRef::Method(mh) = *m else {
+                    continue;
+                };
+                let md = mh.get(self.ast);
                 let mut ptys = Vec::new();
                 for (i, p) in md.params.iter().enumerate() {
-                    match self.ast.param(*p) {
-                        MemberKind::SelfParam(sd) if i == 0 => {}
-                        MemberKind::SelfParam(_) => {}
-                        MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                            ptys.push(self.resolve_sig_ty(*t, &[], Some(obj)));
+                    match *p {
+                        ParamRef::SelfParam(_) if i == 0 => {}
+                        ParamRef::SelfParam(_) => {}
+                        ParamRef::Param(ph) if ph.get(self.ast).ty.is_some() => {
+                            ptys.push(self.resolve_sig_ty(
+                                ph.get(self.ast).ty.expect("checked"),
+                                &[],
+                                Some(obj),
+                            ));
                         }
                         _ => ptys.push(TY_I32),
                     }
@@ -226,10 +233,7 @@ impl<'a> Ctx<'a> {
                     .unwrap_or(TY_NIL);
                 out.push(MemberReq {
                     name: md.name,
-                    self_form: md.params.first().and_then(|p| match self.ast.param(*p) {
-                        MemberKind::SelfParam(sd) => Some(sd.is_mut),
-                        _ => None,
-                    }),
+                    self_form: md.params.first().and_then(|p| self.self_param_mut(*p)),
                     is_async: Some(md.is_async),
                     ptys,
                     ret,
@@ -369,14 +373,18 @@ impl<'a> Ctx<'a> {
     ) -> bool {
         let (self_form, is_async, got_ptys, got_ret) = match got {
             MemberSrc::Local { node, env, .. } => {
-                let md = self.ast.method_decl(*node);
+                let md = node.get(self.ast);
                 let mut ptys = Vec::new();
                 for (i, p) in md.params.iter().enumerate() {
-                    match self.ast.param(*p) {
-                        MemberKind::SelfParam(_) if i == 0 => {}
-                        MemberKind::SelfParam(_) => {}
-                        MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                            ptys.push(self.resolve_sig_ty(*t, env, Some(concrete)));
+                    match *p {
+                        ParamRef::SelfParam(_) if i == 0 => {}
+                        ParamRef::SelfParam(_) => {}
+                        ParamRef::Param(ph) if ph.get(self.ast).ty.is_some() => {
+                            ptys.push(self.resolve_sig_ty(
+                                ph.get(self.ast).ty.expect("checked"),
+                                env,
+                                Some(concrete),
+                            ));
                         }
                         _ => ptys.push(TY_I32),
                     }
@@ -385,10 +393,7 @@ impl<'a> Ctx<'a> {
                     .ret
                     .map(|r| self.resolve_sig_ty(r, env, Some(concrete)))
                     .unwrap_or(TY_NIL);
-                let sf = md.params.first().and_then(|p| match self.ast.param(*p) {
-                    MemberKind::SelfParam(sd) => Some(sd.is_mut),
-                    _ => None,
-                });
+                let sf = md.params.first().and_then(|p| self.self_param_mut(*p));
                 (sf, Some(md.is_async), ptys, ret)
             }
             MemberSrc::Extern { row, subst, .. } => {
@@ -505,7 +510,7 @@ impl<'a> Ctx<'a> {
     /// (validated in pass 1b) before interface-vs-concrete detection.
     pub(crate) fn resolve_bound_members(
         &mut self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         subst: &[(IdentId, TypeId)],
     ) -> Vec<BoundMember> {
         self.resolve_bound_members_in(node, subst, false)
@@ -516,7 +521,7 @@ impl<'a> Ctx<'a> {
     /// member is an interface (infinitely many satisfiers). The
     /// closed-union export enumeration's question (the driver's pack
     /// pass): which instantiations of this generic fn exist?
-    pub fn bound_concrete_members(&mut self, node: NodeHandle<AnyTy>) -> Option<Vec<TypeId>> {
+    pub fn bound_concrete_members(&mut self, node: TyRef) -> Option<Vec<TypeId>> {
         let mut out: Vec<TypeId> = Vec::new();
         for m in self.resolve_bound_members(node, &[]) {
             match m {
@@ -542,24 +547,31 @@ impl<'a> Ctx<'a> {
     /// any-member-suffices fact.
     fn resolve_bound_members_in(
         &mut self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         subst: &[(IdentId, TypeId)],
         in_union: bool,
     ) -> Vec<BoundMember> {
-        match self.ast.ty(node) {
-            TypeKind::TyUnion { elems } => {
+        let alias_head = match node {
+            TyRef::Path(h) => {
+                let segs = &h.get(self.ast).segs;
+                if segs.len() == 1 && segs[0].generics.is_empty() {
+                    Some(segs[0].name)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        match node {
+            TyRef::Union(h) => {
                 let mut out = Vec::new();
-                for e in elems.clone() {
+                for e in h.get(self.ast).elems.clone() {
                     out.extend(self.resolve_bound_members_in(e, subst, true));
                 }
                 out
             }
-            TypeKind::TyPath { segs, .. }
-                if segs.len() == 1
-                    && segs[0].generics.is_empty()
-                    && self.find_alias(segs[0].name).is_some() =>
-            {
-                let name = segs[0].name;
+            TyRef::Path(_) if alias_head.is_some_and(|n| self.find_alias(n).is_some()) => {
+                let name = alias_head.expect("checked");
                 self.validate_alias(name);
                 let idx = self.aliases.iter().position(|a| a.name == name).unwrap();
                 match self.aliases[idx].resolved {
@@ -581,7 +593,7 @@ impl<'a> Ctx<'a> {
     /// descriptor that declares it.
     fn one_bound_member(
         &mut self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         subst: &[(IdentId, TypeId)],
         _in_union: bool,
     ) -> Vec<BoundMember> {
@@ -599,12 +611,18 @@ impl<'a> Ctx<'a> {
     /// Does the bound node SPELL a union — a `TyUnion`, or an alias
     /// resolving to a union target? pure shape question; alias
     /// validation is the admission path's business.
-    pub(crate) fn bound_is_union(&self, node: NodeHandle<AnyTy>) -> bool {
-        match self.ast.ty(node) {
-            TypeKind::TyUnion { .. } => true,
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => self
-                .find_alias(segs[0].name)
-                .is_some_and(|a| matches!(a.resolved, Some(AliasTarget::Union))),
+    pub(crate) fn bound_is_union(&self, node: TyRef) -> bool {
+        match node {
+            TyRef::Union(_) => true,
+            TyRef::Path(h) => {
+                let segs = &h.get(self.ast).segs;
+                if segs.len() == 1 && segs[0].generics.is_empty() {
+                    self.find_alias(segs[0].name)
+                        .is_some_and(|a| matches!(a.resolved, Some(AliasTarget::Union)))
+                } else {
+                    false
+                }
+            }
             _ => false,
         }
     }
@@ -672,7 +690,7 @@ impl<'a> Ctx<'a> {
     /// satisfy nothing. Admission-only: no IR, no dispatch change.
     pub(crate) fn admit_bounds(
         &mut self,
-        bounds: &[(IdentId, NodeHandle<AnyTy>)],
+        bounds: &[(IdentId, TyRef)],
         subst: &[(IdentId, TypeId)],
         sp: Span,
     ) {
