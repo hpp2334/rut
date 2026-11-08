@@ -13,7 +13,7 @@ use crate::hover;
 use crate::inlay;
 use crate::references;
 use crate::signature_help;
-use rut_semantic::{RawSymbol, SymKind, TokenType};
+use rut_semantic::{SymKind, Symbol, TokenType};
 
 /// the analysis envelope — a capsule: ONE construction lane (below),
 /// every part read through named doors; the server lane moves the
@@ -442,12 +442,12 @@ pub fn signature_help_at(
 
 // ---- symbols ----
 
-fn to_document_symbols(raw: &[RawSymbol], src: &str, index: &LineIndex) -> Vec<DocumentSymbol> {
+fn to_document_symbols(raw: &[Symbol], src: &str, index: &LineIndex) -> Vec<DocumentSymbol> {
     raw.iter().map(|r| convert(r.clone(), src, index)).collect()
 }
 
 #[allow(deprecated)] // `DocumentSymbol::deprecated` — kept for older clients; tags are the modern way
-fn convert(r: RawSymbol, src: &str, index: &LineIndex) -> DocumentSymbol {
+fn convert(r: Symbol, src: &str, index: &LineIndex) -> DocumentSymbol {
     let range = range_of(index, src, r.range);
     let mut selection = range_of(index, src, r.selection);
     // selectionRange must stay inside range (LSP contract)

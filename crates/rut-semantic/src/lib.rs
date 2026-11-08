@@ -25,7 +25,7 @@ use self::tokens::{classify_token, flatten_holes};
 
 pub use self::doc::{mode_of, ParsedDoc};
 pub use self::legend::{is_keyword, is_primitive_ty, TokenType, ALL};
-pub use self::symbols::{symbols, RawSymbol, SymKind};
+pub use self::symbols::{symbols, SymKind, Symbol};
 pub use self::tokens::token_type;
 
 mod line_index;

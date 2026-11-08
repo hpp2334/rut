@@ -23,7 +23,7 @@ use rut_lexer::token::Token;
 use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::line_index::LineIndex;
-use crate::{classify, symbols, RawSymbol, TokenType};
+use crate::{classify, symbols, Symbol, TokenType};
 
 /// `.d.rut` parses in declaration mode; everything else is
 /// full `Mode::Impl` — the filename convention, THE authority on which
@@ -52,7 +52,7 @@ pub struct ParsedDoc {
     /// `classify` over (toks, ast), once — the semantic-token spans
     spans: Vec<(Span, TokenType)>,
     /// `symbols` over (toks, ast), once — the document-symbol tree
-    symbols: Vec<RawSymbol>,
+    symbols: Vec<Symbol>,
 }
 
 impl ParsedDoc {
@@ -103,7 +103,7 @@ impl ParsedDoc {
     }
 
     /// `symbols` over (toks, ast), once — the document-symbol tree
-    pub fn symbols(&self) -> &[RawSymbol] {
+    pub fn symbols(&self) -> &[Symbol] {
         &self.symbols
     }
 

@@ -25,17 +25,17 @@ pub enum SymKind {
 /// An outline entry — lsp-free so the classifier stays testable without a
 /// protocol dependency.
 #[derive(Clone, Debug)]
-pub struct RawSymbol {
+pub struct Symbol {
     pub name: String,
     pub kind: SymKind,
     pub range: Span,
     /// the name's own span (the node's recorded `name_span`); falls
     /// back to `range`
     pub selection: Span,
-    pub children: Vec<RawSymbol>,
+    pub children: Vec<Symbol>,
 }
 
-pub fn symbols(toks: &[Token], ast: &Ast) -> Vec<RawSymbol> {
+pub fn symbols(toks: &[Token], ast: &Ast) -> Vec<Symbol> {
     ast.root()
         .items(ast)
         .iter()
@@ -43,11 +43,11 @@ pub fn symbols(toks: &[Token], ast: &Ast) -> Vec<RawSymbol> {
         .collect()
 }
 
-fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<RawSymbol> {
+fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<Symbol> {
     // the walk surface's own span read (modifiers excluded where the
     // node's own span excludes them — fn/method spans start at `fn`)
     let span = item.span(ast);
-    let sym = |name: &str, kind, selection: Option<Span>, children| RawSymbol {
+    let sym = |name: &str, kind, selection: Option<Span>, children| Symbol {
         name: name.to_string(),
         kind,
         range: span,
@@ -248,12 +248,12 @@ fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<RawSymbol> {
 /// (the member is a line inside it), selection the member's name ident.
 /// A member Error slot renders no entry (errors are the panel's
 /// business, not the outline's)
-fn member_symbol(ast: &Ast, enum_span: Span, m: &rut_ast::MemberRef) -> Option<RawSymbol> {
+fn member_symbol(ast: &Ast, enum_span: Span, m: &rut_ast::MemberRef) -> Option<Symbol> {
     let d: &EnumMemberNode = match m {
         rut_ast::MemberRef::Member(h) => h.get(ast),
         rut_ast::MemberRef::Error(_) => return None,
     };
-    Some(RawSymbol {
+    Some(Symbol {
         name: ast.name(d.name).to_string(),
         kind: SymKind::EnumMember,
         range: enum_span,
@@ -267,20 +267,20 @@ fn member_symbols(
     ast: &Ast,
     fields: &[FieldRef],
     methods: &[MethodRef],
-) -> Vec<RawSymbol> {
+) -> Vec<Symbol> {
     let mut out = field_symbols(toks, ast, fields);
     out.extend(method_symbols(ast, methods));
     out
 }
 
-fn field_symbols(toks: &[Token], ast: &Ast, fields: &[FieldRef]) -> Vec<RawSymbol> {
+fn field_symbols(toks: &[Token], ast: &Ast, fields: &[FieldRef]) -> Vec<Symbol> {
     let mut out = Vec::new();
     for f in fields {
         let FieldRef::Field(h) = f else {
             continue; // the recovery slot renders no entry
         };
         let d: &FieldDeclNode = h.get(ast);
-        out.push(RawSymbol {
+        out.push(Symbol {
             name: ast.name(d.name).to_string(),
             kind: SymKind::Field,
             range: d.span,
@@ -293,14 +293,14 @@ fn field_symbols(toks: &[Token], ast: &Ast, fields: &[FieldRef]) -> Vec<RawSymbo
     out
 }
 
-fn method_symbols(ast: &Ast, methods: &[MethodRef]) -> Vec<RawSymbol> {
+fn method_symbols(ast: &Ast, methods: &[MethodRef]) -> Vec<Symbol> {
     let mut out = Vec::new();
     for m in methods {
         let MethodRef::Method(h) = m else {
             continue;
         };
         let d: &MethodDeclNode = h.get(ast);
-        out.push(RawSymbol {
+        out.push(Symbol {
             name: ast.name(d.name).to_string(),
             kind: SymKind::Method,
             range: d.span,
