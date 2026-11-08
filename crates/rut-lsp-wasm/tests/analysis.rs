@@ -17,14 +17,14 @@ use std::collections::BTreeMap;
 #[test]
 fn analyze_end_to_end() {
     let a = analyze_unstamped(IMPL_URI, "entry fn main() -> nil {\n    let x = ;\n}\n");
-    assert!(!a.diags().is_empty(), "parse error must surface");
-    assert!(a.diags()[0].severity == Some(DiagnosticSeverity::ERROR));
-    assert_eq!(a.diags()[0].source.as_deref(), Some("rut"));
+    assert!(!a.diags.is_empty(), "parse error must surface");
+    assert!(a.diags[0].severity == Some(DiagnosticSeverity::ERROR));
+    assert_eq!(a.diags[0].source.as_deref(), Some("rut"));
 
     let clean = analyze_unstamped(IMPL_URI, "enum Color { Red }\n");
-    assert!(clean.diags().is_empty());
-    assert_eq!(clean.symbols().len(), 1);
-    assert_eq!(clean.symbols()[0].name, "Color");
+    assert!(clean.diags.is_empty());
+    assert_eq!(clean.symbols.len(), 1);
+    assert_eq!(clean.symbols[0].name, "Color");
 }
 
 #[test]
@@ -35,7 +35,7 @@ fn encode_is_delta_correct() {
     // on the exact text it classified
     let mut line = 0u32;
     let mut ch = 0u32;
-    for t in a.tokens() {
+    for t in &a.tokens {
         line += t.delta_line;
         ch = if t.delta_line == 0 {
             ch + t.delta_start
@@ -113,7 +113,7 @@ fn merge_dedupes_true_duplicates_only() {
 #[test]
 fn no_package_context_is_parse_only() {
     let src = "entry fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze_unstamped(IMPL_URI, src).diags().to_vec();
+    let parse = analyze_unstamped(IMPL_URI, src).diags;
     assert!(!parse.is_empty());
     let merged = check::merged_doc_diags(
         "file:///ws/p.rut",
@@ -132,7 +132,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // surfaces through the checker with the range the editor highlights
     let src = "use kit::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n}\n";
     let uri = "file:///ws/app/mod.rut";
-    let parse = analyze_unstamped(IMPL_URI, src).diags().to_vec();
+    let parse = analyze_unstamped(IMPL_URI, src).diags;
     assert!(parse.is_empty(), "the doc parses clean: {parse:?}");
     let dep = group(
         "kit",
@@ -201,7 +201,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // and the missing `;` — so the law is pinned as "the check lane
     // adds nothing", not as a v1 row count.)
     let bad = "fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze_unstamped(IMPL_URI, bad).diags().to_vec();
+    let parse = analyze_unstamped(IMPL_URI, bad).diags;
     assert!(!parse.is_empty());
     let n_parse = parse.len();
     let app = group("app", file(uri, bad));
@@ -243,7 +243,7 @@ fn unattributable_spans_skip() {
         ),
     );
     let app = group("app3", file(uri, doc));
-    let parse = analyze_unstamped(IMPL_URI, doc).diags().to_vec();
+    let parse = analyze_unstamped(IMPL_URI, doc).diags;
     assert!(parse.is_empty(), "{parse:?}");
     let merged = check::merged_doc_diags(
         uri,

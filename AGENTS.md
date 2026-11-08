@@ -36,11 +36,12 @@ Nobody outside `rut-parser` drives `normalize → lex → parse` by hand.
   store as ctx (`h.get(ast)`, `root().items(ast)`, `slot.span(ast)`) —
   no smart objects, no per-node back-pointers, no builder ceremony.
   The same law governs the computed artifacts — `Parsed`
-  (`ast()`/`src()`/`into_parts()`), `ParsedDoc` (read doors only;
-  consumers hold the doc and borrow), and lsp-wasm's `Analysis`
-  (reads + `into_parts` for the wire) carry private fields. Plain
-  records (node structs, index rows, `ParseOpts`, driver/lir rows)
-  stay open — many construction sites, no invariant.
+  (`ast()`/`src()`/`into_parts()`) and `ParsedDoc` (read doors only;
+  consumers hold the doc and borrow) carry private fields. Plain
+  records (node structs, index rows, `ParseOpts`, driver/lir rows,
+  lsp-wasm's wire-bound `Analysis` — its rows exist to move to the
+  wire, so the server reads the fields) stay open — many construction
+  sites, no invariant.
 - **The parse-opts row**: recovery is NOT a knob — the ENTRY is the
   choice. `parse` is fail-fast (`Err` = the first diag, no tree; `Ok`
   implies `is_clean()`); `parse_with_recover` is ALWAYS a tree, and

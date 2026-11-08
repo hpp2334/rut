@@ -15,51 +15,17 @@ use crate::references;
 use crate::signature_help;
 use rut_semantic::{SymKind, Symbol, TokenType};
 
-/// the analysis envelope — a capsule: ONE construction lane (below),
-/// every part read through named doors; the server lane moves the
-/// rows via `into_parts`.
+/// the analysis envelope — the per-document rows (diags, tokens,
+/// symbols) plus the hover index, related-info URIs + provenance
+/// stamped at construction. A plain record: the rows exist to move to
+/// the wire, so the server lane reads the fields directly.
 pub struct Analysis {
-    diags: Vec<Diagnostic>,
-    tokens: Vec<SemanticToken>,
-    symbols: Vec<DocumentSymbol>,
+    pub diags: Vec<Diagnostic>,
+    pub tokens: Vec<SemanticToken>,
+    pub symbols: Vec<DocumentSymbol>,
     /// the hover definition index (origin stamped at construction from
     /// the document's URI)
-    index: hover::DefIndex,
-}
-
-impl Analysis {
-    /// the parse + check diagnostics
-    pub fn diags(&self) -> &[Diagnostic] {
-        &self.diags
-    }
-
-    /// the semantic tokens, delta-encoded
-    pub fn tokens(&self) -> &[SemanticToken] {
-        &self.tokens
-    }
-
-    /// the document-symbol tree
-    pub fn symbols(&self) -> &[DocumentSymbol] {
-        &self.symbols
-    }
-
-    /// the hover definition index (origin stamped)
-    pub fn index(&self) -> &hover::DefIndex {
-        &self.index
-    }
-
-    /// the consuming door — the rows as owned values (the server lane
-    /// hands them to the wire)
-    pub fn into_parts(
-        self,
-    ) -> (
-        Vec<Diagnostic>,
-        Vec<SemanticToken>,
-        Vec<DocumentSymbol>,
-        hover::DefIndex,
-    ) {
-        (self.diags, self.tokens, self.symbols, self.index)
-    }
+    pub index: hover::DefIndex,
 }
 
 /// moved to `rut-semantic` (the document layer owns the filename
