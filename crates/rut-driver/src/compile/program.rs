@@ -4,7 +4,7 @@
 //! fight; the module owns the surface snapshot, the seed attach, and
 //! the debug dumps.
 
-use rut_ast::dump;
+use rut_ast::{render_json, render_text, to_dump_tree};
 use rut_core::binary::Program;
 use rut_core::ops::Op;
 use rut_core::types::{TyKind, TypeId, TY_I32, TY_NIL};
@@ -21,7 +21,7 @@ type TraitMapRow<'a> = (
     String,
 );
 use rut_lir::check::{Ctx, FnKey, Inst, AMBIENT_SITE};
-use rut_parser::{parse, Mode};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use super::dump::ir_dump_of;
 use super::seeds::Seeds;
@@ -60,7 +60,7 @@ fn unbound_use_msg(
 ) -> String {
     match row {
         // the row exists and does not cross: the `pub` fix names itself
-        Some(d) if d.vis != rut_ast::ast::Vis::Pub => {
+        Some(d) if d.vis != rut_ast::Vis::Pub => {
             let at = if module.is_empty() {
                 head.to_string()
             } else {
@@ -196,9 +196,7 @@ pub fn compile_program_resolved(
     // opt-in and the parse can arrive pre-done (the graph walk already
     // parsed the unit once for use validation)
     compile_program_inner(
-        src,
-        None,
-        mode,
+        parse_with_recover(src, mode, ParseOpts::default()),
         module_name,
         scope,
         uses,
@@ -212,13 +210,12 @@ pub fn compile_program_resolved(
 }
 
 /// As [`compile_program_resolved`], but the caller may hand a
-/// pre-parsed module (the graph walk's validation parse) and decline
-/// the AST dump renders (embedded lanes never read them).
+/// pre-parsed module (the graph walk's validation parse — the pair
+/// artifact carries the tree AND the normalized text its spans index)
+/// and decline the AST dump renders (embedded lanes never read them).
 #[allow(clippy::too_many_arguments)]
 pub fn compile_program_pre(
-    ast: (rut_ast::ast::Ast, Vec<Diag>),
-    src: &str,
-    mode: Mode,
+    parsed: rut_parser::Parsed,
     module_name: &str,
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
@@ -232,9 +229,7 @@ pub fn compile_program_pre(
     )],
 ) -> ProgramOutput {
     compile_program_inner(
-        src,
-        Some(ast),
-        mode,
+        parsed,
         module_name,
         scope,
         uses,
@@ -249,9 +244,7 @@ pub fn compile_program_pre(
 
 #[allow(clippy::too_many_arguments)]
 fn compile_program_inner(
-    src: &str,
-    pre: Option<(rut_ast::ast::Ast, Vec<Diag>)>,
-    mode: Mode,
+    pre: rut_parser::Parsed,
     module_name: &str,
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
@@ -274,19 +267,21 @@ fn compile_program_inner(
         requests: Vec::new(),
         template_failures: Vec::new(),
     };
-    let (mut ast, mut diags) = match pre {
-        Some((a, d)) => (a, d),
-        None => parse(src, mode),
-    };
+    // the pair artifact IS the unit's text: `src` is the NORMALIZED
+    // text every span indexes (the renders and the line/col table
+    // slice it — never a caller's raw input)
+    let rut_parser::Parsed { ast, src: text } = pre;
+    let mut diags: Vec<Diag> = Vec::new();
     let (ast_dump, ast_json) = if want_dumps {
-        let tree = dump::to_dump_tree(&ast);
-        let t = dump::render_text(&tree, src);
-        let j = dump::render_json(&tree);
+        let tree = to_dump_tree(&ast);
+        let t = render_text(&tree, &text);
+        let j = render_json(&tree);
         (t, j)
     } else {
         (String::new(), String::new())
     };
-    if !diags.is_empty() {
+    if !ast.is_clean() {
+        diags.extend(ast.errors().iter().cloned());
         return fail(diags, ast_dump, ast_json);
     }
     // Intern every used surface name, so a namespace use (`Math`)
@@ -295,11 +290,19 @@ fn compile_program_inner(
     // ids in the exporter's interner (`surface.names`) — re-interned by
     // text into this module's. The texts also feed `dep_exports` (the
     // terminal-miss hint's "a use statement could name it" table).
+    // v1 interned these into the AST's own interner before the Ctx
+    // cloned it; v2's store is frozen post-parse, so they intern into
+    // the CLONE the ctx already holds — `pub_core_map` interns only
+    // well-known ids (its names all sit below `well_known_len`), so
+    // the clone's tail order — parse names, dep names, then the ctx's
+    // mints — is byte-identical to v1's, and every later lookup rides
+    // `ctx.interner` (the same table v1's `ast.interner` reads served).
+    let mut ctx = Ctx::new_scoped(&ast, scope);
     let mut dep_export_leaf_texts: Vec<String> = Vec::new();
     for (_, surface, ..) in uses {
         for f in &surface.funcs {
             let text = surface.names.name(f.name);
-            ast.interner.intern(text);
+            ctx.intern(text);
             dep_export_leaf_texts.push(text.rsplit("::").next().unwrap_or(text).to_string());
         }
         for g in &surface.fn_generics {
@@ -308,18 +311,24 @@ fn compile_program_inner(
         }
         for c in &surface.consts {
             let text = surface.names.name(c.name);
-            ast.interner.intern(text);
+            ctx.intern(text);
             dep_export_leaf_texts.push(text.rsplit("::").next().unwrap_or(text).to_string());
         }
         for t in &surface.ifaces {
-            ast.interner.intern(surface.names.name(t.name));
+            ctx.intern(surface.names.name(t.name));
         }
         for t in &surface.type_exports {
             let text = surface.names.name(t.name);
             dep_export_leaf_texts.push(text.rsplit("::").next().unwrap_or(text).to_string());
         }
     }
-    let mut ctx = Ctx::new_scoped(&ast, scope);
+    // v1's frozen view: the AST's own interner carried [parse names,
+    // dep interns] and NOTHING else ever wrote to it — the lookups
+    // below (the binding lanes, the iface pass's use-gate) read that
+    // exact table. The ctx's live interner grows past it (the iface
+    // pass re-interns trait and method names), so the snapshot keeps
+    // every read answering v1's question against v1's word.
+    let frozen = ctx.interner.clone();
     ctx.allow_uses = allow_uses;
     // the file-module inputs (phase 3): the file layout + scope tree
     // this unit resolves against (flat for single-file packages)
@@ -329,16 +338,16 @@ fn compile_program_inner(
     // resolves through the TARGET module's decls, in the file whose
     // `use` wrote it
     for (site, name, target) in own_uses {
-        if let Some(id) = ast.interner.lookup(name) {
+        if let Some(id) = frozen.lookup(name) {
             ctx.own_uses.insert((site.clone(), id), target.clone());
         }
     }
     // the pkg names this unit's use statements name — a qualified head
     // spelling one of these is the cross-package door the position
     // grammar refuses; the diagnostic names the use fix
-    for it in ast.module_items(ast.root).to_vec() {
-        if let rut_ast::ast::ItemKind::Use { path, .. } = ast.item(it) {
-            if let Some(&head) = path.first() {
+    for it in ast.root().items(&ast) {
+        if let rut_ast::ItemRef::Use(uh) = it {
+            if let Some(&head) = uh.get(&ast).path.first() {
                 ctx.used_pkgs.insert(ast.name(head).to_string());
             }
         }
@@ -367,14 +376,16 @@ fn compile_program_inner(
     // these claim is the intra-package import, no dep head behind it
     let own_claims: std::collections::HashSet<(String, rut_core::IdentId)> = own_uses
         .iter()
-        .filter_map(|(site, name, _)| ast.interner.lookup(name).map(|id| (site.clone(), id)))
+        .filter_map(|(site, name, _)| frozen.lookup(name).map(|id| (site.clone(), id)))
         .collect();
     let mut use_bindings: Vec<UseBinding> = Vec::new();
-    for it in ast.module_items(ast.root).to_vec() {
-        if let rut_ast::ast::ItemKind::Use { path, names } = ast.item(it) {
+    for it in ast.root().items(&ast) {
+        if let rut_ast::ItemRef::Use(uh) = it {
+            let u = uh.get(&ast);
+            let (path, names) = (&u.path, &u.names);
             let head = ast.name(path[0]).to_string();
-            let file = ctx.mods.file_of(ast.span(it.id()).lo).to_string();
-            let span = ast.span(it.id());
+            let file = ctx.mods.file_of(it.span(&ast).lo).to_string();
+            let span = it.span(&ast);
             let prefix = path[1..]
                 .iter()
                 .map(|&s| ast.name(s).to_string())
@@ -419,7 +430,7 @@ fn compile_program_inner(
                 .map(|b| (b.file.clone(), b.leaf))
                 .collect()
         } else {
-            let Some(id) = ast.interner.lookup(text) else {
+            let Some(id) = frozen.lookup(text) else {
                 return Vec::new();
             };
             use_bindings
@@ -458,9 +469,9 @@ fn compile_program_inner(
     ctx.own_spec = module_name.to_string();
     // the binding gate: the names this module's `use` statements wrote
     // — read off the AST before any binding runs
-    for it in ast.module_items(ast.root).to_vec() {
-        if let rut_ast::ast::ItemKind::Use { names, .. } = ast.item(it) {
-            ctx.used.extend(names.iter().copied());
+    for it in ast.root().items(&ast) {
+        if let rut_ast::ItemRef::Use(uh) = it {
+            ctx.used.extend(uh.get(&ast).names.iter().copied());
         }
     }
     // trait names resolve across ALL uses (an impl may live in a
@@ -497,7 +508,7 @@ fn compile_program_inner(
             // declaration name: it rides for the trait map's remap and
             // registers nameless (no use-gate, no dispatch registry)
             let is_inst_desc = text.contains('<');
-            let used_name = ast.interner.lookup(text).filter(|id| ctx.used.contains(id));
+            let used_name = frozen.lookup(text).filter(|id| ctx.used.contains(id));
             let carried_ref = iface_refs.contains(&t.local);
             if !carried_ref
                 && !is_inst_desc
@@ -577,7 +588,7 @@ fn compile_program_inner(
         // a use list
         let ns_sites: Vec<String> = surface
             .namespace
-            .and_then(|ns| ast.interner.lookup(surface.names.name(ns)))
+            .and_then(|ns| frozen.lookup(surface.names.name(ns)))
             .map(|ns_id| {
                 use_bindings
                     .iter()
@@ -591,7 +602,7 @@ fn compile_program_inner(
             let mut sites = binding_sites(head, text);
             // the namespace ride: the head's files resolve the members
             if !ns_sites.is_empty() {
-                if let Some(id) = ast.interner.lookup(text) {
+                if let Some(id) = frozen.lookup(text) {
                     for f2 in &ns_sites {
                         if !sites.iter().any(|(s, _)| s == f2) {
                             sites.push((f2.clone(), id));
@@ -662,7 +673,7 @@ fn compile_program_inner(
         let is_prelude = !surface.native_types.is_empty();
         for c in &surface.consts {
             let text = surface.names.name(c.name);
-            let Some(id) = ast.interner.lookup(text) else {
+            let Some(id) = frozen.lookup(text) else {
                 continue;
             };
             let mut sites: Vec<(String, rut_core::IdentId)> =
@@ -792,7 +803,7 @@ fn compile_program_inner(
         // (the per-file law). Mounted mounting (ink/pouch/calc fns,
         // consts, namespace heads) stays use-gated.
         for (n, kind, ambient) in &surface.native_types {
-            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
+            if let Some(id) = frozen.lookup(surface.names.name(*n)) {
                 if *ambient {
                     ambient_names.insert(id);
                     ctx.add_extern_native_type(AMBIENT_SITE, id, *kind);
@@ -805,7 +816,7 @@ fn compile_program_inner(
             }
         }
         for (n, ambient) in &surface.native_fns {
-            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*n)) {
+            if let Some(id) = frozen.lookup(surface.names.name(*n)) {
                 if *ambient {
                     ambient_names.insert(id);
                     ctx.add_extern_native_fn(AMBIENT_SITE, id);
@@ -820,7 +831,7 @@ fn compile_program_inner(
         // the namespace head (`Math`): bound in the files whose `use`
         // wrote it — resolving exactly there
         if let Some(ns) = &surface.namespace {
-            if let Some(id) = ctx.ast.interner.lookup(surface.names.name(*ns)) {
+            if let Some(id) = frozen.lookup(surface.names.name(*ns)) {
                 for (site, leaf) in bare_sites(head, id) {
                     bound_sites.insert((site.clone(), leaf));
                     ctx.add_extern_namespace(&site, leaf);
@@ -915,15 +926,11 @@ fn compile_program_inner(
             // an async fn is not host-callable (its woven body takes the
             // (frame, cx) pair): it compiles at its call sites
             if ctx
-                .ast
-                .fn_decl(
-                    ctx.fn_nodes
-                        .iter()
-                        .find(|(n, _)| *n == name)
-                        .map(|(_, n)| *n)
-                        .unwrap(),
-                )
-                .is_async
+                .fn_nodes
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, n)| n.get(ctx.ast).is_async)
+                .unwrap()
             {
                 continue;
             }
@@ -945,7 +952,7 @@ fn compile_program_inner(
         if !is_pub {
             continue;
         }
-        if !ctx.ast.fn_decl(node).generics.is_empty() {
+        if !node.get(ctx.ast).generics.is_empty() {
             continue;
         }
         // a `pub async fn` roots too (plan10 phase 3): the export
@@ -973,8 +980,8 @@ fn compile_program_inner(
             continue;
         }
         for (mname, mnode) in &d.methods {
-            let md = ctx.ast.method_decl(*mnode);
-            let exported = md.vis == Some(rut_ast::ast::Vis::Pub);
+            let md = mnode.get(ctx.ast);
+            let exported = md.vis == Some(rut_ast::Vis::Pub);
             if !exported || md.is_async || !md.generics.is_empty() {
                 continue;
             }
@@ -993,8 +1000,8 @@ fn compile_program_inner(
     // methods slot; enums are concrete, no template lane)
     for (ename, e) in ctx.enums.clone() {
         for (mname, mnode) in &e.methods {
-            let md = ctx.ast.method_decl(*mnode);
-            if md.vis != Some(rut_ast::ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
+            let md = mnode.get(ctx.ast);
+            if md.vis != Some(rut_ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
                 continue;
             }
             roots.push(Inst {
@@ -1074,22 +1081,21 @@ fn compile_program_inner(
                     .iter()
                     .find(|(n, _)| n == name)
                     .map(|(_, n)| *n);
-                let is_async = node.map(|n| ctx.ast.fn_decl(n).is_async).unwrap_or(false);
+                let is_async = node.map(|n| n.get(ctx.ast).is_async).unwrap_or(false);
                 let (params, ret, local) = if is_async {
                     let n = node.expect("an async export has its decl node");
-                    let fd = ctx.ast.fn_decl(n).clone();
+                    let fd = n.get(ctx.ast);
                     let saved_mod = ctx.cur_mod.clone();
-                    ctx.cur_mod = ctx.mod_of(n.id()).to_string();
+                    ctx.cur_mod = ctx.mod_of(n.span(ctx.ast)).to_string();
                     let mut ps = Vec::new();
-                    for p in &fd.params {
-                        match ctx.ast.param(*p) {
-                            rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
-                                ty: Some(t),
-                                ..
-                            }) => {
-                                ps.push(ctx.resolve_type(*t, &[]));
-                            }
-                            _ => ps.push(TY_I32),
+                    for &p in &fd.params {
+                        let t = match p {
+                            rut_ast::ParamRef::Param(ph) => ph.get(ctx.ast).ty,
+                            _ => None,
+                        };
+                        match t {
+                            Some(t) => ps.push(ctx.resolve_type(t, &[])),
+                            None => ps.push(TY_I32),
                         }
                     }
                     let r = fd.ret.map(|r| ctx.resolve_type(r, &[])).unwrap_or(TY_NIL);
@@ -1124,7 +1130,7 @@ fn compile_program_inner(
         }
         // the surface signatures resolve in the TYPE's module (phase 3)
         let saved_mod = ctx.cur_mod.clone();
-        ctx.cur_mod = ctx.mod_of(d.node.id()).to_string();
+        ctx.cur_mod = ctx.mod_of(d.node.span(ctx.ast)).to_string();
         // the class's template substitution: each generic parameter
         // spells its `#<param>` placeholder row, `Self` — for a
         // GENERIC class — its own `#Self` placeholder (the
@@ -1145,8 +1151,8 @@ fn compile_program_inner(
             .collect();
         let mut methods = Vec::new();
         for (mname, mnode) in &d.methods {
-            let md = ctx.ast.method_decl(*mnode);
-            let exported = md.vis == Some(rut_ast::ast::Vis::Pub);
+            let md = mnode.get(ctx.ast);
+            let exported = md.vis == Some(rut_ast::Vis::Pub);
             // GENERIC methods cross too: the row carries the method's
             // own generic parameters, the call site substitutes, and
             // the bodies ride the request machinery
@@ -1154,10 +1160,7 @@ fn compile_program_inner(
                 continue;
             }
             let method_generic = !md.generics.is_empty();
-            let has_self = matches!(
-                md.params.first().map(|p| ctx.ast.param(*p)),
-                Some(rut_ast::ast::MemberKind::SelfParam(_))
-            );
+            let has_self = matches!(md.params.first(), Some(rut_ast::ParamRef::SelfParam(_)));
             // a generic method's signature resolves under ITS OWN
             // placeholder env layered on the class's (the class env for
             // the receiver's `Self`, the method env for its parameters)
@@ -1165,15 +1168,14 @@ fn compile_program_inner(
             menv.extend(md.generics.iter().map(|&p| (p, ctx.param_placeholder(p))));
             let self_ty = self_ph.unwrap_or(d.ty);
             let mut params = Vec::new();
-            for p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
-                match ctx.ast.param(*p) {
-                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
-                        ty: Some(t),
-                        ..
-                    }) => {
-                        params.push(ctx.resolve_sig_ty(*t, &menv, Some(self_ty)));
-                    }
-                    _ => params.push(TY_I32),
+            for &p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
+                let t = match p {
+                    rut_ast::ParamRef::Param(ph) => ph.get(ctx.ast).ty,
+                    _ => None,
+                };
+                match t {
+                    Some(t) => params.push(ctx.resolve_sig_ty(t, &menv, Some(self_ty))),
+                    None => params.push(TY_I32),
                 }
             }
             let ret = md
@@ -1235,28 +1237,24 @@ fn compile_program_inner(
         }
         // the surface signatures resolve in the ENUM's module (phase 3)
         let saved_mod = ctx.cur_mod.clone();
-        ctx.cur_mod = ctx.mod_of(e.node).to_string();
+        ctx.cur_mod = ctx.mod_of(e.node.span(ctx.ast)).to_string();
         let mut methods = Vec::new();
         for (mname, mnode) in &e.methods {
-            let md = ctx.ast.method_decl(*mnode);
-            if md.vis != Some(rut_ast::ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
+            let md = mnode.get(ctx.ast);
+            if md.vis != Some(rut_ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
                 continue;
             }
-            let has_self = matches!(
-                md.params.first().map(|p| ctx.ast.param(*p)),
-                Some(rut_ast::ast::MemberKind::SelfParam(_))
-            );
+            let has_self = matches!(md.params.first(), Some(rut_ast::ParamRef::SelfParam(_)));
             let self_ty = e.ty;
             let mut params = Vec::new();
-            for p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
-                match ctx.ast.param(*p) {
-                    rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
-                        ty: Some(t),
-                        ..
-                    }) => {
-                        params.push(ctx.resolve_sig_ty(*t, &[], Some(self_ty)));
-                    }
-                    _ => params.push(TY_I32),
+            for &p in md.params.iter().skip(if has_self { 1 } else { 0 }) {
+                let t = match p {
+                    rut_ast::ParamRef::Param(ph) => ph.get(ctx.ast).ty,
+                    _ => None,
+                };
+                match t {
+                    Some(t) => params.push(ctx.resolve_sig_ty(t, &[], Some(self_ty))),
+                    None => params.push(TY_I32),
                 }
             }
             let ret = md
@@ -1304,13 +1302,13 @@ fn compile_program_inner(
         if !is_pub {
             continue;
         }
-        let fd = ctx.ast.fn_decl(node);
+        let fd = node.get(ctx.ast);
         if fd.generics.is_empty() || fd.is_async {
             continue;
         }
         // the placeholder signature resolves in the fn's module (phase 3)
         let saved_mod = ctx.cur_mod.clone();
-        ctx.cur_mod = ctx.mod_of(node.id()).to_string();
+        ctx.cur_mod = ctx.mod_of(node.span(ctx.ast)).to_string();
         // the placeholder substitution: each generic parameter spells
         // its `#<param>` row (interned BEFORE the type snapshot below
         // carries it)
@@ -1322,10 +1320,11 @@ fn compile_program_inner(
         let args: Vec<TypeId> = fd
             .params
             .iter()
-            .map(|p| match ctx.ast.param(*p) {
-                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
-                    ty: Some(t), ..
-                }) => ctx.resolve_sig_ty(*t, &env, None),
+            .map(|&p| match p {
+                rut_ast::ParamRef::Param(ph) => match ph.get(ctx.ast).ty {
+                    Some(t) => ctx.resolve_sig_ty(t, &env, None),
+                    None => TY_I32,
+                },
                 _ => TY_I32,
             })
             .collect();
@@ -1351,7 +1350,7 @@ fn compile_program_inner(
     // surface reads these ids.
     let mut generic_trait_rows: Vec<(IdentId, u32, usize)> = Vec::new();
     {
-        let decls: Vec<(IdentId, u32, Vec<IdentId>, rut_ast::ast::NodeId)> = ctx
+        let decls: Vec<(IdentId, u32, Vec<IdentId>, rut_ast::ItemRef)> = ctx
             .iface_decls
             .iter()
             .map(|(n, i)| (*n, i.id, i.generics.clone(), i.node))
@@ -1362,7 +1361,7 @@ fn compile_program_inner(
             }
             // the trait's signatures resolve in ITS module (phase 3)
             let saved_mod = ctx.cur_mod.clone();
-            ctx.cur_mod = ctx.mod_of(inode).to_string();
+            ctx.cur_mod = ctx.mod_of(inode.span(ctx.ast)).to_string();
             let ph_args: Vec<TypeId> = generics.iter().map(|&g| ctx.param_placeholder(g)).collect();
             let ph_id = ctx.mk_iface_inst(name, ph_args);
             ctx.cur_mod = saved_mod;
@@ -1681,7 +1680,7 @@ fn compile_program_inner(
                     d.methods
                         .iter()
                         .find(|(n, _)| *n == mname)
-                        .map(|(_, node)| ctx.ast.method_decl(*node).generics.clone())
+                        .map(|(_, node)| node.get(ctx.ast).generics.clone())
                         .unwrap_or_default()
                         .into_iter()
                         .zip(args.iter().cloned())
@@ -1702,7 +1701,7 @@ fn compile_program_inner(
                         .methods
                         .iter()
                         .find(|(n, _)| *n == mname)
-                        .map(|(_, node)| ctx.ast.method_decl(*node).generics.clone())
+                        .map(|(_, node)| node.get(ctx.ast).generics.clone())
                         .unwrap_or_default();
                     let mut full = env.clone();
                     for (g, t) in mgen.iter().zip(args[class_arity.min(args.len())..].iter()) {
@@ -1871,7 +1870,7 @@ fn compile_program_inner(
         else {
             continue;
         };
-        let generics = ctx.ast.fn_decl(node).generics.clone();
+        let generics = node.get(ctx.ast).generics.clone();
         if generics.len() != args.len() {
             continue;
         }
@@ -1911,20 +1910,21 @@ fn compile_program_inner(
             if is_pub {
                 continue;
             }
-            let fd = ctx.ast.fn_decl(node);
+            let fd = node.get(ctx.ast);
             if !fd.generics.is_empty() || fd.is_async {
                 continue;
             }
             // the signature resolves in the fn's module (phase 3)
             let saved_mod = ctx.cur_mod.clone();
-            ctx.cur_mod = ctx.mod_of(node.id()).to_string();
-            let boxed = fd.params.iter().any(|p| match ctx.ast.param(*p) {
-                rut_ast::ast::MemberKind::Param(rut_ast::ast::ParamData {
-                    ty: Some(t), ..
-                }) => {
-                    let ty = ctx.resolve_sig_ty(*t, &[], None);
-                    matches!(ctx.types.kind(ty), TyKind::IfaceObj { .. })
-                }
+            ctx.cur_mod = ctx.mod_of(node.span(ctx.ast)).to_string();
+            let boxed = fd.params.iter().any(|&p| match p {
+                rut_ast::ParamRef::Param(ph) => match ph.get(ctx.ast).ty {
+                    Some(t) => {
+                        let ty = ctx.resolve_sig_ty(t, &[], None);
+                        matches!(ctx.types.kind(ty), TyKind::IfaceObj { .. })
+                    }
+                    None => false,
+                },
                 _ => false,
             });
             ctx.cur_mod = saved_mod;
@@ -1942,8 +1942,8 @@ fn compile_program_inner(
                 continue;
             }
             for (mname, mnode) in &d.methods {
-                let md = ctx.ast.method_decl(*mnode);
-                let exported = md.vis == Some(rut_ast::ast::Vis::Pub);
+                let md = mnode.get(ctx.ast);
+                let exported = md.vis == Some(rut_ast::Vis::Pub);
                 if exported || md.is_async || !md.generics.is_empty() {
                     continue;
                 }
@@ -1959,9 +1959,8 @@ fn compile_program_inner(
         }
         for (ename, e) in ctx.enums.clone() {
             for (mname, mnode) in &e.methods {
-                let md = ctx.ast.method_decl(*mnode);
-                if md.vis == Some(rut_ast::ast::Vis::Pub) || md.is_async || !md.generics.is_empty()
-                {
+                let md = mnode.get(ctx.ast);
+                if md.vis == Some(rut_ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
                     continue;
                 }
                 late_roots.push(Inst {
@@ -2038,7 +2037,7 @@ fn compile_program_inner(
             else {
                 continue;
             };
-            let bounds = ctx.ast.fn_decl(node).bounds.clone();
+            let bounds = node.get(ctx.ast).bounds.clone();
             // every parameter must carry a bound whose members are ALL
             // concrete (a trait member admits infinitely many
             // satisfiers — that decl stays on the template lane)
@@ -2156,7 +2155,10 @@ fn compile_program_inner(
                 .find(|(n, _)| *n == g.name)
                 .map(|(_, n)| *n);
             let bounds = node
-                .map(|n| ctx.ast.fn_decl(n).bounds.iter().map(|(g, _)| *g).collect())
+                .map(|n| {
+                    let fd = n.get(ctx.ast);
+                    fd.bounds.iter().map(|(g, _)| *g).collect()
+                })
                 .unwrap_or_default();
             decls.push(Decl::Free {
                 name: g.name,
@@ -2166,8 +2168,8 @@ fn compile_program_inner(
         }
         for (dname, d) in ctx.datas.clone() {
             for (mname, mnode) in &d.methods {
-                let md = ctx.ast.method_decl(*mnode);
-                if md.vis != Some(rut_ast::ast::Vis::Pub) || md.is_async {
+                let md = mnode.get(ctx.ast);
+                if md.vis != Some(rut_ast::Vis::Pub) || md.is_async {
                     continue;
                 }
                 if d.generics.is_empty() && md.generics.is_empty() {
@@ -2344,9 +2346,11 @@ fn compile_program_inner(
     // table, HERE while this module's source is in hand (the compiler's
     // lowering carries byte offsets only). 1-based both; parallel to
     // `spans` entry-for-entry, consumed lazily by the StackTrace members.
+    // `text` is the NORMALIZED source the spans index (the pair
+    // artifact's) — never a caller's raw input.
     let line_starts: Vec<u32> = {
         let mut ls = vec![0u32];
-        for (i, b) in src.bytes().enumerate() {
+        for (i, b) in text.bytes().enumerate() {
             if b == b'\n' {
                 ls.push(i as u32 + 1);
             }

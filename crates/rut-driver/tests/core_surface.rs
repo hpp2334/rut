@@ -8,8 +8,8 @@
 //! says the surface is kept TRUE to the implementation; this test makes
 //! it enforced, not aspirational.
 
-use rut_ast::ast::{ItemKind, Linkage};
-use rut_parser::{parse, Mode};
+use rut_ast::{ItemRef, Linkage, MethodRef};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 const CORE_DECL: &str = include_str!("../../../rut/core/src/core.d.rut");
 
@@ -72,55 +72,65 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 /// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
 /// against `Surface::core`'s rows.
 fn declared_names() -> DeclSurfaces {
-    let (ast, diags) = parse(CORE_DECL, Mode::Decl);
-    assert!(diags.is_empty(), "core.d.rut must parse cleanly: {diags:?}");
+    let p = parse_with_recover(CORE_DECL, Mode::Decl, ParseOpts::default());
+    assert!(
+        p.ast.is_clean(),
+        "core.d.rut must parse cleanly: {:?}",
+        p.ast.errors()
+    );
+    let ast = p.ast;
     let mut builtin_fns = Vec::new();
     let mut builtin_types = Vec::new();
     let mut plain_ifaces = Vec::new();
     let mut builtin_impls = Vec::new();
-    for it in ast.module_items(ast.root).to_vec() {
-        match ast.item(it) {
-            ItemKind::SurfaceFn {
-                name,
-                linkage,
-                generics,
-                ..
-            } => {
+    for it in ast.root().items(&ast) {
+        match it {
+            ItemRef::SurfaceFn(h) => {
+                let d = h.get(&ast);
                 assert!(
-                    matches!(*linkage, Linkage::Builtin { .. }),
+                    matches!(d.linkage, Linkage::Builtin { .. }),
                     "the prelude's fns are all engine-lowered"
                 );
                 assert!(
-                    generics.is_empty() || !matches!(linkage, Linkage::Host),
+                    d.generics.is_empty() || !matches!(d.linkage, Linkage::Host),
                     "crossing signatures are concrete"
                 );
-                let ambient = matches!(*linkage, Linkage::Builtin { ambient: true });
-                builtin_fns.push((ast.name(*name).to_string(), ambient));
+                let ambient = matches!(d.linkage, Linkage::Builtin { ambient: true });
+                builtin_fns.push((ast.name(d.name).to_string(), ambient));
             }
-            ItemKind::BuiltinTy { name, ambient, .. } => {
-                let n = ast.name(*name).to_string();
+            ItemRef::BuiltinTy(h) => {
+                let d = h.get(&ast);
+                let n = ast.name(d.name).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
                 if !rut_parser::is_primitive_ty(&n) {
-                    builtin_types.push((n, *ambient));
+                    builtin_types.push((n, d.ambient));
                 }
             }
-            ItemKind::BuiltinPrimitive { name, ambient, .. } => {
-                let n = ast.name(*name).to_string();
+            ItemRef::BuiltinPrimitive(h) => {
+                let d = h.get(&ast);
+                let n = ast.name(d.name).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
                 if rut_parser::is_primitive_ty(&n) {
                     continue;
                 }
-                builtin_types.push((n, *ambient));
+                builtin_types.push((n, d.ambient));
             }
-            ItemKind::Interface { name, .. } => plain_ifaces.push(ast.name(*name).to_string()),
-            ItemKind::BuiltinImpl { prim, methods, .. } => {
-                let names = methods
+            ItemRef::Interface(h) => {
+                plain_ifaces.push(ast.name(h.get(&ast).name).to_string());
+            }
+            ItemRef::BuiltinImpl(h) => {
+                let d = h.get(&ast);
+                let names = d
+                    .methods
                     .iter()
-                    .map(|&m| ast.name(ast.method_decl(m).name).to_string())
+                    .filter_map(|&m| match m {
+                        MethodRef::Method(mh) => Some(ast.name(mh.get(&ast).name).to_string()),
+                        MethodRef::Error(_) => None,
+                    })
                     .collect();
-                builtin_impls.push((ast.name(*prim).to_string(), names));
+                builtin_impls.push((ast.name(d.prim).to_string(), names));
             }
             // `host fn`/`host struct` are the embedder's surface — a
             // toolchain decl file may not spell them

@@ -232,7 +232,7 @@ fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
             "net".to_string(),
             ModSource {
                 path: "net".into(),
-                vis: rut_ast::ast::Vis::Pub,
+                vis: rut_ast::Vis::Pub,
                 text: "// the request lane\npub mod tls;\n\npub host fn connect(url: str) -> opaque;\n".into(),
                 file: "mod.d.rut".into(),
             },
@@ -241,7 +241,7 @@ fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
             "net/tls".to_string(),
             ModSource {
                 path: "net/tls".into(),
-                vis: rut_ast::ast::Vis::Pub,
+                vis: rut_ast::Vis::Pub,
                 text: "pub host fn handshake(c: opaque) -> opaque;\n".into(),
                 file: "mod.d.rut".into(),
             },
@@ -302,7 +302,7 @@ fn an_old_v11_archive_still_loads() {
             "net".to_string(),
             ModSource {
                 path: "net".into(),
-                vis: rut_ast::ast::Vis::Pub,
+                vis: rut_ast::Vis::Pub,
                 text: "pub host fn connect(url: str) -> opaque;\n".into(),
                 file: "mod.d.rut".into(),
             },

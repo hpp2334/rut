@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use rut_vm::interp::Vm;
 use rut_vm::HostPkg;
 
-fn mod_source(path: &str, vis: rut_ast::ast::Vis, text: &str) -> rut_driver::ModSource {
+fn mod_source(path: &str, vis: rut_ast::Vis, text: &str) -> rut_driver::ModSource {
     rut_driver::ModSource {
         path: path.to_string(),
         vis,
@@ -33,7 +33,7 @@ fn myhost() -> rut_driver::Mounted {
         "net".to_string(),
         mod_source(
             "net",
-            rut_ast::ast::Vis::Pub,
+            rut_ast::Vis::Pub,
             "pub mod tls;\npub host fn connect(url: str) -> i64;\n",
         ),
     );
@@ -41,7 +41,7 @@ fn myhost() -> rut_driver::Mounted {
         "net/tls".to_string(),
         mod_source(
             "net/tls",
-            rut_ast::ast::Vis::Pub,
+            rut_ast::Vis::Pub,
             "pub host fn handshake(c: i64) -> i64;\n",
         ),
     );
@@ -167,7 +167,7 @@ fn a_bare_host_fn_leaf_does_not_cross() {
             "net".to_string(),
             mod_source(
                 "net",
-                rut_ast::ast::Vis::Pub,
+                rut_ast::Vis::Pub,
                 "host fn connect(url: str) -> i64;\n",
             ),
         );
@@ -197,7 +197,7 @@ fn a_bare_mod_edge_is_invisible_from_outside() {
             "net".to_string(),
             mod_source(
                 "net",
-                rut_ast::ast::Vis::Self_,
+                rut_ast::Vis::Self_,
                 "pub host fn connect(url: str) -> i64;\n",
             ),
         );
@@ -276,7 +276,7 @@ fn an_async_mod_row_binds_through_the_qualified_spelling() {
             "net".to_string(),
             mod_source(
                 "net",
-                rut_ast::ast::Vis::Pub,
+                rut_ast::Vis::Pub,
                 "pub host async fn probe(k: str) -> i64;\n",
             ),
         );

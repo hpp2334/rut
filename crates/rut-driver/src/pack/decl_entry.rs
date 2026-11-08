@@ -18,10 +18,10 @@
 //! same rows its file-tree form did. A mismatch refuses the pack —
 //! never a doctored entry.
 
-use rut_ast::ast::{AnyItem, Ast, ItemKind, NodeHandle, TypeKind};
+use rut_ast::{Ast, FieldRef, ItemRef, MethodRef, ParamRef, TyRef};
 use rut_core::binary::Program;
 use rut_core::types::{TyKind, TypeId};
-use rut_parser::{parse, Mode};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::session::HostRow;
 
@@ -347,9 +347,10 @@ pub fn facts_of_program(prog: &Program) -> std::collections::BTreeSet<String> {
 /// same spellings the renderer emits (`?T`, `[T]`, `(A, B)`, `fn(..) ->
 /// R`, `A | B`, paths with generic args), so equal facts mean equal
 /// surfaces.
-fn ty_ast_text(ast: &Ast, h: NodeHandle<rut_ast::ast::AnyTy>) -> String {
-    match ast.ty(h) {
-        TypeKind::TyPath { segs } => {
+fn ty_ast_text(ast: &Ast, t: TyRef) -> String {
+    match t {
+        TyRef::Path(h) => {
+            let segs = &h.get(ast).segs;
             let mut s = segs
                 .iter()
                 .map(|sg| ast.name(sg.name).to_string())
@@ -369,26 +370,30 @@ fn ty_ast_text(ast: &Ast, h: NodeHandle<rut_ast::ast::AnyTy>) -> String {
             }
             s
         }
-        TypeKind::TyFn { params, ret } => {
-            let ps: Vec<String> = params.iter().map(|&p| ty_ast_text(ast, p)).collect();
-            format!("fn({}) -> {}", ps.join(", "), ty_ast_text(ast, *ret))
+        TyRef::Fn(h) => {
+            let d = h.get(ast);
+            let ps: Vec<String> = d.params.iter().map(|&p| ty_ast_text(ast, p)).collect();
+            format!("fn({}) -> {}", ps.join(", "), ty_ast_text(ast, d.ret))
         }
-        TypeKind::TyOpt { inner } => format!("?{}", ty_ast_text(ast, *inner)),
-        TypeKind::TyArray { elem } => format!("[{}]", ty_ast_text(ast, *elem)),
-        TypeKind::TyTuple { elems } => format!(
+        TyRef::Opt(h) => format!("?{}", ty_ast_text(ast, h.get(ast).inner)),
+        TyRef::Array(h) => format!("[{}]", ty_ast_text(ast, h.get(ast).elem)),
+        TyRef::Tuple(h) => format!(
             "({})",
-            elems
+            h.get(ast)
+                .elems
                 .iter()
                 .map(|&e| ty_ast_text(ast, e))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        TypeKind::TyUnion { elems } => elems
+        TyRef::Union(h) => h
+            .get(ast)
+            .elems
             .iter()
             .map(|&e| ty_ast_text(ast, e))
             .collect::<Vec<_>>()
             .join(" | "),
-        TypeKind::TyConst(_) => String::new(),
+        TyRef::Const(_) | TyRef::Error(_) => String::new(),
     }
 }
 
@@ -398,53 +403,58 @@ fn ty_ast_text(ast: &Ast, h: NodeHandle<rut_ast::ast::AnyTy>) -> String {
 /// the renderer spells types with the same grammar, so equal facts
 /// mean equal surfaces.
 pub fn facts_of_text(text: &str) -> Result<std::collections::BTreeSet<String>, String> {
-    let (ast, diags) = parse(text, Mode::Decl);
-    if !diags.is_empty() {
-        let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
+    let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
+    if !p.ast.is_clean() {
+        let msgs: Vec<String> = p.ast.errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(
             "the declaration entry does not parse: {}",
             msgs.join("; ")
         ));
     }
     let mut facts = std::collections::BTreeSet::new();
-    facts_of_items(&ast, ast.module_items(ast.root), &mut facts);
+    facts_of_items(&p.ast, p.ast.root().items(&p.ast), &mut facts);
     Ok(facts)
 }
 
-fn facts_of_items(
-    ast: &Ast,
-    items: &[NodeHandle<AnyItem>],
-    facts: &mut std::collections::BTreeSet<String>,
-) {
+fn facts_of_items(ast: &Ast, items: &[ItemRef], facts: &mut std::collections::BTreeSet<String>) {
     for &it in items {
-        match ast.item(it) {
-            ItemKind::Class {
-                name,
-                generics,
-                newtype,
-                fields,
-                methods,
-                ..
-            } => {
-                class_facts(ast, *name, generics, *newtype, fields, methods, facts);
+        match it {
+            ItemRef::Class(h) => {
+                let c = h.get(ast);
+                class_facts(
+                    ast,
+                    c.name,
+                    &c.generics,
+                    c.newtype,
+                    &c.fields,
+                    &c.methods,
+                    facts,
+                );
             }
-            ItemKind::Struct {
-                name,
-                generics,
-                fields,
-                methods,
-                ..
-            } => {
-                class_facts(ast, *name, generics, false, fields, methods, facts);
+            ItemRef::Struct(h) => {
+                let c = h.get(ast);
+                class_facts(
+                    ast,
+                    c.name,
+                    &c.generics,
+                    false,
+                    &c.fields,
+                    &c.methods,
+                    facts,
+                );
             }
-            ItemKind::Fn(d) => {
+            ItemRef::Fn(h) => {
+                let d = h.get(ast);
                 let ps: Vec<String> = d
                     .params
                     .iter()
-                    .filter_map(|&p| match ast.param(p) {
-                        rut_ast::ast::MemberKind::Param(pd) => {
-                            Some(pd.ty.map(|t| ty_ast_text(ast, t)).unwrap_or_default())
-                        }
+                    .filter_map(|&p| match p {
+                        ParamRef::Param(pd) => Some(
+                            pd.get(ast)
+                                .ty
+                                .map(|t| ty_ast_text(ast, t))
+                                .unwrap_or_default(),
+                        ),
                         _ => None,
                     })
                     .collect();
@@ -478,8 +488,8 @@ fn facts_of_items(
                 };
                 facts.insert(fact);
             }
-            ItemKind::ModuleLet { name, .. } => {
-                facts.insert(format!("const {}", ast.name(*name)));
+            ItemRef::ModuleLet(h) => {
+                facts.insert(format!("const {}", ast.name(h.get(ast).name)));
             }
             _ => {}
         }
@@ -490,11 +500,11 @@ fn facts_of_items(
 /// order), then one method line per member.
 fn class_facts(
     ast: &Ast,
-    name: rut_ast::ast::IdentId,
-    generics: &[rut_ast::ast::IdentId],
+    name: rut_core::IdentId,
+    generics: &[rut_core::IdentId],
     _newtype: bool,
-    fields: &[NodeHandle<rut_ast::ast::FieldDeclNode>],
-    methods: &[NodeHandle<rut_ast::ast::MethodDeclNode>],
+    fields: &[FieldRef],
+    methods: &[MethodRef],
     facts: &mut std::collections::BTreeSet<String>,
 ) {
     let gens: Vec<String> = generics.iter().map(|&g| ast.name(g).to_string()).collect();
@@ -504,28 +514,35 @@ fn class_facts(
     // binary's crossing paper, not the entry's)
     let fs: Vec<String> = fields
         .iter()
-        .map(|&f| {
-            let d = ast.field_decl(f);
-            format!("{}:{}", ast.name(d.name), ty_ast_text(ast, d.ty))
+        .filter_map(|&f| match f {
+            FieldRef::Field(fh) => {
+                let d = fh.get(ast);
+                Some(format!("{}:{}", ast.name(d.name), ty_ast_text(ast, d.ty)))
+            }
+            FieldRef::Error(_) => None,
         })
         .collect();
     facts.insert(format!("{head}{{{}}}", fs.join(",")));
     for &m in methods {
-        let d = ast.method_decl(m);
+        let MethodRef::Method(mh) = m else { continue };
+        let d = mh.get(ast);
         let ps: Vec<String> = d
             .params
             .iter()
-            .filter_map(|&p| match ast.param(p) {
-                rut_ast::ast::MemberKind::Param(pd) => {
-                    Some(pd.ty.map(|t| ty_ast_text(ast, t)).unwrap_or_default())
-                }
+            .filter_map(|&p| match p {
+                ParamRef::Param(pd) => Some(
+                    pd.get(ast)
+                        .ty
+                        .map(|t| ty_ast_text(ast, t))
+                        .unwrap_or_default(),
+                ),
                 _ => None, // `self` / `mut self`
             })
             .collect();
         let has_self = d
             .params
             .iter()
-            .any(|&p| matches!(ast.param(p), rut_ast::ast::MemberKind::SelfParam(_)));
+            .any(|&p| matches!(p, ParamRef::SelfParam(_)));
         let ret = d
             .ret
             .map(|r| ty_ast_text(ast, r))
@@ -574,15 +591,17 @@ fn splice_tree(
     path: &str,
     mods: &std::collections::BTreeMap<String, crate::mods::ModSource>,
 ) -> Result<String, String> {
-    let (ast, diags) = parse(text, Mode::Decl);
-    if !diags.is_empty() {
-        let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
+    let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
+    if !p.ast.is_clean() {
+        let msgs: Vec<String> = p.ast.errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!("the surface does not parse: {}", msgs.join("; ")));
     }
-    // the decl's own `;` per mod item: an item's span runs to the NEXT
-    // token (the parser's convention), so the splice ends at the semi
-    // the grammar requires — the text after it rides verbatim
-    let (toks, _) = rut_lexer::lexer::lex(text);
+    let ast = p.ast;
+    // v2's exact item spans already end at the decl's own terminator
+    // (`mod NAME;` ends at its semi), so the splice range is the span
+    // itself; the token scan stays as the belt-and-braces locator over
+    // the SAME normalized text the spans index (`p.src`)
+    let (toks, _) = rut_lexer::lexer::lex_mode(&p.src);
     let semi_hi = |span_lo: u32, span_hi: u32| -> u32 {
         toks.iter()
             .find(|t| {
@@ -594,17 +613,18 @@ fn splice_tree(
     // the replacement spans, ascending; a replaced edge's text
     let mut edits: Vec<(u32, u32, String)> = Vec::new();
     let mut spliced: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for it in ast.module_items(ast.root).to_vec() {
-        let ItemKind::ModDecl { vis, name } = ast.item(it) else {
+    for it in ast.root().items(&ast).to_vec() {
+        let ItemRef::ModDecl(h) = it else {
             continue;
         };
-        let name = ast.name(*name).to_string();
+        let d = h.get(&ast);
+        let name = ast.name(d.name).to_string();
         let child_path = if path.is_empty() {
             name.clone()
         } else {
             format!("{path}/{name}")
         };
-        let span = ast.span(it.id());
+        let span = it.span(&ast);
         let end = semi_hi(span.lo, span.hi);
         if !spliced.insert(child_path.clone()) {
             // first mount wins — a repeated edge rides no second block
@@ -615,15 +635,15 @@ fn splice_tree(
             continue; // the loud missing-child error is the lowering's —
                       // the pack has already walked this tree
         };
-        let _ = vis; // the spelled `pub` prefix sits BEFORE the item's span
-                     // (the node starts at the `mod` keyword) and rides
-                     // verbatim — the replacement starts at `mod`
+        // the spelled `pub` prefix sits BEFORE the item's span
+        // (the node starts at the `mod` keyword) and rides
+        // verbatim — the replacement starts at `mod`
         let body = splice_tree(&child.text, &child_path, mods)?;
         edits.push((span.lo, end, format!("mod {name} {{\n{body}\n}}")));
     }
     // splice descending — spans stay valid
     edits.sort_by_key(|e| std::cmp::Reverse(e.0));
-    let mut out = text.to_string();
+    let mut out = p.src;
     for (lo, hi, replacement) in edits {
         out.replace_range(lo as usize..hi as usize, &replacement);
     }
