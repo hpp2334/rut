@@ -234,11 +234,22 @@ pub fn check_doc(
         }
         // the index builds per text — the rows name DIFFERENT files
         let index = rut_semantic::LineIndex::new(text);
-        let mut diag = crate::analysis::to_diagnostic(d, text, &index);
-        match Uri::from_str(uri) {
-            Ok(u) => crate::analysis::set_related_uri(std::slice::from_mut(&mut diag), &u),
-            Err(_) => diag.related_information = None,
-        }
+        // stamped at construction with the document's URI; a degenerate
+        // uri can't name a location — related info drops rather than
+        // guesses
+        let diag = match Uri::from_str(uri) {
+            Ok(u) => crate::analysis::to_diagnostic(d, text, &index, &u),
+            Err(_) => {
+                let mut dg = crate::analysis::to_diagnostic(
+                    d,
+                    text,
+                    &index,
+                    &crate::analysis::placeholder_uri(),
+                );
+                dg.related_information = None;
+                dg
+            }
+        };
         out.push(diag);
     }
     out

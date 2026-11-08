@@ -174,8 +174,9 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             // open / FULL-sync change: the doc stores FIRST (the analyze
             // lane's store — the queries below read the same text)
             core.docs.insert(uri.clone(), src.clone());
-            // analyze_at wires related-info URIs + hover provenance, exactly
-            // wired like `analysis::analyze_at`; a degenerate URI still analyzes
+            // analyze_at stamps related-info URIs + hover provenance at
+            // construction; a degenerate URI still analyzes (unstamped
+            // twin below)
             let a = match Uri::from_str(&uri) {
                 Ok(u) => crate::analysis::analyze_at(&u, &src),
                 Err(_) => crate::analysis::analyze_unstamped(&uri, &src),

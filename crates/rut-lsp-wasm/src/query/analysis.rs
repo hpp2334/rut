@@ -1,6 +1,7 @@
-//! Per-document analysis — one pure function over the text: normalize →
-//! lex (token source) → parse (AST + diags) → classify / symbols → LSP
-//! values. The server layer only routes URIs and publishes.
+//! Per-document analysis — one pure function over the text and its URI:
+//! normalize → lex (token source) → parse (AST + diags) → classify /
+//! symbols → LSP values, every location stamped with the document's
+//! identity at construction. The server layer only routes and publishes.
 
 use ls_types::*;
 use rut_ast::Ast;
@@ -19,8 +20,8 @@ pub struct Analysis {
     pub diags: Vec<Diagnostic>,
     pub tokens: Vec<SemanticToken>,
     pub symbols: Vec<DocumentSymbol>,
-    /// the hover definition index (origin patched by the caller —
-    /// `analyze_at` stamps the URI)
+    /// the hover definition index (origin stamped at construction from
+    /// the document's URI)
     pub index: hover::DefIndex,
 }
 
@@ -28,29 +29,33 @@ pub struct Analysis {
 /// convention); re-exported so the internal callers keep their spelling
 pub use rut_semantic::mode_of;
 
-/// one ParsedDoc → the LSP `Analysis` envelope (no URI wiring — the
-/// stamped twin below owns that)
-fn analysis_of(doc: &rut_semantic::ParsedDoc) -> Analysis {
+/// one ParsedDoc → the LSP `Analysis` envelope — related info + hover
+/// provenance stamped at construction from the document's URI (the
+/// degenerate twin below rides the placeholder)
+fn analysis_of(doc: &rut_semantic::ParsedDoc, uri: &Uri) -> Analysis {
     let src = doc.src();
+    let mut index = hover::index(src, &doc.ast, &doc.toks);
+    index.origin = uri.as_str().to_string();
     Analysis {
         diags: doc
             .diags()
             .iter()
-            .map(|d| to_diagnostic(d, src, &doc.lines))
+            .map(|d| to_diagnostic(d, src, &doc.lines, uri))
             .collect(),
         tokens: encode(&doc.spans, src, &doc.lines),
         symbols: to_document_symbols(doc.symbols.clone(), src, &doc.lines),
-        index: hover::index(src, &doc.ast, &doc.toks),
+        index,
     }
 }
 
 /// the degenerate-URI fallback (a uri that fails to parse as `Uri`
-/// still analyzes — origin stamped from the raw string, no related-info
-/// wiring)
+/// still analyzes — the PARSE runs on the raw string so mode derivation
+/// keeps the filename; related info + provenance ride the placeholder)
 pub fn analyze_unstamped(uri: &str, src: &str) -> Analysis {
-    let mut a = analysis_of(&rut_semantic::ParsedDoc::parse(uri, src));
-    a.index.origin = uri.to_string();
-    a
+    analysis_of(
+        &rut_semantic::ParsedDoc::parse(uri, src),
+        &placeholder_uri(),
+    )
 }
 
 // ---- spans -> LSP ranges ----
@@ -100,7 +105,7 @@ pub fn encode(spans: &[(Span, TokenType)], src: &str, index: &LineIndex) -> Vec<
 
 // ---- diagnostics ----
 
-pub(crate) fn to_diagnostic(d: &Diag, src: &str, index: &LineIndex) -> Diagnostic {
+pub(crate) fn to_diagnostic(d: &Diag, src: &str, index: &LineIndex, uri: &Uri) -> Diagnostic {
     let mut message = d.msg.clone();
     for n in &d.notes {
         message.push_str("\n\nnote: ");
@@ -111,7 +116,7 @@ pub(crate) fn to_diagnostic(d: &Diag, src: &str, index: &LineIndex) -> Diagnosti
         .iter()
         .map(|(sp, label)| DiagnosticRelatedInformation {
             location: Location {
-                uri: Uri::from_str("file:///").unwrap(), // patched by the server layer
+                uri: uri.clone(), // the document's identity — stamped at construction
                 range: range_of(index, src, *sp),
             },
             message: label.clone(),
@@ -134,16 +139,11 @@ pub(crate) fn to_diagnostic(d: &Diag, src: &str, index: &LineIndex) -> Diagnosti
     }
 }
 
-/// Patch the (placeholder) related-info URIs after the fact — `analyze` is
-/// URI-agnostic; the server entry point below knows the document.
-pub(crate) fn set_related_uri(diags: &mut [Diagnostic], uri: &Uri) {
-    for d in diags {
-        if let Some(rel) = &mut d.related_information {
-            for r in rel.iter_mut() {
-                r.location.uri = uri.clone();
-            }
-        }
-    }
+/// the degenerate lane's stand-in — a raw uri that failed `Uri::from_str`
+/// has no identity to stamp; related info rides it openly, the check lane
+/// drops related info rather than guess (its never-guess law)
+pub(crate) fn placeholder_uri() -> Uri {
+    Uri::from_str("file:///").unwrap()
 }
 
 /// Merge two diagnostic lists for one document, dropping TRUE
@@ -164,13 +164,10 @@ pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnos
     out
 }
 
-/// The server's entry point: `analyze` + URI wiring for related info
-/// and hover provenance.
+/// The server's entry point: the analysis stamped with the document's
+/// URI (related info + hover provenance).
 pub fn analyze_at(uri: &Uri, src: &str) -> Analysis {
-    let mut a = analysis_of(&rut_semantic::ParsedDoc::parse(uri.as_str(), src));
-    set_related_uri(&mut a.diags, uri);
-    a.index.origin = uri.as_str().to_string();
-    a
+    analysis_of(&rut_semantic::ParsedDoc::parse(uri.as_str(), src), uri)
 }
 
 // ---- document-level queries (the hosts' entry points) ----
