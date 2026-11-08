@@ -122,18 +122,18 @@ fn run_case_keep_vm(
 /// The demo-envelope lane over the case world: the same compile, plus
 /// the AST dumps + IR render a `CompileOutput` carries (the dump tests).
 fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
-    use rut_ast::dump as ast_dump;
     let combined = with_logger_use(src);
-    let p = rut_parser::parse_opts(
+    // the recovering ENTRY is the recover choice — always a tree; the
+    // dumps ride the pair (text slices the NORMALIZED `p.src`)
+    let p = rut_parser::parse_with_recover(
         &combined,
         rut_parser::Mode::Impl,
-        rut_parser::ParseOpts { recover: true },
+        rut_parser::ParseOpts::default(),
     );
-    let ast = p.ast.expect("the recovering parse always yields a tree");
-    let diags = p.diags;
-    let tree = ast_dump::to_dump_tree(&ast);
-    let ast_dump = ast_dump::render_text(&tree, &ast.src);
-    let ast_json = ast_dump::render_json(&tree);
+    let diags = p.ast.errors().to_vec();
+    let tree = rut_ast::to_dump_tree(&p.ast);
+    let ast_dump = rut_ast::render_text(&tree, &p.src);
+    let ast_json = rut_ast::render_json(&tree);
     if !diags.is_empty() {
         return rut_driver::CompileOutput {
             diags,
@@ -760,13 +760,16 @@ entry fn main() -> nil { Logger::new("app").info(f"{1 + 1}"); }
     let out = compile_out(src, "main");
     assert!(out.diags.is_empty(), "{:?}", out.diags);
     let text = &out.ast_dump;
-    assert!(text.contains("@0 Enum Flavor [0,33)"), "header: {text}");
+    // v2 dump shapes: DFS-numbered ids (root Module @0, first item @1)
+    // and EXACT item spans (the enum ends at its own `}`)
+    assert!(text.contains("@0 Module [0,112)"), "root: {text}");
+    assert!(text.contains("@1 Enum Flavor [0,27)"), "header: {text}");
     assert!(text.contains("vis: private"), "vis label: {text}");
     assert!(text.contains("- Sour"), "member bullet: {text}");
     let json = &out.ast_json;
     let root = serde_hint_parse(json);
     assert_eq!(root.kind, "Module");
-    assert!(json.contains("\"span\":[0,33]"), "span on the wire: {json}");
+    assert!(json.contains("\"span\":[0,27]"), "span on the wire: {json}");
     for banned in ["\"text\"", "\"label\"", "\"fields\"", "\"summary\""] {
         assert!(!json.contains(banned), "banned key {banned} on the wire");
     }
