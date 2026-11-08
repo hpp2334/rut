@@ -31,9 +31,16 @@
 //! enclosing arm's end drain catches the runs; the block's own lines
 //! flush the comments the scanner places on the arm's line; the comment
 //! positions were trailing by scan).
+//!
+//! **Spans (v2)**: node spans are EXACT — a node ends at its own last
+//! token (`prev_end`), no next-token tail — so `span.hi` IS the
+//! element's content end (`content_end`). TWO survivors of the v1
+//! overshoot: the when-ARM's span (built from the bare current token
+//! after its comma = the NEXT arm's opener — the arm walk keeps its
+//! `floor` correction) and the BLOCK's (built from the token AFTER the
+//! `}` — `block_end` walks the token stream back onto the `}`).
 
-use rut_ast::ast::*;
-use rut_lexer::span::Span;
+use rut_ast::*;
 use rut_lexer::token::{FloatSuffix, IntSuffix};
 
 use crate::comments::CommentRun;
@@ -263,9 +270,9 @@ pub(super) struct P<'a> {
     /// the NORMALIZED source — comment text slices out of it verbatim
     src: &'a str,
     /// the lexed token stream — spans index the same normalized text;
-    /// the drains' line anchors read the token ends (parser spans
-    /// OVERSHOOT to the next token — the statement-span convention —
-    /// so the element's true content end comes from the tokens)
+    /// `block_end` reads it (block spans are the one v2 overshoot:
+    /// built from the token AFTER the `}`, so the block's true end
+    /// comes from the tokens, not the span)
     toks: &'a [rut_lexer::token::Token],
     line_starts: Vec<u32>,
     runs: Vec<CommentRun>,
@@ -335,14 +342,24 @@ impl<'a> P<'a> {
         }
     }
 
-    /// the element's TRUE content end. The parser's node spans
-    /// OVERSHOOT: span.hi is the NEXT token's hi (the parser absorbs at
-    /// the current token), so the
-    /// last token at-or-before span.hi may be the next element's
-    /// opener. The law: walk back while a token ends EXACTLY at
-    /// span.hi and starts after span.lo — those ride the overshoot;
-    /// the element's own last token ends strictly inside.
+    /// the element's TRUE content end. v2 node spans are EXACT (the
+    /// item-span law: a node ends at its OWN last consumed token —
+    /// `prev_end`, no next-token tail), so `span.hi` IS the content
+    /// end; the v1 token-walk that peeled the overshoot off is gone
+    /// from this lane (it survives, block-only, as [`Self::block_end`]).
     fn content_end(&self, span: Span) -> u32 {
+        span.hi
+    }
+
+    /// a BLOCK's true content end. Block spans are the one v2
+    /// overshoot that survives: `BlockFrame` builds them from
+    /// `p.span().hi` AFTER the `}` is eaten — the NEXT token's hi (the
+    /// zero-width Eof token's at the file end) — so the `}` is the
+    /// token just before span.hi. The walk: skip the one token ending
+    /// EXACTLY at span.hi that starts after span.lo (tokens are
+    /// disjoint — at most one can end at any byte), landing on the
+    /// block's own `}`.
+    fn block_end(&self, span: Span) -> u32 {
         let n = self.toks.partition_point(|t| t.span.hi <= span.hi);
         let mut j = n;
         while j > 0 {
@@ -691,7 +708,7 @@ impl<'a> P<'a> {
 
 impl<'a> P<'a> {
     pub(super) fn print_module(mut self) -> String {
-        let items = self.a.module_items(self.a.root).to_vec();
+        let items: Vec<ItemRef> = self.a.root().items(self.a).to_vec();
         for it in items {
             self.item(it);
         }
@@ -700,64 +717,73 @@ impl<'a> P<'a> {
     }
 
     /// one item: BEGIN drain (+ separator blank rules), the tokens, END
-    fn item(&mut self, h: NodeHandle<AnyItem>) {
-        let span = self.a.span(h.id());
+    fn item(&mut self, it: ItemRef) {
+        let span = it.span(self.a);
         self.begin_el(span, Begin::Stmt);
-        match self.a.item(h).clone() {
-            ItemKind::Module { items } => {
+        match it {
+            ItemRef::Module(h) => {
                 // reachable only via the root — walk it the same way
+                let items: Vec<ItemRef> = h.get(self.a).items.to_vec();
                 for it in items {
                     self.item(it);
                 }
             }
-            ItemKind::ModDecl { vis, name } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::ModDecl(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("mod ");
-                self.text(self.a.name(name));
+                self.text(self.a.name(d.name));
                 self.text(";");
             }
-            ItemKind::ModInline { vis, name, items } => {
+            ItemRef::ModInline(h) => {
+                let d = h.get(self.a);
                 // the declaration file's inline module (wire v12): the
                 // nested declarations print through the item walk
-                if let Some(v) = vis_opt(vis) {
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("mod ");
-                self.text(self.a.name(name));
+                self.text(self.a.name(d.name));
                 self.text(" {");
+                let items: Vec<ItemRef> = d.items.to_vec();
                 for it in items {
                     self.item(it);
                 }
                 self.text("}");
             }
-            ItemKind::Use { path, names } => {
+            ItemRef::Use(h) => {
+                let d = h.get(self.a);
                 // the full path — package, modules, in order — then the
                 // leaf names in braces
                 self.text("use ");
-                for (i, seg) in path.iter().enumerate() {
+                for (i, seg) in d.path.iter().enumerate() {
                     if i > 0 {
                         self.text("::");
                     }
                     self.text(self.a.name(*seg));
                 }
-                if names.is_empty() {
+                if d.names.is_empty() {
                     self.text(";");
                 } else {
                     self.text("::{");
                     self.sp();
-                    let nm: Vec<String> =
-                        names.iter().map(|&n| self.a.name(n).to_string()).collect();
+                    let nm: Vec<String> = d
+                        .names
+                        .iter()
+                        .map(|&n| self.a.name(n).to_string())
+                        .collect();
                     let dummies: Vec<Span> = std::iter::repeat_n(span, nm.len()).collect();
                     self.ident_list(&nm, &dummies, span);
                     self.sp();
                     self.text("};");
                 }
             }
-            ItemKind::Alias(d) => {
+            ItemRef::Alias(h) => {
+                let d = h.get(self.a);
                 if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
@@ -768,36 +794,35 @@ impl<'a> P<'a> {
                 self.ty(d.target);
                 self.text(";");
             }
-            ItemKind::ModuleLet {
-                vis,
-                name,
-                ty,
-                init,
-            } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::ModuleLet(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("let ");
-                self.text(self.a.name(name));
-                if let Some(t) = ty {
+                self.text(self.a.name(d.name));
+                if let Some(t) = d.ty {
                     self.text(": ");
                     self.ty(t);
                 }
-                self.rhs_eq(init);
+                self.rhs_eq(d.init);
                 self.text(";");
             }
-            ItemKind::Enum { vis, name, members } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::Enum(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("enum ");
-                self.text(self.a.name(name));
+                self.text(self.a.name(d.name));
                 self.text(" {");
-                let names: Vec<String> = members
+                let names: Vec<String> = d
+                    .members
                     .iter()
-                    .map(|m| self.a.name(*m).to_string())
+                    .filter_map(|m| m.as_member())
+                    .map(|mh| self.a.name(mh.get(self.a).name).to_string())
                     .collect();
                 if !names.is_empty() {
                     self.sp();
@@ -807,64 +832,49 @@ impl<'a> P<'a> {
                 self.sp();
                 self.text("}");
             }
-            ItemKind::Struct {
-                vis,
-                name,
-                generics,
-                fields,
-                methods,
-            } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::Struct(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("struct ");
-                self.ty_decl(name, &generics, &Vec::new());
-                self.body_of_fields_methods(fields, methods, Some(span));
+                self.ty_decl(d.name, &d.generics, &[]);
+                self.body_of_fields_methods(&d.fields, &d.methods, Some(span));
             }
-            ItemKind::Class {
-                vis,
-                name,
-                generics,
-                requires,
-                newtype,
-                fields,
-                methods,
-            } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::Class(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("class ");
-                self.ty_decl(name, &generics, &requires);
+                self.ty_decl(d.name, &d.generics, &d.requires);
                 // the positional one-field decl prints back in its
                 // spelling — never as the desugared braced body
-                if newtype {
-                    if let Some(f) = fields.first() {
-                        let d = self.a.field_decl(*f);
+                if d.newtype {
+                    if let Some(f) = d.fields.first().and_then(|f| f.as_field()) {
+                        let fd = f.get(self.a);
                         self.text("(");
-                        self.ty(d.ty);
+                        self.ty(fd.ty);
                         self.text(");");
                         return;
                     }
                 }
-                self.body_of_fields_methods(fields, methods, Some(span));
+                self.body_of_fields_methods(&d.fields, &d.methods, Some(span));
             }
-            ItemKind::Interface {
-                vis,
-                name,
-                generics,
-                methods,
-            } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::Interface(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("interface ");
-                self.text(self.a.name(name));
-                if !generics.is_empty() {
+                self.text(self.a.name(d.name));
+                if !d.generics.is_empty() {
                     self.text("<");
-                    let gnames = generics
+                    let gnames = d
+                        .generics
                         .iter()
                         .map(|&g| self.a.name(g).to_string())
                         .collect::<Vec<_>>()
@@ -872,114 +882,95 @@ impl<'a> P<'a> {
                     self.text(&gnames);
                     self.text(">");
                 }
-                self.iface_body(methods, span);
+                self.iface_body(&d.methods, span);
             }
-            ItemKind::Impl {
-                generics,
-                target,
-                methods,
-                ..
-            } => {
+            ItemRef::Impl(h) => {
+                let d = h.get(self.a);
                 self.text("impl");
-                if !generics.is_empty() {
-                    self.gen_only(&generics);
+                if !d.generics.is_empty() {
+                    self.gen_only(&d.generics);
                     self.sp();
                 } else {
                     self.sp();
                 }
-                self.ty(target);
-                self.methods_body(methods, span);
+                self.ty(d.target);
+                self.methods_body(&d.methods, span);
             }
-            ItemKind::Fn(f) => {
-                self.fn_header(&f, true);
+            ItemRef::Fn(h) => {
+                let f = h.get(self.a);
+                self.fn_header(f, true);
                 self.sp();
                 self.block(f.body);
             }
-            ItemKind::SurfaceFn {
-                vis,
-                linkage,
-                is_async,
-                name,
-                generics,
-                params,
-                ret,
-            } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::SurfaceFn(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
-                self.text(linkage_str(linkage));
+                self.text(linkage_str(d.linkage));
                 self.sp();
-                if is_async {
+                if d.is_async {
                     self.text("async ");
                 }
                 self.text("fn ");
-                self.text(self.a.name(name));
-                self.gen_only(&generics);
-                self.params_list(&params, span);
-                if let Some(r) = ret {
+                self.text(self.a.name(d.name));
+                self.gen_only(&d.generics);
+                self.params_list(&d.params, span);
+                if let Some(r) = d.ret {
                     self.text(" -> ");
                     self.ty(r);
                 }
                 self.text(";");
             }
-            ItemKind::SurfaceStruct { vis, name, fields } => {
-                if let Some(v) = vis_opt(vis) {
+            ItemRef::SurfaceStruct(h) => {
+                let d = h.get(self.a);
+                if let Some(v) = vis_opt(d.vis) {
                     self.text(v);
                     self.sp();
                 }
                 self.text("host struct ");
-                self.text(self.a.name(name));
-                self.fields_body(fields, Some(span));
+                self.text(self.a.name(d.name));
+                self.fields_body(&d.fields, Some(span));
             }
-            ItemKind::BuiltinTy {
-                vis: _,
-                ambient,
-                name,
-                generics,
-                members,
-            } => {
+            ItemRef::BuiltinTy(h) => {
+                let d = h.get(self.a);
                 // the type-shaped builtin items carry the strict spelling
                 // they were declared with (`prelude builtin` ambient /
                 // `pub builtin` import-gated)
-                self.text(if ambient {
+                self.text(if d.ambient {
                     "prelude builtin class "
                 } else {
                     "pub builtin class "
                 });
-                self.text(self.a.name(name));
-                self.gen_only(&generics);
-                self.iface_body(members, span);
+                self.text(self.a.name(d.name));
+                self.gen_only(&d.generics);
+                self.iface_body(&d.members, span);
             }
-            ItemKind::BuiltinPrimitive {
-                ambient,
-                name,
-                members,
-            } => {
-                self.text(if ambient {
+            ItemRef::BuiltinPrimitive(h) => {
+                let d = h.get(self.a);
+                self.text(if d.ambient {
                     "prelude builtin primitive "
                 } else {
                     "pub builtin primitive "
                 });
-                self.text(self.a.name(name));
-                self.iface_body(members, span);
+                self.text(self.a.name(d.name));
+                self.iface_body(&d.members, span);
             }
-            ItemKind::BuiltinImpl { vis, prim, methods } => {
-                let _ = vis;
+            ItemRef::BuiltinImpl(h) => {
+                let d = h.get(self.a);
                 self.text("prelude builtin impl ");
-                self.text(self.a.name(prim));
-                self.iface_body(methods, span);
+                self.text(self.a.name(d.prim));
+                self.iface_body(&d.methods, span);
             }
+            // the refusal gate (`is_clean`) means no Error slot can
+            // reach the printer; the arm is the exhaustiveness law
+            ItemRef::Error(_) => {}
         }
         self.end_el(span);
     }
 
-    fn ty_decl(
-        &mut self,
-        name: IdentId,
-        gens: &[IdentId],
-        requires: &[(IdentId, NodeHandle<AnyTy>)],
-    ) {
+    fn ty_decl(&mut self, name: IdentId, gens: &[IdentId], requires: &[(IdentId, TyRef)]) {
         self.text(self.a.name(name));
         if gens.is_empty() {
             return;
@@ -1016,8 +1007,8 @@ impl<'a> P<'a> {
 
     fn body_of_fields_methods(
         &mut self,
-        fields: Vec<NodeHandle<FieldDeclNode>>,
-        methods: Vec<NodeHandle<MethodDeclNode>>,
+        fields: &[FieldRef],
+        methods: &[MethodRef],
         enclosing: Option<Span>,
     ) {
         self.sp();
@@ -1027,10 +1018,10 @@ impl<'a> P<'a> {
         }
         self.level += 1;
         self.nl();
-        for f in &fields {
+        for f in fields {
             self.member_field(*f);
         }
-        for m in &methods {
+        for m in methods {
             self.member_method(*m);
         }
         if let Some(e) = enclosing {
@@ -1041,7 +1032,7 @@ impl<'a> P<'a> {
         self.text("}");
     }
 
-    fn fields_body(&mut self, fields: Vec<NodeHandle<FieldDeclNode>>, enclosing: Option<Span>) {
+    fn fields_body(&mut self, fields: &[FieldRef], enclosing: Option<Span>) {
         self.sp();
         self.text("{");
         if let Some(e) = enclosing {
@@ -1049,7 +1040,7 @@ impl<'a> P<'a> {
         }
         self.level += 1;
         self.nl();
-        for f in &fields {
+        for f in fields {
             self.member_field(*f);
         }
         if let Some(e) = enclosing {
@@ -1060,13 +1051,13 @@ impl<'a> P<'a> {
         self.text("}");
     }
 
-    fn iface_body(&mut self, methods: Vec<NodeHandle<MethodDeclNode>>, enclosing: Span) {
+    fn iface_body(&mut self, methods: &[MethodRef], enclosing: Span) {
         self.sp();
         self.text("{");
         self.passed = self.passed.max(enclosing.lo);
         self.level += 1;
         self.nl();
-        for m in &methods {
+        for m in methods {
             self.member_method(*m);
         }
         self.drain_close(self.content_end(enclosing));
@@ -1075,13 +1066,13 @@ impl<'a> P<'a> {
         self.text("}");
     }
 
-    fn methods_body(&mut self, methods: Vec<NodeHandle<MethodDeclNode>>, enclosing: Span) {
+    fn methods_body(&mut self, methods: &[MethodRef], enclosing: Span) {
         self.sp();
         self.text("{");
         self.passed = self.passed.max(enclosing.lo);
         self.level += 1;
         self.nl();
-        for m in &methods {
+        for m in methods {
             self.member_method(*m);
         }
         self.drain_close(self.content_end(enclosing));
@@ -1090,11 +1081,11 @@ impl<'a> P<'a> {
         self.text("}");
     }
 
-    fn member_field(&mut self, h: NodeHandle<FieldDeclNode>) {
-        let span = self.a.span(h.id());
+    fn member_field(&mut self, m: FieldRef) {
+        let span = m.span(self.a);
         self.begin_el(span, Begin::Stmt);
-        {
-            let d = self.a.field_decl(h).clone();
+        if let FieldRef::Field(h) = m {
+            let d = h.get(self.a);
             if let Some(v) = d.vis.and_then(vis_opt) {
                 self.text(v);
                 self.sp();
@@ -1114,10 +1105,12 @@ impl<'a> P<'a> {
         self.end_el(span);
     }
 
-    fn member_method(&mut self, h: NodeHandle<MethodDeclNode>) {
-        let span = self.a.span(h.id());
+    fn member_method(&mut self, m: MethodRef) {
+        let span = m.span(self.a);
         self.begin_el(span, Begin::Stmt);
-        self.method_decl(h);
+        if let MethodRef::Method(h) = m {
+            self.method_decl(h);
+        }
         self.end_el(span);
     }
 }
@@ -1136,18 +1129,18 @@ fn linkage_str(l: Linkage) -> &'static str {
 impl<'a> P<'a> {
     /// one type, flat (types never wrap — a type spelling is a naming
     /// position, never a value flow)
-    fn ty(&mut self, h: NodeHandle<AnyTy>) {
-        match self.a.ty(h).clone() {
-            TypeKind::TyPath { segs } => {
-                for (i, seg) in segs.iter().enumerate() {
+    fn ty(&mut self, t: TyRef) {
+        match t {
+            TyRef::Path(h) => {
+                let d = h.get(self.a);
+                for (i, seg) in d.segs.iter().enumerate() {
                     if i > 0 {
                         self.text("::");
                     }
                     self.text(self.a.name(seg.name));
                     if !seg.generics.is_empty() {
                         self.text("<");
-                        let gs: Vec<NodeHandle<AnyTy>> = seg.generics.clone();
-                        for (j, g) in gs.iter().enumerate() {
+                        for (j, g) in seg.generics.iter().enumerate() {
                             if j > 0 {
                                 self.text(", ");
                             }
@@ -1157,33 +1150,33 @@ impl<'a> P<'a> {
                     }
                 }
             }
-            TypeKind::TyFn { params, ret } => {
+            TyRef::Fn(h) => {
+                let d = h.get(self.a);
                 self.text("fn(");
-                let ps: Vec<NodeHandle<AnyTy>> = params.clone();
-                for (i, p) in ps.iter().enumerate() {
+                for (i, p) in d.params.iter().enumerate() {
                     if i > 0 {
                         self.text(", ");
                     }
                     self.ty(*p);
                 }
                 self.text(") -> ");
-                self.ty(ret);
+                self.ty(d.ret);
             }
-            TypeKind::TyOpt { inner } => {
+            TyRef::Opt(h) => {
                 self.text("?");
-                self.ty(inner);
+                self.ty(h.get(self.a).inner);
             }
-            TypeKind::TyArray { elem } => {
+            TyRef::Array(h) => {
                 self.text("[");
-                self.ty(elem);
+                self.ty(h.get(self.a).elem);
                 self.text("]");
             }
-            TypeKind::TyTuple { elems } => {
+            TyRef::Tuple(h) => {
+                let d = h.get(self.a);
                 // >= 2 always — the one-element form is a grouping and
                 // never becomes a TyTuple node (the parser unfolds it)
                 self.text("(");
-                let es: Vec<NodeHandle<AnyTy>> = elems.clone();
-                for (i, e) in es.iter().enumerate() {
+                for (i, e) in d.elems.iter().enumerate() {
                     if i > 0 {
                         self.text(", ");
                     }
@@ -1191,31 +1184,34 @@ impl<'a> P<'a> {
                 }
                 self.text(")");
             }
-            TypeKind::TyConst(e) => {
-                self.expr(e);
+            TyRef::Const(h) => {
+                self.expr(h.get(self.a).expr);
             }
-            TypeKind::TyUnion { elems } => {
-                let es: Vec<NodeHandle<AnyTy>> = elems.clone();
-                for (i, e) in es.iter().enumerate() {
+            TyRef::Union(h) => {
+                let d = h.get(self.a);
+                for (i, e) in d.elems.iter().enumerate() {
                     if i > 0 {
                         self.text(" | ");
                     }
                     self.ty(*e);
                 }
             }
+            TyRef::Error(_) => {}
         }
     }
 
     /// one parameter: `mut self` / `self` / `mut x: T` / `x: T` / `x`
-    fn param(&mut self, h: NodeHandle<AnyParam>) {
-        match self.a.param(h).clone() {
-            MemberKind::SelfParam(d) => {
+    fn param(&mut self, pr: ParamRef) {
+        match pr {
+            ParamRef::SelfParam(h) => {
+                let d = h.get(self.a);
                 if d.is_mut {
                     self.text("mut ");
                 }
                 self.text("self");
             }
-            MemberKind::Param(d) => {
+            ParamRef::Param(h) => {
+                let d = h.get(self.a);
                 if d.is_mut {
                     self.text("mut ");
                 }
@@ -1225,23 +1221,23 @@ impl<'a> P<'a> {
                     self.ty(t);
                 }
             }
-            MemberKind::FieldDecl(_) | MemberKind::MethodDecl(_) => {}
+            ParamRef::Error(_) => {}
         }
     }
 
-    fn params_list(&mut self, params: &[NodeHandle<AnyParam>], _enclosing: Span) {
+    fn params_list(&mut self, params: &[ParamRef], _enclosing: Span) {
         self.text("(");
         if params.is_empty() {
             self.text(")");
             return;
         }
-        let spans: Vec<Span> = params.iter().map(|&p| self.a.span(p.id())).collect();
+        let spans: Vec<Span> = params.iter().map(|&p| p.span(self.a)).collect();
         self.break_list(params, &spans, true, |p, it| p.param(*it));
         self.text(")");
     }
 
     /// the generic list with per-name bounds: `<K requires H, V>`
-    fn gen_bounds(&mut self, gens: &[IdentId], bounds: &[(IdentId, NodeHandle<AnyTy>)]) {
+    fn gen_bounds(&mut self, gens: &[IdentId], bounds: &[(IdentId, TyRef)]) {
         if gens.is_empty() {
             return;
         }
@@ -1261,7 +1257,7 @@ impl<'a> P<'a> {
         self.text(">");
     }
 
-    fn fn_header(&mut self, f: &FnData, with_vis: bool) {
+    fn fn_header(&mut self, f: &FnNode, with_vis: bool) {
         if with_vis {
             if let Some(v) = vis_opt(f.vis) {
                 self.text(v);
@@ -1278,9 +1274,8 @@ impl<'a> P<'a> {
         self.text(self.a.name(f.name));
         self.gen_bounds(&f.generics, &f.bounds);
         self.text("(");
-        let spans: Vec<Span> = f.params.iter().map(|&p| self.a.span(p.id())).collect();
-        let ps: Vec<NodeHandle<AnyParam>> = f.params.clone();
-        self.break_list(&ps, &spans, true, |p, it| p.param(*it));
+        let spans: Vec<Span> = f.params.iter().map(|&p| p.span(self.a)).collect();
+        self.break_list(&f.params, &spans, true, |p, it| p.param(*it));
         self.text(")");
         if let Some(r) = f.ret {
             self.text(" -> ");
@@ -1288,8 +1283,8 @@ impl<'a> P<'a> {
         }
     }
 
-    fn method_decl(&mut self, h: NodeHandle<MethodDeclNode>) {
-        let d = self.a.method_decl(h).clone();
+    fn method_decl(&mut self, h: Handle<MethodDeclNode>) {
+        let d = h.get(self.a);
         // the bracket marker comes FIRST (marker-before-visibility)
         if let Some(mk) = d.marker {
             self.text("[");
@@ -1308,9 +1303,8 @@ impl<'a> P<'a> {
         self.text(self.a.name(d.name));
         self.gen_bounds(&d.generics, &d.bounds);
         self.text("(");
-        let spans: Vec<Span> = d.params.iter().map(|&p| self.a.span(p.id())).collect();
-        let ps: Vec<NodeHandle<AnyParam>> = d.params.clone();
-        self.break_list(&ps, &spans, true, |p, it| p.param(*it));
+        let spans: Vec<Span> = d.params.iter().map(|&p| p.span(self.a)).collect();
+        self.break_list(&d.params, &spans, true, |p, it| p.param(*it));
         self.text(")");
         if let Some(r) = d.ret {
             self.text(" -> ");
@@ -1328,7 +1322,7 @@ impl<'a> P<'a> {
     }
 
     /// a bare rhs (return's) — the two-mode law without the `=`
-    fn rhs_value(&mut self, value: NodeHandle<AnyExpr>) {
+    fn rhs_value(&mut self, value: ExprRef) {
         let m = self.stamp();
         self.in_flat += 1;
         self.sp();
@@ -1345,7 +1339,7 @@ impl<'a> P<'a> {
     /// `= <expr>` with the two-mode law: flat try (inner breaks
     /// suppressed), rollback to `=` then the value on a continuation
     /// line whose break points are armed
-    fn rhs_eq(&mut self, value: NodeHandle<AnyExpr>) {
+    fn rhs_eq(&mut self, value: ExprRef) {
         let m = self.stamp();
         self.in_flat += 1;
         self.sp();
@@ -1403,140 +1397,123 @@ impl<'a> P<'a> {
     /// In inline-flat contexts (arm/lambda bodies) the drains and the
     /// end hooks are suppressed — the enclosing arm/lambda's own end
     /// drain owns the comment queue there.
-    fn stmt(&mut self, h: NodeHandle<AnyStmt>) {
-        let span = self.a.span(h.id());
+    fn stmt(&mut self, s: StmtRef) {
+        let span = s.span(self.a);
         if self.in_flat > 0 {
-            self.stmt_tokens(h);
+            self.stmt_tokens(s);
             return;
         }
         self.begin_el(span, Begin::Stmt);
-        self.stmt_tokens(h);
+        self.stmt_tokens(s);
         self.end_el(span);
     }
 
-    fn stmt_tokens(&mut self, h: NodeHandle<AnyStmt>) {
-        match self.a.stmt(h).clone() {
-            StmtKind::LetStmt {
-                is_mut,
-                name,
-                destructure,
-                ty,
-                init,
-            } => {
+    fn stmt_tokens(&mut self, s: StmtRef) {
+        match s {
+            StmtRef::Let(h) => {
+                let d = h.get(self.a);
                 self.text("let");
-                if is_mut {
+                if d.is_mut {
                     self.sp();
                     self.text("mut");
                 }
-                match destructure {
+                match &d.destructure {
                     Some(names) => {
                         self.sp();
                         self.text("(");
-                        let ns: Vec<String> =
-                            names.iter().map(|&n| self.a.name(n).to_string()).collect();
-                        for (i, n) in ns.iter().enumerate() {
+                        for (i, n) in names.iter().enumerate() {
                             if i > 0 {
                                 self.text(", ");
                             }
-                            self.text(n);
+                            self.text(self.a.name(*n));
                         }
                         self.text(")");
                     }
                     None => {
                         self.sp();
-                        self.text(self.a.name(name));
+                        self.text(self.a.name(d.name));
                     }
                 }
-                if let Some(t) = ty {
+                if let Some(t) = d.ty {
                     self.text(": ");
                     self.ty(t);
                 }
-                self.rhs_eq(init);
+                self.rhs_eq(d.init);
                 self.text(";");
             }
-            StmtKind::If { cond, then, els } => {
-                self.if_stmt(cond, then, els);
+            StmtRef::If(h) => {
+                let d = h.get(self.a);
+                self.if_stmt(d.cond, d.then, d.els);
             }
-            StmtKind::While { cond, body } => {
+            StmtRef::While(h) => {
+                let d = h.get(self.a);
                 self.text("while (");
-                self.expr(cond);
+                self.expr(d.cond);
                 self.text(")");
                 self.sp();
-                self.block(body);
+                self.block(d.body);
             }
-            StmtKind::ForOf {
-                var,
-                is_mut,
-                iter,
-                body,
-            } => {
+            StmtRef::ForOf(h) => {
+                let d = h.get(self.a);
                 self.text("for (let ");
-                if is_mut {
+                if d.is_mut {
                     self.text("mut ");
                 }
-                self.text(self.a.name(var));
+                self.text(self.a.name(d.var));
                 self.text(" of ");
-                self.expr(iter);
+                self.expr(d.iter);
                 self.text(")");
                 self.sp();
-                self.block(body);
+                self.block(d.body);
             }
-            StmtKind::ForC {
-                var,
-                is_mut,
-                init,
-                cond,
-                update,
-                body,
-            } => {
+            StmtRef::ForC(h) => {
+                let d = h.get(self.a);
                 self.text("for (let ");
-                if is_mut {
+                if d.is_mut {
                     self.text("mut ");
                 }
-                self.text(self.a.name(var));
+                self.text(self.a.name(d.var));
                 self.text(" = ");
-                self.expr(init);
+                self.expr(d.init);
                 self.text("; ");
-                self.expr(cond);
+                self.expr(d.cond);
                 self.text("; ");
-                self.expr(update);
+                self.expr(d.update);
                 self.text(")");
                 self.sp();
-                self.block(body);
+                self.block(d.body);
             }
-            StmtKind::Return { value } => {
+            StmtRef::Return(h) => {
+                let d = h.get(self.a);
                 self.text("return");
-                if let Some(v) = value {
+                if let Some(v) = d.value {
                     self.rhs_value(v);
                 }
                 self.text(";");
             }
-            StmtKind::Break => {
+            StmtRef::Break(_) => {
                 self.text("break;");
             }
-            StmtKind::Continue => {
+            StmtRef::Continue(_) => {
                 self.text("continue;");
             }
-            StmtKind::WhenStmt { scrut, arms } => {
+            StmtRef::When(h) => {
+                let d = h.get(self.a);
                 self.text("when (");
-                self.expr(scrut);
+                self.expr(d.scrut);
                 self.text(")");
                 self.sp();
-                self.arms(&arms, self.a.span(h.id()));
+                self.arms(&d.arms, d.span);
             }
-            StmtKind::ExprStmt(e) => {
-                self.expr(e);
+            StmtRef::Expr(e) => {
+                self.expr_tokens(e);
                 self.text(";");
             }
+            StmtRef::Error(_) => {}
         }
     }
 
-    fn if_stmt(
-        &mut self,
-        cond: NodeHandle<AnyExpr>,
-        then: NodeHandle<BlockNode>,
-        els: Option<ElseBranch>,
-    ) {
+    fn if_stmt(&mut self, cond: ExprRef, then: Handle<BlockNode>, els: Option<ElseBranch>) {
         self.text("if (");
         self.expr(cond);
         self.text(")");
@@ -1547,14 +1524,8 @@ impl<'a> P<'a> {
             self.text("else ");
             match e {
                 ElseBranch::If(h2) => {
-                    if let StmtKind::If {
-                        cond: c2,
-                        then: t2,
-                        els: e2,
-                    } = self.a.stmt(h2.into()).clone()
-                    {
-                        self.if_stmt(c2, t2, e2);
-                    }
+                    let d = h2.get(self.a);
+                    self.if_stmt(d.cond, d.then, d.els);
                 }
                 ElseBranch::Block(b) => {
                     self.block(b);
@@ -1567,9 +1538,10 @@ impl<'a> P<'a> {
     /// drains ride the per-statement begin/end hooks (the tail gets the
     /// same element hooks, minus the `;`); the close drains the runs
     /// pending between the last element and the bracket.
-    fn block(&mut self, h: NodeHandle<BlockNode>) {
-        let stmts = self.a.block(h).to_vec();
-        let tail = self.a.block_tail(h);
+    fn block(&mut self, h: Handle<BlockNode>) {
+        let b = h.get(self.a);
+        let stmts: Vec<StmtRef> = b.stmts.to_vec();
+        let tail = b.tail;
         if self.in_flat > 0 {
             // the inline-flat shape (arm/lambda bodies inside flat contexts)
             self.text("{");
@@ -1585,7 +1557,7 @@ impl<'a> P<'a> {
             return;
         }
         self.text("{");
-        self.passed = self.passed.max(self.a.span(h.id()).lo);
+        self.passed = self.passed.max(h.span(self.a).lo);
         self.level += 1;
         self.nl();
         for s in &stmts {
@@ -1594,12 +1566,12 @@ impl<'a> P<'a> {
         if let Some(t) = tail {
             // the block's value: printed like a statement (the comment
             // drains ride it) but without the `;`
-            let span = self.a.span(t.id());
+            let span = t.span(self.a);
             self.begin_el(span, Begin::Stmt);
             self.expr_tokens(t);
             self.end_el(span);
         }
-        self.drain_close(self.content_end(self.a.span(h.id())));
+        self.drain_close(self.block_end(h.span(self.a)));
         self.level -= 1;
         self.nl();
         self.text("}");
@@ -1608,7 +1580,7 @@ impl<'a> P<'a> {
     /// the arm list — ALWAYS one per line (the shape): pattern
     /// alternatives, `->`, the body (flat attempt with rollback to a
     /// broken block), trailing comma, then the line's own comments.
-    fn arms(&mut self, arms: &[NodeHandle<AnyArm>], node: Span) {
+    fn arms(&mut self, arms: &[Handle<WhenArmNode>], node: Span) {
         self.text("{");
         self.level += 1;
         self.nl();
@@ -1618,22 +1590,19 @@ impl<'a> P<'a> {
         // arm's real first token
         let mut floor = self.passed;
         for a in arms {
-            let span = self.a.span(a.id());
+            let span = a.span(self.a);
             self.begin_el(Span::new(floor, floor), Begin::Stmt);
-            match self.a.arm(*a).clone() {
-                ArmKind::WhenArm { pats, body } => {
-                    for (i, p) in pats.iter().enumerate() {
-                        if i > 0 {
-                            self.text(", ");
-                        }
-                        self.pat(*p);
-                    }
-                    self.sp();
-                    self.text("->");
-                    self.sp();
-                    self.arm_body(body, span);
+            let arm = a.get(self.a);
+            for (i, p) in arm.pats.iter().enumerate() {
+                if i > 0 {
+                    self.text(", ");
                 }
+                self.pat(*p);
             }
+            self.sp();
+            self.text("->");
+            self.sp();
+            self.arm_body(arm.body);
             self.text(",");
             // the drain anchors on the cursor — the body's expr() just
             // boosted `passed` to the body's last token
@@ -1651,13 +1620,14 @@ impl<'a> P<'a> {
     /// short-arm shape) and falls back to the multiline block; anything
     /// else prints as an expression. A tail rides the flat attempt (no
     /// `;`) — a block-holding tail forces the broken shape.
-    fn arm_body(&mut self, body: NodeHandle<AnyExpr>, _arm_span: Span) {
-        let Some(b) = self.a.narrow_block(body) else {
+    fn arm_body(&mut self, body: ExprRef) {
+        let ExprRef::Block(b) = body else {
             self.expr(body);
             return;
         };
-        let stmts = self.a.block(b).to_vec();
-        let tail = self.a.block_tail(b);
+        let blk = b.get(self.a);
+        let stmts: Vec<StmtRef> = blk.stmts.to_vec();
+        let tail = blk.tail;
         let flat_ok = self.flat_safe(&stmts) && tail.is_none_or(|t| self.expr_flat(t));
         if flat_ok {
             let m = self.stamp();
@@ -1674,51 +1644,52 @@ impl<'a> P<'a> {
             self.text(" }");
             self.in_flat -= 1;
             if !self.over_on_flat(m) {
-                self.passed = self.passed.max(self.content_end(self.a.span(b.id())));
+                self.passed = self.passed.max(self.block_end(b.span(self.a)));
                 return;
             }
             self.rollback(m);
         }
         self.block(b);
-        self.passed = self.passed.max(self.content_end(self.a.span(b.id())));
+        self.passed = self.passed.max(self.block_end(b.span(self.a)));
     }
 
     /// inline-flat eligibility: only terminal statements whose
     /// expressions contain no block-holding constructs (when
     /// trees, nested blocks, block-bodied lambdas)
-    fn flat_safe(&self, stmts: &[NodeHandle<AnyStmt>]) -> bool {
-        stmts.iter().all(|s| match self.a.stmt(*s).clone() {
-            StmtKind::Return { value } => value.is_none_or(|v| self.expr_flat(v)),
-            StmtKind::ExprStmt(e) => self.expr_flat(e),
-            StmtKind::Break | StmtKind::Continue => true,
-            StmtKind::LetStmt { init, .. } => self.expr_flat(init),
+    fn flat_safe(&self, stmts: &[StmtRef]) -> bool {
+        stmts.iter().all(|s| match *s {
+            StmtRef::Return(h) => h.get(self.a).value.is_none_or(|v| self.expr_flat(v)),
+            StmtRef::Expr(e) => self.expr_flat(e),
+            StmtRef::Break(_) | StmtRef::Continue(_) => true,
+            StmtRef::Let(h) => self.expr_flat(h.get(self.a).init),
             _ => false,
         })
     }
 
-    fn expr_flat(&self, h: NodeHandle<AnyExpr>) -> bool {
-        match self.a.expr(h) {
-            ExprKind::Block { .. } | ExprKind::WhenExpr { .. } | ExprKind::If { .. } => false,
-            ExprKind::Lambda { body, .. } => self.a.narrow_block(*body).is_none(),
+    fn expr_flat(&self, h: ExprRef) -> bool {
+        match h {
+            ExprRef::Block(_) | ExprRef::WhenExpr(_) | ExprRef::If(_) => false,
+            ExprRef::Lambda(lh) => !matches!(lh.get(self.a).body, ExprRef::Block(_)),
             _ => true,
         }
     }
 
     // ---- patterns ----
 
-    fn pat(&mut self, h: NodeHandle<AnyPat>) {
-        match self.a.pat(h).clone() {
-            PatKind::PatLit(e) => {
-                self.expr(e);
+    fn pat(&mut self, p: PatRef) {
+        match p {
+            PatRef::Lit(h) => {
+                self.expr(h.get(self.a).expr);
             }
-            PatKind::PatPath { segs } => {
-                self.path(&segs);
+            PatRef::Path(h) => {
+                self.path(&h.get(self.a).segs);
             }
-            PatKind::PatCtor { segs, args } => {
-                self.path(&segs);
-                if !args.is_empty() {
+            PatRef::Ctor(h) => {
+                let d = h.get(self.a);
+                self.path(&d.segs);
+                if !d.args.is_empty() {
                     self.text("(");
-                    for (i, arg) in args.iter().enumerate() {
+                    for (i, arg) in d.args.iter().enumerate() {
                         if i > 0 {
                             self.text(", ");
                         }
@@ -1730,12 +1701,13 @@ impl<'a> P<'a> {
                     self.text(")");
                 }
             }
-            PatKind::PatWild => {
+            PatRef::Wild(_) => {
                 self.text("_");
             }
-            PatKind::PatElse => {
+            PatRef::Else(_) => {
                 self.text("else");
             }
+            PatRef::Error(_) => {}
         }
     }
 
@@ -1747,8 +1719,7 @@ impl<'a> P<'a> {
             self.text(self.a.name(seg.name));
             if !seg.generics.is_empty() {
                 self.text("<");
-                let gs: Vec<NodeHandle<AnyTy>> = seg.generics.clone();
-                for (j, g) in gs.iter().enumerate() {
+                for (j, g) in seg.generics.iter().enumerate() {
                     if j > 0 {
                         self.text(", ");
                     }
@@ -1763,35 +1734,36 @@ impl<'a> P<'a> {
 // ---- expressions ----
 
 impl<'a> P<'a> {
-    fn expr(&mut self, h: NodeHandle<AnyExpr>) {
-        self.begin_el(self.a.span(h.id()), Begin::Expr);
+    fn expr(&mut self, h: ExprRef) {
+        self.begin_el(h.span(self.a), Begin::Expr);
         self.expr_tokens(h);
-        self.passed = self.passed.max(self.content_end(self.a.span(h.id())));
+        self.passed = self.passed.max(self.content_end(h.span(self.a)));
     }
 
     /// the child-paren law: a child parenthesizes only where flat
     /// precedence would invert the parse's grouping (the fmt survey
     /// §2's table; the VM pins referee)
-    fn needs_parens(&self, h: NodeHandle<AnyExpr>, parent: u8, rhs: bool) -> bool {
-        match self.a.expr(h) {
-            ExprKind::Binary { op, .. } => {
-                let l = binop_level(*op);
+    fn needs_parens(&self, h: ExprRef, parent: u8, rhs: bool) -> bool {
+        match h {
+            ExprRef::Binary(bh) => {
+                let d = bh.get(self.a);
+                let l = binop_level(d.op);
                 l < parent || (l == parent && rhs)
             }
-            ExprKind::Is { .. } => L_CMP < parent || (L_CMP == parent && rhs),
-            ExprKind::Cast { .. } => L_CAST < parent || (L_CAST == parent && rhs),
-            ExprKind::Assign { .. } => true,
+            ExprRef::Is(_) => L_CMP < parent || (L_CMP == parent && rhs),
+            ExprRef::Cast(_) => L_CAST < parent || (L_CAST == parent && rhs),
+            ExprRef::Assign(_) => true,
             // a FIELD/INDEX chain as a CALLEE names the value through the
             // chain — the call grammar takes an operand, so the chain
             // needs its parens back (`(self.drive)(emit)`, `(xs[i])(a)`)
-            ExprKind::Field { .. } | ExprKind::Index { .. } if parent == L_POSTFIX => true,
+            ExprRef::Field(_) | ExprRef::Index(_) if parent == L_POSTFIX => true,
             _ => false,
         }
     }
 
     /// a child in a constrained position (operand, callee, receiver,
     /// index): parens where the law asks
-    fn operand(&mut self, h: NodeHandle<AnyExpr>, parent: u8, rhs: bool) {
+    fn operand(&mut self, h: ExprRef, parent: u8, rhs: bool) {
         let needs = self.needs_parens(h, parent, rhs);
         if needs {
             self.text("(");
@@ -1802,15 +1774,15 @@ impl<'a> P<'a> {
         }
     }
 
-    fn expr_tokens(&mut self, h: NodeHandle<AnyExpr>) {
-        match self.a.expr(h).clone() {
-            ExprKind::Block { .. } => {
+    fn expr_tokens(&mut self, h: ExprRef) {
+        match h {
+            ExprRef::Block(b) => {
                 // expression-position block — a lambda/anon body or a
                 // grouped block; multiline always at statement level.
                 // The tail prints without the `;` (the block's value).
-                let b = NodeHandle::<BlockNode>::new(h.id());
-                let stmts = self.a.block(b).to_vec();
-                let tail = self.a.block_tail(b);
+                let blk = b.get(self.a);
+                let stmts: Vec<StmtRef> = blk.stmts.to_vec();
+                let tail = blk.tail;
                 if self.in_flat > 0 {
                     self.text("{");
                     for s in &stmts {
@@ -1832,23 +1804,25 @@ impl<'a> P<'a> {
                     self.stmt(*s);
                 }
                 if let Some(t) = tail {
-                    let span = self.a.span(t.id());
+                    let span = t.span(self.a);
                     self.begin_el(span, Begin::Stmt);
                     self.expr_tokens(t);
                     self.end_el(span);
                 }
-                self.drain_close(self.content_end(self.a.span(h.id())));
+                self.drain_close(self.block_end(b.span(self.a)));
                 self.level -= 1;
                 self.nl();
                 self.text("}");
             }
-            ExprKind::Lit(l) => {
-                self.lit(&l);
+            ExprRef::Lit(h) => {
+                self.lit(&h.get(self.a).lit);
             }
-            ExprKind::AsyncBlock { body } => {
+            ExprRef::AsyncBlock(h) => {
+                let d = h.get(self.a);
                 // `async { .. }` — the async primitive; the block always
                 // breaks (a mint is a statement-sized thing)
-                let stmts: Vec<_> = self.a.block(body).to_vec();
+                let blk = d.body.get(self.a);
+                let stmts: Vec<StmtRef> = blk.stmts.to_vec();
                 self.text("async ");
                 self.text("{");
                 self.level += 1;
@@ -1856,34 +1830,31 @@ impl<'a> P<'a> {
                 for s in stmts {
                     self.stmt(s);
                 }
-                self.drain_close(self.a.span(body.id()).hi);
+                self.drain_close(d.body.span(self.a).hi);
                 self.level -= 1;
                 self.nl();
                 self.text("}");
             }
-            ExprKind::Path { segs } => {
-                self.path(&segs);
+            ExprRef::Path(h) => {
+                self.path(&h.get(self.a).segs);
             }
-            ExprKind::Call { callee, args } => {
-                self.operand(callee, L_POSTFIX, false);
+            ExprRef::Call(h) => {
+                let d = h.get(self.a);
+                self.operand(d.callee, L_POSTFIX, false);
                 self.text("(");
-                let spans: Vec<Span> = args.iter().map(|&e| self.a.span(e.id())).collect();
-                self.break_list(&args, &spans, true, |p, e| p.expr(*e));
-                self.drain_close(self.a.span(h.id()).hi);
+                let spans: Vec<Span> = d.args.iter().map(|&e| e.span(self.a)).collect();
+                self.break_list(&d.args, &spans, true, |p, e| p.expr(*e));
+                self.drain_close(h.span(self.a).hi);
                 self.text(")");
             }
-            ExprKind::Method {
-                recv,
-                name,
-                generics,
-                args,
-            } => {
-                self.operand(recv, L_POSTFIX, false);
+            ExprRef::Method(h) => {
+                let d = h.get(self.a);
+                self.operand(d.recv, L_POSTFIX, false);
                 self.text(".");
-                self.text(self.a.name(name));
-                if !generics.is_empty() {
+                self.text(self.a.name(d.name));
+                if !d.generics.is_empty() {
                     self.text("<");
-                    for (i, g) in generics.iter().enumerate() {
+                    for (i, g) in d.generics.iter().enumerate() {
                         if i > 0 {
                             self.text(", ");
                         }
@@ -1892,78 +1863,88 @@ impl<'a> P<'a> {
                     self.text(">");
                 }
                 self.text("(");
-                let spans: Vec<Span> = args.iter().map(|&e| self.a.span(e.id())).collect();
-                self.break_list(&args, &spans, true, |p, e| p.expr(*e));
-                self.drain_close(self.a.span(h.id()).hi);
+                let spans: Vec<Span> = d.args.iter().map(|&e| e.span(self.a)).collect();
+                self.break_list(&d.args, &spans, true, |p, e| p.expr(*e));
+                self.drain_close(h.span(self.a).hi);
                 self.text(")");
             }
-            ExprKind::Field { recv, name } => {
-                self.operand(recv, L_POSTFIX, false);
+            ExprRef::Field(h) => {
+                let d = h.get(self.a);
+                self.operand(d.recv, L_POSTFIX, false);
                 self.text(".");
-                self.text(self.a.name(name));
+                self.text(self.a.name(d.name));
             }
-            ExprKind::Index { recv, idx } => {
-                self.operand(recv, L_POSTFIX, false);
+            ExprRef::Index(h) => {
+                let d = h.get(self.a);
+                self.operand(d.recv, L_POSTFIX, false);
                 self.text("[");
-                self.expr(idx);
-                self.drain_close(self.a.span(h.id()).hi);
+                self.expr(d.idx);
+                self.drain_close(h.span(self.a).hi);
                 self.text("]");
             }
-            ExprKind::Unary { op, expr } => {
-                self.text(unop_str(op));
-                self.operand(expr, L_UNARY, false);
+            ExprRef::Unary(h) => {
+                let d = h.get(self.a);
+                self.text(unop_str(d.op));
+                self.operand(d.expr, L_UNARY, false);
             }
-            ExprKind::Binary { op, lhs, rhs } => {
+            ExprRef::Binary(h) => {
+                let d = h.get(self.a);
+                let op = d.op;
                 let lvl = binop_level(op);
                 // flat try with the children's own breaks suppressed
                 let m = self.stamp();
                 self.in_flat += 1;
-                self.operand(lhs, lvl, false);
+                self.operand(d.lhs, lvl, false);
                 self.sp();
                 self.text(binop_str(op));
                 self.sp();
-                self.operand(rhs, lvl, true);
+                self.operand(d.rhs, lvl, true);
                 self.in_flat -= 1;
                 if self.over_on_flat(m) {
                     self.rollback(m);
-                    self.operand(lhs, lvl, false);
+                    self.operand(d.lhs, lvl, false);
                     self.sp();
                     self.text(binop_str(op));
                     self.nl_band();
-                    self.operand(rhs, lvl, true);
+                    self.operand(d.rhs, lvl, true);
                     self.level -= 1;
                 }
             }
-            ExprKind::Assign { op, target, value } => {
-                self.operand(target, L_POSTFIX, false);
+            ExprRef::Assign(h) => {
+                let d = h.get(self.a);
+                self.operand(d.target, L_POSTFIX, false);
                 let m = self.stamp();
                 self.in_flat += 1;
                 self.sp();
-                self.text(assign_str(op));
+                self.text(assign_str(d.op));
                 self.sp();
-                self.operand(value, 0, false);
+                self.operand(d.value, 0, false);
                 self.in_flat -= 1;
                 if self.over_on_flat(m) {
                     self.rollback(m);
                     self.sp();
-                    self.text(assign_str(op));
+                    self.text(assign_str(d.op));
                     self.nl_band();
-                    self.operand(value, 0, false);
+                    self.operand(d.value, 0, false);
                     self.level -= 1;
                 }
             }
-            ExprKind::Lambda { params, ret, body } => {
-                self.lambda(params, ret, body);
+            ExprRef::Lambda(h) => {
+                let d = h.get(self.a);
+                self.lambda(&d.params, d.ret, d.body);
             }
-            ExprKind::Try { expr } => {
-                self.operand(expr, L_POSTFIX, false);
+            ExprRef::Try(h) => {
+                let d = h.get(self.a);
+                self.operand(d.expr, L_POSTFIX, false);
                 self.text("?");
             }
-            ExprKind::FStr { parts } => {
+            ExprRef::FStr(h) => {
+                let d = h.get(self.a);
                 // a newline in any chunk promotes the literal to the
                 // hash-leveled multi-line form — the template's line
                 // structure survives formatting
-                let multiline = parts
+                let multiline = d
+                    .parts
                     .iter()
                     .any(|p| matches!(p, FPartAst::Lit(s) if s.contains('\n')));
                 let (open, close) = if multiline {
@@ -1972,29 +1953,30 @@ impl<'a> P<'a> {
                     ("f\"", "\"")
                 };
                 self.text_lit(open);
-                for p in parts {
+                for p in &d.parts {
                     match p {
                         FPartAst::Lit(s) => {
-                            let esc = escape_str(&s, true, multiline);
+                            let esc = escape_str(s, true, multiline);
                             self.text_lit(&esc);
                         }
                         FPartAst::Hole(e) => {
                             self.text("{");
-                            self.expr(e);
+                            self.expr(*e);
                             self.text("}");
                         }
                     }
                 }
                 self.text_lit(close);
             }
-            ExprKind::Struct { ty, fields } => {
-                self.ty(ty);
+            ExprRef::Struct(h) => {
+                let d = h.get(self.a);
+                self.ty(d.ty);
                 self.sp();
                 self.text("{");
                 let m = self.stamp();
                 self.in_flat += 1;
                 self.sp();
-                for (i, (name, v)) in fields.iter().enumerate() {
+                for (i, (name, v)) in d.fields.iter().enumerate() {
                     if i > 0 {
                         self.text(", ");
                     }
@@ -2006,7 +1988,7 @@ impl<'a> P<'a> {
                 if self.over_on_flat(m) {
                     self.rollback(m);
                     self.nl_band();
-                    for (name, v) in fields.iter() {
+                    for (name, v) in d.fields.iter() {
                         self.text(self.a.name(*name));
                         self.text(": ");
                         self.expr(*v);
@@ -2019,58 +2001,67 @@ impl<'a> P<'a> {
                 self.sp();
                 self.text("}");
             }
-            ExprKind::Tuple { elems } => {
+            ExprRef::Tuple(h) => {
+                let d = h.get(self.a);
                 self.text("(");
-                let spans: Vec<Span> = elems.iter().map(|&e| self.a.span(e.id())).collect();
-                self.break_list(&elems, &spans, false, |p, e| p.expr(*e));
-                self.drain_close(self.a.span(h.id()).hi);
+                let spans: Vec<Span> = d.elems.iter().map(|&e| e.span(self.a)).collect();
+                self.break_list(&d.elems, &spans, false, |p, e| p.expr(*e));
+                self.drain_close(h.span(self.a).hi);
                 self.text(")");
             }
-            ExprKind::ArrayLit { elems } => {
+            ExprRef::ArrayLit(h) => {
+                let d = h.get(self.a);
                 self.text("[");
-                let spans: Vec<Span> = elems.iter().map(|&e| self.a.span(e.id())).collect();
-                self.break_list(&elems, &spans, true, |p, e| p.expr(*e));
-                self.drain_close(self.a.span(h.id()).hi);
+                let spans: Vec<Span> = d.elems.iter().map(|&e| e.span(self.a)).collect();
+                self.break_list(&d.elems, &spans, true, |p, e| p.expr(*e));
+                self.drain_close(h.span(self.a).hi);
                 self.text("]");
             }
-            ExprKind::ArrayRepeat { value, count } => {
+            ExprRef::ArrayRepeat(h) => {
+                let d = h.get(self.a);
                 self.text("[");
-                self.expr(value);
+                self.expr(d.value);
                 self.text("; ");
-                self.expr(count);
+                self.expr(d.count);
                 self.text("]");
             }
-            ExprKind::WhenExpr { scrut, arms } => {
+            ExprRef::WhenExpr(h) => {
+                let d = h.get(self.a);
                 self.text("when (");
-                self.expr(scrut);
+                self.expr(d.scrut);
                 self.text(")");
                 self.sp();
-                self.arms(&arms, self.a.span(h.id()));
+                self.arms(&d.arms, d.span);
             }
-            ExprKind::If { cond, then, els } => {
+            ExprRef::If(h) => {
+                let d = h.get(self.a);
                 // the expression form prints like the statement form (one
                 // spelling); `else if` links hold if STATEMENTS — the
                 // same recursion if_stmt already speaks
-                self.if_stmt(cond, then, els);
+                self.if_stmt(d.cond, d.then, d.els);
             }
-            ExprKind::Await { expr } => {
+            ExprRef::Await(h) => {
+                let d = h.get(self.a);
                 self.text("await ");
-                self.operand(expr, L_UNARY, false);
+                self.operand(d.expr, L_UNARY, false);
             }
-            ExprKind::Is { expr, ty } => {
-                self.operand(expr, L_CMP, false);
+            ExprRef::Is(h) => {
+                let d = h.get(self.a);
+                self.operand(d.expr, L_CMP, false);
                 self.sp();
                 self.text("is");
                 self.sp();
-                self.ty(ty);
+                self.ty(d.ty);
             }
-            ExprKind::Cast { expr, ty } => {
-                self.operand(expr, L_CAST, false);
+            ExprRef::Cast(h) => {
+                let d = h.get(self.a);
+                self.operand(d.expr, L_CAST, false);
                 self.sp();
                 self.text("as");
                 self.sp();
-                self.ty(ty);
+                self.ty(d.ty);
             }
+            ExprRef::Error(_) => {}
         }
     }
 
@@ -2080,15 +2071,10 @@ impl<'a> P<'a> {
     ///   anon form, block-bodied by grammar);
     /// - an expr body otherwise → `(params) (-> ret)? => body` (the
     ///   paren form, `=>`-connected by grammar).
-    fn lambda(
-        &mut self,
-        params: Vec<NodeHandle<AnyParam>>,
-        ret: Option<NodeHandle<AnyTy>>,
-        body: NodeHandle<AnyExpr>,
-    ) {
+    fn lambda(&mut self, params: &[ParamRef], ret: Option<TyRef>, body: ExprRef) {
         if params.len() == 1 && ret.is_none() {
-            if let MemberKind::Param(d) = self.a.param(params[0]) {
-                let d = d.clone();
+            if let ParamRef::Param(ph) = params[0] {
+                let d = ph.get(self.a);
                 if d.ty.is_none() && !d.is_mut {
                     self.text(self.a.name(d.name));
                     self.sp();
@@ -2099,13 +2085,13 @@ impl<'a> P<'a> {
                 }
             }
         }
-        let block_body = self.a.narrow_block(body).is_some();
+        let block_body = matches!(body, ExprRef::Block(_));
         if block_body {
             self.text("fn ");
         }
         self.text("(");
-        let spans: Vec<Span> = params.iter().map(|&p| self.a.span(p.id())).collect();
-        self.break_list(&params, &spans, true, |p, it| p.param(*it));
+        let spans: Vec<Span> = params.iter().map(|&p| p.span(self.a)).collect();
+        self.break_list(params, &spans, true, |p, it| p.param(*it));
         self.text(")");
         if !block_body {
             self.sp();
@@ -2125,13 +2111,14 @@ impl<'a> P<'a> {
     /// the lambda's block body: inline-flat attempt (the corpus's
     /// `fn (x: i32) -> i32 { return x + 1; }` shape), broken fallback.
     /// The tail rides the flat attempt without the `;`.
-    fn lambda_block(&mut self, body: NodeHandle<AnyExpr>) {
-        let Some(b) = self.a.narrow_block(body) else {
+    fn lambda_block(&mut self, body: ExprRef) {
+        let ExprRef::Block(b) = body else {
             self.expr(body);
             return;
         };
-        let stmts = self.a.block(b).to_vec();
-        let tail = self.a.block_tail(b);
+        let blk = b.get(self.a);
+        let stmts: Vec<StmtRef> = blk.stmts.to_vec();
+        let tail = blk.tail;
         let flat_ok = self.flat_safe(&stmts) && tail.is_none_or(|t| self.expr_flat(t));
         if flat_ok {
             let m = self.stamp();

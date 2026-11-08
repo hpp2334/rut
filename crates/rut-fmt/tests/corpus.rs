@@ -6,7 +6,7 @@
 //! byte-frozen: the files keep their hand-written layout; only the
 //! three laws above are asserted.
 
-use rut_parser::{parse, Mode};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 fn corpus() -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
@@ -55,12 +55,12 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
         let src = std::fs::read_to_string(f).unwrap();
         let mode = mode_of(f);
         // the parser's own gate first — the formatter's input law
-        let (_, diags) = parse(&src, mode);
-        if !diags.is_empty() {
+        let base = parse_with_recover(&src, mode, ParseOpts::default());
+        if !base.ast.is_clean() {
             failures.push(format!(
                 "{}: does not parse at base ({} diags)",
                 f.display(),
-                diags.len()
+                base.ast.errors().len()
             ));
             continue;
         }
@@ -75,12 +75,12 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
                 continue;
             }
         };
-        let (_, diags2) = parse(&out, mode);
-        if !diags2.is_empty() {
+        let reparsed = parse_with_recover(&out, mode, ParseOpts::default());
+        if !reparsed.ast.is_clean() {
             failures.push(format!(
                 "{}: FORMATTED text does not reparse: {}",
                 f.display(),
-                diags2[0].msg
+                reparsed.ast.errors()[0].msg
             ));
             continue;
         }
@@ -243,18 +243,18 @@ fn corpus_dump_trees_match_through_format() {
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
         let mode = mode_of(f);
-        let (a1, _) = parse(&src, mode);
-        let want = norm_lits(&span_free(&rut_ast::dump::render_text(
-            &rut_ast::dump::to_dump_tree(&a1),
-            &src,
+        let p1 = parse_with_recover(&src, mode, ParseOpts::default());
+        let want = norm_lits(&span_free(&rut_ast::render_text(
+            &rut_ast::to_dump_tree(&p1.ast),
+            &p1.src,
         )));
         let Ok(out) = rut_fmt::format(&src, mode, &rut_fmt::Style::default()) else {
             continue; // covered by the other test's message
         };
-        let (a2, _) = parse(&out, mode);
-        let got = norm_lits(&span_free(&rut_ast::dump::render_text(
-            &rut_ast::dump::to_dump_tree(&a2),
-            &out,
+        let p2 = parse_with_recover(&out, mode, ParseOpts::default());
+        let got = norm_lits(&span_free(&rut_ast::render_text(
+            &rut_ast::to_dump_tree(&p2.ast),
+            &p2.src,
         )));
         if got != want {
             // find the first differing line for a readable failure
@@ -303,8 +303,12 @@ impl Circle {
     pub fn area(self) -> f64 { return self.r * 3.0; }
 }
 ";
-    let (_, diags) = parse(src, Mode::Impl);
-    assert!(diags.is_empty(), "the fixture must parse clean: {diags:?}");
+    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    assert!(
+        p.ast.is_clean(),
+        "the fixture must parse clean: {:?}",
+        p.ast.errors()
+    );
     let out = rut_fmt::format(src, Mode::Impl, &rut_fmt::Style::default()).expect("fmt accepts it");
     assert!(
         out.contains("pub interface Shape {"),
@@ -319,10 +323,11 @@ impl Circle {
         !out.contains(" for "),
         "no impl-for spelling anywhere: {out}"
     );
-    let (_, diags2) = parse(&out, Mode::Impl);
+    let q = parse_with_recover(&out, Mode::Impl, ParseOpts::default());
     assert!(
-        diags2.is_empty(),
-        "the formatted text must reparse clean: {diags2:?}"
+        q.ast.is_clean(),
+        "the formatted text must reparse clean: {:?}",
+        q.ast.errors()
     );
     let out2 =
         rut_fmt::format(&out, Mode::Impl, &rut_fmt::Style::default()).expect("fmt(fmt) accepts it");
