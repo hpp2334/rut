@@ -1,3 +1,8 @@
+//! PENDING PHASE 2 (rut-fmt): this file stays archived — its
+//! dump-through-format alignment test needs rut-fmt, and the fmt lane
+//! owns the rest of the port. The clean-parse corpus test is already
+//! live at `tests/corpus.rs`.
+//!
 //! Corpus conformance — the runnable example projects
 //! (`examples/**`) and the playground classics (`demo/src/examples/`)
 //! parse with zero diags (declaration mode for `*.d.rut`); together they

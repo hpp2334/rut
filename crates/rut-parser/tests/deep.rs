@@ -2,7 +2,10 @@
 //! one clean `Diag`, never a host crash; the iterative parser runs on a
 //! tiny thread stack that recursive descent would overflow.
 
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::parse;
+use rut_parser::Mode;
 
 fn in_fn(body: &str) -> String {
     format!("fn f() -> nil {{ {body} }}")
@@ -141,7 +144,7 @@ fn malformed_input_terminates() {
     ];
     for src in cases {
         let (ast, diags) = parse(src, Mode::Impl);
-        let _ = std::format!("{:?}", ast.root.id());
+        let _ = std::format!("{:?}", ast.root());
         // termination itself is the contract; most cases also diagnose
         let _ = diags.len();
     }
