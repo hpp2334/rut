@@ -403,7 +403,7 @@ fn comments_never_touch_adjacent_strings() {
         .map(|c| &src[c.span.lo as usize..c.span.hi as usize])
         .collect();
     assert_eq!(texts, vec!["/*c*/", "// real"]);
-    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
     assert_eq!(
         find(doc.src(), &doc.spans, "\"// not a comment\""),
         vec![TokenType::String]
@@ -425,7 +425,7 @@ fn parsed_doc_spans_stay_sorted_and_disjoint() {
     // end — the classified spans stay sorted, disjoint, in-file, and
     // the collected comments interleave disjointly between them
     let src = "// top\n/* banner */\nlet a = 1; // one\nfn f(x: i32) -> i32 { x } /* tail */\n";
-    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
     let mut prev_hi = 0;
     for (sp, _) in &doc.spans {
         assert!(sp.lo < sp.hi, "empty span at {}", sp.lo);
@@ -454,7 +454,7 @@ fn broken_source_still_classifies_and_collects() {
     // names; `entry` is token-owned by text now, so like the reserved
     // words it never drops its class; the comment still collects
     let src = "// still colored\nentry fn main( {\n  let x = ;\n";
-    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
     assert!(!doc.diags().is_empty(), "the break is diagnosed");
     assert_eq!(
         find(doc.src(), &doc.spans, "entry"),
@@ -471,7 +471,7 @@ fn doc_chains_graft_onto_decl_nodes() {
     // doc chain lands on the decl node itself (D7) — the hover lane's
     // table scan is gone, the node field is the truth
     let src = "// the total\n// in two lines\nlet TOTAL = 10;\n";
-    let doc = ParsedDoc::parse("file:///ws/x.rut", src);
+    let doc = ParsedDoc::parse(mode_of("file:///ws/x.rut"), src);
     let item = doc.ast.root().items(&doc.ast)[0];
     let rut_ast::ItemRef::ModuleLet(h) = item else {
         panic!("the module let survived the parse: {item:?}");
@@ -481,12 +481,12 @@ fn doc_chains_graft_onto_decl_nodes() {
 }
 
 #[test]
-fn parsed_doc_derives_the_mode_from_the_uri() {
-    // the filename convention, THE authority: a `.d.rut` uri parses in
-    // declaration mode (bodies forbidden — the surface's own diag),
-    // everything else full Impl
+fn parsed_doc_takes_the_mode_mode_of_spells() {
+    // the filename convention, THE authority — `mode_of` is its one
+    // spelling: a `.d.rut` uri parses in declaration mode (bodies
+    // forbidden — the surface's own diag), everything else full Impl
     let doc = ParsedDoc::parse(
-        "file:///ws/surface.d.rut",
+        mode_of("file:///ws/surface.d.rut"),
         "class Box {\n    fn make();\n}\n",
     );
     assert!(doc.diags().is_empty(), "{:?}", doc.diags());
@@ -494,7 +494,7 @@ fn parsed_doc_derives_the_mode_from_the_uri() {
     assert_eq!(mode_of("file:///ws/main.rut"), Mode::Impl);
 
     let bad = ParsedDoc::parse(
-        "file:///ws/surface.d.rut",
+        mode_of("file:///ws/surface.d.rut"),
         "class Box {\n    fn make() -> i32 { return 0; }\n}\n",
     );
     assert!(

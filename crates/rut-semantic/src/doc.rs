@@ -1,6 +1,6 @@
 //! `ParsedDoc` — the document layer's ONE artifact: the editor's whole
 //! per-document derivation, computed once. The recovering entry
-//! (`rut_parser::parse_with_recover`, mode derived from the uri — the
+//! (`rut_parser::parse_with_recover`, mode supplied by the caller — the
 //! editor never fails fast) parses with `include_comments` so doc
 //! chains graft onto the decl nodes at allocation (D7); the leaf layer
 //! (tokens) is re-derived in the same linear pass (`lex_normalized`);
@@ -8,10 +8,12 @@
 //! query above this layer consumes `&ParsedDoc` parts — no consumer
 //! re-runs the pipeline by hand.
 //!
-//! The editor law is baked here, exactly once: a `.d.rut` uri parses in
-//! declaration mode, everything else full `Mode::Impl` (see `mode_of`);
-//! recovery always on (the tree survives broken code — the queries
-//! answer on best effort). `src` is the pair artifact's other half
+//! The editor law is baked here, exactly once: recovery always on (the
+//! tree survives broken code — the queries answer on best effort) and
+//! docs always. The MODE is the caller's input — `mode_of` spells the
+//! filename convention (a `.d.rut` path parses in declaration mode,
+//! everything else full `Mode::Impl`), and every uri-holding call site
+//! derives through it. `src` is the pair artifact's other half
 //! (v2: the tree carries no text) — every span indexes it.
 use rut_ast::Ast;
 use rut_lexer::diag::Diag;
@@ -52,12 +54,13 @@ pub struct ParsedDoc {
 }
 
 impl ParsedDoc {
-    /// the editor entry: mode derived from the uri, editor opts baked —
-    /// recovering always, docs always (they graft onto the decl nodes).
-    pub fn parse(uri: &str, src: &str) -> ParsedDoc {
+    /// the editor entry: mode supplied by the caller (`mode_of` spells
+    /// the filename convention), editor opts baked — recovering always,
+    /// docs always (they graft onto the decl nodes).
+    pub fn parse(mode: Mode, src: &str) -> ParsedDoc {
         let p = parse_with_recover(
             src,
-            mode_of(uri),
+            mode,
             ParseOpts {
                 include_comments: true,
             },

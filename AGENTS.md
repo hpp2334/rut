@@ -48,8 +48,9 @@ Nobody outside `rut-parser` drives `normalize → lex → parse` by hand.
   the flat ordered view of every diag.
 - **`rut-lsp-wasm`'s `[dependencies]` carries NO `rut-lexer` /
   `rut-parser`** — that list is the law's enforcement. Its ONLY
-  frontend is `rut-semantic` (`ParsedDoc::parse(uri, src)` — mode
-  derived, editor opts baked); `rut-ast` stays as shared tree
+  frontend is `rut-semantic` (`ParsedDoc::parse(mode, src)` — mode
+  from the filename convention (`mode_of`), editor opts baked);
+  `rut-ast` stays as shared tree
   vocabulary, `rut-driver`/`rut-core` are other lanes. The grammar/
   corpus tests may drive the parser via `[dev-dependencies]` (the
   sanctioned seam, like the futures LocalPool); the fail-fast `parse`

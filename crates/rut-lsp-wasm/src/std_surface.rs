@@ -132,9 +132,10 @@ pub fn indexes() -> Vec<DefIndex> {
 /// origin stamped with the pkg's TRUE repo-relative source path, the
 /// (module, mod_path) pair naming where it stands.
 fn std_index(origin: &str, src: &str, src_path: &str, mod_path: Option<&str>) -> DefIndex {
-    // the mode derives from the src_path — every std file obeys the
-    // filename convention; the table's explicit column was redundancy
-    let doc = rut_semantic::ParsedDoc::parse(src_path, src);
+    // the mode derives from the src_path (`mode_of` — every std file
+    // obeys the filename convention; the table's explicit column was
+    // redundancy)
+    let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(src_path), src);
     let mut idx = hover::index(doc.src(), &doc.ast, &doc.toks);
     // the std surface is the PUBLIC face (the hashmap-surface
     // batch): nmapset's internals stay off it — its lane classes

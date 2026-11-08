@@ -49,11 +49,12 @@ fn analysis_of(doc: &rut_semantic::ParsedDoc, uri: &Uri) -> Analysis {
 }
 
 /// the degenerate-URI fallback (a uri that fails to parse as `Uri`
-/// still analyzes — the PARSE runs on the raw string so mode derivation
-/// keeps the filename; related info + provenance ride the placeholder)
+/// still analyzes — the MODE derives from the raw string, `mode_of`
+/// keeping the filename convention; related info + provenance ride the
+/// placeholder)
 pub fn analyze_unstamped(uri: &str, src: &str) -> Analysis {
     analysis_of(
-        &rut_semantic::ParsedDoc::parse(uri, src),
+        &rut_semantic::ParsedDoc::parse(mode_of(uri), src),
         &placeholder_uri(),
     )
 }
@@ -167,7 +168,10 @@ pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnos
 /// The server's entry point: the analysis stamped with the document's
 /// URI (related info + hover provenance).
 pub fn analyze_at(uri: &Uri, src: &str) -> Analysis {
-    analysis_of(&rut_semantic::ParsedDoc::parse(uri.as_str(), src), uri)
+    analysis_of(
+        &rut_semantic::ParsedDoc::parse(mode_of(uri.as_str()), src),
+        uri,
+    )
 }
 
 // ---- document-level queries (the hosts' entry points) ----
@@ -179,10 +183,11 @@ pub fn analyze_at(uri: &Uri, src: &str) -> Analysis {
 /// per-query pipeline: normalize → lex → parse → the document's index
 /// (origin stamped). The queries below only add position + lookup.
 fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
-    // ONE derivation per query: the facade parses (mode derived from
-    // the uri) and the hover index builds over its parts — the old
-    // shape parsed the same text twice (its own parse + index_at's)
-    let d = rut_semantic::ParsedDoc::parse(uri, src);
+    // ONE derivation per query: the facade parses (mode from the
+    // filename convention) and the hover index builds over its parts —
+    // the old shape parsed the same text twice (its own parse +
+    // index_at's)
+    let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
     let mut idx = hover::index(d.src(), &d.ast, &d.toks);
     idx.origin = uri.to_string();
     let rut_semantic::ParsedDoc { ast, toks, src, .. } = d;
@@ -193,7 +198,7 @@ fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
 
 /// the definition index for one document (origin stamped with `uri`)
 pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
-    let d = rut_semantic::ParsedDoc::parse(uri, src);
+    let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
     let mut idx = hover::index(d.src(), &d.ast, &d.toks);
     idx.origin = uri.to_string();
     idx
@@ -321,7 +326,8 @@ pub fn type_definition_at(
 /// files over their indexed source (doc-sized files; the per-query
 /// re-parse is the house style — hover already rides it)
 pub(crate) fn parse_at(uri: &str, src: &str) -> (Vec<Token>, Ast) {
-    let rut_semantic::ParsedDoc { ast, toks, .. } = rut_semantic::ParsedDoc::parse(uri, src);
+    let rut_semantic::ParsedDoc { ast, toks, .. } =
+        rut_semantic::ParsedDoc::parse(mode_of(uri), src);
     (toks, ast)
 }
 

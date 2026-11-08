@@ -845,9 +845,9 @@ pub fn index_dep(
     namespace: Option<&str>,
     consts: &[(String, f64)],
 ) -> DefIndex {
-    // the ordinary index pass — the mode derives from the uri (the
-    // filename convention; every caller already spelled it that way)
-    let doc = rut_semantic::ParsedDoc::parse(uri, src);
+    // the ordinary index pass — `mode_of(uri)` spells the filename
+    // convention (every caller already derived it that way)
+    let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
     let mut idx = crate::hover::index(doc.src(), &doc.ast, &doc.toks);
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
@@ -890,9 +890,9 @@ pub fn index_dep_decl_group(
     namespace: Option<&str>,
     consts: &[(String, f64)],
 ) -> Vec<(String, DefIndex)> {
-    // the ordinary parse once — the uri's `.d.rut` suffix IS the
-    // declaration entry lane's mode (the filename convention)
-    let doc = rut_semantic::ParsedDoc::parse(uri, src);
+    // the ordinary parse once — `mode_of(uri)`: the `.d.rut` suffix IS
+    // the declaration entry lane's mode (the filename convention)
+    let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
     let (ast, toks, src) = (doc.ast, doc.toks, doc.src.clone());
     // the module slices: the root's items, then each inline module's,
     // path-stamped, first-wins (the loader's own edge law)
