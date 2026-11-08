@@ -24,12 +24,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rut_ast::ast::{AnyItem, AnyTy, Ast, ItemKind, Linkage, MemberKind, NodeHandle, TypeKind};
+use rut_ast::{Ast, ItemRef, Linkage, ParamRef, TyRef};
 use rut_core::types::{
     TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
     TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
 };
-use rut_parser::{parse, Mode};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::mods::ModSource;
 use crate::session::{HostRow, Mounted, MountedBody};
@@ -83,17 +83,20 @@ fn crossing_ret_ty(name: &str) -> Option<TypeId> {
 /// host signature is bare names over the crossing set; a nested shape
 /// reports as such. `?T` renders as `?` + its inner's text (the answer
 /// optionals are the one legal nesting).
-fn ty_text(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
-    match ast.ty(h) {
-        TypeKind::TyPath { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
-            ast.name(segs[0].name).to_string()
+fn ty_text(ast: &Ast, t: TyRef) -> String {
+    match t {
+        TyRef::Path(h) => {
+            let segs = &h.get(ast).segs;
+            if segs.len() == 1 && segs[0].generics.is_empty() {
+                ast.name(segs[0].name).to_string()
+            } else {
+                segs.iter()
+                    .map(|s| ast.name(s.name))
+                    .collect::<Vec<_>>()
+                    .join("::")
+            }
         }
-        TypeKind::TyPath { segs } => segs
-            .iter()
-            .map(|s| ast.name(s.name))
-            .collect::<Vec<_>>()
-            .join("::"),
-        TypeKind::TyOpt { inner } => format!("?{}", ty_text(ast, *inner)),
+        TyRef::Opt(h) => format!("?{}", ty_text(ast, h.get(ast).inner)),
         _ => "<a nested type>".to_string(),
     }
 }
@@ -116,14 +119,15 @@ pub fn lower_decl_module(
     children: &BTreeMap<String, ModSource>,
     origin: &str,
 ) -> Result<Mounted, String> {
-    let (ast, diags) = parse(src, Mode::Decl);
-    if !diags.is_empty() {
-        let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
+    let p = parse_with_recover(src, Mode::Decl, ParseOpts::default());
+    if !p.ast.is_clean() {
+        let msgs: Vec<String> = p.ast.errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(
             "{origin}: the surface does not parse: {}",
             msgs.join("; ")
         ));
     }
+    let ast = p.ast;
     let mut host_funcs: Vec<HostRow> = Vec::new();
     // first mount wins, mirrored in the lowering: a repeated
     // `mod NAME;` names the same mounted child — lower it once
@@ -147,37 +151,33 @@ pub fn lower_decl_module(
 /// row-lowering both lanes share (the host tree recursion, the inline
 /// form, and the lib-surface law's root probe).
 fn lower_rows(ast: &Ast, path: &str, display: &str, rows: &mut Vec<HostRow>) -> Result<(), String> {
-    lower_rows_in(ast, ast.module_items(ast.root), path, display, rows)
+    lower_rows_in(ast, ast.root().items(ast), path, display, rows)
 }
 
 fn lower_rows_in(
     ast: &Ast,
-    items: &[NodeHandle<AnyItem>],
+    items: &[ItemRef],
     path: &str,
     display: &str,
     rows: &mut Vec<HostRow>,
 ) -> Result<(), String> {
     for &it in items {
-        let ItemKind::SurfaceFn {
-            linkage: Linkage::Host,
-            is_async,
-            name,
-            params,
-            ret,
-            ..
-        } = ast.item(it)
-        else {
+        let ItemRef::SurfaceFn(h) = it else {
             continue;
         };
-        let fname = ast.name(*name).to_string();
+        let sf = h.get(ast);
+        if !matches!(sf.linkage, Linkage::Host) {
+            continue;
+        }
+        let fname = ast.name(sf.name).to_string();
         let mut ptys = Vec::new();
-        for &p in params {
-            let MemberKind::Param(pd) = ast.param(p) else {
+        for &p in &sf.params {
+            let ParamRef::Param(pd) = p else {
                 return Err(format!(
                     "{display}: host fn `{fname}`: a `self` receiver cannot cross the host boundary"
                 ));
             };
-            let Some(th) = pd.ty else {
+            let Some(th) = pd.get(ast).ty else {
                 return Err(format!(
                     "{display}: host fn `{fname}`: a host signature is concrete — every parameter is typed"
                 ));
@@ -190,9 +190,9 @@ fn lower_rows_in(
             };
             ptys.push(t);
         }
-        let rty = match ret {
+        let rty = match sf.ret {
             Some(r) => {
-                let tyname = ty_text(ast, *r);
+                let tyname = ty_text(ast, r);
                 crossing_ret_ty(&tyname).ok_or_else(|| {
                     format!(
                         "{display}: host fn `{fname}`: return `{tyname}` is not a crossing type — returns cross over primitives, `str`, `bytes`, `opaque`, and the answer optionals `?str`/`?bytes`/`?opaque`"
@@ -206,7 +206,7 @@ fn lower_rows_in(
             name: fname,
             params: ptys,
             ret: rty,
-            is_async: *is_async,
+            is_async: sf.is_async,
         });
     }
     Ok(())
@@ -240,10 +240,11 @@ fn lower_module(
         format!("{path}/{DECL_CHILD_FILE}")
     };
     lower_rows(ast, path, &display, rows)?;
-    for it in ast.module_items(ast.root).to_vec() {
-        match ast.item(it) {
-            ItemKind::ModDecl { vis: _, name } => {
-                let name = ast.name(*name).to_string();
+    for it in ast.root().items(ast).to_vec() {
+        match it {
+            ItemRef::ModDecl(h) => {
+                let d = h.get(ast);
+                let name = ast.name(d.name).to_string();
                 let child_path = join_path(path, &name);
                 let Some(child) = children.get(&child_path) else {
                     return Err(format!(
@@ -254,28 +255,25 @@ fn lower_module(
                 if !lowered.insert(child_path.clone()) {
                     continue; // first mount wins — one lowering per child
                 }
-                let (child_ast, diags) = parse(&child.text, Mode::Decl);
-                if !diags.is_empty() {
-                    let msgs: Vec<String> = diags.iter().map(|d| d.msg.clone()).collect();
+                let cp = parse_with_recover(&child.text, Mode::Decl, ParseOpts::default());
+                if !cp.ast.is_clean() {
+                    let msgs: Vec<String> = cp.ast.errors().iter().map(|d| d.msg.clone()).collect();
                     return Err(format!(
                         "{child_path}/{DECL_CHILD_FILE}: the surface does not parse: {}",
                         msgs.join("; ")
                     ));
                 }
-                lower_module(&child_ast, &child_path, children, origin, rows, lowered)?;
+                lower_module(&cp.ast, &child_path, children, origin, rows, lowered)?;
             }
-            ItemKind::ModInline {
-                vis: _,
-                name,
-                items,
-            } => {
+            ItemRef::ModInline(h) => {
+                let d = h.get(ast);
                 // the inline declaration module: the nested declarations
                 // lower at the child's mod path — no mounted file, no
                 // children-map entry. First-wins applies to the same
                 // FILE-FORM edge (an inline block and a `mod NAME;` for
                 // one path would double-lower); the inline walk lowers
                 // its own items directly, once.
-                let name = ast.name(*name).to_string();
+                let name = ast.name(d.name).to_string();
                 let child_path = join_path(path, &name);
                 if !lowered.insert(format!("inline:{child_path}")) {
                     return Err(format!(
@@ -283,7 +281,7 @@ fn lower_module(
                          (one declaration per name, the one-name-one-decl law)"
                     ));
                 }
-                lower_inline(ast, items, &child_path, &display, rows, lowered)?;
+                lower_inline(ast, &d.items, &child_path, &display, rows, lowered)?;
             }
             _ => continue,
         }
@@ -297,7 +295,7 @@ fn lower_module(
 /// twin of [`lower_module`], one parse deeper.
 fn lower_inline(
     ast: &Ast,
-    items: &[NodeHandle<AnyItem>],
+    items: &[ItemRef],
     path: &str,
     display: &str,
     rows: &mut Vec<HostRow>,
@@ -305,15 +303,11 @@ fn lower_inline(
 ) -> Result<(), String> {
     lower_rows_in(ast, items, path, display, rows)?;
     for &it in items {
-        let ItemKind::ModInline {
-            vis: _,
-            name,
-            items: nested,
-        } = ast.item(it)
-        else {
+        let ItemRef::ModInline(h) = it else {
             continue;
         };
-        let name = ast.name(*name).to_string();
+        let d = h.get(ast);
+        let name = ast.name(d.name).to_string();
         let child_path = join_path(path, &name);
         if !lowered.insert(format!("inline:{child_path}")) {
             return Err(format!(
@@ -321,7 +315,7 @@ fn lower_inline(
                  (one declaration per name, the one-name-one-decl law)"
             ));
         }
-        lower_inline(ast, nested, &child_path, display, rows, lowered)?;
+        lower_inline(ast, &d.items, &child_path, display, rows, lowered)?;
     }
     Ok(())
 }
@@ -346,12 +340,12 @@ fn join_path(path: &str, name: &str) -> String {
 /// at parse — so `host fn` rows under a mounted tree can only ever
 /// come from the host lane's own lowering.
 pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
-    let (ast, diags) = parse(src, Mode::Decl);
-    if !diags.is_empty() {
+    let p = parse_with_recover(src, Mode::Decl, ParseOpts::default());
+    if !p.ast.is_clean() {
         return Ok(()); // non-parsing surfaces stay inert (doc-only)
     }
     let mut rows: Vec<HostRow> = Vec::new();
-    if lower_rows(&ast, "", origin, &mut rows).is_err() {
+    if lower_rows(&p.ast, "", origin, &mut rows).is_err() {
         return Ok(()); // a non-crossing signature is the host lane's error, not this law's
     }
     if let Some(row) = rows.first() {

@@ -1,10 +1,24 @@
 use ls_types::{Documentation, ParameterLabel, SignatureHelp};
-use rut_ast::ast::Ast;
+use rut_ast::Ast;
 use rut_lexer::lexer::{lex, normalize};
 use rut_lexer::token::Token;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::signature_help::*;
-use rut_parser::{parse, Mode};
+use rut_parser::Mode;
+
+/// parse with doc grafting ON — the editor lane's shape (hover's index
+/// reads doc chains off the decl nodes) and the recovering entry (the
+/// tree survives broken snippets)
+fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
+    rut_parser::parse_with_recover(
+        src,
+        mode,
+        rut_parser::ParseOpts {
+            include_comments: true,
+        },
+    )
+    .ast
+}
 
 const DOC: &str = "file:///t/main.rut";
 
@@ -18,8 +32,8 @@ struct Doc {
 fn doc(src: &str) -> Doc {
     let src = normalize(src);
     let (toks, _) = lex(&src);
-    let (ast, _) = parse(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks, &comments_of(&src));
+    let ast = doc_ast(&src, Mode::Impl);
+    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
     index.origin = DOC.to_string();
     Doc {
         src,
@@ -361,11 +375,4 @@ fn doc_lines_render_as_documentation() {
         Some(Documentation::MarkupContent(m)) => assert_eq!(m.value, "hex digit value"),
         other => panic!("doc markdown expected, got {other:?}"),
     }
-}
-
-/// the collected comment table — the same lane the facade rides
-/// (tests lex through the dev-dep seam)
-fn comments_of(src: &str) -> Vec<rut_lsp_wasm::semantic::Comment> {
-    let (_, _, comments) = rut_lexer::lexer::lex_normalized(src, true);
-    comments
 }

@@ -15,7 +15,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// inference.
     pub(crate) fn compile_expr(
         &mut self,
-        node: NodeHandle<AnyExpr>,
+        node: ExprRef,
         expected: Option<TypeId>,
     ) -> TcResult<TypeId> {
         if !self.enter() {
@@ -37,7 +37,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Ok(mut t) = r {
             if let Some(e) = expected {
                 if !self.ctx.spells_same(e, t) {
-                    let lo = self.ctx.ast.span(node.id()).lo;
+                    let lo = node.span(self.ctx.ast).lo;
                     while !self.ctx.spells_same(t, e) {
                         let step = match (
                             self.ctx.types.kind(t).clone(),
@@ -83,27 +83,43 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_expr_inner(
         &mut self,
-        node: NodeHandle<AnyExpr>,
+        node: ExprRef,
         expected: Option<TypeId>,
     ) -> TcResult<TypeId> {
-        let sp = self.ctx.ast.span(node.id());
+        let sp = node.span(self.ctx.ast);
         self.span = sp.lo;
-        match self.ctx.ast.expr(node).clone() {
-            ExprKind::Lit(lit) => {
-                let (ty, reg) = self.load_lit(lit, expected, sp)?;
+        match node {
+            ExprRef::Lit(lh) => {
+                let (ty, reg) = self.load_lit(lh.get(self.ctx.ast).lit.clone(), expected, sp)?;
                 let _ = reg;
                 Ok(ty)
             }
-            ExprKind::Path { segs } => self.compile_path(node, segs, expected, sp),
-            ExprKind::Call { callee, args } => self.compile_call(node, callee, args, expected, sp),
-            ExprKind::Method {
-                recv,
-                name,
-                generics,
-                args,
-            } => self.compile_method(recv, name, generics, args, expected, sp),
-            ExprKind::Field { recv, name } => self.compile_field(recv, name, sp),
-            ExprKind::Tuple { elems } => {
+            ExprRef::Path(ph) => {
+                self.compile_path(node, ph.get(self.ctx.ast).segs.clone(), expected, sp)
+            }
+            ExprRef::Call(ch) => {
+                let (callee, args) = {
+                    let n = ch.get(self.ctx.ast);
+                    (n.callee, n.args.clone())
+                };
+                self.compile_call(node, callee, args, expected, sp)
+            }
+            ExprRef::Method(mh) => {
+                let (recv, name, generics, args) = {
+                    let n = mh.get(self.ctx.ast);
+                    (n.recv, n.name, n.generics.clone(), n.args.clone())
+                };
+                self.compile_method(recv, name, generics, args, expected, sp)
+            }
+            ExprRef::Field(fh) => {
+                let (recv, name) = {
+                    let n = fh.get(self.ctx.ast);
+                    (n.recv, n.name)
+                };
+                self.compile_field(recv, name, sp)
+            }
+            ExprRef::Tuple(th) => {
+                let elems = th.get(self.ctx.ast).elems.clone();
                 // `(a, b, ..)`: a record with numeric fields.
                 // `()` no longer reaches here — the parser rejects it and
                 // points at `nil` (v1.2).
@@ -145,7 +161,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(ty)
             }
-            ExprKind::Index { recv, idx } => {
+            ExprRef::Index(ih) => {
+                let (recv, idx) = {
+                    let n = ih.get(self.ctx.ast);
+                    (n.recv, n.idx)
+                };
                 let rt = self.compile_expr(recv, None)?;
                 let rreg = self.last_reg;
                 // `p[i]` auto-derefs
@@ -171,8 +191,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 Err(())
             }
-            ExprKind::Unary { op, expr } => {
-                use rut_ast::ast::UnOp::*;
+            ExprRef::Unary(uh) => {
+                let (op, expr) = {
+                    let n = uh.get(self.ctx.ast);
+                    (n.op, n.expr)
+                };
+                use rut_ast::UnOp::*;
                 let t = match op {
                     // `*p`/`&v` are gone — the parser diagnoses
                     // them; the coercions they performed are implicit at
@@ -216,17 +240,29 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
                 Ok(t)
             }
-            ExprKind::Binary { op, lhs, rhs } => {
+            ExprRef::Binary(bh) => {
+                let (op, lhs, rhs) = {
+                    let n = bh.get(self.ctx.ast);
+                    (n.op, n.lhs, n.rhs)
+                };
                 self.compile_binary(node, op, lhs, rhs, expected, sp)
             }
-            ExprKind::Assign { op, target, value } => {
+            ExprRef::Assign(ah) => {
+                let (op, target, value) = {
+                    let n = ah.get(self.ctx.ast);
+                    (n.op, n.target, n.value)
+                };
                 self.compile_assign(node, op, target, value, sp)?;
                 Ok(TY_NIL)
             }
-            ExprKind::Lambda { params, ret, body } => {
-                self.compile_lambda(node.id(), params, ret, body, expected, sp)
+            ExprRef::Lambda(lh) => {
+                let (params, ret, body) = {
+                    let n = lh.get(self.ctx.ast);
+                    (n.params.clone(), n.ret, n.body)
+                };
+                self.compile_lambda(lh, params, ret, body, expected, sp)
             }
-            ExprKind::Try { .. } => {
+            ExprRef::Try { .. } => {
                 // `?` was Result-syntax: removed with the sums
                 self.ctx.err(
                     sp,
@@ -234,44 +270,71 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 Err(())
             }
-            ExprKind::Await { expr } => {
+            ExprRef::Await(ah) => {
                 // the landing: the await expansion runs inside
                 // an async body — elsewhere it diagnoses
+                let expr = ah.get(self.ctx.ast).expr;
                 crate::lir::asyncfn::compile_await(self, expr, sp)
             }
-            ExprKind::AsyncBlock { body } => {
+            ExprRef::AsyncBlock(ah) => {
                 // the async primitive (v20): mint the frame, answer
                 // `Future<T>`. Legal everywhere — minting is pure; only
                 // `await` needs an async body.
-                crate::lir::asyncfn::compile_async_block(self, body, expected, sp)
+                crate::lir::asyncfn::compile_async_block(self, ah, expected, sp)
             }
-            ExprKind::FStr { parts } => self.compile_fstr(parts, expected, sp),
-            ExprKind::Struct { ty, fields } => self.compile_struct(ty, fields, expected, sp),
-            ExprKind::ArrayLit { elems } => {
+            ExprRef::FStr(fsh) => {
+                self.compile_fstr(fsh.get(self.ctx.ast).parts.clone(), expected, sp)
+            }
+            ExprRef::Struct(sh) => {
+                let (ty, fields) = {
+                    let n = sh.get(self.ctx.ast);
+                    (n.ty, n.fields.clone())
+                };
+                self.compile_struct(ty, fields, expected, sp)
+            }
+            ExprRef::ArrayLit(ah) => {
+                let elems = ah.get(self.ctx.ast).elems.clone();
                 let arr_ty = self.compile_array_lit(elems, expected, sp)?;
                 Ok(arr_ty)
             }
-            ExprKind::ArrayRepeat { value, count } => {
+            ExprRef::ArrayRepeat(ah) => {
+                let (value, count) = {
+                    let n = ah.get(self.ctx.ast);
+                    (n.value, n.count)
+                };
                 self.compile_array_repeat(value, count, expected, sp)
             }
-            ExprKind::WhenExpr { scrut, arms } => {
+            ExprRef::WhenExpr(wh) => {
+                let (scrut, arms) = {
+                    let n = wh.get(self.ctx.ast);
+                    (n.scrut, n.arms.clone())
+                };
                 self.compile_when(scrut, &arms, expected, sp, false)
             }
-            ExprKind::If { cond, then, els } => {
+            ExprRef::If(ih) => {
                 // the if ATOM — the expression form; `Ok(None)` (both arms
                 // terminated) reads as the nil value here, the funnel's
                 // business
+                let (cond, then, els) = {
+                    let n = ih.get(self.ctx.ast);
+                    (n.cond, n.then, n.els)
+                };
                 self.compile_if_expr(cond, then, els, expected, sp)
                     .map(|v| v.unwrap_or(TY_NIL))
             }
-            ExprKind::Is { expr, ty } => {
+            ExprRef::Is(ih) => {
+                let (expr, ty) = {
+                    let n = ih.get(self.ctx.ast);
+                    (n.expr, n.ty)
+                };
                 let rt = self.compile_expr(expr, None)?;
                 let recv = self.last_reg;
                 let dst = self.new_reg(TY_BOOL);
                 // resolve the RHS (a naming position) — a single-segment
                 // name, generic arguments allowed (an instantiated record
                 // names itself: `v is Vec<i64>`)
-                if let TypeKind::TyPath { segs } = self.ctx.ast.ty(ty) {
+                if let TyRef::Path(th) = ty {
+                    let segs = &th.get(self.ctx.ast).segs;
                     if segs.len() == 1 {
                         let n = self.ctx.name(segs[0].name).to_string();
                         // trait RHS —capability probe (or fold). A generic
@@ -416,7 +479,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     .err(sp, "the `is` right-hand side must be a type name");
                 Err(())
             }
-            ExprKind::Cast { expr, ty } => {
+            ExprRef::Cast(ch) => {
+                let (expr, ty) = {
+                    let n = ch.get(self.ctx.ast);
+                    (n.expr, n.ty)
+                };
                 // `expr as T`: the numeric cast — truncating,
                 // C/Rust semantics, one `Op::Conv`. The RHS is a naming
                 // position restricted to the numeric primitives.
@@ -479,13 +546,19 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 Ok(want)
             }
-            ExprKind::Block { .. } => {
+            ExprRef::Block(bh) => {
                 // the block as a VALUE expression (when arm blocks today;
                 // any value-position block): the tail — or the
                 // tail-position `if` statement — is the block's value,
                 // under the caller's expected hint
-                let t = self.compile_block_value(node.id(), expected)?;
+                let t = self.compile_block_value(bh, expected)?;
                 Ok(t.unwrap_or(TY_NIL))
+            }
+            ExprRef::Error(_) => {
+                // a broken tree never lowers — the compile lanes refuse
+                // on !ast.is_clean() first; unreachable in practice
+                self.ctx.err(sp, "malformed expression");
+                Err(())
             }
         }
     }
@@ -678,7 +751,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_path(
         &mut self,
-        _node: NodeHandle<AnyExpr>,
+        _node: ExprRef,
         segs: Vec<PathSeg>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
@@ -741,14 +814,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((_, ty_node, init, lvis)) = self.ctx.find_let(name).cloned() {
                 // a module let of ANOTHER module is not in scope bare
                 // (single names resolve in the current module only)
-                if self.ctx.mod_of(init.id()) != self.ctx.cur_mod {
+                if self.ctx.mod_of(init.span(self.ctx.ast)) != self.ctx.cur_mod {
                     self.ctx.err(
                         sp,
                         format!(
                             "`{}` is declared in module `{}` — qualify it: `{}::{}`",
                             self.ctx.name(name),
-                            self.ctx.mod_of(init.id()),
-                            self.ctx.mod_of(init.id()),
+                            self.ctx.mod_of(init.span(self.ctx.ast)),
+                            self.ctx.mod_of(init.span(self.ctx.ast)),
                             self.ctx.name(name)
                         ),
                     );
@@ -1058,17 +1131,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Some(Err(()));
             }
             if let Some(fnode) = self.ctx.fn_in(&m, name) {
-                if !self
-                    .ctx
-                    .vis_crosses(&from, &m, self.ctx.ast.fn_decl(fnode).vis)
-                {
+                let vis = fnode.get(self.ctx.ast).vis;
+                if !self.ctx.vis_crosses(&from, &m, vis) {
                     self.ctx.err(
                         sp,
                         format!(
                             "{m}.{} — {}",
                             self.ctx.name(name),
-                            self.ctx
-                                .vis_hint(name, &from, &m, self.ctx.ast.fn_decl(fnode).vis)
+                            self.ctx.vis_hint(name, &from, &m, vis)
                         ),
                     );
                     return Some(Err(()));
@@ -1179,7 +1249,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(target) = self.ctx.own_use_target(name) {
             if let Some(fnode) = self.ctx.fn_in(&target, name) {
                 let from = self.ctx.cur_mod.clone();
-                let vis = self.ctx.ast.fn_decl(fnode).vis;
+                let vis = fnode.get(self.ctx.ast).vis;
                 if !self.ctx.vis_crosses(&from, &target, vis) {
                     self.ctx.err(
                         sp,
@@ -1234,10 +1304,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn fn_value_of_node(
         &mut self,
         name: IdentId,
-        fnode: NodeHandle<FnNode>,
+        fnode: Handle<FnNode>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        let fd = self.ctx.ast.fn_decl(fnode).clone();
+        let fd = fnode.get(self.ctx.ast).clone();
         if fd.is_async {
             self.ctx.err(
                 sp,
@@ -1257,13 +1327,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // the fn's own signature — a non-generic fn spells no free
         // generics, so this env resolves it exactly
-        let ptys: Vec<TypeId> = fd
+        let param_tys: Vec<TyRef> = fd
             .params
             .iter()
-            .map(|p| match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => self.resolve_type_now(*t),
-                _ => TY_I32,
-            })
+            .filter_map(|p| self.ctx.param_ty(*p))
+            .collect();
+        let ptys: Vec<TypeId> = param_tys
+            .iter()
+            .map(|&t| self.resolve_type_now(t))
             .collect();
         let ret_ty = fd.ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
         let inst = crate::check::Inst {
@@ -1304,13 +1375,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn load_const_let(
         &mut self,
-        init: NodeHandle<AnyExpr>,
+        init: ExprRef,
         ty: TypeId,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<u16> {
-        match self.ctx.ast.expr(init).clone() {
-            ExprKind::Lit(Lit::Int(v, sfx)) => {
+        let lit = match init {
+            ExprRef::Lit(lh) => lh.get(self.ctx.ast).lit.clone(),
+            _ => {
+                self.ctx.err(
+                    sp,
+                    "module `let` initializers must be literals in this build",
+                );
+                return Err(());
+            }
+        };
+        match lit {
+            Lit::Int(v, sfx) => {
                 // the same default-width law as `load_lit` — module scope
                 // gets no free pass
                 if sfx.is_none() && v > i32::MAX as u64 {
@@ -1322,7 +1403,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ConstRaw { dst: reg, bits: v }, sp.lo);
                 Ok(reg)
             }
-            ExprKind::Lit(Lit::Float(b, _)) => {
+            Lit::Float(b, _) => {
                 // same f32 narrowing as `load_lit`
                 let bits = if ty == TY_F32 {
                     (f64::from_bits(b) as f32 as f64).to_bits()
@@ -1333,7 +1414,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
                 Ok(reg)
             }
-            ExprKind::Lit(Lit::Bool(v)) => {
+            Lit::Bool(v) => {
                 let reg = self.new_reg(ty);
                 self.emit(
                     Op::ConstRaw {
@@ -1344,7 +1425,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 Ok(reg)
             }
-            ExprKind::Lit(Lit::Str(s)) | ExprKind::Lit(Lit::RawStr(s)) => {
+            Lit::Str(s) => {
                 let k = self.konst(ConstVal::Str(s));
                 let reg = self.new_reg(TY_STR);
                 self.emit(
@@ -1356,7 +1437,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 );
                 Ok(reg)
             }
-            _ => {
+            Lit::RawStr(_) | Lit::Nil => {
                 self.ctx.err(
                     sp,
                     "module `let` initializers must be literals in this build",

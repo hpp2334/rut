@@ -1,11 +1,42 @@
 //! astDump — one mapping, two renderers (the demo page's AST
-//! pane). `to_dump_tree` maps the typed arena to a labeled field tree once;
-//! `render_json` emits the flattened tagged objects the demo's tree UI
-//! consumes (no display strings on the wire — the demo derives every label
-//! from `source` + small tables); `render_text` renders the same tree for
-//! the CLI `rut dump` in the labeled `label: value` / `- item` style.
+//! pane). `to_dump_tree` maps the typed arenas to a labeled field tree
+//! once; `render_json` emits the flattened tagged objects the demo's
+//! tree UI consumes (no display strings on the wire — the demo derives
+//! every label from `source` + small tables); `render_text` renders the
+//! same tree for the CLI `rut dump` in the labeled `label: value` /
+//! `- item` style.
+//!
+//! The mapping dispatches the SLOT enums (`ItemRef`, `StmtRef`, …);
+//! node ids are assigned in DFS pre-order (unique across the per-kind
+//! arenas). `Error` slots dump as `Error` rows carrying their diag
+//! messages — the positional recovery view.
 
-use crate::ast::*;
+use crate::error::ErrorNode;
+use crate::expr::ExprRef;
+use crate::handle::Handle;
+use crate::item::{
+    AliasNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ImplNode, SurfaceFnNode,
+    SurfaceStructNode,
+};
+use crate::item::{
+    ClassNode, EnumNode, FieldDeclNode, FieldRef, FnNode, InterfaceNode, ItemRef, MemberRef,
+    MethodDeclNode, MethodRef, ModuleLetNode, ModuleNode, ParamNode, ParamRef, SelfParamNode,
+    StructNode, Vis,
+};
+use crate::pat::PatRef;
+use crate::stmt::{
+    ElseBranch, ForCNode, ForOfNode, IfNode, LetStmtNode, ReturnNode, StmtRef, WhenStmtNode,
+    WhileNode,
+};
+use crate::ty::TyRef;
+use crate::{
+    ArrayLitNode, ArrayRepeatNode, AssignNode, Ast, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
+    BlockNode, CallNode, CastNode, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode, IsNode,
+    LambdaNode, LitNode, MethodNode, PatCtorNode, PatLitNode, PatPathNode, PathSeg, StructLitNode,
+    TryNode, TupleNode, TyArrayNode, TyConstNode, TyFnNode, TyOptNode, TyPathNode, TyTupleNode,
+    TyUnionNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
+};
+use rut_core::IdentId;
 
 // ---- the dump tree ----
 
@@ -66,11 +97,11 @@ pub enum DumpVal {
 
 // ---- the single mapping ----
 
-fn segs_dump(a: &Ast, segs: &[PathSeg]) -> Vec<DumpSeg> {
+fn segs_dump(a: &Ast, segs: &[PathSeg], next: &mut u32) -> Vec<DumpSeg> {
     segs.iter()
         .map(|s| DumpSeg {
             name: a.name(s.name).to_string(),
-            generics: s.generics.iter().map(|&g| node_dump(a, g.id())).collect(),
+            generics: s.generics.iter().map(|&g| ty_dump(a, g, next)).collect(),
         })
         .collect()
 }
@@ -79,883 +110,343 @@ fn field(label: &'static str, val: DumpVal) -> DumpField {
     DumpField { label, val }
 }
 
-fn node_dump(a: &Ast, id: NodeId) -> DumpNode {
-    let n = a.node(id);
-    let span = (n.span.lo, n.span.hi);
+fn bounds_dump(a: &Ast, bounds: &[(IdentId, TyRef)], next: &mut u32) -> DumpVal {
+    DumpVal::Bounds(
+        bounds
+            .iter()
+            .map(|(n, t)| DumpBound {
+                ident: a.name(*n).to_string(),
+                ty: ty_dump(a, *t, next),
+            })
+            .collect(),
+    )
+}
+
+fn error_dump(a: &Ast, h: Handle<ErrorNode>, next: &mut u32) -> DumpNode {
+    let e = h.get(a);
+    let mut fields = Vec::new();
+    for d in &e.diags {
+        fields.push(field("diag", DumpVal::Str(d.msg.clone())));
+    }
+    DumpNode {
+        id: take_id(next),
+        kind: "Error",
+        span: (e.span.lo, e.span.hi),
+        fields,
+    }
+}
+
+fn take_id(next: &mut u32) -> u32 {
+    let id = *next;
+    *next += 1;
+    id
+}
+
+fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
+    let id = take_id(next);
+    let span = (r.span(a).lo, r.span(a).hi);
     let mut fields: Vec<DumpField> = Vec::new();
-    let kind: &'static str = match &n.kind {
-        Kind::Item(k) => match k {
-            ItemKind::Module { items } => {
-                fields.push(field(
-                    "items",
-                    DumpVal::Nodes(items.iter().map(|&i| node_dump(a, i.id())).collect()),
-                ));
-                "Module"
+    let kind: &'static str = match r {
+        ItemRef::Module(h) => {
+            module_fields(a, h.get(a), &mut fields, next);
+            "Module"
+        }
+        ItemRef::ModDecl(h) => {
+            let d = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            "ModDecl"
+        }
+        ItemRef::ModInline(h) => {
+            let d = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "items",
+                DumpVal::Nodes(d.items.iter().map(|&i| item_dump(a, i, next)).collect()),
+            ));
+            "ModInline"
+        }
+        ItemRef::Use(h) => {
+            let d = h.get(a);
+            fields.push(field(
+                "path",
+                DumpVal::Idents(d.path.iter().map(|&x| a.name(x).to_string()).collect()),
+            ));
+            fields.push(field(
+                "names",
+                DumpVal::Idents(d.names.iter().map(|&x| a.name(x).to_string()).collect()),
+            ));
+            "Use"
+        }
+        ItemRef::Alias(h) => {
+            let d: &AliasNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "target",
+                DumpVal::Node(Box::new(ty_dump(a, d.target, next))),
+            ));
+            "Alias"
+        }
+        ItemRef::ModuleLet(h) => {
+            let d: &ModuleLetNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            if let Some(t) = d.ty {
+                fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, t, next)))));
             }
-            ItemKind::ModDecl { vis, name } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                "ModDecl"
+            fields.push(field(
+                "init",
+                DumpVal::Node(Box::new(expr_dump(a, d.init, next))),
+            ));
+            "ModuleLet"
+        }
+        ItemRef::Enum(h) => {
+            let d: &EnumNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "members",
+                DumpVal::Members(
+                    d.members
+                        .iter()
+                        .map(|m| match m {
+                            MemberRef::Member(mh) => DumpMember {
+                                ident: a.name(mh.get(a).name).to_string(),
+                            },
+                            MemberRef::Error(_) => DumpMember {
+                                ident: "<error>".to_string(),
+                            },
+                        })
+                        .collect(),
+                ),
+            ));
+            "Enum"
+        }
+        ItemRef::Struct(h) => {
+            let d: &StructNode = h.get(a);
+            decl_fields(
+                a,
+                &mut fields,
+                d.vis,
+                d.name,
+                &d.generics,
+                &d.fields,
+                &d.methods,
+                next,
+            );
+            "Struct"
+        }
+        ItemRef::Class(h) => {
+            let d: &ClassNode = h.get(a);
+            decl_fields(
+                a,
+                &mut fields,
+                d.vis,
+                d.name,
+                &d.generics,
+                &d.fields,
+                &d.methods,
+                next,
+            );
+            if d.newtype {
+                fields.push(field("newtype", DumpVal::Flag(true)));
             }
-            ItemKind::ModInline { vis, name, items } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                fields.push(field(
-                    "items",
-                    DumpVal::Nodes(items.iter().map(|&i| node_dump(a, i.id())).collect()),
-                ));
-                "ModInline"
+            if !d.requires.is_empty() {
+                fields.push(field("bounds", bounds_dump(a, &d.requires, next)));
             }
-            ItemKind::Use { path, names } => {
+            "Class"
+        }
+        ItemRef::Interface(h) => {
+            let d: &InterfaceNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            if !d.generics.is_empty() {
                 fields.push(field(
-                    "path",
-                    DumpVal::Idents(path.iter().map(|&x| a.name(x).to_string()).collect()),
+                    "generics",
+                    DumpVal::Idents(d.generics.iter().map(|&g| a.name(g).to_string()).collect()),
                 ));
-                fields.push(field(
-                    "names",
-                    DumpVal::Idents(names.iter().map(|&x| a.name(x).to_string()).collect()),
-                ));
-                "Use"
             }
-            ItemKind::Alias(d) => {
-                fields.push(field("vis", DumpVal::Vis(d.vis)));
-                fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "methods",
+                DumpVal::Nodes(d.methods.iter().map(|m| method_dump(a, *m, next)).collect()),
+            ));
+            "Interface"
+        }
+        ItemRef::Impl(h) => {
+            let d: &ImplNode = h.get(a);
+            if !d.generics.is_empty() {
                 fields.push(field(
-                    "target",
-                    DumpVal::Node(Box::new(node_dump(a, d.target.id()))),
+                    "generics",
+                    DumpVal::Idents(d.generics.iter().map(|&g| a.name(g).to_string()).collect()),
                 ));
-                "Alias"
             }
-            ItemKind::ModuleLet {
-                vis,
-                name,
-                ty,
-                init,
-            } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                if let Some(t) = ty {
-                    fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, t.id())))));
-                }
-                fields.push(field(
-                    "init",
-                    DumpVal::Node(Box::new(node_dump(a, init.id()))),
-                ));
-                "ModuleLet"
+            fields.push(field(
+                "target",
+                DumpVal::Node(Box::new(ty_dump(a, d.target, next))),
+            ));
+            fields.push(field(
+                "methods",
+                DumpVal::Nodes(d.methods.iter().map(|m| method_dump(a, *m, next)).collect()),
+            ));
+            "Impl"
+        }
+        ItemRef::Fn(h) => {
+            let f: &FnNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(f.vis)));
+            if f.is_async {
+                fields.push(field("async", DumpVal::Flag(true)));
             }
-            ItemKind::Enum { vis, name, members } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
+            fields.push(field("name", DumpVal::Str(a.name(f.name).to_string())));
+            if !f.generics.is_empty() {
                 fields.push(field(
-                    "members",
-                    DumpVal::Members(
-                        members
-                            .iter()
-                            .map(|m| DumpMember {
-                                ident: a.name(*m).to_string(),
-                            })
-                            .collect(),
-                    ),
+                    "generics",
+                    DumpVal::Idents(f.generics.iter().map(|&g| a.name(g).to_string()).collect()),
                 ));
-                "Enum"
             }
-            ItemKind::Struct {
-                vis,
-                name,
-                generics,
-                fields: fs,
-                methods,
-            } => {
-                item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
-                "Struct"
+            fields.push(field(
+                "params",
+                DumpVal::Nodes(f.params.iter().map(|p| param_dump(a, *p, next)).collect()),
+            ));
+            if let Some(r) = f.ret {
+                fields.push(field("ret", DumpVal::Node(Box::new(ty_dump(a, r, next)))));
             }
-            ItemKind::Class {
-                vis,
-                name,
-                generics,
-                requires,
-                newtype,
-                fields: fs,
-                methods,
-            } => {
-                item_data_fields(a, &mut fields, *vis, *name, generics, fs, methods);
-                if *newtype {
-                    fields.push(field("newtype", DumpVal::Flag(true)));
-                }
-                if !requires.is_empty() {
-                    fields.push(field(
-                        "bounds",
-                        DumpVal::Bounds(
-                            requires
-                                .iter()
-                                .map(|(n, t)| DumpBound {
-                                    ident: a.name(*n).to_string(),
-                                    ty: node_dump(a, t.id()),
-                                })
-                                .collect(),
-                        ),
-                    ));
-                }
-                "Class"
+            if !f.bounds.is_empty() {
+                fields.push(field("bounds", bounds_dump(a, &f.bounds, next)));
             }
-            ItemKind::Interface {
-                vis,
-                name,
-                generics,
-                methods,
-            } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                if !generics.is_empty() {
-                    fields.push(field(
-                        "generics",
-                        DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect()),
-                    ));
-                }
-                fields.push(field(
-                    "methods",
-                    DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect()),
-                ));
-                "Interface"
+            fields.push(field(
+                "body",
+                DumpVal::Node(Box::new(block_dump(a, f.body, next))),
+            ));
+            "Fn"
+        }
+        ItemRef::SurfaceFn(h) => {
+            let d: &SurfaceFnNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field(
+                "linkage",
+                DumpVal::Str(
+                    match d.linkage {
+                        crate::item::Linkage::Host => "host",
+                        crate::item::Linkage::Builtin { .. } => "builtin",
+                    }
+                    .to_string(),
+                ),
+            ));
+            if d.is_async {
+                fields.push(field("is_async", DumpVal::Flag(true)));
             }
-            ItemKind::Impl {
-                generics,
-                target,
-                methods,
-                ..
-            } => {
-                if !generics.is_empty() {
-                    fields.push(field(
-                        "generics",
-                        DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect()),
-                    ));
-                }
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            if !d.generics.is_empty() {
                 fields.push(field(
-                    "target",
-                    DumpVal::Node(Box::new(node_dump(a, target.id()))),
+                    "generics",
+                    DumpVal::Idents(d.generics.iter().map(|&g| a.name(g).to_string()).collect()),
                 ));
-                fields.push(field(
-                    "methods",
-                    DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect()),
-                ));
-                "Impl"
             }
-            ItemKind::Fn(f) => {
-                fields.push(field("vis", DumpVal::Vis(f.vis)));
-                if f.is_async {
-                    fields.push(field("async", DumpVal::Flag(true)));
-                }
-                fields.push(field("name", DumpVal::Str(a.name(f.name).to_string())));
-                if !f.generics.is_empty() {
-                    fields.push(field(
-                        "generics",
-                        DumpVal::Idents(
-                            f.generics.iter().map(|&g| a.name(g).to_string()).collect(),
-                        ),
-                    ));
-                }
-                fields.push(field(
-                    "params",
-                    DumpVal::Nodes(f.params.iter().map(|&p| node_dump(a, p.id())).collect()),
-                ));
-                if let Some(r) = f.ret {
-                    fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, r.id())))));
-                }
-                if !f.bounds.is_empty() {
-                    fields.push(field(
-                        "bounds",
-                        DumpVal::Bounds(
-                            f.bounds
-                                .iter()
-                                .map(|(n, t)| DumpBound {
-                                    ident: a.name(*n).to_string(),
-                                    ty: node_dump(a, t.id()),
-                                })
-                                .collect(),
-                        ),
-                    ));
-                }
-                fields.push(field(
-                    "body",
-                    DumpVal::Node(Box::new(node_dump(a, f.body.id()))),
-                ));
-                "Fn"
+            fields.push(field(
+                "params",
+                DumpVal::Nodes(d.params.iter().map(|p| param_dump(a, *p, next)).collect()),
+            ));
+            if let Some(r) = d.ret {
+                fields.push(field("ret", DumpVal::Node(Box::new(ty_dump(a, r, next)))));
             }
-            ItemKind::SurfaceFn {
-                vis,
-                linkage,
-                is_async,
-                name,
-                generics,
-                params,
-                ret,
-            } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
+            "SurfaceFn"
+        }
+        ItemRef::SurfaceStruct(h) => {
+            let d: &SurfaceStructNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "fields",
+                DumpVal::Nodes(d.fields.iter().map(|f| field_dump(a, *f, next)).collect()),
+            ));
+            "SurfaceStruct"
+        }
+        ItemRef::BuiltinTy(h) => {
+            let d: &BuiltinTyNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field(
+                "linkage",
+                DumpVal::Str(
+                    if d.ambient {
+                        "prelude builtin"
+                    } else {
+                        "pub builtin"
+                    }
+                    .to_string(),
+                ),
+            ));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            if !d.generics.is_empty() {
                 fields.push(field(
-                    "linkage",
-                    DumpVal::Str(
-                        match linkage {
-                            Linkage::Host => "host",
-                            Linkage::Builtin { .. } => "builtin",
-                        }
-                        .to_string(),
-                    ),
+                    "generics",
+                    DumpVal::Idents(d.generics.iter().map(|&g| a.name(g).to_string()).collect()),
                 ));
-                if *is_async {
-                    fields.push(field("is_async", DumpVal::Flag(true)));
-                }
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                if !generics.is_empty() {
-                    fields.push(field(
-                        "generics",
-                        DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect()),
-                    ));
-                }
-                fields.push(field(
-                    "params",
-                    DumpVal::Nodes(params.iter().map(|&p| node_dump(a, p.id())).collect()),
-                ));
-                if let Some(r) = ret {
-                    fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, r.id())))));
-                }
-                "SurfaceFn"
             }
-            ItemKind::SurfaceStruct {
-                vis,
-                name,
-                fields: fs,
-            } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                fields.push(field(
-                    "fields",
-                    DumpVal::Nodes(fs.iter().map(|&f| node_dump(a, f.id())).collect()),
-                ));
-                "SurfaceStruct"
-            }
-            ItemKind::BuiltinTy {
-                vis,
-                ambient,
-                name,
-                generics,
-                members,
-            } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field(
-                    "linkage",
-                    DumpVal::Str(
-                        if *ambient {
-                            "prelude builtin"
-                        } else {
-                            "pub builtin"
-                        }
-                        .to_string(),
-                    ),
-                ));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                if !generics.is_empty() {
-                    fields.push(field(
-                        "generics",
-                        DumpVal::Idents(generics.iter().map(|&g| a.name(g).to_string()).collect()),
-                    ));
-                }
-                fields.push(field(
-                    "members",
-                    DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect()),
-                ));
-                "BuiltinTy"
-            }
-            ItemKind::BuiltinPrimitive {
-                ambient,
-                name,
-                members,
-            } => {
-                fields.push(field(
-                    "linkage",
-                    DumpVal::Str(
-                        if *ambient {
-                            "prelude builtin"
-                        } else {
-                            "pub builtin"
-                        }
-                        .to_string(),
-                    ),
-                ));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                fields.push(field(
-                    "members",
-                    DumpVal::Nodes(members.iter().map(|&m| node_dump(a, m.id())).collect()),
-                ));
-                "BuiltinPrimitive"
-            }
-            ItemKind::BuiltinImpl { vis, prim, methods } => {
-                fields.push(field("vis", DumpVal::Vis(*vis)));
-                fields.push(field("prim", DumpVal::Str(a.name(*prim).to_string())));
-                fields.push(field(
-                    "methods",
-                    DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect()),
-                ));
-                "BuiltinImpl"
-            }
-        },
-        Kind::Member(k) => match k {
-            MemberKind::FieldDecl(d) => {
-                if let Some(v) = d.vis {
-                    fields.push(field("vis", DumpVal::OptVis(Some(v))));
-                }
-                if d.is_static {
-                    fields.push(field("static", DumpVal::Flag(true)));
-                }
-                fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
-                fields.push(field(
-                    "ty",
-                    DumpVal::Node(Box::new(node_dump(a, d.ty.id()))),
-                ));
-                if let Some(i) = d.init {
-                    fields.push(field("init", DumpVal::Node(Box::new(node_dump(a, i.id())))));
-                }
-                "FieldDecl"
-            }
-            MemberKind::MethodDecl(d) => {
-                if let Some(v) = d.vis {
-                    fields.push(field("vis", DumpVal::OptVis(Some(v))));
-                }
-                if d.is_async {
-                    fields.push(field("async", DumpVal::Flag(true)));
-                }
-                fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
-                if !d.generics.is_empty() {
-                    fields.push(field(
-                        "generics",
-                        DumpVal::Idents(
-                            d.generics.iter().map(|&g| a.name(g).to_string()).collect(),
-                        ),
-                    ));
-                }
-                fields.push(field(
-                    "params",
-                    DumpVal::Nodes(d.params.iter().map(|&p| node_dump(a, p.id())).collect()),
-                ));
-                if let Some(r) = d.ret {
-                    fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, r.id())))));
-                }
-                if !d.bounds.is_empty() {
-                    fields.push(field(
-                        "bounds",
-                        DumpVal::Bounds(
-                            d.bounds
-                                .iter()
-                                .map(|(n, t)| DumpBound {
-                                    ident: a.name(*n).to_string(),
-                                    ty: node_dump(a, t.id()),
-                                })
-                                .collect(),
-                        ),
-                    ));
-                }
-                if let Some(b) = d.body {
-                    fields.push(field("body", DumpVal::Node(Box::new(node_dump(a, b.id())))));
-                }
-                "MethodDecl"
-            }
-            MemberKind::Param(d) => {
-                if d.is_mut {
-                    fields.push(field("mut", DumpVal::Flag(true)));
-                }
-                fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
-                if let Some(t) = d.ty {
-                    fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, t.id())))));
-                }
-                "Param"
-            }
-            MemberKind::SelfParam(d) => {
-                if d.is_mut {
-                    fields.push(field("mut", DumpVal::Flag(true)));
-                }
-                "SelfParam"
-            }
-        },
-        Kind::Stmt(k) => match k {
-            StmtKind::LetStmt {
-                is_mut,
-                name,
-                destructure,
-                ty,
-                init,
-            } => {
-                if *is_mut {
-                    fields.push(field("mut", DumpVal::Flag(true)));
-                }
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                if let Some(names) = destructure {
-                    fields.push(field(
-                        "destructure",
-                        DumpVal::Str(
-                            names
-                                .iter()
-                                .map(|n| a.name(*n).to_string())
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                        ),
-                    ));
-                }
-                if let Some(t) = ty {
-                    fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, t.id())))));
-                }
-                fields.push(field(
-                    "init",
-                    DumpVal::Node(Box::new(node_dump(a, init.id()))),
-                ));
-                "LetStmt"
-            }
-            StmtKind::If { cond, then, els } => {
-                fields.push(field(
-                    "cond",
-                    DumpVal::Node(Box::new(node_dump(a, cond.id()))),
-                ));
-                fields.push(field(
-                    "then",
-                    DumpVal::Node(Box::new(node_dump(a, then.id()))),
-                ));
-                if let Some(e) = els {
-                    let id = match e {
-                        ElseBranch::If(h) => h.id(),
-                        ElseBranch::Block(h) => h.id(),
-                    };
-                    fields.push(field("els", DumpVal::Node(Box::new(node_dump(a, id)))));
-                }
-                "If"
-            }
-            StmtKind::While { cond, body } => {
-                fields.push(field(
-                    "cond",
-                    DumpVal::Node(Box::new(node_dump(a, cond.id()))),
-                ));
-                fields.push(field(
-                    "body",
-                    DumpVal::Node(Box::new(node_dump(a, body.id()))),
-                ));
-                "While"
-            }
-            StmtKind::ForOf {
-                var,
-                is_mut,
-                iter,
-                body,
-            } => {
-                if *is_mut {
-                    fields.push(field("mut", DumpVal::Flag(true)));
-                }
-                fields.push(field("var", DumpVal::Str(a.name(*var).to_string())));
-                fields.push(field(
-                    "iter",
-                    DumpVal::Node(Box::new(node_dump(a, iter.id()))),
-                ));
-                fields.push(field(
-                    "body",
-                    DumpVal::Node(Box::new(node_dump(a, body.id()))),
-                ));
-                "ForOf"
-            }
-            StmtKind::ForC {
-                var,
-                is_mut,
-                init,
-                cond,
-                update,
-                body,
-            } => {
-                if *is_mut {
-                    fields.push(field("mut", DumpVal::Flag(true)));
-                }
-                fields.push(field("var", DumpVal::Str(a.name(*var).to_string())));
-                fields.push(field(
-                    "init",
-                    DumpVal::Node(Box::new(node_dump(a, init.id()))),
-                ));
-                fields.push(field(
-                    "cond",
-                    DumpVal::Node(Box::new(node_dump(a, cond.id()))),
-                ));
-                fields.push(field(
-                    "update",
-                    DumpVal::Node(Box::new(node_dump(a, update.id()))),
-                ));
-                fields.push(field(
-                    "body",
-                    DumpVal::Node(Box::new(node_dump(a, body.id()))),
-                ));
-                "ForC"
-            }
-            StmtKind::Return { value } => {
-                if let Some(v) = value {
-                    fields.push(field(
-                        "value",
-                        DumpVal::Node(Box::new(node_dump(a, v.id()))),
-                    ));
-                }
-                "Return"
-            }
-            StmtKind::Break => "Break",
-            StmtKind::Continue => "Continue",
-            StmtKind::WhenStmt { scrut, arms } => {
-                fields.push(field(
-                    "scrut",
-                    DumpVal::Node(Box::new(node_dump(a, scrut.id()))),
-                ));
-                fields.push(field(
-                    "arms",
-                    DumpVal::Nodes(arms.iter().map(|&x| node_dump(a, x.id())).collect()),
-                ));
-                "WhenStmt"
-            }
-            StmtKind::ExprStmt(e) => {
-                fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, e.id())))));
-                "ExprStmt"
-            }
-        },
-        Kind::Arm(k) => match k {
-            ArmKind::WhenArm { pats, body } => {
-                fields.push(field(
-                    "pats",
-                    DumpVal::Nodes(pats.iter().map(|&p| node_dump(a, p.id())).collect()),
-                ));
-                fields.push(field(
-                    "body",
-                    DumpVal::Node(Box::new(node_dump(a, body.id()))),
-                ));
-                "WhenArm"
-            }
-        },
-        Kind::Pat(k) => match k {
-            PatKind::PatLit(e) => {
-                fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, e.id())))));
-                "PatLit"
-            }
-            PatKind::PatPath { segs } => {
-                fields.push(field("segs", DumpVal::Segs(segs_dump(a, segs))));
-                "PatPath"
-            }
-            PatKind::PatCtor { segs, args } => {
-                fields.push(field("segs", DumpVal::Segs(segs_dump(a, segs))));
-                fields.push(field(
-                    "args",
-                    DumpVal::PatArgs(
-                        args.iter()
-                            .map(|x| x.map(|n| a.name(n).to_string()))
-                            .collect(),
-                    ),
-                ));
-                "PatCtor"
-            }
-            PatKind::PatWild => "PatWild",
-            PatKind::PatElse => "PatElse",
-        },
-        Kind::Type(k) => match k {
-            TypeKind::TyPath { segs } => {
-                fields.push(field("segs", DumpVal::Segs(segs_dump(a, segs))));
-                "TyPath"
-            }
-            TypeKind::TyFn { params, ret } => {
-                fields.push(field(
-                    "params",
-                    DumpVal::Nodes(params.iter().map(|&p| node_dump(a, p.id())).collect()),
-                ));
-                fields.push(field(
-                    "ret",
-                    DumpVal::Node(Box::new(node_dump(a, ret.id()))),
-                ));
-                "TyFn"
-            }
-            TypeKind::TyOpt { inner } => {
-                fields.push(field(
-                    "inner",
-                    DumpVal::Node(Box::new(node_dump(a, inner.id()))),
-                ));
-                "TyOpt"
-            }
-            TypeKind::TyArray { elem } => {
-                fields.push(field(
-                    "elem",
-                    DumpVal::Node(Box::new(node_dump(a, elem.id()))),
-                ));
-                "TyArray"
-            }
-            TypeKind::TyTuple { elems } => {
-                fields.push(field(
-                    "elems",
-                    DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect()),
-                ));
-                "TyTuple"
-            }
-            TypeKind::TyConst(e) => {
-                fields.push(field("expr", DumpVal::Node(Box::new(node_dump(a, e.id())))));
-                "TyConst"
-            }
-            TypeKind::TyUnion { elems } => {
-                fields.push(field(
-                    "elems",
-                    DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect()),
-                ));
-                "TyUnion"
-            }
-        },
-        Kind::Expr(k) => match k {
-            ExprKind::Block { stmts, tail } => {
-                fields.push(field(
-                    "stmts",
-                    DumpVal::Nodes(stmts.iter().map(|&s| node_dump(a, s.id())).collect()),
-                ));
-                if let Some(t) = tail {
-                    fields.push(field("tail", DumpVal::Node(Box::new(node_dump(a, t.id())))));
-                }
-                "Block"
-            }
-            ExprKind::AsyncBlock { body } => {
-                fields.push(field(
-                    "body",
-                    DumpVal::Node(Box::new(node_dump(a, body.id()))),
-                ));
-                "AsyncBlock"
-            }
-            ExprKind::Lit(_) => "Lit", // value derived: src[lo..hi]
-            ExprKind::Path { segs } => {
-                fields.push(field("segs", DumpVal::Segs(segs_dump(a, segs))));
-                "Path"
-            }
-            ExprKind::Call { callee, args } => {
-                fields.push(field(
-                    "callee",
-                    DumpVal::Node(Box::new(node_dump(a, callee.id()))),
-                ));
-                fields.push(field(
-                    "args",
-                    DumpVal::Nodes(args.iter().map(|&x| node_dump(a, x.id())).collect()),
-                ));
-                "Call"
-            }
-            ExprKind::Method {
-                recv,
-                name,
-                generics,
-                args,
-            } => {
-                fields.push(field(
-                    "recv",
-                    DumpVal::Node(Box::new(node_dump(a, recv.id()))),
-                ));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                if !generics.is_empty() {
-                    fields.push(field(
-                        "generics",
-                        DumpVal::Nodes(generics.iter().map(|&g| node_dump(a, g.id())).collect()),
-                    ));
-                }
-                fields.push(field(
-                    "args",
-                    DumpVal::Nodes(args.iter().map(|&x| node_dump(a, x.id())).collect()),
-                ));
-                "Method"
-            }
-            ExprKind::Field { recv, name } => {
-                fields.push(field(
-                    "recv",
-                    DumpVal::Node(Box::new(node_dump(a, recv.id()))),
-                ));
-                fields.push(field("name", DumpVal::Str(a.name(*name).to_string())));
-                "Field"
-            }
-            ExprKind::Index { recv, idx } => {
-                fields.push(field(
-                    "recv",
-                    DumpVal::Node(Box::new(node_dump(a, recv.id()))),
-                ));
-                fields.push(field(
-                    "idx",
-                    DumpVal::Node(Box::new(node_dump(a, idx.id()))),
-                ));
-                "Index"
-            }
-            ExprKind::Unary { op, expr } => {
-                fields.push(field("op", DumpVal::UnOp(*op)));
-                fields.push(field(
-                    "expr",
-                    DumpVal::Node(Box::new(node_dump(a, expr.id()))),
-                ));
-                "Unary"
-            }
-            ExprKind::Binary { op, lhs, rhs } => {
-                fields.push(field("op", DumpVal::Op(*op)));
-                fields.push(field(
-                    "lhs",
-                    DumpVal::Node(Box::new(node_dump(a, lhs.id()))),
-                ));
-                fields.push(field(
-                    "rhs",
-                    DumpVal::Node(Box::new(node_dump(a, rhs.id()))),
-                ));
-                "Binary"
-            }
-            ExprKind::Assign { op, target, value } => {
-                if let Some(o) = op {
-                    fields.push(field("op", DumpVal::Op(*o)));
-                }
-                fields.push(field(
-                    "target",
-                    DumpVal::Node(Box::new(node_dump(a, target.id()))),
-                ));
-                fields.push(field(
-                    "value",
-                    DumpVal::Node(Box::new(node_dump(a, value.id()))),
-                ));
-                "Assign"
-            }
-            ExprKind::Lambda { params, ret, body } => {
-                fields.push(field(
-                    "params",
-                    DumpVal::Nodes(params.iter().map(|&p| node_dump(a, p.id())).collect()),
-                ));
-                if let Some(r) = ret {
-                    fields.push(field("ret", DumpVal::Node(Box::new(node_dump(a, r.id())))));
-                }
-                fields.push(field(
-                    "body",
-                    DumpVal::Node(Box::new(node_dump(a, body.id()))),
-                ));
-                "Lambda"
-            }
-            ExprKind::Try { expr } => {
-                fields.push(field(
-                    "expr",
-                    DumpVal::Node(Box::new(node_dump(a, expr.id()))),
-                ));
-                "Try"
-            }
-            ExprKind::FStr { parts } => {
-                fields.push(field(
-                    "parts",
-                    DumpVal::FParts(
-                        parts
-                            .iter()
-                            .map(|p| match p {
-                                FPartAst::Lit(s) => DumpFPart::Lit(s.clone()),
-                                FPartAst::Hole(e) => DumpFPart::Hole(node_dump(a, e.id())),
-                            })
-                            .collect(),
-                    ),
-                ));
-                "FStr"
-            }
-            ExprKind::Struct { ty, fields: fs } => {
-                fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, ty.id())))));
-                fields.push(field(
-                    "fields",
-                    DumpVal::StructFields(
-                        fs.iter()
-                            .map(|(n, v)| DumpStructField {
-                                ident: a.name(*n).to_string(),
-                                node: node_dump(a, v.id()),
-                            })
-                            .collect(),
-                    ),
-                ));
-                "Struct"
-            }
-            ExprKind::Tuple { elems } => {
-                fields.push(field(
-                    "elems",
-                    DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect()),
-                ));
-                "Tuple"
-            }
-            ExprKind::ArrayLit { elems } => {
-                fields.push(field(
-                    "elems",
-                    DumpVal::Nodes(elems.iter().map(|&e| node_dump(a, e.id())).collect()),
-                ));
-                "ArrayLit"
-            }
-            ExprKind::ArrayRepeat { value, count } => {
-                fields.push(field(
-                    "value",
-                    DumpVal::Node(Box::new(node_dump(a, value.id()))),
-                ));
-                fields.push(field(
-                    "count",
-                    DumpVal::Node(Box::new(node_dump(a, count.id()))),
-                ));
-                "ArrayRepeat"
-            }
-            ExprKind::WhenExpr { scrut, arms } => {
-                fields.push(field(
-                    "scrut",
-                    DumpVal::Node(Box::new(node_dump(a, scrut.id()))),
-                ));
-                fields.push(field(
-                    "arms",
-                    DumpVal::Nodes(arms.iter().map(|&x| node_dump(a, x.id())).collect()),
-                ));
-                "WhenExpr"
-            }
-            ExprKind::If { cond, then, els } => {
-                fields.push(field(
-                    "cond",
-                    DumpVal::Node(Box::new(node_dump(a, cond.id()))),
-                ));
-                fields.push(field(
-                    "then",
-                    DumpVal::Node(Box::new(node_dump(a, then.id()))),
-                ));
-                if let Some(e) = els {
-                    let id = match e {
-                        ElseBranch::If(h) => h.id(),
-                        ElseBranch::Block(h) => h.id(),
-                    };
-                    fields.push(field("els", DumpVal::Node(Box::new(node_dump(a, id)))));
-                }
-                "If"
-            }
-            ExprKind::Await { expr } => {
-                fields.push(field(
-                    "expr",
-                    DumpVal::Node(Box::new(node_dump(a, expr.id()))),
-                ));
-                "Await"
-            }
-            ExprKind::Is { expr, ty } => {
-                fields.push(field(
-                    "expr",
-                    DumpVal::Node(Box::new(node_dump(a, expr.id()))),
-                ));
-                fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, ty.id())))));
-                "Is"
-            }
-            ExprKind::Cast { expr, ty } => {
-                fields.push(field(
-                    "expr",
-                    DumpVal::Node(Box::new(node_dump(a, expr.id()))),
-                ));
-                fields.push(field("ty", DumpVal::Node(Box::new(node_dump(a, ty.id())))));
-                "Cast"
-            }
-        },
+            fields.push(field(
+                "members",
+                DumpVal::Nodes(d.members.iter().map(|m| method_dump(a, *m, next)).collect()),
+            ));
+            "BuiltinTy"
+        }
+        ItemRef::BuiltinPrimitive(h) => {
+            let d: &BuiltinPrimitiveNode = h.get(a);
+            fields.push(field(
+                "linkage",
+                DumpVal::Str(
+                    if d.ambient {
+                        "prelude builtin"
+                    } else {
+                        "pub builtin"
+                    }
+                    .to_string(),
+                ),
+            ));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field(
+                "members",
+                DumpVal::Nodes(d.members.iter().map(|m| method_dump(a, *m, next)).collect()),
+            ));
+            "BuiltinPrimitive"
+        }
+        ItemRef::BuiltinImpl(h) => {
+            let d: &BuiltinImplNode = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("prim", DumpVal::Str(a.name(d.prim).to_string())));
+            fields.push(field(
+                "methods",
+                DumpVal::Nodes(d.methods.iter().map(|m| method_dump(a, *m, next)).collect()),
+            ));
+            "BuiltinImpl"
+        }
+        ItemRef::Error(h) => return error_dump(a, h, next),
     };
     DumpNode {
-        id: id.0,
+        id,
         kind,
         span,
         fields,
     }
 }
 
-fn item_data_fields(
+fn module_fields(a: &Ast, d: &ModuleNode, fields: &mut Vec<DumpField>, next: &mut u32) {
+    fields.push(field(
+        "items",
+        DumpVal::Nodes(d.items.iter().map(|&i| item_dump(a, i, next)).collect()),
+    ));
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decl_fields(
     a: &Ast,
     fields: &mut Vec<DumpField>,
     vis: Vis,
     name: IdentId,
     generics: &[IdentId],
-    fs: &[NodeHandle<FieldDeclNode>],
-    methods: &[NodeHandle<MethodDeclNode>],
+    fs: &[FieldRef],
+    methods: &[MethodRef],
+    next: &mut u32,
 ) {
     fields.push(field("vis", DumpVal::Vis(vis)));
     fields.push(field("name", DumpVal::Str(a.name(name).to_string())));
@@ -967,17 +458,696 @@ fn item_data_fields(
     }
     fields.push(field(
         "fields",
-        DumpVal::Nodes(fs.iter().map(|&f| node_dump(a, f.id())).collect()),
+        DumpVal::Nodes(fs.iter().map(|f| field_dump(a, *f, next)).collect()),
     ));
     fields.push(field(
         "methods",
-        DumpVal::Nodes(methods.iter().map(|&m| node_dump(a, m.id())).collect()),
+        DumpVal::Nodes(methods.iter().map(|m| method_dump(a, *m, next)).collect()),
     ));
+}
+
+fn field_dump(a: &Ast, r: FieldRef, next: &mut u32) -> DumpNode {
+    match r {
+        FieldRef::Field(h) => field_decl_dump(a, h, next),
+        FieldRef::Error(h) => error_dump(a, h, next),
+    }
+}
+
+fn field_decl_dump(a: &Ast, h: Handle<FieldDeclNode>, next: &mut u32) -> DumpNode {
+    let d = h.get(a);
+    let mut fields = Vec::new();
+    if let Some(v) = d.vis {
+        fields.push(field("vis", DumpVal::OptVis(Some(v))));
+    }
+    if d.is_static {
+        fields.push(field("static", DumpVal::Flag(true)));
+    }
+    fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+    fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, d.ty, next)))));
+    if let Some(i) = d.init {
+        fields.push(field(
+            "init",
+            DumpVal::Node(Box::new(expr_dump(a, i, next))),
+        ));
+    }
+    DumpNode {
+        id: take_id(next),
+        kind: "FieldDecl",
+        span: (d.span.lo, d.span.hi),
+        fields,
+    }
+}
+
+fn method_dump(a: &Ast, r: MethodRef, next: &mut u32) -> DumpNode {
+    match r {
+        MethodRef::Method(h) => method_decl_dump(a, h, next),
+        MethodRef::Error(h) => error_dump(a, h, next),
+    }
+}
+
+fn method_decl_dump(a: &Ast, h: Handle<MethodDeclNode>, next: &mut u32) -> DumpNode {
+    let d = h.get(a);
+    let mut fields = Vec::new();
+    if let Some(v) = d.vis {
+        fields.push(field("vis", DumpVal::OptVis(Some(v))));
+    }
+    if d.is_async {
+        fields.push(field("async", DumpVal::Flag(true)));
+    }
+    if let Some(m) = d.marker {
+        fields.push(field("marker", DumpVal::Str(a.name(m).to_string())));
+    }
+    fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+    if !d.generics.is_empty() {
+        fields.push(field(
+            "generics",
+            DumpVal::Idents(d.generics.iter().map(|&g| a.name(g).to_string()).collect()),
+        ));
+    }
+    fields.push(field(
+        "params",
+        DumpVal::Nodes(d.params.iter().map(|p| param_dump(a, *p, next)).collect()),
+    ));
+    if let Some(r) = d.ret {
+        fields.push(field("ret", DumpVal::Node(Box::new(ty_dump(a, r, next)))));
+    }
+    if !d.bounds.is_empty() {
+        fields.push(field("bounds", bounds_dump(a, &d.bounds, next)));
+    }
+    if let Some(b) = d.body {
+        fields.push(field(
+            "body",
+            DumpVal::Node(Box::new(block_dump(a, b, next))),
+        ));
+    }
+    DumpNode {
+        id: take_id(next),
+        kind: "MethodDecl",
+        span: (d.span.lo, d.span.hi),
+        fields,
+    }
+}
+
+fn param_dump(a: &Ast, r: ParamRef, next: &mut u32) -> DumpNode {
+    match r {
+        ParamRef::Param(h) => {
+            let d: &ParamNode = h.get(a);
+            let mut fields = Vec::new();
+            if d.is_mut {
+                fields.push(field("mut", DumpVal::Flag(true)));
+            }
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            if let Some(t) = d.ty {
+                fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, t, next)))));
+            }
+            DumpNode {
+                id: take_id(next),
+                kind: "Param",
+                span: (d.span.lo, d.span.hi),
+                fields,
+            }
+        }
+        ParamRef::SelfParam(h) => {
+            let d: &SelfParamNode = h.get(a);
+            let mut fields = Vec::new();
+            if d.is_mut {
+                fields.push(field("mut", DumpVal::Flag(true)));
+            }
+            DumpNode {
+                id: take_id(next),
+                kind: "SelfParam",
+                span: (d.span.lo, d.span.hi),
+                fields,
+            }
+        }
+        ParamRef::Error(h) => error_dump(a, h, next),
+    }
+}
+
+fn block_dump(a: &Ast, h: Handle<BlockNode>, next: &mut u32) -> DumpNode {
+    let d = h.get(a);
+    let mut fields = Vec::new();
+    fields.push(field(
+        "stmts",
+        DumpVal::Nodes(d.stmts.iter().map(|s| stmt_dump(a, *s, next)).collect()),
+    ));
+    if let Some(t) = d.tail {
+        fields.push(field(
+            "tail",
+            DumpVal::Node(Box::new(expr_dump(a, t, next))),
+        ));
+    }
+    DumpNode {
+        id: take_id(next),
+        kind: "Block",
+        span: (d.span.lo, d.span.hi),
+        fields,
+    }
+}
+
+fn stmt_dump(a: &Ast, r: StmtRef, next: &mut u32) -> DumpNode {
+    let id = take_id(next);
+    let span = (r.span(a).lo, r.span(a).hi);
+    let mut fields: Vec<DumpField> = Vec::new();
+    let kind: &'static str = match r {
+        StmtRef::Let(h) => {
+            let d: &LetStmtNode = h.get(a);
+            if d.is_mut {
+                fields.push(field("mut", DumpVal::Flag(true)));
+            }
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            if let Some(names) = &d.destructure {
+                fields.push(field(
+                    "destructure",
+                    DumpVal::Str(
+                        names
+                            .iter()
+                            .map(|n| a.name(*n).to_string())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ),
+                ));
+            }
+            if let Some(t) = d.ty {
+                fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, t, next)))));
+            }
+            fields.push(field(
+                "init",
+                DumpVal::Node(Box::new(expr_dump(a, d.init, next))),
+            ));
+            "LetStmt"
+        }
+        StmtRef::If(h) => {
+            let d: &IfNode = h.get(a);
+            fields.push(field(
+                "cond",
+                DumpVal::Node(Box::new(expr_dump(a, d.cond, next))),
+            ));
+            fields.push(field(
+                "then",
+                DumpVal::Node(Box::new(block_dump(a, d.then, next))),
+            ));
+            if let Some(e) = d.els {
+                fields.push(field("els", DumpVal::Node(Box::new(else_dump(a, e, next)))));
+            }
+            "If"
+        }
+        StmtRef::While(h) => {
+            let d: &WhileNode = h.get(a);
+            fields.push(field(
+                "cond",
+                DumpVal::Node(Box::new(expr_dump(a, d.cond, next))),
+            ));
+            fields.push(field(
+                "body",
+                DumpVal::Node(Box::new(block_dump(a, d.body, next))),
+            ));
+            "While"
+        }
+        StmtRef::ForOf(h) => {
+            let d: &ForOfNode = h.get(a);
+            if d.is_mut {
+                fields.push(field("mut", DumpVal::Flag(true)));
+            }
+            fields.push(field("var", DumpVal::Str(a.name(d.var).to_string())));
+            fields.push(field(
+                "iter",
+                DumpVal::Node(Box::new(expr_dump(a, d.iter, next))),
+            ));
+            fields.push(field(
+                "body",
+                DumpVal::Node(Box::new(block_dump(a, d.body, next))),
+            ));
+            "ForOf"
+        }
+        StmtRef::ForC(h) => {
+            let d: &ForCNode = h.get(a);
+            if d.is_mut {
+                fields.push(field("mut", DumpVal::Flag(true)));
+            }
+            fields.push(field("var", DumpVal::Str(a.name(d.var).to_string())));
+            fields.push(field(
+                "init",
+                DumpVal::Node(Box::new(expr_dump(a, d.init, next))),
+            ));
+            fields.push(field(
+                "cond",
+                DumpVal::Node(Box::new(expr_dump(a, d.cond, next))),
+            ));
+            fields.push(field(
+                "update",
+                DumpVal::Node(Box::new(expr_dump(a, d.update, next))),
+            ));
+            fields.push(field(
+                "body",
+                DumpVal::Node(Box::new(block_dump(a, d.body, next))),
+            ));
+            "ForC"
+        }
+        StmtRef::Return(h) => {
+            let d: &ReturnNode = h.get(a);
+            if let Some(v) = d.value {
+                fields.push(field(
+                    "value",
+                    DumpVal::Node(Box::new(expr_dump(a, v, next))),
+                ));
+            }
+            "Return"
+        }
+        StmtRef::Break(_) => "Break",
+        StmtRef::Continue(_) => "Continue",
+        StmtRef::When(h) => {
+            let d: &WhenStmtNode = h.get(a);
+            fields.push(field(
+                "scrut",
+                DumpVal::Node(Box::new(expr_dump(a, d.scrut, next))),
+            ));
+            fields.push(field(
+                "arms",
+                DumpVal::Nodes(d.arms.iter().map(|&x| arm_dump(a, x, next)).collect()),
+            ));
+            "WhenStmt"
+        }
+        StmtRef::Expr(e) => {
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, e, next))),
+            ));
+            "ExprStmt"
+        }
+        StmtRef::Error(h) => return error_dump(a, h, next),
+    };
+    DumpNode {
+        id,
+        kind,
+        span,
+        fields,
+    }
+}
+
+fn else_dump(a: &Ast, e: ElseBranch, next: &mut u32) -> DumpNode {
+    match e {
+        ElseBranch::If(h) => stmt_dump(a, StmtRef::If(h), next),
+        ElseBranch::Block(h) => block_dump(a, h, next),
+    }
+}
+
+fn arm_dump(a: &Ast, h: Handle<WhenArmNode>, next: &mut u32) -> DumpNode {
+    let d = h.get(a);
+    let fields = vec![
+        field(
+            "pats",
+            DumpVal::Nodes(d.pats.iter().map(|p| pat_dump(a, *p, next)).collect()),
+        ),
+        field("body", DumpVal::Node(Box::new(expr_dump(a, d.body, next)))),
+    ];
+    DumpNode {
+        id: take_id(next),
+        kind: "WhenArm",
+        span: (d.span.lo, d.span.hi),
+        fields,
+    }
+}
+
+fn pat_dump(a: &Ast, r: PatRef, next: &mut u32) -> DumpNode {
+    let id = take_id(next);
+    let span = (r.span(a).lo, r.span(a).hi);
+    let mut fields: Vec<DumpField> = Vec::new();
+    let kind: &'static str = match r {
+        PatRef::Lit(h) => {
+            let d: &PatLitNode = h.get(a);
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            "PatLit"
+        }
+        PatRef::Path(h) => {
+            let d: &PatPathNode = h.get(a);
+            fields.push(field("segs", DumpVal::Segs(segs_dump(a, &d.segs, next))));
+            "PatPath"
+        }
+        PatRef::Ctor(h) => {
+            let d: &PatCtorNode = h.get(a);
+            fields.push(field("segs", DumpVal::Segs(segs_dump(a, &d.segs, next))));
+            fields.push(field(
+                "args",
+                DumpVal::PatArgs(
+                    d.args
+                        .iter()
+                        .map(|x| x.map(|n| a.name(n).to_string()))
+                        .collect(),
+                ),
+            ));
+            "PatCtor"
+        }
+        PatRef::Wild(_) => "PatWild",
+        PatRef::Else(_) => "PatElse",
+        PatRef::Error(h) => return error_dump(a, h, next),
+    };
+    DumpNode {
+        id,
+        kind,
+        span,
+        fields,
+    }
+}
+
+fn ty_dump(a: &Ast, r: TyRef, next: &mut u32) -> DumpNode {
+    let id = take_id(next);
+    let span = (r.span(a).lo, r.span(a).hi);
+    let mut fields: Vec<DumpField> = Vec::new();
+    let kind: &'static str = match r {
+        TyRef::Path(h) => {
+            let d: &TyPathNode = h.get(a);
+            fields.push(field("segs", DumpVal::Segs(segs_dump(a, &d.segs, next))));
+            "TyPath"
+        }
+        TyRef::Fn(h) => {
+            let d: &TyFnNode = h.get(a);
+            fields.push(field(
+                "params",
+                DumpVal::Nodes(d.params.iter().map(|p| ty_dump(a, *p, next)).collect()),
+            ));
+            fields.push(field(
+                "ret",
+                DumpVal::Node(Box::new(ty_dump(a, d.ret, next))),
+            ));
+            "TyFn"
+        }
+        TyRef::Opt(h) => {
+            let d: &TyOptNode = h.get(a);
+            fields.push(field(
+                "inner",
+                DumpVal::Node(Box::new(ty_dump(a, d.inner, next))),
+            ));
+            "TyOpt"
+        }
+        TyRef::Array(h) => {
+            let d: &TyArrayNode = h.get(a);
+            fields.push(field(
+                "elem",
+                DumpVal::Node(Box::new(ty_dump(a, d.elem, next))),
+            ));
+            "TyArray"
+        }
+        TyRef::Tuple(h) => {
+            let d: &TyTupleNode = h.get(a);
+            fields.push(field(
+                "elems",
+                DumpVal::Nodes(d.elems.iter().map(|e| ty_dump(a, *e, next)).collect()),
+            ));
+            "TyTuple"
+        }
+        TyRef::Const(h) => {
+            let d: &TyConstNode = h.get(a);
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            "TyConst"
+        }
+        TyRef::Union(h) => {
+            let d: &TyUnionNode = h.get(a);
+            fields.push(field(
+                "elems",
+                DumpVal::Nodes(d.elems.iter().map(|e| ty_dump(a, *e, next)).collect()),
+            ));
+            "TyUnion"
+        }
+        TyRef::Error(h) => return error_dump(a, h, next),
+    };
+    DumpNode {
+        id,
+        kind,
+        span,
+        fields,
+    }
+}
+
+fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> DumpNode {
+    let id = take_id(next);
+    let span = (r.span(a).lo, r.span(a).hi);
+    let mut fields: Vec<DumpField> = Vec::new();
+    let kind: &'static str = match r {
+        ExprRef::Block(h) => return block_dump(a, h, next),
+        ExprRef::AsyncBlock(h) => {
+            let d: &AsyncBlockNode = h.get(a);
+            fields.push(field(
+                "body",
+                DumpVal::Node(Box::new(block_dump(a, d.body, next))),
+            ));
+            "AsyncBlock"
+        }
+        ExprRef::Lit(h) => {
+            let _d: &LitNode = h.get(a);
+            "Lit" // value derived: src[lo..hi]
+        }
+        ExprRef::Path(h) => {
+            let d: &crate::expr::PathNode = h.get(a);
+            fields.push(field("segs", DumpVal::Segs(segs_dump(a, &d.segs, next))));
+            "Path"
+        }
+        ExprRef::Call(h) => {
+            let d: &CallNode = h.get(a);
+            fields.push(field(
+                "callee",
+                DumpVal::Node(Box::new(expr_dump(a, d.callee, next))),
+            ));
+            fields.push(field(
+                "args",
+                DumpVal::Nodes(d.args.iter().map(|x| expr_dump(a, *x, next)).collect()),
+            ));
+            "Call"
+        }
+        ExprRef::Method(h) => {
+            let d: &MethodNode = h.get(a);
+            fields.push(field(
+                "recv",
+                DumpVal::Node(Box::new(expr_dump(a, d.recv, next))),
+            ));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            if !d.generics.is_empty() {
+                fields.push(field(
+                    "generics",
+                    DumpVal::Nodes(d.generics.iter().map(|g| ty_dump(a, *g, next)).collect()),
+                ));
+            }
+            fields.push(field(
+                "args",
+                DumpVal::Nodes(d.args.iter().map(|x| expr_dump(a, *x, next)).collect()),
+            ));
+            "Method"
+        }
+        ExprRef::Field(h) => {
+            let d: &FieldNode = h.get(a);
+            fields.push(field(
+                "recv",
+                DumpVal::Node(Box::new(expr_dump(a, d.recv, next))),
+            ));
+            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            "Field"
+        }
+        ExprRef::Index(h) => {
+            let d: &IndexNode = h.get(a);
+            fields.push(field(
+                "recv",
+                DumpVal::Node(Box::new(expr_dump(a, d.recv, next))),
+            ));
+            fields.push(field(
+                "idx",
+                DumpVal::Node(Box::new(expr_dump(a, d.idx, next))),
+            ));
+            "Index"
+        }
+        ExprRef::Unary(h) => {
+            let d: &UnaryNode = h.get(a);
+            fields.push(field("op", DumpVal::UnOp(d.op)));
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            "Unary"
+        }
+        ExprRef::Binary(h) => {
+            let d: &BinaryNode = h.get(a);
+            fields.push(field("op", DumpVal::Op(d.op)));
+            fields.push(field(
+                "lhs",
+                DumpVal::Node(Box::new(expr_dump(a, d.lhs, next))),
+            ));
+            fields.push(field(
+                "rhs",
+                DumpVal::Node(Box::new(expr_dump(a, d.rhs, next))),
+            ));
+            "Binary"
+        }
+        ExprRef::Assign(h) => {
+            let d: &AssignNode = h.get(a);
+            if let Some(o) = d.op {
+                fields.push(field("op", DumpVal::Op(o)));
+            }
+            fields.push(field(
+                "target",
+                DumpVal::Node(Box::new(expr_dump(a, d.target, next))),
+            ));
+            fields.push(field(
+                "value",
+                DumpVal::Node(Box::new(expr_dump(a, d.value, next))),
+            ));
+            "Assign"
+        }
+        ExprRef::Lambda(h) => {
+            let d: &LambdaNode = h.get(a);
+            fields.push(field(
+                "params",
+                DumpVal::Nodes(d.params.iter().map(|p| param_dump(a, *p, next)).collect()),
+            ));
+            if let Some(r) = d.ret {
+                fields.push(field("ret", DumpVal::Node(Box::new(ty_dump(a, r, next)))));
+            }
+            fields.push(field(
+                "body",
+                DumpVal::Node(Box::new(expr_dump(a, d.body, next))),
+            ));
+            "Lambda"
+        }
+        ExprRef::Try(h) => {
+            let d: &TryNode = h.get(a);
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            "Try"
+        }
+        ExprRef::FStr(h) => {
+            let d: &FStrNode = h.get(a);
+            fields.push(field(
+                "parts",
+                DumpVal::FParts(
+                    d.parts
+                        .iter()
+                        .map(|p| match p {
+                            FPartAst::Lit(s) => DumpFPart::Lit(s.clone()),
+                            FPartAst::Hole(e) => DumpFPart::Hole(expr_dump(a, *e, next)),
+                        })
+                        .collect(),
+                ),
+            ));
+            "FStr"
+        }
+        ExprRef::Struct(h) => {
+            let d: &StructLitNode = h.get(a);
+            fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, d.ty, next)))));
+            fields.push(field(
+                "fields",
+                DumpVal::StructFields(
+                    d.fields
+                        .iter()
+                        .map(|(n, v)| DumpStructField {
+                            ident: a.name(*n).to_string(),
+                            node: expr_dump(a, *v, next),
+                        })
+                        .collect(),
+                ),
+            ));
+            "Struct"
+        }
+        ExprRef::Tuple(h) => {
+            let d: &TupleNode = h.get(a);
+            fields.push(field(
+                "elems",
+                DumpVal::Nodes(d.elems.iter().map(|e| expr_dump(a, *e, next)).collect()),
+            ));
+            "Tuple"
+        }
+        ExprRef::ArrayLit(h) => {
+            let d: &ArrayLitNode = h.get(a);
+            fields.push(field(
+                "elems",
+                DumpVal::Nodes(d.elems.iter().map(|e| expr_dump(a, *e, next)).collect()),
+            ));
+            "ArrayLit"
+        }
+        ExprRef::ArrayRepeat(h) => {
+            let d: &ArrayRepeatNode = h.get(a);
+            fields.push(field(
+                "value",
+                DumpVal::Node(Box::new(expr_dump(a, d.value, next))),
+            ));
+            fields.push(field(
+                "count",
+                DumpVal::Node(Box::new(expr_dump(a, d.count, next))),
+            ));
+            "ArrayRepeat"
+        }
+        ExprRef::WhenExpr(h) => {
+            let d: &WhenExprNode = h.get(a);
+            fields.push(field(
+                "scrut",
+                DumpVal::Node(Box::new(expr_dump(a, d.scrut, next))),
+            ));
+            fields.push(field(
+                "arms",
+                DumpVal::Nodes(d.arms.iter().map(|&x| arm_dump(a, x, next)).collect()),
+            ));
+            "WhenExpr"
+        }
+        ExprRef::If(h) => {
+            let d: &IfExprNode = h.get(a);
+            fields.push(field(
+                "cond",
+                DumpVal::Node(Box::new(expr_dump(a, d.cond, next))),
+            ));
+            fields.push(field(
+                "then",
+                DumpVal::Node(Box::new(block_dump(a, d.then, next))),
+            ));
+            if let Some(e) = d.els {
+                fields.push(field("els", DumpVal::Node(Box::new(else_dump(a, e, next)))));
+            }
+            "If"
+        }
+        ExprRef::Await(h) => {
+            let d: &AwaitNode = h.get(a);
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            "Await"
+        }
+        ExprRef::Is(h) => {
+            let d: &IsNode = h.get(a);
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, d.ty, next)))));
+            "Is"
+        }
+        ExprRef::Cast(h) => {
+            let d: &CastNode = h.get(a);
+            fields.push(field(
+                "expr",
+                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
+            ));
+            fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, d.ty, next)))));
+            "Cast"
+        }
+        ExprRef::Error(h) => return error_dump(a, h, next),
+    };
+    DumpNode {
+        id,
+        kind,
+        span,
+        fields,
+    }
 }
 
 /// Build the dump tree from a parsed module.
 pub fn to_dump_tree(ast: &Ast) -> DumpNode {
-    node_dump(ast, ast.root.id())
+    let mut next = 0u32;
+    item_dump(ast, ItemRef::Module(ast.root()), &mut next)
 }
 
 // ---- renderer 1: JSON (flattened tagged objects, no display strings) ----

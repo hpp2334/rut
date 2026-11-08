@@ -4,30 +4,20 @@
 //! whole statement, and malformed headers still diagnose. (The
 //! mut-binding LAW itself is a later phase — here the flag only flows.)
 
-use rut_ast::ast::*;
-use rut_ast::dump::{render_json, to_dump_tree};
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::{last_fn_body, parse};
+use rut_ast::{render_json, to_dump_tree, Ast, ExprRef, Lit, StmtRef};
+use rut_parser::Mode;
 
 /// the first `for` statement of the last fn's body
-fn first_for(src: &str) -> (Ast, NodeHandle<AnyStmt>) {
+fn first_for(src: &str) -> (Ast, StmtRef) {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let f = items
-        .iter()
-        .rfind(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
-        .expect("fn");
-    let body = match ast.item(*f) {
-        ItemKind::Fn(d) => d.body,
-        _ => unreachable!(),
-    };
-    let s = ast.block(body)[0];
+    let s = last_fn_body(&ast).get(&ast).stmts[0];
     assert!(
-        matches!(
-            ast.kind(s.id()),
-            Kind::Stmt(StmtKind::ForOf { .. } | StmtKind::ForC { .. })
-        ),
-        "expected a for statement"
+        matches!(s, StmtRef::ForOf(_) | StmtRef::ForC(_)),
+        "expected a for statement, got {s:?}"
     );
     (ast, s)
 }
@@ -36,26 +26,22 @@ fn first_for(src: &str) -> (Ast, NodeHandle<AnyStmt>) {
 fn for_of_takes_mut() {
     let src = "fn f(xs: Vec<i32>) -> nil { for (let mut t of xs) { } }";
     let (ast, s) = first_for(src);
-    let Kind::Stmt(StmtKind::ForOf {
-        var,
-        is_mut,
-        iter,
-        body,
-    }) = ast.kind(s.id())
-    else {
-        panic!("expected a for-of");
+    let StmtRef::ForOf(fh) = s else {
+        panic!("expected a for-of, got {s:?}");
     };
-    assert!(is_mut, "`mut` must set the flag");
-    assert_eq!(ast.name(*var), "t");
+    let d = fh.get(&ast);
+    assert!(d.is_mut, "`mut` must set the flag");
+    assert_eq!(ast.name(d.var), "t");
     // the iterable and the body ride untouched
-    assert!(matches!(ast.expr(*iter), ExprKind::Path { .. }));
-    assert!(ast.block(*body).is_empty());
-    // the span covers the whole statement (statement spans end at the
-    // next token, so the fn's own `}` rides along)
-    let sp = ast.span(s.id());
+    assert!(matches!(d.iter, ExprRef::Path(_)));
+    assert!(d.body.get(&ast).stmts.is_empty());
+    // the span covers the whole statement — EXACT now: it ends at the
+    // loop's own `}`, not the next token's tail (the v1 span carried
+    // the fn's closing brace along)
     assert_eq!(
-        &src[sp.lo as usize..sp.hi as usize],
-        "for (let mut t of xs) { } }"
+        d.span.text(src),
+        "for (let mut t of xs) { }",
+        "the exact span law"
     );
 }
 
@@ -63,38 +49,36 @@ fn for_of_takes_mut() {
 fn for_of_without_mut_is_unchanged() {
     let src = "fn f(xs: Vec<i32>) -> nil { for (let t of xs) { } }";
     let (ast, s) = first_for(src);
-    let Kind::Stmt(StmtKind::ForOf { var, is_mut, .. }) = ast.kind(s.id()) else {
-        panic!("expected a for-of");
+    let StmtRef::ForOf(fh) = s else {
+        panic!("expected a for-of, got {s:?}");
     };
-    assert!(!is_mut, "no `mut`, no flag");
-    assert_eq!(ast.name(*var), "t");
+    let d = fh.get(&ast);
+    assert!(!d.is_mut, "no `mut`, no flag");
+    assert_eq!(ast.name(d.var), "t");
 }
 
 #[test]
 fn for_c_takes_mut() {
     let src = "fn f(n: i32) -> nil { for (let mut i = 0; i < n; i += 1) { } }";
     let (ast, s) = first_for(src);
-    let Kind::Stmt(StmtKind::ForC {
-        var,
-        is_mut,
-        init,
-        cond,
-        update,
-        body,
-    }) = ast.kind(s.id())
-    else {
-        panic!("expected a for-c");
+    let StmtRef::ForC(fh) = s else {
+        panic!("expected a for-c, got {s:?}");
     };
-    assert!(is_mut, "`mut` must set the flag");
-    assert_eq!(ast.name(*var), "i");
-    assert!(matches!(ast.expr(*init), ExprKind::Lit(Lit::Int(..))));
-    assert!(matches!(ast.expr(*cond), ExprKind::Binary { .. }));
-    assert!(matches!(ast.expr(*update), ExprKind::Assign { .. }));
-    assert!(ast.block(*body).is_empty());
-    let sp = ast.span(s.id());
+    let d = fh.get(&ast);
+    assert!(d.is_mut, "`mut` must set the flag");
+    assert_eq!(ast.name(d.var), "i");
+    let ExprRef::Lit(lh) = d.init else {
+        panic!("a lit init, got {:?}", d.init);
+    };
+    assert!(matches!(lh.get(&ast).lit, Lit::Int(..)));
+    assert!(matches!(d.cond, ExprRef::Binary(_)));
+    assert!(matches!(d.update, ExprRef::Assign(_)));
+    assert!(d.body.get(&ast).stmts.is_empty());
+    // exact spans: the statement ends at its own `}`
     assert_eq!(
-        &src[sp.lo as usize..sp.hi as usize],
-        "for (let mut i = 0; i < n; i += 1) { } }"
+        d.span.text(src),
+        "for (let mut i = 0; i < n; i += 1) { }",
+        "the exact span law"
     );
 }
 
@@ -102,11 +86,12 @@ fn for_c_takes_mut() {
 fn for_c_without_mut_is_unchanged() {
     let src = "fn f(n: i32) -> nil { for (let i = 0; i < n; i += 1) { } }";
     let (ast, s) = first_for(src);
-    let Kind::Stmt(StmtKind::ForC { var, is_mut, .. }) = ast.kind(s.id()) else {
-        panic!("expected a for-c");
+    let StmtRef::ForC(fh) = s else {
+        panic!("expected a for-c, got {s:?}");
     };
-    assert!(!is_mut, "no `mut`, no flag");
-    assert_eq!(ast.name(*var), "i");
+    let d = fh.get(&ast);
+    assert!(!d.is_mut, "no `mut`, no flag");
+    assert_eq!(ast.name(d.var), "i");
 }
 
 #[test]

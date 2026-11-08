@@ -3,7 +3,7 @@
 //! values. The server layer only routes URIs and publishes.
 
 use ls_types::*;
-use rut_ast::ast::Ast;
+use rut_ast::Ast;
 use rut_semantic::{Diag, LineIndex, Span, Token};
 use std::str::FromStr;
 
@@ -34,13 +34,13 @@ fn analysis_of(doc: &rut_semantic::ParsedDoc) -> Analysis {
     let src = doc.src();
     Analysis {
         diags: doc
-            .diags
+            .diags()
             .iter()
             .map(|d| to_diagnostic(d, src, &doc.lines))
             .collect(),
         tokens: encode(&doc.spans, src, &doc.lines),
         symbols: to_document_symbols(doc.symbols.clone(), src, &doc.lines),
-        index: hover::index(src, &doc.ast, &doc.toks, &doc.comments),
+        index: hover::index(src, &doc.ast, &doc.toks),
     }
 }
 
@@ -186,18 +186,18 @@ fn doc_ctx(uri: &str, src: &str) -> (String, Vec<Token>, Ast, hover::DefIndex) {
     // the uri) and the hover index builds over its parts — the old
     // shape parsed the same text twice (its own parse + index_at's)
     let d = rut_semantic::ParsedDoc::parse(uri, src);
-    let mut idx = hover::index(d.src(), &d.ast, &d.toks, &d.comments);
+    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
     idx.origin = uri.to_string();
-    let rut_semantic::ParsedDoc { ast, toks, .. } = d;
+    let rut_semantic::ParsedDoc { ast, toks, src, .. } = d;
     // one String clone per query — the consumers want the text and the
     // tree as separate values (the parse itself dwarfs this)
-    (ast.src.clone(), toks, ast, idx)
+    (src, toks, ast, idx)
 }
 
 /// the definition index for one document (origin stamped with `uri`)
 pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
     let d = rut_semantic::ParsedDoc::parse(uri, src);
-    let mut idx = hover::index(d.src(), &d.ast, &d.toks, &d.comments);
+    let mut idx = hover::index(d.src(), &d.ast, &d.toks);
     idx.origin = uri.to_string();
     idx
 }

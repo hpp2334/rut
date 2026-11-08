@@ -5,8 +5,11 @@
 //! `private` keyword is a lexer hard error naming its replacement.
 //! Type bodies are FIELDS ONLY — methods live in `impl` blocks.
 
-use rut_ast::ast::*;
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::parse;
+use rut_ast::{FieldRef, ItemRef, MethodRef, TyRef, Vis};
+use rut_parser::Mode;
 
 #[test]
 fn member_pub_scopes_parse() {
@@ -28,26 +31,36 @@ impl Widget {
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Class { fields, .. } = ast.item(items[0]) else {
-        panic!("expected a class");
+    let items = ast.root().items(&ast);
+    let ItemRef::Class(ch) = items[0] else {
+        panic!("expected a class, got {:?}", items[0]);
     };
-    let ItemKind::Impl { methods, .. } = ast.item(items[1]) else {
-        panic!("expected an impl block");
+    let fields = ch.get(&ast).fields.clone();
+    let ItemRef::Impl(ih) = items[1] else {
+        panic!("expected an impl block, got {:?}", items[1]);
     };
-    let expect = |h: NodeHandle<FieldDeclNode>, want: Option<Vis>| {
-        assert_eq!(ast.field_decl(h).vis, want);
+    let methods = ih.get(&ast).methods.clone();
+    let field_vis = |r: FieldRef, want: Option<Vis>| {
+        let FieldRef::Field(fh) = r else {
+            panic!("a field, got {r:?}");
+        };
+        assert_eq!(fh.get(&ast).vis, want);
     };
-    expect(fields[0], Some(Vis::Pub));
-    expect(fields[1], Some(Vis::Pkg));
-    expect(fields[2], Some(Vis::Super));
-    expect(fields[3], None);
-    let m = |i: usize| ast.method_decl(methods[i]).vis;
-    assert_eq!(m(0), Some(Vis::Pub));
-    assert_eq!(m(1), Some(Vis::Pub));
-    assert_eq!(m(2), Some(Vis::Super));
-    assert_eq!(m(3), Some(Vis::Pkg));
-    assert_eq!(m(4), None);
+    field_vis(fields[0], Some(Vis::Pub));
+    field_vis(fields[1], Some(Vis::Pkg));
+    field_vis(fields[2], Some(Vis::Super));
+    field_vis(fields[3], None);
+    let method_vis = |i: usize| {
+        let MethodRef::Method(mh) = methods[i] else {
+            panic!("a method, got {:?}", methods[i]);
+        };
+        mh.get(&ast).vis
+    };
+    assert_eq!(method_vis(0), Some(Vis::Pub));
+    assert_eq!(method_vis(1), Some(Vis::Pub));
+    assert_eq!(method_vis(2), Some(Vis::Super));
+    assert_eq!(method_vis(3), Some(Vis::Pkg));
+    assert_eq!(method_vis(4), None);
 }
 
 #[test]
@@ -79,17 +92,23 @@ impl Sink {
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Class { fields, .. } = ast.item(items[0]) else {
-        panic!("expected a class");
+    let items = ast.root().items(&ast);
+    let ItemRef::Class(ch) = items[0] else {
+        panic!("expected a class, got {:?}", items[0]);
     };
-    let ItemKind::Impl { methods, .. } = ast.item(items[1]) else {
-        panic!("expected an impl block");
+    let FieldRef::Field(fh) = ch.get(&ast).fields[0] else {
+        panic!("a field");
     };
-    let fd = ast.field_decl(fields[0]);
+    let fd = fh.get(&ast);
     assert_eq!(fd.vis, Some(Vis::Pub));
     assert!(fd.is_static);
-    let md = ast.method_decl(methods[0]);
+    let ItemRef::Impl(ih) = items[1] else {
+        panic!("expected an impl block, got {:?}", items[1]);
+    };
+    let MethodRef::Method(mh) = ih.get(&ast).methods[0] else {
+        panic!("a method");
+    };
+    let md = mh.get(&ast);
     assert_eq!(md.vis, Some(Vis::Pub));
     assert!(md.is_async);
 }
@@ -167,12 +186,19 @@ fn interface_bodies_accept_async_and_no_self_sigs() {
     }";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Interface { methods, .. } = ast.item(items[0]) else {
-        panic!("expected an interface");
+    let items = ast.root().items(&ast);
+    let ItemRef::Interface(ih) = items[0] else {
+        panic!("expected an interface, got {:?}", items[0]);
     };
-    assert!(ast.method_decl(methods[1]).is_async);
-    assert!(!ast.method_decl(methods[2]).is_async);
+    let methods = &ih.get(&ast).methods;
+    let MethodRef::Method(a) = methods[1] else {
+        panic!("a method, got {:?}", methods[1]);
+    };
+    assert!(a.get(&ast).is_async);
+    let MethodRef::Method(b) = methods[2] else {
+        panic!("a method, got {:?}", methods[2]);
+    };
+    assert!(!b.get(&ast).is_async);
 }
 
 #[test]
@@ -183,17 +209,15 @@ fn inherent_impl_is_the_one_form() {
         impl P { fn show(self) -> str { return \"\"; } }";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Impl { target, .. } = ast.item(items[1]) else {
-        panic!("expected an inherent impl");
+    let items = ast.root().items(&ast);
+    let ItemRef::Impl(ih) = items[1] else {
+        panic!("expected an inherent impl, got {:?}", items[1]);
     };
-    let TypeKind::TyPath { segs } = ast.ty(*target) else {
-        panic!("expected a path target");
+    let TyRef::Path(t) = ih.get(&ast).target else {
+        panic!("expected a path target, got {:?}", ih.get(&ast).target);
     };
-    assert_eq!(ast.name(segs[0].name), "P");
-    let ItemKind::Impl { .. } = ast.item(items[3]) else {
-        panic!("expected a second inherent impl");
-    };
+    assert_eq!(ast.name(t.get(&ast).segs[0].name), "P");
+    assert!(matches!(items[3], ItemRef::Impl(_)));
 }
 
 #[test]
@@ -204,16 +228,14 @@ fn interface_vis_parses_into_the_item() {
     }";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Interface {
-        vis, name, methods, ..
-    } = ast.item(items[0])
-    else {
-        panic!("expected an interface");
+    let items = ast.root().items(&ast);
+    let ItemRef::Interface(ih) = items[0] else {
+        panic!("expected an interface, got {:?}", items[0]);
     };
-    assert_eq!(*vis, Vis::Pub);
-    assert_eq!(ast.name(*name), "Show");
-    assert_eq!(methods.len(), 1);
+    let d = ih.get(&ast);
+    assert_eq!(d.vis, Vis::Pub);
+    assert_eq!(ast.name(d.name), "Show");
+    assert_eq!(d.methods.len(), 1);
 }
 
 #[test]

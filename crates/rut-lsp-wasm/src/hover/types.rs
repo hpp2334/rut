@@ -1,7 +1,7 @@
 //! The index data — one entry per type, fn, or impl declaration:
 //! verbatim signature slices, doc lines, and spans for rendering.
 
-use rut_ast::ast::{AnyTy, Ast, NodeHandle, TypeKind, Vis};
+use rut_ast::{Ast, TyRef, Vis};
 use rut_semantic::Mode;
 use rut_semantic::Span;
 
@@ -266,16 +266,18 @@ impl DefIndex {
 }
 
 /// head segment text of a type node (`Circle`, `Vec` in `Vec<T>`)
-pub(crate) fn ty_head(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
-    match ast.ty(h) {
-        TypeKind::TyPath { segs, .. } => segs
+pub(crate) fn ty_head(ast: &Ast, t: TyRef) -> String {
+    match t {
+        TyRef::Path(h) => h
+            .get(ast)
+            .segs
             .first()
             .map(|s| ast.name(s.name).to_string())
             .unwrap_or_default(),
         // `?Circle` binds like `Circle` for member lookup —
         // without this arm a nullable let-binding infers "" and its
         // receiver hover misses
-        TypeKind::TyOpt { inner } => ty_head(ast, *inner),
+        TyRef::Opt(h) => ty_head(ast, h.get(ast).inner),
         _ => String::new(),
     }
 }
@@ -294,15 +296,17 @@ pub(crate) fn head_of_ty(text: &str) -> String {
 /// display text of a type node — the alias hover's `type X = <target>`;
 /// path segments join with `::` (the name-resolution law's spelling —
 /// a `.` would read value access)
-pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
-    match ast.ty(h) {
-        TypeKind::TyPath { segs } => {
-            let mut s = segs
+pub(crate) fn ty_src(ast: &Ast, t: TyRef) -> String {
+    match t {
+        TyRef::Path(h) => {
+            let d = h.get(ast);
+            let mut s = d
+                .segs
                 .iter()
                 .map(|sg| ast.name(sg.name).to_string())
                 .collect::<Vec<_>>()
                 .join("::");
-            if let Some(last) = segs.last() {
+            if let Some(last) = d.segs.last() {
                 if !last.generics.is_empty() {
                     s.push_str(&format!(
                         "<{}>",
@@ -319,20 +323,23 @@ pub(crate) fn ty_src(ast: &Ast, h: NodeHandle<AnyTy>) -> String {
         // the prefix spelling renders with its payload: `?i32`, `??str`
         // (matches symbols.rs's `ty_text` — the memo all three renderers
         // must carry)
-        TypeKind::TyOpt { inner } => format!("?{}", ty_src(ast, *inner)),
-        TypeKind::TyArray { elem } => format!("[{}]", ty_src(ast, *elem)),
+        TyRef::Opt(h) => format!("?{}", ty_src(ast, h.get(ast).inner)),
+        TyRef::Array(h) => format!("[{}]", ty_src(ast, h.get(ast).elem)),
         // a written tuple annotation renders as written — `-> (opaque,
         // str)` used to render empty, which leaked `: `-style hints and
         // hovers (the inlay phase's find)
-        TypeKind::TyTuple { elems } => format!(
+        TyRef::Tuple(h) => format!(
             "({})",
-            elems
+            h.get(ast)
+                .elems
                 .iter()
                 .map(|&e| ty_src(ast, e))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        TypeKind::TyUnion { elems } => elems
+        TyRef::Union(h) => h
+            .get(ast)
+            .elems
             .iter()
             .map(|&e| ty_src(ast, e))
             .collect::<Vec<_>>()

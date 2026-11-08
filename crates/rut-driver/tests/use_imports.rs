@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use rut_ast::ast::Vis;
+use rut_ast::Vis;
 
 const DEP: &str = "util";
 

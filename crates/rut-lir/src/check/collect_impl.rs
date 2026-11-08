@@ -12,12 +12,11 @@ impl<'a> Ctx<'a> {
     /// monomorphization queue eagerly so vtables carry real ids.
     pub(crate) fn collect_impl(
         &mut self,
-        node: NodeId,
+        sp: Span,
         declared: &[IdentId],
-        target: NodeHandle<AnyTy>,
-        methods: &[NodeHandle<MethodDeclNode>],
+        target: TyRef,
+        methods: &[MethodRef],
     ) {
-        let sp = self.ast.span(node);
         // ---- the target: a local struct/class or a local enum (a
         // plain alias expands to its target's decl). Observed
         // capability is satisfied by HAVING the members — nothing
@@ -29,10 +28,11 @@ impl<'a> Ctx<'a> {
         // Generic binders are DECLARED after `impl` — the head's bare
         // parameter names are USES; each must resolve against the
         // declared list (the undeclared-name diagnostic names the fix).
-        let (target_ty, target_data, spell) = match self.ast.ty(target) {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 => {
-                let name = segs[0].name;
-                let generics = segs[0].generics.clone();
+        let (target_ty, target_data, spell) = match target {
+            TyRef::Path(h) if h.get(self.ast).segs.len() == 1 => {
+                let seg = &h.get(self.ast).segs[0];
+                let name = seg.name;
+                let generics = seg.generics.clone();
                 match self.ty_path_impl_target(sp, declared, name, generics) {
                     Some(arm) => arm,
                     None => return,
@@ -46,9 +46,12 @@ impl<'a> Ctx<'a> {
                 return;
             }
         };
-        let mut mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)> = Vec::new();
+        let mut mths: Vec<(IdentId, Handle<MethodDeclNode>)> = Vec::new();
         for m in methods {
-            mths.push((self.ast.method_decl(*m).name, *m));
+            let MethodRef::Method(mh) = *m else {
+                continue;
+            };
+            mths.push((mh.get(self.ast).name, mh));
         }
         // the placement law (phase 3): an inherent impl lives in the
         // type's module — literally, by path now. A flat package has
@@ -58,12 +61,12 @@ impl<'a> Ctx<'a> {
             .datas
             .iter()
             .find(|(n, _)| *n == spell)
-            .map(|(_, d)| self.mod_of(d.node.id()).to_string())
+            .map(|(_, d)| self.mod_of(d.node.span(self.ast)).to_string())
             .or_else(|| {
                 self.enums
                     .iter()
                     .find(|(n, _)| *n == spell)
-                    .map(|(_, e)| self.mod_of(e.node).to_string())
+                    .map(|(_, e)| self.mod_of(e.node.span(self.ast)).to_string())
             });
         if let Some(home) = type_home {
             if home != self.cur_mod {
@@ -100,7 +103,7 @@ impl<'a> Ctx<'a> {
         sp: rut_lexer::span::Span,
         declared: &[IdentId],
         name: IdentId,
-        generics: Vec<NodeHandle<AnyTy>>,
+        generics: Vec<TyRef>,
     ) -> Option<AliasTargetRow> {
         // a PLAIN alias expands in impl-target position: the alias
         // spells the target's type.
@@ -190,10 +193,15 @@ impl<'a> Ctx<'a> {
     }
 
     /// The bare single-segment ident a type node spells, when it does.
-    fn node_head_ident(&self, node: NodeHandle<AnyTy>) -> Option<IdentId> {
-        match self.ast.ty(node) {
-            TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
-                Some(segs[0].name)
+    fn node_head_ident(&self, node: TyRef) -> Option<IdentId> {
+        match node {
+            TyRef::Path(h) => {
+                let segs = &h.get(self.ast).segs;
+                if segs.len() == 1 && segs[0].generics.is_empty() {
+                    Some(segs[0].name)
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -202,7 +210,7 @@ impl<'a> Ctx<'a> {
     /// Is the node's head name a KNOWN type (primitive, declared,
     /// used)? The impl-row matcher's parameter test — an unknown bare
     /// name is the impl's own generic.
-    pub fn node_is_known_type(&self, node: NodeHandle<AnyTy>) -> bool {
+    pub fn node_is_known_type(&self, node: TyRef) -> bool {
         let Some(n) = self.node_head_ident(node) else {
             return true;
         };
@@ -224,7 +232,7 @@ impl<'a> Ctx<'a> {
         spell: IdentId,
         target_ty: TypeId,
         target_data: Option<(IdentId, Vec<IdentId>)>,
-        mths: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+        mths: Vec<(IdentId, Handle<MethodDeclNode>)>,
         _origin: String,
     ) {
         // `spell` is the target's DECL name (the expansion's decl when
@@ -240,13 +248,13 @@ impl<'a> Ctx<'a> {
             // since the `builtin trait` rows died
             let vsp = mths
                 .first()
-                .map(|(_, m)| self.ast.span(m.id()))
-                .unwrap_or(self.ast.span(self.ast.root.id()));
+                .map(|(_, m)| m.span(self.ast))
+                .unwrap_or(self.ast.root().span(self.ast));
             self.validate_markers(tname, &mths, target_data, target_ty, vsp);
             for (n, mnode) in &mths {
                 if self.datas[idx].1.methods.iter().any(|(pn, _)| pn == n) {
                     self.err(
-                        self.ast.span(mnode.id()),
+                        mnode.span(self.ast),
                         format!(
                             "duplicate method `{}` on `{}`",
                             self.name(*n),
@@ -262,7 +270,7 @@ impl<'a> Ctx<'a> {
             let disposal = sym::DISPOSAL_MARKER;
             let marked: Vec<IdentId> = mths
                 .iter()
-                .filter(|(_, m)| self.ast.method_decl(*m).marker == Some(disposal))
+                .filter(|(_, m)| m.get(self.ast).marker == Some(disposal))
                 .map(|(n, _)| *n)
                 .collect();
             if std::env::var("RUT_DEBUG_SATISFY").is_ok() {
@@ -281,7 +289,7 @@ impl<'a> Ctx<'a> {
             let constructor = sym::CONSTRUCTOR_MARKER;
             if let Some((cn, _)) = mths
                 .iter()
-                .find(|(_, m)| self.ast.method_decl(*m).marker == Some(constructor))
+                .find(|(_, m)| m.get(self.ast).marker == Some(constructor))
             {
                 self.class_ctors.insert(tname, *cn);
             }
@@ -307,20 +315,20 @@ impl<'a> Ctx<'a> {
             // members are immortal singletons, never released, and an
             // unknown word dies here too (the closed set's other gate)
             for (_n, mnode) in &mths {
-                let md = self.ast.method_decl(*mnode);
+                let md = mnode.get(self.ast);
                 let Some(word) = md.marker else { continue };
                 if word == sym::DISPOSAL_MARKER {
-                    self.err(self.ast.span(mnode.id()), format!(
+                    self.err(mnode.span(self.ast), format!(
                         "`{}` cannot carry `[disposal]` — only a struct or class can (the engine disposes a record's cell; an enum's members are immortal singletons)",
                         self.name(tname)
                     ));
                 } else if word == sym::CONSTRUCTOR_MARKER {
-                    self.err(self.ast.span(mnode.id()), format!(
+                    self.err(mnode.span(self.ast), format!(
                         "`{}` cannot carry `[constructor]` — only a class can (an enum's members are its own immortal singletons; there is no call form to designate)",
                         self.name(tname)
                     ));
                 } else if word != sym::ITERABLE_MARKER {
-                    self.err(self.ast.span(mnode.id()), format!(
+                    self.err(mnode.span(self.ast), format!(
                         "`[{}]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`",
                         self.name(word)
                     ));
@@ -329,7 +337,7 @@ impl<'a> Ctx<'a> {
             for (n, mnode) in &mths {
                 if self.enums[idx].1.methods.iter().any(|(pn, _)| pn == n) {
                     self.err(
-                        self.ast.span(mnode.id()),
+                        mnode.span(self.ast),
                         format!(
                             "duplicate method `{}` on `{}`",
                             self.name(*n),
@@ -371,7 +379,7 @@ impl<'a> Ctx<'a> {
     fn validate_markers(
         &mut self,
         tname: IdentId,
-        mths: &[(IdentId, NodeHandle<MethodDeclNode>)],
+        mths: &[(IdentId, Handle<MethodDeclNode>)],
         target_data: Option<(IdentId, Vec<IdentId>)>,
         target_ty: TypeId,
         sp: rut_lexer::span::Span,
@@ -392,11 +400,11 @@ impl<'a> Ctx<'a> {
             None => vec![],
         };
         for (n, mnode) in mths {
-            let md = self.ast.method_decl(*mnode);
+            let md = mnode.get(self.ast);
             let Some(word) = md.marker else { continue };
             if word != disposal && word != iterable && word != constructor {
                 self.err(
-                    self.ast.span(mnode.id()),
+                    mnode.span(self.ast),
                     format!(
                         "`[{}]` is not a designated surface — the closed marker set is `[disposal]`, `[iterable]`, and `[constructor]`",
                         self.name(word)
@@ -406,7 +414,7 @@ impl<'a> Ctx<'a> {
             }
             if md.is_async {
                 self.err(
-                    self.ast.span(mnode.id()),
+                    mnode.span(self.ast),
                     format!(
                         "`[{}]` marks a synchronous contract — `async` is not allowed here",
                         self.name(word)
@@ -420,12 +428,12 @@ impl<'a> Ctx<'a> {
                 .map(|d| {
                     d.methods
                         .iter()
-                        .any(|(pn, pm)| *pn != *n && self.ast.method_decl(*pm).marker == Some(word))
+                        .any(|(pn, pm)| *pn != *n && pm.get(self.ast).marker == Some(word))
                 })
                 .unwrap_or(false)
                 || mths
                     .iter()
-                    .any(|(pn, pm)| pn != n && self.ast.method_decl(*pm).marker == Some(word));
+                    .any(|(pn, pm)| pn != n && pm.get(self.ast).marker == Some(word));
             if already {
                 if word == constructor {
                     // the duplicate names BOTH member spellings — the
@@ -435,21 +443,17 @@ impl<'a> Ctx<'a> {
                         .and_then(|d| {
                             d.methods
                                 .iter()
-                                .find(|(pn, pm)| {
-                                    *pn != *n && self.ast.method_decl(*pm).marker == Some(word)
-                                })
+                                .find(|(pn, pm)| *pn != *n && pm.get(self.ast).marker == Some(word))
                                 .map(|(pn, _)| *pn)
                         })
                         .or_else(|| {
                             mths.iter()
-                                .find(|(pn, pm)| {
-                                    pn != n && self.ast.method_decl(*pm).marker == Some(word)
-                                })
+                                .find(|(pn, pm)| pn != n && pm.get(self.ast).marker == Some(word))
                                 .map(|(pn, _)| *pn)
                         });
                     match other {
                         Some(o) => self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             format!(
                                 "`{}` already carries a `[constructor]` member — `{}` and `{}` both designate the construction surface; at most one per class (`{}(..)` must lower to one member)",
                                 self.name(tname),
@@ -459,7 +463,7 @@ impl<'a> Ctx<'a> {
                             ),
                         ),
                         None => self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             format!(
                                 "`{}` already carries a `[constructor]` member — at most one per class (`{}(..)` must lower to one member)",
                                 self.name(tname),
@@ -469,7 +473,7 @@ impl<'a> Ctx<'a> {
                     }
                 } else {
                     self.err(
-                        self.ast.span(mnode.id()),
+                        mnode.span(self.ast),
                         format!(
                             "`{}` already carries a `[{}]` member — at most one per contract per class (the engine's slot is singular)",
                             self.name(tname),
@@ -502,31 +506,26 @@ impl<'a> Ctx<'a> {
                     }
                     // signature: `(mut self, cx: DisposalContext)` -> nil
                     let mut params = md.params.iter();
-                    let self_form = match params.next().map(|p| self.ast.param(*p)) {
-                        Some(MemberKind::SelfParam(sd)) => Some(sd.is_mut),
-                        _ => None,
-                    };
+                    let self_form = params.next().and_then(|p| self.self_param_mut(*p));
                     if self_form != Some(true) {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "a `[disposal]` member takes `mut self` first — the engine calls it on the pinned cell",
                         );
                     }
-                    let cx_ok = match params.next().map(|p| self.ast.param(*p)) {
-                        Some(MemberKind::Param(ParamData { ty: Some(t), .. })) => {
-                            self.resolve_sig_ty(*t, &param_env, None) == TY_DISPOSAL_CONTEXT
-                        }
-                        _ => false,
+                    let cx_ok = match params.next().and_then(|p| self.param_ty(*p)) {
+                        Some(t) => self.resolve_sig_ty(t, &param_env, None) == TY_DISPOSAL_CONTEXT,
+                        None => false,
                     };
                     if !cx_ok {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "a `[disposal]` member's second parameter is `cx: DisposalContext` — the engine mints it per call",
                         );
                     }
                     if params.next().is_some() {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "a `[disposal]` member takes exactly `(mut self, cx: DisposalContext)`",
                         );
                     }
@@ -537,7 +536,7 @@ impl<'a> Ctx<'a> {
                         != TY_NIL
                     {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "a `[disposal]` member returns nil — the engine ignores any answer",
                         );
                     }
@@ -548,39 +547,36 @@ impl<'a> Ctx<'a> {
                     // signature: `(self, emit: fn(E) -> bool)` -> nil —
                     // the element type falls out of the emit parameter
                     let mut params = md.params.iter();
-                    let has_self = matches!(
-                        params.next().map(|p| self.ast.param(*p)),
-                        Some(MemberKind::SelfParam(_))
-                    );
+                    let has_self = params
+                        .next()
+                        .is_some_and(|p| self.self_param_mut(*p).is_some());
                     if !has_self {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "an `[iterable]` member takes a receiver — `fn <name>(self, emit: fn(E) -> bool)`",
                         );
                     }
-                    let emit_ok = match params.next().map(|p| self.ast.param(*p)) {
-                        Some(MemberKind::Param(ParamData { ty: Some(t), .. })) => {
-                            {
-                                let et = self.resolve_sig_ty(*t, &param_env, None);
-                                // a fn type names the element directly; a
-                                // target parameter (`emit: fn(E) -> bool`
-                                // under `impl<E>`) falls out at
-                                // instantiation
-                                matches!(self.types.kind(et), TyKind::Fn { .. })
-                                    || param_env.iter().any(|(_, ph)| *ph == et)
-                            }
+                    let emit_ok = match params.next().and_then(|p| self.param_ty(*p)) {
+                        Some(t) => {
+                            let et = self.resolve_sig_ty(t, &param_env, None);
+                            // a fn type names the element directly; a
+                            // target parameter (`emit: fn(E) -> bool`
+                            // under `impl<E>`) falls out at
+                            // instantiation
+                            matches!(self.types.kind(et), TyKind::Fn { .. })
+                                || param_env.iter().any(|(_, ph)| *ph == et)
                         }
-                        _ => false,
+                        None => false,
                     };
                     if !emit_ok {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "an `[iterable]` member's second parameter is the emit callback — `emit: fn(E) -> bool` (`false` stops the iteration; the element type falls out of the marked member's signature)",
                         );
                     }
                     if params.next().is_some() {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "an `[iterable]` member takes exactly `(self, emit: fn(E) -> bool)`",
                         );
                     }
@@ -591,7 +587,7 @@ impl<'a> Ctx<'a> {
                         != TY_NIL
                     {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "an `[iterable]` member returns nil — the drive consumes through `emit`",
                         );
                     }
@@ -644,12 +640,13 @@ impl<'a> Ctx<'a> {
                     }
                     // signature: NO receiver (the class itself is the
                     // call's subject) and the return is `Self` or `?Self`
-                    if matches!(
-                        md.params.first().map(|p| self.ast.param(*p)),
-                        Some(MemberKind::SelfParam(_))
-                    ) {
+                    if md
+                        .params
+                        .first()
+                        .is_some_and(|p| self.self_param_mut(*p).is_some())
+                    {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "a `[constructor]` member takes no receiver — `fn <free>(..) -> Self` (the call `Type(..)` spells the class, not a value)",
                         );
                     }
@@ -665,7 +662,7 @@ impl<'a> Ctx<'a> {
                         .unwrap_or(false);
                     if !ret_ok {
                         self.err(
-                            self.ast.span(mnode.id()),
+                            mnode.span(self.ast),
                             "a `[constructor]` member returns `Self` (or `?Self` — the try-construction: `Type(..)` then yields `?Type`)",
                         );
                     }
@@ -681,12 +678,17 @@ impl<'a> Ctx<'a> {
 
     /// The identifier list of a generic argument list whose entries are all
     /// bare type-parameter names (`<T>`, `<T, U>`); `None` otherwise.
-    fn ty_generic_idents(&self, generics: &[NodeHandle<AnyTy>]) -> Option<Vec<IdentId>> {
+    fn ty_generic_idents(&self, generics: &[TyRef]) -> Option<Vec<IdentId>> {
         let mut out = Vec::with_capacity(generics.len());
         for g in generics {
-            match self.ast.ty(*g) {
-                TypeKind::TyPath { segs, .. } if segs.len() == 1 && segs[0].generics.is_empty() => {
-                    out.push(segs[0].name);
+            match g {
+                TyRef::Path(h) => {
+                    let segs = &h.get(self.ast).segs;
+                    if segs.len() == 1 && segs[0].generics.is_empty() {
+                        out.push(segs[0].name);
+                    } else {
+                        return None;
+                    }
                 }
                 _ => return None,
             }

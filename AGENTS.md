@@ -18,26 +18,43 @@ and `cargo nextest run`. Practical consequences:
 
 **Call the layer whose abstraction you consume.** Document semantics
 (classify, symbols, mode derivation, position math) → `rut-semantic`.
-Syntax only (reprint, transform) → the AST facade
-`rut_parser::parse_opts` (fmt does exactly this). Nobody outside
-`rut-parser` drives `normalize → lex → parse` by hand.
+Syntax only (reprint, transform) → the parser's entry pair
+`rut_parser::parse` / `parse_with_recover` (fmt does exactly this).
+Nobody outside `rut-parser` drives `normalize → lex → parse` by hand.
 
-- **The AST artifact law**: `Ast` stores only what is NOT a pure
-  function of its parts — the nodes and the text its spans index
-  (`ast.src`, normalized; the tree is self-contained). The leaf layer
-  (tokens + comments) is `rut_lexer::lexer::lex_normalized(&src,
-  collect)` away, one deterministic linear pass. `parse_opts`'s
-  `recover` (default OFF — `fail_fast ≡ !recover`) buys the total tree
-  + every diag; off = first diag only, no tree.
+- **The AST artifact law (v3)**: `Ast` stores PURE STRUCTURE — the
+  nodes and nothing else; it holds NO src and no text. The artifact is
+  the PAIR `Parsed { ast, src }` — `src` is the NORMALIZED text every
+  span indexes (never the caller's raw input), and `Span::text(&src)`
+  is the join (text queries are span×src joins; nothing else stores
+  text). The leaf layer (tokens + comments) stays one deterministic
+  linear pass away: `rut_lexer::lexer::lex_normalized(&src, collect)`.
+- **The capsule law**: `Ast` is the capsule store. Its mut surface is
+  PLAIN DOORS for the parse lane (`new`/`intern`/`set_root`/
+  `alloc*`/`set_errors`); its reads are `root`/`name`/`errors`/
+  `is_clean`/`interner`. Behavior lives on nodes and handles with the
+  store as ctx (`h.get(ast)`, `root().items(ast)`, `slot.span(ast)`) —
+  no smart objects, no per-node back-pointers, no builder ceremony.
+- **The parse-opts row**: recovery is NOT a knob — the ENTRY is the
+  choice. `parse` is fail-fast (`Err` = the first diag, no tree; `Ok`
+  implies `is_clean()`); `parse_with_recover` is ALWAYS a tree, and
+  production lanes pair it with `ast.is_clean()` / `ast.errors()`. The
+  one knob is `ParseOpts { include_comments }` — docs graft onto decl
+  nodes at allocation; the grammar never consults comments. The
+  recovery ladder: part damage → `Error` slots beside the survivors
+  (every slot enum carries `Error(Handle<ErrorNode>)`), identity
+  damage → fences (an `ErrorNode` covering the unparseable region, in
+  the list it belongs to), lex rows → root-level. `ast.errors()` is
+  the flat ordered view of every diag.
 - **`rut-lsp-wasm`'s `[dependencies]` carries NO `rut-lexer` /
   `rut-parser`** — that list is the law's enforcement. Its ONLY
   frontend is `rut-semantic` (`ParsedDoc::parse(uri, src)` — mode
   derived, editor opts baked); `rut-ast` stays as shared tree
   vocabulary, `rut-driver`/`rut-core` are other lanes. The grammar/
   corpus tests may drive the parser via `[dev-dependencies]` (the
-  sanctioned seam, like the futures LocalPool). `rut_parser::parse`
-  (the `{recover: true}` shorthand) has no callers outside its own
-  crate's tests.
+  sanctioned seam, like the futures LocalPool); the fail-fast `parse`
+  door exists for "a diag means stop" callers — today only its own
+  crate's tests — while fmt/semantic/driver ride the recovering entry.
 
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 
@@ -184,7 +201,7 @@ order:
   envelope's exact key set through the shipped artifact — the only gate
   that can catch a Rust-side rename, since the wire is data.
 - **When the frontend moves, the lane moves**: any change touching the
-  lexer, parser, `rut-lsp`, or the TextMate grammar must run this lane
+  lexer, parser, `rut-lsp-wasm`, or the TextMate grammar must run this lane
   (or at minimum `build:wasm` + `test:e2e`) before the work is done —
   a new syntax reads as false diagnostics through a stale wasm, and the
   corpus gate catches exactly that.

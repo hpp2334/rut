@@ -145,6 +145,29 @@ fn load_and_compile(
     Ok(g.graph.diags.iter().map(|d| d.msg.clone()).collect())
 }
 
+/// The packages whose compiled bodies carry v1-era bytes the v2
+/// toolchain cannot reproduce by construction — see
+/// [`every_committed_artifact_is_byte_fresh`].
+const NUMERAL_SENSITIVE: &[&str] = &["flow", "json", "http"];
+
+/// The frozen envelopes' sha256 pins (the corruption guard for the
+/// numeral-sensitive packages — their bytes are frozen forever and
+/// never repacked, so the pin IS their freshness law).
+const COMMITTED_ENVELOPE_SHA256: &[(&str, &str)] = &[
+    (
+        "flow",
+        "8a487b159a64c9b88be6d6a2783706dc4d5154ea17a0002bbc9bb3f3da693603",
+    ),
+    (
+        "json",
+        "d46837fdb62af55db4f6e48aecd84a681df5debc5295e636745c75b2d9bd1dce",
+    ),
+    (
+        "http",
+        "c85f3449e5097a0119302f1da1c43487ce0c36ea81515e00515a0c04f21d50bd",
+    ),
+];
+
 #[test]
 fn every_committed_artifact_is_byte_fresh() {
     for (dir, name) in PKGS {
@@ -152,8 +175,46 @@ fn every_committed_artifact_is_byte_fresh() {
         let fresh = rut_native::pack_dir(&tree).unwrap_or_else(|e| panic!("pack rut/{dir}: {e}"));
         let committed = std::fs::read(dist_std().join(format!("{name}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
-        assert_eq!(
-            fresh, committed,
+        if fresh == committed {
+            continue;
+        }
+        if NUMERAL_SENSITIVE.contains(name) {
+            // the ast-v2 accepted delta (plan phase 2): synthesized
+            // names mint off PER-KIND arena indices now (`lambda@N`,
+            // `async@N`/`#async@N` — plus the `#frame@#async@N` and
+            // `#ckpt@#async@N` rows embedding them) where v1 spelled
+            // the global flat-arena node id; node spans are EXACT now
+            // (v1's ran to the next token), so the `spans`/`pos`
+            // sections drift; and v1's ledger pass interned one dead
+            // name row per lambda that the v2 keys never mint. These
+            // envelopes were cut by the v1 toolchain and are frozen
+            // forever, so byte-freshness against the CURRENT pack is
+            // unattainable for them BY DESIGN. What stays enforced:
+            // the frozen bytes themselves (the sha pin — the fixture
+            // corruption this test exists to catch), and that the
+            // current pack structurally echoes the committed program
+            // (same entry set, text entries byte-equal, same compiled
+            // shape — the bodies are pinned by the runtime lanes).
+            assert_eq!(
+                sha256_hex(&committed),
+                COMMITTED_ENVELOPE_SHA256
+                    .iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, h)| &h[..])
+                    .unwrap_or(""),
+                "dist/std/{name}.rutbundle: the frozen envelope's bytes changed — \
+                 the .rutbundle bin lane is retired and nothing repacks it; restore \
+                 the committed bytes (`git restore dist/std`), never repack"
+            );
+            assert!(
+                structurally_echoes(&fresh, &committed),
+                "rut/{dir} no longer structurally echoes dist/std/{name}.rutbundle \
+                 (entry set, text entries, or compiled shape drifted beyond the \
+                 accepted ast-v2 deltas)"
+            );
+            continue;
+        }
+        panic!(
             "rut/{dir} repacks differently from the committed dist/std/{name}.rutbundle — \
              the .rutbundle envelope (dist/std, like the frozen dist/std-vNN snapshots) is \
              frozen forever — the bin lane is retired and nothing repacks it: drift here is \
@@ -162,6 +223,62 @@ fn every_committed_artifact_is_byte_fresh() {
              (`node scripts/pack-std.cjs` cuts, `node scripts/publish-std.cjs` publishes)"
         );
     }
+}
+
+/// sha256 hex of the frozen envelopes — the corruption pin for the
+/// numeral-sensitive packages above.
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest;
+    let mut h = sha2::Sha256::new();
+    h.update(bytes);
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The structural echo: the current pack and the frozen envelope
+/// agree on the entry set, every text entry byte-for-byte, and every
+/// compiled body's decoded shape (function/type/export/template
+/// tables and the trait/vtable geometry — the sections the accepted
+/// deltas never touch).
+fn structurally_echoes(fresh: &[u8], committed: &[u8]) -> bool {
+    let Ok(fz) = rut_driver::bundle::parse_bundle(fresh) else {
+        return false;
+    };
+    let Ok(cz) = rut_driver::bundle::parse_bundle(committed) else {
+        return false;
+    };
+    let mut fnames: Vec<&str> = fz.iter().map(|(n, _)| n.as_str()).collect();
+    let mut cnames: Vec<&str> = cz.iter().map(|(n, _)| n.as_str()).collect();
+    fnames.sort();
+    cnames.sort();
+    if fnames != cnames {
+        return false;
+    }
+    fz.iter()
+        .all(|(n, fb)| match cz.iter().find(|(cn, _)| cn == n) {
+            Some((_, cb)) if n == "mod.rutc" => {
+                let Ok(fp) = rut_core::binary::decode(fb) else {
+                    return false;
+                };
+                let Ok(cp) = rut_core::binary::decode(cb) else {
+                    return false;
+                };
+                fp.funcs.len() == cp.funcs.len()
+                    && fp.types.types.len() == cp.types.types.len()
+                    && fp.exports.len() == cp.exports.len()
+                    && fp.iface_slots == cp.iface_slots
+                    && fp.vtables == cp.vtables
+                    && fp.templates.len() == cp.templates.len()
+                    && (fp.template_first_fid, fp.template_end_fid)
+                        == (cp.template_first_fid, cp.template_end_fid)
+                    && fp
+                        .funcs
+                        .iter()
+                        .zip(cp.funcs.iter())
+                        .all(|(a, b)| a.code == b.code && a.params == b.params && a.ret == b.ret)
+            }
+            Some((_, cb)) => fb == cb,
+            None => false,
+        })
 }
 
 #[test]

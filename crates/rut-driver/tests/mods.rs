@@ -27,7 +27,7 @@
 
 use std::path::{Path, PathBuf};
 
-use rut_ast::ast::Vis;
+use rut_ast::Vis;
 use rut_driver::mods::{collect_module_set, DeclKind, ModSource};
 use rut_driver::{Mounted, MountedBody, Walk};
 

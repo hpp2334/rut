@@ -7,8 +7,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_free_fn_call(
         &mut self,
         name: IdentId,
-        generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        generics: Vec<TyRef>,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -23,7 +23,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .err(sp, format!("unknown function `{}`", self.ctx.name(name)));
             return Err(());
         };
-        let fd = self.ctx.ast.fn_decl(fnode).clone();
+        let fd = fnode.get(self.ctx.ast).clone();
         // the async landing: an async fn's call site mints
         // the frame — the cx is engine-minted like `self`, the call's
         // value IS the frame cell (widening to `Future<T>` through the
@@ -60,14 +60,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // (phase 3); the argument expressions are the caller's code and
         // stay under the caller's module.
         let saved_mod = self.ctx.cur_mod.clone();
-        let callee_mod = self.ctx.mod_of(fnode.id()).to_string();
-        let param_nodes: Vec<Option<NodeHandle<AnyTy>>> = params
-            .iter()
-            .map(|p| match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => Some(*t),
-                _ => None,
-            })
-            .collect();
+        let callee_mod = self.ctx.mod_of(fnode.span(self.ctx.ast)).to_string();
+        let param_nodes: Vec<Option<TyRef>> =
+            params.iter().map(|p| self.ctx.param_ty(*p)).collect();
         if args.len() != params.len() {
             self.ctx.err(
                 sp,
@@ -149,17 +144,15 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // final param types under the completed substitution
         let ptys: Vec<TypeId> = params
             .iter()
-            .map(|p| match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                    self.ctx.resolve_type(*t, &subst)
-                }
-                _ => TY_I32,
+            .map(|p| match self.ctx.param_ty(*p) {
+                Some(t) => self.ctx.resolve_type(t, &subst),
+                None => TY_I32,
             })
             .collect();
         for (i, a) in args.iter().enumerate() {
             if !self.widens_val(*a, arg_tys[i], ptys[i]) {
                 self.ctx.err(
-                    self.ctx.ast.span(a.id()),
+                    a.span(self.ctx.ast),
                     format!(
                         "argument {} is `{}`, `{}` expected",
                         i + 1,
@@ -191,8 +184,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. }) {
                     iface_origins.push(arg_tys[i]);
                 } else {
-                    let origins = match self.ctx.ast.expr(args[i]) {
-                        ExprKind::Path { segs } if segs.len() == 1 => self.origins_of(segs[0].name),
+                    let origins = match args[i] {
+                        ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
+                            self.origins_of(ph.get(self.ctx.ast).segs[0].name)
+                        }
                         _ => Vec::new(),
                     };
                     if origins.len() == 1 {
@@ -246,8 +241,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         dname: IdentId,
         class_args: Vec<TypeId>,
         self_ty: TypeId,
-        mnode: NodeHandle<MethodDeclNode>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        mnode: Handle<MethodDeclNode>,
+        args: Vec<ExprRef>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         // the decl name may be a class (generics substitute) or an
@@ -261,13 +256,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 .collect(),
             None => vec![],
         };
-        let md = self.ctx.ast.method_decl(mnode).clone();
+        let md = mnode.get(self.ctx.ast).clone();
         let (params, ret, mname) = (md.params, md.ret, md.name);
         // no-self first param (or no params at all) = class method
-        if matches!(
-            params.first().map(|p| self.ctx.ast.param(*p)),
-            Some(MemberKind::SelfParam(_))
-        ) {
+        if params
+            .first()
+            .is_some_and(|p| self.ctx.self_param_mut(*p).is_some())
+        {
             self.ctx
                 .err(sp, "instance methods are called on a value, not the class");
             return Err(());
@@ -276,7 +271,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // method's bounds and signature resolve in the TYPE's module
         // (the placement law puts the impl there — phase 3).
         let saved_mod = self.ctx.cur_mod.clone();
-        self.ctx.cur_mod = self.ctx.mod_of(mnode.id()).to_string();
+        self.ctx.cur_mod = self.ctx.mod_of(mnode.span(self.ctx.ast)).to_string();
         self.ctx.admit_bounds(&md.bounds, &class_subst, sp);
         let mut ptys = Vec::new();
         // the callee's signature may spell `Self`/`T` — resolve under the
@@ -285,11 +280,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
         self.self_ty = Some(self_ty);
         for p in &params {
-            match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                    ptys.push(self.resolve_type_now(*t))
-                }
-                _ => ptys.push(TY_I32),
+            match self.ctx.param_ty(*p) {
+                Some(t) => ptys.push(self.resolve_type_now(t)),
+                None => ptys.push(TY_I32),
             }
         }
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(TY_NIL);
@@ -316,7 +309,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(*a, Some(ptys[i]))?;
             if !self.widens_val(*a, t, ptys[i]) {
                 self.ctx.err(
-                    self.ctx.ast.span(a.id()),
+                    a.span(self.ctx.ast),
                     format!(
                         "argument {} is `{}`, `{}` expected",
                         i + 1,
@@ -338,8 +331,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if !matches!(self.ctx.types.kind(arg_tys[i]), TyKind::IfaceObj { .. }) {
                     iface_origins.push(arg_tys[i]);
                 } else {
-                    let origins = match self.ctx.ast.expr(args[i]) {
-                        ExprKind::Path { segs } if segs.len() == 1 => self.origins_of(segs[0].name),
+                    let origins = match args[i] {
+                        ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
+                            self.origins_of(ph.get(self.ctx.ast).segs[0].name)
+                        }
                         _ => Vec::new(),
                     };
                     if origins.len() == 1 {

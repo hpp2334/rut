@@ -1,4 +1,4 @@
-use rut_ast::ast::Vis;
+use rut_ast::Vis;
 use rut_lexer::span::Span;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::hover::{ModDef, TyDef, TyForm};

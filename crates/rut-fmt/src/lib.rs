@@ -33,31 +33,26 @@ use rut_parser::Mode;
 /// Format one rut source.
 ///
 /// `src` may carry `\r\n` — the facade's normalization law rides first
-/// (`parse_opts`), and spans index the NORMALIZED text, so the comment
-/// reattachment and the printer see the same offsets.
+/// (`parse_with_recover` returns the NORMALIZED text as `Parsed::src`,
+/// and every span indexes it), so the comment reattachment and the
+/// printer see the same offsets.
 ///
 /// Errors are the frontend's own diagnostics (lex + parse), spans into
 /// the normalized text: a source with diags is refused, never guessed
-/// at — the formatter's input is a parsed-clean module. The caller
-/// renders them (`rut fmt` labels the group with the real path).
+/// at — `is_clean` is the gate, `ast.errors()` the full report (the
+/// recovering parse collects every diag, not just the first). The
+/// caller renders them (`rut fmt` labels the group with the real path).
 pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<Diag>> {
-    let parsed = rut_parser::parse_opts(
-        src,
-        mode,
-        // recovering: the refusal below reports EVERY diag, not the first
-        rut_parser::ParseOpts { recover: true },
-    );
-    if !parsed.diags.is_empty() {
-        return Err(parsed.diags);
+    let p = rut_parser::parse_with_recover(src, mode, rut_parser::ParseOpts::default());
+    if !p.ast.is_clean() {
+        return Err(p.ast.errors().to_vec());
     }
-    let ast = parsed
-        .ast
-        .expect("the recovering parse always yields a tree");
     // the leaf layer on demand: tokens + comments in one linear pass
-    let (toks, _, comments) = rut_lexer::lexer::lex_normalized(&ast.src, true);
-    let runs = comments::runs_from_comments(&comments, &toks, &ast.src);
-    let p = printer::P::new(&ast, &ast.src, &toks, style, runs);
-    Ok(p.print_module())
+    // over the NORMALIZED text (`p.src`) every span indexes
+    let (toks, _, comments) = rut_lexer::lexer::lex_normalized(&p.src, true);
+    let runs = comments::runs_from_comments(&comments, &toks, &p.src);
+    let printer = printer::P::new(&p.ast, &p.src, &toks, style, runs);
+    Ok(printer.print_module())
 }
 
 /// Format a source, preserving the caller's trailing newline convention:

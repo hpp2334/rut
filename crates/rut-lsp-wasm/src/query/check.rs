@@ -32,7 +32,7 @@ use std::str::FromStr;
 use crate::hover::DefIndex;
 use crate::std_surface;
 use ls_types::{Diagnostic, Uri};
-use rut_ast::ast::Vis;
+use rut_ast::Vis;
 use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
 use rut_semantic::Diag;
 

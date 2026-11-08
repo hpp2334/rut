@@ -11,7 +11,8 @@
 //!
 //! Two layers (the lsp-features survey §3.2 design): the **decl layer**
 //! (`build` — types, fns, fields, enum members, module lets, use names,
-//! all with token-recovered name spans) and the **binding pass**
+//! all with the nodes' own recorded name spans; docs ride the decl
+//! nodes' `DocData` chains) and the **binding pass**
 //! (`bindings` — every fn-local binding as
 //! `{ name, decl_ident_span, scope_span, kind, ty }`, shadow-correct
 //! resolve). `infer` is the display-side type heuristic both consume.

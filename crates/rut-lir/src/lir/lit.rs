@@ -5,20 +5,23 @@
 
 use super::*;
 use crate::check::TcResult;
-use rut_ast::ast::{ExprKind, Lit};
+use rut_ast::Lit;
 use rut_core::binary::ConstVal;
 
 /// A `[v; n]` fill whose value is a compile-time all-zero literal —
 /// `nil`, `0` (any int suffix), `0.0`, `false`. The array block arrives
 /// zeroed, so these constructions need no fill loop. `-0.0` (a `Neg` of
 /// a literal) does NOT match: its bits are not zero.
-fn is_zero_fill(e: &ExprKind) -> bool {
+fn is_zero_fill(ast: &rut_ast::Ast, e: ExprRef) -> bool {
     match e {
-        ExprKind::Lit(Lit::Nil) => true,
-        ExprKind::Lit(Lit::Int(0, _)) => true,
-        // f64-bit form of 0.0/0f32 — all-zero bits
-        ExprKind::Lit(Lit::Float(0, _)) => true,
-        ExprKind::Lit(Lit::Bool(false)) => true,
+        ExprRef::Lit(lh) => match &lh.get(ast).lit {
+            Lit::Nil => true,
+            Lit::Int(0, _) => true,
+            // f64-bit form of 0.0/0f32 — all-zero bits
+            Lit::Float(0, _) => true,
+            Lit::Bool(false) => true,
+            _ => false,
+        },
         _ => false,
     }
 }
@@ -97,30 +100,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// would change evaluation order.
     pub(crate) fn try_accumulate_fstr(
         &mut self,
-        value: NodeHandle<AnyExpr>,
+        value: ExprRef,
         name: IdentId,
         acc: u16,
         sp: rut_lexer::span::Span,
     ) -> TcResult<bool> {
-        let ExprKind::FStr { parts } = self.ctx.ast.expr(value).clone() else {
+        let ExprRef::FStr(fsh) = value else {
             return Ok(false);
         };
+        let parts = fsh.get(self.ctx.ast).parts.clone();
         if parts.len() < 2 {
             return Ok(false);
         }
         let FPartAst::Hole(e0) = &parts[0] else {
             return Ok(false);
         };
-        let ExprKind::Path { segs } = self.ctx.ast.expr(*e0).clone() else {
+        let ExprRef::Path(ph0) = *e0 else {
             return Ok(false);
         };
+        let segs = ph0.get(self.ctx.ast).segs.clone();
         if segs.len() != 1 || segs[0].name != name || !segs[0].generics.is_empty() {
             return Ok(false);
         }
         for p in &parts[1..] {
             if let FPartAst::Hole(e) = p {
                 let mut names = Vec::new();
-                self.scan_names(e.id(), &mut names);
+                self.scan_names_expr(*e, &mut names);
                 if names.contains(&name) {
                     return Ok(false);
                 }
@@ -157,7 +162,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let mut t = self.compile_expr(*e, None)?;
                     // `{p}` formats the pointee: deref the
                     // box before formatting — any element type
-                    let lo = self.ctx.ast.span(e.id()).lo;
+                    let lo = e.span(self.ctx.ast).lo;
                     if let TyKind::Opt { elem } = self.ctx.types.kind(t).clone() {
                         let src = self.last_reg;
                         let d = self.new_reg(elem);
@@ -172,7 +177,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         );
                         t = elem;
                     }
-                    self.check_formattable(t, self.ctx.ast.span(e.id()))?;
+                    self.check_formattable(t, e.span(self.ctx.ast))?;
                     let src = self.last_reg;
                     if t == TY_STR {
                         // already a string: `Str` is a pure alias
@@ -217,8 +222,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         name: IdentId,
         d: &crate::check::DataDecl,
-        generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        generics: Vec<TyRef>,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -234,8 +239,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         // the wrapped type, as the decl spells it — the synthesized
         // `inner` field's node (the desugared decl's single field)
-        let field_node = match self.ctx.ast.item(d.node) {
-            ItemKind::Class { fields, .. } if fields.len() == 1 => fields[0],
+        let field_node = match d.node {
+            ItemRef::Class(ch) if ch.get(self.ctx.ast).fields.len() == 1 => {
+                ch.get(self.ctx.ast).fields[0]
+            }
             _ => {
                 self.ctx.err(
                     sp,
@@ -244,7 +251,14 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Err(());
             }
         };
-        let fd = self.ctx.ast.field_decl(field_node);
+        let FieldRef::Field(fdh) = field_node else {
+            self.ctx.err(
+                sp,
+                format!("`{}` is not a newtype class", self.ctx.name(name)),
+            );
+            return Err(());
+        };
+        let fd = fdh.get(self.ctx.ast);
         if d.generics.is_empty() {
             // the concrete wrapper: the wrapped value checks against the
             // field type as written, one cell mints
@@ -252,7 +266,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(args[0], Some(fty))?;
             if !self.widens(t, fty) {
                 self.ctx.err(
-                    self.ctx.ast.span(args[0].id()),
+                    args[0].span(self.ctx.ast),
                     format!(
                         "the wrapped value is `{}`, `{}` expected",
                         self.ctx.type_name(t),
@@ -308,7 +322,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
             if !self.unify_template_field(hint, t, &d.generics, &mut subst) {
                 self.ctx.err(
-                    self.ctx.ast.span(args[0].id()),
+                    args[0].span(self.ctx.ast),
                     format!(
                         "the wrapped value is `{}`, the wrapped type of `{}` expected",
                         self.ctx.type_name(t),
@@ -372,7 +386,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         if !self.widens(arg_ty, fty) {
             self.ctx.err(
-                self.ctx.ast.span(args[0].id()),
+                args[0].span(self.ctx.ast),
                 format!(
                     "the wrapped value is `{}`, `{}` expected",
                     self.ctx.type_name(arg_ty),
@@ -397,8 +411,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_extern_newtype_ctor(
         &mut self,
         name: IdentId,
-        generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        generics: Vec<TyRef>,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -456,7 +470,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let t = self.compile_expr(args[0], Some(fty))?;
                 if !self.widens(t, fty) {
                     self.ctx.err(
-                        self.ctx.ast.span(args[0].id()),
+                        args[0].span(self.ctx.ast),
                         format!(
                             "the wrapped value is `{}`, `{}` expected",
                             self.ctx.type_name(t),
@@ -476,7 +490,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let mut subst: Vec<(IdentId, TypeId)> = Vec::new();
             if !self.unify_template_field(template_field, t, &g.params, &mut subst) {
                 self.ctx.err(
-                    self.ctx.ast.span(args[0].id()),
+                    args[0].span(self.ctx.ast),
                     format!(
                         "the wrapped value is `{}`, the wrapped type of `{}` expected",
                         self.ctx.type_name(t),
@@ -532,7 +546,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let fty = self.ctx.subst_template_ty(template_field, &env);
             if !self.widens(t, fty) {
                 self.ctx.err(
-                    self.ctx.ast.span(args[0].id()),
+                    args[0].span(self.ctx.ast),
                     format!(
                         "the wrapped value is `{}`, `{}` expected",
                         self.ctx.type_name(t),
@@ -560,7 +574,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let t = self.compile_expr(args[0], Some(fty))?;
         if !self.widens(t, fty) {
             self.ctx.err(
-                self.ctx.ast.span(args[0].id()),
+                args[0].span(self.ctx.ast),
                 format!(
                     "the wrapped value is `{}`, `{}` expected",
                     self.ctx.type_name(t),
@@ -774,8 +788,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_struct(
         &mut self,
-        ty: NodeHandle<AnyTy>,
-        fields: Vec<(IdentId, NodeHandle<AnyExpr>)>,
+        ty: TyRef,
+        fields: Vec<(IdentId, ExprRef)>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -783,27 +797,32 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // spelled WITHOUT its arguments (`M { .. }` where `M` is generic)
         // takes them from the expected instantiation — the literal types
         // against its annotation or return (`let m: M<i64, ?Item> = M { .. }`)
-        let sty = match self.ctx.ast.ty(ty) {
-            TypeKind::TyPath { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
-                let arity = self
-                    .ctx
-                    .find_data(segs[0].name)
-                    .map(|d| d.generics.len())
-                    .or_else(|| {
-                        self.ctx
-                            .extern_generics
-                            .get(&segs[0].name)
-                            .map(|g| g.params.len())
-                    });
-                match (arity, expected) {
-                    (Some(n), Some(e))
-                        if n > 0
-                            && self.ctx.inst_data.get(&e).map(|(d, _)| *d)
-                                == Some(segs[0].name) =>
-                    {
-                        e
+        let sty = match ty {
+            TyRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => {
+                let seg = &ph.get(self.ctx.ast).segs[0];
+                if seg.generics.is_empty() {
+                    let arity = self
+                        .ctx
+                        .find_data(seg.name)
+                        .map(|d| d.generics.len())
+                        .or_else(|| {
+                            self.ctx
+                                .extern_generics
+                                .get(&seg.name)
+                                .map(|g| g.params.len())
+                        });
+                    match (arity, expected) {
+                        (Some(n), Some(e))
+                            if n > 0
+                                && self.ctx.inst_data.get(&e).map(|(d, _)| *d)
+                                    == Some(seg.name) =>
+                        {
+                            e
+                        }
+                        _ => self.resolve_type_now(ty),
                     }
-                    _ => self.resolve_type_now(ty),
+                } else {
+                    self.resolve_type_now(ty)
                 }
             }
             _ => self.resolve_type_now(ty),
@@ -826,10 +845,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .cloned()
                         .zip(cargs.iter().cloned())
                         .collect();
-                    let field_nodes = match self.ctx.ast.item(d.node) {
-                        ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => {
-                            fields.clone()
-                        }
+                    let field_nodes: Vec<FieldRef> = match d.node {
+                        ItemRef::Struct(sh) => sh.get(self.ctx.ast).fields.clone(),
+                        ItemRef::Class(ch) => ch.get(self.ctx.ast).fields.clone(),
                         _ => Vec::new(),
                     };
                     let saved_subst = std::mem::replace(&mut self.subst, class_subst.clone());
@@ -837,10 +855,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     self.self_ty = Some(sty);
                     // the field types resolve in the DECL's module (phase 3)
                     let saved_mod = self.ctx.cur_mod.clone();
-                    self.ctx.cur_mod = self.ctx.mod_of(d.node.id()).to_string();
+                    self.ctx.cur_mod = self.ctx.mod_of(d.node.span(self.ctx.ast)).to_string();
                     let mut list = Vec::new();
                     for f in &field_nodes {
-                        let fd = self.ctx.ast.field_decl(*f);
+                        let FieldRef::Field(fh) = *f else {
+                            continue;
+                        };
+                        let fd = fh.get(self.ctx.ast);
                         let fty = self.resolve_type_now(fd.ty);
                         list.push((fd.name, fty, fd.init));
                     }
@@ -894,7 +915,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (fname, v) in &fields {
             let Some(fidx) = field_list.iter().position(|(n, _, _)| n == fname) else {
                 self.ctx.err(
-                    self.ctx.ast.span(v.id()),
+                    v.span(self.ctx.ast),
                     format!(
                         "`{}` has no field `{}`",
                         self.ctx.name(dname),
@@ -907,12 +928,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // the read+write in one — the spelling takes the dial
             // (struct literals are exempt, the fields always-pub)
             if let Some(msg) = self.ctx.field_vis_err(sty, *fname) {
-                self.ctx.err(self.ctx.ast.span(v.id()), msg);
+                self.ctx.err(v.span(self.ctx.ast), msg);
                 return Err(());
             }
             if set[fidx] {
                 self.ctx.err(
-                    self.ctx.ast.span(v.id()),
+                    v.span(self.ctx.ast),
                     format!(
                         "duplicate field `{}` in the `{}` literal",
                         self.ctx.name(*fname),
@@ -925,7 +946,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
                 self.ctx.err(
-                    self.ctx.ast.span(v.id()),
+                    v.span(self.ctx.ast),
                     format!(
                         "field `{}` is `{}`, found `{}`",
                         self.ctx.name(*fname),
@@ -960,7 +981,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let saved_self = self.self_ty;
                         let saved_mod = self.ctx.cur_mod.clone();
                         if let Some((_, d)) = self.ctx.datas.iter().find(|(n, _)| *n == dname) {
-                            self.ctx.cur_mod = self.ctx.mod_of(d.node.id()).to_string();
+                            self.ctx.cur_mod =
+                                self.ctx.mod_of(d.node.span(self.ctx.ast)).to_string();
                         }
                         self.self_ty = Some(sty);
                         let t = self.compile_expr(*init, Some(*fty));
@@ -969,10 +991,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         self.self_ty = saved_self;
                         let t = t?;
                         if t != *fty {
-                            self.ctx.err(
-                                self.ctx.ast.span(init.id()),
-                                "field initializer type mismatch",
-                            );
+                            self.ctx
+                                .err(init.span(self.ctx.ast), "field initializer type mismatch");
                         }
                         val_regs[fidx] = Some(self.last_reg);
                     }
@@ -1017,7 +1037,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn compile_struct_extern(
         &mut self,
         sty: TypeId,
-        fields: Vec<(IdentId, NodeHandle<AnyExpr>)>,
+        fields: Vec<(IdentId, ExprRef)>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let TyKind::Data { fields: desc } = self.ctx.types.kind(sty).clone() else {
@@ -1042,7 +1062,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (fname, v) in &fields {
             let Some(fidx) = desc.iter().position(|f| f.name == *fname) else {
                 self.ctx.err(
-                    self.ctx.ast.span(v.id()),
+                    v.span(self.ctx.ast),
                     format!(
                         "`{}` has no field `{}`",
                         self.ctx.type_name(sty),
@@ -1055,7 +1075,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(*v, Some(fty))?;
             if t != fty {
                 self.ctx.err(
-                    self.ctx.ast.span(v.id()),
+                    v.span(self.ctx.ast),
                     format!(
                         "field `{}` is `{}`, found `{}`",
                         self.ctx.name(*fname),
@@ -1097,7 +1117,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_array_lit(
         &mut self,
-        elems: Vec<NodeHandle<AnyExpr>>,
+        elems: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -1123,7 +1143,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     ety = Some(t);
                 } else if !self.widens(t, u) {
                     self.ctx.err(
-                        self.ctx.ast.span(e.id()),
+                        e.span(self.ctx.ast),
                         "array literal elements must agree on one type",
                     );
                 }
@@ -1154,8 +1174,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// copies the cell handle n times — every slot aliases the one cell.
     pub(crate) fn compile_array_repeat(
         &mut self,
-        value: NodeHandle<AnyExpr>,
-        count: NodeHandle<AnyExpr>,
+        value: ExprRef,
+        count: ExprRef,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -1196,7 +1216,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // a `nil` fill IS the zero-fill — ArrNew alone is the memset. Any
         // all-zero literal is too (0, 0u64, 0u8, false, 0.0): the block
         // arrives zeroed, so the fill loop would rewrite zero with zero
-        if is_zero_fill(self.ctx.ast.expr(value)) {
+        if is_zero_fill(self.ctx.ast, value) {
             self.last_reg = dst;
             return Ok(aty);
         }
@@ -1251,10 +1271,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
     pub(crate) fn compile_lambda(
         &mut self,
-        lambda_node: NodeId,
-        params: Vec<NodeHandle<AnyParam>>,
-        ret: Option<NodeHandle<AnyTy>>,
-        body: NodeHandle<AnyExpr>,
+        lambda_node: Handle<LambdaNode>,
+        params: Vec<ParamRef>,
+        ret: Option<TyRef>,
+        body: ExprRef,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -1265,22 +1285,23 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // param types: annotations first, then the expected fn type
         let mut param_tys = Vec::new();
         for (i, p) in params.iter().enumerate() {
-            let ty = match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { ty: Some(t), .. }) => self.resolve_type_now(*t),
-                MemberKind::Param(ParamData { ty: None, .. }) => {
-                    if let Some(&t) = eptys.get(i) {
-                        t
-                    } else {
-                        self.ctx.err(
-                            self.ctx.ast.span(p.id()),
-                            "lambda parameter needs a type annotation (or an expected fn type)",
-                        );
-                        TY_I32
+            let ty = match *p {
+                ParamRef::Param(ph) => match ph.get(self.ctx.ast).ty {
+                    Some(t) => self.resolve_type_now(t),
+                    None => {
+                        if let Some(&t) = eptys.get(i) {
+                            t
+                        } else {
+                            self.ctx.err(
+                                p.span(self.ctx.ast),
+                                "lambda parameter needs a type annotation (or an expected fn type)",
+                            );
+                            TY_I32
+                        }
                     }
-                }
+                },
                 _ => {
-                    self.ctx
-                        .err(self.ctx.ast.span(p.id()), "lambdas take no `self`");
+                    self.ctx.err(p.span(self.ctx.ast), "lambdas take no `self`");
                     TY_I32
                 }
             };
@@ -1290,11 +1311,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         let ret_ty = ret.map(|r| self.resolve_type_now(r)).unwrap_or(eret);
         // capture scan: free names that resolve to enclosing locals
         let mut referenced = Vec::new();
-        self.scan_names(body.id(), &mut referenced);
+        self.scan_names_expr(body, &mut referenced);
         let lambda_param_names: Vec<IdentId> = params
             .iter()
-            .filter_map(|p| match self.ctx.ast.param(*p) {
-                MemberKind::Param(ParamData { name, .. }) => Some(*name),
+            .filter_map(|p| match p {
+                ParamRef::Param(ph) => Some(ph.get(self.ctx.ast).name),
                 _ => None,
             })
             .collect();
@@ -1336,7 +1357,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         }
         // register the synthetic fn: params = declared ++ captures
-        let node_id = self.ctx.ast.span(body.id()).lo; // not unique per node —use body NodeId instead
+        let node_id = body.span(self.ctx.ast).lo; // not unique per node —use the node handle instead
         let _ = node_id;
         // the Lambda node id: find it by body —the caller passes parts; the
         // lambda node is the PARENT of body. Store captures keyed by the
@@ -1382,167 +1403,184 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     }
 
     /// collect every single-segment path name under `node` (capture scan).
-    /// Generic walk over the arena by `NodeId` — it must cross statement and
-    /// expression categories freely; type subtrees carry no value names.
-    pub(crate) fn scan_names(&mut self, node: NodeId, out: &mut Vec<IdentId>) {
+    /// Split walks over the slot enums (v2) — they cross statement and
+    /// expression categories freely through the block/else-if edges;
+    /// type subtrees carry no value names and never enter.
+    pub(crate) fn scan_names_stmt(&mut self, s: StmtRef, out: &mut Vec<IdentId>) {
         if out.len() > 4096 {
             return;
         }
-        let kids = |n: NodeId, out: &mut Vec<IdentId>, s: &mut Self| s.scan_names(n, out);
-        match self.ctx.ast.kind(node).clone() {
-            // items / members / patterns / types carry no value names
-            Kind::Item(_) | Kind::Member(_) | Kind::Pat(_) | Kind::Type(_) => {}
-            Kind::Stmt(StmtKind::LetStmt { init, .. }) => kids(init.id(), out, self),
-            Kind::Stmt(StmtKind::If { cond, then, els }) => {
-                kids(cond.id(), out, self);
-                kids(then.id(), out, self);
-                if let Some(e) = els {
+        match s {
+            // patterns carry no value names
+            StmtRef::Let(h) => self.scan_names_expr(h.get(self.ctx.ast).init, out),
+            StmtRef::If(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.cond, out);
+                self.scan_names_block(n.then, out);
+                if let Some(e) = n.els {
                     match e {
-                        ElseBranch::If(h) => kids(h.id(), out, self),
-                        ElseBranch::Block(h) => kids(h.id(), out, self),
+                        ElseBranch::If(ih) => self.scan_names_stmt(StmtRef::If(ih), out),
+                        ElseBranch::Block(bh) => self.scan_names_block(bh, out),
                     }
                 }
             }
-            Kind::Stmt(StmtKind::While { cond, body }) => {
-                kids(cond.id(), out, self);
-                kids(body.id(), out, self);
+            StmtRef::While(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.cond, out);
+                self.scan_names_block(n.body, out);
             }
-            Kind::Stmt(StmtKind::ForOf { iter, body, .. }) => {
-                kids(iter.id(), out, self);
-                kids(body.id(), out, self);
+            StmtRef::ForOf(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.iter, out);
+                self.scan_names_block(n.body, out);
             }
-            Kind::Stmt(StmtKind::ForC {
-                init,
-                cond,
-                update,
-                body,
-                ..
-            }) => {
-                kids(init.id(), out, self);
-                kids(cond.id(), out, self);
-                kids(update.id(), out, self);
-                kids(body.id(), out, self);
+            StmtRef::ForC(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.init, out);
+                self.scan_names_expr(n.cond, out);
+                self.scan_names_expr(n.update, out);
+                self.scan_names_block(n.body, out);
             }
-            Kind::Stmt(StmtKind::Return { value }) => {
-                if let Some(v) = value {
-                    kids(v.id(), out, self);
+            StmtRef::Return(h) => {
+                if let Some(v) = h.get(self.ctx.ast).value {
+                    self.scan_names_expr(v, out);
                 }
             }
-            Kind::Stmt(StmtKind::WhenStmt { scrut, arms }) => {
-                kids(scrut.id(), out, self);
-                for a in arms {
-                    kids(a.id(), out, self);
+            StmtRef::When(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.scrut, out);
+                for a in n.arms.clone() {
+                    self.scan_names_arm(a, out);
                 }
             }
-            Kind::Stmt(StmtKind::ExprStmt(e)) => kids(e.id(), out, self),
-            Kind::Stmt(StmtKind::Break | StmtKind::Continue) => {}
-            Kind::Arm(ArmKind::WhenArm { pats, body }) => {
-                for p in pats {
-                    kids(p.id(), out, self);
-                }
-                kids(body.id(), out, self);
-            }
-            Kind::Expr(ExprKind::Block { stmts, tail }) => {
-                for s in stmts {
-                    kids(s.id(), out, self);
-                }
-                // the tail is in scope at its site — a closure inside it
-                // captures like any statement's
-                if let Some(t) = tail {
-                    kids(t.id(), out, self);
-                }
-            }
+            StmtRef::Expr(e) => self.scan_names_expr(e, out),
+            StmtRef::Break(_) | StmtRef::Continue(_) | StmtRef::Error(_) => {}
+        }
+    }
+
+    pub(crate) fn scan_names_expr(&mut self, node: ExprRef, out: &mut Vec<IdentId>) {
+        if out.len() > 4096 {
+            return;
+        }
+        match node {
+            ExprRef::Block(bh) => self.scan_names_block(bh, out),
             // the async block's body IS in scope at its site: the mint
             // reads the captured values there, so the enclosing scan
             // descends (an `async { }` inside a for-of body makes the
             // block's reads the emit closure's captures)
-            Kind::Expr(ExprKind::AsyncBlock { body }) => kids(body.id(), out, self),
-            Kind::Expr(ExprKind::Path { segs }) => {
+            ExprRef::AsyncBlock(h) => self.scan_names_block(h.get(self.ctx.ast).body, out),
+            ExprRef::Path(ph) => {
                 // the HEAD of any path chain is a name candidate — a
                 // multi-seg chain (`acc.total`) names its head local just
                 // like a bare path does; lookup filters non-locals
+                let segs = &ph.get(self.ctx.ast).segs;
                 if !segs.is_empty() && out.len() < 4096 && !out.contains(&segs[0].name) {
                     out.push(segs[0].name);
                 }
             }
-            Kind::Expr(ExprKind::Lit(_)) => {}
-            Kind::Expr(ExprKind::Call { callee, args }) => {
-                kids(callee.id(), out, self);
-                for a in args {
-                    kids(a.id(), out, self);
+            ExprRef::Lit(_) | ExprRef::Error(_) => {}
+            ExprRef::Call(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.callee, out);
+                for a in n.args.clone() {
+                    self.scan_names_expr(a, out);
                 }
             }
-            Kind::Expr(ExprKind::Method { recv, args, .. }) => {
-                kids(recv.id(), out, self);
-                for a in args {
-                    kids(a.id(), out, self);
+            ExprRef::Method(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.recv, out);
+                for a in n.args.clone() {
+                    self.scan_names_expr(a, out);
                 }
             }
-            Kind::Expr(ExprKind::Field { recv, .. }) => kids(recv.id(), out, self),
-            Kind::Expr(ExprKind::Index { recv, idx }) => {
-                kids(recv.id(), out, self);
-                kids(idx.id(), out, self);
+            ExprRef::Field(h) => self.scan_names_expr(h.get(self.ctx.ast).recv, out),
+            ExprRef::Index(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.recv, out);
+                self.scan_names_expr(n.idx, out);
             }
-            Kind::Expr(ExprKind::Unary { expr, .. }) => kids(expr.id(), out, self),
-            Kind::Expr(ExprKind::Binary { lhs, rhs, .. }) => {
-                kids(lhs.id(), out, self);
-                kids(rhs.id(), out, self);
+            ExprRef::Unary(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
+            ExprRef::Binary(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.lhs, out);
+                self.scan_names_expr(n.rhs, out);
             }
-            Kind::Expr(ExprKind::Assign { target, value, .. }) => {
-                kids(target.id(), out, self);
-                kids(value.id(), out, self);
+            ExprRef::Assign(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.target, out);
+                self.scan_names_expr(n.value, out);
             }
-            Kind::Expr(ExprKind::Lambda { body: b, .. }) => kids(b.id(), out, self),
-            Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => {
-                kids(expr.id(), out, self)
-            }
-            Kind::Expr(ExprKind::Is { expr, .. }) => kids(expr.id(), out, self),
-            Kind::Expr(ExprKind::Cast { expr, .. }) => kids(expr.id(), out, self),
-            Kind::Expr(ExprKind::FStr { parts }) => {
-                for p in parts {
+            ExprRef::Lambda(h) => self.scan_names_expr(h.get(self.ctx.ast).body, out),
+            ExprRef::Try(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
+            ExprRef::Await(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
+            ExprRef::FStr(h) => {
+                for p in h.get(self.ctx.ast).parts.clone() {
                     if let FPartAst::Hole(e) = p {
-                        kids(e.id(), out, self);
+                        self.scan_names_expr(e, out);
                     }
                 }
             }
-            Kind::Expr(ExprKind::Struct { fields, .. }) => {
-                for (_, v) in fields {
-                    kids(v.id(), out, self);
+            ExprRef::Struct(h) => {
+                for (_, v) in h.get(self.ctx.ast).fields.clone() {
+                    self.scan_names_expr(v, out);
                 }
             }
-            Kind::Expr(ExprKind::ArrayLit { elems }) => {
-                for e in elems {
-                    kids(e.id(), out, self);
+            ExprRef::ArrayLit(h) => {
+                for e in h.get(self.ctx.ast).elems.clone() {
+                    self.scan_names_expr(e, out);
                 }
             }
-            Kind::Expr(ExprKind::ArrayRepeat { value, count }) => {
-                kids(value.id(), out, self);
-                kids(count.id(), out, self);
+            ExprRef::ArrayRepeat(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.value, out);
+                self.scan_names_expr(n.count, out);
             }
-            Kind::Expr(ExprKind::Tuple { elems }) => {
-                for e in elems {
-                    kids(e.id(), out, self);
+            ExprRef::Tuple(h) => {
+                for e in h.get(self.ctx.ast).elems.clone() {
+                    self.scan_names_expr(e, out);
                 }
             }
-            Kind::Expr(ExprKind::WhenExpr { scrut, arms }) => {
-                kids(scrut.id(), out, self);
-                for a in arms {
-                    kids(a.id(), out, self);
+            ExprRef::WhenExpr(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.scrut, out);
+                for a in n.arms.clone() {
+                    self.scan_names_arm(a, out);
                 }
             }
             // the if ATOM: cond + branch blocks; an `else if` link is an
             // if STATEMENT — the statement walk resumes through it
-            Kind::Expr(ExprKind::If { cond, then, els }) => {
-                kids(cond.id(), out, self);
-                kids(then.id(), out, self);
-                if let Some(e) = els {
+            ExprRef::If(h) => {
+                let n = h.get(self.ctx.ast);
+                self.scan_names_expr(n.cond, out);
+                self.scan_names_block(n.then, out);
+                if let Some(e) = n.els {
                     match e {
-                        ElseBranch::If(h) => kids(h.id(), out, self),
-                        ElseBranch::Block(h) => kids(h.id(), out, self),
+                        ElseBranch::If(ih) => self.scan_names_stmt(StmtRef::If(ih), out),
+                        ElseBranch::Block(bh) => self.scan_names_block(bh, out),
                     }
                 }
             }
+            ExprRef::Is(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
+            ExprRef::Cast(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
         }
+    }
+
+    fn scan_names_block(&mut self, bh: Handle<BlockNode>, out: &mut Vec<IdentId>) {
+        let n = bh.get(self.ctx.ast);
+        let (stmts, tail) = (n.stmts.clone(), n.tail);
+        for s in stmts {
+            self.scan_names_stmt(s, out);
+        }
+        // the tail is in scope at its site — a closure inside it
+        // captures like any statement's
+        if let Some(t) = tail {
+            self.scan_names_expr(t, out);
+        }
+    }
+
+    fn scan_names_arm(&mut self, ah: Handle<WhenArmNode>, out: &mut Vec<IdentId>) {
+        // patterns carry no value names
+        self.scan_names_expr(ah.get(self.ctx.ast).body, out);
     }
 }
 
@@ -1562,17 +1600,17 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     ///   lambda body or a `for..of` body — the closure sites. A flat
     ///   set: shadowing only over-approximates, which costs a cell and
     ///   stays correct.
-    pub(crate) fn capture_pre_pass(&mut self, node: NodeId) {
+    pub(crate) fn capture_pre_pass(&mut self, body: ExprRef) {
         let mut assigned = std::collections::HashSet::new();
         let mut captured = std::collections::HashSet::new();
-        self.walk_capture_law(node, false, &mut assigned, &mut captured);
+        self.walk_capture_law_expr(body, false, &mut assigned, &mut captured);
         self.assigned = assigned;
         self.captured = captured;
     }
 
-    fn walk_capture_law(
+    fn walk_capture_law_stmt(
         &mut self,
-        node: NodeId,
+        s: StmtRef,
         inside: bool,
         assigned: &mut std::collections::HashSet<IdentId>,
         captured: &mut std::collections::HashSet<IdentId>,
@@ -1580,198 +1618,233 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if assigned.len() + captured.len() > 8192 {
             return;
         }
-        let walk = |n: NodeId,
-                    inside: bool,
-                    s: &mut Self,
-                    a: &mut std::collections::HashSet<IdentId>,
-                    c: &mut std::collections::HashSet<IdentId>| {
-            s.walk_capture_law(n, inside, a, c)
-        };
-        match self.ctx.ast.kind(node).clone() {
-            Kind::Item(_) | Kind::Member(_) | Kind::Pat(_) | Kind::Type(_) => {}
-            Kind::Stmt(StmtKind::LetStmt { init, .. }) => {
-                walk(init.id(), inside, self, assigned, captured)
+        match s {
+            StmtRef::Let(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).init, inside, assigned, captured)
             }
-            Kind::Stmt(StmtKind::If { cond, then, els }) => {
-                walk(cond.id(), inside, self, assigned, captured);
-                walk(then.id(), inside, self, assigned, captured);
-                if let Some(e) = els {
+            StmtRef::If(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.cond, inside, assigned, captured);
+                self.walk_capture_law_block(n.then, inside, assigned, captured);
+                if let Some(e) = n.els {
                     match e {
-                        ElseBranch::If(h) => walk(h.id(), inside, self, assigned, captured),
-                        ElseBranch::Block(h) => walk(h.id(), inside, self, assigned, captured),
+                        ElseBranch::If(ih) => {
+                            self.walk_capture_law_stmt(StmtRef::If(ih), inside, assigned, captured)
+                        }
+                        ElseBranch::Block(bh) => {
+                            self.walk_capture_law_block(bh, inside, assigned, captured)
+                        }
                     }
                 }
             }
-            Kind::Stmt(StmtKind::While { cond, body }) => {
-                walk(cond.id(), inside, self, assigned, captured);
-                walk(body.id(), inside, self, assigned, captured);
+            StmtRef::While(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.cond, inside, assigned, captured);
+                self.walk_capture_law_block(n.body, inside, assigned, captured);
             }
-            Kind::Stmt(StmtKind::ForOf {
-                var,
-                is_mut: _,
-                iter,
-                body,
-            }) => {
+            StmtRef::ForOf(h) => {
+                let n = h.get(self.ctx.ast);
                 // the loop var is ONE variable reassigned per iteration
                 // (the sugar law) — the element store counts as an
                 // assignment in BOTH frames
-                assigned.insert(var);
-                walk(iter.id(), inside, self, assigned, captured);
-                walk(body.id(), true, self, assigned, captured);
+                assigned.insert(n.var);
+                self.walk_capture_law_expr(n.iter, inside, assigned, captured);
+                self.walk_capture_law_block(n.body, true, assigned, captured);
             }
-            Kind::Stmt(StmtKind::ForC {
-                init,
-                cond,
-                update,
-                body,
-                ..
-            }) => {
-                walk(init.id(), inside, self, assigned, captured);
-                walk(cond.id(), inside, self, assigned, captured);
-                walk(update.id(), inside, self, assigned, captured);
-                walk(body.id(), inside, self, assigned, captured);
+            StmtRef::ForC(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.init, inside, assigned, captured);
+                self.walk_capture_law_expr(n.cond, inside, assigned, captured);
+                self.walk_capture_law_expr(n.update, inside, assigned, captured);
+                self.walk_capture_law_block(n.body, inside, assigned, captured);
             }
-            Kind::Stmt(StmtKind::Return { value }) => {
-                if let Some(v) = value {
-                    walk(v.id(), inside, self, assigned, captured);
+            StmtRef::Return(h) => {
+                if let Some(v) = h.get(self.ctx.ast).value {
+                    self.walk_capture_law_expr(v, inside, assigned, captured);
                 }
             }
-            Kind::Stmt(StmtKind::WhenStmt { scrut, arms }) => {
-                walk(scrut.id(), inside, self, assigned, captured);
-                for a in arms {
-                    walk(a.id(), inside, self, assigned, captured);
+            StmtRef::When(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.scrut, inside, assigned, captured);
+                for a in n.arms.clone() {
+                    self.walk_capture_law_arm(a, inside, assigned, captured);
                 }
             }
-            Kind::Stmt(StmtKind::ExprStmt(e)) => walk(e.id(), inside, self, assigned, captured),
-            Kind::Stmt(StmtKind::Break | StmtKind::Continue) => {}
-            Kind::Arm(ArmKind::WhenArm { pats, body }) => {
-                for p in pats {
-                    walk(p.id(), inside, self, assigned, captured);
-                }
-                walk(body.id(), inside, self, assigned, captured);
-            }
-            Kind::Expr(ExprKind::Block { stmts, tail }) => {
-                for s in stmts {
-                    walk(s.id(), inside, self, assigned, captured);
-                }
-                // the tail is walked with the SAME `inside` law: a
-                // closure site there captures exactly like a statement's
-                if let Some(t) = tail {
-                    walk(t.id(), inside, self, assigned, captured);
-                }
-            }
+            StmtRef::Expr(e) => self.walk_capture_law_expr(e, inside, assigned, captured),
+            StmtRef::Break(_) | StmtRef::Continue(_) | StmtRef::Error(_) => {}
+        }
+    }
+
+    fn walk_capture_law_expr(
+        &mut self,
+        node: ExprRef,
+        inside: bool,
+        assigned: &mut std::collections::HashSet<IdentId>,
+        captured: &mut std::collections::HashSet<IdentId>,
+    ) {
+        if assigned.len() + captured.len() > 8192 {
+            return;
+        }
+        match node {
+            ExprRef::Block(bh) => self.walk_capture_law_block(bh, inside, assigned, captured),
             // the async block descends with the SAME `inside` law: its
             // reads are the enclosing fn's captures (the mint reads the
             // values at the site); the lambda's own law is the stricter
             // `true` arm and does not apply — the block frame is minted,
             // never deferred
-            Kind::Expr(ExprKind::AsyncBlock { body }) => {
-                walk(body.id(), inside, self, assigned, captured)
+            ExprRef::AsyncBlock(h) => {
+                self.walk_capture_law_block(h.get(self.ctx.ast).body, inside, assigned, captured)
             }
-            Kind::Expr(ExprKind::Path { segs }) => {
+            ExprRef::Path(ph) => {
+                let segs = &ph.get(self.ctx.ast).segs;
                 if inside && !segs.is_empty() {
                     captured.insert(segs[0].name);
                 }
             }
-            Kind::Expr(ExprKind::Lit(_)) => {}
-            Kind::Expr(ExprKind::Call { callee, args }) => {
-                walk(callee.id(), inside, self, assigned, captured);
-                for a in args {
-                    walk(a.id(), inside, self, assigned, captured);
+            ExprRef::Lit(_) | ExprRef::Error(_) => {}
+            ExprRef::Call(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.callee, inside, assigned, captured);
+                for a in n.args.clone() {
+                    self.walk_capture_law_expr(a, inside, assigned, captured);
                 }
             }
-            Kind::Expr(ExprKind::Method { recv, args, .. }) => {
-                walk(recv.id(), inside, self, assigned, captured);
-                for a in args {
-                    walk(a.id(), inside, self, assigned, captured);
+            ExprRef::Method(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.recv, inside, assigned, captured);
+                for a in n.args.clone() {
+                    self.walk_capture_law_expr(a, inside, assigned, captured);
                 }
             }
-            Kind::Expr(ExprKind::Field { recv, .. }) => {
-                walk(recv.id(), inside, self, assigned, captured)
+            ExprRef::Field(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).recv, inside, assigned, captured)
             }
-            Kind::Expr(ExprKind::Index { recv, idx }) => {
-                walk(recv.id(), inside, self, assigned, captured);
-                walk(idx.id(), inside, self, assigned, captured);
+            ExprRef::Index(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.recv, inside, assigned, captured);
+                self.walk_capture_law_expr(n.idx, inside, assigned, captured);
             }
-            Kind::Expr(ExprKind::Unary { expr, .. }) => {
-                walk(expr.id(), inside, self, assigned, captured)
+            ExprRef::Unary(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
             }
-            Kind::Expr(ExprKind::Binary { lhs, rhs, .. }) => {
-                walk(lhs.id(), inside, self, assigned, captured);
-                walk(rhs.id(), inside, self, assigned, captured);
+            ExprRef::Binary(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.lhs, inside, assigned, captured);
+                self.walk_capture_law_expr(n.rhs, inside, assigned, captured);
             }
-            Kind::Expr(ExprKind::Assign { target, value, .. }) => {
+            ExprRef::Assign(h) => {
+                let n = h.get(self.ctx.ast);
                 // the single-segment LHS names an assignment; compound
                 // forms (`+=` and kin) count too. A multi-segment or
                 // field/index target mutates THROUGH the head — not an
                 // assignment OF the binding (the shared handle already
                 // crosses).
-                if let ExprKind::Path { segs } = self.ctx.ast.expr(target) {
-                    if segs.len() == 1 {
-                        assigned.insert(segs[0].name);
+                if let ExprRef::Path(ph) = n.target {
+                    if ph.get(self.ctx.ast).segs.len() == 1 {
+                        assigned.insert(ph.get(self.ctx.ast).segs[0].name);
                     }
                 }
-                walk(target.id(), inside, self, assigned, captured);
-                walk(value.id(), inside, self, assigned, captured);
+                self.walk_capture_law_expr(n.target, inside, assigned, captured);
+                self.walk_capture_law_expr(n.value, inside, assigned, captured);
             }
-            Kind::Expr(ExprKind::Lambda { body: b, .. }) => {
-                walk(b.id(), true, self, assigned, captured)
+            ExprRef::Lambda(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).body, true, assigned, captured)
             }
-            Kind::Expr(ExprKind::Try { expr }) | Kind::Expr(ExprKind::Await { expr }) => {
-                walk(expr.id(), inside, self, assigned, captured)
+            ExprRef::Try(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
             }
-            Kind::Expr(ExprKind::Is { expr, .. }) => {
-                walk(expr.id(), inside, self, assigned, captured)
+            ExprRef::Await(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
             }
-            Kind::Expr(ExprKind::Cast { expr, .. }) => {
-                walk(expr.id(), inside, self, assigned, captured)
+            ExprRef::Is(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
             }
-            Kind::Expr(ExprKind::FStr { parts }) => {
-                for p in parts {
+            ExprRef::Cast(h) => {
+                self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
+            }
+            ExprRef::FStr(h) => {
+                for p in h.get(self.ctx.ast).parts.clone() {
                     if let FPartAst::Hole(e) = p {
-                        walk(e.id(), inside, self, assigned, captured);
+                        self.walk_capture_law_expr(e, inside, assigned, captured);
                     }
                 }
             }
-            Kind::Expr(ExprKind::Struct { fields, .. }) => {
-                for (_, v) in fields {
-                    walk(v.id(), inside, self, assigned, captured);
+            ExprRef::Struct(h) => {
+                for (_, v) in h.get(self.ctx.ast).fields.clone() {
+                    self.walk_capture_law_expr(v, inside, assigned, captured);
                 }
             }
-            Kind::Expr(ExprKind::ArrayLit { elems }) => {
-                for e in elems {
-                    walk(e.id(), inside, self, assigned, captured);
+            ExprRef::ArrayLit(h) => {
+                for e in h.get(self.ctx.ast).elems.clone() {
+                    self.walk_capture_law_expr(e, inside, assigned, captured);
                 }
             }
-            Kind::Expr(ExprKind::ArrayRepeat { value, count }) => {
-                walk(value.id(), inside, self, assigned, captured);
-                walk(count.id(), inside, self, assigned, captured);
+            ExprRef::ArrayRepeat(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.value, inside, assigned, captured);
+                self.walk_capture_law_expr(n.count, inside, assigned, captured);
             }
-            Kind::Expr(ExprKind::Tuple { elems }) => {
-                for e in elems {
-                    walk(e.id(), inside, self, assigned, captured);
+            ExprRef::Tuple(h) => {
+                for e in h.get(self.ctx.ast).elems.clone() {
+                    self.walk_capture_law_expr(e, inside, assigned, captured);
                 }
             }
-            Kind::Expr(ExprKind::WhenExpr { scrut, arms }) => {
-                walk(scrut.id(), inside, self, assigned, captured);
-                for a in arms {
-                    walk(a.id(), inside, self, assigned, captured);
+            ExprRef::WhenExpr(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.scrut, inside, assigned, captured);
+                for a in n.arms.clone() {
+                    self.walk_capture_law_arm(a, inside, assigned, captured);
                 }
             }
             // the if ATOM: cond + branch blocks with the SAME `inside`
             // law (a closure in an arm captures exactly like a
             // statement's); an `else if` link is an if STATEMENT — the
             // statement walk resumes through it
-            Kind::Expr(ExprKind::If { cond, then, els }) => {
-                walk(cond.id(), inside, self, assigned, captured);
-                walk(then.id(), inside, self, assigned, captured);
-                if let Some(e) = els {
+            ExprRef::If(h) => {
+                let n = h.get(self.ctx.ast);
+                self.walk_capture_law_expr(n.cond, inside, assigned, captured);
+                self.walk_capture_law_block(n.then, inside, assigned, captured);
+                if let Some(e) = n.els {
                     match e {
-                        ElseBranch::If(h) => walk(h.id(), inside, self, assigned, captured),
-                        ElseBranch::Block(h) => walk(h.id(), inside, self, assigned, captured),
+                        ElseBranch::If(ih) => {
+                            self.walk_capture_law_stmt(StmtRef::If(ih), inside, assigned, captured)
+                        }
+                        ElseBranch::Block(bh) => {
+                            self.walk_capture_law_block(bh, inside, assigned, captured)
+                        }
                     }
                 }
             }
         }
+    }
+
+    fn walk_capture_law_block(
+        &mut self,
+        bh: Handle<BlockNode>,
+        inside: bool,
+        assigned: &mut std::collections::HashSet<IdentId>,
+        captured: &mut std::collections::HashSet<IdentId>,
+    ) {
+        let n = bh.get(self.ctx.ast);
+        let (stmts, tail) = (n.stmts.clone(), n.tail);
+        for s in stmts {
+            self.walk_capture_law_stmt(s, inside, assigned, captured);
+        }
+        // the tail is walked with the SAME `inside` law: a closure site
+        // there captures exactly like a statement's
+        if let Some(t) = tail {
+            self.walk_capture_law_expr(t, inside, assigned, captured);
+        }
+    }
+
+    fn walk_capture_law_arm(
+        &mut self,
+        ah: Handle<WhenArmNode>,
+        inside: bool,
+        assigned: &mut std::collections::HashSet<IdentId>,
+        captured: &mut std::collections::HashSet<IdentId>,
+    ) {
+        // patterns carry no value names
+        self.walk_capture_law_expr(ah.get(self.ctx.ast).body, inside, assigned, captured);
     }
 }

@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use rut_ast::ast::Vis;
+use rut_ast::Vis;
 
 fn mod_source(path: &str, vis: Vis, text: &str) -> rut_driver::ModSource {
     mod_file_source(path, vis, text, "mod.rut")

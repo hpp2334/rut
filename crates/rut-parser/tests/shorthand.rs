@@ -4,35 +4,31 @@
 //! shorthand flag in the AST — the value is an ordinary expression
 //! downstream, so lowering/checking see a plain variable read).
 
-use rut_ast::ast::*;
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::{last_fn_body, parse};
+use rut_ast::{Ast, ExprRef, IdentId, ItemRef, Lit, MethodRef, StmtRef, TyRef};
+use rut_parser::Mode;
 
 /// the one let's initializer in the last fn's body (clean parse required)
-fn let_init(src: &str) -> (Ast, NodeHandle<AnyExpr>) {
+fn let_init(src: &str) -> (Ast, ExprRef) {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let f = items
-        .iter()
-        .rfind(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
-        .expect("fn");
-    let body = match ast.item(*f) {
-        ItemKind::Fn(d) => d.body,
-        _ => unreachable!(),
-    };
-    let init: NodeHandle<AnyExpr> = match ast.kind(ast.block(body)[0].id()) {
-        Kind::Stmt(StmtKind::LetStmt { init, .. }) => *init,
-        _ => panic!("expected a let"),
-    };
-    (ast, init)
+    match last_fn_body(&ast).get(&ast).stmts[0] {
+        StmtRef::Let(h) => {
+            let init = h.get(&ast).init;
+            (ast, init)
+        }
+        ref s => panic!("expected a let, got {s:?}"),
+    }
 }
 
 /// the (name, value) pairs of a struct literal
-fn fields(ast: &Ast, e: NodeHandle<AnyExpr>) -> &[(IdentId, NodeHandle<AnyExpr>)] {
-    match ast.expr(e) {
-        ExprKind::Struct { fields, .. } => fields,
-        other => panic!("expected a struct literal, found {other:?}"),
-    }
+fn fields(ast: &Ast, e: ExprRef) -> &[(IdentId, ExprRef)] {
+    let ExprRef::Struct(sh) = e else {
+        panic!("expected a struct literal, found {e:?}");
+    };
+    &sh.get(ast).fields
 }
 
 #[test]
@@ -45,26 +41,29 @@ fn shorthand_desugars_to_a_single_seg_path() {
     // the shorthand: `id` carries a single-segment path value whose
     // span is exactly the field-name token
     assert_eq!(ast.name(fs[0].0), "id");
-    let ExprKind::Path { segs } = ast.expr(fs[0].1) else {
-        panic!(
-            "the shorthand must desugar to a path, got {:?}",
-            ast.expr(fs[0].1)
-        );
+    let ExprRef::Path(ph) = fs[0].1 else {
+        panic!("the shorthand must desugar to a path, got {:?}", fs[0].1);
     };
+    let segs = &ph.get(&ast).segs;
     assert_eq!(segs.len(), 1);
     assert_eq!(ast.name(segs[0].name), "id");
     assert!(segs[0].generics.is_empty());
-    let sp = ast.span(fs[0].1.id());
     assert_eq!(
-        &src[sp.lo as usize..sp.hi as usize],
+        ph.span(&ast).text(src),
         "id",
         "the value's span is the name token"
     );
     // the spelled fields are untouched
     assert_eq!(ast.name(fs[1].0), "title");
-    assert!(matches!(ast.expr(fs[1].1), ExprKind::Lit(Lit::Str(_))));
+    let ExprRef::Lit(lh) = fs[1].1 else {
+        panic!("a str lit, got {:?}", fs[1].1);
+    };
+    assert!(matches!(lh.get(&ast).lit, Lit::Str(_)));
     assert_eq!(ast.name(fs[2].0), "completed");
-    assert!(matches!(ast.expr(fs[2].1), ExprKind::Lit(Lit::Bool(false))));
+    let ExprRef::Lit(bh) = fs[2].1 else {
+        panic!("a bool lit, got {:?}", fs[2].1);
+    };
+    assert!(matches!(bh.get(&ast).lit, Lit::Bool(false)));
 }
 
 #[test]
@@ -73,20 +72,23 @@ fn self_literal_takes_shorthand() {
                impl P { fn with(x: i32) -> P { let p = Self { x, y: 0 }; p } }";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Impl { methods, .. } = ast.item(items[1]) else {
-        panic!("expected an impl block");
+    let items = ast.root().items(&ast);
+    let ItemRef::Impl(ih) = items[1] else {
+        panic!("expected an impl block, got {:?}", items[1]);
     };
-    let md = ast.method_decl(methods[0]);
-    let body = md.body.expect("a body");
-    let Kind::Stmt(StmtKind::LetStmt { init, .. }) = ast.kind(ast.block(body)[0].id()) else {
-        panic!("expected a let");
+    let MethodRef::Method(mh) = ih.get(&ast).methods[0] else {
+        panic!("expected a method");
     };
-    let fs = fields(&ast, *init);
+    let body = mh.get(&ast).body.expect("a body");
+    let StmtRef::Let(lh) = body.get(&ast).stmts[0] else {
+        panic!("expected a let, got {:?}", body.get(&ast).stmts[0]);
+    };
+    let fs = fields(&ast, lh.get(&ast).init);
     assert_eq!(ast.name(fs[0].0), "x");
-    let ExprKind::Path { segs } = ast.expr(fs[0].1) else {
-        panic!("the shorthand must desugar to a path");
+    let ExprRef::Path(ph) = fs[0].1 else {
+        panic!("the shorthand must desugar to a path, got {:?}", fs[0].1);
     };
+    let segs = &ph.get(&ast).segs;
     assert_eq!(segs.len(), 1);
     assert_eq!(ast.name(segs[0].name), "x");
 }
@@ -98,18 +100,19 @@ fn generic_literal_takes_shorthand() {
     let (ast, init) = let_init(src);
     let fs = fields(&ast, init);
     assert_eq!(ast.name(fs[0].0), "v");
-    let ExprKind::Path { segs } = ast.expr(fs[0].1) else {
-        panic!("the shorthand must desugar to a path");
+    let ExprRef::Path(ph) = fs[0].1 else {
+        panic!("the shorthand must desugar to a path, got {:?}", fs[0].1);
     };
-    assert_eq!(segs.len(), 1);
-    assert_eq!(ast.name(segs[0].name), "v");
+    assert_eq!(ph.get(&ast).segs.len(), 1);
+    assert_eq!(ast.name(ph.get(&ast).segs[0].name), "v");
     // the literal head keeps its generic arguments
-    let ExprKind::Struct { ty, .. } = ast.expr(init) else {
+    let ExprRef::Struct(sh) = init else {
         unreachable!()
     };
-    let TypeKind::TyPath { segs } = ast.ty(*ty) else {
-        panic!("expected a path head");
+    let TyRef::Path(t) = sh.get(&ast).ty else {
+        panic!("expected a path head, got {:?}", sh.get(&ast).ty);
     };
+    let segs = &t.get(&ast).segs;
     assert_eq!(ast.name(segs[0].name), "P");
     assert_eq!(segs[0].generics.len(), 1);
 }
@@ -121,7 +124,7 @@ fn trailing_comma_after_shorthand() {
     let (ast, init) = let_init(src);
     let fs = fields(&ast, init);
     assert_eq!(fs.len(), 2, "the trailing comma adds no field");
-    assert!(matches!(ast.expr(fs[0].1), ExprKind::Path { .. }));
+    assert!(matches!(fs[0].1, ExprRef::Path(_)));
 }
 
 #[test]

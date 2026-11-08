@@ -3,35 +3,34 @@
 //! `when` literal patterns accept the raw form, and level 0 keeps its
 //! single-line diagnostics.
 
-use rut_ast::ast::*;
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::{first_fn_body, parse};
+use rut_ast::{Ast, ExprRef, FPartAst, Lit, StmtRef};
+use rut_parser::Mode;
 
 /// the statement's initializer expression of `fn f() { let x = INIT; }`
-fn init_of(src: &str) -> (Ast, NodeHandle<AnyExpr>) {
+fn init_of(src: &str) -> (Ast, ExprRef) {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let f = items
-        .iter()
-        .find(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
-        .expect("fn");
-    let ItemKind::Fn(d) = ast.item(*f) else {
-        unreachable!()
-    };
-    let stmts = ast.block(d.body);
-    let handle = match ast.kind(stmts[0].id()) {
-        Kind::Stmt(StmtKind::LetStmt { init, .. }) => NodeHandle::new(init.id()),
-        other => panic!("let stmt, got {other:?}"),
-    };
-    (ast, handle)
+    match first_fn_body(&ast).get(&ast).stmts[0] {
+        StmtRef::Let(h) => {
+            let init = h.get(&ast).init;
+            (ast, init)
+        }
+        ref s => panic!("let stmt, got {s:?}"),
+    }
 }
 
 #[test]
 fn multiline_raw_lands_in_the_ast_verbatim() {
     let src = "fn f() {\n    let s = r#\"a\nb\"c\"#;\n}";
     let (ast, e) = init_of(src);
-    let Kind::Expr(ExprKind::Lit(Lit::RawStr(s))) = ast.kind(e.id()) else {
-        panic!("raw literal, got {:?}", ast.kind(e.id()));
+    let ExprRef::Lit(lh) = e else {
+        panic!("raw literal, got {e:?}");
+    };
+    let Lit::RawStr(s) = &lh.get(&ast).lit else {
+        panic!("raw literal, got {:?}", lh.get(&ast).lit);
     };
     assert_eq!(s, "a\nb\"c");
 }
@@ -40,9 +39,10 @@ fn multiline_raw_lands_in_the_ast_verbatim() {
 fn multiline_fstr_parts_keep_the_newlines() {
     let src = "fn f() {\n    let t = f#\"row {n}\nend\"#;\n}";
     let (ast, e) = init_of(src);
-    let Kind::Expr(ExprKind::FStr { parts }) = ast.kind(e.id()) else {
-        panic!("f-string, got {:?}", ast.kind(e.id()));
+    let ExprRef::FStr(fh) = e else {
+        panic!("f-string, got {e:?}");
     };
+    let parts = &fh.get(&ast).parts;
     assert_eq!(parts.len(), 3);
     let FPartAst::Lit(a) = &parts[0] else {
         panic!("first chunk, got {:?}", parts[0]);

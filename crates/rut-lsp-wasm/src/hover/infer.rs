@@ -8,7 +8,7 @@
 //! take the `f32` default). Names resolve through the binding pass.
 //! A miss is `None` — never wrong text.
 
-use rut_ast::ast::*;
+use rut_ast::{Ast, BinOp, ExprRef, Lit, PathSeg};
 use rut_semantic::IntSuffix;
 
 use super::bindings::{elem_ty, resolve, Binding};
@@ -20,66 +20,85 @@ pub(crate) fn expr_ty(
     ast: &Ast,
     binds: &[Binding],
     idxs: &[&DefIndex],
-    e: NodeHandle<AnyExpr>,
+    e: ExprRef,
 ) -> Option<String> {
-    let pos = ast.span(e.id()).lo;
-    match ast.expr(e) {
+    match e {
         // the literal defaults are the engine's own law
-        ExprKind::Lit(Lit::Str(_) | Lit::RawStr(_)) => Some("str".to_string()),
-        ExprKind::Lit(Lit::Bool(_)) => Some("bool".to_string()),
-        ExprKind::Lit(Lit::Int(_, sfx)) => Some(sfx.map(int_suffix).unwrap_or("i32").to_string()),
-        ExprKind::Lit(Lit::Float(_, sfx)) => {
-            Some(sfx.map(float_suffix).unwrap_or("f32").to_string())
+        ExprRef::Lit(h) => match &h.get(ast).lit {
+            Lit::Str(_) | Lit::RawStr(_) => Some("str".to_string()),
+            Lit::Bool(_) => Some("bool".to_string()),
+            Lit::Int(_, sfx) => Some(sfx.map(int_suffix).unwrap_or("i32").to_string()),
+            Lit::Float(_, sfx) => Some(sfx.map(float_suffix).unwrap_or("f32").to_string()),
+            Lit::Nil => None,
+        },
+        ExprRef::FStr(_) => Some("str".to_string()),
+        ExprRef::Path(h) => path_ty(ast, binds, idxs, h.span(ast).lo, &h.get(ast).segs),
+        ExprRef::Call(h) => {
+            let d = h.get(ast);
+            call_ty(idxs, ast, d.callee)
         }
-        ExprKind::FStr { .. } => Some("str".to_string()),
-        ExprKind::Path { segs } => path_ty(ast, binds, idxs, pos, segs),
-        ExprKind::Call { callee, .. } => call_ty(idxs, ast, *callee),
-        ExprKind::Method { recv, name, .. } => {
-            if ast.name(*name) == "new" {
+        ExprRef::Method(h) => {
+            let d = h.get(ast);
+            if ast.name(d.name) == "new" {
                 // `Type.new(..)` — the original init_ty shape
-                if let ExprKind::Path { segs } = ast.expr(*recv) {
-                    return segs.first().map(|s| ast.name(s.name).to_string());
+                if let ExprRef::Path(ph) = d.recv {
+                    return ph
+                        .get(ast)
+                        .segs
+                        .first()
+                        .map(|s| ast.name(s.name).to_string());
                 }
                 return None;
             }
-            let ty = expr_ty(ast, binds, idxs, *recv)?;
-            member_ret(idxs, &head_of_ty(&ty), ast.name(*name))
+            let ty = expr_ty(ast, binds, idxs, d.recv)?;
+            member_ret(idxs, &head_of_ty(&ty), ast.name(d.name))
         }
-        ExprKind::Field { recv, name } => {
-            let ty = expr_ty(ast, binds, idxs, *recv)?;
-            field_ty(idxs, &head_of_ty(&ty), ast.name(*name))
+        ExprRef::Field(h) => {
+            let d = h.get(ast);
+            let ty = expr_ty(ast, binds, idxs, d.recv)?;
+            field_ty(idxs, &head_of_ty(&ty), ast.name(d.name))
         }
-        ExprKind::Index { recv, .. } => expr_ty(ast, binds, idxs, *recv).and_then(|t| elem_ty(&t)),
-        ExprKind::Struct { ty, .. } => Some(ty_src(ast, *ty)),
-        ExprKind::Tuple { elems } => {
+        ExprRef::Index(h) => {
+            let d = h.get(ast);
+            expr_ty(ast, binds, idxs, d.recv).and_then(|t| elem_ty(&t))
+        }
+        ExprRef::Struct(h) => Some(ty_src(ast, h.get(ast).ty)),
+        ExprRef::Tuple(h) => {
+            let elems = &h.get(ast).elems;
             let parts: Option<Vec<String>> = elems
                 .iter()
                 .map(|&e| expr_ty(ast, binds, idxs, e))
                 .collect();
             parts.map(|p| format!("({})", p.join(", ")))
         }
-        ExprKind::ArrayLit { elems } => elems
+        ExprRef::ArrayLit(h) => h
+            .get(ast)
+            .elems
             .first()
             .and_then(|&e| expr_ty(ast, binds, idxs, e))
             .map(|t| format!("[{t}]")),
-        ExprKind::ArrayRepeat { value, .. } => {
-            expr_ty(ast, binds, idxs, *value).map(|t| format!("[{t}]"))
+        ExprRef::ArrayRepeat(h) => {
+            let d = h.get(ast);
+            expr_ty(ast, binds, idxs, d.value).map(|t| format!("[{t}]"))
         }
-        ExprKind::Cast { ty, .. } => Some(ty_src(ast, *ty)),
-        ExprKind::Is { .. } => Some("bool".to_string()),
-        ExprKind::Binary { op, lhs, rhs } => match op {
-            BinOp::Eq
-            | BinOp::Ne
-            | BinOp::Lt
-            | BinOp::Gt
-            | BinOp::Le
-            | BinOp::Ge
-            | BinOp::And
-            | BinOp::Or => Some("bool".to_string()),
-            // same-type arithmetic; the left operand decides
-            _ => expr_ty(ast, binds, idxs, *lhs).or_else(|| expr_ty(ast, binds, idxs, *rhs)),
-        },
-        ExprKind::Try { expr } => expr_ty(ast, binds, idxs, *expr),
+        ExprRef::Cast(h) => Some(ty_src(ast, h.get(ast).ty)),
+        ExprRef::Is(_) => Some("bool".to_string()),
+        ExprRef::Binary(h) => {
+            let d = h.get(ast);
+            match d.op {
+                BinOp::Eq
+                | BinOp::Ne
+                | BinOp::Lt
+                | BinOp::Gt
+                | BinOp::Le
+                | BinOp::Ge
+                | BinOp::And
+                | BinOp::Or => Some("bool".to_string()),
+                // same-type arithmetic; the left operand decides
+                _ => expr_ty(ast, binds, idxs, d.lhs).or_else(|| expr_ty(ast, binds, idxs, d.rhs)),
+            }
+        }
+        ExprRef::Try(h) => expr_ty(ast, binds, idxs, h.get(ast).expr),
         _ => None,
     }
 }
@@ -88,7 +107,7 @@ pub(crate) fn expr_ty(
 /// (`Color::Red` — the head IS the value's type), a namespace/type
 /// head's fn or const (a call site resolves through `call_ty`), or a
 /// plain local read (the lone-seg tail). Value access after `.` rides
-/// `ExprKind::Field` — those resolve as field-of-field reads through
+/// `ExprRef::Field` — those resolve as field-of-field reads through
 /// the binding pass, never here
 fn path_ty(
     ast: &Ast,
@@ -137,8 +156,9 @@ fn path_ty(
 /// CAPITALIZED path segment the index knows as a class/struct — is the
 /// type itself (`let log = Logger("hello");` types `log` as `Logger`,
 /// the positional shape of the `Type::new(..)` arm below)
-fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: NodeHandle<AnyExpr>) -> Option<String> {
-    if let ExprKind::Path { segs } = ast.expr(callee) {
+fn call_ty(idxs: &[&DefIndex], ast: &Ast, callee: ExprRef) -> Option<String> {
+    if let ExprRef::Path(h) = callee {
+        let segs = &h.get(ast).segs;
         if segs.len() == 1 {
             let name = ast.name(segs[0].name);
             let hits: Vec<&FnDef> = idxs

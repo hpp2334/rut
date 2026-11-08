@@ -1,10 +1,17 @@
 //! Declarations: items, pub visibility, use statements, type
-//! bodies,
-//! fn/method signatures, surface stubs — as frames. `classify_item` is
-//! v1's `parse_item` dispatch (peek 1, keyword-led); the frames carry
-//! the state each rule accumulated across child pushes.
+//! bodies, fn/method signatures, surface stubs — as frames. The
+//! grammar logic is the frame machine's own; construction is
+//! ALLOCATE-COMPLETE over the capsule store (every node whole, docs
+//! grafted at allocation, exact spans), and every member list fences
+//! its broken regions as ErrorNodes beside the survivors.
 
-use rut_ast::ast::*;
+use rut_ast::{
+    AliasNode, BlockNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, DocData,
+    EnumNode, FieldDeclNode, FieldRef, FnNode, Handle, IdentId, ImplNode, InterfaceNode, ItemRef,
+    Linkage, MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModuleLetNode,
+    ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode, TyRef,
+    UseNode, Vis,
+};
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
@@ -12,9 +19,9 @@ use crate::expr::{ExprFrame, ExprMode};
 use crate::frame::{pub_scope, Done, Frame, PubFrame, Step};
 use crate::stmt::BlockFrame;
 use crate::ty::TypeFrame;
-use crate::{Mode, Parser};
+use crate::{with_doc, Mode, Name, Parser};
 
-// ---- item dispatch (v1's parse_item) ----
+// ---- item dispatch ----
 
 pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
     let sp = p.span();
@@ -148,13 +155,12 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
 /// name modules), then the leaf is a brace list or a single name (the
 /// LAST path segment pops into names). The flat forms —
 /// `use pkg::{A, B};` / `use pkg::A;` — degenerate to `path = [pkg]`.
-/// The one illegal shape is `use pkg::A::B;` (a mod path with nothing
-/// at the leaf — mods are not values): one diagnostic, and the item
-/// still parses for recovery.
 pub(crate) struct UseFrame {
     lo: u32,
     path: Vec<IdentId>,
+    path_spans: Vec<Span>,
     names: Vec<IdentId>,
+    name_spans: Vec<Span>,
 }
 
 impl UseFrame {
@@ -162,8 +168,19 @@ impl UseFrame {
         UseFrame {
             lo: 0,
             path: Vec::new(),
+            path_spans: Vec::new(),
             names: Vec::new(),
+            name_spans: Vec::new(),
         }
+    }
+
+    fn push_seg(&mut self, n: Name) {
+        self.path.push(n.id);
+        self.path_spans.push(n.span);
+    }
+    fn push_name(&mut self, n: Name) {
+        self.names.push(n.id);
+        self.name_spans.push(n.span);
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
@@ -172,7 +189,7 @@ impl UseFrame {
             p.sync_stmt();
             return Step::Pop(Done::Failed);
         };
-        self.path.push(pkg);
+        self.push_seg(pkg);
         if !p.eat_punct(Tok::Colon2) {
             p.err_here(
                 "expected `::` after the package name — use paths spell `use <pkg>::{A, B};`",
@@ -193,7 +210,7 @@ impl UseFrame {
                     p.sync_stmt();
                     return Step::Pop(Done::Failed);
                 };
-                self.path.push(seg);
+                self.push_seg(seg);
                 if !p.eat_punct(Tok::Colon2) {
                     break;
                 }
@@ -217,20 +234,26 @@ impl UseFrame {
                     "`use pkg::A::B;` imports nothing — spell a name at the leaf (`::{ C }` or `::C`)",
                 ),
                 _ => {
-                    let leaf = self.path.pop().expect("path depth checked above");
-                    self.names.push(leaf);
+                    let id = self.path.pop().expect("path depth checked above");
+                    let sp = self.path_spans.pop().expect("spans parallel the ids");
+                    self.names.push(id);
+                    self.name_spans.push(sp);
                 }
             }
         }
         p.expect(Tok::Semi);
-        let (path, names) = (
-            std::mem::take(&mut self.path),
-            std::mem::take(&mut self.names),
+        let node = with_doc!(
+            p,
+            UseNode {
+                span: p.span_from(self.lo),
+                path: std::mem::take(&mut self.path),
+                name_span: self.path_spans.first().copied().unwrap_or(Span::new(0, 0)),
+                names: std::mem::take(&mut self.names),
+                name_spans: std::mem::take(&mut self.name_spans),
+                doc: DocData::default(),
+            }
         );
-        Step::Pop(Done::Item(p.item(
-            ItemKind::Use { path, names },
-            Span::new(self.lo, p.span().hi),
-        )))
+        Step::Pop(Done::Item(node.allocate(&mut p.ast)))
     }
 
     /// the brace leaf — `::{A, B}` — one or more idents. `false` when
@@ -243,7 +266,7 @@ impl UseFrame {
             let Some(n) = p.expect_ident("a used name") else {
                 return false;
             };
-            self.names.push(n);
+            self.push_name(n);
             if !p.eat_punct(Tok::Comma) {
                 p.expect(Tok::RBrace);
                 return true;
@@ -263,13 +286,12 @@ impl UseFrame {
 /// files the inline `mod NAME { .. }` block form is gone — one
 /// mechanism, files only — and diagnosing it still produces the decl
 /// (the stray block is skipped so the tail keeps parsing). In a
-/// DECLARATION file (`Mode::Decl`, wire v12) the inline form IS
-/// legal — the declaration entry lane nests declarations in the
-/// grammar — and the block parses as an [`ItemKind::ModInline`].
+/// DECLARATION file (`Mode::Decl`) the inline form IS legal and the
+/// block parses as a `ModInlineNode`.
 pub(crate) struct ModDeclFrame {
     vis: Vis,
     lo: u32,
-    name: IdentId,
+    name: Name,
     /// the inline form is out for its block (Decl mode): the frame
     /// relays the inline module's item upward when it pops
     inline: bool,
@@ -280,7 +302,10 @@ impl ModDeclFrame {
         ModDeclFrame {
             vis,
             lo: 0,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             inline: false,
         }
     }
@@ -297,9 +322,8 @@ impl ModDeclFrame {
                 // nested declarations (it consumed the `{` above); this
                 // frame stays underneath and relays its item
                 self.inline = true;
-                return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(
-                    self.vis, self.lo, self.name,
-                )));
+                let (vis, lo, name) = (self.vis, self.lo, self.name);
+                return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(vis, lo, name)));
             }
             p.err_here(
                 "inline `mod { }` blocks are gone — the body lives in `NAME/mod.rut` beside this file",
@@ -319,14 +343,17 @@ impl ModDeclFrame {
         } else {
             p.expect(Tok::Semi);
         }
-        let node = p.item(
-            ItemKind::ModDecl {
+        let node = with_doc!(
+            p,
+            ModDeclNode {
+                span: p.span_from(self.lo),
                 vis: self.vis,
-                name: self.name,
-            },
-            Span::new(self.lo, p.span().hi),
+                name: self.name.id,
+                name_span: self.name.span,
+                doc: DocData::default(),
+            }
         );
-        Step::Pop(Done::Item(node))
+        Step::Pop(Done::Item(node.allocate(&mut p.ast)))
     }
 
     pub(crate) fn absorb(&mut self, _p: &mut Parser, d: Done) -> Step {
@@ -343,47 +370,48 @@ impl ModDeclFrame {
 }
 
 /// The inline declaration module's frame — `pub? mod NAME { <decls> }`
-/// in a `.d.rut` (Decl mode only). Declarations only, recursively:
-/// every item classifies through the module-item dispatch (Decl mode
-/// already refuses bodies), nested `mod` blocks recurse through the
-/// same frame. Collects until the matching `}`, then pops the
-/// [`ItemKind::ModInline`] item.
+/// in a `.d.rut` (Decl mode only). Declarations only, recursively.
 pub(crate) struct ModInlineFrame {
     vis: Vis,
     lo: u32,
-    name: IdentId,
-    items: Vec<NodeHandle<AnyItem>>,
-    /// cursor position when the current item started (progress guard)
+    name: Name,
+    items: Vec<ItemRef>,
+    /// cursor position + diag watermark when the current item started
     before: usize,
+    dmark: usize,
 }
 
 impl ModInlineFrame {
     /// The `{` was already consumed by [`ModDeclFrame::step`].
-    fn from_decl(vis: Vis, lo: u32, name: IdentId) -> Self {
+    fn from_decl(vis: Vis, lo: u32, name: Name) -> Self {
         ModInlineFrame {
             vis,
             lo,
             name,
             items: Vec::new(),
             before: 0,
+            dmark: 0,
         }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let items = std::mem::take(&mut self.items);
-                let node = p.item(
-                    ItemKind::ModInline {
+                let node = with_doc!(
+                    p,
+                    ModInlineNode {
+                        span: p.span_from(self.lo),
                         vis: self.vis,
-                        name: self.name,
-                        items,
-                    },
-                    Span::new(self.lo, p.span().hi),
+                        name: self.name.id,
+                        name_span: self.name.span,
+                        items: std::mem::take(&mut self.items),
+                        doc: DocData::default(),
+                    }
                 );
-                return Step::Pop(Done::Item(node));
+                return Step::Pop(Done::Item(node.allocate(&mut p.ast)));
             }
             self.before = p.pos;
+            self.dmark = p.mark();
             match classify_item(p) {
                 Some(fr) => return Step::Push(fr),
                 None => self.recover(p),
@@ -400,15 +428,16 @@ impl ModInlineFrame {
         self.step(p)
     }
 
-    /// the module frame's recovery, scoped to the block: guarantee
-    /// progress and resync (an unbalanced `}` is left for the frame's
-    /// own loop top to take)
+    /// the item-level fence, scoped to the block: guarantee progress,
+    /// resync (an unbalanced `}` is left for the frame's own loop top)
     fn recover(&mut self, p: &mut Parser) {
         if p.pos == self.before {
             p.err_here("expected a declaration");
             p.bump();
         }
         p.sync_stmt();
+        let (before, mark) = (self.before, self.dmark);
+        self.items.push(ItemRef::Error(p.fence(before, mark)));
     }
 }
 
@@ -416,14 +445,11 @@ impl ModInlineFrame {
 
 /// `pub(..)? type Name = Target;`: a transparent alias, or a
 /// `Target` spelled `A | B` for the bound-only union. Aliases are
-/// NON-GENERIC — `type Name<K, ..>` is a parse error (`expected =`,
-/// the one-name-one-decl law; the row form is repealed). `vis` rides
-/// the item like `TyDeclFrame`'s; the `use`-both rule stays the
-/// binding gate.
+/// NON-GENERIC — `type Name<K, ..>` is a parse error.
 pub(crate) struct TypeAliasFrame {
     vis: Vis,
     lo: u32,
-    name: IdentId,
+    name: Name,
 }
 
 impl TypeAliasFrame {
@@ -431,7 +457,10 @@ impl TypeAliasFrame {
         TypeAliasFrame {
             vis,
             lo: 0,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
         }
     }
 
@@ -449,15 +478,18 @@ impl TypeAliasFrame {
         match d {
             Done::Ty(ty) => {
                 p.expect(Tok::Semi);
-                let node = p.item(
-                    ItemKind::Alias(AliasData {
+                let node = with_doc!(
+                    p,
+                    AliasNode {
+                        span: p.span_from(self.lo),
                         vis: self.vis,
-                        name: self.name,
+                        name: self.name.id,
+                        name_span: self.name.span,
                         target: ty,
-                    }),
-                    Span::new(self.lo, p.span().hi),
+                        doc: DocData::default(),
+                    }
                 );
-                Step::Pop(Done::Item(node))
+                Step::Pop(Done::Item(node.allocate(&mut p.ast)))
             }
             Done::Failed => Step::Pop(Done::Failed),
             _ => unreachable!("type alias frame receives a type"),
@@ -471,8 +503,8 @@ pub(crate) struct ModuleLetFrame {
     vis: Vis,
     lo: u32,
     stage: MlStage,
-    name: IdentId,
-    ty: Option<NodeHandle<AnyTy>>,
+    name: Name,
+    ty: Option<TyRef>,
 }
 
 #[derive(Clone, Copy)]
@@ -487,7 +519,10 @@ impl ModuleLetFrame {
             vis,
             lo: 0,
             stage: MlStage::Ty,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             ty: None,
         }
     }
@@ -518,16 +553,19 @@ impl ModuleLetFrame {
             }
             (MlStage::Init, Done::Expr(init)) => {
                 p.expect(Tok::Semi);
-                let node = p.item(
-                    ItemKind::ModuleLet {
+                let node = with_doc!(
+                    p,
+                    ModuleLetNode {
+                        span: p.span_from(self.lo),
                         vis: self.vis,
-                        name: self.name,
+                        name: self.name.id,
+                        name_span: self.name.span,
                         ty: self.ty.take(),
                         init,
-                    },
-                    Span::new(self.lo, p.span().hi),
+                        doc: DocData::default(),
+                    }
                 );
-                Step::Pop(Done::Item(node))
+                Step::Pop(Done::Item(node.allocate(&mut p.ast)))
             }
             (_, Done::Failed) => Step::Pop(Done::Failed),
             _ => unreachable!("module let receives a type or an initializer"),
@@ -540,8 +578,8 @@ impl ModuleLetFrame {
 pub(crate) struct EnumFrame {
     vis: Vis,
     lo: u32,
-    name: IdentId,
-    members: Vec<IdentId>,
+    name: Name,
+    members: Vec<MemberRef>,
 }
 
 impl EnumFrame {
@@ -549,8 +587,18 @@ impl EnumFrame {
         EnumFrame {
             vis,
             lo: 0,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             members: Vec::new(),
+        }
+    }
+
+    /// resync inside a member list: to the `,`, the `}`, or EOF
+    fn sync_member(p: &mut Parser) {
+        while !matches!(p.tok(), Tok::Comma | Tok::RBrace | Tok::Eof) {
+            p.bump();
         }
     }
 
@@ -565,39 +613,62 @@ impl EnumFrame {
             if p.eat_punct(Tok::RBrace) {
                 break;
             }
-            let Some(m) = p.expect_ident("an enum member") else {
-                p.sync_stmt();
-                return Step::Pop(Done::Failed);
-            };
-            self.members.push(m);
-            if !p.eat_punct(Tok::Comma) {
-                if !p.eat_punct(Tok::RBrace) {
-                    let found = p.peek(0).describe();
-                    p.err_here(format!("expected `,` or `}}`, found {found}"));
-                    // skip the stray tokens so the member list's tail
-                    // (`, B }`) still parses — one diag, full recovery
-                    while !matches!(p.tok(), Tok::Comma | Tok::RBrace | Tok::Eof) {
+            let (before, dmark) = (p.pos, p.mark());
+            match p.expect_ident("an enum member") {
+                Some(m) => {
+                    let node = with_doc!(
+                        p,
+                        rut_ast::EnumMemberNode {
+                            span: m.span,
+                            name: m.id,
+                            name_span: m.span,
+                            doc: DocData::default(),
+                        }
+                    );
+                    self.members.push(node.allocate(&mut p.ast));
+                    if !p.eat_punct(Tok::Comma) {
+                        if !p.eat_punct(Tok::RBrace) {
+                            let found = p.peek(0).describe();
+                            p.err_here(format!("expected `,` or `}}`, found {found}"));
+                            // skip the stray tokens so the member list's tail
+                            // (`, B }`) still parses — one diag, full recovery
+                            Self::sync_member(p);
+                            if p.eat_punct(Tok::Comma) {
+                                continue;
+                            }
+                            // the stray run may end at the enum's own `}` — take it
+                            p.eat_punct(Tok::RBrace);
+                        }
+                        break;
+                    }
+                }
+                None => {
+                    // the ladder's member tier: a broken member fences
+                    // IN the list — the enum survives with its hole
+                    if p.pos == before {
                         p.bump();
                     }
-                    if p.eat_punct(Tok::Comma) {
-                        continue;
+                    Self::sync_member(p);
+                    self.members.push(MemberRef::Error(p.fence(before, dmark)));
+                    if !p.eat_punct(Tok::Comma) {
+                        p.eat_punct(Tok::RBrace);
+                        break;
                     }
-                    // the stray run may end at the enum's own `}` — take it
-                    p.eat_punct(Tok::RBrace);
                 }
-                break;
             }
         }
-        let members = std::mem::take(&mut self.members);
-        let node = p.item(
-            ItemKind::Enum {
+        let node = with_doc!(
+            p,
+            EnumNode {
+                span: p.span_from(self.lo),
                 vis: self.vis,
-                name: self.name,
-                members,
-            },
-            Span::new(self.lo, p.span().hi),
+                name: self.name.id,
+                name_span: self.name.span,
+                members: std::mem::take(&mut self.members),
+                doc: DocData::default(),
+            }
         );
-        Step::Pop(Done::Item(node))
+        Step::Pop(Done::Item(node.allocate(&mut p.ast)))
     }
 
     pub(crate) fn absorb(&mut self, _p: &mut Parser, _d: Done) -> Step {
@@ -608,18 +679,12 @@ impl EnumFrame {
 // ---- generic parameter list ----
 //
 // fn/method generic parameters may carry inline admission
-// bounds (`<T requires A | B>`), and so do CLASS generics (§A5 —
-// `class HashMap<K requires Hashable, V>`); struct/interface/surface
-// generics reject them. A bound suspends the enclosing frame at a
-// GenBound stage — the bound itself is a child Type frame — and
-// `generic_params_more` hands back the generic whose bound is being
-// parsed (`Some`).
+// bounds (`<T requires A | B>`), and so do CLASS generics; struct/
+// interface/surface generics reject them. A bound suspends the
+// enclosing frame at a GenBound stage — the bound itself is a child
+// Type frame.
 
-fn generic_params(
-    p: &mut Parser,
-    allow_bounds: bool,
-    owner: &str,
-) -> (Vec<IdentId>, Option<IdentId>) {
+fn generic_params(p: &mut Parser, allow_bounds: bool, owner: &str) -> (Vec<IdentId>, Option<Name>) {
     p.bump(); // < (the caller checked)
     let mut out = Vec::new();
     let pending = generic_params_more(p, allow_bounds, owner, &mut out);
@@ -627,20 +692,20 @@ fn generic_params(
 }
 
 /// Continue the list at a parameter name — after `<`, a comma, or an
-/// absorbed bound. `Some(g)` when `g requires` suspends the list.
+/// absorbed bound. `Some(n)` when `n requires` suspends the list.
 fn generic_params_more(
     p: &mut Parser,
     allow_bounds: bool,
     owner: &str,
     out: &mut Vec<IdentId>,
-) -> Option<IdentId> {
+) -> Option<Name> {
     p.eat_punct(Tok::Comma); // after an absorbed bound the separator is still ahead
     loop {
         if p.eat_punct(Tok::Gt) {
             return None;
         }
         let n = p.expect_ident("a generic parameter")?;
-        out.push(n);
+        out.push(n.id);
         if p.at_kw("requires") {
             p.bump();
             if allow_bounds {
@@ -665,23 +730,17 @@ fn generic_params_more(
 }
 
 // ---- struct / class ----
-//
-// Class generics take inline admission bounds
-// (`class HashMap<K requires Hashable, V>`); struct generics reject
-// them. A bound suspends the frame at a GenBound stage — the bound
-// itself is a child Type frame — exactly like the fn/method frames;
-// the body frame only pushes once the `<..>` list is fully consumed.
 
 pub(crate) struct TyDeclFrame {
     is_class: bool,
     vis: Vis,
     lo: u32,
     stage: TdStage,
-    name: IdentId,
+    name: Name,
     generics: Vec<IdentId>,
     /// the class's admission bounds, in `requires` order (empty for
     /// structs — their generics never carry bounds)
-    requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
+    requires: Vec<(IdentId, TyRef)>,
     /// the generic whose `requires` bound is being parsed (GenBound stage)
     pending: Option<IdentId>,
 }
@@ -702,7 +761,10 @@ impl TyDeclFrame {
             vis,
             lo: 0,
             stage: TdStage::Body,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             generics: Vec::new(),
             requires: Vec::new(),
             pending: None,
@@ -724,8 +786,8 @@ impl TyDeclFrame {
             let owner = if self.is_class { "class" } else { "struct" };
             let (gens, pending) = generic_params(p, self.is_class, owner);
             self.generics = gens;
-            if let Some(g) = pending {
-                self.pending = Some(g);
+            if let Some(n) = pending {
+                self.pending = Some(n.id);
                 self.stage = TdStage::GenBound;
                 return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
             }
@@ -735,10 +797,7 @@ impl TyDeclFrame {
 
     fn push_body(&mut self, p: &mut Parser) -> Step {
         // the positional one-field form — `class Name(Wrapped);` — the
-        // newtype decl: the manufacture mechanism for everything
-        // satisfaction can't reach. Classes only (a struct head has no
-        // positional form); the wrapped type is a child Type frame and
-        // absorb builds the desugared one-field class.
+        // newtype decl
         if self.is_class && matches!(p.tok(), Tok::LParen) {
             p.bump(); // (
             if p.eat_punct(Tok::RParen) {
@@ -763,8 +822,8 @@ impl TyDeclFrame {
                 self.requires.push((g, t));
                 let owner = if self.is_class { "class" } else { "struct" };
                 let pending = generic_params_more(p, self.is_class, owner, &mut self.generics);
-                if let Some(g) = pending {
-                    self.pending = Some(g);
+                if let Some(n) = pending {
+                    self.pending = Some(n.id);
                     return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
                 }
                 self.push_body(p)
@@ -772,13 +831,8 @@ impl TyDeclFrame {
             (TdStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
             (TdStage::NewtypeTy, Done::Ty(t)) => {
                 // `class Foo(Bar);` ≡ `class Foo { inner: Bar }` plus the
-                // compiler-provided constructor `Foo(x)` — the desugar
-                // happens HERE, as one synthesized field, so every
-                // downstream machine (template fields, layout, the
-                // instance literal, the LSP) treats the wrapper as the
-                // ordinary class it is. The positional spelling is the
-                // only new surface; `newtype: true` arms the call
-                // construction at the checker.
+                // compiler-provided constructor — the desugar happens
+                // HERE, as one synthesized field
                 p.expect(Tok::RParen);
                 if p.eat_punct(Tok::LBrace) {
                     p.err_here("a newtype class has no body — the wrapped type is the one field; methods live in `impl` blocks");
@@ -786,56 +840,74 @@ impl TyDeclFrame {
                     return Step::Pop(Done::Failed);
                 }
                 p.expect(Tok::Semi);
-                let inner = p.interner.intern("inner");
-                let ty_span = p.nodes[t.id().0 as usize].span;
-                let field = p.field_decl(
-                    FieldDeclData {
-                        vis: None,
-                        is_static: false,
-                        name: inner,
-                        ty: t,
-                        init: None,
-                    },
-                    ty_span,
-                );
-                let node = p.item(
-                    ItemKind::Class {
+                let inner = p.ast.intern("inner");
+                let ty_span = t.span(&p.ast);
+                // SYNTHESIZED — no doc graft (it would steal the class's
+                // own chain above)
+                let field = FieldDeclNode {
+                    span: ty_span,
+                    vis: None,
+                    is_static: false,
+                    name: inner,
+                    name_span: ty_span,
+                    ty: t,
+                    init: None,
+                    doc: DocData::default(),
+                }
+                .allocate(&mut p.ast);
+                let node = with_doc!(
+                    p,
+                    ClassNode {
+                        span: p.span_from(self.lo),
                         vis: self.vis,
-                        name: self.name,
+                        name: self.name.id,
+                        name_span: self.name.span,
                         generics: std::mem::take(&mut self.generics),
                         requires: std::mem::take(&mut self.requires),
                         newtype: true,
                         fields: vec![field],
                         methods: Vec::new(),
-                    },
-                    Span::new(self.lo, p.span().hi),
+                        doc: DocData::default(),
+                    }
                 );
-                Step::Pop(Done::Item(node))
+                Step::Pop(Done::Item(node.allocate(&mut p.ast)))
             }
             (TdStage::NewtypeTy, Done::Failed) => Step::Pop(Done::Failed),
             (TdStage::Body, Done::Body(fields, methods)) => {
-                let (vis, name, generics) =
-                    (self.vis, self.name, std::mem::take(&mut self.generics));
-                let kind = if self.is_class {
-                    ItemKind::Class {
-                        vis,
-                        name,
-                        generics,
-                        requires: std::mem::take(&mut self.requires),
-                        newtype: false,
-                        fields,
-                        methods,
-                    }
+                let item = if self.is_class {
+                    with_doc!(
+                        p,
+                        ClassNode {
+                            span: p.span_from(self.lo),
+                            vis: self.vis,
+                            name: self.name.id,
+                            name_span: self.name.span,
+                            generics: std::mem::take(&mut self.generics),
+                            requires: std::mem::take(&mut self.requires),
+                            newtype: false,
+                            fields,
+                            methods,
+                            doc: DocData::default(),
+                        }
+                    )
+                    .allocate(&mut p.ast)
                 } else {
-                    ItemKind::Struct {
-                        vis,
-                        name,
-                        generics,
-                        fields,
-                        methods,
-                    }
+                    with_doc!(
+                        p,
+                        StructNode {
+                            span: p.span_from(self.lo),
+                            vis: self.vis,
+                            name: self.name.id,
+                            name_span: self.name.span,
+                            generics: std::mem::take(&mut self.generics),
+                            fields,
+                            methods,
+                            doc: DocData::default(),
+                        }
+                    )
+                    .allocate(&mut p.ast)
                 };
-                Step::Pop(Done::Item(p.item(kind, Span::new(self.lo, p.span().hi))))
+                Step::Pop(Done::Item(item))
             }
             (TdStage::Body, Done::Failed) => Step::Pop(Done::Failed),
             _ => unreachable!("type declarations receive a body"),
@@ -844,16 +916,11 @@ impl TyDeclFrame {
 }
 
 // ---- interface ----
-//
-// `interface Name<..> { fn sig(..) -> T; .. }` — the observed-capability
-// declaration: SIGNATURES ONLY (bodiless member fns), `Self` and
-// generics allowed. Satisfaction is structural — a type qualifies by
-// HAVING the members (its inherent `impl`), never by registering.
 
 pub(crate) struct InterfaceFrame {
     vis: Vis,
     lo: u32,
-    name: IdentId,
+    name: Name,
     generics: Vec<IdentId>,
 }
 
@@ -862,7 +929,10 @@ impl InterfaceFrame {
         InterfaceFrame {
             vis,
             lo: 0,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             generics: Vec::new(),
         }
     }
@@ -884,18 +954,19 @@ impl InterfaceFrame {
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
             Done::Body(_, methods) => {
-                let (vis, name, generics) =
-                    (self.vis, self.name, std::mem::take(&mut self.generics));
-                let node = p.item(
-                    ItemKind::Interface {
-                        vis,
-                        name,
-                        generics,
+                let node = with_doc!(
+                    p,
+                    InterfaceNode {
+                        span: p.span_from(self.lo),
+                        vis: self.vis,
+                        name: self.name.id,
+                        name_span: self.name.span,
+                        generics: std::mem::take(&mut self.generics),
                         methods,
-                    },
-                    Span::new(self.lo, p.span().hi),
+                        doc: DocData::default(),
+                    }
                 );
-                Step::Pop(Done::Item(node))
+                Step::Pop(Done::Item(node.allocate(&mut p.ast)))
             }
             Done::Failed => Step::Pop(Done::Failed),
             _ => unreachable!("interface frame receives a body"),
@@ -904,34 +975,20 @@ impl InterfaceFrame {
 }
 
 // ---- impl ----
-//
-// The one impl form: `impl T { .. }` — inherent, the type's module
-// only. Bodies are braced, methods only. (`impl I for T` is gone —
-// observed capability is satisfied by having the members, never by
-// registering a block.)
 
 pub(crate) struct ImplFrame {
     lo: u32,
     stage: ImStage,
-    /// the declared generic binders (`impl<T, U> ..`) — the definition
-    /// site; bare params in the head must resolve against this list
     generics: Vec<IdentId>,
-    /// bounds accepted for grammar uniformity (`impl<T requires ..>`) —
-    /// std needs none today; the collector ignores them (admission is
-    /// the fn/class machinery's business)
-    bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-    /// the generic whose `requires` bound is being parsed (GenBound stage)
+    bounds: Vec<(IdentId, TyRef)>,
     pending: Option<IdentId>,
-    target: Option<NodeHandle<AnyTy>>,
+    target: Option<TyRef>,
 }
 
 #[derive(Clone, Copy)]
 enum ImStage {
-    /// the bound of a suspended generic — a child Type frame
     GenBound,
-    /// the target type
     Head,
-    /// the braced method body
     Methods,
 }
 
@@ -955,13 +1012,11 @@ impl ImplFrame {
                 "implementation in a declaration file —`impl` blocks live in `.rut`",
             );
         }
-        // the declared generic binders — the same list grammar the
-        // fn/class routines drive (bounds included, for uniformity)
         if matches!(p.tok(), Tok::Lt) {
             let (gens, pending) = generic_params(p, true, "impl");
             self.generics = gens;
-            if let Some(g) = pending {
-                self.pending = Some(g);
+            if let Some(n) = pending {
+                self.pending = Some(n.id);
                 self.stage = ImStage::GenBound;
                 return Step::Push(Frame::Type(TypeFrame::new(p)));
             }
@@ -974,10 +1029,9 @@ impl ImplFrame {
             (ImStage::GenBound, Done::Ty(t)) => {
                 let g = self.pending.take().expect("bound without a parameter");
                 self.bounds.push((g, t));
-                // continue the list at the next parameter (or close it)
                 let pending = generic_params_more(p, true, "impl", &mut self.generics);
-                if let Some(g) = pending {
-                    self.pending = Some(g);
+                if let Some(n) = pending {
+                    self.pending = Some(n.id);
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
                 self.stage = ImStage::Head;
@@ -985,21 +1039,19 @@ impl ImplFrame {
             }
             (ImStage::GenBound, Done::Failed) => Step::Pop(Done::Failed),
             (ImStage::Head, Done::Ty(t)) => {
-                // inherent impl: `impl Type { .. }` — the one form
                 self.target = Some(t);
                 self.stage = ImStage::Methods;
                 Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Inherent)))
             }
             (ImStage::Methods, Done::Body(_, methods)) => {
-                let node = p.item(
-                    ItemKind::Impl {
-                        generics: std::mem::take(&mut self.generics),
-                        bounds: std::mem::take(&mut self.bounds),
-                        target: self.target.take().expect("impl without a target"),
-                        methods,
-                    },
-                    Span::new(self.lo, p.span().hi),
-                );
+                let node = ImplNode {
+                    span: p.span_from(self.lo),
+                    generics: std::mem::take(&mut self.generics),
+                    bounds: std::mem::take(&mut self.bounds),
+                    target: self.target.take().expect("impl without a target"),
+                    methods,
+                }
+                .allocate(&mut p.ast);
                 Step::Pop(Done::Item(node))
             }
             (_, Done::Failed) => Step::Pop(Done::Failed),
@@ -1012,41 +1064,37 @@ impl ImplFrame {
 
 pub(crate) enum BodyMode {
     /// struct/class body: FIELDS ONLY — methods live in `impl` blocks
-    ///
     Class { allow_pub: bool, is_struct: bool },
-    /// `host struct` body: fields only, no initializers — the host
-    /// constructs the record
+    /// `host struct` body: fields only, no initializers
     HostStruct,
-    /// interface body: bodiless method signatures (`async` and no-`self`
-    /// signatures legal — no bodies)
+    /// interface body: bodiless method signatures
     Interface,
-    /// `impl T` body: inherent methods — `pub` and `async` legal
-    /// (checker restricts `pub` to classes); no fields
+    /// `impl T` body: inherent methods
     Inherent,
 }
 
 pub(crate) struct TypeBodyFrame {
     mode: BodyMode,
-    fields: Vec<NodeHandle<FieldDeclNode>>,
-    methods: Vec<NodeHandle<MethodDeclNode>>,
+    fields: Vec<FieldRef>,
+    methods: Vec<MethodRef>,
     stage: TbStage,
-    /// the field under construction
+    /// the member under construction
     f_lo: Span,
     f_vis: Option<Vis>,
     f_static: bool,
-    f_name: IdentId,
-    f_ty: Option<NodeHandle<AnyTy>>,
+    f_name: Name,
+    f_ty: Option<TyRef>,
+    /// member start + diag watermark (the fence's extent)
+    before: usize,
+    dmark: usize,
 }
 
 #[derive(Clone, Copy)]
 enum TbStage {
     Open,
     Members,
-    /// waiting for the current field's type
     FieldTy,
-    /// waiting for the current field's initializer
     FieldInit,
-    /// waiting for a method declaration
     Method,
 }
 
@@ -1060,12 +1108,16 @@ impl TypeBodyFrame {
             f_lo: Span::new(0, 0),
             f_vis: None,
             f_static: false,
-            f_name: IdentId(0),
+            f_name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             f_ty: None,
+            before: 0,
+            dmark: 0,
         }
     }
 
-    /// the leading clause for a malformed interface/impl member diagnostic
     fn mode_noun(&self) -> &'static str {
         match self.mode {
             BodyMode::Interface => "interfaces declare method signatures",
@@ -1076,8 +1128,6 @@ impl TypeBodyFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        // v1 brace strictness: struct/class and interface bodies bail on a
-        // missing `{`; impl and surface bodies had already expected it
         let strict = matches!(
             self.mode,
             BodyMode::Class { .. } | BodyMode::HostStruct | BodyMode::Interface
@@ -1094,11 +1144,8 @@ impl TypeBodyFrame {
     }
 
     /// The bracket marker's PARSE half: `[word]` before a member's
-    /// modifiers. The parser accepts ANY contextual ident here (the
-    /// grammar audit: `[`/`]` exist, and no member decl could start
-    /// with `[` before this) — the CHECKER validates the engine's
-    /// closed marker set. `None` when the next tokens are not a bracket
-    /// group.
+    /// modifiers — any contextual ident; the CHECKER validates the
+    /// closed marker set.
     fn parse_member_marker(p: &mut Parser) -> Option<IdentId> {
         if !matches!(p.tok(), Tok::LBracket) {
             return None;
@@ -1107,6 +1154,7 @@ impl TypeBodyFrame {
         p.bump(); // [
         let word = p
             .expect_ident("a marker name after `[`")
+            .map(|n| n.id)
             .unwrap_or(IdentId(0));
         if p.expect(Tok::RBracket).is_none() {
             p.err(
@@ -1124,6 +1172,8 @@ impl TypeBodyFrame {
                 let methods = std::mem::take(&mut self.methods);
                 return Step::Pop(Done::Body(fields, methods));
             }
+            self.before = p.pos;
+            self.dmark = p.mark();
             match self.mode {
                 BodyMode::HostStruct => {
                     let lo = p.span();
@@ -1155,7 +1205,10 @@ impl TypeBodyFrame {
                             )));
                         }
                         Tok::Ident(_) => {
-                            let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
+                            let name = p.expect_ident("a field name").unwrap_or(Name {
+                                id: IdentId(0),
+                                span: lo,
+                            });
                             p.expect(Tok::Colon);
                             self.stage = TbStage::FieldTy;
                             self.f_lo = lo;
@@ -1168,6 +1221,8 @@ impl TypeBodyFrame {
                             let found = p.peek(0).describe();
                             p.err_here(format!("expected a field, found {found}"));
                             p.sync_stmt();
+                            let (before, mark) = (self.before, self.dmark);
+                            self.fields.push(FieldRef::Error(p.fence(before, mark)));
                         }
                     }
                 }
@@ -1176,14 +1231,6 @@ impl TypeBodyFrame {
                     is_struct,
                 } => {
                     let lo = p.span();
-                    // members default to module-private;
-                    // `pub` (+ scopes) exposes them. FIELDS ONLY in an
-                    // implementation file — methods live in `impl`
-                    // blocks there (the `fn` member diagnoses and is
-                    // parsed bodiless to stay in sync). In a DECLARATION
-                    // file a bodiless method signature IS the class's
-                    // interface (the `.d.ts` shape — the declaration
-                    // entry lane): it parses clean, no `impl` block.
                     let mut vis: Option<Vis> = None;
                     let mut is_static = false;
                     while let Tok::Ident(m) = p.tok().clone() {
@@ -1232,7 +1279,10 @@ impl TypeBodyFrame {
                             )));
                         }
                         Tok::Ident(_) => {
-                            let name = p.expect_ident("a field name").unwrap_or(IdentId(0));
+                            let name = p.expect_ident("a field name").unwrap_or(Name {
+                                id: IdentId(0),
+                                span: lo,
+                            });
                             p.expect(Tok::Colon);
                             self.stage = TbStage::FieldTy;
                             self.f_lo = lo;
@@ -1245,16 +1295,12 @@ impl TypeBodyFrame {
                             let found = p.peek(0).describe();
                             p.err_here(format!("expected a field, found {found}"));
                             p.sync_stmt();
-                            // sync consumes at least one token (or stops
-                            // at `}` / EOF, both caught at the loop top)
+                            let (before, mark) = (self.before, self.dmark);
+                            self.fields.push(FieldRef::Error(p.fence(before, mark)));
                         }
                     }
                 }
                 BodyMode::Interface => {
-                    // modifier loop: the bracket marker parsed here and
-                    // diagnosed (markers are inherent-members-only); `pub`
-                    // rejected (the interface's own visibility governs);
-                    // `async` accepted on the signature
                     let lo = p.span();
                     let mut is_async = false;
                     let marker = Self::parse_member_marker(p);
@@ -1275,7 +1321,7 @@ impl TypeBodyFrame {
                     if let Some(word) = marker {
                         p.err(lo, format!(
                             "`[{}]` marks an inherent impl member — engine contracts are declared on `impl Type {{ .. }}` blocks, never an interface",
-                            p.interner.name(word)
+                            p.ast.name(word)
                         ));
                     }
                     if p.at_kw("fn") {
@@ -1293,8 +1339,7 @@ impl TypeBodyFrame {
                 }
                 BodyMode::Inherent => {
                     // `impl T { .. }` — inherent methods: the bracket
-                    // marker FIRST (marker-before-visibility —
-                    // `[disposal] pub fn ..`), then `pub`/`async`
+                    // marker FIRST, then `pub`/`async`
                     let lo = p.span();
                     let marker = Self::parse_member_marker(p);
                     let mut vis: Option<Vis> = None;
@@ -1360,13 +1405,23 @@ impl TypeBodyFrame {
                 self.field_done(p, Some(e))
             }
             Done::Failed => match self.stage {
-                // v1: a failed method or field type resyncs and continues
-                TbStage::Method | TbStage::FieldTy => {
+                // the ladder's member tier: a failed method/field-type
+                // fences IN its list; the body survives
+                TbStage::Method => {
                     p.sync_stmt();
+                    let (before, mark) = (self.before, self.dmark);
+                    self.methods.push(MethodRef::Error(p.fence(before, mark)));
                     self.stage = TbStage::Members;
                     self.members_top(p)
                 }
-                // v1: a failed field initializer bails the whole body (`?`)
+                TbStage::FieldTy => {
+                    p.sync_stmt();
+                    let (before, mark) = (self.before, self.dmark);
+                    self.fields.push(FieldRef::Error(p.fence(before, mark)));
+                    self.stage = TbStage::Members;
+                    self.members_top(p)
+                }
+                // v1: a failed field initializer bails the whole body
                 TbStage::FieldInit => Step::Pop(Done::Failed),
                 _ => unreachable!(),
             },
@@ -1374,18 +1429,21 @@ impl TypeBodyFrame {
         }
     }
 
-    fn field_done(&mut self, p: &mut Parser, init: Option<NodeHandle<AnyExpr>>) -> Step {
-        let node = p.field_decl(
-            FieldDeclData {
+    fn field_done(&mut self, p: &mut Parser, init: Option<rut_ast::ExprRef>) -> Step {
+        let node = with_doc!(
+            p,
+            FieldDeclNode {
+                span: Span::new(self.f_lo.lo, p.prev_end.max(self.f_lo.lo)),
                 vis: self.f_vis,
                 is_static: self.f_static,
-                name: self.f_name,
+                name: self.f_name.id,
+                name_span: self.f_name.span,
                 ty: self.f_ty.take().expect("field without a type"),
                 init,
-            },
-            self.f_lo.to(p.span()),
+                doc: DocData::default(),
+            }
         );
-        self.fields.push(node);
+        self.fields.push(node.allocate(&mut p.ast));
         if !(p.eat_punct(Tok::Semi) || p.eat_punct(Tok::Comma)) {
             // last field before `}` — allowed; otherwise complain
             if !matches!(p.tok(), Tok::RBrace) {
@@ -1404,22 +1462,16 @@ pub(crate) struct MethodFrame {
     lo: u32,
     vis: Option<Vis>,
     is_async: bool,
-    /// the bracket marker (`[disposal]` / `[iterable]` /
-    /// `[constructor]` — the designated surfaces) — parsed as a
-    /// contextual word, validated against the closed set by the checker
     marker: Option<IdentId>,
     with_body: bool,
-    /// rut methods take inline bounds; surface (.d.rut) members
-    /// do not
     allow_bounds: bool,
     stage: MeStage,
-    name: IdentId,
+    name: Name,
     generics: Vec<IdentId>,
-    /// the generic whose `requires` bound is being parsed (GenBound stage)
     pending: Option<IdentId>,
-    bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-    params: Option<Vec<NodeHandle<AnyParam>>>,
-    ret: Option<NodeHandle<AnyTy>>,
+    bounds: Vec<(IdentId, TyRef)>,
+    params: Option<Vec<ParamRef>>,
+    ret: Option<TyRef>,
 }
 
 #[derive(Clone, Copy)]
@@ -1445,7 +1497,10 @@ impl MethodFrame {
             with_body,
             allow_bounds,
             stage: MeStage::Params,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             generics: Vec::new(),
             pending: None,
             bounds: Vec::new(),
@@ -1463,8 +1518,8 @@ impl MethodFrame {
         if matches!(p.tok(), Tok::Lt) {
             let (gens, pending) = generic_params(p, self.allow_bounds, "method");
             self.generics = gens;
-            if let Some(g) = pending {
-                self.pending = Some(g);
+            if let Some(n) = pending {
+                self.pending = Some(n.id);
                 self.stage = MeStage::GenBound;
                 return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
             }
@@ -1492,8 +1547,7 @@ impl MethodFrame {
     }
 
     /// A `where` clause is gone: diagnose with the inline
-    /// replacement and skip past the stray clause so the signature's
-    /// tail (`;` or the body) still parses.
+    /// replacement and skip past the stray clause.
     fn stray_where(&mut self, p: &mut Parser) {
         if p.at_kw("where") {
             p.err_here(
@@ -1505,21 +1559,25 @@ impl MethodFrame {
         }
     }
 
-    fn pop(&mut self, p: &mut Parser, body: Option<NodeHandle<BlockNode>>) -> Step {
-        let d = MethodDeclData {
-            vis: self.vis,
-            is_async: self.is_async,
-            marker: self.marker.take(),
-            name: self.name,
-            generics: std::mem::take(&mut self.generics),
-            bounds: std::mem::take(&mut self.bounds),
-            params: self.params.take().expect("method without params"),
-            ret: self.ret.take(),
-            body,
-        };
-        Step::Pop(Done::Method(
-            p.method_decl(d, Span::new(self.lo, p.span().hi)),
-        ))
+    fn pop(&mut self, p: &mut Parser, body: Option<Handle<BlockNode>>) -> Step {
+        let d = with_doc!(
+            p,
+            MethodDeclNode {
+                span: p.span_from(self.lo),
+                vis: self.vis,
+                is_async: self.is_async,
+                marker: self.marker.take(),
+                name: self.name.id,
+                name_span: self.name.span,
+                generics: std::mem::take(&mut self.generics),
+                bounds: std::mem::take(&mut self.bounds),
+                params: self.params.take().expect("method without params"),
+                ret: self.ret.take(),
+                body,
+                doc: DocData::default(),
+            }
+        );
+        Step::Pop(Done::Method(d.allocate(&mut p.ast)))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
@@ -1529,8 +1587,8 @@ impl MethodFrame {
                 self.bounds.push((g, t));
                 let pending =
                     generic_params_more(p, self.allow_bounds, "method", &mut self.generics);
-                if let Some(g) = pending {
-                    self.pending = Some(g);
+                if let Some(n) = pending {
+                    self.pending = Some(n.id);
                     return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
                 }
                 self.stage = MeStage::Params;
@@ -1563,13 +1621,12 @@ pub(crate) struct FnFrame {
     lo: u32,
     stage: FnSStage,
     is_async: bool,
-    name: IdentId,
+    name: Name,
     generics: Vec<IdentId>,
-    /// the generic whose `requires` bound is being parsed (GenBound stage)
     pending: Option<IdentId>,
-    bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-    params: Option<Vec<NodeHandle<AnyParam>>>,
-    ret: Option<NodeHandle<AnyTy>>,
+    bounds: Vec<(IdentId, TyRef)>,
+    params: Option<Vec<ParamRef>>,
+    ret: Option<TyRef>,
     /// the bodiless spelling's `;` end (Decl mode) — the empty body's span
     semi_hi: u32,
 }
@@ -1591,7 +1648,10 @@ impl FnFrame {
             lo: 0,
             stage: FnSStage::Params,
             is_async: false,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             generics: Vec::new(),
             pending: None,
             bounds: Vec::new(),
@@ -1617,8 +1677,8 @@ impl FnFrame {
         if matches!(p.tok(), Tok::Lt) {
             let (gens, pending) = generic_params(p, true, "fn");
             self.generics = gens;
-            if let Some(g) = pending {
-                self.pending = Some(g);
+            if let Some(n) = pending {
+                self.pending = Some(n.id);
                 self.stage = FnSStage::GenBound;
                 return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
             }
@@ -1634,12 +1694,9 @@ impl FnFrame {
         self.body(p)
     }
 
-    /// The fn body — a stray `where` clause (removed) diagnoses
-    /// with the inline replacement and is skipped so the `{` still parses.
+    /// The fn body — a stray `where` clause diagnoses and is skipped.
     /// In a DECLARATION file a bodiless signature (`fn f(..);`) is the
-    /// legal spelling — a declaration, no body — and pops clean; a
-    /// braced body is implementation and diagnoses (the recovery
-    /// parses it so the file's tail stays sane).
+    /// legal spelling; a braced body is implementation and diagnoses.
     fn body(&mut self, p: &mut Parser) -> Step {
         if p.at_kw("where") {
             p.err_here(
@@ -1665,27 +1722,33 @@ impl FnFrame {
     }
 
     /// The bodiless pop (Decl mode only): the fn node carries an EMPTY
-    /// block — the arena's fn shape has no bodiless arm, and no machine
-    /// ever lowers a declaration-file fn (the declaration lane reads
-    /// signatures only).
+    /// block (synthesized, no doc of its own).
     fn pop(&mut self, p: &mut Parser) -> Step {
         let at = self.semi_hi;
-        let body = p.block(Vec::new(), Span::new(at, at));
-        let f = p.fn_decl(
-            FnData {
+        let body = BlockNode {
+            span: Span::new(at, at),
+            stmts: Vec::new(),
+            tail: None,
+        }
+        .alloc_plain(&mut p.ast);
+        let f = with_doc!(
+            p,
+            FnNode {
+                span: p.span_from(self.lo),
                 vis: self.vis,
                 is_async: self.is_async,
                 entry: self.entry,
-                name: self.name,
+                name: self.name.id,
+                name_span: self.name.span,
                 generics: std::mem::take(&mut self.generics),
                 params: self.params.take().expect("fn without params"),
                 ret: self.ret.take(),
                 bounds: std::mem::take(&mut self.bounds),
                 body,
-            },
-            Span::new(self.lo, p.span().hi),
+                doc: DocData::default(),
+            }
         );
-        Step::Pop(Done::Item(f.into()))
+        Step::Pop(Done::Item(f.allocate(&mut p.ast)))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
@@ -1694,8 +1757,8 @@ impl FnFrame {
                 let g = self.pending.take().expect("bound without a parameter");
                 self.bounds.push((g, t));
                 let pending = generic_params_more(p, true, "fn", &mut self.generics);
-                if let Some(g) = pending {
-                    self.pending = Some(g);
+                if let Some(n) = pending {
+                    self.pending = Some(n.id);
                     return Step::Push(Frame::Type(TypeFrame::new_bound(p)));
                 }
                 self.stage = FnSStage::Params;
@@ -1713,21 +1776,24 @@ impl FnFrame {
             }
             (FnSStage::Ret, Done::Failed) => Step::Pop(Done::Failed),
             (FnSStage::Body, Done::Block(body)) => {
-                let f = p.fn_decl(
-                    FnData {
+                let f = with_doc!(
+                    p,
+                    FnNode {
+                        span: p.span_from(self.lo),
                         vis: self.vis,
                         is_async: self.is_async,
                         entry: self.entry,
-                        name: self.name,
+                        name: self.name.id,
+                        name_span: self.name.span,
                         generics: std::mem::take(&mut self.generics),
                         params: self.params.take().expect("fn without params"),
                         ret: self.ret.take(),
                         bounds: std::mem::take(&mut self.bounds),
                         body,
-                    },
-                    Span::new(self.lo, p.span().hi),
+                        doc: DocData::default(),
+                    }
                 );
-                Step::Pop(Done::Item(f.into()))
+                Step::Pop(Done::Item(f.allocate(&mut p.ast)))
             }
             (FnSStage::Body, Done::Failed) => Step::Pop(Done::Failed),
             _ => unreachable!("fn frame receives params, types, or a body"),
@@ -1736,67 +1802,20 @@ impl FnFrame {
 }
 
 // ---- host/builtin surface declarations (.d.rut) ----
-//
-// Two linkages: `host` — the embedding Rust implements it;
-// `builtin` — the engine itself (compiler-lowered, core only). Builtin
-// decls spell ONE of two forms: `prelude builtin` (ambient — binds in
-// every unit, no `use`) or `pub builtin` (import-gated — resolves only
-// through `use <pkg>::{ .. }`); a bare `builtin` diagnoses. What each
-// may spell:
-//
-//     host fn name(params) -> T;        concrete signature over the
-//                                       crossing set
-//     host async fn name(params) -> T;  the host future lane: calling
-//                                       mints a cold engine-woven
-//                                       Future frame; the embedder
-//                                       registers the `__start`/
-//                                       `__yield`/`__take`/`__cancel`
-//                                       row family with
-//                                       `register_async!`
-//     host struct Name { fields }    flat record; every field a
-//                                       crossing type; host-constructed
-//     prelude builtin fn name<T>(..);   engine fn, ambient (generics
-//                                       fine — nothing crosses); the
-//                                       same four kinds spell
-//                                       `pub builtin` when gated
-//     prelude builtin primitive <name> { .. }   a boot primitive's
-//                                       surface statement (`str`/
-//                                       `bytes`/`opaque`) — never a
-//                                       class
-//     prelude builtin class Name<T> { methods } engine type's member
-//                                       contract (`Future<T>` and
-//                                       `RunContext` among them — the
-//                                       closed async pair)
-//
-// `host class`, `extern`, and `builtin trait` are gone (v20: engine
-// contracts are `builtin class` rows and the `[..]` markers);
-// native state crosses as `opaque`
-// and rut wraps it in a class (the `Logger` pattern).
 
 pub(crate) struct SurfaceFrame {
     linkage: Linkage,
-    /// the declaring visibility (`pub host fn` vs bare `host fn`) —
-    /// carried faithfully onto every `SurfaceFn` row so the
-    /// cross-package leaf gate (`pub` only) can read it
     vis: Vis,
     lo: u32,
     stage: SuStage,
-    /// `host async fn name(..) -> T;` — the host future lane: the
-    /// minted rows (`__start`/`__yield`/`__take`/`__cancel`) drive an
-    /// embedder `Completer` through the engine-woven frame
     is_async: bool,
-    /// `builtin impl i32 { .. }` — collects bodiless methods like
-    /// BuiltinTy but emits the builtin-impl node
     is_impl: bool,
-    /// `builtin primitive opaque { .. }` — collects bodiless methods
-    /// like BuiltinTy but emits the builtin-primitive node (the boot
-    /// primitives' surface statement, builtin-surface phase 1)
     is_primitive: bool,
-    name: IdentId,
+    name: Name,
     generics: Vec<IdentId>,
-    methods: Vec<NodeHandle<MethodDeclNode>>,
-    params: Option<Vec<NodeHandle<AnyParam>>>,
-    ret: Option<NodeHandle<AnyTy>>,
+    methods: Vec<MethodRef>,
+    params: Option<Vec<ParamRef>>,
+    ret: Option<TyRef>,
 }
 
 #[derive(Clone, Copy)]
@@ -1816,7 +1835,10 @@ impl SurfaceFrame {
             is_async: false,
             is_impl: false,
             is_primitive: false,
-            name: IdentId(0),
+            name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
             generics: Vec::new(),
             methods: Vec::new(),
             params: None,
@@ -1842,13 +1864,6 @@ impl SurfaceFrame {
     fn host_step(&mut self, p: &mut Parser) -> Step {
         match p.tok().clone() {
             Tok::Ident(k) if k == "async" => {
-                // `pub host async fn name(params) -> T;` — the host
-                // future lane: calling one mints a COLD engine-woven
-                // Future frame whose state field holds the host cell
-                // (`__start`'s answer); the embedder registers the row
-                // family with `register_async!`. Concrete crossing
-                // signatures only — the generic rejection below is the
-                // same diagnostic the sync lane uses.
                 p.bump();
                 self.is_async = true;
                 match p.tok().clone() {
@@ -1896,11 +1911,6 @@ impl SurfaceFrame {
         };
         self.name = name;
         if matches!(p.tok(), Tok::Lt) {
-            // a host fn's parameters and returns are
-            // built from the crossing set — a generic parameter
-            // has no shape the boundary could check. The async lane
-            // refuses with the same words: its answer type IS the
-            // decl's return, so a generic would strand the weave.
             p.err(
                 p.span(),
                 "host fn signatures are concrete —generic parameters cannot cross the boundary",
@@ -1921,8 +1931,6 @@ impl SurfaceFrame {
                     return Step::Pop(Done::Failed);
                 };
                 self.name = name;
-                // engine fns are compiler-lowered (panic, string_join) —
-                // generics are fine: nothing crosses a boundary
                 if matches!(p.tok(), Tok::Lt) {
                     let (gens, pending) = generic_params(p, false, "builtin fn");
                     self.generics = gens;
@@ -1932,13 +1940,6 @@ impl SurfaceFrame {
                 Step::Push(Frame::Params(ParamsFrame::new()))
             }
             Tok::Ident(k) if k == "class" || k == "trait" => {
-                // `builtin class Name<T> { .. }` — an engine builtin type's
-                // member contract. The `builtin trait` spelling is GONE
-                // (v20): the engine-contract row kind died with the
-                // select + type-surface plan's lanes 3+4 — `Future`/
-                // `RunContext` are closed classes, `Iterable`/`Disposal`
-                // are the bracket markers. Diagnosed, then recovered as a
-                // class so the members still parse.
                 if k == "trait" {
                     p.err(p.span(), "`builtin trait` is removed — engine contracts are spelled on types now: `Future`/`RunContext` are `builtin class` rows, and `Iterable`/`Disposal` are bracket markers (`[iterable] fn` / `[disposal] fn` in an inherent `impl`)");
                 }
@@ -1958,10 +1959,6 @@ impl SurfaceFrame {
                 self.members_top(p)
             }
             Tok::Ident(k) if k == "primitive" => {
-                // `builtin primitive <name> { .. }` — the boot primitives'
-                // surface statement (`str`/`bytes`/`opaque`): NOT a class —
-                // no construction literal, no fields; the members are the
-                // compiler-lowered contracts users and the LSP see
                 p.bump();
                 let Some(name) = p.expect_ident("a primitive name") else {
                     return Step::Pop(Done::Failed);
@@ -1970,7 +1967,6 @@ impl SurfaceFrame {
                 self.is_primitive = true;
                 if matches!(p.tok(), Tok::Lt) {
                     p.err(p.span(), "a primitive takes no generic arguments");
-                    // skip the rejected list so parsing stays in sync
                     while !matches!(p.tok(), Tok::LBrace | Tok::Semi | Tok::Eof) {
                         p.bump();
                     }
@@ -1980,9 +1976,6 @@ impl SurfaceFrame {
                 self.members_top(p)
             }
             Tok::Ident(k) if k == "impl" => {
-                // `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }`
-                // — numeric methods ON a primitive type:
-                // lowered inline at the method call, ambient on the prim
                 p.bump();
                 let Some(prim) = p.expect_ident("a primitive type name") else {
                     return Step::Pop(Done::Failed);
@@ -2012,42 +2005,46 @@ impl SurfaceFrame {
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let span = Span::new(self.lo, p.span().hi);
-                // the strict spelling the decl used — `prelude builtin`
-                // (ambient) vs `pub builtin` (import-gated); a bare
-                // `builtin` diagnoses and recovers as ambient
                 let ambient = matches!(self.linkage, Linkage::Builtin { ambient: true });
-                let node = if self.is_impl {
-                    p.item(
-                        ItemKind::BuiltinImpl {
-                            vis: Vis::Self_,
-                            prim: self.name,
-                            methods: std::mem::take(&mut self.methods),
-                        },
-                        span,
-                    )
+                let item = if self.is_impl {
+                    BuiltinImplNode {
+                        span: p.span_from(self.lo),
+                        vis: Vis::Self_,
+                        prim: self.name.id,
+                        name_span: self.name.span,
+                        methods: std::mem::take(&mut self.methods),
+                    }
+                    .allocate(&mut p.ast)
                 } else if self.is_primitive {
-                    p.item(
-                        ItemKind::BuiltinPrimitive {
+                    with_doc!(
+                        p,
+                        BuiltinPrimitiveNode {
+                            span: p.span_from(self.lo),
                             ambient,
-                            name: self.name,
+                            name: self.name.id,
+                            name_span: self.name.span,
                             members: std::mem::take(&mut self.methods),
-                        },
-                        span,
+                            doc: DocData::default(),
+                        }
                     )
+                    .allocate(&mut p.ast)
                 } else {
-                    p.item(
-                        ItemKind::BuiltinTy {
+                    with_doc!(
+                        p,
+                        BuiltinTyNode {
+                            span: p.span_from(self.lo),
                             vis: Vis::Self_,
                             ambient,
-                            name: self.name,
+                            name: self.name.id,
+                            name_span: self.name.span,
                             generics: std::mem::take(&mut self.generics),
                             members: std::mem::take(&mut self.methods),
-                        },
-                        span,
+                            doc: DocData::default(),
+                        }
                     )
+                    .allocate(&mut p.ast)
                 };
-                return Step::Pop(Done::Item(node));
+                return Step::Pop(Done::Item(item));
             }
             let is_async = if p.at_kw("async") {
                 p.bump();
@@ -2092,15 +2089,18 @@ impl SurfaceFrame {
             // a host struct body arrives as (fields, no methods) — any
             // `fn` member was diagnosed by the body frame and is dropped
             (SuStage::Members, Done::Body(fields, _methods)) => {
-                let node = p.item(
-                    ItemKind::SurfaceStruct {
+                let node = with_doc!(
+                    p,
+                    SurfaceStructNode {
+                        span: p.span_from(self.lo),
                         vis: Vis::Self_,
-                        name: self.name,
+                        name: self.name.id,
+                        name_span: self.name.span,
                         fields,
-                    },
-                    Span::new(self.lo, p.span().hi),
+                        doc: DocData::default(),
+                    }
                 );
-                Step::Pop(Done::Item(node))
+                Step::Pop(Done::Item(node.allocate(&mut p.ast)))
             }
             (SuStage::Members, Done::Failed) => {
                 p.sync_stmt();
@@ -2114,31 +2114,37 @@ impl SurfaceFrame {
     }
 
     fn pop_fn(&mut self, p: &mut Parser) -> Step {
-        let node = p.item(
-            ItemKind::SurfaceFn {
+        let node = with_doc!(
+            p,
+            SurfaceFnNode {
+                span: p.span_from(self.lo),
                 vis: self.vis,
                 linkage: self.linkage,
                 is_async: self.is_async,
-                name: self.name,
+                name: self.name.id,
+                name_span: self.name.span,
                 generics: std::mem::take(&mut self.generics),
                 params: self.params.take().expect("surface fn without params"),
                 ret: self.ret.take(),
-            },
-            Span::new(self.lo, p.span().hi),
+                doc: DocData::default(),
+            }
         );
-        Step::Pop(Done::Item(node))
+        Step::Pop(Done::Item(node.allocate(&mut p.ast)))
     }
 }
 
 // ---- parameter list ----
 
 pub(crate) struct ParamsFrame {
-    out: Vec<NodeHandle<AnyParam>>,
+    out: Vec<ParamRef>,
     stage: PsStage,
     /// the parameter under construction
     p_lo: Span,
     p_mut: bool,
-    p_name: IdentId,
+    p_name: Name,
+    /// param start + diag watermark (the fence's extent)
+    before: usize,
+    dmark: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -2154,7 +2160,12 @@ impl ParamsFrame {
             stage: PsStage::List,
             p_lo: Span::new(0, 0),
             p_mut: false,
-            p_name: IdentId(0),
+            p_name: Name {
+                id: IdentId(0),
+                span: Span::new(0, 0),
+            },
+            before: 0,
+            dmark: 0,
         }
     }
 
@@ -2165,11 +2176,21 @@ impl ParamsFrame {
         self.list_top(p)
     }
 
+    /// resync inside a param list: to the `,`, the `)`, or EOF
+    fn sync_param(p: &mut Parser) {
+        while !matches!(p.tok(), Tok::Comma | Tok::RParen | Tok::Eof) {
+            p.bump();
+        }
+    }
+
     fn list_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RParen) {
                 return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
             }
+            let (before, dmark) = (p.pos, p.mark());
+            self.before = before;
+            self.dmark = dmark;
             let lo = p.span();
             let mut is_mut = false;
             if p.at_kw("mut") && p.at_kw2("self") {
@@ -2177,9 +2198,13 @@ impl ParamsFrame {
                 p.bump();
             }
             if p.at_kw("self") {
-                p.bump();
-                self.out
-                    .push(p.member(MemberKind::SelfParam(SelfParamData { is_mut }), lo));
+                let sp = p.bump().span;
+                let node = SelfParamNode {
+                    span: Span::new(lo.lo, sp.hi.max(lo.lo)),
+                    is_mut,
+                }
+                .allocate(&mut p.ast);
+                self.out.push(node);
                 if !p.eat_punct(Tok::Comma) {
                     p.expect(Tok::RParen);
                     return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
@@ -2191,8 +2216,15 @@ impl ParamsFrame {
                 p.bump();
             }
             let Some(name) = p.expect_ident("a parameter name") else {
-                p.sync_stmt();
-                return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
+                // the ladder's param tier: a broken param fences IN the
+                // list — the signature survives with its hole
+                Self::sync_param(p);
+                self.out.push(ParamRef::Error(p.fence(before, dmark)));
+                if !p.eat_punct(Tok::Comma) {
+                    p.expect(Tok::RParen);
+                    return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
+                }
+                continue;
             };
             self.p_lo = lo;
             self.p_mut = is_mut;
@@ -2201,14 +2233,15 @@ impl ParamsFrame {
                 self.stage = PsStage::Ty;
                 return Step::Push(Frame::Type(TypeFrame::new(p)));
             }
-            self.out.push(p.member(
-                MemberKind::Param(ParamData {
-                    is_mut,
-                    name,
-                    ty: None,
-                }),
-                lo.to(p.span()),
-            ));
+            let node = ParamNode {
+                span: Span::new(lo.lo, p.prev_end.max(lo.lo)),
+                is_mut,
+                name: name.id,
+                name_span: name.span,
+                ty: None,
+            }
+            .allocate(&mut p.ast);
+            self.out.push(node);
             if !p.eat_punct(Tok::Comma) {
                 p.expect(Tok::RParen);
                 return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
@@ -2222,22 +2255,34 @@ impl ParamsFrame {
                 debug_assert!(matches!(self.stage, PsStage::Ty));
                 self.stage = PsStage::List;
                 let (lo, is_mut, name) = (self.p_lo, self.p_mut, self.p_name);
-                self.out.push(p.member(
-                    MemberKind::Param(ParamData {
-                        is_mut,
-                        name,
-                        ty: Some(t),
-                    }),
-                    lo.to(p.span()),
-                ));
+                let node = ParamNode {
+                    span: Span::new(lo.lo, p.prev_end.max(lo.lo)),
+                    is_mut,
+                    name: name.id,
+                    name_span: name.span,
+                    ty: Some(t),
+                }
+                .allocate(&mut p.ast);
+                self.out.push(node);
                 if !p.eat_punct(Tok::Comma) {
                     p.expect(Tok::RParen);
                     return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
                 }
                 self.list_top(p)
             }
-            // v1: `Some(self.parse_type()?)` bails the whole list
-            Done::Failed => Step::Pop(Done::Failed),
+            Done::Failed => {
+                // the failed param's TYPE: fence in place, continue the
+                // list (the ladder's param tier)
+                Self::sync_param(p);
+                let (before, mark) = (self.before, self.dmark);
+                self.out.push(ParamRef::Error(p.fence(before, mark)));
+                self.stage = PsStage::List;
+                if !p.eat_punct(Tok::Comma) {
+                    p.expect(Tok::RParen);
+                    return Step::Pop(Done::Members(std::mem::take(&mut self.out)));
+                }
+                self.list_top(p)
+            }
             _ => unreachable!("params frame receives types"),
         }
     }

@@ -24,7 +24,9 @@ use rut_driver::sha256_hex;
 
 /// The fetch cap: a bundle beyond this is refused without buffering
 /// it (the content-length is honored when present; the buffered length
-/// is checked regardless).
+/// is checked regardless). Wire-lane only: without the `http` feature
+/// nothing fetches, so the cap has no caller.
+#[cfg(feature = "http")]
 const MAX_FETCH_BYTES: usize = 256 * 1024 * 1024;
 
 /// HOW url-dep bytes arrive — the call site's half of the layer split.

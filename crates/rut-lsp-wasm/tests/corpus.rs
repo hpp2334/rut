@@ -8,6 +8,20 @@ use rut_lsp_wasm::semantic::{classify, symbols, TokenType};
 use rut_lsp_wasm::LineIndex;
 use rut_parser::{is_reserved_kw, Mode};
 
+/// parse with doc grafting ON — the editor lane's shape (hover's index
+/// reads doc chains off the decl nodes) and the recovering entry (the
+/// tree survives broken snippets)
+fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
+    rut_parser::parse_with_recover(
+        src,
+        mode,
+        rut_parser::ParseOpts {
+            include_comments: true,
+        },
+    )
+    .ast
+}
+
 fn corpus() -> Vec<std::path::PathBuf> {
     // the four corpus trees (the lsp-align survey §6): examples, the
     // playground classics, the stdlib itself, and the bench workloads
@@ -40,11 +54,11 @@ fn analyzed(
     mode: Mode,
 ) -> (
     Vec<rut_lexer::token::Token>,
-    rut_ast::ast::Ast,
+    rut_ast::Ast,
     Vec<(rut_lexer::span::Span, TokenType)>,
 ) {
     let (toks, _) = rut_lexer::lexer::lex(src);
-    let (ast, _) = rut_parser::parse(src, mode);
+    let ast = doc_ast(src, mode);
     let spans = classify(&toks, &ast);
     (toks, ast, spans)
 }
@@ -123,7 +137,8 @@ fn corpus_parses_clean_lsp() {
         } else {
             Mode::Impl
         };
-        let (_, diags) = rut_parser::parse(&src, mode);
+        let ast = doc_ast(&src, mode);
+        let diags = ast.errors();
         if !diags.is_empty() {
             failures.push(format!(
                 "{}: {} diag(s): first = {}",

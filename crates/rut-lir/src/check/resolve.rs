@@ -273,45 +273,49 @@ impl<'a> Ctx<'a> {
     /// A type in a NAMING position (impl heads, requires lists, is RHS) —
     /// bare trait name → the trait's object type here means the TYPE;
     /// for `is` RHS we keep trait vs concrete distinction in the compiler.
-    pub fn resolve_naming_type(&mut self, node: NodeHandle<AnyTy>) -> TypeId {
+    pub fn resolve_naming_type(&mut self, node: TyRef) -> TypeId {
         self.resolve_type(node, &[])
     }
 
     /// Resolve a type AST node into the type table. `env` binds generic
     /// params of the enclosing instantiation.
-    pub fn resolve_type(&mut self, node: NodeHandle<AnyTy>, env: &[(IdentId, TypeId)]) -> TypeId {
-        let sp = self.ast.span(node.id());
-        match self.ast.ty(node) {
-            TypeKind::TyFn { params, ret } => {
+    pub fn resolve_type(&mut self, node: TyRef, env: &[(IdentId, TypeId)]) -> TypeId {
+        let sp = node.span(self.ast);
+        match node {
+            TyRef::Fn(h) => {
+                let (params, ret) = {
+                    let n = h.get(self.ast);
+                    (n.params.clone(), n.ret)
+                };
                 let mut ptys = Vec::new();
                 for p in params {
-                    ptys.push(self.resolve_type(*p, env));
+                    ptys.push(self.resolve_type(p, env));
                 }
-                let rty = self.resolve_type(*ret, env);
+                let rty = self.resolve_type(ret, env);
                 self.mk_fn_ty(ptys, rty)
             }
-            TypeKind::TyOpt { inner } => {
-                let elem = self.resolve_type(*inner, env);
+            TyRef::Opt(h) => {
+                let elem = self.resolve_type(h.get(self.ast).inner, env);
                 self.mk_opt(elem)
             }
-            TypeKind::TyArray { elem } => {
+            TyRef::Array(h) => {
                 // `[T]` — the array type: grammar-spelled,
                 // resolved directly, no surface name behind it
-                let elem = self.resolve_type(*elem, env);
+                let elem = self.resolve_type(h.get(self.ast).elem, env);
                 self.mk_array(elem)
             }
-            TypeKind::TyTuple { elems } => {
+            TyRef::Tuple(h) => {
                 let mut etys = Vec::new();
-                for e in elems {
-                    etys.push(self.resolve_type(*e, env));
+                for e in h.get(self.ast).elems.clone() {
+                    etys.push(self.resolve_type(e, env));
                 }
                 self.mk_tuple(etys)
             }
-            TypeKind::TyConst(_) => {
+            TyRef::Const(_) => {
                 self.err(sp, "a const expression is not a type here");
                 TY_I32
             }
-            TypeKind::TyUnion { .. } => {
+            TyRef::Union { .. } => {
                 // a union in a value position (bound-only)
                 self.err(
                     sp,
@@ -319,9 +323,16 @@ impl<'a> Ctx<'a> {
                 );
                 TY_I32
             }
-            TypeKind::TyPath { segs, .. } => {
+            TyRef::Error(_) => {
+                // a broken tree never lowers — the compile lanes refuse
+                // on !ast.is_clean() first; unreachable in practice
+                self.err(sp, "malformed type");
+                TY_I32
+            }
+            TyRef::Path(h) => {
+                let segs = h.get(self.ast).segs.clone();
                 if segs.len() > 1 {
-                    return self.resolve_qualified_ty(segs, sp, env);
+                    return self.resolve_qualified_ty(&segs, sp, env);
                 }
                 let seg = &segs[0];
                 let name = seg.name;

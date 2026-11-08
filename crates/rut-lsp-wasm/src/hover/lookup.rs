@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use rut_ast::ast::{Ast, ItemKind};
+use rut_ast::{Ast, ItemRef};
 use rut_semantic::Span;
 use rut_semantic::{Tok, Token};
 
@@ -185,9 +185,10 @@ pub(crate) fn member_context(toks: &[Token], t: &Token) -> Option<String> {
 /// natively.
 pub(crate) fn used_ifaces(ast: &Ast) -> HashSet<String> {
     let mut out = HashSet::new();
-    for h in ast.module_items(ast.root) {
-        if let ItemKind::Use { names, .. } = ast.item(*h) {
-            out.extend(names.iter().map(|n| ast.name(*n).to_string()));
+    for item in ast.root().items(ast) {
+        if let ItemRef::Use(h) = item {
+            let d = h.get(ast);
+            out.extend(d.names.iter().map(|n| ast.name(*n).to_string()));
         }
     }
     out

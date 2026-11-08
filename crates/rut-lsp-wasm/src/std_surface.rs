@@ -135,7 +135,7 @@ fn std_index(origin: &str, src: &str, src_path: &str, mod_path: Option<&str>) ->
     // the mode derives from the src_path — every std file obeys the
     // filename convention; the table's explicit column was redundancy
     let doc = rut_semantic::ParsedDoc::parse(src_path, src);
-    let mut idx = hover::index(doc.src(), &doc.ast, &doc.toks, &doc.comments);
+    let mut idx = hover::index(doc.src(), &doc.ast, &doc.toks);
     // the std surface is the PUBLIC face (the hashmap-surface
     // batch): nmapset's internals stay off it — its lane classes
     // are `pub`-less in the source now, and a pub-less type never

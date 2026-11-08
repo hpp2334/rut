@@ -5,44 +5,41 @@
 //! the generic and bounded heads, the printed-back spelling, and the
 //! malformed forms.
 
-use rut_ast::ast::*;
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::parse;
+use rut_ast::{FieldRef, ItemRef, TyRef, Vis};
+use rut_parser::Mode;
 
 #[test]
 fn positional_decl_desugars_to_one_inner_field() {
     let src = "class JsonI64(i64);\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Class {
-        vis: _,
-        name,
-        generics,
-        requires,
-        newtype,
-        fields,
-        methods,
-    } = ast.item(items[0])
-    else {
-        panic!("expected a class");
+    let items = ast.root().items(&ast);
+    let ItemRef::Class(ch) = items[0] else {
+        panic!("expected a class, got {:?}", items[0]);
     };
-    assert_eq!(ast.name(*name), "JsonI64");
-    assert!(*newtype, "the positional spelling arms the flag");
-    assert!(generics.is_empty() && requires.is_empty() && methods.is_empty());
-    assert_eq!(fields.len(), 1, "exactly the wrapped field");
-    let fd = ast.field_decl(fields[0]);
+    let c = ch.get(&ast);
+    assert_eq!(ast.name(c.name), "JsonI64");
+    assert!(c.newtype, "the positional spelling arms the flag");
+    assert!(c.generics.is_empty() && c.requires.is_empty() && c.methods.is_empty());
+    assert_eq!(c.fields.len(), 1, "exactly the wrapped field");
+    let FieldRef::Field(fh) = c.fields[0] else {
+        panic!("the inner field, got {:?}", c.fields[0]);
+    };
+    let fd = fh.get(&ast);
     assert_eq!(ast.name(fd.name), "inner");
     assert_eq!(fd.vis, None, "the field rides the module-private default");
     assert!(!fd.is_static && fd.init.is_none());
     // the wrapped type is the field's type node — the same span as the
     // spelled `(i64)` parens' interior
-    match ast.ty(fd.ty) {
-        TypeKind::TyPath { segs } => {
-            assert_eq!(segs.len(), 1);
-            assert_eq!(ast.name(segs[0].name), "i64");
-        }
-        t => panic!("expected a path type, got {t:?}"),
-    }
+    let TyRef::Path(t) = fd.ty else {
+        panic!("expected a path type, got {:?}", fd.ty);
+    };
+    let segs = &t.get(&ast).segs;
+    assert_eq!(segs.len(), 1);
+    assert_eq!(ast.name(segs[0].name), "i64");
 }
 
 #[test]
@@ -56,19 +53,14 @@ fn generic_newtype_head_parses() {
     ] {
         let (ast, diags) = parse(src, Mode::Impl);
         assert!(diags.is_empty(), "{src}: expected a clean parse: {diags:?}");
-        let items = ast.module_items(ast.root);
-        let ItemKind::Class {
-            newtype,
-            generics,
-            fields,
-            ..
-        } = ast.item(items[0])
-        else {
-            panic!("{src}: expected a class");
+        let items = ast.root().items(&ast);
+        let ItemRef::Class(ch) = items[0] else {
+            panic!("{src}: expected a class, got {:?}", items[0]);
         };
-        assert!(*newtype, "{src}");
-        assert_eq!(generics.len(), 1, "{src}");
-        assert_eq!(fields.len(), 1, "{src}");
+        let c = ch.get(&ast);
+        assert!(c.newtype, "{src}");
+        assert_eq!(c.generics.len(), 1, "{src}");
+        assert_eq!(c.fields.len(), 1, "{src}");
         let _ = wrapped;
     }
 }
@@ -79,19 +71,14 @@ fn bounded_generic_newtype_head_parses() {
     let src = "class HashWrap<K requires Hashable>(K);\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Class {
-        generics,
-        requires,
-        newtype,
-        ..
-    } = ast.item(items[0])
-    else {
-        panic!("expected a class");
+    let items = ast.root().items(&ast);
+    let ItemRef::Class(ch) = items[0] else {
+        panic!("expected a class, got {:?}", items[0]);
     };
-    assert!(*newtype);
-    assert_eq!(generics.len(), 1);
-    assert_eq!(requires.len(), 1, "the bound rides the head");
+    let c = ch.get(&ast);
+    assert!(c.newtype);
+    assert_eq!(c.generics.len(), 1);
+    assert_eq!(c.requires.len(), 1, "the bound rides the head");
 }
 
 #[test]
@@ -99,12 +86,13 @@ fn pub_newtype_decl_parses() {
     let src = "pub class TheirJson(TheirType);\n";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Class { vis, newtype, .. } = ast.item(items[0]) else {
-        panic!("expected a class");
+    let items = ast.root().items(&ast);
+    let ItemRef::Class(ch) = items[0] else {
+        panic!("expected a class, got {:?}", items[0]);
     };
-    assert_eq!(*vis, Vis::Pub);
-    assert!(*newtype);
+    let c = ch.get(&ast);
+    assert_eq!(c.vis, Vis::Pub);
+    assert!(c.newtype);
 }
 
 #[test]
@@ -119,38 +107,34 @@ fn wrapped_type_may_be_any_type_term() {
     ] {
         let (ast, diags) = parse(src, Mode::Impl);
         assert!(diags.is_empty(), "{src}: {diags:?}");
-        let items = ast.module_items(ast.root);
-        let ItemKind::Class {
-            newtype, fields, ..
-        } = ast.item(items[0])
-        else {
-            panic!("{src}: expected a class");
+        let items = ast.root().items(&ast);
+        let ItemRef::Class(ch) = items[0] else {
+            panic!("{src}: expected a class, got {:?}", items[0]);
         };
-        assert!(*newtype && fields.len() == 1, "{src}");
+        let c = ch.get(&ast);
+        assert!(c.newtype && c.fields.len() == 1, "{src}");
     }
 }
 
 #[test]
 fn empty_parens_diagnose() {
-    let (ast, diags) = parse("class Foo();\n", Mode::Impl);
+    let (_, diags) = parse("class Foo();\n", Mode::Impl);
     assert!(
         diags
             .iter()
             .any(|d| d.msg.contains("wraps exactly one type")),
         "the empty positional form names the fix: {diags:?}"
     );
-    let _ = ast;
 }
 
 #[test]
 fn body_after_positional_form_diagnoses() {
     // the positional decl has no body — methods live in impl blocks
-    let (ast, diags) = parse("class Foo(i32) { }\n", Mode::Impl);
+    let (_, diags) = parse("class Foo(i32) { }\n", Mode::Impl);
     assert!(
         diags.iter().any(|d| d.msg.contains("no body")),
         "a body after the wrapped type names the fix: {diags:?}"
     );
-    let _ = ast;
 }
 
 #[test]

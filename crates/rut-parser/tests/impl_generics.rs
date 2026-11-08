@@ -4,8 +4,11 @@
 //! and the AST records it. The undeclared-name diagnostic and
 //! collection live in rut-lir; here the surface speaks.
 
-use rut_ast::ast::*;
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::parse;
+use rut_ast::{ItemRef, TyRef};
+use rut_parser::Mode;
 
 #[test]
 fn declared_binders_parse_on_the_inherent_impl() {
@@ -17,18 +20,16 @@ impl<T> Vec2<T> {
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Impl {
-        generics, target, ..
-    } = ast.item(items[1])
-    else {
+    let items = ast.root().items(&ast);
+    let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an inherent impl");
     };
-    assert_eq!(generics.len(), 1, "the inherent impl declares one binder");
-    let TypeKind::TyPath { segs } = ast.ty(*target) else {
-        panic!("expected a path target");
+    let d = ih.get(&ast);
+    assert_eq!(d.generics.len(), 1, "the inherent impl declares one binder");
+    let TyRef::Path(t) = d.target else {
+        panic!("expected a path target, got {:?}", d.target);
     };
-    assert_eq!(ast.name(segs[0].name), "Vec2");
+    assert_eq!(ast.name(t.get(&ast).segs[0].name), "Vec2");
 }
 
 #[test]
@@ -41,11 +42,11 @@ impl<K, V> Map2<K, V> {
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Impl { generics, .. } = ast.item(items[1]) else {
+    let items = ast.root().items(&ast);
+    let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block");
     };
-    assert_eq!(generics.len(), 2);
+    assert_eq!(ih.get(&ast).generics.len(), 2);
 }
 
 #[test]
@@ -62,16 +63,14 @@ impl<T requires Hash2> Box2<T> {
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Impl {
-        generics, bounds, ..
-    } = ast.item(items[2])
-    else {
+    let items = ast.root().items(&ast);
+    let ItemRef::Impl(ih) = items[2] else {
         panic!("expected an impl block");
     };
-    assert_eq!(generics.len(), 1);
-    assert_eq!(bounds.len(), 1, "the bound node rides the impl item");
-    assert_eq!(ast.name(bounds[0].0), "T");
+    let d = ih.get(&ast);
+    assert_eq!(d.generics.len(), 1);
+    assert_eq!(d.bounds.len(), 1, "the bound node rides the impl item");
+    assert_eq!(ast.name(d.bounds[0].0), "T");
 }
 
 #[test]
@@ -84,9 +83,12 @@ impl P {
 ";
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
-    let ItemKind::Impl { generics, .. } = ast.item(items[1]) else {
+    let items = ast.root().items(&ast);
+    let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block");
     };
-    assert!(generics.is_empty(), "a concrete impl declares no binders");
+    assert!(
+        ih.get(&ast).generics.is_empty(),
+        "a concrete impl declares no binders"
+    );
 }

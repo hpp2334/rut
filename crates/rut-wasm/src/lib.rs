@@ -379,17 +379,16 @@ fn compile_playground(
     manifest_text: Option<&str>,
 ) -> (rut_driver::CompileOutput, rut_vm::interp::HostPkgContext) {
     // the string lane's own render: the tree UI's structured AST rides
-    // every envelope, diags or not
-    let p = rut_parser::parse_opts(
+    // every envelope, diags or not — the recovering ENTRY is the
+    // recover choice; always a tree
+    let p = rut_parser::parse_with_recover(
         src,
         rut_parser::Mode::Impl,
-        // recovering: the tree UI rides every envelope, diags or not
-        rut_parser::ParseOpts { recover: true },
+        rut_parser::ParseOpts::default(),
     );
-    let ast = p.ast.expect("the recovering parse always yields a tree");
-    let parse_diags = p.diags;
-    let tree = rut_ast::dump::to_dump_tree(&ast);
-    let ast_json = rut_ast::dump::render_json(&tree);
+    let parse_diags = p.ast.errors().to_vec();
+    let tree = rut_ast::to_dump_tree(&p.ast);
+    let ast_json = rut_ast::render_json(&tree);
     if !parse_diags.is_empty() {
         return (
             CompileOutput {

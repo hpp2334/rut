@@ -510,18 +510,14 @@ impl RutRun {
             // today's check)
             if let MountedBody::Source { text, is_decl } = &pkg.body {
                 let mode = if *is_decl { Mode::Decl } else { Mode::Impl };
-                let p = rut_parser::parse_opts(
-                    text,
-                    mode,
-                    // recovering: the closure check wants the whole file's
-                    // `use` heads even beside syntax diags
-                    rut_parser::ParseOpts { recover: true },
-                );
-                let diags = p.diags;
-                let ast = p.ast.expect("the recovering parse always yields a tree");
-                if diags.is_empty() {
+                // the recovering entry: the closure check wants the
+                // whole file's `use` heads even beside syntax diags
+                let p =
+                    rut_parser::parse_with_recover(text, mode, rut_parser::ParseOpts::default());
+                if p.ast.is_clean() {
                     let layout = layout_for("");
-                    for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &ast) {
+                    for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &p.ast)
+                    {
                         if let Err(e) = session.resolve_use(spec, &name, &root) {
                             return Err(RunError::law(e.to_string()));
                         }
@@ -532,20 +528,18 @@ impl RutRun {
             // statements join the same closure check — whatever the
             // body kind (a compiled root's children still ride source)
             for m in pkg.mods.values() {
-                let p = rut_parser::parse_opts(
+                // recovering: a file beside its syntax diags still
+                // joins the closure check
+                let p = rut_parser::parse_with_recover(
                     &m.text,
                     Mode::Impl,
-                    // recovering: a file beside its syntax diags still
-                    // joins the closure check
-                    rut_parser::ParseOpts { recover: true },
+                    rut_parser::ParseOpts::default(),
                 );
-                let diags = p.diags;
-                let ast = p.ast.expect("the recovering parse always yields a tree");
-                if !diags.is_empty() {
+                if !p.ast.is_clean() {
                     continue; // the compile reports the syntax
                 }
                 let layout = layout_for(&m.path);
-                for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &ast) {
+                for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, &p.ast) {
                     if let Err(e) = session.resolve_use(spec, &name, &root) {
                         return Err(RunError::law(format!("`{}` ({}): {e}", pkg.spec, m.path)));
                     }

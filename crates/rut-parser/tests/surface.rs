@@ -7,8 +7,11 @@
 //! (ambient) and `pub builtin` (import-gated); the bare keyword
 //! diagnoses.
 
-use rut_ast::ast::*;
-use rut_parser::{parse, Mode};
+mod common;
+
+use common::parse;
+use rut_ast::{ItemRef, Linkage, Vis};
+use rut_parser::Mode;
 
 const FN_SURFACE: &str = "\
 // the string natives, declared where the host binds them
@@ -20,31 +23,25 @@ prelude builtin fn own<T>(x: T) -> T;
 fn host_fn_parses() {
     let (ast, diags) = parse(FN_SURFACE, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 2);
-    let ItemKind::SurfaceFn {
-        name,
-        params,
-        linkage,
-        ..
-    } = ast.item(items[0])
-    else {
-        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
+    let ItemRef::SurfaceFn(h) = items[0] else {
+        panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
-    assert_eq!(*linkage, Linkage::Host);
-    assert_eq!(ast.name(*name), "string_len");
-    assert_eq!(params.len(), 1);
-    let ItemKind::SurfaceFn {
-        linkage, generics, ..
-    } = ast.item(items[1])
-    else {
-        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[1]));
+    let d = h.get(&ast);
+    assert_eq!(d.linkage, Linkage::Host);
+    assert_eq!(ast.name(d.name), "string_len");
+    assert_eq!(d.params.len(), 1);
+    let ItemRef::SurfaceFn(h2) = items[1] else {
+        panic!("expected a SurfaceFn item, got {:?}", items[1]);
     };
+    let d2 = h2.get(&ast);
     assert!(
-        matches!(*linkage, Linkage::Builtin { ambient: true }),
-        "`prelude builtin fn` is the ambient builtin linkage: {linkage:?}"
+        matches!(d2.linkage, Linkage::Builtin { ambient: true }),
+        "`prelude builtin fn` is the ambient builtin linkage: {:?}",
+        d2.linkage
     );
-    assert_eq!(generics.len(), 1, "builtin fn keeps its generics");
+    assert_eq!(d2.generics.len(), 1, "builtin fn keeps its generics");
 }
 
 #[test]
@@ -60,27 +57,28 @@ pub host fn legacy_ping() -> bool;
 ";
     let (ast, diags) = parse(src, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 3, "one item per line: {items:?}");
-    let edge = |i: usize| match ast.item(items[i]) {
-        ItemKind::ModDecl { vis, name } => (*vis, ast.name(*name).to_string()),
+    let edge = |i: usize| match items[i] {
+        ItemRef::ModDecl(h) => {
+            let d = h.get(&ast);
+            (d.vis, ast.name(d.name).to_string())
+        }
         k => panic!("expected a mod decl at {i}, got {k:?}"),
     };
     assert_eq!(edge(0), (Vis::Pub, "net".to_string()));
     assert_eq!(edge(1), (Vis::Self_, "helper".to_string()));
-    let ItemKind::SurfaceFn {
-        vis, linkage, name, ..
-    } = ast.item(items[2])
-    else {
-        panic!("expected a SurfaceFn after the edges");
+    let ItemRef::SurfaceFn(h) = items[2] else {
+        panic!("expected a SurfaceFn after the edges, got {:?}", items[2]);
     };
+    let d = h.get(&ast);
     assert_eq!(
-        *vis,
+        d.vis,
         Vis::Pub,
         "`pub host fn` keeps its pub beside mod edges"
     );
-    assert_eq!(*linkage, Linkage::Host);
-    assert_eq!(ast.name(*name), "legacy_ping");
+    assert_eq!(d.linkage, Linkage::Host);
+    assert_eq!(ast.name(d.name), "legacy_ping");
 }
 
 #[test]
@@ -94,23 +92,15 @@ fn builtin_trait_spelling_is_removed() {
         "the removed spelling must be diagnosed: {diags:?}"
     );
     // recovery: the members still parse (as a class)
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTy {
-        name,
-        generics,
-        members,
-        ..
-    } = ast.item(items[0])
-    else {
-        panic!(
-            "expected the recovered BuiltinTy item, got {:?}",
-            ast.item(items[0])
-        );
+    let ItemRef::BuiltinTy(h) = items[0] else {
+        panic!("expected the recovered BuiltinTy item, got {:?}", items[0]);
     };
-    assert_eq!(ast.name(*name), "Index");
-    assert_eq!(generics.len(), 1);
-    assert_eq!(members.len(), 1);
+    let d = h.get(&ast);
+    assert_eq!(ast.name(d.name), "Index");
+    assert_eq!(d.generics.len(), 1);
+    assert_eq!(d.members.len(), 1);
 }
 
 const BUILTIN_SURFACE: &str = "\
@@ -124,20 +114,15 @@ prelude builtin class Option<T> {
 fn builtin_ty_parses() {
     let (ast, diags) = parse(BUILTIN_SURFACE, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTy {
-        name,
-        generics,
-        members,
-        ..
-    } = ast.item(items[0])
-    else {
-        panic!("expected a BuiltinTy item, got {:?}", ast.item(items[0]));
+    let ItemRef::BuiltinTy(h) = items[0] else {
+        panic!("expected a BuiltinTy item, got {:?}", items[0]);
     };
-    assert_eq!(ast.name(*name), "Option");
-    assert_eq!(generics.len(), 1);
-    assert_eq!(members.len(), 2);
+    let d = h.get(&ast);
+    assert_eq!(ast.name(d.name), "Option");
+    assert_eq!(d.generics.len(), 1);
+    assert_eq!(d.members.len(), 2);
 }
 
 #[test]
@@ -164,12 +149,12 @@ fn zero_member_builtin_bodies_parse() {
         diags.is_empty(),
         "zero-member builtin class must parse clean: {diags:?}"
     );
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTy { members, .. } = ast.item(items[0]) else {
-        panic!("expected a BuiltinTy item, got {:?}", ast.item(items[0]));
+    let ItemRef::BuiltinTy(h) = items[0] else {
+        panic!("expected a BuiltinTy item, got {:?}", items[0]);
     };
-    assert!(members.is_empty());
+    assert!(h.get(&ast).members.is_empty());
 
     let (ast, diags) = parse("prelude builtin trait Mark { }", Mode::Decl);
     assert!(
@@ -178,15 +163,12 @@ fn zero_member_builtin_bodies_parse() {
             .any(|d| d.msg.contains("`builtin trait` is removed")),
         "the removed spelling must be diagnosed: {diags:?}"
     );
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinTy { members, .. } = ast.item(items[0]) else {
-        panic!(
-            "expected the recovered BuiltinTy item, got {:?}",
-            ast.item(items[0])
-        );
+    let ItemRef::BuiltinTy(h) = items[0] else {
+        panic!("expected the recovered BuiltinTy item, got {:?}", items[0]);
     };
-    assert!(members.is_empty());
+    assert!(h.get(&ast).members.is_empty());
 }
 
 const HOST_STRUCT: &str = "\
@@ -201,16 +183,14 @@ pub host struct Location {
 fn host_struct_parses() {
     let (ast, diags) = parse(HOST_STRUCT, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 1);
-    let ItemKind::SurfaceStruct { name, fields, .. } = ast.item(items[0]) else {
-        panic!(
-            "expected a SurfaceStruct item, got {:?}",
-            ast.item(items[0])
-        );
+    let ItemRef::SurfaceStruct(h) = items[0] else {
+        panic!("expected a SurfaceStruct item, got {:?}", items[0]);
     };
-    assert_eq!(ast.name(*name), "Location");
-    assert_eq!(fields.len(), 3);
+    let d = h.get(&ast);
+    assert_eq!(ast.name(d.name), "Location");
+    assert_eq!(d.fields.len(), 3);
 }
 
 #[test]
@@ -254,29 +234,22 @@ pub host fn tick() -> i32;
 fn host_async_fn_parses() {
     let (ast, diags) = parse(ASYNC_HOST_FN, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 2);
-    let ItemKind::SurfaceFn {
-        linkage,
-        is_async,
-        name,
-        params,
-        ret,
-        ..
-    } = ast.item(items[0])
-    else {
-        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
+    let ItemRef::SurfaceFn(h) = items[0] else {
+        panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
-    assert_eq!(*linkage, Linkage::Host);
-    assert!(*is_async, "the async marker must land on the decl");
-    assert_eq!(ast.name(*name), "fetch");
-    assert_eq!(params.len(), 1);
-    assert!(ret.is_some());
+    let d = h.get(&ast);
+    assert_eq!(d.linkage, Linkage::Host);
+    assert!(d.is_async, "the async marker must land on the decl");
+    assert_eq!(ast.name(d.name), "fetch");
+    assert_eq!(d.params.len(), 1);
+    assert!(d.ret.is_some());
     // the sync lane keeps its flag down
-    let ItemKind::SurfaceFn { is_async, .. } = ast.item(items[1]) else {
-        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[1]));
+    let ItemRef::SurfaceFn(h2) = items[1] else {
+        panic!("expected a SurfaceFn item, got {:?}", items[1]);
     };
-    assert!(!*is_async);
+    assert!(!h2.get(&ast).is_async);
 }
 
 #[test]
@@ -331,12 +304,13 @@ fn builtin_impl_decl() {
         diags.is_empty(),
         "builtin impl must parse cleanly: {diags:?}"
     );
-    let items = ast.module_items(ast.root).to_vec();
-    let ItemKind::BuiltinImpl { prim, methods, .. } = ast.item(items[0]) else {
-        panic!("expected a BuiltinImpl item, got {:?}", ast.item(items[0]));
+    let items = ast.root().items(&ast).to_vec();
+    let ItemRef::BuiltinImpl(h) = items[0] else {
+        panic!("expected a BuiltinImpl item, got {:?}", items[0]);
     };
-    assert_eq!(ast.name(*prim), "i32");
-    assert_eq!(methods.len(), 3);
+    let d = h.get(&ast);
+    assert_eq!(ast.name(d.prim), "i32");
+    assert_eq!(d.methods.len(), 3);
     // it is a declaration form: an implementation file rejects it
     let (_, diags) = parse(
         "prelude builtin impl i32 { fn abs(self) -> i32; }",
@@ -362,17 +336,15 @@ fn builtin_primitive_parses() {
     // the erasure primitive live on it.
     let (ast, diags) = parse(BUILTIN_PRIMITIVE, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 1);
-    let ItemKind::BuiltinPrimitive { name, members, .. } = ast.item(items[0]) else {
-        panic!(
-            "expected a BuiltinPrimitive item, got {:?}",
-            ast.item(items[0])
-        );
+    let ItemRef::BuiltinPrimitive(h) = items[0] else {
+        panic!("expected a BuiltinPrimitive item, got {:?}", items[0]);
     };
-    assert_eq!(ast.name(*name), "opaque");
+    let d = h.get(&ast);
+    assert_eq!(ast.name(d.name), "opaque");
     assert_eq!(
-        members.len(),
+        d.members.len(),
         2,
         "`new` and `downcast` are both on the primitive"
     );
@@ -401,13 +373,14 @@ fn the_two_builtin_spellings_parse_clean() {
         diags.is_empty(),
         "`prelude builtin fn` must parse clean: {diags:?}"
     );
-    let items = ast.module_items(ast.root);
-    let ItemKind::SurfaceFn { linkage, .. } = ast.item(items[0]) else {
-        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
+    let items = ast.root().items(&ast);
+    let ItemRef::SurfaceFn(h) = items[0] else {
+        panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
     assert!(
-        matches!(*linkage, Linkage::Builtin { ambient: true }),
-        "`prelude builtin` is the ambient spelling: {linkage:?}"
+        matches!(h.get(&ast).linkage, Linkage::Builtin { ambient: true }),
+        "`prelude builtin` is the ambient spelling: {:?}",
+        h.get(&ast).linkage
     );
 
     let (ast, diags) = parse("pub builtin fn own<T>(x: T) -> T;", Mode::Decl);
@@ -415,13 +388,14 @@ fn the_two_builtin_spellings_parse_clean() {
         diags.is_empty(),
         "`pub builtin fn` must parse clean: {diags:?}"
     );
-    let items = ast.module_items(ast.root);
-    let ItemKind::SurfaceFn { linkage, .. } = ast.item(items[0]) else {
-        panic!("expected a SurfaceFn item, got {:?}", ast.item(items[0]));
+    let items = ast.root().items(&ast);
+    let ItemRef::SurfaceFn(h) = items[0] else {
+        panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
     assert!(
-        matches!(*linkage, Linkage::Builtin { ambient: false }),
-        "`pub builtin` is the import-gated spelling: {linkage:?}"
+        matches!(h.get(&ast).linkage, Linkage::Builtin { ambient: false }),
+        "`pub builtin` is the import-gated spelling: {:?}",
+        h.get(&ast).linkage
     );
 
     // the kind words compose with both spellings (the `builtin trait`
@@ -620,35 +594,34 @@ pub host fn legacy() -> bool;
 ";
     let (ast, diags) = parse(src, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 3);
-    let ItemKind::ModInline {
-        vis,
-        name,
-        items: net,
-    } = ast.item(items[0])
-    else {
-        panic!("expected a ModInline, got {:?}", ast.item(items[0]));
+    let ItemRef::ModInline(nh) = items[0] else {
+        panic!("expected a ModInline, got {:?}", items[0]);
     };
-    assert_eq!(*vis, Vis::Pub);
-    assert_eq!(ast.name(*name), "net");
-    assert_eq!(net.len(), 2, "the nested edge + the row: {net:?}");
-    let ItemKind::ModInline {
-        name, items: tls, ..
-    } = ast.item(net[0])
-    else {
-        panic!("expected the nested ModInline, got {:?}", ast.item(net[0]));
+    let net = nh.get(&ast);
+    assert_eq!(net.vis, Vis::Pub);
+    assert_eq!(ast.name(net.name), "net");
+    assert_eq!(
+        net.items.len(),
+        2,
+        "the nested edge + the row: {:?}",
+        net.items
+    );
+    let ItemRef::ModInline(th) = net.items[0] else {
+        panic!("expected the nested ModInline, got {:?}", net.items[0]);
     };
-    assert_eq!(ast.name(*name), "tls");
-    assert_eq!(tls.len(), 1);
-    let ItemKind::SurfaceFn { name, .. } = ast.item(tls[0]) else {
-        panic!("expected the nested row");
+    let tls = th.get(&ast);
+    assert_eq!(ast.name(tls.name), "tls");
+    assert_eq!(tls.items.len(), 1);
+    let ItemRef::SurfaceFn(hh) = tls.items[0] else {
+        panic!("expected the nested row, got {:?}", tls.items[0]);
     };
-    assert_eq!(ast.name(*name), "handshake");
-    let ItemKind::SurfaceFn { name, .. } = ast.item(net[1]) else {
-        panic!("expected the level-one row");
+    assert_eq!(ast.name(hh.get(&ast).name), "handshake");
+    let ItemRef::SurfaceFn(ch) = net.items[1] else {
+        panic!("expected the level-one row, got {:?}", net.items[1]);
     };
-    assert_eq!(ast.name(*name), "connect");
+    assert_eq!(ast.name(ch.get(&ast).name), "connect");
 
     // the file-form edge still parses beside inline blocks, and the
     // inline form is DECL-ONLY
@@ -686,27 +659,32 @@ pub struct Pair {
 ";
     let (ast, diags) = parse(src, Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    let items = ast.module_items(ast.root);
+    let items = ast.root().items(&ast);
     assert_eq!(items.len(), 4, "{items:?}");
     // a struct stays fields-only (methods are classes' impl surface)
-    let ItemKind::Struct { methods, .. } = ast.item(items[3]) else {
-        panic!("expected the struct");
+    let ItemRef::Struct(sh) = items[3] else {
+        panic!("expected the struct, got {:?}", items[3]);
     };
-    assert!(methods.is_empty());
-    let ItemKind::Class { methods, .. } = ast.item(items[0]) else {
-        panic!("expected the class");
+    assert!(sh.get(&ast).methods.is_empty());
+    let ItemRef::Class(ch) = items[0] else {
+        panic!("expected the class, got {:?}", items[0]);
     };
-    assert_eq!(methods.len(), 2, "the bodiless members ride the class");
-    let ItemKind::Fn(d) = ast.item(items[1]) else {
-        panic!("expected the free fn");
+    assert_eq!(
+        ch.get(&ast).methods.len(),
+        2,
+        "the bodiless members ride the class"
+    );
+    let ItemRef::Fn(fh) = items[1] else {
+        panic!("expected the free fn, got {:?}", items[1]);
     };
-    assert_eq!(ast.name(d.name), "freeze");
-    assert_eq!(d.generics.len(), 0);
+    let f = fh.get(&ast);
+    assert_eq!(ast.name(f.name), "freeze");
+    assert_eq!(f.generics.len(), 0);
     // the bodiless spelling carries an empty block (the arena's fn
     // shape) — no machine lowers it
+    let body_span = f.body.span(&ast);
     assert_eq!(
-        ast.span(d.body.id()).lo,
-        ast.span(d.body.id()).hi,
+        body_span.lo, body_span.hi,
         "the empty body: zero-width at the semi"
     );
 

@@ -15,10 +15,10 @@ pub use dump::ir_dump_of;
 pub use program::{compile_program, compile_program_pre, compile_program_resolved, ProgramOutput};
 pub use seeds::{SeedGroup, Seeds};
 
-use rut_ast::dump as ast_dump;
+use rut_ast::{render_json as ast_render_json, render_text as ast_render_text, to_dump_tree};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
-use rut_parser::{parse, Mode};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::run::{Compiled, RunError, RutRun};
 pub use crate::session::Mounted;
@@ -41,13 +41,16 @@ pub struct CompileOutput {
 /// here — a host that wants them offers them (`rut-native`'s
 /// `tree_pkg`); the single-source lane knows no names.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
-    let (ast, diags) = parse(src, mode);
-    let tree = ast_dump::to_dump_tree(&ast);
-    let ast_dump = ast_dump::render_text(&tree, src);
-    let ast_json = ast_dump::render_json(&tree);
-    if !diags.is_empty() {
+    // the recovering entry: ALWAYS a tree, and `p.src` is the
+    // NORMALIZED text every span indexes — the renders slice it, never
+    // the caller's raw input (the pair-artifact law, v2)
+    let p = parse_with_recover(src, mode, ParseOpts::default());
+    let tree = to_dump_tree(&p.ast);
+    let ast_dump = ast_render_text(&tree, &p.src);
+    let ast_json = ast_render_json(&tree);
+    if !p.ast.is_clean() {
         return CompileOutput {
-            diags,
+            diags: p.ast.errors().to_vec(),
             ast_dump,
             ast_json,
             ir_dump: String::new(),

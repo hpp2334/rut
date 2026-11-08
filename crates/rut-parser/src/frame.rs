@@ -5,8 +5,14 @@
 //! the stage it suspended at). The structure frames live here and in
 //! `item.rs`/`stmt.rs`; the Pratt engine and its helpers live in
 //! `expr.rs`; types in `ty.rs`.
+//!
+//! v2: children travel as SLOTS (`ItemRef`, `StmtRef`, …); a failed
+//! child FENCES — the parent's recovery allocates an `ErrorNode` into
+//! the very list the region belongs to, carrying the region's diags.
 
-use rut_ast::ast::*;
+use rut_ast::{
+    BlockNode, ExprRef, Handle, IfNode, ItemRef, ModuleNode, ParamRef, PatRef, StmtRef, TyRef, Vis,
+};
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
@@ -21,32 +27,28 @@ use crate::ty::TypeFrame;
 use crate::Parser;
 
 /// A popped frame's result. `Failed` means the child bailed after its
-/// own diagnostic and recovery — the propagation semantics of the `?`
-/// operator in the recursive-descent v1.
+/// own diagnostic and recovery — the parent fences the region.
 #[derive(Debug)]
 pub(crate) enum Done {
-    Root(NodeHandle<ModuleNode>),
-    Item(NodeHandle<AnyItem>),
-    Stmt(NodeHandle<AnyStmt>),
-    If(NodeHandle<IfNode>),
-    Expr(NodeHandle<AnyExpr>),
+    Root(Handle<ModuleNode>),
+    Item(ItemRef),
+    Stmt(StmtRef),
+    If(Handle<IfNode>),
+    Expr(ExprRef),
     /// a block's tail expression — the `}`-closed last statement
     /// (no `;`): handed to the enclosing `BlockFrame`, which records it
     /// as the block's implicit value
-    TailExpr(NodeHandle<AnyExpr>),
-    Block(NodeHandle<BlockNode>),
-    Ty(NodeHandle<AnyTy>),
-    Pat(NodeHandle<AnyPat>),
-    Members(Vec<NodeHandle<AnyParam>>),
-    Method(NodeHandle<MethodDeclNode>),
-    /// a struct/class/interface/impl body: (fields, methods)
-    Body(
-        Vec<NodeHandle<FieldDeclNode>>,
-        Vec<NodeHandle<MethodDeclNode>>,
-    ),
+    TailExpr(ExprRef),
+    Block(Handle<BlockNode>),
+    Ty(TyRef),
+    Pat(PatRef),
+    Members(Vec<ParamRef>),
+    Method(rut_ast::MethodRef),
+    /// a struct/class/interface/impl body: (fields, methods) — slots
+    Body(Vec<rut_ast::FieldRef>, Vec<rut_ast::MethodRef>),
     WhenParts {
-        scrut: NodeHandle<AnyExpr>,
-        arms: Vec<NodeHandle<AnyArm>>,
+        scrut: ExprRef,
+        arms: Vec<Handle<rut_ast::WhenArmNode>>,
     },
     Failed,
 }
@@ -151,9 +153,7 @@ impl Frame {
     }
 
     /// Frames whose stack depth is bounded by the shared NEST_MAX budget
-    /// (C3). These are the rules whose v1 counterparts called `enter()` —
-    /// plus types, which v1 left unbounded (a latent C3 hole: deeply
-    /// nested generic arguments recursed `parse_type` without any guard).
+    /// (C3).
     pub(crate) fn nests(&self) -> bool {
         match self {
             Frame::Block(_) | Frame::Type(_) => true,
@@ -174,27 +174,34 @@ impl Frame {
 // ---- module (declarations only) ----
 
 pub(crate) struct ModuleFrame {
-    items: Vec<NodeHandle<AnyItem>>,
-    /// cursor position when the current item started (progress guard)
+    items: Vec<ItemRef>,
+    /// cursor position + diag watermark when the current item started
+    /// (the fence's extent)
     before: usize,
+    dmark: usize,
 }
 
 impl ModuleFrame {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(pre_items: Vec<ItemRef>) -> Self {
         ModuleFrame {
-            items: Vec::new(),
+            items: pre_items,
             before: 0,
+            dmark: 0,
         }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.at_eof() {
-                let hi = p.span().hi;
-                let m = p.module(std::mem::take(&mut self.items), Span::new(0, hi));
+                let m = rut_ast::ModuleNode {
+                    span: Span::new(0, p.span().hi),
+                    items: std::mem::take(&mut self.items),
+                }
+                .alloc_plain(&mut p.ast);
                 return Step::Pop(Done::Root(m));
             }
             self.before = p.pos;
+            self.dmark = p.mark();
             match classify_item(p) {
                 Some(fr) => return Step::Push(fr),
                 None => self.recover(p),
@@ -211,14 +218,17 @@ impl ModuleFrame {
         self.step(p)
     }
 
-    /// parse_module's None-arm: `classify_item` already diagnosed itself;
-    /// guarantee progress and resync at the module level
+    /// the item-level FENCE: progress guarantee, resync, then the
+    /// region becomes an ErrorNode in the items list — identity damage
+    /// (or a failed item) never vanishes
     fn recover(&mut self, p: &mut Parser) {
         if p.pos == self.before {
             p.err_here("expected a declaration");
             p.bump();
         }
         p.sync_item();
+        let (before, mark) = (self.before, self.dmark);
+        self.items.push(ItemRef::Error(p.fence(before, mark)));
     }
 }
 
@@ -251,9 +261,7 @@ impl PubFrame {
 }
 
 /// The optional scope after `pub`: nothing = public, `(super|pkg)` =
-/// the parent-module / package scopes. Shared by module items and
-/// class members. The old `pub(mod)`/`pub(self)` spellings are gone —
-/// unannotated is already module-private, so they only added noise.
+/// the parent-module / package scopes.
 pub(crate) fn pub_scope(p: &mut Parser) -> Vis {
     if p.eat_punct(Tok::LParen) {
         let v = match p.tok().clone() {

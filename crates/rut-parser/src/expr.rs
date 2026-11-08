@@ -1,15 +1,19 @@
 //! Expressions: the embedded Pratt engine — an operator
-//! stack plus an operand stack of `NodeId`s, reductions popping two
-//! operands and pushing one node, bottom-up (C1). Binding powers follow
-//! the §4 table: assignment right (1), `||` (3), `&&` (4), `== !=` (5),
-//! relational + `is` non-associative (6), `| ^` (7), `&` (8), `<< >>`
-//! (9), `+ -` (10), `* / %` (11), `as` (12 — Rust placement: tighter
-//! than `*`, looser than unary), unary right, postfix — the last two
-//! structural (prefix sweep + atom), not oploop entries. Atoms (primary
-//! plus postfix chains) are built by `AtomFrame`; the two §4.2 scans
-//! live in `ty.rs`.
+//! stack plus an operand stack of expr SLOTS, reductions popping two
+//! operands and pushing one node, bottom-up. Binding powers follow
+//! the §4 table. Atoms (primary plus postfix chains) are built by
+//! `AtomFrame`; the two §4.2 far-decision scans live in `ty.rs`.
+//!
+//! v2: operands are `ExprRef` slots; a failed operand under a pending
+//! operator becomes an `Error` SLOT — the binary completes with its
+//! hole (the recovery ladder's part tier).
 
-use rut_ast::ast::*;
+use rut_ast::{
+    ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
+    CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode, IsNode,
+    LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode, PathSeg, StructLitNode,
+    TryNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
+};
 use rut_lexer::span::Span;
 use rut_lexer::token::{FPart, FStrTok, Tok, Token};
 
@@ -58,15 +62,20 @@ pub(crate) struct ExprFrame {
     lo: Span,
     stage: ExprStage,
     ops: Vec<OpEntry>,
-    operands: Vec<NodeHandle<AnyExpr>>,
+    operands: Vec<ExprRef>,
     /// prefix operators swept for the operand being fetched
     prefixes: Vec<(Pfx, Span)>,
     /// the binding level of the last <=6-level operator shifted — the
     /// non-associativity scope for relational/`is`
     last_level: u8,
     pending_assign: Option<BinOp>,
+    /// the operand fetch's start + diag watermark (the Error slot's
+    /// extent when the fetch fails under a pending operator)
+    operand_pos: usize,
+    operand_mark: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ExprStage {
     Start,
     /// waiting for an atom — the operand
@@ -75,8 +84,7 @@ enum ExprStage {
     IsTy,
     /// waiting for the `as` right-hand type (the numeric cast)
     AsTy,
-    /// waiting for the right-hand side of an assignment (a full
-    /// expression — assignment is right-associative through recursion)
+    /// waiting for the right-hand side of an assignment
     AssignRhs,
 }
 
@@ -91,13 +99,15 @@ impl ExprFrame {
             prefixes: Vec::new(),
             last_level: 0,
             pending_assign: None,
+            operand_pos: p.pos,
+            operand_mark: p.mark(),
         }
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         debug_assert!(matches!(self.stage, ExprStage::Start));
         if self.mode == ExprMode::Full {
-            // lambda scan 1: `( params ) (: Type)? =>` — scan read-only (§4.2)
+            // lambda scan 1: `( params ) (: Type)? =>` — read-only (§4.2)
             if matches!(p.tok(), Tok::LParen) && p.scan_is_lambda() {
                 self.stage = ExprStage::Operand;
                 return Step::Push(Frame::Lambda(LambdaFrame::paren(self.lo)));
@@ -111,20 +121,19 @@ impl ExprFrame {
                     let sp = p.span();
                     p.bump(); // ident
                     p.bump(); // =>
-                    let id = p.interner.intern(&name);
-                    let param = p.member(
-                        MemberKind::Param(ParamData {
-                            is_mut: false,
-                            name: id,
-                            ty: None,
-                        }),
-                        sp,
-                    );
+                    let id = p.ast.intern(&name);
+                    let param = ParamNode {
+                        span: sp,
+                        is_mut: false,
+                        name: id,
+                        name_span: sp,
+                        ty: None,
+                    }
+                    .allocate(&mut p.ast);
                     self.stage = ExprStage::Operand;
                     return Step::Push(Frame::Lambda(LambdaFrame::single(self.lo, vec![param])));
                 }
-                // anonymous closure: `fn (params) -> T { .. }` — the scan
-                // consumes `fn`; ParamsFrame takes the `(`
+                // anonymous closure: `fn (params) -> T { .. }`
                 if name == "fn" && matches!(p.peek(1).tok, Tok::LParen) {
                     p.bump(); // fn
                     self.stage = ExprStage::Operand;
@@ -135,10 +144,11 @@ impl ExprFrame {
         self.fetch_operand(p)
     }
 
-    /// sweep prefix operators (`-` `!` `~` `*` `&` `await`), then fetch an
-    /// atom.
+    /// sweep prefix operators, then fetch an atom.
     fn fetch_operand(&mut self, p: &mut Parser) -> Step {
         self.stage = ExprStage::Operand;
+        self.operand_pos = p.pos;
+        self.operand_mark = p.mark();
         if let Some(f) = self.sweep(p) {
             return Step::Push(f);
         }
@@ -147,10 +157,7 @@ impl ExprFrame {
 
     fn sweep(&mut self, p: &mut Parser) -> Option<Frame> {
         loop {
-            // the removed `*x` / `&x` prefix forms diagnose themselves and
-            // are skipped (the Diag fails the compile; binary `*`/`&` are
-            // unaffected — they shift in the oploop, never at operand
-            // starts). Bindings share by reference now.
+            // the removed `*x` / `&x` prefix forms diagnose themselves
             match p.tok() {
                 Tok::Star | Tok::Amp => {
                     p.err_here("`*x` / `&x` were removed — bindings share by reference now — pass `x` directly");
@@ -167,8 +174,7 @@ impl ExprFrame {
                 _ => None,
             };
             let Some(pfx) = pfx else { break };
-            // C3: unary chains carry the expression budget — one clean
-            // Diag, the tree stays bounded, the cursor still advances
+            // C3: unary chains carry the expression budget
             if p.expr_nesting() + self.prefixes.len() as u32 >= EXPR_MAX {
                 p.expr_nesting_diag();
                 p.bump();
@@ -188,8 +194,17 @@ impl ExprFrame {
                     let mut e = e;
                     while let Some((pfx, sp)) = self.prefixes.pop() {
                         e = match pfx {
-                            Pfx::Un(op) => p.expr(ExprKind::Unary { op, expr: e }, sp.to(p.span())),
-                            Pfx::Await => p.expr(ExprKind::Await { expr: e }, sp.to(p.span())),
+                            Pfx::Un(op) => UnaryNode {
+                                span: Span::new(sp.lo, e.span(&p.ast).hi.max(sp.lo)),
+                                op,
+                                expr: e,
+                            }
+                            .allocate(&mut p.ast),
+                            Pfx::Await => AwaitNode {
+                                span: Span::new(sp.lo, e.span(&p.ast).hi.max(sp.lo)),
+                                expr: e,
+                            }
+                            .allocate(&mut p.ast),
                         };
                     }
                     if self.mode == ExprMode::UnaryOnly {
@@ -200,11 +215,9 @@ impl ExprFrame {
                 }
                 ExprStage::AssignRhs => {
                     let target = self.operands.pop().expect("assignment without a target");
-                    let sp = p.nodes[target.id().0 as usize].span;
-                    match &p.nodes[target.id().0 as usize].kind {
-                        Kind::Expr(
-                            ExprKind::Path { .. } | ExprKind::Field { .. } | ExprKind::Index { .. },
-                        ) => {}
+                    let sp = target.span(&p.ast);
+                    match target {
+                        ExprRef::Path(_) | ExprRef::Field(_) | ExprRef::Index(_) => {}
                         _ => {
                             p.err(
                                 sp,
@@ -212,14 +225,13 @@ impl ExprFrame {
                             );
                         }
                     }
-                    let node = p.expr(
-                        ExprKind::Assign {
-                            op: self.pending_assign,
-                            target,
-                            value: e,
-                        },
-                        sp.to(p.span()),
-                    );
+                    let node = AssignNode {
+                        span: Span::new(sp.lo, p.prev_end.max(sp.lo)),
+                        op: self.pending_assign,
+                        target,
+                        value: e,
+                    }
+                    .allocate(&mut p.ast);
                     self.operands.push(node);
                     self.oploop(p)
                 }
@@ -232,11 +244,21 @@ impl ExprFrame {
                     .operands
                     .pop()
                     .expect("`is`/`as` without a left-hand side");
-                let sp = p.nodes[lhs.id().0 as usize].span;
+                let sp = lhs.span(&p.ast);
                 let node = if cast {
-                    p.expr(ExprKind::Cast { expr: lhs, ty: t }, sp.to(p.span()))
+                    CastNode {
+                        span: Span::new(sp.lo, p.prev_end.max(sp.lo)),
+                        expr: lhs,
+                        ty: t,
+                    }
+                    .allocate(&mut p.ast)
                 } else {
-                    p.expr(ExprKind::Is { expr: lhs, ty: t }, sp.to(p.span()))
+                    IsNode {
+                        span: Span::new(sp.lo, p.prev_end.max(sp.lo)),
+                        expr: lhs,
+                        ty: t,
+                    }
+                    .allocate(&mut p.ast)
                 };
                 self.operands.push(node);
                 if !cast {
@@ -246,16 +268,35 @@ impl ExprFrame {
                 }
                 self.oploop(p)
             }
-            Done::Failed => Step::Pop(Done::Failed),
+            Done::Failed => {
+                // a failed operand: under a PENDING operator it becomes
+                // an Error SLOT (the binary completes with its hole);
+                // otherwise the failure propagates to the parent's fence
+                if self.ops.is_empty() && self.stage == ExprStage::Operand {
+                    return Step::Pop(Done::Failed);
+                }
+                let (pos, mark) = (self.operand_pos, self.operand_mark);
+                self.operands.push(ExprRef::Error(p.fence(pos, mark)));
+                if self.stage == ExprStage::AssignRhs {
+                    let target = self.operands.pop().expect("assignment without a target");
+                    let sp = target.span(&p.ast);
+                    let node = AssignNode {
+                        span: Span::new(sp.lo, p.prev_end.max(sp.lo)),
+                        op: self.pending_assign,
+                        target,
+                        value: ExprRef::Error(p.fence(pos, mark)),
+                    }
+                    .allocate(&mut p.ast);
+                    self.operands.push(node);
+                }
+                self.oploop(p)
+            }
             _ => unreachable!("expr frame receives expressions or types"),
         }
     }
 
     /// the operator step: shift one binary/assign/`is` operator with
     /// precedence-driven reduction, or finish by reducing everything
-    ///
-    /// A single pass per call — every path below returns, so the caller
-    /// (`step`) drives us back for the next operator.
     fn oploop(&mut self, p: &mut Parser) -> Step {
         let (op, bp, level) = match p.tok() {
             Tok::PipePipe => (BinOp::Or, 3u8, 3u8),
@@ -288,8 +329,8 @@ impl ExprFrame {
             Tok::ShlEq => return self.shift_assign(p, Some(BinOp::Shl)),
             Tok::ShrEq => return self.shift_assign(p, Some(BinOp::Shr)),
             _ if p.at_kw("is") => {
-                // `is` takes a TYPE as its right-hand side (naming
-                // position) — non-associative at level 6
+                // `is` takes a TYPE as its right-hand side —
+                // non-associative at level 6
                 if self.last_level == 6 {
                     return self.finish_op(p);
                 }
@@ -300,13 +341,7 @@ impl ExprFrame {
                 return Step::Push(Frame::Type(TypeFrame::new(p)));
             }
             _ if p.at_kw("as") && peek_is_numeric_prim(p) => {
-                // `expr as T` — the numeric cast:
-                // truncating like C/Rust. Left-associative at level 12,
-                // tighter than `*` (Rust placement), so `a * b as u32`
-                // casts `b` and `x as u32 as u64` chains. The RHS is a
-                // naming position type restricted to the numeric
-                // primitives — anything else leaves `as` unmatched
-                // (the caller's expect diagnoses it).
+                // `expr as T` — the numeric cast
                 p.bump(); // the `as` keyword
                 self.reduce_while(p, 12);
                 self.stage = ExprStage::AsTy;
@@ -314,9 +349,7 @@ impl ExprFrame {
             }
             _ => return self.finish_op(p),
         };
-        // non-associativity scope: one relational per
-        // context — a second level-6 op is left for the caller's
-        // expect, exactly as v1's parse_rel did
+        // non-associativity scope: one relational per context
         if level == 6 && self.last_level == 6 {
             return self.finish_op(p);
         }
@@ -341,7 +374,6 @@ impl ExprFrame {
 
     fn shift_assign(&mut self, p: &mut Parser, op: Option<BinOp>) -> Step {
         p.bump(); // the assignment operator token
-                  // right-associative: reduce only strictly tighter bindings
         while let Some(top) = self.ops.last() {
             if top.bp <= 1 {
                 break;
@@ -367,15 +399,14 @@ impl ExprFrame {
             .expect("reduction on an empty operator stack");
         let rhs = self.operands.pop().unwrap();
         let lhs = self.operands.pop().unwrap();
-        let lo = p.nodes[lhs.id().0 as usize].span.lo;
-        let node = p.expr(
-            ExprKind::Binary {
-                op: top.op,
-                lhs,
-                rhs,
-            },
-            Span::new(lo, p.span().hi),
-        );
+        let lo = lhs.span(&p.ast).lo;
+        let node = BinaryNode {
+            span: Span::new(lo, p.prev_end.max(lo)),
+            op: top.op,
+            lhs,
+            rhs,
+        }
+        .allocate(&mut p.ast);
         self.operands.push(node);
     }
 }
@@ -394,26 +425,26 @@ pub(crate) struct AtomFrame {
     lo: Span,
     mode: AtomMode,
     stage: AtomStage,
-    cur_field: Option<IdentId>,
+    cur_field: Option<rut_ast::IdentId>,
 }
 
 enum AtomStage {
     Primary,
     Paren {
         first: bool,
-        e: Option<NodeHandle<AnyExpr>>,
-        elems: Vec<NodeHandle<AnyExpr>>,
+        e: Option<ExprRef>,
+        elems: Vec<ExprRef>,
     },
     Array {
-        elems: Vec<NodeHandle<AnyExpr>>,
+        elems: Vec<ExprRef>,
     },
     /// `[v; n]` — the value was parsed, the count is being fetched
     Repeat {
-        value: NodeHandle<AnyExpr>,
+        value: ExprRef,
     },
     Struct {
-        ty: NodeHandle<AnyTy>,
-        fields: Vec<(IdentId, NodeHandle<AnyExpr>)>,
+        ty: rut_ast::TyRef,
+        fields: Vec<(rut_ast::IdentId, ExprRef)>,
     },
     /// a `::`-chain path: segments collected so far
     PathColons {
@@ -422,34 +453,34 @@ enum AtomStage {
     /// generic args on the HEAD segment (`Vec<u32>::from(..)`)
     PathGen {
         segs: Vec<PathSeg>,
-        args: Vec<NodeHandle<AnyTy>>,
+        args: Vec<rut_ast::TyRef>,
     },
     /// generic args on a later `::` segment (`Option<T>::Some(x)`)
     PathSegGen {
         segs: Vec<PathSeg>,
-        name: IdentId,
-        args: Vec<NodeHandle<AnyTy>>,
+        name: rut_ast::IdentId,
+        args: Vec<rut_ast::TyRef>,
     },
     Postfix {
-        e: NodeHandle<AnyExpr>,
+        e: ExprRef,
     },
     PostDotGen {
-        recv: NodeHandle<AnyExpr>,
-        name: IdentId,
-        args: Vec<NodeHandle<AnyTy>>,
+        recv: ExprRef,
+        name: rut_ast::IdentId,
+        args: Vec<rut_ast::TyRef>,
     },
     PostDotCall {
-        recv: NodeHandle<AnyExpr>,
-        name: IdentId,
-        generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        recv: ExprRef,
+        name: rut_ast::IdentId,
+        generics: Vec<rut_ast::TyRef>,
+        args: Vec<ExprRef>,
     },
     PostCall {
-        callee: NodeHandle<AnyExpr>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        callee: ExprRef,
+        args: Vec<ExprRef>,
     },
     PostIndex {
-        recv: NodeHandle<AnyExpr>,
+        recv: ExprRef,
     },
     /// `async { .. }` — the block body is being fetched
     AsyncBody {
@@ -473,27 +504,47 @@ impl AtomFrame {
         match p.tok().clone() {
             Tok::Int(v, sfx) => {
                 p.bump();
-                let e = p.expr(ExprKind::Lit(Lit::Int(v, sfx)), sp);
+                let e = LitNode {
+                    span: sp,
+                    lit: Lit::Int(v, sfx),
+                }
+                .allocate(&mut p.ast);
                 self.finish(p, e)
             }
             Tok::Float(bits, sfx) => {
                 p.bump();
-                let e = p.expr(ExprKind::Lit(Lit::Float(bits, sfx)), sp);
+                let e = LitNode {
+                    span: sp,
+                    lit: Lit::Float(bits, sfx),
+                }
+                .allocate(&mut p.ast);
                 self.finish(p, e)
             }
             Tok::Str(s) => {
                 p.bump();
-                let e = p.expr(ExprKind::Lit(Lit::Str(s)), sp);
+                let e = LitNode {
+                    span: sp,
+                    lit: Lit::Str(s),
+                }
+                .allocate(&mut p.ast);
                 self.finish(p, e)
             }
             Tok::RawStr(s) => {
                 p.bump();
-                let e = p.expr(ExprKind::Lit(Lit::RawStr(s)), sp);
+                let e = LitNode {
+                    span: sp,
+                    lit: Lit::RawStr(s),
+                }
+                .allocate(&mut p.ast);
                 self.finish(p, e)
             }
             Tok::Bool(b) => {
                 p.bump();
-                let e = p.expr(ExprKind::Lit(Lit::Bool(b)), sp);
+                let e = LitNode {
+                    span: sp,
+                    lit: Lit::Bool(b),
+                }
+                .allocate(&mut p.ast);
                 self.finish(p, e)
             }
             Tok::FStr(f) => {
@@ -518,34 +569,34 @@ impl AtomFrame {
                 if name == "when" && matches!(p.peek(1).tok, Tok::LParen) {
                     return Step::Push(Frame::When(WhenFrame::new()));
                 }
-                // `if (cond) { .. }` — the if ATOM (the expression form):
-                // same guard law as `when` (parens required), and the
-                // statement-leading `if` never reaches here (StmtFrame
-                // dispatches it before the atoms). The frame is the
-                // statement grammar's own IfFrame — the popped if node's
-                // field set IS the expression's.
+                // `if (cond) { .. }` — the if ATOM (the expression form)
                 if name == "if" && matches!(p.peek(1).tok, Tok::LParen) {
                     return Step::Push(Frame::If(IfFrame::new()));
                 }
-                // `nil` — the empty value (pointer null; v1.2:
-                // the `nil` type's own value as well)
+                // `nil` — the empty value
                 if name == "nil" {
                     p.bump();
-                    let e = p.expr(ExprKind::Lit(Lit::Nil), sp);
+                    let e = LitNode {
+                        span: sp,
+                        lit: Lit::Nil,
+                    }
+                    .allocate(&mut p.ast);
                     return self.finish(p, e);
                 }
-                // anonymous closure: handled at the expression start —
-                // see ExprFrame::step (scan 3)
+                // anonymous closure: handled at the expression start
                 if name == "fn" && matches!(p.peek(1).tok, Tok::LParen) {
                     p.err_here("closures are expressions — `fn (..) { .. }` cannot appear here");
                 }
                 if name == "self" {
                     p.bump();
-                    let seg = PathSeg {
-                        name: sym::SELF,
-                        generics: Vec::new(),
-                    };
-                    let e = p.expr(ExprKind::Path { segs: vec![seg] }, sp);
+                    let e = PathNode {
+                        span: sp,
+                        segs: vec![PathSeg {
+                            name: sym::SELF,
+                            generics: Vec::new(),
+                        }],
+                    }
+                    .allocate(&mut p.ast);
                     return self.finish(p, e);
                 }
                 if name == "Self" {
@@ -555,23 +606,22 @@ impl AtomFrame {
                         let ty_name = sym::SELF_TY;
                         return self.struct_enter(p, ty_name, true);
                     }
-                    let seg = PathSeg {
-                        name: sym::SELF_TY,
-                        generics: Vec::new(),
-                    };
-                    let e = p.expr(ExprKind::Path { segs: vec![seg] }, sp);
+                    let e = PathNode {
+                        span: sp,
+                        segs: vec![PathSeg {
+                            name: sym::SELF_TY,
+                            generics: Vec::new(),
+                        }],
+                    }
+                    .allocate(&mut p.ast);
                     return self.finish(p, e);
                 }
-                // struct literal: `Ident {` (struct only — classes have
-                // no instance literal; the checker rejects `Circle { .. }`)
+                // struct literal: `Ident {` (struct only)
                 if matches!(p.peek(1).tok, Tok::LBrace) && !is_reserved_kw(&name) {
-                    let ty_name = p.interner.intern(&name);
+                    let ty_name = p.ast.intern(&name);
                     return self.struct_enter(p, ty_name, false);
                 }
-                // `async { .. }` — the async block, the async PRIMITIVE
-                // (v20): one expression form, keyword before a block.
-                // Evaluating it mints the frame; its type is `Future<T>`.
-                // (`async fn` stays a declaration — the sugar over this.)
+                // `async { .. }` — the async block primitive
                 if name == "async" && matches!(p.peek(1).tok, Tok::LBrace) {
                     let lo = sp.lo;
                     p.bump();
@@ -580,12 +630,11 @@ impl AtomFrame {
                 }
                 p.bump();
                 let first = PathSeg {
-                    name: p.interner.intern(&name),
+                    name: p.ast.intern(&name),
                     generics: Vec::new(),
                 };
                 let segs = vec![first];
-                // generic args on the head segment: `Vec<f32>(1024)`,
-                // `downcast<Point>(o)`, `MyMap<K, V>::new(..)`, `Option<T>::Some(x)`
+                // generic args on the head segment: `Vec<f32>(1024)`
                 if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
                     p.bump();
                     self.stage = AtomStage::PathGen {
@@ -606,7 +655,7 @@ impl AtomFrame {
     }
 
     /// a completed atom: into the postfix loop, or straight out (Bare)
-    fn finish(&mut self, p: &mut Parser, e: NodeHandle<AnyExpr>) -> Step {
+    fn finish(&mut self, p: &mut Parser, e: ExprRef) -> Step {
         if self.mode == AtomMode::Bare {
             return Step::Pop(Done::Expr(e));
         }
@@ -629,13 +678,13 @@ impl AtomFrame {
                     let name = match p.tok().clone() {
                         Tok::Int(v, None) => {
                             p.bump();
-                            p.interner.intern(&v.to_string())
+                            p.ast.intern(&v.to_string())
                         }
                         _ => {
-                            let Some(name) = p.expect_ident("a member name") else {
+                            let Some(n) = p.expect_ident("a member name") else {
                                 return Step::Pop(Done::Failed);
                             };
-                            name
+                            n.id
                         }
                     };
                     if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
@@ -657,7 +706,12 @@ impl AtomFrame {
                         };
                         return self.call_top(p);
                     }
-                    e = p.expr(ExprKind::Field { recv: e, name }, self.lo.to(p.span()));
+                    e = FieldNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        recv: e,
+                        name,
+                    }
+                    .allocate(&mut p.ast);
                 }
                 Tok::LParen => {
                     p.bump();
@@ -674,7 +728,11 @@ impl AtomFrame {
                 }
                 Tok::Question => {
                     p.bump();
-                    e = p.expr(ExprKind::Try { expr: e }, self.lo.to(p.span()));
+                    e = TryNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        expr: e,
+                    }
+                    .allocate(&mut p.ast);
                 }
                 _ => return Step::Pop(Done::Expr(e)),
             }
@@ -699,9 +757,12 @@ impl AtomFrame {
                             p.err_here(
                                 "`()` is not a value — the empty value is spelled `nil` (v1.2)",
                             );
-                            Step::Pop(Done::Expr(
-                                p.expr(ExprKind::Lit(Lit::Nil), self.lo.to(p.span())),
-                            ))
+                            let node = LitNode {
+                                span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                                lit: Lit::Nil,
+                            }
+                            .allocate(&mut p.ast);
+                            Step::Pop(Done::Expr(node))
                         }
                     };
                 }
@@ -709,17 +770,19 @@ impl AtomFrame {
                 if let Some(v) = e {
                     elems.push(v);
                 }
-                return Step::Pop(Done::Expr(
-                    p.expr(ExprKind::Tuple { elems }, self.lo.to(p.span())),
-                ));
+                let node = TupleNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    elems,
+                }
+                .allocate(&mut p.ast);
+                return Step::Pop(Done::Expr(node));
             }
             let (first, has_e) = match &self.stage {
                 AtomStage::Paren { first, e, .. } => (*first, e.is_some()),
                 _ => unreachable!(),
             };
             if !first && matches!(p.tok(), Tok::Comma) {
-                // tuple element separator: fold the element,
-                // parse the next
+                // tuple element separator: fold the element, parse the next
                 if has_e {
                     if let AtomStage::Paren { e, elems, .. } = &mut self.stage {
                         elems.push(e.take().unwrap());
@@ -745,43 +808,46 @@ impl AtomFrame {
                 AtomStage::Array { elems } => std::mem::take(elems),
                 _ => unreachable!(),
             };
-            return Step::Pop(Done::Expr(
-                p.expr(ExprKind::ArrayLit { elems }, self.lo.to(p.span())),
-            ));
+            let node = ArrayLitNode {
+                span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                elems,
+            }
+            .allocate(&mut p.ast);
+            return Step::Pop(Done::Expr(node));
         }
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
-    // -- struct literal: `Name { field: expr, .. }` / `Name<Ty> { .. }` /
-    //    `Self { .. }` --
+    // -- struct literal: `Name { field: expr, .. }` / `Name<Ty> { .. }` --
 
-    fn struct_enter(&mut self, p: &mut Parser, ty_name: IdentId, ident_consumed: bool) -> Step {
+    fn struct_enter(
+        &mut self,
+        p: &mut Parser,
+        ty_name: rut_ast::IdentId,
+        ident_consumed: bool,
+    ) -> Step {
         self.struct_enter_gen(p, ty_name, Vec::new(), ident_consumed)
     }
 
-    /// The literal head with its generic arguments (`Source<str> { .. }`,
-    /// the generic record literal): the args were parsed as types by the
-    /// generic-argument scan, the `{` follows.
     fn struct_enter_gen(
         &mut self,
         p: &mut Parser,
-        ty_name: IdentId,
-        generics: Vec<NodeHandle<AnyTy>>,
+        ty_name: rut_ast::IdentId,
+        generics: Vec<rut_ast::TyRef>,
         ident_consumed: bool,
     ) -> Step {
         if !ident_consumed {
             p.bump(); // the type ident
         }
         p.bump(); // {
-        let ty = p.typ(
-            TypeKind::TyPath {
-                segs: vec![PathSeg {
-                    name: ty_name,
-                    generics,
-                }],
-            },
-            self.lo,
-        );
+        let ty = rut_ast::TyPathNode {
+            span: self.lo,
+            segs: vec![PathSeg {
+                name: ty_name,
+                generics,
+            }],
+        }
+        .allocate(&mut p.ast);
         self.stage = AtomStage::Struct {
             ty,
             fields: Vec::new(),
@@ -800,31 +866,24 @@ impl AtomFrame {
             p.sync_stmt();
             return self.struct_pop(p);
         };
-        // `Name { x, .. }` / `Name { x }` — the field-init shorthand:
-        // the bare name reads the like-named binding, desugared to a
-        // single-segment path spanned over the name token. Anything
-        // else keeps the `field: expr` grammar (so `Name { x.y }` and
-        // `Name { x<EOF>` stay on the clear "expected `:`" error).
+        // `Name { x, .. }` — the field-init shorthand
         if matches!(p.tok(), Tok::Comma | Tok::RBrace) {
-            let e = p.expr(
-                ExprKind::Path {
-                    segs: vec![PathSeg {
-                        name: f,
-                        generics: Vec::new(),
-                    }],
-                },
-                id_sp,
-            );
-            return self.struct_field_done(p, f, e);
+            let e = PathNode {
+                span: id_sp,
+                segs: vec![PathSeg {
+                    name: f.id,
+                    generics: Vec::new(),
+                }],
+            }
+            .allocate(&mut p.ast);
+            return self.struct_field_done(p, f.id, e);
         }
         p.expect(Tok::Colon);
-        self.cur_field = Some(f);
+        self.cur_field = Some(f.id);
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
-    /// one field absorbed — fold `(name, value)` into the literal, then
-    /// a `,` loops to the next field, anything else must close it
-    fn struct_field_done(&mut self, p: &mut Parser, f: IdentId, e: NodeHandle<AnyExpr>) -> Step {
+    fn struct_field_done(&mut self, p: &mut Parser, f: rut_ast::IdentId, e: ExprRef) -> Step {
         match &mut self.stage {
             AtomStage::Struct { fields, .. } => fields.push((f, e)),
             _ => unreachable!("struct field at the wrong stage"),
@@ -842,14 +901,16 @@ impl AtomFrame {
             AtomStage::Struct { ty, fields } => (*ty, std::mem::take(fields)),
             _ => unreachable!(),
         };
-        Step::Pop(Done::Expr(
-            p.expr(ExprKind::Struct { ty, fields }, self.lo.to(p.span())),
-        ))
+        let node = StructLitNode {
+            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            ty,
+            fields,
+        }
+        .allocate(&mut p.ast);
+        Step::Pop(Done::Expr(node))
     }
 
-    // -- path building: `a::b::c` — `::` separates NAME-RESOLUTION
-    //    segments (modules, enum members, statics, namespaces); the
-    //    postfix loop's `.` below is value access only --
+    // -- path building: `a::b::c` --
 
     fn pathcolons_top(&mut self, p: &mut Parser) -> Step {
         loop {
@@ -858,7 +919,11 @@ impl AtomFrame {
                     AtomStage::PathColons { segs } => std::mem::take(segs),
                     _ => unreachable!(),
                 };
-                let node = p.expr(ExprKind::Path { segs }, self.lo.to(p.span()));
+                let node = PathNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    segs,
+                }
+                .allocate(&mut p.ast);
                 return self.finish(p, node);
             }
             let Some(name) = p.expect_ident("a path segment") else {
@@ -872,14 +937,14 @@ impl AtomFrame {
                 };
                 self.stage = AtomStage::PathSegGen {
                     segs,
-                    name,
+                    name: name.id,
                     args: Vec::new(),
                 };
                 return self.genarg_top(p);
             }
             if let AtomStage::PathColons { segs } = &mut self.stage {
                 segs.push(PathSeg {
-                    name,
+                    name: name.id,
                     generics: Vec::new(),
                 });
             }
@@ -887,7 +952,6 @@ impl AtomFrame {
     }
 
     /// generic-argument list top: `>` finishes, otherwise fetch an arg
-    /// (an integer expression is a const-generic arg, else a type)
     fn genarg_top(&mut self, p: &mut Parser) -> Step {
         if p.eat_punct(Tok::Gt) {
             return self.genarg_done(p);
@@ -914,10 +978,7 @@ impl AtomFrame {
                 let args = std::mem::take(args);
                 let mut segs = std::mem::take(segs);
                 segs[0].generics = args;
-                // `Name<Ty> { .. }` — the generic record literal:
-                // a single-segment head followed by `{` enters the
-                // literal with its arguments, the generic scan's commit
-                // already decided this was never a comparison
+                // `Name<Ty> { .. }` — the generic record literal
                 if segs.len() == 1 && matches!(p.tok(), Tok::LBrace) {
                     let name = segs[0].name;
                     let generics = std::mem::take(&mut segs[0].generics);
@@ -930,9 +991,6 @@ impl AtomFrame {
                 let args = std::mem::take(args);
                 let name = *name;
                 let mut segs = std::mem::take(segs);
-                // the generic args close this `::` segment; a following
-                // `(` is the postfix call over the whole path
-                // (`MyMap<K, V>::new(..)` — a `Call`, never a `Method`)
                 segs.push(PathSeg {
                     name,
                     generics: args,
@@ -954,7 +1012,12 @@ impl AtomFrame {
                     };
                     self.call_top(p)
                 } else {
-                    let node = p.expr(ExprKind::Field { recv, name }, self.lo.to(p.span()));
+                    let node = FieldNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        recv,
+                        name,
+                    }
+                    .allocate(&mut p.ast);
                     self.stage = AtomStage::Postfix { e: node };
                     self.postfix_top(p)
                 }
@@ -985,7 +1048,12 @@ impl AtomFrame {
             AtomStage::PostCall { callee, args } => {
                 let callee = *callee;
                 let args = std::mem::take(args);
-                let node = p.expr(ExprKind::Call { callee, args }, self.lo.to(p.span()));
+                let node = CallNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    callee,
+                    args,
+                }
+                .allocate(&mut p.ast);
                 self.stage = AtomStage::Postfix { e: node };
                 self.postfix_top(p)
             }
@@ -999,15 +1067,14 @@ impl AtomFrame {
                 let name = *name;
                 let generics = std::mem::take(generics);
                 let args = std::mem::take(args);
-                let node = p.expr(
-                    ExprKind::Method {
-                        recv,
-                        name,
-                        generics,
-                        args,
-                    },
-                    self.lo.to(p.span()),
-                );
+                let node = MethodNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    recv,
+                    name,
+                    generics,
+                    args,
+                }
+                .allocate(&mut p.ast);
                 self.stage = AtomStage::Postfix { e: node };
                 self.postfix_top(p)
             }
@@ -1020,7 +1087,11 @@ impl AtomFrame {
             // the async block's body landed: the block IS the expression
             Done::Block(b) => match self.stage {
                 AtomStage::AsyncBody { lo } => {
-                    let e = p.expr(ExprKind::AsyncBlock { body: b }, Span::new(lo, p.span().hi));
+                    let e = AsyncBlockNode {
+                        span: Span::new(lo, p.prev_end.max(lo)),
+                        body: b,
+                    }
+                    .allocate(&mut p.ast);
                     self.finish(p, e)
                 }
                 _ => unreachable!("atom frame received a block outside the async body"),
@@ -1039,15 +1110,13 @@ impl AtomFrame {
                         *slot = Some(e);
                         *first = false;
                     } else {
-                        // a post-comma element: fold into the tuple
                         elems.push(e);
                     }
                     self.paren_top(p)
                 }
                 AtomStage::Array { elems } => {
                     elems.push(e);
-                    // `;` switches to the repeat form `[ v; n ]`:
-                    // the parsed element IS the fill value
+                    // `;` switches to the repeat form `[ v; n ]`
                     if p.eat_punct(Tok::Semi) {
                         let value = elems.pop().expect("repeat value");
                         self.stage = AtomStage::Repeat { value };
@@ -1058,18 +1127,24 @@ impl AtomFrame {
                     } else {
                         p.expect(Tok::RBracket);
                         let elems = std::mem::take(elems);
-                        Step::Pop(Done::Expr(
-                            p.expr(ExprKind::ArrayLit { elems }, self.lo.to(p.span())),
-                        ))
+                        let node = ArrayLitNode {
+                            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                            elems,
+                        }
+                        .allocate(&mut p.ast);
+                        Step::Pop(Done::Expr(node))
                     }
                 }
                 AtomStage::Repeat { value } => {
                     let value = *value;
                     p.expect(Tok::RBracket);
-                    Step::Pop(Done::Expr(p.expr(
-                        ExprKind::ArrayRepeat { value, count: e },
-                        self.lo.to(p.span()),
-                    )))
+                    let node = ArrayRepeatNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        value,
+                        count: e,
+                    }
+                    .allocate(&mut p.ast);
+                    Step::Pop(Done::Expr(node))
                 }
                 AtomStage::Struct { .. } => {
                     let f = self.cur_field.take().expect("struct field without a name");
@@ -1079,7 +1154,13 @@ impl AtomFrame {
                 | AtomStage::PathSegGen { args, .. }
                 | AtomStage::PostDotGen { args, .. } => {
                     // const-generic argument: integer expression
-                    args.push(p.typ(TypeKind::TyConst(e), p.span()));
+                    args.push(
+                        rut_ast::TyConstNode {
+                            span: e.span(&p.ast),
+                            expr: e,
+                        }
+                        .allocate(&mut p.ast),
+                    );
                     self.genarg_after_arg(p)
                 }
                 AtomStage::PostCall { args, .. } | AtomStage::PostDotCall { args, .. } => {
@@ -1089,7 +1170,12 @@ impl AtomFrame {
                 AtomStage::PostIndex { recv } => {
                     let recv = *recv;
                     p.expect(Tok::RBracket);
-                    let node = p.expr(ExprKind::Index { recv, idx: e }, self.lo.to(p.span()));
+                    let node = IndexNode {
+                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                        recv,
+                        idx: e,
+                    }
+                    .allocate(&mut p.ast);
                     self.stage = AtomStage::Postfix { e: node };
                     self.postfix_top(p)
                 }
@@ -1108,26 +1194,28 @@ impl AtomFrame {
             }
             Done::WhenParts { scrut, arms } => {
                 debug_assert!(matches!(self.stage, AtomStage::Primary));
-                let node = p.expr(ExprKind::WhenExpr { scrut, arms }, self.lo.to(p.span()));
+                let node = WhenExprNode {
+                    span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                    scrut,
+                    arms,
+                }
+                .allocate(&mut p.ast);
                 self.finish(p, node)
             }
             Done::If(h) => {
                 debug_assert!(matches!(self.stage, AtomStage::Primary));
                 // the if frame minted the statement node; its field set
-                // IS the expression's (span included — the statement
-                // node's own span covers `if` .. last `}`), so extract
-                // and re-mint as an expression. An `else if` chain stays
-                // `ElseBranch::If` — statement handles all the way down,
-                // exactly like the statement form.
-                let (sp, kind) = {
-                    let n = &p.nodes[h.id().0 as usize];
-                    (n.span, n.kind.clone())
-                };
-                let (cond, then, els) = match kind {
-                    Kind::Stmt(StmtKind::If { cond, then, els }) => (cond, then, els),
-                    _ => unreachable!("the if frame minted an if statement"),
-                };
-                let node = p.expr(ExprKind::If { cond, then, els }, sp);
+                // IS the expression's — re-mint as an expression. An
+                // `else if` chain stays `ElseBranch::If` — statement
+                // handles all the way down.
+                let n = h.get(&p.ast);
+                let node = IfExprNode {
+                    span: n.span,
+                    cond: n.cond,
+                    then: n.then,
+                    els: n.els,
+                }
+                .allocate(&mut p.ast);
                 self.finish(p, node)
             }
             Done::Failed => match self.stage {
@@ -1161,8 +1249,8 @@ impl AtomFrame {
 
 pub(crate) struct LambdaFrame {
     sp: Span,
-    params: Option<Vec<NodeHandle<AnyParam>>>,
-    ret: Option<NodeHandle<AnyTy>>,
+    params: Option<Vec<ParamRef>>,
+    ret: Option<rut_ast::TyRef>,
     /// anonymous-fn form `fn (params) -> T { .. }` — no `=>`, block required
     anon: bool,
 }
@@ -1178,7 +1266,7 @@ impl LambdaFrame {
         }
     }
     /// `x => ..` — the single param was pre-seeded by the caller
-    pub(crate) fn single(sp: Span, params: Vec<NodeHandle<AnyParam>>) -> Self {
+    pub(crate) fn single(sp: Span, params: Vec<ParamRef>) -> Self {
         LambdaFrame {
             sp,
             params: Some(params),
@@ -1241,22 +1329,21 @@ impl LambdaFrame {
                 self.body(p)
             }
             Done::Expr(e) => Step::Pop(Done::Expr(self.mk(p, e))),
-            Done::Block(b) => Step::Pop(Done::Expr(self.mk(p, b.into()))),
+            Done::Block(b) => Step::Pop(Done::Expr(self.mk(p, ExprRef::Block(b)))),
             Done::Failed => Step::Pop(Done::Failed),
             _ => unreachable!("lambda frame receives params/types/exprs"),
         }
     }
 
-    fn mk(&mut self, p: &mut Parser, body: NodeHandle<AnyExpr>) -> NodeHandle<AnyExpr> {
+    fn mk(&mut self, p: &mut Parser, body: ExprRef) -> ExprRef {
         let params = self.params.take().expect("lambda without params");
-        p.expr(
-            ExprKind::Lambda {
-                params,
-                ret: self.ret.take(),
-                body,
-            },
-            self.sp.to(p.span()),
-        )
+        LambdaNode {
+            span: Span::new(self.sp.lo, p.prev_end.max(self.sp.lo)),
+            params,
+            ret: self.ret.take(),
+            body,
+        }
+        .allocate(&mut p.ast)
     }
 }
 
@@ -1268,7 +1355,7 @@ pub(crate) struct FStrFrame {
     idx: usize,
     parts: Vec<FPartAst>,
     /// the outer token slice, position, and budgets, saved while a hole
-    /// is being parsed by the same loop (no nested parse call)
+    /// is being parsed by the same loop
     saved: Option<(Vec<Token>, usize, u32, u32)>,
 }
 
@@ -1291,8 +1378,7 @@ impl FStrFrame {
                     self.idx += 1;
                 }
                 FPart::Hole(hole_toks) => {
-                    // sub-parse over the hole's token slice: the same
-                    // loop, a frame over the sub-slice
+                    // sub-parse over the hole's token slice
                     self.idx += 1;
                     let mut toks = hole_toks;
                     toks.push(Token {
@@ -1304,12 +1390,13 @@ impl FStrFrame {
                 }
             }
         }
-        Step::Pop(Done::Expr(p.expr(
-            ExprKind::FStr {
+        Step::Pop(Done::Expr(
+            FStrNode {
+                span: self.sp,
                 parts: std::mem::take(&mut self.parts),
-            },
-            self.sp,
-        )))
+            }
+            .allocate(&mut p.ast),
+        ))
     }
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {

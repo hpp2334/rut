@@ -28,13 +28,13 @@ use ls_types::{
     InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position,
 };
 
-use rut_ast::ast::*;
+use rut_ast::{Ast, ElseBranch, ExprRef, ItemRef, StmtRef};
+use rut_semantic::LineIndex;
 use rut_semantic::Token;
 
 use crate::hover::lookup::{self, recv_type};
 use crate::hover::types::{head_of_ty, DefIndex, FnDef};
 use crate::hover::{bindings, infer, BindKind, Binding};
-use rut_semantic::LineIndex;
 
 /// everything one inlay query needs — the same `doc_ctx` pipeline the
 /// other queries ride, plus the line index (byte spans ⇄ LSP positions
@@ -118,14 +118,14 @@ fn type_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
     // module lets — the AST's `ty: None` is the unannotated law;
     // `LetDef::ty` (annotation-or-inferred, the hover render's source)
     // supplies the text
-    for h in ctx.ast.module_items(ctx.ast.root) {
-        let ItemKind::ModuleLet { ty, .. } = ctx.ast.item(*h) else {
+    for item in ctx.ast.root().items(ctx.ast) {
+        let ItemRef::ModuleLet(h) = item else {
             continue;
         };
-        if ty.is_some() {
+        if h.get(ctx.ast).ty.is_some() {
             continue;
         }
-        let span = ctx.ast.span(h.id());
+        let span = h.span(ctx.ast);
         let Some(l) = ctx.doc.lets.iter().find(|l| l.span == span) else {
             continue;
         };
@@ -147,20 +147,14 @@ fn type_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
 /// params match the arity exactly.
 fn call_hints(ctx: &Ctx, binds: &[Binding], out: &mut Vec<Raw>) {
     let mut cx = CallCx { ctx, binds, out };
-    for h in ctx.ast.module_items(ctx.ast.root) {
-        match ctx.ast.item(*h) {
-            ItemKind::Fn(d) => cx.walk_block(d.body),
-            ItemKind::Class { methods, .. }
-            | ItemKind::Struct { methods, .. }
-            | ItemKind::Interface { methods, .. }
-            | ItemKind::Impl { methods, .. } => {
-                for m in methods {
-                    if let Some(body) = ctx.ast.method_decl(*m).body {
-                        cx.walk_block(body);
-                    }
-                }
-            }
-            ItemKind::ModuleLet { init, .. } => cx.walk_expr(*init),
+    for item in ctx.ast.root().items(ctx.ast) {
+        match item {
+            ItemRef::Fn(h) => cx.walk_block(h.get(ctx.ast).body),
+            ItemRef::Class(h) => cx.walk_methods(&h.get(ctx.ast).methods),
+            ItemRef::Struct(h) => cx.walk_methods(&h.get(ctx.ast).methods),
+            ItemRef::Interface(h) => cx.walk_methods(&h.get(ctx.ast).methods),
+            ItemRef::Impl(h) => cx.walk_methods(&h.get(ctx.ast).methods),
+            ItemRef::ModuleLet(h) => cx.walk_expr(h.get(ctx.ast).init),
             _ => {}
         }
     }
@@ -173,91 +167,95 @@ struct CallCx<'a> {
 }
 
 impl CallCx<'_> {
-    fn walk_block(&mut self, block: NodeHandle<BlockNode>) {
-        for s in self.ctx.ast.block(block).to_vec() {
+    fn walk_methods(&mut self, methods: &[rut_ast::MethodRef]) {
+        for m in methods {
+            let rut_ast::MethodRef::Method(h) = m else {
+                continue;
+            };
+            if let Some(body) = h.get(self.ctx.ast).body {
+                self.walk_block(body);
+            }
+        }
+    }
+
+    fn walk_block(&mut self, block: rut_ast::Handle<rut_ast::BlockNode>) {
+        let d = block.get(self.ctx.ast);
+        for s in d.stmts.iter().copied() {
             self.walk_stmt(s);
         }
         // the block's tail value is in the same scope
-        if let Some(t) = self.ctx.ast.block_tail(block) {
+        if let Some(t) = d.tail {
             self.walk_expr(t);
         }
     }
 
-    fn walk_stmt(&mut self, s: NodeHandle<AnyStmt>) {
-        match self.ctx.ast.kind(s.id()) {
-            Kind::Stmt(StmtKind::LetStmt { init, .. }) => self.walk_expr(*init),
-            Kind::Stmt(StmtKind::ForOf { iter, body, .. }) => {
-                self.walk_expr(*iter);
-                self.walk_block(*body);
+    fn walk_stmt(&mut self, s: StmtRef) {
+        match s {
+            StmtRef::Let(h) => self.walk_expr(h.get(self.ctx.ast).init),
+            StmtRef::ForOf(h) => {
+                let d = h.get(self.ctx.ast);
+                self.walk_expr(d.iter);
+                self.walk_block(d.body);
             }
-            Kind::Stmt(StmtKind::ForC {
-                init,
-                cond,
-                update,
-                body,
-                ..
-            }) => {
-                self.walk_expr(*init);
-                self.walk_expr(*cond);
-                self.walk_expr(*update);
-                self.walk_block(*body);
+            StmtRef::ForC(h) => {
+                let d = h.get(self.ctx.ast);
+                self.walk_expr(d.init);
+                self.walk_expr(d.cond);
+                self.walk_expr(d.update);
+                self.walk_block(d.body);
             }
-            Kind::Stmt(StmtKind::If { cond, then, els }) => {
-                self.walk_expr(*cond);
-                self.walk_block(*then);
-                match els {
-                    Some(ElseBranch::If(h)) => self.walk_stmt((*h).into()),
-                    Some(ElseBranch::Block(b)) => self.walk_block(*b),
+            StmtRef::If(h) => {
+                let d = h.get(self.ctx.ast);
+                self.walk_expr(d.cond);
+                self.walk_block(d.then);
+                match d.els {
+                    Some(ElseBranch::If(ih)) => self.walk_stmt(StmtRef::If(ih)),
+                    Some(ElseBranch::Block(b)) => self.walk_block(b),
                     None => {}
                 }
             }
-            Kind::Stmt(StmtKind::While { cond, body }) => {
-                self.walk_expr(*cond);
-                self.walk_block(*body);
+            StmtRef::While(h) => {
+                let d = h.get(self.ctx.ast);
+                self.walk_expr(d.cond);
+                self.walk_block(d.body);
             }
-            Kind::Stmt(StmtKind::WhenStmt { scrut, arms }) => {
-                self.walk_expr(*scrut);
-                for a in arms {
-                    match self.ctx.ast.arm(*a) {
-                        ArmKind::WhenArm { body, .. } => self.walk_expr(*body),
-                    }
+            StmtRef::When(h) => {
+                let d = h.get(self.ctx.ast);
+                self.walk_expr(d.scrut);
+                for a in &d.arms {
+                    self.walk_expr(a.get(self.ctx.ast).body);
                 }
             }
-            Kind::Stmt(StmtKind::Return { value: Some(v) }) => self.walk_expr(*v),
-            Kind::Stmt(StmtKind::Return { value: None }) => {}
-            Kind::Stmt(StmtKind::ExprStmt(e)) => self.walk_expr(*e),
-            _ => {}
+            StmtRef::Return(h) => {
+                if let Some(v) = h.get(self.ctx.ast).value {
+                    self.walk_expr(v);
+                }
+            }
+            StmtRef::Expr(e) => self.walk_expr(e),
+            StmtRef::Break(_) | StmtRef::Continue(_) | StmtRef::Error(_) => {}
         }
     }
 
-    fn walk_expr(&mut self, e: NodeHandle<AnyExpr>) {
-        match self.ctx.ast.expr(e) {
-            ExprKind::Call { callee, args } => {
-                self.free_call(*callee, args);
-                self.walk_expr(*callee);
-                for a in args.clone() {
+    fn walk_expr(&mut self, e: ExprRef) {
+        match e {
+            ExprRef::Call(h) => {
+                let d = h.get(self.ctx.ast);
+                self.free_call(d.callee, &d.args);
+                self.walk_expr(d.callee);
+                for a in d.args.clone() {
                     self.walk_expr(a);
                 }
             }
-            ExprKind::Method {
-                recv, name, args, ..
-            } => {
-                self.method_call(e, *recv, *name, args);
-                self.walk_expr(*recv);
-                for a in args.clone() {
+            ExprRef::Method(h) => {
+                let d = h.get(self.ctx.ast);
+                self.method_call(e, d.recv, d.name, &d.args);
+                self.walk_expr(d.recv);
+                for a in d.args.clone() {
                     self.walk_expr(a);
                 }
             }
-            ExprKind::Block { .. } => {
-                let b = NodeHandle::<BlockNode>::new(e.id());
-                for s in self.ctx.ast.block(b).to_vec() {
-                    self.walk_stmt(s);
-                }
-                if let Some(t) = self.ctx.ast.block_tail(b) {
-                    self.walk_expr(t);
-                }
-            }
-            ExprKind::Lambda { body, .. } => self.walk_expr(*body),
+            ExprRef::Block(bh) => self.walk_block(bh),
+            ExprRef::Lambda(h) => self.walk_expr(h.get(self.ctx.ast).body),
             _ => {
                 for c in bindings::expr_children(self.ctx.ast, e) {
                     self.walk_expr(c);
@@ -268,10 +266,11 @@ impl CallCx<'_> {
 
     /// `f(..)` — a free fn by unique match (the `call_ty` law:
     /// ambiguity is a miss, never a wrong name)
-    fn free_call(&mut self, callee: NodeHandle<AnyExpr>, args: &[NodeHandle<AnyExpr>]) {
-        let ExprKind::Path { segs } = self.ctx.ast.expr(callee) else {
+    fn free_call(&mut self, callee: ExprRef, args: &[ExprRef]) {
+        let ExprRef::Path(h) = callee else {
             return;
         };
+        let segs = &h.get(self.ctx.ast).segs;
         if segs.len() != 1 {
             return;
         }
@@ -291,22 +290,22 @@ impl CallCx<'_> {
     /// fn's recorded params
     fn method_call(
         &mut self,
-        call: NodeHandle<AnyExpr>,
-        recv: NodeHandle<AnyExpr>,
-        name: IdentId,
-        args: &[NodeHandle<AnyExpr>],
+        call: ExprRef,
+        recv: ExprRef,
+        name: rut_ast::IdentId,
+        args: &[ExprRef],
     ) {
-        let pos = self.ctx.ast.span(call.id()).lo;
+        let pos = call.span(self.ctx.ast).lo;
         // a named receiver resolves through the phase-1 recv rule
         // (`self`, capitalized, primitive, binding, module let);
         // anything else (chained calls, field paths) through the
         // display-side expression inference
-        let head = match self.ctx.ast.expr(recv) {
-            ExprKind::Path { segs } if segs.len() == 1 => recv_type(
+        let head = match recv {
+            ExprRef::Path(ph) if ph.get(self.ctx.ast).segs.len() == 1 => recv_type(
                 self.ctx.idxs,
                 self.binds,
                 pos,
-                self.ctx.ast.name(segs[0].name),
+                self.ctx.ast.name(ph.get(self.ctx.ast).segs[0].name),
             ),
             _ => infer::expr_ty(self.ctx.ast, self.binds, self.ctx.idxs, recv)
                 .map(|t| head_of_ty(&t)),
@@ -328,13 +327,13 @@ impl CallCx<'_> {
     /// one PARAMETER hint per arg, at the arg's first byte — only on
     /// the exact-arity match (the survey's "mismatch → no hints, never
     /// wrong hints" law)
-    fn arg_hints(&mut self, params: &[String], args: &[NodeHandle<AnyExpr>]) {
+    fn arg_hints(&mut self, params: &[String], args: &[ExprRef]) {
         if params.len() != args.len() || args.is_empty() {
             return;
         }
         for (p, a) in params.iter().zip(args) {
             self.out.push(Raw {
-                byte: self.ctx.ast.span(a.id()).lo,
+                byte: a.span(self.ctx.ast).lo,
                 label: format!("{p}:"),
                 kind: InlayHintKind::PARAMETER,
                 tooltip: None,

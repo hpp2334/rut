@@ -18,9 +18,9 @@ type GraphOut = (
 /// triples plus any ifaces needing consumer-side respell rows.
 type IfaceRespell = (Vec<String>, Vec<(String, String, String)>);
 use rut_lexer::span::Span;
-use rut_parser::{parse, Mode};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
-use rut_ast::ast::{Ast, ItemKind, Vis};
+use rut_ast::{Ast, ItemRef, Vis};
 
 use crate::session::{MountedBody, Session};
 use crate::Seeds;
@@ -551,9 +551,11 @@ impl<'a> GraphCompiler<'a> {
         // attribute the same way (the file ranges are byte
         // arithmetic, text aside)
         let layout = mod_inputs_of(module, files);
-        let (ast, d) = parse(&combined, if is_decl { Mode::Decl } else { Mode::Impl });
-        if !d.is_empty() {
-            self.diags.extend(attribute_diags(d, spec, &layout));
+        let mode = if is_decl { Mode::Decl } else { Mode::Impl };
+        let parsed = parse_with_recover(&combined, mode, ParseOpts::default());
+        if !parsed.ast.is_clean() {
+            self.diags
+                .extend(attribute_diags(parsed.ast.errors().to_vec(), spec, &layout));
             return None;
         }
         // phase-2 plumbing: collect the pkg's mounted module set —
@@ -579,7 +581,7 @@ impl<'a> GraphCompiler<'a> {
         // module; the own lane walks the consumer's own mod tree and
         // gates its leaves under the crossing predicate. The validated
         // dep heads ensure; the own bindings ride the compile.
-        let (uses, own_uses) = self.validate_qualified_uses(spec, module, &ast, &layout)?;
+        let (uses, own_uses) = self.validate_qualified_uses(spec, module, &parsed.ast, &layout)?;
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays
         // legal but redundant for them), while the `pub builtin`
@@ -638,11 +640,10 @@ impl<'a> GraphCompiler<'a> {
             .collect();
 
         // the validation parse hands straight to the compile — one
-        // parse per unit, not one per pass over it
+        // parse per unit, not one per pass over it (the pair artifact
+        // carries the tree AND the normalized text its spans index)
         let out = crate::compile::compile_program_pre(
-            (ast, Vec::new()),
-            &combined,
-            if is_decl { Mode::Decl } else { Mode::Impl },
+            parsed,
             spec,
             scope,
             &bound,
@@ -772,12 +773,13 @@ pub(crate) fn dep_use_heads(
     ast: &Ast,
 ) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for it in ast.module_items(ast.root).to_vec() {
-        let ItemKind::Use { path, .. } = ast.item(it) else {
+    for it in ast.root().items(ast) {
+        let ItemRef::Use(uh) = it else {
             continue;
         };
-        let head = ast.name(path[0]).to_string();
-        let from = layout.file_of(ast.span(it.id()).lo).to_string();
+        let u = uh.get(ast);
+        let head = ast.name(u.path[0]).to_string();
+        let from = layout.file_of(it.span(ast).lo).to_string();
         if session.resolve_use(spec, &head, root).is_err()
             && session.own_use_head(spec, &head, &from).is_some()
         {
@@ -909,12 +911,14 @@ impl GraphCompiler<'_> {
         let mut ok = true;
         let mut own_uses: Vec<(String, String, String)> = Vec::new();
         let session = self.session;
-        for it in ast.module_items(ast.root).to_vec() {
-            let ItemKind::Use { path, names } = ast.item(it) else {
+        for it in ast.root().items(ast).to_vec() {
+            let ItemRef::Use(uh) = it else {
                 continue;
             };
+            let un = uh.get(ast);
+            let (path, names) = (&un.path, &un.names);
             let head_text = ast.name(path[0]).to_string();
-            let span = ast.span(it.id());
+            let span = it.span(ast);
             // the importing file's mod path — the own walk starts here
             let from = layout.file_of(span.lo).to_string();
             // the head's two namespaces: the mounted+declared dep

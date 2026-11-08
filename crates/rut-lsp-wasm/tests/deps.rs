@@ -541,7 +541,7 @@ fn kit_rows_bundle() -> Vec<u8> {
             "layout".to_string(),
             rut_driver::ModSource {
                 path: "layout".into(),
-                vis: rut_ast::ast::Vis::Pub,
+                vis: rut_ast::Vis::Pub,
                 text: "pub mod grid;\npub struct Column {\n    w: i32;\n}\n".into(),
                 file: "mod.rut".into(),
             },
@@ -550,7 +550,7 @@ fn kit_rows_bundle() -> Vec<u8> {
             "layout/grid".to_string(),
             rut_driver::ModSource {
                 path: "layout/grid".into(),
-                vis: rut_ast::ast::Vis::Pub,
+                vis: rut_ast::Vis::Pub,
                 text: "pub struct Cell {\n    x: i32;\n}\n".into(),
                 file: "mod.rut".into(),
             },
@@ -671,7 +671,7 @@ fn host_tree_bundle() -> Vec<u8> {
             "net".to_string(),
             rut_driver::ModSource {
                 path: "net".into(),
-                vis: rut_ast::ast::Vis::Pub,
+                vis: rut_ast::Vis::Pub,
                 text: "pub mod tls;\npub host fn connect(url: str) -> opaque;\n".into(),
                 file: "mod.d.rut".into(),
             },
@@ -680,7 +680,7 @@ fn host_tree_bundle() -> Vec<u8> {
             "net/tls".to_string(),
             rut_driver::ModSource {
                 path: "net/tls".into(),
-                vis: rut_ast::ast::Vis::Pub,
+                vis: rut_ast::Vis::Pub,
                 text: "pub host fn handshake(c: opaque) -> opaque;\n".into(),
                 file: "mod.d.rut".into(),
             },

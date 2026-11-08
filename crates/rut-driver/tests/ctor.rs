@@ -421,12 +421,12 @@ fn unknown_words_name_the_three_designated_surfaces() {
 fn markers_outside_inherent_bodies_stay_parse_rejects() {
     // Law 4's pin: parse_member_marker only runs in the inherent arm —
     // an interface member's marker dies at the parser
-    let p = rut_parser::parse_opts(
+    let p = rut_parser::parse_with_recover(
         "interface I { [constructor] fn make() -> i32; }",
         Mode::Impl,
-        rut_parser::ParseOpts { recover: true },
+        rut_parser::ParseOpts::default(),
     );
-    let diags = p.diags;
+    let diags = p.ast.errors().to_vec();
     assert!(
         diags
             .iter()
@@ -435,24 +435,32 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
     );
     // a free fn's marker never parses either (the top level takes no
     // bracket groups)
-    let (_, diags) = rut_parser::parse("[constructor] fn make() -> i32 { return 0; }", Mode::Impl);
+    let p = rut_parser::parse_with_recover(
+        "[constructor] fn make() -> i32 { return 0; }",
+        Mode::Impl,
+        rut_parser::ParseOpts::default(),
+    );
     assert!(
-        !diags.is_empty(),
-        "a free-fn marker must diagnose: {diags:?}"
+        !p.ast.is_clean(),
+        "a free-fn marker must diagnose: {:?}",
+        p.ast.errors()
     );
     // the trait-impl spelling is gone entirely — the marker never
     // reaches a `for` body
-    let (_, diags) = rut_parser::parse(
+    let p = rut_parser::parse_with_recover(
         "class C { }\
          interface I { fn m(self); }\
          impl I for C { [constructor] fn m(self) { } }",
         Mode::Impl,
+        rut_parser::ParseOpts::default(),
     );
     assert!(
-        diags
+        p.ast
+            .errors()
             .iter()
             .any(|d| d.msg.contains("expected {, found `for`")),
-        "the trait-impl spelling dies at the parser: {diags:?}"
+        "the trait-impl spelling dies at the parser: {:?}",
+        p.ast.errors()
     );
 }
 

@@ -1,29 +1,25 @@
 //! Parser — the explicit-frame machine (contract C2 — no
 //! native recursion).
 //!
-//! One `run` loop (§4) drives two mechanisms: a **frame stack** for
+//! One `run` loop drives two mechanisms: a **frame stack** for
 //! structure — one frame kind per grammar rule, each holding the children
 //! it has collected and the stage it suspended at — and an embedded
-//! **Pratt engine** for expressions (an operator stack plus an operand
-//! stack of `NodeId`s, reductions building nodes bottom-up). A frame that
-//! needs a child pushes a frame; a frame that completes pops and hands
-//! its result (`Done`) to the parent through the inbox. Host stack usage
-//! is constant regardless of input.
+//! **Pratt engine** for expressions. A frame that needs a child pushes
+//! a frame; a frame that completes pops and hands its result (`Done`)
+//! to the parent through the inbox. Host stack usage is constant.
 //!
-//! Contracts honored here: **C1** flat arena AST (built bottom-up),
-//! **C3** depth budgets — exceeding one is a normal `Diag`, never a host
-//! stack overflow (expressions `EXPR_MAX = 64`, brackets/blocks/
-//! `NEST_MAX = 1024`; the expression cap stays at 64 because downstream
-//! walks over the tree — dump, typecheck — are themselves recursive in
-//! this milestone), **C4** monotone cursor + lookahead discipline (local
-//! decisions peek ≤ 4 tokens; the two far decisions — lambda vs paren,
-//! generic-call vs `<` — are read-only balancing *scans*, §4.2; there is
-//! no checkpoint/rollback API, so backtracking is unrepresentable).
+//! v2 laws: construction is ALLOCATE-COMPLETE over the capsule store —
+//! every node value is built whole (span + name_span + doc inside) and
+//! takes its slot once; recovery FENCES unparseable regions as
+//! `ErrorNode`s into the very list they belong to (the recovery
+//! ladder); docs graft at allocation when `include_comments` is set
+//! (the grammar never consults comments); node spans end at the item's
+//! own terminator (`prev_end` — exact spans).
 
-use rut_ast::ast::*;
+use rut_ast::{CommentData, DocData, ErrorNode, Handle, ItemRef, ModuleNode};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::{Span, NEST_MAX};
-use rut_lexer::token::{Tok, Token};
+use rut_lexer::token::{Comment, Tok, Token};
 
 mod expr;
 mod frame;
@@ -47,58 +43,46 @@ pub enum Mode {
 /// (AST dump, fused typecheck) do — the cap keeps trees they visit shallow.
 pub(crate) const EXPR_MAX: u32 = 64;
 
-/// parse one source. The LEGACY `{recover: true}` shorthand — a total
-/// tree + every diag. NO callers outside this crate's own tests (the
-/// layer law: everyone else sits on `parse_opts`); kept for the 161
-/// in-crate grammar-test call sites.
-pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
-    let p = parse_opts(src, mode, ParseOpts { recover: true });
-    (
-        p.ast.expect("the recovering parse always yields a tree"),
-        p.diags,
-    )
-}
-
-/// The AST layer's opts — one knob, default OFF (`derive(Default)`;
-/// `fail_fast ≡ !recover`, and `recover` is the term of art).
-/// Comments are NOT a parse concern: the leaf layer (tokens + comments
-/// together — no consumer wants trivia without tokens) is
-/// `lex_normalized(&ast.src, true)` away for the tooling that wants it,
-/// so the artifact stays a pure tree + its text.
+/// The AST layer's opts — one knob: docs in the tree. `recover` is NOT
+/// a knob; the ENTRY is the choice (`parse` fail-fast /
+/// `parse_with_recover` always a tree).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ParseOpts {
-    /// best-effort recovery: a total tree + ALL diags. Off = fail fast:
-    /// the FIRST diag (lexer or parser) stops the parse, `ast` is `None`,
-    /// `diags` carries exactly one row.
-    pub recover: bool,
+    /// graft doc chains onto decl nodes at allocation (D7). The grammar
+    /// never consults comments; tree shape never depends on them.
+    pub include_comments: bool,
 }
 
-/// The AST layer's artifact: the tree — SELF-CONTAINED, the single
-/// owner of the text its spans index (`ast.src`) — plus the diags.
-/// Nothing beside the `Ast` re-stores derivable data; a fail-fast stop
-/// carries no tree at all (the first diag only).
+/// The pair artifact: the tree + ITS exact text. `src` is the
+/// NORMALIZED text every span indexes — the join target, never the
+/// caller's raw input.
 pub struct Parsed {
-    /// `None` ⇔ `recover: false` stopped at the first diag
-    pub ast: Option<Ast>,
-    pub diags: Vec<Diag>,
+    pub ast: rut_ast::Ast,
+    pub src: String,
 }
 
-/// The AST facade: normalize → lex → parse. Nothing outside this crate
-/// drives those steps by hand; the token stream is consumed here and
-/// re-derived on demand (`lex_normalized`) by the consumers that want
-/// the leaf layer.
-pub fn parse_opts(src: &str, mode: Mode, opts: ParseOpts) -> Parsed {
-    let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, mut diags, _) = rut_lexer::lexer::lex_normalized(&normalized, false);
-    // fail fast: a lex diag stops the parse before it starts
-    if !opts.recover {
-        if let Some(first) = diags.first().cloned() {
-            return Parsed {
-                ast: None,
-                diags: vec![first],
-            };
-        }
+/// The fail-fast entry: `Err` carries the FIRST diag and no tree was
+/// built; `Ok` implies a clean tree (`ast.is_clean()`).
+pub fn parse(src: &str, mode: Mode, opts: ParseOpts) -> Result<Parsed, Diag> {
+    let p = parse_with_recover(src, mode, opts);
+    match p.ast.errors().first().cloned() {
+        Some(first) => Err(first),
+        None => Ok(p),
     }
+}
+
+/// The recovering entry: ALWAYS a tree. Unparseable regions are
+/// `ErrorNode`s in the lists they belong to; every diag rides
+/// `ast.errors()` (the flat view) and the in-stream slots (the
+/// positional view).
+pub fn parse_with_recover(src: &str, mode: Mode, opts: ParseOpts) -> Parsed {
+    let normalized = rut_lexer::lexer::normalize(src);
+    let (toks, diags, comments) = rut_lexer::lexer::lex_normalized(&normalized, true);
+    let comments = if opts.include_comments {
+        Some(comments)
+    } else {
+        None
+    };
     let mut p = Parser {
         toks,
         pos: 0,
@@ -111,49 +95,63 @@ pub fn parse_opts(src: &str, mode: Mode, opts: ParseOpts) -> Parsed {
         nest_reported: false,
         expr_depth: 0,
         expr_reported: false,
-        nodes: Vec::new(),
-        interner: Interner::default(),
-    };
-    let root = p.run();
-    diags.append(&mut p.diags);
-    if !opts.recover && !diags.is_empty() {
-        return Parsed {
-            ast: None,
-            diags: vec![diags.remove(0)],
-        };
-    }
-    let ast = Ast {
-        nodes: p.nodes,
-        interner: p.interner,
-        root,
+        ast: rut_ast::Ast::new(),
         src: normalized,
+        comments,
+        prev_end: 0,
     };
-    Parsed {
-        ast: Some(ast),
-        diags,
+    // lex rows have no grammar home: one root-level ErrorNode each,
+    // pre-seeded into the module (the ladder's LEX tier)
+    let mut pre_items = Vec::new();
+    for d in &diags {
+        let h = ErrorNode {
+            span: d.span,
+            diags: vec![d.clone()],
+        }
+        .alloc_plain(&mut p.ast);
+        pre_items.push(ItemRef::Error(h));
     }
+    let root = p.run(pre_items);
+    // the ordered flat lane: lex rows first (as today), then the parse rows
+    let mut all = diags;
+    all.append(&mut p.diags);
+    p.ast.set_errors(all);
+    p.ast.set_root(root);
+    Parsed {
+        ast: p.ast,
+        src: p.src,
+    }
+}
+
+/// a name capture — the ident's interning id AND its span (the parse
+/// verdict hover used to recover by token-walking; v2 records it).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Name {
+    pub id: rut_ast::IdentId,
+    pub span: Span,
 }
 
 pub(crate) struct Parser {
     pub(crate) toks: Vec<Token>,
     pub(crate) pos: usize,
-    /// debug monotone-cursor witness (C4): `pos` never moves backwards
-    /// within one token slice (the f-string hole slice switch resets it)
+    /// debug monotone-cursor witness (C4)
     max_pos: usize,
-    diags: Vec<Diag>,
+    pub(crate) diags: Vec<Diag>,
     pub(crate) mode: Mode,
     frames: Vec<Frame>,
-    /// the result a popped child frame handed to its parent
     inbox: Option<Done>,
-    /// nesting-kind frames on the stack (blocks, types, unary-only exprs)
     nest: u32,
     nest_reported: bool,
-    /// full-expression frames on the stack (the EXPR_MAX budget)
     expr_depth: u32,
     expr_reported: bool,
-    // arena
-    pub(crate) nodes: Vec<Node>,
-    pub(crate) interner: Interner,
+    // the capsule store — nodes land here, complete, once
+    pub(crate) ast: rut_ast::Ast,
+    /// the NORMALIZED text (spans index it; moved into `Parsed`)
+    pub(crate) src: String,
+    /// the comment table — `Some` ⇔ include_comments (docs graft)
+    pub(crate) comments: Option<Vec<Comment>>,
+    /// hi of the last consumed token — exact item spans end here
+    pub(crate) prev_end: u32,
 }
 
 // ---- span/cursor helpers (C4: cursor only ever moves forward) ----
@@ -174,15 +172,18 @@ impl Parser {
         debug_assert!(self.pos >= self.max_pos, "cursor moved backwards (C4)");
         self.max_pos = self.pos;
         let t = self.peek(0).clone();
+        self.prev_end = t.span.hi;
         if self.pos < self.toks.len() - 1 {
             self.pos += 1;
         }
         t
     }
+    /// exact span helper: [lo .. last consumed] (the item-span law,
+    /// D6: a node's span ends at its OWN last consumed token)
+    pub(crate) fn span_from(&self, lo: u32) -> Span {
+        Span::new(lo, self.prev_end.max(lo))
+    }
 
-    /// switch to an f-string hole's sub-slice — the one
-    /// sanctioned `pos` reset: a different token stream, not backtracking.
-    /// Returns the outer slice/position/budgets for the later restore.
     pub(crate) fn switch_to_hole(&mut self, toks: Vec<Token>) -> (Vec<Token>, usize, u32, u32) {
         let old_toks = std::mem::replace(&mut self.toks, toks);
         let old_pos = std::mem::replace(&mut self.pos, 0);
@@ -192,7 +193,6 @@ impl Parser {
         (old_toks, old_pos, ed, ne)
     }
 
-    /// restore the outer token slice and budgets after a hole parsed
     pub(crate) fn restore_from_hole(&mut self, toks: Vec<Token>, pos: usize, ed: u32, ne: u32) {
         self.toks = toks;
         self.pos = pos;
@@ -205,7 +205,6 @@ impl Parser {
         matches!(self.tok(), Tok::Eof)
     }
 
-    /// `at` a keyword (keywords are Idents)
     pub(crate) fn at_kw(&self, kw: &str) -> bool {
         matches!(self.tok(), Tok::Ident(s) if s == kw)
     }
@@ -237,11 +236,15 @@ impl Parser {
         }
     }
 
-    pub(crate) fn expect_ident(&mut self, what: &str) -> Option<IdentId> {
+    /// the ident consumption — returns the NAME (id + span), the
+    /// verdict recorded at the grammar site
+    pub(crate) fn expect_ident(&mut self, what: &str) -> Option<Name> {
         if let Tok::Ident(name) = self.tok().clone() {
             let sp = self.bump().span;
-            let _ = sp;
-            return Some(self.interner.intern(&name));
+            return Some(Name {
+                id: self.ast.intern(&name),
+                span: sp,
+            });
         }
         let found = self.peek(0).describe();
         self.err_here(format!("expected {what}, found {found}"));
@@ -257,8 +260,6 @@ impl Parser {
         }
     }
 
-    /// Expect `>`, splitting a maximal-munch `>>` (span arithmetic:
-    /// `Vec<Vec<i32>>` needs no re-lexing and no glued tokens).
     pub(crate) fn expect_gt(&mut self) -> bool {
         match self.tok().clone() {
             Tok::Gt => {
@@ -267,8 +268,6 @@ impl Parser {
             }
             Tok::Shr => {
                 let sp = self.peek(0).span;
-                // Shr becomes TWO Gt tokens (span arithmetic):
-                // `Vec<Vec<i32>>` closes both levels
                 self.toks[self.pos] = Token {
                     tok: Tok::Gt,
                     span: Span::new(sp.lo, sp.lo + 1),
@@ -291,87 +290,79 @@ impl Parser {
         }
     }
 
-    // ---- arena ----
-    //
-    // Typed constructors: a child slot's type is enforced at every
-    // construction site — the parser cannot build a wrong-category link.
+    // ---- diags/fencing (the recovery ladder's plumbing) ----
 
-    fn push_raw(&mut self, kind: Kind, span: Span) -> NodeId {
-        let id = NodeId(self.nodes.len() as u32);
-        self.nodes.push(Node { span, kind });
-        id
+    /// a diag watermark — `take_since` splits the rows a fenced region
+    /// owns (they ride its ErrorNode; the flat lane gets them back at
+    /// the parse boundary in order)
+    pub(crate) fn mark(&self) -> usize {
+        self.diags.len()
     }
-    pub(crate) fn item(&mut self, k: ItemKind, span: Span) -> NodeHandle<AnyItem> {
-        NodeHandle::new(self.push_raw(Kind::Item(k), span))
+    pub(crate) fn diags_since(&self, mark: usize) -> Vec<Diag> {
+        if mark < self.diags.len() {
+            self.diags[mark..].to_vec()
+        } else {
+            Vec::new()
+        }
     }
-    pub(crate) fn stmt(&mut self, k: StmtKind, span: Span) -> NodeHandle<AnyStmt> {
-        NodeHandle::new(self.push_raw(Kind::Stmt(k), span))
+    /// FENCE: allocate the ErrorNode covering [tok[start] .. last
+    /// consumed], carrying the region's diags. Call AFTER resyncing.
+    pub(crate) fn fence(&mut self, start: usize, mark: usize) -> Handle<ErrorNode> {
+        let lo = self
+            .toks
+            .get(start)
+            .map(|t| t.span.lo)
+            .unwrap_or(self.prev_end);
+        let span = Span::new(lo.min(self.prev_end), self.prev_end.max(lo));
+        let diags = self.diags_since(mark);
+        ErrorNode { span, diags }.alloc_plain(&mut self.ast)
     }
-    pub(crate) fn expr(&mut self, k: ExprKind, span: Span) -> NodeHandle<AnyExpr> {
-        NodeHandle::new(self.push_raw(Kind::Expr(k), span))
-    }
-    pub(crate) fn pat(&mut self, k: PatKind, span: Span) -> NodeHandle<AnyPat> {
-        NodeHandle::new(self.push_raw(Kind::Pat(k), span))
-    }
-    pub(crate) fn typ(&mut self, k: TypeKind, span: Span) -> NodeHandle<AnyTy> {
-        NodeHandle::new(self.push_raw(Kind::Type(k), span))
-    }
-    pub(crate) fn arm(&mut self, k: ArmKind, span: Span) -> NodeHandle<AnyArm> {
-        NodeHandle::new(self.push_raw(Kind::Arm(k), span))
-    }
-    pub(crate) fn member(&mut self, k: MemberKind, span: Span) -> NodeHandle<AnyParam> {
-        NodeHandle::new(self.push_raw(Kind::Member(k), span))
-    }
-    pub(crate) fn field_decl(&mut self, d: FieldDeclData, span: Span) -> NodeHandle<FieldDeclNode> {
-        NodeHandle::new(self.push_raw(Kind::Member(MemberKind::FieldDecl(d)), span))
-    }
-    pub(crate) fn method_decl(
-        &mut self,
-        d: MethodDeclData,
-        span: Span,
-    ) -> NodeHandle<MethodDeclNode> {
-        NodeHandle::new(self.push_raw(Kind::Member(MemberKind::MethodDecl(d)), span))
-    }
-    pub(crate) fn fn_decl(&mut self, d: FnData, span: Span) -> NodeHandle<FnNode> {
-        NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Fn(d)), span))
-    }
-    pub(crate) fn module(
-        &mut self,
-        items: Vec<NodeHandle<AnyItem>>,
-        span: Span,
-    ) -> NodeHandle<ModuleNode> {
-        NodeHandle::new(self.push_raw(Kind::Item(ItemKind::Module { items }), span))
-    }
-    pub(crate) fn block(
-        &mut self,
-        stmts: Vec<NodeHandle<AnyStmt>>,
-        span: Span,
-    ) -> NodeHandle<BlockNode> {
-        self.block_with_tail(stmts, None, span)
-    }
-    /// a block with its tail expression (the `}`-closed last statement)
-    pub(crate) fn block_with_tail(
-        &mut self,
-        stmts: Vec<NodeHandle<AnyStmt>>,
-        tail: Option<NodeHandle<AnyExpr>>,
-        span: Span,
-    ) -> NodeHandle<BlockNode> {
-        NodeHandle::new(self.push_raw(Kind::Expr(ExprKind::Block { stmts, tail }), span))
-    }
-    pub(crate) fn if_stmt(
-        &mut self,
-        cond: NodeHandle<AnyExpr>,
-        then: NodeHandle<BlockNode>,
-        els: Option<ElseBranch>,
-        span: Span,
-    ) -> NodeHandle<IfNode> {
-        NodeHandle::new(self.push_raw(Kind::Stmt(StmtKind::If { cond, then, els }), span))
+
+    // ---- docs at allocation (D7) ----
+
+    /// the doc chain directly above `lo` — the Go-convention rules,
+    /// byte-identical to the hover lane this replaces. Empty unless
+    /// `include_comments`.
+    pub(crate) fn doc_above(&self, lo: u32) -> DocData {
+        let Some(cs) = &self.comments else {
+            return DocData::default();
+        };
+        let src = &self.src;
+        let line_initial = |c: &Comment| {
+            let line_start = src[..c.span.lo as usize]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            src[line_start..c.span.lo as usize].trim().is_empty()
+        };
+        let mut out: Vec<CommentData> = Vec::new();
+        let mut bound = lo;
+        let mut first = true;
+        while let Some(c) = cs.iter().rev().find(|c| {
+            c.span.hi <= bound && src[c.span.lo as usize..].starts_with("//") && line_initial(c)
+        }) {
+            let gap = &src[c.span.hi as usize..bound as usize];
+            let attaches =
+                gap.chars().all(char::is_whitespace) && (first || gap.matches('\n').count() <= 1);
+            if !attaches {
+                break;
+            }
+            out.push(CommentData {
+                span: c.span,
+                doc: c.doc,
+            });
+            bound = c.span.lo;
+            first = false;
+        }
+        out.reverse();
+        DocData(out)
     }
 
     // ---- the driver loop ----
 
-    fn run(&mut self) -> NodeHandle<ModuleNode> {
-        self.frames.push(Frame::Module(ModuleFrame::new()));
+    fn run(&mut self, pre_items: Vec<ItemRef>) -> Handle<ModuleNode> {
+        self.frames
+            .push(Frame::Module(frame::ModuleFrame::new(pre_items)));
         let mut root = None;
         while let Some(mut frame) = self.frames.pop() {
             let done = self.inbox.take();
@@ -398,9 +389,6 @@ impl Parser {
         root.expect("the module frame must complete the parse")
     }
 
-    /// Push a child frame, enforcing the depth budgets (C3). Over budget
-    /// is a normal (latched, once-per-parse) Diag plus a site-specific
-    /// degraded result — never a push, never a host stack overflow.
     fn push_child(&mut self, child: Frame) {
         if child.counts_full_expr() && self.expr_depth >= EXPR_MAX {
             if !self.expr_reported {
@@ -416,10 +404,6 @@ impl Parser {
                 self.nest_reported = true;
                 self.err(self.span(), "nesting too deep");
             }
-            // degraded results mirror the old enter()-failure sites:
-            // a block consumes its balanced braces and yields an empty
-            // block so the enclosing item can continue; everything else
-            // fails and lets the parent's recovery run
             let d = match child {
                 Frame::Block(bf) => {
                     self.skim_balanced();
@@ -449,8 +433,6 @@ impl Parser {
         }
     }
 
-    /// the EXPR_MAX recovery skim: skip forward to the matching closer
-    /// (or statement boundary); resync forward only
     fn skim_to_closer(&mut self) {
         let mut depth = 0i32;
         loop {
@@ -472,7 +454,6 @@ impl Parser {
         }
     }
 
-    /// consume through the matching `}` (block-budget recovery)
     fn skim_balanced(&mut self) {
         let mut depth = 0i32;
         loop {
@@ -491,8 +472,6 @@ impl Parser {
             self.bump();
         }
     }
-
-    // ---- recovery: resync forward at `;` / `}` / balanced block
 
     pub(crate) fn sync_stmt(&mut self) {
         let mut brace = 0i32;
@@ -529,11 +508,19 @@ impl Parser {
     }
 }
 
+/// fill a decl node's doc at allocation — `with_doc!(p, FnNode { .. })`
+macro_rules! with_doc {
+    ($p:expr, $node:expr) => {{
+        let mut n = $node;
+        n.doc = $p.doc_above(n.span.lo);
+        n
+    }};
+}
+pub(crate) use with_doc;
+
 /// Reserved words of the grammar — keywords are `Ident`s
 /// matched by interner text. Public: the LSP classifier
 /// and any tooling that needs the keyword set share this one table.
-/// `where` is gone (bounds are inline); `type` is the
-/// contextual alias introducer — an ordinary identifier elsewhere.
 pub const RESERVED_KW: &[&str] = &[
     "let",
     "mut",
@@ -568,22 +555,12 @@ pub fn is_reserved_kw(s: &str) -> bool {
     RESERVED_KW.contains(&s)
 }
 
-/// The primitive type names, in canonical order — the ONE table:
-/// [`is_primitive_ty`] matches against it and the LSP's type-position
-/// completion enumerates it (no duplicated list can drift).
-/// `str` included — it is a primitive, not a class; its natives are
-/// the free `string_len`/`string_encode` host fns declared in core.
-/// `bytes` is the immutable binary primitive alongside `str`.
+/// The primitive type names, in canonical order — the ONE table.
 pub const PRIMITIVE_TYS: &[&str] = &[
     "bool", "str", "bytes", "nil", "f32", "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32",
     "u64",
 ];
 
-/// The primitive types — contextual type names, matched by
-/// interner text. Public and canonical: surface decls and
-/// the LSP classifier share this one table.
 pub fn is_primitive_ty(s: &str) -> bool {
     PRIMITIVE_TYS.contains(&s)
 }
-
-use crate::frame::ModuleFrame;

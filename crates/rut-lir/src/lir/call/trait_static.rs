@@ -19,7 +19,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         concrete: TypeId,
         iface_id: Option<Vec<u32>>,
         name: IdentId,
-        args: Vec<NodeHandle<AnyExpr>>,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -63,7 +63,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let t = self.compile_expr(*a, Some(ptys[i]))?;
                 if !self.widens_val(*a, t, ptys[i]) {
                     self.ctx.err(
-                        self.ctx.ast.span(a.id()),
+                        a.span(self.ctx.ast),
                         format!(
                             "argument {} is `{}`, `{}` expected",
                             i + 1,
@@ -116,13 +116,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 let saved_subst = std::mem::replace(&mut self.subst, env.clone());
                 let saved_self = self.self_ty;
                 self.self_ty = Some(concrete);
-                let md = self.ctx.ast.method_decl(node).clone();
+                let md = node.get(self.ctx.ast).clone();
                 let mut ptys = Vec::new();
                 for p in md.params.iter() {
-                    match self.ctx.ast.param(*p) {
-                        MemberKind::Param(ParamData { ty: Some(t), .. }) => {
-                            ptys.push(self.resolve_type_now(*t))
-                        }
+                    match self.ctx.param_ty(*p) {
+                        Some(t) => ptys.push(self.resolve_type_now(t)),
                         _ => ptys.push(TY_I32),
                     }
                 }
@@ -141,7 +139,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let t = self.compile_expr(*a, Some(ptys[i]))?;
                     if !self.widens_val(*a, t, ptys[i]) {
                         self.ctx.err(
-                            self.ctx.ast.span(a.id()),
+                            a.span(self.ctx.ast),
                             format!(
                                 "argument {} is `{}`, `{}` expected",
                                 i + 1,
@@ -209,7 +207,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let t = self.compile_expr(*a, Some(ptys[i]))?;
                     if !self.widens_val(*a, t, ptys[i]) {
                         self.ctx.err(
-                            self.ctx.ast.span(a.id()),
+                            a.span(self.ctx.ast),
                             format!(
                                 "argument {} is `{}`, `{}` expected",
                                 i + 1,
@@ -394,7 +392,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         param_tys: Vec<TypeId>,
         ret_ty: TypeId,
         rreg: u16,
-        args: Vec<NodeHandle<AnyExpr>>,
+        args: Vec<ExprRef>,
         _expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -414,7 +412,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             let t = self.compile_expr(*a, Some(param_tys[i]))?;
             if !self.widens_val(*a, t, param_tys[i]) {
                 self.ctx.err(
-                    self.ctx.ast.span(a.id()),
+                    a.span(self.ctx.ast),
                     format!(
                         "argument {} is `{}`, `{}` expected",
                         i + 1,

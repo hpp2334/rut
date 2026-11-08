@@ -1,848 +1,185 @@
-//! AST — flat arena with typed node handles.
+//! The capsule store (D4): per-kind private arenas, the interner, the
+//! root — and NOTHING else. NO `src` (the text is the caller's —
+//! `Parsed { ast, src }` is the pair artifact; text queries are span×src
+//! joins), no flat kind enum, no public fields.
 //!
-//! Nodes are plain records in one arena; children are `NodeHandle<T>`s —
-//! typed indices into it, never `Box<Expr>`. Construction is bottom-up;
-//! drop/clone are flat `Vec` ops, so no input can overflow the host stack
-//! through the tree. Spans on every node; names are `IdentId`s into the
-//! interner.
+//! THE ARTIFACT LAW (v3): `Ast` stores PURE STRUCTURE — the typed
+//! nodes, their spans/verdicts, the interner vocabulary. Every door is
+//! a method; reads live on nodes/handles with the store as ctx.
 //!
-//! `NodeKind` is split per category (`ItemKind`/`MemberKind`/`StmtKind`/
-//! `ExprKind`/`PatKind`/`ArmKind`/`TypeKind`): a child slot's type says
-//! which category it accepts, and closed slots (`fn` bodies are `Block`s,
-//! method lists are `MethodDecl`s) name the exact variant. A wrong-category
-//! link does not compile. `Block` is an expression — arm and lambda bodies
-//! are block-or-expr — which is exactly how the compiler treats them.
+//! THE MUTATION LAW: `&ctx` methods ask the store, `&mut ctx` methods
+//! tell it — and only the parse lane tells (`intern`, `set_root`,
+//! `allocate`, `set_errors`). Node fields are never mutated after
+//! allocation; there is no API for it.
 
-use rut_lexer::span::Span;
-use std::marker::PhantomData;
+use rut_core::{IdentId, Interner};
+use rut_lexer::diag::Diag;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct NodeId(pub u32);
+use crate::handle::{Arena, Handle, NodeStore};
 
-/// An interned name — re-exported from rut-core: the AST's
-/// interner and rut-core's are one type, so well-known symbol ids
-/// (`rut_core::sym::SELF` and friends) are valid in the AST's interner.
-pub use rut_core::IdentId;
-
-// ---- typed handles ----
-
-/// A `NodeId` that carries the node's category (or exact variant) in its
-/// type. Zero-sized at runtime.
-pub struct NodeHandle<T> {
-    id: NodeId,
-    _ty: PhantomData<fn() -> T>,
-}
-
-impl<T> NodeHandle<T> {
-    pub fn new(id: NodeId) -> Self {
-        NodeHandle {
-            id,
-            _ty: PhantomData,
+// ---- the node inventory: one private arena per kind ----
+//
+// Every node kind in the tree, exactly once. The macro wires the
+// fields, the NodeStore impls (typed `allocate`/`get`), nothing else —
+// behavior lives on the nodes.
+macro_rules! arenas {
+    ($( $field:ident : $ty:ty ),* $(,)?) => {
+        pub struct Ast {
+            $( $field: Arena<$ty>, )*
+            interner: Interner,
+            root: Option<Handle<crate::item::ModuleNode>>,
+            /// the ordered diag rows (the FLAT view — the panel). The
+            /// POSITIONAL view is the `ErrorNode`s in the streams; the
+            /// same rows, two shapes. Parse-lane-written only.
+            errors: Vec<Diag>,
         }
-    }
-    pub fn id(&self) -> NodeId {
-        self.id
-    }
-}
-impl<T> Clone for NodeHandle<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<T> Copy for NodeHandle<T> {}
-impl<T> PartialEq for NodeHandle<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-impl<T> Eq for NodeHandle<T> {}
-impl<T> std::hash::Hash for NodeHandle<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-impl<T> std::fmt::Debug for NodeHandle<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.id)
-    }
-}
-impl<T> From<NodeHandle<T>> for NodeId {
-    fn from(h: NodeHandle<T>) -> NodeId {
-        h.id
-    }
-}
 
-// markers: categories (open slots) + variants (closed slots)
-pub struct ModuleNode;
-pub struct AnyItem;
-pub struct IfNode;
-pub struct AnyStmt;
-pub struct AnyExpr;
-pub struct AnyPat;
-pub struct AnyTy;
-pub struct AnyParam; // Param | SelfParam
-pub struct AnyArm;
-pub struct BlockNode; // fn/method/loop/if-then bodies, block arms
-pub struct FieldDeclNode;
-pub struct MethodDeclNode;
-pub struct FnNode;
+        impl Ast {
+            /// the empty store — the parse lane's first call
+            #[allow(clippy::new_without_default)] // a Default would
+            // suggest Ast::default() elsewhere; the store is BORN in
+            // the parse lane, one constructor, one story
+            pub fn new() -> Ast {
+                Ast {
+                    $( $field: Arena::empty(), )*
+                    interner: Interner::default(),
+                    root: None,
+                    errors: Vec::new(),
+                }
+            }
+            /// construction (parse lane): land a complete node in its
+            /// arena — the one allocation door behind every
+            /// `XNode { .. }.allocate(ctx)`
+            pub fn alloc<T: NodeStore>(&mut self, node: T) -> Handle<T> {
+                let h = Handle::new(T::arena_mut(self).0.len() as u32);
+                T::arena_mut(self).0.push(node);
+                h
+            }
+            /// construction (parse lane): intern a name
+            pub fn intern(&mut self, name: &str) -> IdentId {
+                self.interner.intern(name)
+            }
+            /// construction (parse lane): seal the root
+            pub fn set_root(&mut self, root: Handle<crate::item::ModuleNode>) {
+                self.root = Some(root);
+            }
+            /// construction (parse lane): the ordered diag rows
+            pub fn set_errors(&mut self, diags: Vec<Diag>) {
+                self.errors = diags;
+            }
 
-macro_rules! upcast {
-    ($from:ty, $to:ty) => {
-        impl From<NodeHandle<$from>> for NodeHandle<$to> {
-            fn from(h: NodeHandle<$from>) -> NodeHandle<$to> {
-                NodeHandle::new(h.id())
+            // ---- reads ----
+            /// the root's Copy handle — the walk door
+            pub fn root(&self) -> Handle<crate::item::ModuleNode> {
+                self.root.expect("the parse lane always sets the root")
+            }
+            /// a name's spelling — the interner read
+            pub fn name(&self, id: IdentId) -> &str {
+                self.interner.name(id)
+            }
+            /// the whole vocabulary, by reference — the middle-end's
+            /// door: its `Ctx` CLONES the interner (extending it with
+            /// synthesized names and moving the result into the emitted
+            /// `Program`), so it needs the store itself, not per-name
+            /// reads. Read-only — interning stays the parse lane's.
+            pub fn interner(&self) -> &Interner {
+                &self.interner
+            }
+            /// the FLAT error view, source order (the panel). The
+            /// positional view is the ErrorNodes in the streams.
+            pub fn errors(&self) -> &[Diag] {
+                &self.errors
+            }
+            /// O(1) — the fmt/compiler refusal gate
+            pub fn is_clean(&self) -> bool {
+                self.errors.is_empty()
             }
         }
+
+        $( impl NodeStore for $ty {
+            fn arena(ast: &Ast) -> &Arena<Self> { &ast.$field }
+            fn arena_mut(ast: &mut Ast) -> &mut Arena<Self> { &mut ast.$field }
+        } )*
+        $( impl crate::handle::HasSpan for $ty {
+            fn span(&self) -> rut_lexer::span::Span { self.span }
+        } )*
     };
 }
-upcast!(ModuleNode, AnyItem);
-upcast!(FnNode, AnyItem);
-upcast!(IfNode, AnyStmt);
-upcast!(BlockNode, AnyExpr);
 
-pub struct Ast {
-    pub nodes: Vec<Node>,
-    pub interner: Interner,
-    pub root: NodeHandle<ModuleNode>,
-    /// the NORMALIZED text every span in this tree indexes (CRLF → LF —
-    /// the caller's raw bytes may differ). The tree is SELF-CONTAINED:
-    /// slice text at spans through this field, never through the input.
-    ///
-    /// THE ARTIFACT LAW — the tree stores only what is NOT a pure
-    /// function of its parts: the nodes, and the text its spans index.
-    /// The LEAF layer (the token stream, and comments when wanted) is
-    /// `rut_lexer::lexer::lex_normalized(&src, collect)` away — one
-    /// deterministic linear pass — and is therefore never stored here.
-    pub src: String,
-}
-
-impl Ast {
-    pub fn node(&self, id: NodeId) -> &Node {
-        &self.nodes[id.0 as usize]
-    }
-    pub fn span(&self, id: NodeId) -> Span {
-        self.nodes[id.0 as usize].span
-    }
-    pub fn name(&self, id: IdentId) -> &str {
-        self.interner.name(id)
-    }
-
-    // full view (generic walks — dump)
-    pub fn kind(&self, id: NodeId) -> &Kind {
-        &self.nodes[id.0 as usize].kind
-    }
-
-    // category accessors — construction is typed, so the wrapper is
-    // structural; a mismatch is unreachable by construction
-    pub fn item(&self, h: NodeHandle<AnyItem>) -> &ItemKind {
-        match &self.node(h.id()).kind {
-            Kind::Item(k) => k,
-            _ => unreachable!("item handle into a non-item node"),
-        }
-    }
-    pub fn stmt(&self, h: NodeHandle<AnyStmt>) -> &StmtKind {
-        match &self.node(h.id()).kind {
-            Kind::Stmt(k) => k,
-            _ => unreachable!("stmt handle into a non-stmt node"),
-        }
-    }
-    pub fn expr(&self, h: NodeHandle<AnyExpr>) -> &ExprKind {
-        match &self.node(h.id()).kind {
-            Kind::Expr(k) => k,
-            _ => unreachable!("expr handle into a non-expr node"),
-        }
-    }
-    pub fn pat(&self, h: NodeHandle<AnyPat>) -> &PatKind {
-        match &self.node(h.id()).kind {
-            Kind::Pat(k) => k,
-            _ => unreachable!("pattern handle into a non-pattern node"),
-        }
-    }
-    pub fn ty(&self, h: NodeHandle<AnyTy>) -> &TypeKind {
-        match &self.node(h.id()).kind {
-            Kind::Type(k) => k,
-            _ => unreachable!("type handle into a non-type node"),
-        }
-    }
-    pub fn arm(&self, h: NodeHandle<AnyArm>) -> &ArmKind {
-        match &self.node(h.id()).kind {
-            Kind::Arm(k) => k,
-            _ => unreachable!("arm handle into a non-arm node"),
-        }
-    }
-
-    // variant accessors for closed slots
-    pub fn module_items(&self, h: NodeHandle<ModuleNode>) -> &[NodeHandle<AnyItem>] {
-        match self.item(h.into()) {
-            ItemKind::Module { items } => items,
-            _ => unreachable!("module handle into a non-module node"),
-        }
-    }
-    pub fn fn_decl(&self, h: NodeHandle<FnNode>) -> &FnData {
-        match self.item(h.into()) {
-            ItemKind::Fn(d) => d,
-            _ => unreachable!("fn handle into a non-fn node"),
-        }
-    }
-    /// `type X = A;` — checked narrowing for the alias item
-    pub fn alias(&self, h: NodeHandle<AnyItem>) -> &AliasData {
-        match self.item(h) {
-            ItemKind::Alias(d) => d,
-            _ => unreachable!("alias handle into a non-alias item"),
-        }
-    }
-    pub fn field_decl(&self, h: NodeHandle<FieldDeclNode>) -> &FieldDeclData {
-        match &self.node(h.id()).kind {
-            Kind::Member(MemberKind::FieldDecl(d)) => d,
-            _ => unreachable!("field handle into a non-field node"),
-        }
-    }
-    pub fn method_decl(&self, h: NodeHandle<MethodDeclNode>) -> &MethodDeclData {
-        match &self.node(h.id()).kind {
-            Kind::Member(MemberKind::MethodDecl(d)) => d,
-            _ => unreachable!("method handle into a non-method node"),
-        }
-    }
-    /// Param or SelfParam (fn/lambda/method parameter lists)
-    pub fn param(&self, h: NodeHandle<AnyParam>) -> &MemberKind {
-        match &self.node(h.id()).kind {
-            Kind::Member(k) => k,
-            _ => unreachable!("param handle into a non-param node"),
-        }
-    }
-    pub fn block(&self, h: NodeHandle<BlockNode>) -> &[NodeHandle<AnyStmt>] {
-        match self.expr(h.into()) {
-            ExprKind::Block { stmts, .. } => stmts,
-            _ => unreachable!("block handle into a non-block node"),
-        }
-    }
-    /// the block's tail expression (the `}`-closed last statement) —
-    /// the implicit value Rust-style; `None` when the block ends nil
-    pub fn block_tail(&self, h: NodeHandle<BlockNode>) -> Option<NodeHandle<AnyExpr>> {
-        match self.expr(h.into()) {
-            ExprKind::Block { tail, .. } => *tail,
-            _ => unreachable!("block handle into a non-block node"),
-        }
-    }
-    /// checked narrowing: block-or-expr slots (arm / lambda bodies)
-    pub fn narrow_block(&self, h: NodeHandle<AnyExpr>) -> Option<NodeHandle<BlockNode>> {
-        match self.expr(h) {
-            ExprKind::Block { .. } => Some(NodeHandle::new(h.id())),
-            _ => None,
-        }
-    }
-}
-
-/// String interner — names are indices, not `String` keys.
-/// Lives in rut-core so well-known symbols and every compiled artifact
-/// share one representation; re-exported here for the parser and the AST.
-pub use rut_core::Interner;
-
-// ---- visibility ----
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Vis {
-    /// `pub` — usable from anywhere
-    Pub,
-    /// `pub(super)` — the parent module's subtree
-    Super,
-    /// `pub(pkg)` — package-wide, no further
-    Pkg,
-    /// unannotated module items **and members** — module-private
-    /// (the default; the `pub(self)` spelling is gone)
-    Self_,
-}
-
-// ---- linkage (.d.rut surface decls) ----
-
-/// Who implements a surface declaration. The `extern` kind (a linked rut
-/// package) is gone: rut→rut use statements go through the module loader and
-/// host→rut entry points are `entry fn` — `host` is the one foreign-body
-/// case left (embedding Rust).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Linkage {
-    /// `host` — the embedding Rust (a registered `NativeModule`)
-    Host,
-    /// `builtin` — the engine itself, compiler-lowered (core only;
-    /// nothing to register, the decl is a pure signature contract).
-    /// TWO strict spellings: `prelude builtin` (ambient — binds without
-    /// any `use`) and `pub builtin` (import-gated — resolves only
-    /// through `use <pkg>::{ .. }`). A bare `builtin` diagnoses.
-    Builtin {
-        /// `true` for `prelude builtin` (ambient), `false` for
-        /// `pub builtin` (import-gated)
-        ambient: bool,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub struct PathSeg {
-    pub name: IdentId,
-    /// generic arguments — type nodes (incl. const-generic `TyConst`)
-    pub generics: Vec<NodeHandle<AnyTy>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum Kind {
-    Item(ItemKind),
-    Member(MemberKind),
-    Stmt(StmtKind),
-    Expr(ExprKind),
-    Pat(PatKind),
-    Arm(ArmKind),
-    Type(TypeKind),
-}
-
-pub struct Node {
-    pub span: Span,
-    pub kind: Kind,
-}
-
-// ---- items ----
-
-#[derive(Clone, Debug)]
-pub struct FnData {
-    pub vis: Vis,
-    pub is_async: bool,
-    /// `entry fn` — host-callable: lands in the binary's
-    /// entry table; its signature must satisfy the crossing rule,
-    /// checked at compile time
-    pub entry: bool,
-    pub name: IdentId,
-    pub generics: Vec<IdentId>,
-    pub params: Vec<NodeHandle<AnyParam>>,
-    pub ret: Option<NodeHandle<AnyTy>>,
-    /// inline admission-only bounds: `fn f<T requires A | B>(..)`
-    /// (the `where` clause is gone; bounds hang off the generic list)
-    pub bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-    pub body: NodeHandle<BlockNode>,
-}
-
-/// `pub(..)? type Name = Target;` — a transparent type alias.
-/// `Target` may be a plain type (the name binds the target's id) or a
-/// `TyUnion` (`A | B` — a bound-only union alias, never a value type).
-/// Aliases are NON-GENERIC (the row form
-/// `type Name<K, i64> = ..;` is repealed — one name, one decl).
-#[derive(Clone, Debug)]
-pub struct AliasData {
-    pub vis: Vis,
-    pub name: IdentId,
-    pub target: NodeHandle<AnyTy>,
-}
-
-#[derive(Clone, Debug)]
-pub enum ItemKind {
-    Module {
-        items: Vec<NodeHandle<AnyItem>>,
-    },
-    /// `pub? mod NAME;` — a file-module DECLARATION: the body lives in
-    /// the sibling `NAME/mod.rut` (the loader mounts it — declarations
-    /// are the graph). In implementation files the inline
-    /// `mod NAME { .. }` block form is gone — one mechanism, files
-    /// only.
-    ModDecl {
-        vis: Vis,
-        name: IdentId,
-    },
-    /// `pub? mod NAME { <declarations> }` — the INLINE module form,
-    /// declaration files only (wire v12): a `.d.rut` nests its
-    /// declarations in the grammar — structure lives in the grammar,
-    /// never in paths. Declarations only, recursively: `host fn`
-    /// signatures, `mod` edges (file-form and inline), type decls —
-    /// no bodies (a `.d.rut` is body-free by law; the parser refuses
-    /// them in Decl mode as always). The consolidated declaration
-    /// entry a bundle group rides parses to exactly this shape.
-    ModInline {
-        vis: Vis,
-        name: IdentId,
-        items: Vec<NodeHandle<AnyItem>>,
-    },
-    /// `use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — `path[0]` is
-    /// the package, the middle segments name modules, and the leaf
-    /// names are the imports. The flat forms (`use pkg::{A, B};` /
-    /// `use pkg::A;`) degenerate to `path = [pkg]`.
-    Use {
-        path: Vec<IdentId>,
-        names: Vec<IdentId>,
-    },
-    /// `type X = A;` / `type X = A | B;` — transparent alias / bound-only
-    /// union alias; aliases are non-generic (the row form is
-    /// repealed — one name, one decl)
-    Alias(AliasData),
-    ModuleLet {
-        vis: Vis,
-        name: IdentId,
-        ty: Option<NodeHandle<AnyTy>>,
-        init: NodeHandle<AnyExpr>,
-    },
-    Enum {
-        vis: Vis,
-        name: IdentId,
-        members: Vec<IdentId>,
-    },
-    Struct {
-        vis: Vis,
-        name: IdentId,
-        generics: Vec<IdentId>,
-        fields: Vec<NodeHandle<FieldDeclNode>>,
-        methods: Vec<NodeHandle<MethodDeclNode>>,
-    },
-    Class {
-        vis: Vis,
-        name: IdentId,
-        generics: Vec<IdentId>,
-        /// admission-only bounds on the class's own
-        /// generics: `class HashMap<K requires Hashable, V>` (the class
-        /// extension of the fn/method `requires` grammar; structs take
-        /// none). Gates which instantiations compile — no method calls
-        /// on the bare parameter.
-        requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
-        /// the positional one-field decl (`class JsonI64(i64);`): the
-        /// newtype spelling. The field list is the DESUGARED shape —
-        /// exactly one `inner` field of the wrapped type — and the flag
-        /// is what arms the call construction `JsonI64(64)` (the
-        /// compiler-provided constructor; a braced class never gets one,
-        /// so the seal holds).
-        newtype: bool,
-        fields: Vec<NodeHandle<FieldDeclNode>>,
-        methods: Vec<NodeHandle<MethodDeclNode>>,
-    },
-    /// `interface Name<..> { fn sig(..) -> T; .. }` — the
-    /// observed-capability declaration: signatures only, `Self` and
-    /// generics allowed. Satisfaction is STRUCTURAL — a type qualifies
-    /// by having the members (its inherent `impl`), never by
-    /// registering anything.
-    Interface {
-        vis: Vis,
-        name: IdentId,
-        generics: Vec<IdentId>,
-        methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless MethodDecls
-    },
-    /// `impl T { .. }` — the inherent impl, the type's module only.
-    /// (`impl I for T` is gone — observed capability is satisfied by
-    /// having the members, never by registering.) Bodies are braced,
-    /// methods only. Generic binders are DECLARED after `impl`
-    /// (`impl<T> Vec<T>`) — the definition site; bare params in the
-    /// head are uses that must resolve against the declared list (no
-    /// implicit inference).
-    Impl {
-        generics: Vec<IdentId>,
-        bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-        target: NodeHandle<AnyTy>,
-        methods: Vec<NodeHandle<MethodDeclNode>>,
-    },
-    /// `host fn` / `builtin fn` — .d.rut only. `host`:
-    /// embedding-Rust body, concrete signature over the crossing set;
-    /// `builtin`: engine-lowered (generics allowed —
-    /// nothing crosses a boundary). `is_async`: the host future lane —
-    /// calling one mints a cold engine-woven Future frame whose rows
-    /// (`<name>__start`/`__yield`/`__take`/`__cancel`) the embedder
-    /// registers with `register_async!`.
-    SurfaceFn {
-        vis: Vis,
-        linkage: Linkage,
-        is_async: bool,
-        name: IdentId,
-        generics: Vec<IdentId>,
-        params: Vec<NodeHandle<AnyParam>>,
-        ret: Option<NodeHandle<AnyTy>>,
-    },
-    /// `host struct` — .d.rut only: a flat record whose every field is
-    /// a crossing type. Host fns take/return it; the host constructs and
-    /// reads it through the field table (the shape is the whole surface).
-    SurfaceStruct {
-        vis: Vis,
-        name: IdentId,
-        fields: Vec<NodeHandle<FieldDeclNode>>,
-    },
-    /// `builtin Name<..>` — .d.rut only, core only: an engine builtin
-    /// type's member contract (`Option`, `Result`, `Opaque`, `Array`).
-    /// (The names are historical: the surface spells the erasure
-    /// primitive `opaque` since builtin-surface phase 2.)
-    /// Members are compiler-lowered — the decl exists
-    /// so users and the LSP see every signature; no impl ever registers.
-    BuiltinTy {
-        vis: Vis,
-        /// the strict spelling the decl used: `true` — `prelude builtin`
-        /// (ambient), `false` — `pub builtin` (import-gated)
-        ambient: bool,
-        name: IdentId,
-        generics: Vec<IdentId>,
-        members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
-    },
-    /// `builtin trait Name<..>` — REMOVED (v20, the select + type-surface
-    /// plan's lanes 3+4): the engine-contract row kind is gone.
-    /// `Future`/`RunContext` are closed `builtin class` rows now;
-    /// `Iterable`/`Disposal` are the bracket markers
-    /// (`[iterable] fn` / `[disposal] fn` on inherent impl members).
-    /// The parser diagnoses the spelling and recovers.
-    /// `builtin primitive <name> { .. }` — .d.rut only, core only: the
-    /// surface statement for a boot primitive (`str`/`bytes`/`opaque`).
-    /// NOT a class — no construction literal, no fields; the members are
-    /// the compiler-lowered contracts users and the LSP see (statics
-    /// like `opaque(..)` / `opaque.downcast<T>`). The Rust-side
-    /// representation is the boot table's, unchanged.
-    BuiltinPrimitive {
-        /// the strict spelling the decl used: `true` — `prelude builtin`
-        /// (ambient), `false` — `pub builtin` (import-gated)
-        ambient: bool,
-        name: IdentId,
-        members: Vec<NodeHandle<MethodDeclNode>>, // bodiless
-    },
-    /// `builtin impl i32 { fn wrapping_add(self, y: i32) -> i32; .. }` —
-    /// .d.rut only, core only: numeric methods ON a
-    /// primitive type, lowered inline at the call site
-    /// (`x.wrapping_add(y)`). No impl ever registers — the decl is the
-    /// signature contract the lockstep test keeps true to rut-lir's
-    /// lowering table; the methods are ambient on the primitive.
-    BuiltinImpl {
-        vis: Vis,
-        /// the receiver primitive's name (`i32` — a `sym::I32` well-known)
-        prim: IdentId,
-        methods: Vec<NodeHandle<MethodDeclNode>>, // bodiless, `self` receivers
-    },
-    Fn(FnData),
-}
-
-// ---- members ----
-
-/// struct/class field: `pub(..)`? `static`? name: ty (= init)?
-/// `vis: None` = unannotated — module-private, the default
-#[derive(Clone, Debug)]
-pub struct FieldDeclData {
-    pub vis: Option<Vis>,
-    pub is_static: bool,
-    pub name: IdentId,
-    pub ty: NodeHandle<AnyTy>,
-    pub init: Option<NodeHandle<AnyExpr>>,
-}
-
-/// `pub(..)`? `[marker]`? `async`? fn name<..>(self, ..) -> T { .. }
-/// `vis: None` = unannotated — module-private, the default
-#[derive(Clone, Debug)]
-pub struct MethodDeclData {
-    pub vis: Option<Vis>,
-    pub is_async: bool,
-    /// the designated surface the member fills, if any (v20): a
-    /// bracket marker `[disposal]` / `[iterable]` / `[constructor]` — a
-    /// CONTEXTUAL word in a closed set, checked at collect (one per
-    /// surface per class, inherent members only, signature must match).
-    /// The name of the marked fn itself is FREE: designation is by
-    /// bracket, never by spelling.
-    pub marker: Option<IdentId>,
-    pub name: IdentId,
-    pub generics: Vec<IdentId>,
-    pub params: Vec<NodeHandle<AnyParam>>, // Param / SelfParam
-    pub ret: Option<NodeHandle<AnyTy>>,
-    /// inline admission-only bounds on the method's own
-    /// generic parameters (`fn m<T requires A>(self, x: T)`)
-    pub bounds: Vec<(IdentId, NodeHandle<AnyTy>)>,
-    pub body: Option<NodeHandle<BlockNode>>, // None in interfaces / surface classes
-}
-
-/// `mut`? name: ty — or a type-less lambda param `(x)`
-#[derive(Clone, Debug)]
-pub struct ParamData {
-    pub is_mut: bool,
-    pub name: IdentId,
-    pub ty: Option<NodeHandle<AnyTy>>,
-}
-
-/// `self` / `mut self`
-#[derive(Clone, Debug)]
-pub struct SelfParamData {
-    pub is_mut: bool,
-}
-
-#[derive(Clone, Debug)]
-pub enum MemberKind {
-    FieldDecl(FieldDeclData),
-    MethodDecl(MethodDeclData),
-    Param(ParamData),
-    SelfParam(SelfParamData),
-}
-
-// ---- statements ----
-
-/// `else if` chains re-enter `If`; plain `else` is a block
-#[derive(Clone, Copy, Debug)]
-pub enum ElseBranch {
-    If(NodeHandle<IfNode>),
-    Block(NodeHandle<BlockNode>),
-}
-
-#[derive(Clone, Debug)]
-pub enum StmtKind {
-    LetStmt {
-        is_mut: bool,
-        name: IdentId,
-        destructure: Option<Vec<IdentId>>,
-        ty: Option<NodeHandle<AnyTy>>,
-        init: NodeHandle<AnyExpr>,
-    },
-    If {
-        cond: NodeHandle<AnyExpr>,
-        then: NodeHandle<BlockNode>,
-        els: Option<ElseBranch>,
-    },
-    While {
-        cond: NodeHandle<AnyExpr>,
-        body: NodeHandle<BlockNode>,
-    },
-    ForOf {
-        var: IdentId,
-        is_mut: bool,
-        iter: NodeHandle<AnyExpr>,
-        body: NodeHandle<BlockNode>,
-    },
-    ForC {
-        var: IdentId,
-        is_mut: bool,
-        init: NodeHandle<AnyExpr>,
-        cond: NodeHandle<AnyExpr>,
-        update: NodeHandle<AnyExpr>,
-        body: NodeHandle<BlockNode>,
-    },
-    Return {
-        value: Option<NodeHandle<AnyExpr>>,
-    },
-    Break,
-    Continue,
-    WhenStmt {
-        scrut: NodeHandle<AnyExpr>,
-        arms: Vec<NodeHandle<AnyArm>>,
-    },
-    ExprStmt(NodeHandle<AnyExpr>),
-}
-
-// ---- arms ----
-
-#[derive(Clone, Debug)]
-pub enum ArmKind {
-    WhenArm {
-        pats: Vec<NodeHandle<AnyPat>>,
-        body: NodeHandle<AnyExpr>,
-    },
-}
-
-// ---- patterns (constructor/binding forms per corpus) ----
-
-#[derive(Clone, Debug)]
-pub enum PatKind {
-    /// literal pattern (int/float/bool/char/string) — expr node, literal only
-    PatLit(NodeHandle<AnyExpr>),
-    /// enum-member path: `Color.Red`
-    PatPath {
-        segs: Vec<PathSeg>,
-    },
-    /// constructor pattern: `Ok(cfg)`, `Option<T>.Some(x)`, `Some(_)`,
-    /// payloadless `Option<T>.None`; args are binding names (`None` = `_`)
-    PatCtor {
-        segs: Vec<PathSeg>,
-        args: Vec<Option<IdentId>>,
-    },
-    PatWild,
-    PatElse,
-}
-
-// ---- types ----
-
-/// `TypeKind` (not `TyKind`) — rut-core's type-table kind owns that name
-#[derive(Clone, Debug)]
-pub enum TypeKind {
-    /// path type — a trait name in type position is the object type;
-    /// the bare name spells it
-    TyPath { segs: Vec<PathSeg> },
-    /// fn type: `fn(Store, P) -> R` — params are bare types
-    TyFn {
-        params: Vec<NodeHandle<AnyTy>>,
-        ret: NodeHandle<AnyTy>,
-    },
-    /// nullable type `?T` — the prefix `?` binds
-    /// the following type term: `[?T]` is an array of nullables,
-    /// `?[T]` a nullable array, `??T` chains. The postfix `T?` spelling
-    /// is removed (diagnosed at the parse).
-    TyOpt { inner: NodeHandle<AnyTy> },
-    /// array type `[T]` — the fixed-length heap array;
-    /// grammar-spelled, resolved directly (the `Array` name is gone)
-    TyArray { elem: NodeHandle<AnyTy> },
-    /// tuple type `(A, B, ..)` — a record with numeric fields
-    TyTuple { elems: Vec<NodeHandle<AnyTy>> },
-    /// const-generic argument (the `N` in a const-generic param) — an expression
-    TyConst(NodeHandle<AnyExpr>),
-    /// `A | B` — a bound-only union: legal only in `requires`
-    /// bounds and union aliases; a value position is a compile error
-    TyUnion { elems: Vec<NodeHandle<AnyTy>> },
-}
-
-// ---- expressions ----
-
-#[derive(Clone, Debug)]
-pub enum ExprKind {
-    /// block expression — fn bodies, loop bodies, block arms/lambda bodies.
-    /// Rust-style tail value: the last statement WITHOUT `;` (an
-    /// expression statement closed by the block's `}`) is the block's
-    /// value; a trailing `if` statement with an `else` reads as the tail
-    /// too (statement-if in tail position). `None` ⇒ the block's value
-    /// is `nil`.
-    Block {
-        stmts: Vec<NodeHandle<AnyStmt>>,
-        tail: Option<NodeHandle<AnyExpr>>,
-    },
-    Lit(Lit),
-    /// dotted path, possibly with generic args on any segment:
-    /// `primes`, `Color.Red`, `Vec.from`, `MyMap<K, V>.new`, `Self`
-    Path {
-        segs: Vec<PathSeg>,
-    },
-    Call {
-        callee: NodeHandle<AnyExpr>,
-        args: Vec<NodeHandle<AnyExpr>>,
-    },
-    Method {
-        recv: NodeHandle<AnyExpr>,
-        name: IdentId,
-        generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
-    },
-    Field {
-        recv: NodeHandle<AnyExpr>,
-        name: IdentId,
-    },
-    Index {
-        recv: NodeHandle<AnyExpr>,
-        idx: NodeHandle<AnyExpr>,
-    },
-    Unary {
-        op: UnOp,
-        expr: NodeHandle<AnyExpr>,
-    },
-    Binary {
-        op: BinOp,
-        lhs: NodeHandle<AnyExpr>,
-        rhs: NodeHandle<AnyExpr>,
-    },
-    Assign {
-        op: Option<BinOp>,
-        target: NodeHandle<AnyExpr>,
-        value: NodeHandle<AnyExpr>,
-    },
-    Lambda {
-        params: Vec<NodeHandle<AnyParam>>,
-        ret: Option<NodeHandle<AnyTy>>,
-        body: NodeHandle<AnyExpr>,
-    },
-    Try {
-        expr: NodeHandle<AnyExpr>,
-    }, // postfix `?`
-    FStr {
-        parts: Vec<FPartAst>,
-    },
-    /// struct / `Self { .. }` literal — classes have no instance literal
-    Struct {
-        ty: NodeHandle<AnyTy>,
-        fields: Vec<(IdentId, NodeHandle<AnyExpr>)>,
-    },
-    /// tuple expression `(a, b, ..)` — a record with numeric fields
-    /// (`()` is rejected — the empty value is `nil`)
-    Tuple {
-        elems: Vec<NodeHandle<AnyExpr>>,
-    },
-    /// `[e1, .., en] : [T]`
-    ArrayLit {
-        elems: Vec<NodeHandle<AnyExpr>>,
-    },
-    /// `[v; n] : [T]` — the repeat construction: `n` slots
-    /// filled with the VALUE `v`. There is no type-in-expression form — a
-    /// type is not a value.
-    ArrayRepeat {
-        value: NodeHandle<AnyExpr>,
-        count: NodeHandle<AnyExpr>,
-    },
-    WhenExpr {
-        scrut: NodeHandle<AnyExpr>,
-        arms: Vec<NodeHandle<AnyArm>>,
-    },
-    /// `if (cond) { then } else { els }` as an EXPRESSION — the
-    /// statement-if's own field set (`else if` chains hold if STATEMENT
-    /// nodes, `ElseBranch::If`, exactly as the statement form does).
-    /// `if` atoms parse beside `when`: the `(` must follow, the
-    /// statement-leading `if` is claimed by the statement grammar first.
-    If {
-        cond: NodeHandle<AnyExpr>,
-        then: NodeHandle<BlockNode>,
-        els: Option<ElseBranch>,
-    },
-    Await {
-        expr: NodeHandle<AnyExpr>,
-    },
-    /// `async { .. }` — the async block, the async primitive (v20): ONE
-    /// expression form, keyword before a block. Evaluating it MINTS the
-    /// frame (the body woven by the same machinery an `async fn` body
-    /// uses); the frame runs when driven (awaited or launched). Its TYPE
-    /// is `Future<T>` with `T` inferred from the block's `return`
-    /// statements (fn-body rules); the `return` is the FUTURE's answer,
-    /// not any enclosing fn's.
-    AsyncBlock {
-        body: NodeHandle<BlockNode>,
-    },
-    /// `expr is Type` — relational precedence, non-associative
-    Is {
-        expr: NodeHandle<AnyExpr>,
-        ty: NodeHandle<AnyTy>,
-    },
-    /// `expr as T` — the numeric cast, truncating like C/Rust; binds
-    /// tighter than `*`, left-associative, RHS a naming position
-    /// restricted to the numeric primitives
-    Cast {
-        expr: NodeHandle<AnyExpr>,
-        ty: NodeHandle<AnyTy>,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub enum FPartAst {
-    Lit(String),
-    Hole(NodeHandle<AnyExpr>),
-}
-
-#[derive(Clone, Debug)]
-pub enum Lit {
-    Int(u64, Option<rut_lexer::token::IntSuffix>),
-    Float(u64 /*f64 bits*/, Option<rut_lexer::token::FloatSuffix>),
-    Str(String),
-    RawStr(String),
-    Bool(bool),
-    /// `nil` — the null pointer literal
-    Nil,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnOp {
-    Neg,
-    Not,
-    BitNot,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Eq,
-    Ne,
-    Lt,
-    Gt,
-    Le,
-    Ge,
-    And,
-    Or, // logical short-circuit
-    BitAnd,
-    BitOr,
-    BitXor,
-    Shl,
-    Shr,
+arenas! {
+    // items
+    modules: crate::item::ModuleNode,
+    mod_decls: crate::item::ModDeclNode,
+    mod_inlines: crate::item::ModInlineNode,
+    uses: crate::item::UseNode,
+    aliases: crate::item::AliasNode,
+    module_lets: crate::item::ModuleLetNode,
+    enums: crate::item::EnumNode,
+    structs: crate::item::StructNode,
+    classes: crate::item::ClassNode,
+    interfaces: crate::item::InterfaceNode,
+    impls: crate::item::ImplNode,
+    fns: crate::item::FnNode,
+    surface_fns: crate::item::SurfaceFnNode,
+    surface_structs: crate::item::SurfaceStructNode,
+    builtin_tys: crate::item::BuiltinTyNode,
+    builtin_primitives: crate::item::BuiltinPrimitiveNode,
+    builtin_impls: crate::item::BuiltinImplNode,
+    // members
+    field_decls: crate::item::FieldDeclNode,
+    method_decls: crate::item::MethodDeclNode,
+    enum_members: crate::item::EnumMemberNode,
+    params: crate::item::ParamNode,
+    self_params: crate::item::SelfParamNode,
+    // statements
+    let_stmts: crate::stmt::LetStmtNode,
+    if_stmts: crate::stmt::IfNode,
+    whiles: crate::stmt::WhileNode,
+    for_ofs: crate::stmt::ForOfNode,
+    for_cs: crate::stmt::ForCNode,
+    returns: crate::stmt::ReturnNode,
+    breaks: crate::stmt::BreakNode,
+    continues: crate::stmt::ContinueNode,
+    when_stmts: crate::stmt::WhenStmtNode,
+    // expressions
+    blocks: crate::expr::BlockNode,
+    lits: crate::expr::LitNode,
+    paths: crate::expr::PathNode,
+    calls: crate::expr::CallNode,
+    methods: crate::expr::MethodNode,
+    fields: crate::expr::FieldNode,
+    indexes: crate::expr::IndexNode,
+    unaries: crate::expr::UnaryNode,
+    binaries: crate::expr::BinaryNode,
+    assigns: crate::expr::AssignNode,
+    lambdas: crate::expr::LambdaNode,
+    tries: crate::expr::TryNode,
+    fstrs: crate::expr::FStrNode,
+    struct_lits: crate::expr::StructLitNode,
+    tuples: crate::expr::TupleNode,
+    array_lits: crate::expr::ArrayLitNode,
+    array_repeats: crate::expr::ArrayRepeatNode,
+    when_exprs: crate::expr::WhenExprNode,
+    if_exprs: crate::expr::IfExprNode,
+    awaits: crate::expr::AwaitNode,
+    async_blocks: crate::expr::AsyncBlockNode,
+    is_exprs: crate::expr::IsNode,
+    casts: crate::expr::CastNode,
+    // types
+    ty_paths: crate::ty::TyPathNode,
+    ty_fns: crate::ty::TyFnNode,
+    ty_opts: crate::ty::TyOptNode,
+    ty_arrays: crate::ty::TyArrayNode,
+    ty_tuples: crate::ty::TyTupleNode,
+    ty_consts: crate::ty::TyConstNode,
+    ty_unions: crate::ty::TyUnionNode,
+    // patterns
+    pat_lits: crate::pat::PatLitNode,
+    pat_paths: crate::pat::PatPathNode,
+    pat_ctors: crate::pat::PatCtorNode,
+    pat_wilds: crate::pat::PatWildNode,
+    pat_elses: crate::pat::PatElseNode,
+    // arms + recovery
+    when_arms: crate::expr::WhenArmNode,
+    error_nodes: crate::error::ErrorNode,
 }

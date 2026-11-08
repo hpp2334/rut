@@ -4,7 +4,7 @@
 //! runs over what this pass collects. Errors are Diags; a module with any
 //! diag stops before emit.
 
-use rut_ast::ast::*;
+use rut_ast::*;
 use rut_core::binary::{ConstVal, FuncCode, IfaceDesc};
 use rut_core::types::*;
 use rut_core::{sym, Interner};
@@ -24,9 +24,9 @@ pub(crate) use impls::MemberSrc;
 // ---- row aliases: the recurring ledger shapes, named once ----
 
 /// A let-decl ledger row: `(name, declared ty, init, visibility)`.
-pub type LetRow = (IdentId, Option<NodeHandle<AnyTy>>, NodeHandle<AnyExpr>, Vis);
+pub type LetRow = (IdentId, Option<TyRef>, ExprRef, Vis);
 /// A data-decl field row: `(name, ty, default expr, visibility)`.
-pub type FieldRow = (IdentId, TypeId, Option<NodeHandle<AnyExpr>>, Option<Vis>);
+pub type FieldRow = (IdentId, TypeId, Option<ExprRef>, Option<Vis>);
 /// A lambda's resolved signature: `(generic params, ret, named params)`.
 pub type LambdaSig = (Vec<TypeId>, TypeId, Vec<(IdentId, TypeId)>);
 /// An extern enum row: the minted ty plus `(variant name, discriminant)`.
@@ -58,10 +58,10 @@ pub struct EnumDecl {
     pub members: Vec<IdentId>,
     /// inherent methods (`impl Color { .. }`): statics and self
     /// methods alike, exactly the struct decl's slot
-    pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
-    /// the `enum` item's node — the declaration's module is read off
+    pub methods: Vec<(IdentId, Handle<MethodDeclNode>)>,
+    /// the `enum` item's slot — the declaration's module is read off
     /// its span (file modules, phase 3)
-    pub node: NodeId,
+    pub node: ItemRef,
     /// the declared visibility — the crossing predicate's input
     pub vis: Vis,
 }
@@ -76,19 +76,19 @@ pub enum DataKind {
 pub struct DataDecl {
     pub kind: DataKind,
     pub ty: TypeId,
-    /// the declaration's AST node — re-read to instantiate generics
-    pub node: NodeHandle<AnyItem>,
+    /// the declaration's AST slot — re-read to instantiate generics
+    pub node: ItemRef,
     /// (name, ty, initializer, member vis — None = the module-private
     /// default; checked when modules load, M2) in decl order
     pub fields: Vec<FieldRow>,
     /// inherent methods (name → MethodDecl node)
-    pub methods: Vec<(IdentId, NodeHandle<MethodDeclNode>)>,
+    pub methods: Vec<(IdentId, Handle<MethodDeclNode>)>,
     pub generics: Vec<IdentId>,
     /// The class's admission bounds
     /// (`class HashMap<K requires i8 | … | bytes, V>`, the nmapset key
     /// union); checked at every
     /// `mk_data_inst`. Empty for structs and for classes without bounds.
-    pub requires: Vec<(IdentId, NodeHandle<AnyTy>)>,
+    pub requires: Vec<(IdentId, TyRef)>,
     /// the positional one-field decl (`class JsonI64(i64);`): the flag
     /// that arms the call construction `JsonI64(64)` — the spelled
     /// constructor. A braced class never gets one (the seal holds).
@@ -100,7 +100,7 @@ pub struct DataDecl {
 #[derive(Clone, Debug)]
 pub struct IfaceDeclInfo {
     pub id: u32,
-    pub node: NodeId,
+    pub node: ItemRef,
     /// generic parameters (`trait Foo<T>`) — empty for non-generic ones
     pub generics: Vec<IdentId>,
     /// the declared visibility — the crossing predicate's input
@@ -125,9 +125,9 @@ pub enum AliasTarget {
 #[derive(Clone, Debug)]
 pub struct AliasDecl {
     pub name: IdentId,
-    pub node: NodeId,
+    pub node: ItemRef,
     /// the target as written
-    pub target: NodeHandle<AnyTy>,
+    pub target: TyRef,
     pub resolved: Option<AliasTarget>,
     /// the declared visibility — the crossing predicate's input
     pub vis: Vis,
@@ -216,16 +216,16 @@ pub enum FnKey {
     },
     /// one lambda AST node (its enclosing fn is non-generic in this build,
     /// so one instantiation per node)
-    Lambda(NodeId),
+    Lambda(Handle<LambdaNode>),
     /// one `async { }` block AST node (v20): the mint plan (captures +
     /// answer type) rides `ctx.async_block_sigs`; unit-local like a
     /// lambda — no ledger row
-    AsyncBlock(NodeId),
+    AsyncBlock(Handle<AsyncBlockNode>),
     /// the emit closure of a desugared `for (v of xs)` over the
     /// `iterate` protocol: `body` with `v: E` bound;
     /// `break` → `return false`, `continue` → `return true`
     ForOfEmit {
-        body: NodeId,
+        body: Handle<BlockNode>,
         var: IdentId,
     },
     /// An engine-backed thunk: a bodyless FuncCode whose
@@ -254,7 +254,7 @@ pub struct AsyncLayout {
 /// first weave's inference pass.
 #[derive(Clone, Debug)]
 pub struct AsyncBlockSig {
-    pub body: NodeHandle<BlockNode>,
+    pub body: Handle<BlockNode>,
     pub caps: Vec<(IdentId, TypeId)>,
     pub ret: TypeId,
     pub infer: bool,
@@ -438,7 +438,7 @@ pub struct Ctx<'a> {
     // name → index maps
     pub fn_index: Vec<IdentId>,
     /// free fn decl nodes: (name, Fn node)
-    pub fn_nodes: Vec<(IdentId, NodeHandle<FnNode>)>,
+    pub fn_nodes: Vec<(IdentId, Handle<FnNode>)>,
     /// lambda capture lists, filled when the lambda is created:
     /// the instantiation's fid → one `Capture` per capture. `cell:
     /// Some` marks a promoted binding — the closure shares the
@@ -783,9 +783,10 @@ pub(crate) enum BoundMember {
 
 /// Display text of a bound/target type node — `A`, `A | B`, `Array<T>`
 /// (diagnostics name the bound).
-pub(crate) fn bound_ty_str(ctx: &Ctx, node: NodeHandle<AnyTy>) -> String {
-    match ctx.ast.ty(node) {
-        TypeKind::TyPath { segs } => {
+pub(crate) fn bound_ty_str(ctx: &Ctx, node: TyRef) -> String {
+    match node {
+        TyRef::Path(h) => {
+            let segs = &h.get(ctx.ast).segs;
             let mut s = segs
                 .iter()
                 .map(|sg| ctx.name(sg.name).to_string())
@@ -804,7 +805,9 @@ pub(crate) fn bound_ty_str(ctx: &Ctx, node: NodeHandle<AnyTy>) -> String {
             }
             s
         }
-        TypeKind::TyUnion { elems } => elems
+        TyRef::Union(h) => h
+            .get(ctx.ast)
+            .elems
             .iter()
             .map(|&e| bound_ty_str(ctx, e))
             .collect::<Vec<_>>()
@@ -827,7 +830,7 @@ impl<'a> Ctx<'a> {
     pub fn new_scoped(ast: &'a Ast, scope: rut_core::ScopeId) -> Ctx<'a> {
         // the interner clones the AST's — every source id resolves
         // identically; synthesized names intern here only.
-        let mut interner = ast.interner.clone();
+        let mut interner = ast.interner().clone();
         let pub_core = rut_core::binary::pub_core_map(&mut interner);
         Ctx {
             ast,
@@ -940,10 +943,11 @@ impl<'a> Ctx<'a> {
 
     // ---- file-module resolution helpers (phase 3) ----
 
-    /// The file module a node belongs to: its span's byte start falls
-    /// in exactly one mounted file's range (flat inputs answer `""`).
-    pub fn mod_of(&self, node: NodeId) -> &str {
-        self.mods.file_of(self.ast.span(node).lo)
+    /// The file module a declaration belongs to: its span's byte start
+    /// falls in exactly one mounted file's range (flat inputs answer
+    /// `""`).
+    pub fn mod_of(&self, sp: Span) -> &str {
+        self.mods.file_of(sp.lo)
     }
 
     /// The visibility predicate (the flat `is_pub = vis == Vis::Pub`
@@ -1034,7 +1038,7 @@ impl<'a> Ctx<'a> {
     /// every fn answers.
     pub(crate) fn fn_is_here(&self, name: IdentId) -> bool {
         match self.fn_nodes.iter().find(|(n, _)| *n == name) {
-            Some((_, node)) => self.mod_of(node.id()) == self.cur_mod,
+            Some((_, node)) => self.mod_of(node.span(self.ast)) == self.cur_mod,
             None => false,
         }
     }
@@ -1045,7 +1049,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn enum_in(&self, m: &str, name: IdentId) -> Option<EnumDecl> {
         self.enums
             .iter()
-            .find(|(n, d)| *n == name && self.mod_of(d.node) == m)
+            .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
             .map(|(_, d)| d.clone())
     }
 
@@ -1133,7 +1137,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn data_in(&self, m: &str, name: IdentId) -> Option<DataDecl> {
         self.datas
             .iter()
-            .find(|(n, d)| *n == name && self.mod_of(d.node.id()) == m)
+            .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
             .map(|(_, d)| d.clone())
     }
 
@@ -1141,7 +1145,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn iface_in(&self, m: &str, name: IdentId) -> Option<IfaceDeclInfo> {
         self.iface_decls
             .iter()
-            .find(|(n, d)| *n == name && self.mod_of(d.node) == m)
+            .find(|(n, d)| *n == name && self.mod_of(d.node.span(self.ast)) == m)
             .map(|(_, d)| d.clone())
     }
 
@@ -1149,15 +1153,15 @@ impl<'a> Ctx<'a> {
     pub(crate) fn alias_in(&self, m: &str, name: IdentId) -> Option<AliasDecl> {
         self.aliases
             .iter()
-            .find(|a| a.name == name && self.mod_of(a.node) == m)
+            .find(|a| a.name == name && self.mod_of(a.node.span(self.ast)) == m)
             .cloned()
     }
 
     /// A free fn declared in module `m` — its AST node.
-    pub(crate) fn fn_in(&self, m: &str, name: IdentId) -> Option<NodeHandle<FnNode>> {
+    pub(crate) fn fn_in(&self, m: &str, name: IdentId) -> Option<Handle<FnNode>> {
         self.fn_nodes
             .iter()
-            .find(|(n, node)| *n == name && self.mod_of(node.id()) == m)
+            .find(|(n, node)| *n == name && self.mod_of(node.span(self.ast)) == m)
             .map(|(_, node)| *node)
     }
 
@@ -1165,7 +1169,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn let_in(&self, m: &str, name: IdentId) -> Option<LetRow> {
         self.lets
             .iter()
-            .find(|(n, _, init, _)| *n == name && self.mod_of(init.id()) == m)
+            .find(|(n, _, init, _)| *n == name && self.mod_of(init.span(self.ast)) == m)
             .cloned()
     }
 
@@ -1175,22 +1179,22 @@ impl<'a> Ctx<'a> {
     /// unknown-name diagnostic).
     pub(crate) fn decl_home(&self, name: IdentId) -> Option<String> {
         if let Some((_, d)) = self.datas.iter().find(|(n, _)| *n == name) {
-            return Some(self.mod_of(d.node.id()).to_string());
+            return Some(self.mod_of(d.node.span(self.ast)).to_string());
         }
         if let Some((_, d)) = self.enums.iter().find(|(n, _)| *n == name) {
-            return Some(self.mod_of(d.node).to_string());
+            return Some(self.mod_of(d.node.span(self.ast)).to_string());
         }
         if let Some((_, d)) = self.iface_decls.iter().find(|(n, _)| *n == name) {
-            return Some(self.mod_of(d.node).to_string());
+            return Some(self.mod_of(d.node.span(self.ast)).to_string());
         }
         if let Some(a) = self.aliases.iter().find(|a| a.name == name) {
-            return Some(self.mod_of(a.node).to_string());
+            return Some(self.mod_of(a.node.span(self.ast)).to_string());
         }
         if let Some((_, node)) = self.fn_nodes.iter().find(|(n, _)| *n == name) {
-            return Some(self.mod_of(node.id()).to_string());
+            return Some(self.mod_of(node.span(self.ast)).to_string());
         }
         if let Some((_, _, init, _)) = self.lets.iter().find(|(n, ..)| *n == name) {
-            return Some(self.mod_of(init.id()).to_string());
+            return Some(self.mod_of(init.span(self.ast)).to_string());
         }
         None
     }
@@ -1198,16 +1202,16 @@ impl<'a> Ctx<'a> {
     /// cross-module duplicate message's lookup.
     pub(crate) fn type_home(&self, name: IdentId) -> Option<String> {
         if let Some((_, d)) = self.datas.iter().find(|(n, _)| *n == name) {
-            return Some(self.mod_of(d.node.id()).to_string());
+            return Some(self.mod_of(d.node.span(self.ast)).to_string());
         }
         if let Some((_, d)) = self.enums.iter().find(|(n, _)| *n == name) {
-            return Some(self.mod_of(d.node).to_string());
+            return Some(self.mod_of(d.node.span(self.ast)).to_string());
         }
         if let Some((_, d)) = self.iface_decls.iter().find(|(n, _)| *n == name) {
-            return Some(self.mod_of(d.node).to_string());
+            return Some(self.mod_of(d.node.span(self.ast)).to_string());
         }
         if let Some(a) = self.aliases.iter().find(|a| a.name == name) {
-            return Some(self.mod_of(a.node).to_string());
+            return Some(self.mod_of(a.node.span(self.ast)).to_string());
         }
         None
     }
@@ -1256,11 +1260,11 @@ impl<'a> Ctx<'a> {
     pub(crate) fn member_vis_err(
         &self,
         owner: IdentId,
-        decl_node: NodeId,
+        decl_sp: Span,
         name: IdentId,
         mvis: Option<Vis>,
     ) -> Option<String> {
-        let def_mod = self.mod_of(decl_node);
+        let def_mod = self.mod_of(decl_sp);
         let vis = mvis.unwrap_or(Vis::Self_);
         let from = self.cur_mod.clone();
         if self.vis_crosses(&from, def_mod, vis) {
@@ -1299,18 +1303,22 @@ impl<'a> Ctx<'a> {
         // the field's dial: the decl's own member list — the generic
         // template keeps no resolved field table (its instantiations
         // re-read the decl), so the AST is the one source of the vis
-        let members = match self.ast.item(d.node) {
-            ItemKind::Struct { fields, .. } | ItemKind::Class { fields, .. } => fields.clone(),
+        let members: Vec<FieldRef> = match d.node {
+            ItemRef::Struct(h) => h.get(self.ast).fields.clone(),
+            ItemRef::Class(h) => h.get(self.ast).fields.clone(),
             _ => Vec::new(),
         };
         let fvis = members
             .iter()
             .find_map(|&f| {
-                let fd = self.ast.field_decl(f);
+                let FieldRef::Field(fh) = f else {
+                    return None;
+                };
+                let fd = fh.get(self.ast);
                 (fd.name == name).then_some(fd.vis)
             })
             .flatten();
-        self.member_vis_err(dname, d.node.id(), name, fvis)
+        self.member_vis_err(dname, d.node.span(self.ast), name, fvis)
     }
 
     /// Use another module's type descriptors so `(scope, local)` ids
@@ -1448,12 +1456,12 @@ impl<'a> Ctx<'a> {
                 continue;
             };
             // the entry's signature resolves in its own module
-            self.cur_mod = self.mod_of(node.id()).to_string();
-            let fd = self.ast.fn_decl(node).clone();
+            self.cur_mod = self.mod_of(node.span(self.ast)).to_string();
+            let fd = node.get(self.ast).clone();
             let fname = self.name(name).to_string();
             if !fd.generics.is_empty() {
                 self.err(
-                    self.ast.span(node.id()),
+                    node.span(self.ast),
                     format!(
                         "`entry fn {fname}` cannot be generic — the published signature is one concrete shape"
                     ),
@@ -1461,17 +1469,19 @@ impl<'a> Ctx<'a> {
                 continue;
             }
             for p in &fd.params {
-                let MemberKind::Param(pd) = self.ast.param(*p) else {
+                let ParamRef::Param(pd) = *p else {
                     continue;
                 };
-                let Some(t) = pd.ty else { continue };
+                let Some(t) = pd.get(self.ast).ty else {
+                    continue;
+                };
                 let ty = self.resolve_type(t, &[]);
                 if !self.crosses_boundary(ty) {
                     self.err(
-                        self.ast.span(p.id()),
+                        p.span(self.ast),
                         format!(
                             "`entry fn {fname}`: parameter `{}` is `{}` — only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary",
-                            self.name(pd.name),
+                            self.name(pd.get(self.ast).name),
                             self.type_name(ty)
                         ),
                     );
@@ -1481,7 +1491,7 @@ impl<'a> Ctx<'a> {
                 let ty = self.resolve_type(r, &[]);
                 if !self.crosses_boundary(ty) {
                     self.err(
-                        self.ast.span(r.id()),
+                        r.span(self.ast),
                         format!(
                             "`entry fn {fname}` returns `{}` — only primitives, `str`, `nil`, `bytes`, `?T` over those, anonymous tuples of crossable types, and `opaque` cross the host boundary",
                             self.type_name(ty)
@@ -1494,6 +1504,28 @@ impl<'a> Ctx<'a> {
 
     pub fn name(&self, id: IdentId) -> &str {
         self.interner.name(id)
+    }
+
+    // ---- the param lane's v1-parity accessors ----
+    // v2 params are SLOTS (`ParamRef`); the v1 `MemberKind::Param(..)` /
+    // `MemberKind::SelfParam(..)` matches restated as two questions.
+
+    /// A param slot's annotation node — `Some` only for a named
+    /// `Param` that spells a type.
+    pub(crate) fn param_ty(&self, p: ParamRef) -> Option<TyRef> {
+        match p {
+            ParamRef::Param(h) => h.get(self.ast).ty,
+            _ => None,
+        }
+    }
+
+    /// A param slot's `self`-ness — `Some(is_mut)` for a
+    /// `self`/`mut self` receiver, `None` for anything else.
+    pub(crate) fn self_param_mut(&self, p: ParamRef) -> Option<bool> {
+        match p {
+            ParamRef::SelfParam(h) => Some(h.get(self.ast).is_mut),
+            _ => None,
+        }
     }
 
     /// A type's display name — synthesized instantiation names resolve
@@ -1885,7 +1917,7 @@ impl<'a> Ctx<'a> {
         };
         match self.aliases[idx].resolved {
             Some(AliasTarget::Pending) => {
-                let sp = self.ast.span(self.aliases[idx].node);
+                let sp = self.aliases[idx].node.span(self.ast);
                 let n = self.aliases[idx].name;
                 self.err(
                     sp,
@@ -1902,11 +1934,11 @@ impl<'a> Ctx<'a> {
         }
         self.aliases[idx].resolved = Some(AliasTarget::Pending);
         let target = self.aliases[idx].target;
-        match self.ast.ty(target) {
-            TypeKind::TyUnion { elems } => {
+        match target {
+            TyRef::Union(h) => {
                 // a union alias: every member must resolve (as a type or
                 // trait); the union itself never becomes a value type
-                for e in elems.clone() {
+                for e in h.get(self.ast).elems.clone() {
                     self.resolve_type(e, &[]);
                 }
                 if matches!(self.aliases[idx].resolved, Some(AliasTarget::Pending)) {
@@ -1961,7 +1993,7 @@ impl<'a> Ctx<'a> {
     /// through this (the `#<param>` placeholder env).
     pub fn resolve_sig_ty(
         &mut self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         env: &[(IdentId, TypeId)],
         self_ty: Option<TypeId>,
     ) -> TypeId {
@@ -1975,39 +2007,40 @@ impl<'a> Ctx<'a> {
     /// fall through to the ordinary resolver.
     pub(crate) fn resolve_sig_ty_deep(
         &mut self,
-        node: NodeHandle<AnyTy>,
+        node: TyRef,
         env: &[(IdentId, TypeId)],
         self_ty: Option<TypeId>,
     ) -> TypeId {
-        let is_self = |segs: &Vec<rut_ast::ast::PathSeg>| {
+        let is_self = |segs: &[rut_ast::PathSeg]| {
             segs.len() == 1 && segs[0].generics.is_empty() && segs[0].name == sym::SELF_TY
         };
-        match self.ast.ty(node) {
-            TypeKind::TyPath { segs, .. } if is_self(segs) => {
+        match node {
+            TyRef::Path(h) if is_self(&h.get(self.ast).segs) => {
                 if let Some(t) = self_ty {
                     return t;
                 }
             }
-            TypeKind::TyOpt { inner } => {
-                if let TypeKind::TyPath { segs, .. } = self.ast.ty(*inner) {
-                    if is_self(segs) {
+            TyRef::Opt(h) => {
+                let inner = h.get(self.ast).inner;
+                if let TyRef::Path(ih) = inner {
+                    if is_self(&ih.get(self.ast).segs) {
                         if let Some(t) = self_ty {
                             return self.mk_opt(t);
                         }
                     }
                 }
-                let elem = self.resolve_sig_ty_deep(*inner, env, self_ty);
+                let elem = self.resolve_sig_ty_deep(inner, env, self_ty);
                 return self.mk_opt(elem);
             }
-            TypeKind::TyTuple { elems } => {
+            TyRef::Tuple(h) => {
                 let mut etys = Vec::new();
-                for e in elems {
-                    etys.push(self.resolve_sig_ty_deep(*e, env, self_ty));
+                for e in h.get(self.ast).elems.clone() {
+                    etys.push(self.resolve_sig_ty_deep(e, env, self_ty));
                 }
                 return self.mk_tuple(etys);
             }
-            TypeKind::TyArray { elem } => {
-                let et = self.resolve_sig_ty_deep(*elem, env, self_ty);
+            TyRef::Array(h) => {
+                let et = self.resolve_sig_ty_deep(h.get(self.ast).elem, env, self_ty);
                 return self.mk_array(et);
             }
             _ => {}

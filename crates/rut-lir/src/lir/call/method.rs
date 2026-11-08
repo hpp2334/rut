@@ -13,10 +13,10 @@ use rut_core::sym;
 impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_method(
         &mut self,
-        recv: NodeHandle<AnyExpr>,
+        recv: ExprRef,
         name: IdentId,
-        generics: Vec<NodeHandle<AnyTy>>,
-        args: Vec<NodeHandle<AnyExpr>>,
+        generics: Vec<TyRef>,
+        args: Vec<ExprRef>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -35,9 +35,12 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // through the capture law's accessor instead (its register
         // holds the shared cell, the value loads from it — method
         // mutation through the read hits the same shared cell)
-        let recv_raw = match self.ctx.ast.expr(recv).clone() {
-            ExprKind::Path { segs } if segs.len() == 1 && segs[0].generics.is_empty() => {
-                let l = self.lookup(segs[0].name).cloned();
+        let recv_raw = match recv {
+            ExprRef::Path(ph)
+                if ph.get(self.ctx.ast).segs.len() == 1
+                    && ph.get(self.ctx.ast).segs[0].generics.is_empty() =>
+            {
+                let l = self.lookup(ph.get(self.ctx.ast).segs[0].name).cloned();
                 l.map(|l| {
                     let reg = if l.cell.is_some() {
                         self.read_local(&l, sp.lo)
@@ -672,8 +675,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // the member-visibility law: a plain method is
                 // module-private — the call site's module must see the
                 // declaring module through the dial
-                let mvis = self.ctx.ast.method_decl(mnode).vis;
-                if let Some(msg) = self.ctx.member_vis_err(dname, mnode.id(), name, mvis) {
+                let mvis = mnode.get(self.ctx.ast).vis;
+                if let Some(msg) =
+                    self.ctx
+                        .member_vis_err(dname, mnode.span(self.ctx.ast), name, mvis)
+                {
                     self.ctx.err(sp, msg);
                     return Err(());
                 }
@@ -717,7 +723,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         let t = self.compile_expr(*a, Some(ptys[i]))?;
                         if !self.widens_val(*a, t, ptys[i]) {
                             self.ctx.err(
-                                self.ctx.ast.span(a.id()),
+                                a.span(self.ctx.ast),
                                 format!(
                                     "argument {} is `{}`, `{}` expected",
                                     i + 1,
@@ -783,7 +789,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     let t = self.compile_expr(*a, Some(ptys[i]))?;
                     if !self.widens_val(*a, t, ptys[i]) {
                         self.ctx.err(
-                            self.ctx.ast.span(a.id()),
+                            a.span(self.ctx.ast),
                             format!(
                                 "argument {} is `{}`, `{}` expected",
                                 i + 1,
@@ -827,8 +833,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let Some((_, mnode)) = e.methods.iter().find(|(mn, _)| *mn == name).cloned() {
                     // the member-visibility law: enum members take the
                     // `pub` dial like a class's
-                    let mvis = self.ctx.ast.method_decl(mnode).vis;
-                    if let Some(msg) = self.ctx.member_vis_err(ename, mnode.id(), name, mvis) {
+                    let mvis = mnode.get(self.ctx.ast).vis;
+                    if let Some(msg) =
+                        self.ctx
+                            .member_vis_err(ename, mnode.span(self.ctx.ast), name, mvis)
+                    {
                         self.ctx.err(sp, msg);
                         return Err(());
                     }
@@ -869,7 +878,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             // concrete type (the fill was proved at the boxing site)
             let tdesc = self.ctx.iface_by_id(iface_id).clone();
             if let Some(midx) = tdesc.methods.iter().position(|m| m.name == name) {
-                if let ExprKind::Path { segs } = self.ctx.ast.expr(recv).clone() {
+                if let ExprRef::Path(ph) = recv {
+                    let segs = &ph.get(self.ctx.ast).segs;
                     if segs.len() == 1 {
                         let origins = self.origins_of(segs[0].name);
                         if origins.len() == 1 {
@@ -880,10 +890,13 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                         // the single-origin static bind IS
                                         // a member call — the visibility
                                         // law rides it
-                                        let mvis = self.ctx.ast.method_decl(node).vis;
-                                        if let Some(msg) =
-                                            self.ctx.member_vis_err(data, node.id(), name, mvis)
-                                        {
+                                        let mvis = node.get(self.ctx.ast).vis;
+                                        if let Some(msg) = self.ctx.member_vis_err(
+                                            data,
+                                            node.span(self.ctx.ast),
+                                            name,
+                                            mvis,
+                                        ) {
                                             self.ctx.err(sp, msg);
                                             return Err(());
                                         }
@@ -1007,9 +1020,11 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 
 /// The receiver's source name for a diagnostic (`x` for `x.f()`, else
 /// `expr`) — used when a primitive method call is rejected.
-fn recv_name(ctx: &crate::check::Ctx, recv: NodeHandle<AnyExpr>) -> String {
-    match ctx.ast.expr(recv) {
-        ExprKind::Path { segs } => segs
+fn recv_name(ctx: &crate::check::Ctx, recv: ExprRef) -> String {
+    match recv {
+        ExprRef::Path(ph) => ph
+            .get(ctx.ast)
+            .segs
             .iter()
             .map(|s| ctx.name(s.name).to_string())
             .collect::<Vec<_>>()

@@ -151,9 +151,9 @@ impl<'a> Ctx<'a> {
         match inst.key {
             FnKey::Free(n) => self.name(n).to_string(),
             FnKey::Method { data, name } => format!("{}${}", self.name(data), self.name(name)),
-            FnKey::Lambda(node) => format!("lambda@{}", node.0),
-            FnKey::AsyncBlock(node) => format!("async@{}", node.0),
-            FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.0),
+            FnKey::Lambda(node) => format!("lambda@{}", node.index()),
+            FnKey::AsyncBlock(node) => format!("async@{}", node.index()),
+            FnKey::ForOfEmit { body, .. } => format!("forof@{}", body.index()),
             FnKey::HostThunk(name) => format!("host@{}", self.name(name)),
         }
     }
@@ -176,7 +176,7 @@ impl<'a> Ctx<'a> {
             guard += 1;
             if guard > 100_000 {
                 self.err(
-                    self.ast.span(self.ast.root.id()),
+                    self.ast.root().span(self.ast),
                     "monomorphization queue exploded (>100k instantiations)",
                 );
                 return Err(());
@@ -319,7 +319,7 @@ impl<'a> Ctx<'a> {
         let datas = self.datas.clone();
         for (dname, d) in datas {
             for (n, mnode) in &d.methods {
-                if self.ast.method_decl(*mnode).marker != Some(disposal) {
+                if mnode.get(self.ast).marker != Some(disposal) {
                     continue;
                 }
                 let key = Inst {
@@ -350,7 +350,7 @@ impl<'a> Ctx<'a> {
         for (_, d) in &self.datas {
             if d.methods
                 .iter()
-                .any(|(_, m)| self.ast.method_decl(*m).marker == Some(disposal))
+                .any(|(_, m)| m.get(self.ast).marker == Some(disposal))
             {
                 set.insert(d.ty);
             }
@@ -361,21 +361,19 @@ impl<'a> Ctx<'a> {
     pub fn compile_module_lets(&mut self) {
         let entries: Vec<LetRow> = self.lets.clone();
         for (_, ty, init, _) in entries {
-            let sp = self.ast.span(init.id());
-            match self.ast.expr(init) {
-                ExprKind::Lit(Lit::Int(v, sfx)) => {
-                    let _ = (v, sfx);
-                    // typed by annotation or default i32; store raw
-                }
-                ExprKind::Lit(Lit::Float(_, _))
-                | ExprKind::Lit(Lit::Str(_))
-                | ExprKind::Lit(Lit::Bool(_)) => {}
-                _ => {
-                    self.err(
-                        sp,
-                        "module `let` initializers must be load-time expressions — literals only in this build",
-                    );
-                }
+            let sp = init.span(self.ast);
+            let lit_is_load_time = match init {
+                ExprRef::Lit(lh) => matches!(
+                    lh.get(self.ast).lit,
+                    Lit::Int(..) | Lit::Float(..) | Lit::Str(_) | Lit::Bool(_)
+                ),
+                _ => false,
+            };
+            if !lit_is_load_time {
+                self.err(
+                    sp,
+                    "module `let` initializers must be load-time expressions — literals only in this build",
+                );
             }
             let _ = ty;
         }

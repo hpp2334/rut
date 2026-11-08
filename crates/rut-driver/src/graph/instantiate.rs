@@ -18,7 +18,7 @@ use rut_core::binary::Program;
 use rut_core::ops::Op;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
-use rut_parser::{parse, Mode};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use super::build_seed_groups;
 use super::compiler::{attribute_diags, GraphCompiler};
@@ -160,10 +160,9 @@ impl<'a> GraphCompiler<'a> {
         let layout = src.layout.clone();
         let own_uses = src.own_uses.clone();
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
+        let mode = if is_decl { Mode::Decl } else { Mode::Impl };
         let out = crate::compile::compile_program_pre(
-            parse(&text, if is_decl { Mode::Decl } else { Mode::Impl }),
-            &text,
-            if is_decl { Mode::Decl } else { Mode::Impl },
+            parse_with_recover(&text, mode, ParseOpts::default()),
             owner,
             scope,
             &bound,

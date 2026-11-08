@@ -268,7 +268,7 @@ pub(crate) fn render_mod(
     mounted: &str,
     children: Option<usize>,
 ) -> String {
-    let edge = if m.vis == rut_ast::ast::Vis::Pub {
+    let edge = if m.vis == rut_ast::Vis::Pub {
         "pub mod".to_string()
     } else {
         "mod".to_string()

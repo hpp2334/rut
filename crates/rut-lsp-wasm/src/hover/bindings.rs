@@ -12,15 +12,19 @@
 //! scope-exit correct (a binding's scope ends with its introducing
 //! block, so it cannot leak past it).
 //!
-//! Spans are the contract: phase 2's within-file definition is a LOOKUP
-//! against these records, so `decl_ident_span` must be byte-exact. Names
-//! are `IdentId`s — the AST carries no name spans — so the declaring
-//! identifier is recovered from the token stream (the recovery
-//! `build.rs` pioneered; no parser changes). `ty` is the display text
-//! (declared annotation as written, else the `infer::expr_ty`
-//! heuristic); `Binding::ty_head` cuts it to the lookup head.
+//! Spans are the contract: within-file definition is a LOOKUP
+//! against these records, so `decl_ident_span` must be byte-exact. The
+//! decl nodes record their `name_span`s (v2's parse verdict); a
+//! destructured let's EXTRA binding names still recover from the token
+//! stream (`ident_span` — the one recovery left, the whole span trick
+//! this pass pioneered). `ty` is the display text (declared annotation
+//! as written, else the `infer::expr_ty` heuristic);
+//! `Binding::ty_head` cuts it to the lookup head.
 
-use rut_ast::ast::*;
+use rut_ast::{
+    Ast, BlockNode, ElseBranch, ExprRef, FnNode, Handle, ItemRef, LetStmtNode, MethodRef, ParamRef,
+    StmtRef, TyRef, TyTupleNode,
+};
 use rut_semantic::Span;
 use rut_semantic::{Tok, Token};
 
@@ -99,26 +103,18 @@ pub fn collect(ast: &Ast, toks: &[Token], idxs: &[&DefIndex]) -> Vec<Binding> {
         src_end,
         out: Vec::new(),
     };
-    for h in ast.module_items(ast.root) {
-        match ast.item(*h) {
-            ItemKind::Fn(d) => {
-                let scope = cx.scope_of(ast.span(d.body.id()));
+    for item in ast.root().items(ast) {
+        match item {
+            ItemRef::Fn(h) => {
+                let d: &FnNode = h.get(ast);
+                let scope = cx.scope_of(d.body.span(ast));
                 cx.push_params(&d.params, scope);
                 cx.walk_block(d.body);
             }
-            ItemKind::Class { methods, .. }
-            | ItemKind::Struct { methods, .. }
-            | ItemKind::Interface { methods, .. }
-            | ItemKind::Impl { methods, .. } => {
-                for m in methods {
-                    let d = ast.method_decl(*m);
-                    if let Some(body) = d.body {
-                        let scope = cx.scope_of(ast.span(body.id()));
-                        cx.push_params(&d.params, scope);
-                        cx.walk_block(body);
-                    }
-                }
-            }
+            ItemRef::Class(h) => cx.walk_methods(&h.get(ast).methods),
+            ItemRef::Struct(h) => cx.walk_methods(&h.get(ast).methods),
+            ItemRef::Interface(h) => cx.walk_methods(&h.get(ast).methods),
+            ItemRef::Impl(h) => cx.walk_methods(&h.get(ast).methods),
             _ => {}
         }
     }
@@ -182,9 +178,10 @@ impl Cx<'_> {
     /// after the first opener. Token-backed (like `ident_span`'s
     /// recovery — no parser changes): comments never lex, strings and
     /// f-strings ride as single tokens so their braces stay out, and a
-    /// closed block's own `}` IS inside the span (statement spans end at
-    /// the NEXT token). A span with no braces at all (an expression
-    /// lambda's body) is never "open" — depth zero means keep the span.
+    /// closed block's own `}` IS inside the span (block spans end at
+    /// their own closer — the exact-span law). A span with no braces at
+    /// all (an expression lambda's body) is never "open" — depth zero
+    /// means keep the span.
     fn open_brace_at_end(&self, span: Span) -> bool {
         let mut depth = 0i32;
         for t in self
@@ -207,104 +204,56 @@ impl Cx<'_> {
     }
 
     /// params of a fn/method/lambda — visible through the whole body
-    fn push_params(&mut self, params: &[NodeHandle<AnyParam>], scope: Span) {
+    fn push_params(&mut self, params: &[ParamRef], scope: Span) {
         for p in params {
-            if let MemberKind::Param(d) = self.ast.param(*p) {
-                let name = self.ast.name(d.name).to_string();
-                let Some(decl) = ident_span(self.toks, self.ast.span(p.id()), &name) else {
-                    continue;
-                };
-                let ty = d.ty.map(|t| ty_src(self.ast, t));
-                self.push(&name, decl, scope, BindKind::Param, d.is_mut, ty, false);
+            let ParamRef::Param(h) = p else {
+                continue; // `self` / `mut self` — a keyword, never a binding
+            };
+            let d = h.get(self.ast);
+            let name = self.ast.name(d.name).to_string();
+            let Some(decl) = ident_span(self.toks, d.span, &name) else {
+                continue;
+            };
+            let ty = d.ty.map(|t| ty_src(self.ast, t));
+            self.push(&name, decl, scope, BindKind::Param, d.is_mut, ty, false);
+        }
+    }
+
+    fn walk_methods(&mut self, methods: &[MethodRef]) {
+        for m in methods {
+            let MethodRef::Method(h) = m else {
+                continue;
+            };
+            let d = h.get(self.ast);
+            if let Some(body) = d.body {
+                let scope = self.scope_of(body.span(self.ast));
+                self.push_params(&d.params, scope);
+                self.walk_block(body);
             }
         }
     }
 
-    fn walk_block(&mut self, block: NodeHandle<BlockNode>) {
-        let span = self.scope_of(self.ast.span(block.id()));
-        for s in self.ast.block(block).to_vec() {
+    fn walk_block(&mut self, block: Handle<BlockNode>) {
+        let span = self.scope_of(block.span(self.ast));
+        for s in block.get(self.ast).stmts.iter().copied() {
             self.walk_stmt(s, span);
         }
         // the block's tail value is in the same scope
-        if let Some(t) = self.ast.block_tail(block) {
+        if let Some(t) = block.get(self.ast).tail {
             self.walk_expr(t);
         }
     }
 
-    fn walk_stmt(&mut self, s: NodeHandle<AnyStmt>, block: Span) {
-        let sp = self.ast.span(s.id());
-        match self.ast.kind(s.id()) {
-            Kind::Stmt(StmtKind::LetStmt {
-                name,
-                destructure,
-                ty,
-                init,
-                is_mut,
-                ..
-            }) => {
-                let names: Vec<IdentId> = match destructure {
-                    Some(ns) => ns.clone(),
-                    None => vec![*name],
-                };
-                // per-binding annotation: a tuple type destructures
-                // positionally; a single name takes the annotation whole
-                let anns: Vec<Option<String>> = match (destructure, ty) {
-                    (Some(_), Some(t)) => match self.ast.ty(*t) {
-                        TypeKind::TyTuple { elems } => names
-                            .iter()
-                            .enumerate()
-                            .map(|(i, _)| elems.get(i).map(|&e| ty_src(self.ast, e)))
-                            .collect(),
-                        _ => vec![None; names.len()],
-                    },
-                    (_, Some(t)) => vec![Some(ty_src(self.ast, *t)); names.len()],
-                    _ => vec![None; names.len()],
-                };
-                for (i, n) in names.iter().enumerate() {
-                    let text = self.ast.name(*n);
-                    // first match = the declaration: the declaring ident
-                    // precedes every use of the name inside the stmt
-                    let Some(decl) = ident_span(self.toks, sp, text) else {
-                        continue;
-                    };
-                    let mut inferred = false;
-                    let ty_text = anns[i].clone().or_else(|| {
-                        let raw = match destructure {
-                            Some(_) => match self.ast.expr(*init) {
-                                ExprKind::Tuple { elems } => elems.get(i).and_then(|&e| {
-                                    infer::expr_ty(self.ast, &self.out, self.idxs, e)
-                                }),
-                                _ => None,
-                            },
-                            None => infer::expr_ty(self.ast, &self.out, self.idxs, *init),
-                        };
-                        if raw.is_some() {
-                            inferred = true;
-                        }
-                        raw
-                    });
-                    self.push(
-                        text,
-                        decl,
-                        Span::new(decl.lo, block.hi),
-                        BindKind::Let,
-                        *is_mut,
-                        ty_text,
-                        inferred,
-                    );
-                }
-                self.walk_expr(*init); // lambdas in the initializer
-            }
-            Kind::Stmt(StmtKind::ForOf {
-                var,
-                is_mut,
-                iter,
-                body,
-            }) => {
-                let body_span = self.scope_of(self.ast.span(body.id()));
-                let text = self.ast.name(*var);
+    fn walk_stmt(&mut self, s: StmtRef, block: Span) {
+        match s {
+            StmtRef::Let(h) => self.walk_let(h, block),
+            StmtRef::ForOf(h) => {
+                let d = h.get(self.ast);
+                let sp = d.span;
+                let body_span = self.scope_of(d.body.span(self.ast));
+                let text = self.ast.name(d.var);
                 if let Some(decl) = ident_span(self.toks, sp, text) {
-                    let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *iter)
+                    let raw = infer::expr_ty(self.ast, &self.out, self.idxs, d.iter)
                         .and_then(|t| elem_ty(&t));
                     let inferred = raw.is_some();
                     self.push(
@@ -312,25 +261,20 @@ impl Cx<'_> {
                         decl,
                         Span::new(decl.lo, body_span.hi),
                         BindKind::IterVar,
-                        *is_mut,
+                        d.is_mut,
                         raw,
                         inferred,
                     );
                 }
-                self.walk_expr(*iter);
-                self.walk_block(*body);
+                self.walk_expr(d.iter);
+                self.walk_block(d.body);
             }
-            Kind::Stmt(StmtKind::ForC {
-                var,
-                is_mut,
-                init,
-                cond,
-                update,
-                body,
-            }) => {
-                let text = self.ast.name(*var);
+            StmtRef::ForC(h) => {
+                let d = h.get(self.ast);
+                let sp = d.span;
+                let text = self.ast.name(d.var);
                 if let Some(decl) = ident_span(self.toks, sp, text) {
-                    let raw = infer::expr_ty(self.ast, &self.out, self.idxs, *init);
+                    let raw = infer::expr_ty(self.ast, &self.out, self.idxs, d.init);
                     let inferred = raw.is_some();
                     // the counter is visible through cond + update too —
                     // the scope is the whole loop statement (extended
@@ -341,64 +285,115 @@ impl Cx<'_> {
                         decl,
                         Span::new(decl.lo, scope.hi),
                         BindKind::IterVar,
-                        *is_mut,
+                        d.is_mut,
                         raw,
                         inferred,
                     );
                 }
-                self.walk_expr(*init);
-                self.walk_expr(*cond);
-                self.walk_expr(*update);
-                self.walk_block(*body);
+                self.walk_expr(d.init);
+                self.walk_expr(d.cond);
+                self.walk_expr(d.update);
+                self.walk_block(d.body);
             }
-            Kind::Stmt(StmtKind::If { cond, then, els }) => {
-                self.walk_expr(*cond);
-                self.walk_block(*then);
-                match els {
-                    Some(ElseBranch::If(h)) => self.walk_stmt((*h).into(), block),
-                    Some(ElseBranch::Block(b)) => self.walk_block(*b),
+            StmtRef::If(h) => {
+                let d = h.get(self.ast);
+                self.walk_expr(d.cond);
+                self.walk_block(d.then);
+                match d.els {
+                    Some(ElseBranch::If(ih)) => self.walk_stmt(StmtRef::If(ih), block),
+                    Some(ElseBranch::Block(b)) => self.walk_block(b),
                     None => {}
                 }
             }
-            Kind::Stmt(StmtKind::While { cond, body }) => {
-                self.walk_expr(*cond);
-                self.walk_block(*body);
+            StmtRef::While(h) => {
+                let d = h.get(self.ast);
+                self.walk_expr(d.cond);
+                self.walk_block(d.body);
             }
-            Kind::Stmt(StmtKind::WhenStmt { scrut, arms }) => {
-                self.walk_expr(*scrut);
-                for a in arms {
-                    match self.ast.arm(*a) {
-                        ArmKind::WhenArm { body, .. } => self.walk_expr(*body),
-                    }
+            StmtRef::When(h) => {
+                let d = h.get(self.ast);
+                self.walk_expr(d.scrut);
+                for a in &d.arms {
+                    self.walk_expr(a.get(self.ast).body);
                 }
             }
-            Kind::Stmt(StmtKind::Return { value: Some(v) }) => self.walk_expr(*v),
-            Kind::Stmt(StmtKind::Return { value: None }) => {}
-            Kind::Stmt(StmtKind::ExprStmt(e)) => self.walk_expr(*e),
-            _ => {}
+            StmtRef::Return(h) => {
+                if let Some(v) = h.get(self.ast).value {
+                    self.walk_expr(v);
+                }
+            }
+            StmtRef::Expr(e) => self.walk_expr(e),
+            StmtRef::Break(_) | StmtRef::Continue(_) | StmtRef::Error(_) => {}
         }
     }
 
-    fn walk_expr(&mut self, e: NodeHandle<AnyExpr>) {
-        match self.ast.expr(e) {
-            ExprKind::Block { .. } => {
-                let span = self.ast.span(e.id());
-                let b = NodeHandle::<BlockNode>::new(e.id());
-                for s in self.ast.block(b).to_vec() {
-                    self.walk_stmt(s, span);
-                }
-                if let Some(t) = self.ast.block_tail(b) {
-                    self.walk_expr(t);
-                }
+    fn walk_let(&mut self, h: Handle<LetStmtNode>, block: Span) {
+        let d = h.get(self.ast);
+        let sp = d.span;
+        let names: Vec<rut_ast::IdentId> = match &d.destructure {
+            Some(ns) => ns.clone(),
+            None => vec![d.name],
+        };
+        // per-binding annotation: a tuple type destructures
+        // positionally; a single name takes the annotation whole
+        let anns: Vec<Option<String>> = match (&d.destructure, d.ty) {
+            (Some(_), Some(TyRef::Tuple(th))) => {
+                let tup: &TyTupleNode = th.get(self.ast);
+                names
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| tup.elems.get(i).map(|&e| ty_src(self.ast, e)))
+                    .collect()
             }
-            ExprKind::Lambda {
-                params,
-                body,
-                ret: _,
-            } => {
-                let span = self.scope_of(self.ast.span(body.id()));
-                self.push_params(params, span);
-                self.walk_expr(*body);
+            (_, Some(t)) => vec![Some(ty_src(self.ast, t)); names.len()],
+            _ => vec![None; names.len()],
+        };
+        for (i, n) in names.iter().enumerate() {
+            let text = self.ast.name(*n);
+            // first match = the declaration: the declaring ident
+            // precedes every use of the name inside the stmt
+            let Some(decl) = ident_span(self.toks, sp, text) else {
+                continue;
+            };
+            let mut inferred = false;
+            let ty_text = anns[i].clone().or_else(|| {
+                let raw = match &d.destructure {
+                    Some(_) => match d.init {
+                        ExprRef::Tuple(th) => th
+                            .get(self.ast)
+                            .elems
+                            .get(i)
+                            .and_then(|&e| infer::expr_ty(self.ast, &self.out, self.idxs, e)),
+                        _ => None,
+                    },
+                    None => infer::expr_ty(self.ast, &self.out, self.idxs, d.init),
+                };
+                if raw.is_some() {
+                    inferred = true;
+                }
+                raw
+            });
+            self.push(
+                text,
+                decl,
+                Span::new(decl.lo, block.hi),
+                BindKind::Let,
+                d.is_mut,
+                ty_text,
+                inferred,
+            );
+        }
+        self.walk_expr(d.init); // lambdas in the initializer
+    }
+
+    fn walk_expr(&mut self, e: ExprRef) {
+        match e {
+            ExprRef::Block(bh) => self.walk_block(bh),
+            ExprRef::Lambda(h) => {
+                let d = h.get(self.ast);
+                let span = self.scope_of(d.body.span(self.ast));
+                self.push_params(&d.params, span);
+                self.walk_expr(d.body);
             }
             _ => {
                 for c in expr_children(self.ast, e) {
@@ -413,91 +408,89 @@ impl Cx<'_> {
 /// (`Block`/`Lambda` are handled by the walker itself). Shared with the
 /// inlay hints' call-site walk (one recursion rule, two consumers —
 /// the `member_target` precedent)
-pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle<AnyExpr>> {
-    fn all(out: &mut Vec<NodeHandle<AnyExpr>>, hs: &[NodeHandle<AnyExpr>]) {
-        out.extend_from_slice(hs);
-    }
-    fn arm_bodies(ast: &Ast, arms: &[NodeHandle<AnyArm>], out: &mut Vec<NodeHandle<AnyExpr>>) {
-        for a in arms {
-            match ast.arm(*a) {
-                ArmKind::WhenArm { body, .. } => out.push(*body),
-            }
+pub(crate) fn expr_children(ast: &Ast, e: ExprRef) -> Vec<ExprRef> {
+    let mut out: Vec<ExprRef> = Vec::new();
+    match e {
+        ExprRef::Call(h) => {
+            let d = h.get(ast);
+            out.push(d.callee);
+            out.extend(d.args.iter().copied());
         }
-    }
-    let mut out: Vec<NodeHandle<AnyExpr>> = Vec::new();
-    match ast.expr(e) {
-        ExprKind::Call { callee, args } => {
-            out.push(*callee);
-            all(&mut out, args);
+        ExprRef::Method(h) => {
+            let d = h.get(ast);
+            out.push(d.recv);
+            out.extend(d.args.iter().copied());
         }
-        ExprKind::Method { recv, args, .. } => {
-            out.push(*recv);
-            all(&mut out, args);
+        ExprRef::Field(h) => out.push(h.get(ast).recv),
+        ExprRef::Index(h) => {
+            let d = h.get(ast);
+            out.push(d.recv);
+            out.push(d.idx);
         }
-        ExprKind::Field { recv, .. } => out.push(*recv),
-        ExprKind::Index { recv, idx } => {
-            out.push(*recv);
-            out.push(*idx);
+        ExprRef::Unary(h) => out.push(h.get(ast).expr),
+        ExprRef::Try(h) => out.push(h.get(ast).expr),
+        ExprRef::Await(h) => out.push(h.get(ast).expr),
+        ExprRef::Binary(h) => {
+            let d = h.get(ast);
+            out.push(d.lhs);
+            out.push(d.rhs);
         }
-        ExprKind::Unary { expr, .. } | ExprKind::Try { expr } | ExprKind::Await { expr } => {
-            out.push(*expr)
+        ExprRef::Assign(h) => {
+            let d = h.get(ast);
+            out.push(d.target);
+            out.push(d.value);
         }
-        ExprKind::Binary { lhs, rhs, .. } => {
-            out.push(*lhs);
-            out.push(*rhs);
-        }
-        ExprKind::Assign { target, value, .. } => {
-            out.push(*target);
-            out.push(*value);
-        }
-        ExprKind::Struct { fields, .. } => {
-            for (_, v) in fields {
+        ExprRef::Struct(h) => {
+            let d = h.get(ast);
+            for (_, v) in &d.fields {
                 out.push(*v);
             }
         }
-        ExprKind::Tuple { elems } | ExprKind::ArrayLit { elems } => all(&mut out, elems),
-        ExprKind::ArrayRepeat { value, count } => {
-            out.push(*value);
-            out.push(*count);
+        ExprRef::Tuple(h) => out.extend(h.get(ast).elems.iter().copied()),
+        ExprRef::ArrayLit(h) => out.extend(h.get(ast).elems.iter().copied()),
+        ExprRef::ArrayRepeat(h) => {
+            let d = h.get(ast);
+            out.push(d.value);
+            out.push(d.count);
         }
-        ExprKind::WhenExpr { scrut, arms } => {
-            out.push(*scrut);
-            arm_bodies(ast, arms, &mut out);
+        ExprRef::WhenExpr(h) => {
+            let d = h.get(ast);
+            out.push(d.scrut);
+            for a in &d.arms {
+                out.push(a.get(ast).body);
+            }
         }
-        ExprKind::If { cond, then, els } => {
-            out.push(*cond);
-            out.push((*then).into());
+        ExprRef::If(h) => {
+            let d = h.get(ast);
+            out.push(d.cond);
+            out.push(ExprRef::Block(d.then));
             // `else if` links hold if STATEMENTS (the shared ElseBranch):
             // flattened — each link's condition and block join the child
             // list so the walk descends uniformly (blocks are expression
             // nodes; the walker's Block arm resumes through them)
-            let mut link = *els;
+            let mut link = d.els;
             while let Some(e) = link {
                 match e {
                     ElseBranch::Block(b) => {
-                        out.push(b.into());
+                        out.push(ExprRef::Block(b));
                         break;
                     }
-                    ElseBranch::If(h) => match ast.kind(h.id()) {
-                        Kind::Stmt(StmtKind::If {
-                            cond,
-                            then,
-                            els: next,
-                        }) => {
-                            out.push(*cond);
-                            out.push((*then).into());
-                            link = *next;
-                        }
-                        _ => break,
-                    },
+                    ElseBranch::If(ih) => {
+                        let nd = ih.get(ast);
+                        out.push(nd.cond);
+                        out.push(ExprRef::Block(nd.then));
+                        link = nd.els;
+                    }
                 }
             }
         }
-        ExprKind::Is { expr, .. } | ExprKind::Cast { expr, .. } => out.push(*expr),
+        ExprRef::Is(h) => out.push(h.get(ast).expr),
+        ExprRef::Cast(h) => out.push(h.get(ast).expr),
         // `Block`/`Lambda` never reach here (the walker handles them);
         // literals and paths have no children. FStr holes are raw token
-        // streams — not walked (a lambda inside an f-string hole keeps
-        // its bindings unrecorded; a miss, never wrong text)
+        // streams as far as this pass is concerned — not walked (a
+        // lambda inside an f-string hole keeps its bindings unrecorded;
+        // a miss, never wrong text)
         _ => {}
     }
     out
@@ -506,8 +499,9 @@ pub(crate) fn expr_children(ast: &Ast, e: NodeHandle<AnyExpr>) -> Vec<NodeHandle
 /// the byte span of `name`'s declaring identifier inside `span` — the
 /// first non-keyword `Ident` token matching the name. The declaring
 /// ident precedes every use of the name inside the decl node's own
-/// span, so first-match IS the declaration. This token recovery is the
-/// whole span trick (names are `IdentId`s — no parser changes).
+/// span, so first-match IS the declaration. The decl nodes record
+/// their own `name_span`s; this recovery remains for the names the
+/// nodes do not carry (a destructured let's extra bindings).
 pub(crate) fn ident_span(toks: &[Token], span: Span, name: &str) -> Option<Span> {
     toks.iter()
         .filter(|t| t.span.lo >= span.lo && t.span.hi <= span.hi)

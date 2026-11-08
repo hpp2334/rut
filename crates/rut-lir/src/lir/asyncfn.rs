@@ -160,11 +160,8 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     else {
         return Ok(()); // unknown fn — already diagnosed
     };
-    let Kind::Item(ItemKind::Fn(f)) = ctx.ast.kind(node.id()) else {
-        return Ok(());
-    };
-    let f = f.clone();
-    let sp = ctx.ast.span(node.id());
+    let f = node.get(ctx.ast).clone();
+    let sp = node.span(ctx.ast);
     if !f.generics.is_empty() {
         ctx.err(
             sp,
@@ -175,17 +172,22 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     // the cx is INJECTED, never spelled: an async fn's parameters are
     // ordinary values (a spelled `cx` would collide with the injection)
     for p in &f.params {
-        if let MemberKind::Param(ParamData {
-            ty: Some(t), name, ..
-        }) = ctx.ast.param(*p)
-        {
-            let spells_cx = *name == sym::CX
-                || matches!(ctx.ast.ty(*t), TypeKind::TyPath { ref segs, .. }
-                    if segs.len() == 1 && segs[0].name == sym::RUN_CONTEXT);
+        let ParamRef::Param(ph) = *p else {
+            continue;
+        };
+        let (name, t) = {
+            let n = ph.get(ctx.ast);
+            (n.name, n.ty)
+        };
+        if let Some(t) = t {
+            let spells_cx = name == sym::CX
+                || matches!(t, TyRef::Path(ref th)
+                    if th.get(ctx.ast).segs.len() == 1
+                        && th.get(ctx.ast).segs[0].name == sym::RUN_CONTEXT);
             if spells_cx {
-                ctx.err(ctx.ast.span(p.id()), format!(
+                ctx.err(p.span(ctx.ast), format!(
                     "`{}`: an async fn's parameters are ordinary values — the resume context is injected as `cx`, never spelled",
-                    ctx.name(*name)
+                    ctx.name(name)
                 ));
                 return Err(());
             }
@@ -203,21 +205,29 @@ pub(crate) fn compile_async_fn(ctx: &mut Ctx, inst: &Inst, fid: u32) -> TcResult
     let mut param_origins: Vec<Vec<TypeId>> = Vec::new();
     let mut origin_iter = inst.iface_origins.iter();
     for p in &f.params {
-        if let MemberKind::Param(ParamData {
-            ty: Some(t), name, ..
-        }) = ctx.ast.param(*p)
-        {
-            let ty = ctx.resolve_type(*t, &[]);
-            let origins = if matches!(ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
-                origin_iter.next().cloned().into_iter().collect()
-            } else {
-                Vec::new()
-            };
-            param_origins.push(origins);
-            param_fields.push((*name, ty));
-        } else {
-            ctx.err(ctx.ast.span(p.id()), "parameter needs a type annotation");
+        let ParamRef::Param(ph) = *p else {
+            ctx.err(p.span(ctx.ast), "parameter needs a type annotation");
             return Err(());
+        };
+        let (name, t) = {
+            let n = ph.get(ctx.ast);
+            (n.name, n.ty)
+        };
+        match t {
+            Some(t) => {
+                let ty = ctx.resolve_type(t, &[]);
+                let origins = if matches!(ctx.types.kind(ty), TyKind::IfaceObj { .. }) {
+                    origin_iter.next().cloned().into_iter().collect()
+                } else {
+                    Vec::new()
+                };
+                param_origins.push(origins);
+                param_fields.push((name, ty));
+            }
+            None => {
+                ctx.err(p.span(ctx.ast), "parameter needs a type annotation");
+                return Err(());
+            }
         }
     }
     let layout = ensure_layout(ctx, fid, name, ret_ty, param_fields.clone());
@@ -243,14 +253,14 @@ fn weave_async_body_infer(
     fid: u32,
     name: IdentId,
     layout: Layout,
-    body: NodeHandle<BlockNode>,
+    body: Handle<BlockNode>,
     param_fields: Vec<(IdentId, TypeId)>,
     param_origins: Vec<Vec<TypeId>>,
     infer: bool,
 ) -> TcResult<()> {
     let cx_ty = ctx.run_context_ty();
     let frame_local = ctx.intern("#frame");
-    let body_lo = ctx.ast.span(body.id()).lo;
+    let body_lo = body.span(ctx.ast).lo;
     let ret_ty = match ctx.types.kind(layout.frame_ty) {
         TyKind::Data { fields } => fields
             .get(af::ANSWER_FIELD as usize)
@@ -371,7 +381,7 @@ fn weave_async_body_infer(
     emit_restore(&mut c, body_lo);
     // the capture law's pre-pass: an async body's locals promote like
     // any frame's (the hidden cell rides the frame field)
-    c.capture_pre_pass(body.id());
+    c.capture_pre_pass(ExprRef::Block(body));
     if c.compile_block(body).is_err() {
         return Err(());
     }
@@ -650,7 +660,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         &mut self,
         name: IdentId,
         cx_reg: u16,
-        args: &[NodeHandle<AnyExpr>],
+        args: &[ExprRef],
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let sp_lo = sp.lo;
@@ -732,7 +742,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
 /// engine-reserved state field, so a user impl has nothing to read.
 pub(crate) fn compile_await(
     c: &mut FnCompiler,
-    expr: NodeHandle<AnyExpr>,
+    expr: ExprRef,
     sp: rut_lexer::span::Span,
 ) -> TcResult<TypeId> {
     let Some(frame) = c.async_frame.as_ref().map(|f| AsyncFrameView {
@@ -967,8 +977,8 @@ struct AsyncFrameView {
 pub(crate) fn compile_async_call(
     c: &mut FnCompiler,
     name: IdentId,
-    fd: &rut_ast::ast::FnData,
-    args: &[NodeHandle<AnyExpr>],
+    fd: &FnNode,
+    args: &[ExprRef],
     _expected: Option<TypeId>,
     sp: rut_lexer::span::Span,
 ) -> TcResult<TypeId> {
@@ -999,14 +1009,14 @@ pub(crate) fn compile_async_call(
     let mut atys = Vec::new();
     let mut origins = Vec::new();
     for (i, a) in args.iter().enumerate() {
-        let pt = match c.ctx.ast.param(fd.params[i]) {
-            MemberKind::Param(ParamData { ty: Some(t), .. }) => c.resolve_type_now(*t),
-            _ => TY_I32,
-        };
+        let pt = c
+            .ctx
+            .param_ty(fd.params[i])
+            .map_or(TY_I32, |t| c.resolve_type_now(t));
         let t = c.compile_expr(*a, Some(pt))?;
         if !c.widens_val(*a, t, pt) {
             c.ctx.err(
-                c.ctx.ast.span(a.id()),
+                a.span(c.ctx.ast),
                 format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1,
@@ -1022,8 +1032,10 @@ pub(crate) fn compile_async_call(
             if !matches!(c.ctx.types.kind(t), TyKind::IfaceObj { .. }) {
                 origins.push(t);
             } else {
-                let tracked = match c.ctx.ast.expr(*a) {
-                    ExprKind::Path { segs } if segs.len() == 1 => c.origins_of(segs[0].name),
+                let tracked = match a {
+                    ExprRef::Path(ph) if ph.get(c.ctx.ast).segs.len() == 1 => {
+                        c.origins_of(ph.get(c.ctx.ast).segs[0].name)
+                    }
                     _ => Vec::new(),
                 };
                 if tracked.len() == 1 {
@@ -1063,11 +1075,11 @@ pub(crate) fn compile_async_call(
 /// the block is the FUTURE's answer, not any enclosing fn's.
 pub(crate) fn compile_async_block(
     c: &mut FnCompiler,
-    body: NodeHandle<BlockNode>,
+    node: Handle<AsyncBlockNode>,
     expected: Option<TypeId>,
     sp: rut_lexer::span::Span,
 ) -> TcResult<TypeId> {
-    let node = body.id();
+    let body = node.get(c.ctx.ast).body;
     // expected flow-in: a `Future<elem>` context names the answer
     let expected_elem = match expected.map(|e| c.ctx.types.kind(e).clone()) {
         Some(TyKind::Future { elem }) => Some(elem),
@@ -1078,7 +1090,7 @@ pub(crate) fn compile_async_block(
     // for-of emit closure's law. Cell-backed captures pool the SHARED
     // cell; the rest copy their current value (the capture law).
     let mut referenced = Vec::new();
-    c.scan_names(node, &mut referenced);
+    c.scan_names_expr(ExprRef::Block(body), &mut referenced);
     let mut caps: Vec<(IdentId, TypeId)> = Vec::new();
     let mut cap_regs: Vec<u16> = Vec::new();
     for n in referenced {
@@ -1171,11 +1183,15 @@ pub(crate) fn compile_async_block(
 
 /// The weaved body of one `async { }` block instantiation: the mint
 /// plan supplies captures + answer; the shared weave does the rest.
-pub(crate) fn compile_async_block_fn(ctx: &mut Ctx, fid: u32, node: NodeId) -> TcResult<()> {
+pub(crate) fn compile_async_block_fn(
+    ctx: &mut Ctx,
+    fid: u32,
+    node: Handle<AsyncBlockNode>,
+) -> TcResult<()> {
     let Some(sig) = ctx.async_block_sigs.get(&fid).cloned() else {
         return Ok(()); // no plan — the block was never a call site
     };
-    let name = ctx.intern(&format!("#async@{}", node.0));
+    let name = ctx.intern(&format!("#async@{}", node.index()));
     let layout = ensure_layout(ctx, fid, name, sig.ret, sig.caps.clone());
     weave_async_body_infer(
         ctx,
@@ -1574,7 +1590,7 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
             (Some(f), Some(c)) => (f, c),
             _ => {
                 ctx.err(
-                    ctx.ast.span(ctx.ast.root.id()),
+                    ctx.ast.root().span(ctx.ast),
                     "the sleep yield wrapper needs the engine-minted frame and cx types",
                 );
                 return Err(());
@@ -1770,7 +1786,7 @@ pub(crate) fn ensure_host_async(
     if let Some(l) = ctx.host_async.get(&key) {
         return Ok(*l);
     }
-    let sp = ctx.ast.span(ctx.ast.root.id());
+    let sp = ctx.ast.root().span(ctx.ast);
     let ret_ty = ef.ret;
     // the registration name is the row family's ONE source of truth —
     // it rides the decl surface (`SurfaceFn::host`)
@@ -1995,7 +2011,7 @@ pub(crate) fn compile_host_async_call(
     c: &mut FnCompiler,
     name: IdentId,
     ef: &crate::check::ExternFn,
-    args: &[NodeHandle<AnyExpr>],
+    args: &[ExprRef],
     _expected: Option<TypeId>,
     sp: rut_lexer::span::Span,
 ) -> TcResult<TypeId> {
@@ -2017,7 +2033,7 @@ pub(crate) fn compile_host_async_call(
         let t = c.compile_expr(*a, Some(ef.params[i]))?;
         if !c.widens(t, ef.params[i]) {
             c.ctx.err(
-                c.ctx.ast.span(a.id()),
+                a.span(c.ctx.ast),
                 format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1,
@@ -2246,7 +2262,7 @@ pub(crate) fn compile_crossed_async_call(
     c: &mut FnCompiler,
     name: IdentId,
     ef: &crate::check::ExternFn,
-    args: &[NodeHandle<AnyExpr>],
+    args: &[ExprRef],
     _expected: Option<TypeId>,
     sp: rut_lexer::span::Span,
 ) -> TcResult<TypeId> {
@@ -2267,7 +2283,7 @@ pub(crate) fn compile_crossed_async_call(
         let t = c.compile_expr(*a, Some(ef.params[i]))?;
         if !c.widens(t, ef.params[i]) {
             c.ctx.err(
-                c.ctx.ast.span(a.id()),
+                a.span(c.ctx.ast),
                 format!(
                     "argument {} is `{}`, `{}` expected",
                     i + 1,

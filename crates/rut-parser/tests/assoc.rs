@@ -3,31 +3,23 @@
 //! non-associative, assignment is right-associative, and
 //! unary/postfix chains compose.
 
-use rut_ast::ast::*;
-use rut_parser::{parse, Mode};
+mod common;
 
-fn expr_of(src: &str) -> Ast {
+use common::{first_fn_body, parse};
+use rut_ast::{BinOp, ExprRef, StmtRef, UnOp};
+use rut_parser::Mode;
+
+/// the fn's first statement's initializer expression
+fn init_of(src: &str) -> (rut_ast::Ast, ExprRef) {
     let (ast, diags) = parse(src, Mode::Impl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
-    ast
-}
-
-/// the statement's initializer expression
-fn init_of(src: &str) -> NodeHandle<AnyExpr> {
-    let ast = expr_of(src);
-    let items = ast.module_items(ast.root);
-    let f = items
-        .iter()
-        .find(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
-        .expect("fn");
-    let ItemKind::Fn(d) = ast.item(*f) else {
-        unreachable!()
-    };
-    let stmts = ast.block(d.body);
-    let Kind::Stmt(StmtKind::LetStmt { init, .. }) = ast.kind(stmts[0].id()) else {
-        panic!("let stmt");
-    };
-    NodeHandle::new(init.id())
+    match first_fn_body(&ast).get(&ast).stmts[0] {
+        StmtRef::Let(h) => {
+            let init = h.get(&ast).init;
+            (ast, init)
+        }
+        ref s => panic!("let stmt, got {s:?}"),
+    }
 }
 
 #[test]
@@ -57,11 +49,11 @@ fn is_is_non_associative() {
 #[test]
 fn relational_allowed_across_looser_ops() {
     // `a < b && c < d` — one relational per context, fresh on each side
-    let ast = expr_of("fn f() -> nil { let x = 1 < 2 && 3 < 4; }");
-    let e = init_of("fn f() -> nil { let x = 1 < 2 && 3 < 4; }");
-    let Kind::Expr(ExprKind::Binary { op: BinOp::And, .. }) = ast.kind(e.id()) else {
-        panic!("expected And(..) at the top, got {:?}", ast.kind(e.id()));
+    let (ast, e) = init_of("fn f() -> nil { let x = 1 < 2 && 3 < 4; }");
+    let ExprRef::Binary(b) = e else {
+        panic!("expected And(..) at the top, got {e:?}");
     };
+    assert_eq!(b.get(&ast).op, BinOp::And);
 }
 
 #[test]
@@ -77,42 +69,29 @@ fn relational_blocked_after_tighter_op() {
 
 #[test]
 fn assignment_is_right_associative() {
-    let ast = expr_of("fn f() -> nil { let mut x = 0; let mut y = 0; let mut z = 0; x = y = z; }");
-    let items = ast.module_items(ast.root);
-    let f = items
-        .iter()
-        .find(|i| matches!(ast.item(**i), ItemKind::Fn(_)))
-        .expect("fn");
-    let ItemKind::Fn(d) = ast.item(*f) else {
-        unreachable!()
-    };
-    let stmts = ast.block(d.body);
-    let Kind::Stmt(StmtKind::ExprStmt(e)) = ast.kind(stmts[3].id()) else {
-        panic!("expr stmt");
+    let src = "fn f() -> nil { let mut x = 0; let mut y = 0; let mut z = 0; x = y = z; }";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let stmts = &first_fn_body(&ast).get(&ast).stmts;
+    let StmtRef::Expr(outer) = stmts[3] else {
+        panic!("expr stmt, got {:?}", stmts[3]);
     };
     // outer: x = (y = z); inner must also be an Assign
-    let Kind::Expr(ExprKind::Assign {
-        target: outer_t,
-        value: outer_v,
-        ..
-    }) = ast.kind(e.id())
-    else {
-        panic!("outer Assign, got {:?}", ast.kind(e.id()));
+    let ExprRef::Assign(oh) = outer else {
+        panic!("outer Assign, got {outer:?}");
     };
-    let Kind::Expr(ExprKind::Assign {
-        target: inner_t, ..
-    }) = ast.kind(outer_v.id())
-    else {
-        panic!("inner Assign, got {:?}", ast.kind(outer_v.id()));
+    let o = oh.get(&ast);
+    let ExprRef::Assign(ih) = o.value else {
+        panic!("inner Assign, got {:?}", o.value);
     };
-    let Kind::Expr(ExprKind::Path { segs }) = ast.kind(outer_t.id()) else {
-        panic!("x")
+    let ExprRef::Path(pt) = o.target else {
+        panic!("x, got {:?}", o.target);
     };
-    assert_eq!(ast.name(segs[0].name), "x");
-    let Kind::Expr(ExprKind::Path { segs }) = ast.kind(inner_t.id()) else {
-        panic!("y")
+    assert_eq!(ast.name(pt.get(&ast).segs[0].name), "x");
+    let ExprRef::Path(it) = ih.get(&ast).target else {
+        panic!("y, got {:?}", ih.get(&ast).target);
     };
-    assert_eq!(ast.name(segs[0].name), "y");
+    assert_eq!(ast.name(it.get(&ast).segs[0].name), "y");
 }
 
 #[test]
@@ -129,50 +108,40 @@ fn invalid_assignment_target_diagnoses() {
 #[test]
 fn precedence_shapes() {
     // `1 + 2 * 3` → Add(1, Mul(2, 3))
-    let src = "fn f() -> nil { let x = 1 + 2 * 3; }";
-    let ast = expr_of(src);
-    let e = init_of(src);
-    let Kind::Expr(ExprKind::Binary {
-        op: BinOp::Add,
-        rhs,
-        ..
-    }) = ast.kind(e.id())
-    else {
-        panic!("Add at top, got {:?}", ast.kind(e.id()));
+    let (ast, e) = init_of("fn f() -> nil { let x = 1 + 2 * 3; }");
+    let ExprRef::Binary(bh) = e else {
+        panic!("Add at top, got {e:?}");
     };
-    let Kind::Expr(ExprKind::Binary { op: BinOp::Mul, .. }) = ast.kind(rhs.id()) else {
-        panic!("Mul on the right, got {:?}", ast.kind(rhs.id()));
+    let b = bh.get(&ast);
+    assert_eq!(b.op, BinOp::Add);
+    let ExprRef::Binary(rh) = b.rhs else {
+        panic!("Mul on the right, got {:?}", b.rhs);
     };
+    assert_eq!(rh.get(&ast).op, BinOp::Mul);
 
     // `1 * 2 + 3` → Add(Mul(1, 2), 3)
-    let src = "fn f() -> nil { let x = 1 * 2 + 3; }";
-    let ast = expr_of(src);
-    let e = init_of(src);
-    let Kind::Expr(ExprKind::Binary {
-        op: BinOp::Add,
-        lhs,
-        ..
-    }) = ast.kind(e.id())
-    else {
-        panic!("Add at top, got {:?}", ast.kind(e.id()));
+    let (ast, e) = init_of("fn f() -> nil { let x = 1 * 2 + 3; }");
+    let ExprRef::Binary(bh) = e else {
+        panic!("Add at top, got {e:?}");
     };
-    let Kind::Expr(ExprKind::Binary { op: BinOp::Mul, .. }) = ast.kind(lhs.id()) else {
-        panic!("Mul on the left, got {:?}", ast.kind(lhs.id()));
+    let b = bh.get(&ast);
+    assert_eq!(b.op, BinOp::Add);
+    let ExprRef::Binary(lh) = b.lhs else {
+        panic!("Mul on the left, got {:?}", b.lhs);
     };
+    assert_eq!(lh.get(&ast).op, BinOp::Mul);
 
     // `a || b && c` → Or(a, And(b, c)); `a && b || c` → Or(And(a, b), c)
-    let src = "fn f() -> nil { let x = a || b && c; }";
-    let ast = expr_of(src);
-    let e = init_of(src);
-    let Kind::Expr(ExprKind::Binary {
-        op: BinOp::Or, rhs, ..
-    }) = ast.kind(e.id())
-    else {
-        panic!("Or at top, got {:?}", ast.kind(e.id()));
+    let (ast, e) = init_of("fn f() -> nil { let x = a || b && c; }");
+    let ExprRef::Binary(bh) = e else {
+        panic!("Or at top, got {e:?}");
     };
-    let Kind::Expr(ExprKind::Binary { op: BinOp::And, .. }) = ast.kind(rhs.id()) else {
-        panic!("And on the right, got {:?}", ast.kind(rhs.id()));
+    let b = bh.get(&ast);
+    assert_eq!(b.op, BinOp::Or);
+    let ExprRef::Binary(rh) = b.rhs else {
+        panic!("And on the right, got {:?}", b.rhs);
     };
+    assert_eq!(rh.get(&ast).op, BinOp::And);
 }
 
 #[test]
@@ -181,38 +150,22 @@ fn prefix_and_postfix_compose() {
     // value access now: the path closes at `a`, the field chains as
     // the postfix loop's Field node; the unary wraps whatever the
     // operand grammar built
-    let src = "fn f() -> nil { let x = -a.b; }";
-    let ast = expr_of(src);
-    let e = init_of(src);
-    let Kind::Expr(ExprKind::Unary {
-        op: UnOp::Neg,
-        expr,
-        ..
-    }) = ast.kind(e.id())
-    else {
-        panic!("Unary at top, got {:?}", ast.kind(e.id()));
+    let (ast, e) = init_of("fn f() -> nil { let x = -a.b; }");
+    let ExprRef::Unary(uh) = e else {
+        panic!("Unary at top, got {e:?}");
     };
-    let Kind::Expr(ExprKind::Field { .. }) = ast.kind(expr.id()) else {
-        panic!("Field under the unary, got {:?}", ast.kind(expr.id()));
-    };
+    let u = uh.get(&ast);
+    assert_eq!(u.op, UnOp::Neg);
+    assert!(matches!(u.expr, ExprRef::Field(_)));
 
     // postfix `.` on a non-path atom IS a Field node: `-(x).b`
-    let src = "fn f() -> nil { let x = -(x).b; }";
-    let ast = expr_of(src);
-    let e = init_of(src);
-    let Kind::Expr(ExprKind::Unary {
-        op: UnOp::Neg,
-        expr,
-        ..
-    }) = ast.kind(e.id())
-    else {
-        panic!("Unary at top, got {:?}", ast.kind(e.id()));
+    let (ast, e) = init_of("fn f() -> nil { let x = -(x).b; }");
+    let ExprRef::Unary(uh) = e else {
+        panic!("Unary at top, got {e:?}");
     };
-    let Kind::Expr(ExprKind::Field { .. }) = ast.kind(expr.id()) else {
-        panic!("Field under the unary, got {:?}", ast.kind(expr.id()));
-    };
+    assert!(matches!(uh.get(&ast).expr, ExprRef::Field(_)));
 
     // `- - x` chains prefix ops
-    let src = "fn f() -> nil { let x = - -1; }";
-    expr_of(src);
+    let (_, diags) = parse("fn f() -> nil { let x = - -1; }", Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
 }

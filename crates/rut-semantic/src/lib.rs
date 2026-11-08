@@ -1,7 +1,7 @@
 //! Semantic tokens + document symbols — the M1 classifier (rut-semantic). Pure rut-side, no LSP types: token-level classes come from the
 //! lexed stream (keywords by text; literals; f-string
 //! tiling with fully-lexed holes), identifier classes from
-//! a flat walk of the AST arena. Names are interner ids whose nodes carry
+//! a walk of the slot tree. Names are interner ids whose nodes carry
 //! whole-construct spans, so name positions are **recovered**: a bounded
 //! scan for the matching `Ident` token inside the node's span (the parser
 //! itself matched by text, so this is reliable; a miss skips the name —
@@ -17,7 +17,7 @@ mod recover;
 mod symbols;
 mod tokens;
 
-use rut_ast::ast::Ast;
+use rut_ast::Ast;
 
 use self::names::classify_ast;
 use self::recover::finalize;

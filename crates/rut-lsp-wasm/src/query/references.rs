@@ -27,7 +27,7 @@
 
 use std::collections::HashSet;
 
-use rut_ast::ast::Ast;
+use rut_ast::Ast;
 use rut_semantic::Span;
 use rut_semantic::{Tok, Token};
 
@@ -306,7 +306,7 @@ fn targets<'a>(ctx: &definition::Ctx<'a>, pos: u32, name: &str) -> Vec<Target<'a
 /// tokens/AST; the other files lex+parse their indexed source once
 struct Parsed {
     toks: Vec<Token>,
-    ast: rut_ast::ast::Ast,
+    ast: rut_ast::Ast,
 }
 
 /// a declaring ident never doubles as a reference to a DIFFERENT
@@ -376,7 +376,7 @@ fn scan_files(
         chain.extend(ctx.idxs.iter().copied().filter(|x| x.origin != f.origin));
         // the doc reuses the query pipeline's tokens/AST; the other
         // files ride their per-file parse
-        let (toks, ast): (&[Token], &rut_ast::ast::Ast) =
+        let (toks, ast): (&[Token], &rut_ast::Ast) =
             match parsed.iter().find(|(i, _)| std::ptr::eq(*i, *f)) {
                 Some(p) => (&p.1.toks, &p.1.ast),
                 None if is_doc => (ctx.toks, ctx.ast),

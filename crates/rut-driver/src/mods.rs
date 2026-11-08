@@ -34,8 +34,8 @@
 
 use std::collections::BTreeMap;
 
-use rut_ast::ast::{Ast, ItemKind, Linkage, Vis};
-use rut_parser::{parse, Mode};
+use rut_ast::{Ast, ItemRef, Linkage, Vis};
+use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::session::{Mounted, MountedBody};
 
@@ -134,8 +134,8 @@ pub fn mount_mod_children(
     child_file: &str,
     read: &mut dyn FnMut(&str, &str) -> Result<ChildLookup, String>,
 ) -> Result<BTreeMap<String, ModSource>, String> {
-    let (ast, diags) = parse(root_text, mode);
-    if !diags.is_empty() {
+    let p = parse_with_recover(root_text, mode, ParseOpts::default());
+    if !p.ast.is_clean() {
         return Ok(BTreeMap::new()); // the compile reports the syntax, loudly
     }
     let mut out = BTreeMap::new();
@@ -143,7 +143,7 @@ pub fn mount_mod_children(
     mount_rec(
         "",
         child_file,
-        &ast,
+        &p.ast,
         mode,
         child_file,
         read,
@@ -176,11 +176,13 @@ fn mount_rec(
     out: &mut BTreeMap<String, ModSource>,
     visiting: &mut Vec<String>,
 ) -> Result<(), String> {
-    for it in ast.module_items(ast.root).to_vec() {
-        let ItemKind::ModDecl { vis, name } = ast.item(it) else {
+    for it in ast.root().items(ast) {
+        let ItemRef::ModDecl(h) = it else {
             continue;
         };
-        let name = ast.name(*name).to_string();
+        let d = h.get(ast);
+        let (vis, name) = (d.vis, d.name);
+        let name = ast.name(name).to_string();
         let child_path = if parent.is_empty() {
             name.clone()
         } else {
@@ -199,12 +201,12 @@ fn mount_rec(
                 visiting.push(canon);
                 // the child parses to its OWN module root — recurse
                 // into its declarations, never splice it here
-                let (child_ast, diags) = parse(&text, mode);
-                if diags.is_empty() {
+                let cp = parse_with_recover(&text, mode, ParseOpts::default());
+                if cp.ast.is_clean() {
                     mount_rec(
                         &child_path,
                         &file,
-                        &child_ast,
+                        &cp.ast,
                         mode,
                         child_file,
                         read,
@@ -217,7 +219,7 @@ fn mount_rec(
                     child_path.clone(),
                     ModSource {
                         path: child_path,
-                        vis: *vis,
+                        vis,
                         text,
                         file: file.clone(),
                     },
@@ -340,16 +342,17 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     let root_declares: BTreeMap<String, Vis> = match &pkg.body {
         MountedBody::Source { text, is_decl } => {
             let m = if *is_decl { Mode::Decl } else { Mode::Impl };
-            let (ast, diags) = parse(text, m);
-            if !diags.is_empty() {
+            let p = parse_with_recover(text, m, ParseOpts::default());
+            if !p.ast.is_clean() {
                 problems.extend(
-                    diags
+                    p.ast
+                        .errors()
                         .iter()
                         .map(|d| format!("`{spec}` (mod.rut): {}", d.msg)),
                 );
                 BTreeMap::new()
             } else {
-                let decls = decl_rows(&ast);
+                let decls = decl_rows(&p.ast);
                 let declared: BTreeMap<String, Vis> = decls
                     .iter()
                     .filter(|d| d.kind == DeclKind::Mod)
@@ -357,7 +360,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .collect();
                 set.units.push(ModuleUnit {
                     path: String::new(),
-                    ast,
+                    ast: p.ast,
                     decls,
                 });
                 declared
@@ -367,16 +370,17 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             root_surface: Some(text),
             ..
         } => {
-            let (ast, diags) = parse(text, Mode::Decl);
-            if !diags.is_empty() {
+            let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
+            if !p.ast.is_clean() {
                 problems.extend(
-                    diags
+                    p.ast
+                        .errors()
                         .iter()
                         .map(|d| format!("`{spec}` ({child_file}): {}", d.msg)),
                 );
                 BTreeMap::new()
             } else {
-                let decls = decl_rows(&ast);
+                let decls = decl_rows(&p.ast);
                 let declared: BTreeMap<String, Vis> = decls
                     .iter()
                     .filter(|d| d.kind == DeclKind::Mod)
@@ -384,7 +388,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                     .collect();
                 set.units.push(ModuleUnit {
                     path: String::new(),
-                    ast,
+                    ast: p.ast,
                     decls,
                 });
                 declared
@@ -395,22 +399,23 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     // the children, mod-path order — each its own module root
     let mut child_decls: BTreeMap<String, BTreeMap<String, Vis>> = BTreeMap::new();
     for (path, m) in &pkg.mods {
-        let (ast, diags) = parse(&m.text, mode);
-        if !diags.is_empty() {
+        let p = parse_with_recover(&m.text, mode, ParseOpts::default());
+        if !p.ast.is_clean() {
             problems.extend(
-                diags
+                p.ast
+                    .errors()
                     .iter()
                     .map(|d| format!("`{spec}` ({path}/{child_file}): {}", d.msg)),
             );
             child_decls.insert(path.clone(), BTreeMap::new());
             set.units.push(ModuleUnit {
                 path: path.clone(),
-                ast,
+                ast: p.ast,
                 decls: vec![],
             });
             continue;
         }
-        let decls = decl_rows(&ast);
+        let decls = decl_rows(&p.ast);
         let declared: BTreeMap<String, Vis> = decls
             .iter()
             .filter(|d| d.kind == DeclKind::Mod)
@@ -419,7 +424,7 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
         child_decls.insert(path.clone(), declared);
         set.units.push(ModuleUnit {
             path: path.clone(),
-            ast,
+            ast: p.ast,
             decls,
         });
     }
@@ -478,26 +483,47 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
 /// qualified-use leaf gate's reads.
 pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
     let mut out = Vec::new();
-    for it in ast.module_items(ast.root).to_vec() {
-        let (name, vis, kind, is_async) = match ast.item(it) {
-            ItemKind::Fn(d) => (d.name, d.vis, DeclKind::Fn, d.is_async),
-            ItemKind::Alias(d) => (d.name, d.vis, DeclKind::Alias, false),
-            ItemKind::ModuleLet { vis, name, .. } => (*name, *vis, DeclKind::ModuleLet, false),
-            ItemKind::Enum { vis, name, .. } => (*name, *vis, DeclKind::Enum, false),
-            ItemKind::Struct { vis, name, .. } => (*name, *vis, DeclKind::Struct, false),
-            ItemKind::Class { vis, name, .. } => (*name, *vis, DeclKind::Class, false),
-            ItemKind::Interface { vis, name, .. } => (*name, *vis, DeclKind::Interface, false),
-            ItemKind::ModDecl { vis, name } => (*name, *vis, DeclKind::Mod, false),
+    for it in ast.root().items(ast) {
+        let (name, vis, kind, is_async) = match it {
+            ItemRef::Fn(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::Fn, d.is_async)
+            }
+            ItemRef::Alias(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::Alias, false)
+            }
+            ItemRef::ModuleLet(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::ModuleLet, false)
+            }
+            ItemRef::Enum(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::Enum, false)
+            }
+            ItemRef::Struct(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::Struct, false)
+            }
+            ItemRef::Class(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::Class, false)
+            }
+            ItemRef::Interface(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::Interface, false)
+            }
+            ItemRef::ModDecl(h) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::Mod, false)
+            }
             // a `host fn` surface row — the host tree's leaf decl: the
             // declaring `pub` rides it, so a qualified use validates
             // (`pub host fn` crosses, a bare `host fn` is private)
-            ItemKind::SurfaceFn {
-                linkage: Linkage::Host,
-                vis,
-                name,
-                is_async,
-                ..
-            } => (*name, *vis, DeclKind::HostFn, *is_async),
+            ItemRef::SurfaceFn(h) if matches!(h.get(ast).linkage, Linkage::Host) => {
+                let d = h.get(ast);
+                (d.name, d.vis, DeclKind::HostFn, d.is_async)
+            }
             _ => continue,
         };
         out.push(DeclRow {
