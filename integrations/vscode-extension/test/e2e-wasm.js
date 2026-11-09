@@ -10,17 +10,17 @@
 //
 // Plus the hover/completion smoke the survey demanded: a `?T` hover
 // (the RFC 0043 alias rendering phase 1 fixed), member hover/completion
-// through a `?Circle` let-binding (the ty_head fix), and a bare
-// nmapset/nmap_host completion (the std-surface 8/8 fix) — all against
-// the shipped binary.
+// through a `?Circle` let-binding (the ty_head fix), and the ambient
+// core completion (the prelude's plain bare rows) — all against the
+// shipped binary.
 //
 // Phase 2 (lsp-features) adds the DEFINITION round trips: request
 // position → response span == the declaring ident EXACTLY, through all
 // three resolution layers — within-file (binding pass + decl layer),
 // cross-file (the use graph into a rut.add_def'ed module), and stdlib
-// (the embedded surface's true rut/... source path) — plus a
-// typeDefinition smoke. A feature without a gate through the shipped
-// artifact does not land.
+// (a STORE-MOUNTED dep's true source file) — plus a typeDefinition
+// smoke. A feature without a gate through the shipped artifact does
+// not land.
 //
 // Phase 3 (lsp-features) adds the INLAY smokes: type hints on
 // unannotated bindings and param-name hints at exact-arity call sites,
@@ -38,14 +38,19 @@
 // (verbatim signature + active parameter correct at first/middle/
 // nested positions; an arity mismatch -> no help).
 //
-// Phase 5 (manifest-deps) adds the DEP ABI: rut_parse_manifest (the
-// repo's own path+url fixture manifest through the envelope — names,
-// entry modes, the Rust-computed cache path), rut_add_def_named (a
-// named dep feeding the `use <name>::` tier), and rut_add_bundle (the
-// committed dist/std/pouch.rutbundle — the offline url-dep fixture the
-// CLI tests use — landing pouch's surface in hover + go-to-definition).
-// These exports ride the RAW ABI (the smoke.js protocol): the extension
-// binding learns them in the next lane, the ABI gate ships first.
+// Phase 5 (manifest-deps) added the DEP ABI; today's shape is the
+// three-lane law: the provider queries, the workspace-scan push
+// (rut.add_def / rut.add_def_mod / rut.parse_manifest), and the dep
+// pull (set_env + rut.resolve_deps — the read-only walk over the
+// injected env). The std-zips phase then moved std OFF the ambient
+// wasm onto the dep lane for good: the core prelude is the ONE
+// ambient index, every other std pkg reaches the editor exactly the
+// way `rut new` scaffolds it — a manifest row, a lock pin, and the
+// global store — which this gate serves through a synthesized STORE
+// fixture (deps/<name>@<sha256[:16]>/meta.json + the unpack/ tree,
+// the urls and pins derived from the CLI template's own pin table).
+// No raw-ABI exports exist anymore; every lane below goes through
+// the extension's binding.
 //
 // Runs headless in plain node — no `code` needed; the Extension Host
 // suite (test:host) stays the loud-skip lane on machines without VS Code.
@@ -289,73 +294,24 @@ async function main() {
         smokes++;
     }
 
-    // ---- bare completion over the std surface (A2's honest bare scope):
-    // a foreign name is a PLAIN bare item only when the doc's `use` names
-    // it — every other foreign name rides the AUTO-IMPORT tier (the
-    // `use pkg::Name;` insert rides the item). The std surface is the
-    // editor's ambient dep lane, so the family pair still completes at a
-    // bare position — as import offers, sorted after the locals. ----
+    // ---- the ambient lane is the PRELUDE alone (std rides the dep
+    // lane now): a lone projectless doc gets the ambient core rows —
+    // StackTrace and panic complete PLAIN (`prelude builtin` binds in
+    // every unit, no import edit rides the item) — and NOTHING else
+    // from std: no Vec, no HashMap, no Logger. The honest none is the
+    // point (a lone file declares no deps, exactly like any
+    // third-party lib); the mounted world below lights std up. ----
     {
-        const uri = 'file:///ws/e2e-std.rut';
+        const uri = 'file:///ws/e2e-ambient.rut';
         const src = 'fn main() -> nil {\n}\n';
         const a = await rut.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
-                `std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
+                `ambient probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const bareItems = await rut.complete(uri, 0, 0, src);
         const labels = bareItems.map((i) => i.label);
-        // the type-name-law batch: the completion pin offers the family
-        // pair — now through the auto-import tier (the alias-row form is
-        // repealed, so the `pub type HashMap<K, ..>` rows that used to sit
-        // beside the class in the index are gone)
-        for (const want of ['HashMap', 'HashSet']) {
-            if (!labels.includes(want))
-                bad.push(`bare completion lacks nmapset's '${want}' (${labels.length} items)`);
-        }
-        for (const nm of ['HashMap', 'HashSet']) {
-            const hit = bareItems.find((i) => i.label === nm);
-            if (!hit) continue;
-            if (!/^nmapset::.+ — import$/.test(hit.detail || '')) {
-                bad.push(`bare completion '${nm}' is not the import offer: '${hit.detail}'`);
-            }
-            const edits = hit.additionalTextEdits || [];
-            if (edits.length !== 1 || !/use nmapset::\{? ?/.test(edits[0].newText || '')) {
-                bad.push(
-                    `bare completion '${nm}' carries no use-insert edit: ${JSON.stringify(edits)}`,
-                );
-            }
-            if (!hit.sortText?.startsWith('~')) {
-                bad.push(
-                    `import offer '${nm}' must sort after the locals: ${JSON.stringify(hit.sortText)}`,
-                );
-            }
-        }
-        // nmap-host: the width moved INTO the name (no overloading) — the
-        // keyed-lane fn is `map_hput` now (the `_i` spelling is gone with
-        // the integer-suffix plan)
-        if (!labels.includes('map_hput'))
-            bad.push(`bare completion lacks nmap_host's 'map_hput' (${labels.length} items)`);
-        // nmap-hostvals P4: the probing core's lanes left the surface — the
-        // round-1 opaque-keyed `map_entry` must not come back
-        if (labels.includes('map_entry'))
-            bad.push(`bare completion still offers nmap_host's 'map_entry' (deleted at P4)`);
-        // the 9th std pkg (the rut-json batch phase 1): json's base surface —
-        // the entries + the traits + the reader/writer — rides every bare
-        // completion exactly like nmapset's types do (std_surface 8 -> 9)
-        for (const want of [
-            'encodeJson',
-            'decodeJson',
-            'decodeJsonBytes',
-            'JsonSerialize',
-            'JsonDeserialize',
-            'JsonReader',
-            'JsonWriter',
-        ]) {
-            if (!labels.includes(want))
-                bad.push(`bare completion lacks json's '${want}' (${labels.length} items)`);
-        }
         // the ambient core rows stay PLAIN bare offers (the `prelude
         // builtin` spellings bind in every unit — no import edit on them)
         for (const want of ['StackTrace', 'panic']) {
@@ -364,6 +320,183 @@ async function main() {
             else if ((hit.additionalTextEdits || []).length !== 0) {
                 bad.push(`ambient core row '${want}' must complete plain, no import edit`);
             }
+        }
+        // std is NOT ambient: none of its names complete for a doc that
+        // declares no deps
+        for (const absent of ['Vec', 'HashMap', 'Logger', 'map_hput']) {
+            if (labels.includes(absent))
+                bad.push(`bare completion offers std's '${absent}' — std is not ambient`);
+        }
+        smokes++;
+    }
+
+    // ---- the std STORE world (std rides the dep lane): the project
+    // shape `rut new` scaffolds — a manifest declaring url deps, a
+    // lock pinning them, and the global store the walk reads. The
+    // fixture synthesizes the store exactly as `rut install` lays it:
+    // deps/<name>@<sha256[:16]>/ with meta.json vouching the FULL
+    // sha256 of the COMMITTED dist/std zip (the bytes the url names —
+    // asserted, so a stale mirror cannot serve quietly) and the
+    // unpack/ tree carrying the repo sources the zips pack. The urls
+    // and pins derive from the CLI template's own pin table, so a std
+    // re-cut moves this gate with it. ----
+    const stdZipPath = (name) => path.join(REPO, 'dist', 'std', `${name}.zip`);
+    const stdPins = (() => {
+        const manifestText = fs.readFileSync(
+            path.join(REPO, 'crates', 'rut-cli', 'template', 'rut.jsonc'),
+            'utf8',
+        );
+        const lockText = fs.readFileSync(
+            path.join(REPO, 'crates', 'rut-cli', 'template', 'rut.lock'),
+            'utf8',
+        );
+        const pins = {};
+        for (const name of ['pouch', 'ink']) {
+            const url = manifestText.match(
+                new RegExp(`"${name}"\\s*:\\s*\\{\\s*"url"\\s*:\\s*"([^"]+)"`),
+            )[1];
+            const row = lockText.match(new RegExp(`\\{[^{}]*"pkg"\\s*:\\s*"${name}"[^{}]*\\}`))[0];
+            pins[name] = { url, sha256: row.match(/"sha256"\s*:\s*"([0-9a-f]{64})"/)[1] };
+        }
+        return pins;
+    })();
+    const POUCH_STORE_DIR = `.rut/deps/pouch@${stdPins.pouch.sha256.slice(0, 16)}`;
+    const stdStoreFiles = (() => {
+        const files = new Map();
+        files.set(
+            '/ws/stdproj/rut.lock',
+            JSON.stringify(
+                {
+                    format: 'rutlock',
+                    format_version: 1,
+                    deps: Object.entries(stdPins).map(([pkg, { url, sha256 }]) => ({
+                        pkg,
+                        url,
+                        sha256,
+                    })),
+                },
+                null,
+                2,
+            ),
+        );
+        files.set(
+            '/ws/stdproj/rut.jsonc',
+            JSON.stringify({
+                name: 'stdproj',
+                deps: Object.fromEntries(
+                    Object.entries(stdPins).map(([n, { url }]) => [n, { url }]),
+                ),
+            }),
+        );
+        files.set('/ws/stdproj/src/mod.rut', 'fn main() -> nil {\n}\n');
+        for (const [name, { url, sha256 }] of Object.entries(stdPins)) {
+            const dir = `.rut/deps/${name}@${sha256.slice(0, 16)}`;
+            files.set(
+                `${dir}/meta.json`,
+                JSON.stringify({ name, url, sha256, format: 'zip', format_version: 1 }),
+            );
+            if (name === 'ink') {
+                // the unpack law: ink's zip carries its host dep as an
+                // embedded group under the extracted tree, and ink's own
+                // manifest points its path row into it — the fixture
+                // mirrors the shape (the group's bytes are the repo's
+                // own ink_host sources, what the zip packs)
+                files.set(
+                    `${dir}/unpack/rut.jsonc`,
+                    JSON.stringify({
+                        name: 'ink',
+                        deps: { ink_host: { path: 'deps/ink_host' } },
+                    }),
+                );
+                files.set(
+                    `${dir}/unpack/deps/ink_host/rut.jsonc`,
+                    JSON.stringify({
+                        name: 'ink_host',
+                        type: 'host',
+                        entry: { type: './ink_host.d.rut' },
+                    }),
+                );
+                files.set(
+                    `${dir}/unpack/deps/ink_host/src/ink_host.d.rut`,
+                    fs.readFileSync(
+                        path.join(REPO, 'rut', 'ink_host', 'src', 'ink_host.d.rut'),
+                        'utf8',
+                    ),
+                );
+            } else {
+                files.set(`${dir}/unpack/rut.jsonc`, JSON.stringify({ name }));
+            }
+            files.set(
+                `${dir}/unpack/src/mod.rut`,
+                fs.readFileSync(path.join(REPO, 'rut', name, 'src', 'mod.rut'), 'utf8'),
+            );
+        }
+        return files;
+    })();
+    const makeStdEnv = () => {
+        const enc = new TextEncoder();
+        return {
+            read(p) {
+                const v = stdStoreFiles.get(p);
+                return v === undefined ? null : enc.encode(v);
+            },
+            readDir(p) {
+                const names = [...stdStoreFiles.keys()]
+                    .filter((k) => k.startsWith(`${p}/`))
+                    .map((k) => k.slice(p.length + 1).split('/')[0]);
+                return names.length ? [...new Set(names)] : null;
+            },
+            isDir(p) {
+                return [...stdStoreFiles.keys()].some((k) => k.startsWith(`${p}/`));
+            },
+            notify() {},
+        };
+    };
+    let std;
+    {
+        // the store vouches the pins: the committed zips' bytes hash to
+        // the lock pins the fixture serves (the same law rut install
+        // verifies — a drifted mirror dies here, not in a test below)
+        for (const [name, { sha256 }] of Object.entries(stdPins)) {
+            assert.strictEqual(
+                crypto
+                    .createHash('sha256')
+                    .update(fs.readFileSync(stdZipPath(name)))
+                    .digest('hex'),
+                sha256,
+                `dist/std/${name}.zip matches the template pin`,
+            );
+        }
+        std = await RutLsp.load(fs.readFileSync(WASM_PATH), makeStdEnv());
+        // the extension's own sequence: the manifest table first, then
+        // the walk mounts the store's world into the same defs store
+        const table = await std.parseManifest(stdStoreFiles.get('/ws/stdproj/rut.jsonc'));
+        assert.ok(!table.error && table.name === 'stdproj', `manifest: ${JSON.stringify(table)}`);
+        assert.strictEqual(
+            table.deps.filter((r) => r.source.kind === 'url').length,
+            2,
+            `the url rows: ${JSON.stringify(table.deps)}`,
+        );
+        const wout = await std.resolveDeps(['/ws/stdproj']);
+        assert.ok(
+            !wout.error && wout.missing.length === 0,
+            `the std store mounts clean: ${JSON.stringify(wout)}`,
+        );
+        // std answers through the mounted world: the module tier lists
+        // the deps, the auto-import tier offers Vec (pouch is a DIRECT
+        // dep of the project, so the use insert rides the item)
+        const projUri = 'file:///ws/stdproj/src/mod.rut';
+        const projSrc = stdStoreFiles.get('/ws/stdproj/src/mod.rut');
+        await std.analyze(projUri, projSrc);
+        const bare = await std.complete(projUri, 0, 0, projSrc);
+        const bareLabels = bare.map((i) => i.label);
+        if (!bareLabels.includes('Vec'))
+            bad.push(
+                `mounted-world bare completion lacks pouch's 'Vec' (${bareLabels.length} items)`,
+            );
+        const vec = bare.find((i) => i.label === 'Vec');
+        if (vec && !/^pouch::Vec — import$/.test(vec.detail || '')) {
+            bad.push(`mounted 'Vec' is not the import offer: '${vec.detail}'`);
         }
         smokes++;
     }
@@ -388,9 +521,12 @@ async function main() {
 
         // A6 pin: the brace form rides the names tier (`{` is a trigger
         // char — the extension fires the request on the keystroke)
+        // through the MOUNTED pouch (the store world above — std rides
+        // the dep lane, never the ambient wasm)
         const bsrc = 'use pouch::{\nfn main() -> nil {\n}\n';
         const buri = 'file:///ws/e2e-use-brace.rut';
-        const bitems = await rut.complete(buri, 0, 'use pouch::{'.length, bsrc);
+        await std.analyze(buri, bsrc);
+        const bitems = await std.complete(buri, 0, 'use pouch::{'.length, bsrc);
         const blabels = bitems.map((i) => i.label);
         if (!blabels.includes('Vec'))
             bad.push(`use brace form lacks pouch's 'Vec' (got ${blabels.join(', ')})`);
@@ -399,11 +535,12 @@ async function main() {
 
     // ---- member completion through a CONSTRUCTOR binding, with the
     // completion lane's doc sync + dot guard (the completion-correctness
-    // phase): `let log = Logger("h")` types the binding from the ink
-    // surface's class (the ctor-call inference), `log.` offers the impl
-    // methods — and NEVER the bare tier's keyword/host-fn dump. The
-    // CURRENT text rides the request (rut.complete's src argument →
-    // the doc-sync complete), so the dot is fresh without the debounce. ----
+    // phase): `let log = Logger("h")` types the binding from the
+    // MOUNTED ink dep's class (the store world — std rides the dep
+    // lane; the ctor-call inference), `log.` offers the impl methods —
+    // and NEVER the bare tier's keyword/free-fn dump. The CURRENT text
+    // rides the request (rut.complete's src argument → the doc-sync
+    // complete), so the dot is fresh without the debounce. ----
     {
         const uri = 'file:///ws/e2e-ctor-completion.rut';
         // the member NAMES after each dot keep the doc parsing clean; the
@@ -417,25 +554,25 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = await rut.analyze(uri, src);
+        const a = await std.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `ctor-completion probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const [cline, cch] = posOf(src, 'log.'); // cursor right after the dot
-        const items = await rut.complete(uri, cline, cch + 4, src);
+        const items = await std.complete(uri, cline, cch + 4, src);
         const labels = items.map((i) => i.label);
         for (const want of ['new', 'debug', 'info', 'warn', 'error']) {
             if (!labels.includes(want))
                 bad.push(`ctor binding completion lacks '${want}' (got ${labels.join(', ')})`);
         }
         if (labels.includes('abs'))
-            bad.push(`ctor binding completion leaked the host fn 'abs' (got ${labels.join(', ')})`);
+            bad.push(`ctor binding completion leaked the free fn 'abs' (got ${labels.join(', ')})`);
         // the dot guard: an unresolved receiver answers EMPTY, never the
         // keyword table
         const [uline, uch] = posOf(src, 'someUnknown.');
-        const guarded = await rut.complete(uri, uline, uch + 'someUnknown.'.length, src);
+        const guarded = await std.complete(uri, uline, uch + 'someUnknown.'.length, src);
         if (guarded.length !== 0) {
             bad.push(
                 `dot guard failed: 'someUnknown.' completed ${guarded.length} item(s): ${guarded
@@ -697,7 +834,7 @@ async function main() {
     // response span == the declaring ident EXACTLY. Three resolution
     // layers gated through the SHIPPED artifact: within-file (the binding
     // pass + decl layer), cross-file (the use graph), stdlib (the
-    // embedded surface's true rut/... source path) ----
+    // store-mounted dep's true source file) ----
 
     // expected [line, char] of the ident at `at` inside `needle`'s line
     const identAt = (src, lineRe, needle) => {
@@ -810,9 +947,11 @@ async function main() {
         smokes++;
     }
 
-    // STDLIB: `use pouch::{ Vec }` jumps into the EMBEDDED surface — the
-    // response carries the true rut/... path and the span of the
-    // declaring ident in the REAL pouch source
+    // STDLIB through the DEP LANE: `use pouch::{ Vec }` jumps into the
+    // STORE-MOUNTED source — the response carries the walk's own file
+    // spelling (the store's unpack tree, derived from the lock pin) and
+    // the span of the declaring ident in the REAL pouch source the
+    // fixture serves
     {
         const uri = 'file:///ws/e2e-def-std.rut';
         const src = [
@@ -822,27 +961,27 @@ async function main() {
             '}',
             '',
         ].join('\n');
-        const a = await rut.analyze(uri, src);
+        const a = await std.analyze(uri, src);
         if (a.diags.length !== 0) {
             bad.push(
                 `def-std probe doc has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
         const real = fs.readFileSync(path.join(REPO, 'rut', 'pouch', 'src', 'mod.rut'), 'utf8');
-        const wantUri = path.join('rut', 'pouch', 'src', 'mod.rut');
+        const wantUri = `${POUCH_STORE_DIR}/unpack/src/mod.rut`;
         const want = { uri: wantUri, range: identAt(real, /^pub class Vec/, 'Vec'), len: 3 };
-        let locs = await rut.definition(uri, ...identAt(src, /^use pouch::\{ Vec \};/, 'Vec'));
+        let locs = await std.definition(uri, ...identAt(src, /^use pouch::\{ Vec \};/, 'Vec'));
         if (!locs.length || locs[0].uri !== wantUri) {
             bad.push(
-                `std jump lost the true source path (got ${JSON.stringify(locs.map((l) => l.uri))})`,
+                `std jump lost the store-mounted source path (got ${JSON.stringify(locs.map((l) => l.uri))})`,
             );
         } else {
             eqRange(locs, want, 'std use name');
         }
-        locs = await rut.definition(uri, ...identAt(src, /let v = Vec\.new\(\);/, 'Vec'));
+        locs = await std.definition(uri, ...identAt(src, /let v = Vec\.new\(\);/, 'Vec'));
         if (!locs.length || locs[0].uri !== wantUri) {
             bad.push(
-                `std usage jump lost the true source path (got ${JSON.stringify(locs.map((l) => l.uri))})`,
+                `std usage jump lost the store-mounted source path (got ${JSON.stringify(locs.map((l) => l.uri))})`,
             );
         } else {
             eqRange(locs, want, 'std usage');
@@ -879,18 +1018,19 @@ async function main() {
     // ---- phase 3 (lsp-features): INLAY hints through the SHIPPED
     // artifact. CORPUS ground truth: every hint's label is checked
     // against the source's own decl lines (an annotation elsewhere in the
-    // file, the callee's ret, or the stdlib's true pouch decl). ----
+    // file, the callee's ret, or the stdlib's true pouch decl — the
+    // MOUNTED pouch, std being a dep like any other now). ----
     {
         const digestPath = path.join(REPO, 'examples', '02-digest', 'src', 'mod.rut');
         const digestSrc = fs.readFileSync(digestPath, 'utf8');
         const digestUri = `file://${digestPath}`;
-        const a = await rut.analyze(digestUri, digestSrc);
+        const a = await std.analyze(digestUri, digestSrc);
         if (a.diags.length !== 0) {
             bad.push(
                 `digest inlay probe has ${a.diags.length} diagnostic(s): ${JSON.stringify(a.diags[0])}`,
             );
         }
-        const all = await rut.inlayHint(
+        const all = await std.inlayHint(
             digestUri,
             { line: 0, character: 0 },
             { line: digestSrc.split('\n').length, character: 0 },
@@ -991,7 +1131,7 @@ async function main() {
         // hint's type text IS what hover shows for the same binding
         {
             const [line, ch] = posOnLine(digestSrc, /let d = hex_digits\(\);/, 'd');
-            const h = await rut.hover(digestUri, line, ch);
+            const h = await std.hover(digestUri, line, ch);
             const hint = all.find(
                 (x) => x.position.line === line && x.position.character === ch + 1,
             );
@@ -1350,21 +1490,27 @@ async function main() {
         smokes++;
     }
 
-    // ---- phase 5 (manifest-deps): the DEP ABI — rut_parse_manifest /
-    // rut_add_def_named / rut_add_bundle — through the SHIPPED artifact's
-    // raw exports. Separate instance: its state.defs is the std surface
-    // plus whatever this lane indexes, so the bundle assertions read
-    // exactly what the ABI landed (the binding lane above keeps its own
-    // instance unpolluted for the corpus walk). ----
+    // ---- phase 5 (manifest-deps): the DEP ABI — parse_manifest /
+    // add_def / add_def_mod / set_env + resolve_deps — through the
+    // SHIPPED artifact's binding. Separate instance, loaded over the
+    // SAME std store world (std rides the dep lane: ink mounts here,
+    // so the doc-sync lane's Logger assertions read the real walk),
+    // plus whatever this lane indexes — the binding lane above keeps
+    // its own instance unpolluted for the corpus walk. ----
     {
         // a FRESH binding instance: dropping the require cache re-executes
         // the bundle, so the wasm-bindgen module instantiates AGAIN from the
-        // same shipped bytes — this lane's defs are the std surface plus
-        // exactly what it indexes, and the corpus lane above keeps its
-        // instance unpolluted
+        // same shipped bytes — this lane's defs are the prelude, the
+        // mounted std world, and exactly what it indexes; the corpus lane
+        // above keeps its instance unpolluted
         delete require.cache[BINDING_PATH];
         const depBinding = require(BINDING_PATH);
-        const dep = await depBinding.RutLsp.load(fs.readFileSync(WASM_PATH));
+        const dep = await depBinding.RutLsp.load(fs.readFileSync(WASM_PATH), makeStdEnv());
+        const depWalk = await dep.resolveDeps(['/ws/stdproj']);
+        assert.ok(
+            !depWalk.error && depWalk.missing.length === 0,
+            `the dep-lane std store mounts: ${JSON.stringify(depWalk)}`,
+        );
 
         // the manifest: the repo's own path+url fixture (03-plugin) — the
         // same bytes rut-lsp's dep_table unit test pins
@@ -1860,7 +2006,7 @@ async function main() {
         };
         const envRut = await RutLsp.load(fs.readFileSync(WASM_PATH), fakeEnv);
         // set_env resolved (load returned) and the env-carrying core
-        // still answers: a clean analyze + the std surface intact
+        // still answers: a clean analyze + the prelude intact
         const envUri = 'file:///ws/e2e-env.rut';
         const envSrc = 'fn main() -> nil {\n}\n';
         const ea = await envRut.analyze(envUri, envSrc);
@@ -1871,7 +2017,7 @@ async function main() {
         );
         assert.ok(
             (await envRut.legend()).includes('keyword'),
-            'the env-carrying core still boots the std surface',
+            'the env-carrying core still boots the prelude',
         );
         // the zero-behavior law: no entry read the env this phase (the
         // walk is the next one) and the hint lane stayed quiet
@@ -2220,9 +2366,12 @@ async function main() {
     }
     console.log(
         `e2e-wasm: PASS — ${files.length} corpus files, 0 false diagnostics, ${symbols} symbols, ` +
-            `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/std-completion/ctor-completion+dot-guard/postfix-removal/` +
+            `${smokes} smoke assertions (legend/fixture/?T hover/primitives/member-nullable/` +
+            `ambient-core-honest-none/` +
+            `std-store-mount+mounted-bare-import/` +
+            `ctor-completion+dot-guard/postfix-removal/` +
             `field-decl-hover/inferred-ident/field-read-receiver/for-of-receiver/primitive-hover/` +
-            `def-within/def-cross/def-std/typeDefinition/` +
+            `def-within/def-cross/def-std-store-mounted/typeDefinition/` +
             `inlay-corpus-ground-truth/inlay-for-of-corpus/inlay-synthetic-laws/` +
             `refs-shadow/refs-cross/sighelp/` +
             `manifest-dep-table/manifest-decl+error/walked-dep-use-tier/` +

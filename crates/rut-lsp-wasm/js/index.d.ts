@@ -58,8 +58,9 @@ export interface LspHover {
 
 /**
  * an LSP Location — a definition target. `uri` is the doc itself, a
- * workspace origin, or (the embedded std surface) a repo-relative
- * source path the host resolves against the workspace.
+ * workspace origin, a store-mounted dep file, or (the core prelude)
+ * a repo-relative source path the host resolves against the
+ * workspace.
  */
 export interface LspLocation {
   uri: string;
@@ -209,7 +210,7 @@ export class RutLsp {
 
   /**
    * Load the shipped artifact once (the glue's `init` is module-global).
-   * The std surface is already indexed by the constructor. `env` — the
+   * The core prelude is already indexed by the constructor. `env` — the
    * injected read-only host environment — is optional: when present it
    * rides `set_env` before the handle returns (the dep walk's
    * capability); when omitted the core stays env-less, exactly the

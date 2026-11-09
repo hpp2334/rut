@@ -866,20 +866,31 @@ fn the_unnamed_fallback_stays_verbatim() {
     assert!(matches_pkg(&idx, "core"));
 }
 
-// ---- layer 4: the stdlib surface ----
+// ---- layer 4: the stdlib dep lane ----
 
 #[test]
 fn std_use_jumps_to_the_true_source_path() {
+    // std rides the dep lane: pouch mounts through the PUBLIC door
+    // (`deps::index_dep` — the same index the walk lays down), the
+    // repo's own source as a fixture, and F12 lands on the origin
+    // the fixture serves
+    const POUCH: &str = include_str!("../../../rut/pouch/src/mod.rut");
     let src = "use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec::new();\n}\n";
     let d = doc(src);
-    let extra = rut_lsp_wasm::std_surface::indexes();
+    let extra = [rut_lsp_wasm::deps::index_dep(
+        "pouch",
+        "rut/pouch/src/mod.rut",
+        POUCH,
+        None,
+        &[],
+    )];
     let hits = def(&d, at(&d.src, "= Vec::new();", 1) + 2, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     // the TRUE rut/... path, not a label
     assert_eq!(hits[0].uri, "rut/pouch/src/mod.rut");
     // the reported range is the declaring `Vec` ident in the REAL
-    // source file (normalize the embedded const like the index did)
-    let real = normalize(rut_lsp_wasm::std_surface::POUCH);
+    // source file (normalize the fixture const like the index did)
+    let real = normalize(POUCH);
     let ix = LineIndex::new(&real);
     let want = at(&real, "class Vec", 1) + 6;
     assert_eq!(span_of(&real, &ix, &hits[0]), (want, want + 3));

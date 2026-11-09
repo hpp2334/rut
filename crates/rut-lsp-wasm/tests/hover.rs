@@ -919,18 +919,26 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
 }
 
 #[test]
-fn host_fn_hover_via_the_calc_surface_has_no_next_decl_artifact() {
-    // the embedded calc surface's generic `pub fn abs<T requires
-    // f32 | f64>(x: T) -> T` (the old concrete `pub host fn abs(x:
-    // f64) -> f64;` used to render `...f64;pub` — the span ran into
-    // the next decl's `pub`); the hover markdown carries the clean
-    // signature only
+fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
+    // the calc fixture's generic `pub fn abs<T requires f32 | f64>(x:
+    // T) -> T` (the old concrete `pub host fn abs(x: f64) -> f64;`
+    // used to render `...f64;pub` — the span ran into the next
+    // decl's `pub`); the hover markdown carries the clean signature
+    // only. calc rides the PUBLIC dep lane — the repo's own source
+    // mounted as a fixture (`deps::index_dep`), exactly what the
+    // walk indexes
     let doc = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = index(&s, &ast, &toks);
-    let std = rut_lsp_wasm::std_surface::indexes();
+    let std = [rut_lsp_wasm::deps::index_dep(
+        "calc",
+        "rut/calc/src/mod.rut",
+        include_str!("../../../rut/calc/src/mod.rut"),
+        None,
+        &[],
+    )];
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.find("abs(").unwrap() as u32;

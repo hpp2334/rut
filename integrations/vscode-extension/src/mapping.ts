@@ -22,8 +22,8 @@ import type {
 // parses as-is; a walk origin (the crate's `/`-joined rooted string —
 // absolute, or the global store's `.rut/deps/…` spelling) resolves
 // through the same env path law (`..` collapses, the store anchors at
-// the real `$RUT_HOME`); a repo-relative path (the embedded std
-// surface's true source, e.g. `rut/pouch/src/mod.rut`) resolves
+// the real `$RUT_HOME`); a repo-relative path (the core prelude's
+// true source, e.g. `rut/core/src/core.d.rut`) resolves
 // against the workspace folders — a workspace that is the rut repo
 // gets a real jump into the stdlib. Nowhere to resolve: dropped
 // (never a wrong jump). A FULLY dropped answer — the wasm resolved

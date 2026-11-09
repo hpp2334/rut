@@ -11,9 +11,10 @@
 //! pass over the Decl-mode parse (the `.d.rut` filename convention),
 //! origin `core`, the TRUE repo-relative source path (the definition
 //! layer jumps there), and the manifest-shape stamps (`module`, mode).
-//! The `pub builtin` disposal pair (`StackTrace`, `panic`) keeps its
-//! import-gated spelling (`DefIndex::pub_gated`), so the names
-//! complete plain in the bare tier exactly as the engine binds them.
+//! The ambient pair (`StackTrace`, `panic` — `prelude builtin`
+//! spellings) keeps completing plain in the bare tier exactly as the
+//! engine binds them, while the import-gated `pub builtin` names ride
+//! `DefIndex::pub_gated` (the compiler's ambient split, mirrored).
 
 use crate::hover::{self, DefIndex};
 

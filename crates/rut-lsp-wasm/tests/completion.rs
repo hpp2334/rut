@@ -150,7 +150,7 @@ fn bare_completion_gates_pub_builtin_core_names() {
     let cast = doc_ast(&c2, Mode::Decl);
     let mut core = rut_lsp_wasm::hover::index(&c2, &cast, &ctoks);
     // the manifest module name — the stamp every face lays down
-    // (deps::index_dep, std_surface), and what the bare tier's
+    // (deps::index_dep, the prelude), and what the bare tier's
     // `(name, pkg)` imported gate matches against
     core.module = Some("core".to_string());
 
@@ -380,23 +380,66 @@ fn string_receiver_completes_str_surface() {
 // ---- the use-path tiers ----
 
 /// completions with the cursor just after `needle`, over the std
-/// surface (the doc itself carries nothing)
+/// fixture chain (the doc itself carries nothing)
 fn complete_over_std(doc: &str, needle: &str) -> Vec<CompletionOut> {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
-    let std = rut_lsp_wasm::std_surface::indexes();
+    let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
     complete(&chain, &toks, &ast, pos, &s, &DocMods::default())
 }
 
+/// the std chain as the PUBLIC dep lane serves it: the ambient
+/// prelude (the ONE embedded index) plus the repo's own std sources
+/// mounted as ordinary dep fixtures — `deps::index_dep`, the same
+/// door the walk rides (std is not special anymore; the library
+/// embeds nothing but core, tests embedding fixture sources is the
+/// normal shape). `direct_dep` mirrors the walk's root-manifest stamp
+/// — the auto-import tier's gate.
+fn std_dep_fixtures() -> Vec<DefIndex> {
+    let mount = |name: &str, uri: &str, src: &str| {
+        let mut idx = rut_lsp_wasm::deps::index_dep(name, uri, src, None, &[]);
+        idx.direct_dep = true;
+        idx
+    };
+    vec![
+        rut_lsp_wasm::prelude::index(),
+        mount(
+            "pouch",
+            "rut/pouch/src/mod.rut",
+            include_str!("../../../rut/pouch/src/mod.rut"),
+        ),
+        mount(
+            "nmapset",
+            "rut/nmapset/src/mod.rut",
+            include_str!("../../../rut/nmapset/src/mod.rut"),
+        ),
+        mount(
+            "calc",
+            "rut/calc/src/mod.rut",
+            include_str!("../../../rut/calc/src/mod.rut"),
+        ),
+        mount(
+            "json",
+            "rut/json/src/mod.rut",
+            include_str!("../../../rut/json/src/mod.rut"),
+        ),
+        mount(
+            "ink",
+            "rut/ink/src/mod.rut",
+            include_str!("../../../rut/ink/src/mod.rut"),
+        ),
+    ]
+}
+
 #[test]
 fn use_path_completion_lists_the_chain_module_names() {
     // `use ⏐` — module names from every NAMED index, the std
-    // surface included (std is not special; no hardcoded table)
+    // fixtures included (std is not special; no hardcoded table)
     let items = complete_over_std("use ", "use ");
     let ls = labels(&items);
     for want in ["pouch", "core", "nmapset", "calc", "json"] {
@@ -1016,7 +1059,7 @@ fn auto_import_offers_foreign_names_with_the_insert_edit() {
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
-    let std = rut_lsp_wasm::std_surface::indexes();
+    let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
@@ -1044,7 +1087,7 @@ fn auto_import_lands_after_the_last_leading_use() {
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
-    let std = rut_lsp_wasm::std_surface::indexes();
+    let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
@@ -1064,7 +1107,7 @@ fn auto_import_skips_leading_comments() {
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
-    let std = rut_lsp_wasm::std_surface::indexes();
+    let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
@@ -1083,7 +1126,7 @@ fn already_imported_names_are_not_re_offered() {
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
-    let std = rut_lsp_wasm::std_surface::indexes();
+    let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
@@ -1101,8 +1144,9 @@ fn already_imported_names_are_not_re_offered() {
 #[test]
 fn constructor_call_binding_completes_the_ink_surface() {
     // `let log = Logger("h")` — the constructor-call form types the
-    // binding from the indexed class (the embedded ink surface), so
-    // `log.` lists the impl methods (new/debug/info/warn/error/log)
+    // binding from the indexed class (the ink FIXTURE mounted through
+    // the dep lane), so `log.` lists the impl methods
+    // (new/debug/info/warn/error/log)
     let doc = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log.\n}\n";
     let items = complete_over_std(doc, "log.");
     let ls = labels(&items);
@@ -1112,8 +1156,9 @@ fn constructor_call_binding_completes_the_ink_surface() {
             "`{want}` completes through the ctor binding: {ls:?}"
         );
     }
-    // the bare tier's host fns never dump into a member position
-    assert!(!ls.contains(&"abs"), "no host-fn dump after a dot: {ls:?}");
+    // the bare tier's free fns never dump into a member position
+    // (calc's `abs` rides the same fixture chain)
+    assert!(!ls.contains(&"abs"), "no free-fn dump after a dot: {ls:?}");
 }
 
 #[test]

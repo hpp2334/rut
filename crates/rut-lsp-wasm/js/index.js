@@ -36,7 +36,7 @@ export class RutLsp {
 
   /**
    * Load the module once: the shipped artifact's bytes in, a live core
-   * out (the std surface is already indexed by the constructor).
+   * out (the core prelude is already indexed by the constructor).
    * The glue's `init` is module-global — one `load` per process; a
    * second call reuses the instantiated module.
    *

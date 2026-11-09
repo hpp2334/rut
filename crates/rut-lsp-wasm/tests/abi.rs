@@ -236,11 +236,19 @@ fn definition_on_the_mod_edge_names_the_child_file_top() {
 #[test]
 fn complete_syncs_the_doc_and_the_dot_guard_holds() {
     let (lsp, mut pool) = RutLsp::spawn_native();
-    // ctor inference rides the embedded ink surface: `Logger("h")`
-    // types the binding, `log.` lists the impl methods. The stored
-    // doc is STALE on purpose (the tail still short the dot — the
-    // analyze debounce's window): the `_in` entry stores the
-    // CURRENT text first, so the member tier still answers.
+    // ink rides the dep lane now (the embedded surface died): the
+    // repo's own ink source indexes as a named dep through the
+    // workspace-push ABI — ctor inference reads `Logger` off it, so
+    // `log.` lists the impl methods. The stored doc is STALE on
+    // purpose (the tail still short the dot — the analyze debounce's
+    // window): the `_in` entry stores the CURRENT text first, so the
+    // member tier still answers.
+    take(pool.run_until(lsp.add_def_mod(
+        "file:///ws/ink/src/mod.rut".to_string(),
+        "ink".to_string(),
+        String::new(),
+        include_str!("../../../rut/ink/src/mod.rut").to_string(),
+    )));
     let stale = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log\n}\n";
     let fresh = "fn go() -> nil {\n    let log = Logger(\"h\");\n    log.\n}\n";
     let uri = "file:///ws/sync.rut";
@@ -258,10 +266,10 @@ fn complete_syncs_the_doc_and_the_dot_guard_holds() {
             "`{want}` completes through the ctor binding: {labels:?}"
         );
     }
-    // the bare tier's host fns never dump into a member position
+    // the bare tier's free fns never dump into a member position
     assert!(
         !labels.contains(&"abs"),
-        "no host-fn dump after a dot: {labels:?}"
+        "no free-fn dump after a dot: {labels:?}"
     );
 
     // the dot guard: a receiver that is not a name (`probe().` — the

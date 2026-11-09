@@ -97,8 +97,9 @@ export function registerCompletion(rut: RutLsp): vscode.Disposable {
 }
 
 // ctrl+click / F12 — the wasm definition query, targets resolved to
-// real URIs (the embedded std surface jumps carry repo-relative paths
-// into the true rut/ sources)
+// real URIs (the core prelude's jumps carry repo-relative paths into
+// the true rut/ sources; dep-lane targets land in the store's
+// mounted files)
 export function registerDefinition(rut: RutLsp): vscode.Disposable {
     return vscode.languages.registerDefinitionProvider(SELECTOR, {
         async provideDefinition(
