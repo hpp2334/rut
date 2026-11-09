@@ -24,11 +24,6 @@ pub enum TyForm {
     HostStruct,
     /// `type X = A;` — a transparent alias
     Alias,
-    /// a dep manifest's `namespace` head (`calc`'s `Math`) — no surface
-    /// decl spells it, the mint in `deps::index_dep` records it so the
-    /// qualified shape (`Math::sqrt`, `Math::PI`) resolves like the
-    /// engine's bound namespace
-    Namespace,
 }
 
 impl TyForm {
@@ -42,7 +37,6 @@ impl TyForm {
             TyForm::Primitive => "primitive",
             TyForm::HostStruct => "host struct",
             TyForm::Alias => "type",
-            TyForm::Namespace => "namespace",
         }
     }
 }
@@ -252,13 +246,6 @@ pub struct DefIndex {
     /// definition layer prefers body hits over decl-surface hits when
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
-    /// the manifest-spelled qualified-access head (`calc_host`'s
-    /// `Math`) — the spelling the source grammar cannot say, so the
-    /// lanes that READ the manifest stamp it on the row (the dep
-    /// indexers, the walk's mounts); `None` = namespace-free. The
-    /// check lane's world assembly reads it off the group's first row
-    /// (`check::groups_from_defs`) — never a second baked table.
-    pub namespace: Option<String>,
     /// the dep is a DIRECT dep of the open document's package —
     /// declared in its own manifest (`deps`, `dev-deps`
     /// at the walk root). The compiler's closure check

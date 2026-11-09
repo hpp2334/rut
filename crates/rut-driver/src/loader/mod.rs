@@ -500,9 +500,8 @@ fn entry_child_lookup<'a>(
 /// in-archive counterpart of a directory mount: the declared kind
 /// dispatches (a `type = "host"` pkg is a decl surface whose mod tree
 /// rides the rows envelope; a `type = "lib"` pkg with a surface and no
-/// body is the surface-only dev state). The manifest's
-/// `namespace`/`consts` rows ride here too — the manifest is their
-/// only spelling.
+/// body is the surface-only dev state). The manifest's `consts` rows
+/// ride here too — the manifest is their only spelling.
 pub fn bundle_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -576,7 +575,7 @@ pub fn bundle_entry_pkg(
 /// root `.d.rut`, each child its mod path), else the flat surface
 /// entry lowers alone — the root file is `mod.d.rut`, the ONE
 /// canonical name the packer emits at both levels. The manifest's
-/// `namespace`/`consts` rows fold in either way.
+/// `consts` rows fold in either way (bound bare at the pkg's root).
 fn host_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -584,7 +583,6 @@ fn host_entry_pkg(
 ) -> Result<Mounted, String> {
     let fold = |mut m: Mounted| -> Mounted {
         m.entry = manifest.entry.clone();
-        m.namespace = manifest.namespace.clone();
         m.manifest = manifest.clone();
         let consts = manifest
             .consts

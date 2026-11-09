@@ -62,7 +62,7 @@ offset  field
         funcs: u32 count, then per func (below)
         exports: u32 count, then (name: IdentId, func: u32) pairs
         instantiation ledger: type rows, then fn identities   # below
-        surface: namespace, funcs, consts, types + scope blocks + type
+        surface: funcs, consts, types + scope blocks + type
                  exports, interface decls, inherent method surfaces,
                  the native rows   # below
         templates: window first fid, window end (exclusive), then
@@ -110,8 +110,9 @@ offset  field
   program-wide row; a consumer resolves its requests against a packaged
   binary's ledger. Type exports carry their generic parameter lists
   beside this (see the surface below).
-- **Surface**: the exported surface rides after `exports` — the
-  namespace head, funcs (with their async/host rows), consts, the
+- **Surface**: the exported surface rides after `exports` —
+  funcs (module rows spelled mod-qualified, with their async/host
+  rows), consts, the
   carried type descriptors + scope blocks + type exports (generic
   exports carry their parameter names in order), interface
   declarations (`SurfaceIface` — every module publishes the interfaces

@@ -317,11 +317,6 @@ pub struct Surface {
     /// the name context for every name in this surface (including
     /// `types`' descriptors); starts with the well-known table
     pub names: Interner,
-    /// The qualified-access head for a namespace module (`calc` ->
-    /// `Math`): members are reached as `<namespace>.<member>`. `None`
-    /// when the module has no namespace form. Routing is name-generic:
-    /// the compiler binds the head only when the module wrote it.
-    pub namespace: Option<IdentId>,
     pub funcs: Vec<SurfaceFn>,
     /// exported constants (native modules: `calc`)
     pub consts: Vec<SurfaceConst>,
@@ -1026,20 +1021,17 @@ pub fn encode(prog: &Program) -> Vec<u8> {
     e.out
 }
 
-/// The surface section (v16): namespace, funcs, consts, the carried
+/// The surface section (v16): funcs, consts, the carried
 /// type descriptors + scope blocks + type exports, trait decls, impl
 /// registrations (both ABI lists), the reserved inherent-impl table,
 /// and the native rows with their ambient bits — in that wire order.
+/// A module's rows spell their module path qualified (`math::sqrt`,
+/// the host rows' `net::connect` convention); the root's stay bare.
 fn encode_surface(e: &mut Enc, s: &Surface) {
-    // the qualified-access head (`calc` -> `Math`), if the module has
-    // a namespace form
-    match s.namespace {
-        Some(n) => {
-            e.u8(1);
-            e.u32(n.0);
-        }
-        None => e.u8(0),
-    }
+    // the retired namespace head's slot: always the empty tag now (the
+    // mechanism died — module paths and bare consts), still WRITTEN so
+    // old binaries and new share the one decode shape
+    e.u8(0);
     // funcs: the usable name, its signature, the exporter's local fn
     // id, and the async/host rows (decl/native modules only)
     e.u32(s.funcs.len() as u32);
@@ -1656,8 +1648,11 @@ fn decode_surface(
         names: interner.clone(),
         ..Default::default()
     };
-    // the namespace head, if the module has a namespace form
-    s.namespace = if d.u8()? != 0 { Some(name(d)?) } else { None };
+    // the retired namespace head's slot — read and discarded (an old
+    // binary may carry a name id there; the field is gone)
+    if d.u8()? != 0 {
+        let _ = name(d)?;
+    }
     // funcs
     let n = d.u32()? as usize;
     s.funcs = Vec::with_capacity(n);
@@ -2943,14 +2938,12 @@ mod tests {
         // v16: `Program.surface` is on the wire — decode(encode(p)).surface
         // == p.surface, every row, both ABI lists, ambient bits included
         let mut p = sample();
-        let math = p.interner.intern("Math");
         let double = p.interner.intern("double");
         let sleep = p.interner.intern("sleep");
         let pi = p.interner.intern("PI");
         let area = p.interner.intern("area");
         let point = p.interner.lookup("Point").unwrap();
         let shape = p.interner.lookup("Vec").unwrap();
-        p.surface.namespace = Some(math);
         p.surface.funcs.push(SurfaceFn {
             name: double,
             params: vec![TY_I32],

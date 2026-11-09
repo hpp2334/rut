@@ -799,11 +799,10 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let from = self.ctx.cur_mod.clone();
         let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name) else {
-            if self.ctx.used_pkgs.contains(self.ctx.name(segs[0].name)) {
-                self.package_head_error(segs, name, sp);
-                return Some(Err(()));
-            }
-            return None;
+            // the dep-module lane: a module a `use` bound (`use
+            // calc::{ math }`) or a declared dep's pkg-name root —
+            // `math::sqrt(x)` / `calc::math::sqrt(x)`
+            return self.compile_dep_mod_call(segs, name, generics, args, expected, sp);
         };
         for (i, seg) in segs.iter().enumerate().skip(1) {
             // a child mod extends the walk
@@ -975,6 +974,159 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return Some(Err(()));
         }
         None
+    }
+
+    /// The dep-module call lane (`math::sqrt(x)`, `calc::math::sqrt(x)`):
+    /// the head names a module of a dep — either a module THIS file's
+    /// `use` bound (`use calc::{ math }`) or the pkg-name root of a
+    /// declared tree-carrying dep (ambient). Interior segments walk
+    /// `pub mod` children; the leaf compiles as the module's exported
+    /// fn (a concrete row, or a generic row's mirror instantiation).
+    /// `None` = the head names no dep module (the caller's ladder
+    /// carries on — the used-pkg refusal stays that ladder's own).
+    fn compile_dep_mod_call(
+        &mut self,
+        segs: &[PathSeg],
+        name: IdentId,
+        generics: &[TyRef],
+        args: &[ExprRef],
+        expected: Option<TypeId>,
+        sp: rut_lexer::span::Span,
+    ) -> Option<TcResult<TypeId>> {
+        let mut m = self.ctx.extern_mod(segs[0].name)?;
+        let walked = |up_to: usize| -> String {
+            segs[..up_to]
+                .iter()
+                .map(|s| self.ctx.name(s.name).to_string())
+                .collect::<Vec<_>>()
+                .join("::")
+        };
+        for (i, seg) in segs.iter().enumerate().skip(1) {
+            match m.children.get(&seg.name).cloned() {
+                Some(child) => m = child,
+                None => {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}` is not a module of `{}` — only `pub mod` children extend a dep module path",
+                            self.ctx.name(seg.name),
+                            walked(i)
+                        ),
+                    );
+                    return Some(Err(()));
+                }
+            }
+        }
+        let path = walked(segs.len());
+        if let Some(ef) = m.fns.get(&name).cloned() {
+            // the async rows ride the same weaves the free-call lane
+            // runs (a host future, or a crossed woven export)
+            if ef.is_async {
+                if ef.host.is_some() {
+                    return Some(crate::lir::asyncfn::compile_host_async_call(
+                        self, name, &ef, args, expected, sp,
+                    ));
+                }
+                return Some(crate::lir::asyncfn::compile_crossed_async_call(
+                    self, name, &ef, args, expected, sp,
+                ));
+            }
+            if !generics.is_empty() {
+                self.ctx.err(
+                    sp,
+                    format!("`{path}::{}` takes no type arguments", self.ctx.name(name)),
+                );
+                return Some(Err(()));
+            }
+            if args.len() != ef.params.len() {
+                self.ctx.err(
+                    sp,
+                    format!(
+                        "call arity: {} args for {} params",
+                        args.len(),
+                        ef.params.len()
+                    ),
+                );
+                return Some(Err(()));
+            }
+            let mut aregs = Vec::new();
+            for (i, a) in args.iter().enumerate() {
+                let t = match self.compile_expr(*a, Some(ef.params[i])) {
+                    Ok(t) => t,
+                    Err(()) => return Some(Err(())),
+                };
+                if !self.widens(t, ef.params[i]) {
+                    self.ctx.err(
+                        a.span(self.ctx.ast),
+                        format!(
+                            "argument {} is `{}`, `{}` expected",
+                            i + 1,
+                            self.ctx.type_name(t),
+                            self.ctx.type_name(ef.params[i])
+                        ),
+                    );
+                }
+                aregs.push(self.last_reg);
+            }
+            let dst = if ef.ret == TY_NIL {
+                None
+            } else {
+                Some(self.new_reg(ef.ret))
+            };
+            {
+                let (argv_off, argc) = self.pool_args(&aregs);
+                self.emit(
+                    Op::Call {
+                        func: ef.func,
+                        argv_off,
+                        argc,
+                        dst: opt_reg(dst),
+                    },
+                    sp.lo,
+                );
+            }
+            return Some(Ok(ef.ret));
+        }
+        if let Some(gf) = m.generic_fns.get(&name).cloned() {
+            // the mirror mint reads the PER-FILE generic table for the
+            // owner-side body request — bind the row here (idempotent)
+            // so the stub's body is requested from the owner
+            let site = self.ctx.cur_mod.clone();
+            self.ctx.add_extern_generic_fn(
+                &site,
+                name,
+                gf.owner.clone(),
+                gf.params.clone(),
+                gf.args.clone(),
+                gf.ret,
+            );
+            return Some(self.compile_extern_generic_fn_call(
+                name,
+                &gf,
+                generics.to_vec(),
+                args.to_vec(),
+                expected,
+                sp,
+            ));
+        }
+        if m.consts.contains_key(&name) {
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{path}::{}` is a constant — it takes no arguments",
+                    self.ctx.name(name)
+                ),
+            );
+            return Some(Err(()));
+        }
+        self.ctx.err(
+            sp,
+            format!(
+                "`{}` is not exported by the dep module `{path}` — its surface is `pub` names only",
+                self.ctx.name(name)
+            ),
+        );
+        Some(Err(()))
     }
 
     /// Implicit widening — exact > interface-typed when the concrete

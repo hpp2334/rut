@@ -43,7 +43,9 @@ pub const ENTRY_HEADER: &str = "\
 /// methods after), then free + generic fns, then the interfaces as
 /// comment lines (the surface carries an interface's generic COUNT,
 /// not parameter names, so a faithful re-spelling is impossible — the
-/// names still document the surface).
+/// names still document the surface), and the consts the same way
+/// (a manifest const has no surface-grammar spelling — the entry
+/// documents it, the manifest remains its only form).
 pub fn render_program_entry(prog: &Program) -> String {
     let s = &prog.surface;
     let ty = |t: TypeId| ty_text(prog, t);
@@ -95,8 +97,17 @@ pub fn render_program_entry(prog: &Program) -> String {
         }
     }
     // ---- the free fns (ordinary + generic), one sorted section. Host
-    // rows are decl/native surface, never a compiled lib's face.
+    // rows are decl/native surface, never a compiled lib's face. A
+    // module's fn rides the surface MOD-QUALIFIED (`math::sqrt`) but
+    // the ENTRY spells it BARE — the entry is the flat editing truth,
+    // the mod tree rides the rows envelope.
     let mut fns: Vec<String> = Vec::new();
+    let bare = |text: String| -> String {
+        match text.rfind("::") {
+            Some(i) => text[i + 2..].to_string(),
+            None => text,
+        }
+    };
     for f in &s.funcs {
         if f.host.is_some() {
             continue;
@@ -104,13 +115,13 @@ pub fn render_program_entry(prog: &Program) -> String {
         let ps = params_spelled(false, &f.params.iter().map(|&p| ty(p)).collect::<Vec<_>>());
         let ret = ret_spelled(&ty(f.ret));
         let kw = if f.is_async { "pub async fn" } else { "pub fn" };
-        fns.push(format!("{kw} {}({ps}){ret};", name(f.name)));
+        fns.push(format!("{kw} {}({ps}){ret};", bare(name(f.name))));
     }
     for g in &s.fn_generics {
         let ps = params_spelled(false, &g.args.iter().map(|&p| ty(p)).collect::<Vec<_>>());
         let ret = ret_spelled(&ty(g.ret));
         let gens = generics_spelled(&g.params.iter().map(|&p| name(p)).collect::<Vec<_>>());
-        fns.push(format!("pub fn {}{gens}({ps}){ret};", name(g.name)));
+        fns.push(format!("pub fn {}{gens}({ps}){ret};", bare(name(g.name))));
     }
     fns.sort();
     if !fns.is_empty() {
@@ -141,6 +152,20 @@ pub fn render_program_entry(prog: &Program) -> String {
     ifaces.sort();
     for i in ifaces {
         out.push_str(&i);
+        out.push('\n');
+    }
+    // ---- the consts, as comments (same law: the surface grammar has
+    // no spelling for a manifest const — the manifest is its only
+    // form; the entry documents the name)
+    let mut consts: Vec<String> = s
+        .consts
+        .iter()
+        .map(|c| format!("// const {}", name(c.name).replace('#', "")))
+        .collect();
+    consts.sort();
+    consts.dedup();
+    for c in consts {
+        out.push_str(&c);
         out.push('\n');
     }
     out
@@ -257,12 +282,24 @@ pub fn ty_text(prog: &Program, t: TypeId) -> String {
 /// refuses when the two disagree — the text is generated from the
 /// surface, so a mismatch is a renderer bug, never a packable shape.
 /// Interfaces ride no facts (they render as comments — the surface's
-/// generic-count limitation), nor do markers (trailing comments).
+/// generic-count limitation), nor do markers (trailing comments), nor
+/// do consts (a manifest const has no surface-grammar spelling — the
+/// entry renders its name as a comment, the manifest stays its only
+/// form).
 pub fn facts_of_program(prog: &Program) -> std::collections::BTreeSet<String> {
     let s = &prog.surface;
     let own = rut_core::link::own_scope(prog);
     let name = |id: rut_core::sym::IdentId| -> String {
         prog.interner.name(id).trim_start_matches('#').to_string()
+    };
+    // the entry's facts are the BARE spellings (a module fn's surface
+    // row is mod-qualified; the entry renders it bare — the facts
+    // compare against the parsed-back text)
+    let bare = |text: String| -> String {
+        match text.rfind("::") {
+            Some(i) => text[i + 2..].to_string(),
+            None => text,
+        }
     };
     let mut facts = std::collections::BTreeSet::new();
     for t in &s.type_exports {
@@ -318,7 +355,7 @@ pub fn facts_of_program(prog: &Program) -> std::collections::BTreeSet<String> {
         facts.insert(format!(
             "{}fn {}({}) -> {}",
             if f.is_async { "async " } else { "" },
-            name(f.name),
+            bare(name(f.name)),
             ps.join(";"),
             ty_text(prog, f.ret)
         ));
@@ -327,7 +364,7 @@ pub fn facts_of_program(prog: &Program) -> std::collections::BTreeSet<String> {
         let ps: Vec<String> = g.args.iter().map(|&p| ty_text(prog, p)).collect();
         facts.insert(format!(
             "genfn {}<{}>({}) -> {}",
-            name(g.name),
+            bare(name(g.name)),
             g.params
                 .iter()
                 .map(|&p| name(p))
@@ -337,9 +374,7 @@ pub fn facts_of_program(prog: &Program) -> std::collections::BTreeSet<String> {
             ty_text(prog, g.ret)
         ));
     }
-    for c in &s.consts {
-        facts.insert(format!("const {}", name(c.name)));
-    }
+    // consts ride no facts (comments in the entry — see the doc)
     facts
 }
 

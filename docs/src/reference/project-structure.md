@@ -262,8 +262,8 @@ demand:
 | package | shape |
 |---|---|
 | `core` | the only standard package — the builtin surface, auto-offered by every run's `.compile()` |
-| `calc` | the math surface as a normal lib — generic fns over `calc_host`; a `deps`-carrying dir mounts through `load_dir`/`dir_pkgs`, never `tree_pkg` ([stdlib](stdlib.md)) |
-| `calc_host` | host pkg: the math rows + the `Math::` constants — offer `rut_native::tree_pkg("calc_host")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
+| `calc` | the math surface as a normal lib (its `math` module) — generic fns over `calc_host`; a `deps`-carrying dir mounts through `load_dir`/`dir_pkgs`, never `tree_pkg` ([stdlib](stdlib.md)) |
+| `calc_host` | host pkg: the math rows + the `PI` constants (bare at its root) — offer `rut_native::tree_pkg("calc_host")`, bind `rut_std::math::pkg()` ([stdlib](stdlib.md)) |
 | `ink_host`, `nmap_host`, `async_host`, `bench_cross` | host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std` |
 | `http_host` | host pkg, the surface-tree pilot — the default `src/mod.d.rut` root over the std HTTP rows, `net/` + `stream/` mods ([project structure](#host-surface-trees)); bodies in `rut-std` |
 | `ink`, `http`, `strbuild`, `futures` | rut classes over host rows (published compiled — methods cross on the surface's inherent rows) |

@@ -6,7 +6,7 @@
 // by literal, everywhere (module-level let initializers included).
 
 use ink::{ Logger };
-use calc::{ sqrt };
+use calc::{ math };
 
 struct Point {
     x: f32;
@@ -33,7 +33,7 @@ fn nudged(pt: Point) -> Point {    // no mutation: builds a NEW record
 }
 
 fn length(pt: Point) -> f64 {     // free function instead of a method
-    return sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
+    return math::sqrt((pt.x * pt.x + pt.y * pt.y) as f64);
 }
 
 fn structs() {

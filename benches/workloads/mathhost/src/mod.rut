@@ -1,5 +1,5 @@
 use ink::{ Logger };
-use calc::{ abs, min, max, signum };
+use calc::{ math };
 
 // mathhost — calc's float helpers (abs/min/max/signum) in a hot loop:
 // every call routes through the generic wrapper (one rut-level call,
@@ -18,10 +18,10 @@ entry fn main() -> nil {
         y = y * 0.9999999 + 0.0000002;
         if (x < 0.25) { x = x + 2.75; }
         if (y < 0.10) { y = y + 1.50; }
-        acc = acc + abs(x - y);
-        acc = acc + min(x, y);
-        acc = acc + max(x, y);
-        acc = acc + signum(x - y) * 0.5;
+        acc = acc + math::abs(x - y);
+        acc = acc + math::min(x, y);
+        acc = acc + math::max(x, y);
+        acc = acc + math::signum(x - y) * 0.5;
     }
     Logger("app").info(f"CHECKSUM {acc}");
 }

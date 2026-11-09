@@ -1912,13 +1912,13 @@ fn unsuffixed_int_literals_must_fit_i32() {
 fn builtin_impl_numeric_methods_run() {
     // core's `builtin impl <int>` methods (ambient on the primitives,
     // compiler-lowered) + `calc`'s generic float surface: the width
-    // falls out of the argument (`sqrt(2.0f64)` is the f64 row), and
-    // the constants keep the `Math::` head on `calc_host`. The integer
-    // abs/min/max/signum forms are gone — the float helpers are host
-    // fns now.
+    // falls out of the argument (`math::sqrt(2.0f64)` is the f64
+    // row), and the constants are calc_host's manifest consts,
+    // re-exported through calc's math module (`math::PI`). The
+    // integer abs/min/max/signum forms are gone — the float helpers
+    // are host fns now.
     let src = r#"
-use calc::{ abs, min, max, signum, sqrt };
-use calc_host::{ Math };
+use calc::{ math };
 entry fn main() -> nil {
     let log = Logger::new("app");
     // i32 wrapping
@@ -1950,8 +1950,8 @@ entry fn main() -> nil {
     // wrapping shift
     log.info(f"{1073741824.wrapping_shl(1)}");
     // float helpers (the generic surface, f64 members) + constants
-    log.info(f"{abs(-2.5f64)} {min(1.0f64, 2.0f64)} {max(1.0f64, 2.0f64)} {signum(-3.5f64)} {signum(0.0f64)} {signum(4.5f64)}");
-    log.info(f"{sqrt(2.0f64)} {Math::PI}");
+    log.info(f"{math::abs(-2.5f64)} {math::min(1.0f64, 2.0f64)} {math::max(1.0f64, 2.0f64)} {math::signum(-3.5f64)} {math::signum(0.0f64)} {math::signum(4.5f64)}");
+    log.info(f"{math::sqrt(2.0f64)} {math::PI}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 2_000_000);
@@ -1981,15 +1981,15 @@ fn case_f32_math_surface() {
     // width falls out of the argument, no suffix to spell (the old
     // `_f` twins are calc_host's internal row names now)
     let src = r#"
-use calc::{ sqrt, abs, min, max, signum, copysign, fma, pow, floor, hypot };
+use calc::{ math };
 entry fn main() -> nil {
-    Logger::new("f32").info(f"{sqrt(2.0)} {abs(-2.5)} {min(1.0, 2.0)} {max(1.0, 2.0)}");
-    Logger::new("f32").info(f"{signum(-3.5)} {signum(0.0)} {signum(4.5)} {copysign(3.0, -1.0)}");
-    Logger::new("f32").info(f"{fma(2.0, 3.0, 4.0)} {pow(2.0, 10.0)} {floor(2.7)} {hypot(3.0, 4.0)}");
+    Logger::new("f32").info(f"{math::sqrt(2.0)} {math::abs(-2.5)} {math::min(1.0, 2.0)} {math::max(1.0, 2.0)}");
+    Logger::new("f32").info(f"{math::signum(-3.5)} {math::signum(0.0)} {math::signum(4.5)} {math::copysign(3.0, -1.0)}");
+    Logger::new("f32").info(f"{math::fma(2.0, 3.0, 4.0)} {math::pow(2.0, 10.0)} {math::floor(2.7)} {math::hypot(3.0, 4.0)}");
     // the width survives the boundary: 0.1f32 rounds differently from
     // 0.1f64, and sqrt(x*x) comes back f32-rounded
     let x: f32 = 0.1;
-    let r: f32 = sqrt(x * x);
+    let r: f32 = math::sqrt(x * x);
     Logger::new("f32").info(f"{x} {r}");
 }
 "#;
@@ -2007,14 +2007,13 @@ fn calc_generic_surface_widths() {
     // annotated variable, inference from a literal's default, the
     // explicit type argument, and a same-T binary member
     let src = r#"
-use calc::{ sqrt, pow };
-use calc_host::{ Math };
+use calc::{ math };
 entry fn main() -> nil {
     let log = Logger::new("w");
     let d: f64 = 2.0;
     let f: f32 = 2.0;
-    log.info(f"{sqrt(d)} {sqrt(f)} {sqrt<f64>(4.0)} {pow(3.0f64, 2.0f64)}");
-    log.info(f"{Math::E} {Math::SQRT_2}");
+    log.info(f"{math::sqrt(d)} {math::sqrt(f)} {math::sqrt<f64>(4.0)} {math::pow(3.0f64, 2.0f64)}");
+    log.info(f"{math::E} {math::SQRT_2}");
 }
 "#;
     let (lines, trap, _) = run_case(src, 1_000_000);

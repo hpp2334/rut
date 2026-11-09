@@ -173,19 +173,30 @@ fn a_private_leaf_errors_at_the_use_line() {
 }
 
 #[test]
-fn a_flat_leaf_naming_a_module_diagnoses_with_the_walk_hint() {
-    // `sub` is the dep's `pub mod` — no surface ever carries a module,
-    // so the leaf would bind nothing; the diag says what to spell
-    // instead instead of the flat `has no` shape
+fn a_flat_leaf_binds_the_module_for_qualified_access() {
+    // `sub` is the dep's `pub mod` — the leaf binds the MODULE now
+    // (`use util::{ sub }` + `sub::top()`), and a PRIVATE mod leaf
+    // still refuses, naming the `pub mod` fix
     let src = "use util::{ sub };\n\
-               entry fn main() -> i32 { return 0; }\n";
+               entry fn main() -> i32 { return sub::one(); }\n";
     let g = graph_of(src);
-    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
     assert!(
-        g.diags[0].msg.contains("`sub` is a module of `util`")
-            && g.diags[0].msg.contains("use util::sub::{ .. }"),
-        "got: {}",
-        g.diags[0].msg
+        !msgs(&g)
+            .iter()
+            .any(|m| m.contains("`sub` is a module of `util`")),
+        "the module leaf binds: {:?}",
+        msgs(&g)
+    );
+    // the fully-qualified form needs no use at all — the path roots
+    // at the dep's own name
+    let src = "entry fn main() -> i32 { return util::sub::one(); }\n";
+    let g = graph_of(src);
+    assert!(
+        !msgs(&g)
+            .iter()
+            .any(|m| m.contains("`sub` is a module of `util`")),
+        "the pkg-rooted path resolves: {:?}",
+        msgs(&g)
     );
 }
 

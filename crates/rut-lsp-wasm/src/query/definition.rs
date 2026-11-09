@@ -594,7 +594,7 @@ fn use_site_targets(ctx: &Ctx, span: Span, name: &str) -> Option<Vec<DefLocation
         }
         // a path segment — the pkg head included: `k == 0` opens the
         // pkg's ROOT index at the file top (`Span::new(0, 0)`, the
-        // convention the minted namespace head uses too)
+        // convention a pkg-root row uses)
         for (k, sp) in u.path_spans.iter().enumerate() {
             if *sp != Some(span) {
                 continue;

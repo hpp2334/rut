@@ -6,8 +6,8 @@
 //! Three entries:
 //! - [`dep_table`] parses one manifest into a [`DepTable`]: the
 //!   module's own identity (`name`, entry sources with the mode each
-//!   indexes in, `namespace`, `consts`) plus its dep rows (`deps`,
-//!   `dev-deps`), each a `path` directory or a `url`
+//!   indexes in, `consts` — bound bare at the pkg's root) plus its dep
+//!   rows (`deps`, `dev-deps`), each a `path` directory or a `url`
 //!   bundle with the `.rut/cache/` cache path computed here. The pin
 //!   is NOT the manifest's business — [`lock_pins`] reads `rut.lock`
 //!   (the walk root's ledger) and [`dep_table_pinned`] stamps its rows
@@ -17,12 +17,11 @@
 //!   rode-along dep groups are the loader's business, not the
 //!   editor's.
 //! - [`index_dep`] indexes one dep source file: [`analysis::index_at`]
-//!   plus `module = Some(name)`, with `namespace`/`consts` minted onto
-//!   the index (a namespace-head type row, module-scope lets for the
-//!   consts — the `calc`/`Math::PI` shape: the engine binds
-//!   `use calc::{Math}` then routes `Math::sqrt`/`Math::PI` as qualified
-//!   access, and the member machinery resolves both through the minted
-//!   row).
+//!   plus `module = Some(name)`, with the manifest's `consts` minted
+//!   onto the index as module-scope lets — the bare
+//!   `use calc_host::{ PI }` form the compiler binds as an extern
+//!   const once the pkg is used (the qualified forms ride the dep's
+//!   own `mod` tree: `use calc::{ math }` + `math::PI`).
 
 use rut_ast::Vis;
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
@@ -38,7 +37,6 @@ type ModHead = (
 use rut_semantic::Mode;
 use sha2::{Digest, Sha256};
 
-use crate::hover::types::{MemberSrc, TyDef, TyForm};
 use crate::hover::DefIndex;
 
 /// One entry source a dep indexes: the manifest-relative file path and
@@ -90,9 +88,8 @@ pub struct DepTable {
     /// [`dep_table_compat`]) carries the repealed keys instead, mapped
     /// exactly as the loader's reader-compat law does.
     pub entries: Vec<EntrySource>,
-    /// the qualified-access head (`calc`'s `Math`)
-    pub namespace: Option<String>,
-    /// the compiler-materialized constants (`Math::PI`), name → f64
+    /// the compiler-materialized constants (`calc_host`'s `PI`
+    /// family), bound bare at the pkg's root
     pub consts: Vec<(String, f64)>,
     /// `type = "host"` — the entry surface is a pure `.d.rut` and its
     /// `mod` tree mounts the Decl flavor (`NAME/mod.d.rut` children,
@@ -255,7 +252,6 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     Ok(DepTable {
         name: m.name,
         entries,
-        namespace: m.namespace,
         consts: m.consts.into_iter().collect(),
         host: m.pkg_type == rut_driver::bundle::PkgType::Host,
         deps: rows(&m.deps),
@@ -286,7 +282,6 @@ pub struct BundleFile {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BundleIndex {
     pub module: String,
-    pub namespace: Option<String>,
     pub consts: Vec<(String, f64)>,
     pub files: Vec<BundleFile>,
     /// the archive's own `rut.jsonc` text
@@ -426,7 +421,6 @@ pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     }
     Ok(BundleIndex {
         module,
-        namespace: table.namespace,
         consts: table.consts,
         files,
         manifest: manifest_text,
@@ -632,7 +626,6 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     }
     Ok(BundleIndex {
         module,
-        namespace: table.namespace,
         consts: table.consts,
         files,
         // a compiled bundle's ride-alongs are compiled groups — never
@@ -832,33 +825,21 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
 
 /// Index one dep source file: the ordinary [`analysis::index_at`] pass
 /// over `src` (origin stamped with `uri`, mode per the manifest), the
-/// module NAMED, the manifest's `namespace` stamped on the row (the
-/// check lane's world assembly reads the head off it — never a second
-/// baked table), and the `namespace`/`consts` minted on —
-/// a `TyForm::Namespace` type row for the head (the module's free fns
-/// as methods, the consts as fields: the qualified `Math::sqrt`/`Math::PI`
-/// shape resolves through the member machinery), module-scope lets for
-/// the consts (the bare `PI` form the compiler binds as an extern
-/// const once the pkg is used).
-pub fn index_dep(
-    name: &str,
-    uri: &str,
-    src: &str,
-    namespace: Option<&str>,
-    consts: &[(String, f64)],
-) -> DefIndex {
+/// module NAMED, and the manifest's `consts` minted on as module-scope
+/// lets — the bare `use calc_host::{ PI }` form the compiler binds as
+/// an extern const once the pkg is used (the module-qualified forms
+/// ride the dep's own `mod` tree).
+pub fn index_dep(name: &str, uri: &str, src: &str, consts: &[(String, f64)]) -> DefIndex {
     // the ordinary index pass — `mode_of(uri)` spells the filename
     // convention (every caller already derived it that way)
     let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
     let mut idx = crate::hover::index(doc.src(), doc.ast(), doc.toks());
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
-    // the manifest's qualified-access head rides the row itself
-    idx.namespace = namespace.map(|n| n.to_string());
     // the parse mode rides the index — the definition layer's
     // body-over-decl preference reads it
     idx.mode = Some(rut_semantic::mode_of(uri));
-    mint_pkg_rows(&mut idx, namespace, consts);
+    mint_pkg_rows(&mut idx, consts);
     idx
 }
 
@@ -870,10 +851,9 @@ pub fn index_dep_mod(
     uri: &str,
     mod_path: &str,
     src: &str,
-    namespace: Option<&str>,
     consts: &[(String, f64)],
 ) -> DefIndex {
-    let mut idx = index_dep(name, uri, src, namespace, consts);
+    let mut idx = index_dep(name, uri, src, consts);
     idx.mod_path = Some(mod_path.to_string());
     idx
 }
@@ -884,14 +864,13 @@ pub fn index_dep_mod(
 /// the mod path its nesting spells. Structure lives in the grammar,
 /// never in paths: the file is one, the modules many, the parse one.
 /// `mod_path` prefixes every stamp (the file's own position — `""` for
-/// a group root). The namespace head and the consts mint on the
-/// pkg-root module only (they are the MANIFEST's rows, the pkg's own).
+/// a group root). The consts mint on the pkg-root module only (they
+/// are the MANIFEST's rows, the pkg's own).
 pub fn index_dep_decl_group(
     name: &str,
     uri: &str,
     mod_path: &str,
     src: &str,
-    namespace: Option<&str>,
     consts: &[(String, f64)],
 ) -> Vec<(String, DefIndex)> {
     // the ordinary parse once — `mode_of(uri)`: the `.d.rut` suffix IS
@@ -917,16 +896,13 @@ pub fn index_dep_decl_group(
                 format!("{uri}#{path}")
             };
             idx.module = Some(name.to_string());
-            // the manifest's head rides every row of the group — the
-            // check lane's first-row read never misses it
-            idx.namespace = namespace.map(|n| n.to_string());
             // the parse mode rides the index — the definition layer's
             // body-over-decl preference reads it
             idx.mode = Some(rut_semantic::mode_of(uri));
             idx.mod_path = Some(path.clone());
-            // the manifest's head rows mint on the pkg root only
+            // the manifest's const rows mint on the pkg root only
             if path == mod_path {
-                mint_pkg_rows(&mut idx, namespace, consts);
+                mint_pkg_rows(&mut idx, consts);
             }
             (path, idx)
         })
@@ -962,58 +938,11 @@ fn collect_inline_modules(
     }
 }
 
-/// The namespace head + consts, minted onto one dep index (the
-/// qualified-access rows — [`index_dep`]'s tail, shared with the
-/// declaration-entry splitter).
-fn mint_pkg_rows(idx: &mut DefIndex, namespace: Option<&str>, consts: &[(String, f64)]) {
-    if let Some(head) = namespace {
-        // the module's free fns become the head's methods — the
-        // qualified-access surface the engine routes by the bound
-        // namespace
-        let methods: Vec<MemberSrc> = idx
-            .fns
-            .iter()
-            .filter(|f| f.owner.is_none())
-            .map(|f| MemberSrc {
-                name: f.name.clone(),
-                src: f.src.clone(),
-                ty: f.ret.clone(),
-                name_span: f.name_span,
-                doc: f.doc.clone(),
-                line: f.line,
-            })
-            .collect();
-        let fields: Vec<MemberSrc> = consts
-            .iter()
-            .map(|(n, v)| MemberSrc {
-                name: n.clone(),
-                src: format!("{n} = {:?}", v),
-                ty: Some("f64".to_string()),
-                name_span: None,
-                doc: vec!["manifest const — compiler-materialized".to_string()],
-                line: 1,
-            })
-            .collect();
-        let module = idx.module.clone().unwrap_or_default();
-        idx.types.push(TyDef {
-            name: head.to_string(),
-            name_span: None,
-            form: TyForm::Namespace,
-            vis: Vis::Pub,
-            is_pub: true,
-            ambient: false,
-            generics: Vec::new(),
-            fields,
-            methods,
-            alias_target: None,
-            doc: vec![format!(
-                "the module's namespace head — `use {}::{{ {head} }}` binds it; members are reached qualified",
-                module
-            )],
-            span: Span::new(0, 0),
-            line: 1,
-        });
-    }
+/// The manifest's consts, minted onto one dep index as module-scope
+/// lets — the bare `use calc_host::{ PI }` form ([`index_dep`]'s tail,
+/// shared with the declaration-entry splitter; the qualified forms
+/// ride the dep's own `mod` tree).
+fn mint_pkg_rows(idx: &mut DefIndex, consts: &[(String, f64)]) {
     for (n, v) in consts {
         idx.lets.push(crate::hover::LetDef {
             name: n.clone(),

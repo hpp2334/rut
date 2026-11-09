@@ -1,3 +1,4 @@
+use rut_ast::Vis;
 use rut_driver::bundle::files::MANIFEST_NAME;
 use rut_lsp_wasm::deps::*;
 use rut_lsp_wasm::hover::TyForm;
@@ -134,9 +135,10 @@ fn a_malformed_lock_is_the_error_not_silent_pins() {
 }
 
 #[test]
-fn calc_manifest_carries_namespace_and_consts() {
-    // the namespace + consts live on the HOST pkg's manifest
-    // (calc_host); `calc` beside it is the generic lib
+fn calc_manifest_carries_bare_consts() {
+    // the consts live on the HOST pkg's manifest (calc_host), bound
+    // bare at its root; `calc` beside it is the generic lib whose
+    // math module re-exports the family
     let t = dep_table(CALC_HOST_MANIFEST).expect("the real calc_host manifest parses");
     assert_eq!(t.name.as_deref(), Some("calc_host"));
     // the host surface: decl mode, no body — the spelled surface
@@ -148,7 +150,6 @@ fn calc_manifest_carries_namespace_and_consts() {
             mode: Mode::Decl
         }]
     );
-    assert_eq!(t.namespace.as_deref(), Some("Math"));
     let pi = t
         .consts
         .iter()
@@ -162,6 +163,16 @@ fn calc_manifest_carries_namespace_and_consts() {
         .find(|(n, _)| n == "INFINITY")
         .expect("INFINITY in consts");
     assert!(inf.1.is_infinite() && inf.1.is_sign_positive());
+    // the retired `namespace` key refuses loudly, naming the fix
+    let err = dep_table(&CALC_HOST_MANIFEST.replace(
+        "\"type\": \"host\",",
+        "\"type\": \"host\",\n  \"namespace\": \"Math\",",
+    ))
+    .unwrap_err();
+    assert!(
+        err.contains("namespace: retired") && err.contains("delete the key"),
+        "the refusal names the fix: {err}"
+    );
 }
 
 #[test]
@@ -212,7 +223,6 @@ fn pouch_bundle_indexes_its_declaration_entry() {
     // fields, the bodiless method signatures, the free fn.
     let b = bundle_sources(POUCH_BUNDLE).expect("the committed pouch bundle parses");
     assert_eq!(b.module, "pouch");
-    assert_eq!(b.namespace, None);
     assert!(b.consts.is_empty());
     assert_eq!(
         b.files.len(),
@@ -266,14 +276,7 @@ fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
     let f = &b.files[0];
     assert_eq!(f.path, "mod.d.rut");
     assert_eq!(f.mode, Mode::Decl);
-    let idxs = index_dep_decl_group(
-        &b.module,
-        "bundle:pouch/mod.d.rut",
-        "",
-        &f.src,
-        b.namespace.as_deref(),
-        &b.consts,
-    );
+    let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", &f.src, &b.consts);
     assert_eq!(idxs.len(), 1, "a flat entry: one module");
     let idx = &idxs[0].1;
     assert_eq!(idx.mode, Some(Mode::Decl));
@@ -317,7 +320,7 @@ pub mod net {
 }
 pub host fn legacy_ping() -> bool;
 ";
-    let idxs = index_dep_decl_group("myhost", "bundle:myhost/mod.d.rut", "", src, None, &[]);
+    let idxs = index_dep_decl_group("myhost", "bundle:myhost/mod.d.rut", "", src, &[]);
     let paths: Vec<&str> = idxs.iter().map(|(p, _)| p.as_str()).collect();
     assert_eq!(paths, vec!["", "net"], "{paths:?}");
     let (root, net) = (&idxs[0].1, &idxs[1].1);
@@ -394,18 +397,12 @@ fn srczip_rides_the_unpack_ingredients() {
 }
 
 #[test]
-fn index_dep_names_the_module_and_mints_the_namespace() {
+fn index_dep_names_the_module_and_mints_the_bare_consts() {
     let src = "\
 pub host fn sqrt(x: f64) -> f64;
 ";
     let consts = vec![("PI".to_string(), std::f64::consts::PI)];
-    let idx = index_dep(
-        "calc",
-        "file:///deps/calc.d.rut",
-        src,
-        Some("Math"),
-        &consts,
-    );
+    let idx = index_dep("calc", "file:///deps/calc.d.rut", src, &consts);
     // the explicit name rides the index …
     assert_eq!(idx.module.as_deref(), Some("calc"));
     assert_eq!(idx.origin, "file:///deps/calc.d.rut");
@@ -417,19 +414,9 @@ pub host fn sqrt(x: f64) -> f64;
         .fns
         .iter()
         .any(|f| f.name == "sqrt" && f.owner.is_none()));
-    // … the namespace head mints as a type row carrying the fns as
-    // methods and the consts as fields — the Math::sqrt/Math::PI shape
-    let math = idx.ty("Math").expect("the namespace head mints");
-    assert_eq!(math.form, TyForm::Namespace);
-    assert!(math.is_pub);
-    assert!(math.methods.iter().any(|m| m.name == "sqrt"));
-    let pi = math
-        .fields
-        .iter()
-        .find(|m| m.name == "PI")
-        .expect("PI as a field");
-    assert_eq!(pi.ty.as_deref(), Some("f64"));
-    // … and the consts mint module-scope lets (the bare-`PI` form)
+    // … and the consts mint module-scope lets — the bare
+    // `use calc_host::{ PI }` form (the qualified forms ride the
+    // dep's own `mod` tree, never a minted head)
     let pi = idx
         .lets
         .iter()
@@ -437,19 +424,18 @@ pub host fn sqrt(x: f64) -> f64;
         .expect("PI as a module let");
     assert_eq!(pi.ty.as_deref(), Some("f64"));
     assert!(pi.src.starts_with("let PI = 3.141592653589793"));
+    assert_eq!(pi.vis, Vis::Pub);
 }
 
 #[test]
-fn index_dep_without_namespace_mints_nothing() {
+fn index_dep_without_consts_mints_nothing() {
     let idx = index_dep(
         "pouch",
         "file:///deps/pouch.rut",
         "class Vec<T> {\n}\n",
-        None,
         &[],
     );
     assert_eq!(idx.module.as_deref(), Some("pouch"));
-    assert!(idx.ty("Math").is_none());
     assert!(idx.lets.is_empty());
 }
 
@@ -460,7 +446,6 @@ fn index_dep_mod_stamps_the_mod_path() {
         "file:///deps/gadgets/layout/mod.rut",
         "layout",
         "pub struct Column {\n    w: i32;\n}\n",
-        None,
         &[],
     );
     assert_eq!(idx.module.as_deref(), Some("gadgets"));
@@ -471,7 +456,6 @@ fn index_dep_mod_stamps_the_mod_path() {
         "file:///deps/gadgets/mod.rut",
         "",
         "pub mod layout;\n",
-        None,
         &[],
     );
     assert_eq!(root.mod_path.as_deref(), Some(""));
@@ -496,7 +480,7 @@ fn dep_impl_methods_ride_the_dep_index() {
         "    pub fn info(self, msg: str) -> nil { logger_log(self.internal, 1, msg); }\n",
         "}\n",
     );
-    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK, None, &[]);
+    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK, &[]);
     let info = idx.fns.iter().find(|f| f.name == "info");
     assert_eq!(
         info.map(|f| f.owner.as_deref()),
@@ -572,7 +556,6 @@ fn a_mod_bundle_unpacks_the_rows_tree() {
     let bytes = kit_rows_bundle();
     let b = bundle_sources(&bytes).expect("the kit bundle unpacks");
     assert_eq!(b.module, "kit");
-    assert_eq!(b.namespace, None);
     // the root + each child, path-keyed
     let paths: Vec<&str> = b.files.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(

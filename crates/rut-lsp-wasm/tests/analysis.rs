@@ -125,7 +125,6 @@ fn group(module: &str, root: FileSrc) -> PkgFiles {
     files.insert(String::new(), root);
     PkgFiles {
         module: module.to_string(),
-        namespace: None,
         files,
     }
 }

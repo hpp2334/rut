@@ -1,5 +1,6 @@
 {
-  // calc/ — the float math surface as a NORMAL lib: every member is a
+  // calc/ — the float math lib: a normal lib pkg whose surface lives
+  // one module down (`pub mod math;` → `math.rut`). Every member is a
   // closed-union generic (`sqrt<T requires f32 | f64>`) — the width
   // falls out of the argument, no suffix to spell. The body is the
   // `is` dispatch: `x is f32` folds per member (generic bodies compile
@@ -11,10 +12,14 @@
   // consumer's `sqrt<f32>` request is served from the ledger — no
   // template row, no placeholder compile.
   //
-  // The CONSTANTS keep the qualified `Math::` head on the host pkg:
-  // `use calc_host::{ Math }` then `Math::PI`. The INTEGER numeric
-  // methods (`wrapping_*`, `saturating_*`, `checked_*`) are core's
-  // `builtin impl` methods; `NAN` is core's too (`use core::{NAN}`).
+  // Callers bind the module and qualify: `use calc::{ math }` then
+  // `math::sqrt(x)` / `math::PI` — or the fully-qualified
+  // `calc::math::sqrt(x)` with no use. The CONSTANTS are calc_host's
+  // manifest consts, re-exported through math's
+  // `pub use calc_host::{ PI, .. }` — callers never touch the host
+  // pkg. The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
+  // `checked_*`) are core's `builtin impl` methods; `NAN` is core's
+  // too (`use core::{ NAN }`).
   "format": "rutbundle",
   "format_version": 12,
   "name": "calc",

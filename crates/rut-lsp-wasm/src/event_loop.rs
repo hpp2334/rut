@@ -371,10 +371,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             src,
             tx,
         } => {
-            // the workspace-scan push lane knows no manifest — the
-            // namespace head stays unstamped (the dep walk's mounts
-            // are the lane that knows it)
-            let decls = core.add_def_mod_at(&uri, &name, None, &mod_path, &src);
+            let decls = core.add_def_mod_at(&uri, &name, &mod_path, &src);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
         }
     }

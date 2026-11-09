@@ -603,10 +603,9 @@ fn lib_pkg(
 /// refused at parse (the manifest walk); a published BUNDLE's old
 /// manifest rides the reader's compat lane instead (a loading law).
 ///
-/// The manifest's `namespace` row (when present) rides the pkg as the
-/// qualified-access head (`calc`'s `Math`), and its `consts` rows ride
-/// the host body's constants — the surface grammar has no spelling for
-/// either, so the manifest carries what the engine mounts.
+/// The manifest's `consts` rows ride the host body's constants, bound
+/// bare at the pkg's root — the surface grammar has no spelling for
+/// them, so the manifest carries what the engine mounts.
 fn load_entry_module(
     src: &dyn Source,
     dir: &str,
@@ -654,7 +653,6 @@ fn load_entry_module(
             let mut m =
                 rut_driver::lower_decl_module(&src_text, &mods, &key).map_err(LoadError::law)?;
             m.entry = manifest.entry.clone();
-            m.namespace = manifest.namespace.clone();
             // the consts ride the host body (the manifest is their only
             // spelling)
             let consts = manifest_consts(manifest);

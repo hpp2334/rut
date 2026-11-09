@@ -859,21 +859,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             self.ctx.err(sp, msg);
             return Err(());
         }
-        // `<namespace>.CONST` — a used namespace's constants
-        // (`Math::PI`). Name-generic: routed by the bound
-        // namespace head, never by a hardcoded string.
-        if segs.len() == 2 && self.ctx.is_extern_namespace(segs[0].name) {
-            if let Some((ty, bits)) = self.ctx.extern_const(segs[1].name) {
-                let reg = self.new_reg(ty);
-                self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
-                return Ok(ty);
-            }
-            let ns = self.ctx.name(segs[0].name).to_string();
-            let m = self.ctx.name(segs[1].name).to_string();
-            self.ctx
-                .err(sp, format!("`{ns}::{m}` is not a namespace constant"));
-            return Err(());
-        }
+        // `<namespace>::CONST` died with the namespace mechanism —
+        // `math::PI` rides the qualified VALUE path's dep-module lane
+        // below (`compile_qualified_value`)
         // two segments: local field chain `p.x`, `req.value.reply` — locals
         // shadow type names (a local is a value position)
         if segs.len() >= 2 && segs[0].generics.is_empty() {
@@ -1044,7 +1032,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     /// the leaf resolves among that module's decls (a fn value, a
     /// module let, a type — which is no value). Gated by the crossing
     /// predicate. `None` = the head is not a module — the caller's
-    /// ladder carries on (namespace constants, plain unknown-name).
+    /// ladder carries on (the dep-module consts, plain unknown-name).
     pub(crate) fn compile_qualified_value(
         &mut self,
         segs: &[PathSeg],
@@ -1056,7 +1044,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let from = self.ctx.cur_mod.clone();
         let Some(mut m) = self.ctx.resolve_mod_head(&from, segs[0].name) else {
-            return None; // the caller's pkg-head check diagnoses
+            // the dep-module lane (`math::PI` after `use calc::{ math }`,
+            // or `calc::math::PI` off the pkg-name root)
+            return self.compile_dep_mod_value(segs, sp);
         };
         for (i, seg) in segs.iter().enumerate().skip(1) {
             // a child mod extends the walk
@@ -1213,6 +1203,71 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             format!(
                 "`{}` is a module — modules are not values",
                 self.ctx.name(segs[segs.len() - 1].name)
+            ),
+        );
+        Some(Err(()))
+    }
+
+    /// The dep-module VALUE lane (`math::PI`, `calc::math::PI`): the
+    /// head names a module of a dep (a use binding of this file, or a
+    /// declared dep's ambient pkg-name root); interior segments walk
+    /// `pub mod` children; the leaf materializes the module's exported
+    /// constant. `None` = the head names no dep module (the caller's
+    /// ladder carries on).
+    fn compile_dep_mod_value(
+        &mut self,
+        segs: &[PathSeg],
+        sp: rut_lexer::span::Span,
+    ) -> Option<TcResult<TypeId>> {
+        let mut m = self.ctx.extern_mod(segs[0].name)?;
+        let walked = |up_to: usize| -> String {
+            segs[..up_to]
+                .iter()
+                .map(|s| self.ctx.name(s.name).to_string())
+                .collect::<Vec<_>>()
+                .join("::")
+        };
+        // the INTERIOR segments walk children; the LAST segment is the
+        // member (a const) — the path is `mod..mod::CONST`
+        for (i, seg) in segs.iter().enumerate().skip(1).take(segs.len() - 2) {
+            match m.children.get(&seg.name).cloned() {
+                Some(child) => m = child,
+                None => {
+                    self.ctx.err(
+                        sp,
+                        format!(
+                            "`{}` is not a module of `{}` — only `pub mod` children extend a dep module path",
+                            self.ctx.name(seg.name),
+                            walked(i)
+                        ),
+                    );
+                    return Some(Err(()));
+                }
+            }
+        }
+        let path = walked(segs.len() - 1);
+        let name = segs[segs.len() - 1].name;
+        if let Some(&(ty, bits)) = m.consts.get(&name) {
+            let reg = self.new_reg(ty);
+            self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
+            return Some(Ok(ty));
+        }
+        if m.fns.contains_key(&name) || m.generic_fns.contains_key(&name) {
+            self.ctx.err(
+                sp,
+                format!(
+                    "`{path}::{}` is a fn — call it (`{path}::{}(..)`), never name it bare",
+                    self.ctx.name(name),
+                    self.ctx.name(name)
+                ),
+            );
+            return Some(Err(()));
+        }
+        self.ctx.err(
+            sp,
+            format!(
+                "`{}` is not exported by the dep module `{path}` — its surface is `pub` names only",
+                self.ctx.name(name)
             ),
         );
         Some(Err(()))

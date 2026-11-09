@@ -9,16 +9,16 @@
   // install (`.host_pkg(rut_std::math::pkg())`) — the declaration
   // mounts, the embedding Rust binds.
   //
-  // The namespace head and the constants stay HERE (the surface
-  // grammar has no spelling for either, so the manifest is their only
-  // form) — `use calc_host::{ Math }` binds the head and
-  // `Math::PI` reads:
+  // The CONSTANTS stay HERE (the surface grammar has no spelling for
+  // them, so the manifest is their only form) but bind BARE at this
+  // pkg's root (`use calc_host::{ PI }`); `calc`'s math module
+  // re-exports the family (`pub use calc_host::{ PI, .. }`), so
+  // callers reach them as `math::PI` through the ordinary module path
+  // and never spell `calc_host`:
   //   "consts" — f64, compiler-materialized (JSON has no spelling
   //              for the non-finite pair; `"inf"` / `"-inf"` name it):
-  //              Math::PI Math::TAU Math::E Math::SQRT_2 Math::LN_2
-  //              Math::LN_10 Math::LOG2_E Math::LOG10_E Math::INFINITY
-  //              Math::NEG_INFINITY Math::EPSILON Math::MAX Math::MIN
-  //              Math.MIN_POSITIVE.
+  //              PI TAU E SQRT_2 LN_2 LN_10 LOG2_E LOG10_E INFINITY
+  //              NEG_INFINITY EPSILON MAX MIN MIN_POSITIVE.
   //
   // Contract (std/core.d.rut): the surface is kept TRUE to the
   // implementation — signatures match the mount tables, never
@@ -27,7 +27,6 @@
   "format_version": 12,
   "name": "calc_host",
   "type": "host",
-  "namespace": "Math",
   "consts": {
     "PI": 3.141592653589793,
     "TAU": 6.283185307179586,

@@ -119,14 +119,22 @@ pub(super) fn walk_top_lane(
                     .into(),
             ));
         }
-        // the qualified-access head (`calc`'s `Math`): the manifest's
-        // spelling of what the surface grammar cannot say — the
-        // namespace `use <pkg>::{ Head }` binds and qualified member
-        // access routes through
-        "namespace" => m.namespace = Some(expect_string(key, value)?),
-        // the host body's constants (`calc`'s `Math.PI`): name → f64,
-        // compiler-materialized — the surface grammar has no `static`
-        // field form, so the manifest is their only spelling
+        // `namespace` (the qualified-access head) refuses LOUDLY: the
+        // mechanism died — module paths (`use calc::{ math }` +
+        // `math::sqrt(x)`) and bare consts (`use calc_host::{ PI }`, or
+        // a `pub use` re-export) are the grammar's own spellings now.
+        // A silent ignore would strand an old manifest's meaning at
+        // some call site far from the manifest.
+        "namespace" => {
+            return Err(ManifestError(
+                "namespace: retired — module paths (`use calc::{ math }`) and bare consts; delete the key"
+                    .into(),
+            ));
+        }
+        // the host body's constants (`calc_host`'s `PI` family): name →
+        // f64, compiler-materialized and bound BARE at the pkg's root —
+        // the surface grammar has no `static` field form, so the
+        // manifest is their only spelling
         "consts" => walk_consts(value, m)?,
         "entry" => walk_entry(value, m, compat)?,
         "deps" => walk_deps(value, m, compat)?,

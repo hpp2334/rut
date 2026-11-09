@@ -10,24 +10,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         name: IdentId,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
-        // `<namespace>.CONST` — a used namespace's constant (checked
-        // before the receiver is compiled, since the head is not a value).
-        // Name-generic: routed by the bound head.
-        if let ExprRef::Path(ph) = recv {
-            let segs = &ph.get(self.ctx.ast).segs;
-            if segs.len() == 1 && self.ctx.is_extern_namespace(segs[0].name) {
-                if let Some((ty, bits)) = self.ctx.extern_const(name) {
-                    let reg = self.new_reg(ty);
-                    self.emit(Op::ConstRaw { dst: reg, bits }, sp.lo);
-                    return Ok(ty);
-                }
-                let ns = self.ctx.name(segs[0].name).to_string();
-                let fname = self.ctx.name(name).to_string();
-                self.ctx
-                    .err(sp, format!("`{ns}::{fname}` is not a namespace constant"));
-                return Err(());
-            }
-        }
+        // `<namespace>.CONST` died with the namespace mechanism — a
+        // dep module's consts read `math::PI` (the qualified VALUE
+        // path, `compile_qualified_value`)
         let rt = self.compile_expr(recv, None)?;
         let rreg = self.last_reg;
         // `p.x` auto-derefs: load the pointee cell first, then

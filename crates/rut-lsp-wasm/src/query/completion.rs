@@ -621,7 +621,6 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
                     t.doc.clone(),
                     match t.form {
                         TyForm::Interface => CompletionKind::Interface,
-                        TyForm::Namespace => CompletionKind::Module,
                         _ => CompletionKind::Type,
                     },
                 ),
@@ -828,7 +827,6 @@ fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut>
                     t.doc.clone(),
                     match t.form {
                         TyForm::Interface => CompletionKind::Interface,
-                        TyForm::Namespace => CompletionKind::Module,
                         _ => CompletionKind::Type,
                     },
                 ),
@@ -842,14 +840,14 @@ fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut>
 
 /// Member completions after `<TypeHead>::` — the `::` law's member
 /// lists whose head is a type, reusing the index lookup hover's member
-/// lane keys on (`find_ty`): an enum head offers its members, a
-/// namespace head (a dep's minted `Math`) its consts + fns, any other
-/// type head its statics and associated fns (the inherent `impl T { fn
-/// .. }` rows — the owner string IS the type's name). An interface head
-/// offers nothing: its signatures ride receivers, never `::`. `None` =
-/// the head resolves to no indexed type (the caller falls through); a
-/// resolved head is FINAL — the filtered list is the answer even when
-/// empty (the known-head law, like the module tier's).
+/// lane keys on (`find_ty`): an enum head offers its members, any
+/// other type head its statics and associated fns (the inherent
+/// `impl T { fn .. }` rows — the owner string IS the type's name). An
+/// interface head offers nothing: its signatures ride receivers,
+/// never `::`. `None` = the head resolves to no indexed type (the
+/// caller falls through); a resolved head is FINAL — the filtered
+/// list is the answer even when empty (the known-head law, like the
+/// module tier's).
 fn type_head_completions(
     idxs: &[&DefIndex],
     segs: &[String],
@@ -872,32 +870,6 @@ fn type_head_completions(
                             m.src.clone(),
                             m.doc.clone(),
                             CompletionKind::EnumMember,
-                        ),
-                    );
-                }
-            }
-            // `Math::⏐` — the consts as fields, the module's fns as
-            // methods (the namespace mint's shape)
-            TyForm::Namespace => {
-                for f in &ty.fields {
-                    push_item(
-                        &mut out,
-                        CompletionOut::plain(
-                            f.name.clone(),
-                            f.src.clone(),
-                            f.doc.clone(),
-                            CompletionKind::Const,
-                        ),
-                    );
-                }
-                for m in &ty.methods {
-                    push_item(
-                        &mut out,
-                        CompletionOut::plain(
-                            m.name.clone(),
-                            m.src.clone(),
-                            m.doc.clone(),
-                            CompletionKind::Fn,
                         ),
                     );
                 }
@@ -965,14 +937,60 @@ fn scope_index<'a>(
     mods::find_mod(idxs, pkg, path)
 }
 
+/// A use of the DOC that bound `head` as a member of a NAMED dep
+/// (`use calc::{ math }`): answers the dep's pkg name and the walked
+/// mod path (the use's own path minus the pkg head — `math`, or
+/// `math/grid` for a deep binding). The dep must be a mounted, named
+/// index (a module-leaf binding the engine resolves through the
+/// dep-module lane); a use that bound a plain name answers nothing
+/// here — its module resolution never lands.
+fn use_bound_dep_module(
+    idxs: &[&DefIndex],
+    doc_index: &DefIndex,
+    head: &str,
+) -> Option<(String, String)> {
+    for u in &doc_index.uses {
+        if u.name != head || u.path.is_empty() {
+            continue;
+        }
+        // the dep must be mounted and named (a named index answers for it)
+        if !idxs
+            .iter()
+            .any(|i| i.module.as_deref() == Some(u.pkg.as_str()))
+        {
+            continue;
+        }
+        // the walked module: a FLAT use's leaf IS the module
+        // (`use calc::{ math }` → `math`); a qualified use's deeper
+        // path spells it (`use calc::math::{ grid }` → `math/grid`
+        // when the leaf itself names a module)
+        let path = if u.path.len() == 1 {
+            u.name.clone()
+        } else {
+            u.path[1..].join("/")
+        };
+        // the binding must land on a MODULE of the dep (a fn/const
+        // leaf heads no path)
+        if !mods::find_mod(idxs, Some(&u.pkg), &path).is_some() {
+            continue;
+        }
+        return Some((u.pkg.clone(), path));
+    }
+    None
+}
+
 /// Position-path completions: after `modname::` in a package's own
 /// file, the resolved module's members VISIBLE to the current file —
 /// the phase-3 tier predicate (`private` reaches the declaring module
 /// and descendants, `pub(super)` the parent's subtree, `pub(pkg)` the
 /// whole package, `pub` everywhere) applied to every row. Declared
 /// children of any edge vis ride as walkable segments (the
-/// intra-package walk gates leaves, not heads). `None` = the head did
-/// not resolve to a module (the caller falls through).
+/// intra-package walk gates leaves, not heads). The dep-module lane
+/// rides beside the own-package one: a use of this doc that bound a
+/// module of a named dep (`use calc::{ math }`) heads the path into
+/// the DEP's tree — the editor's mirror of the engine's
+/// `math::sqrt(x)` / `math::PI` resolution. `None` = the head did not
+/// resolve to a module (the caller falls through).
 fn position_path_completions(
     idxs: &[&DefIndex],
     doc: &DocMods,
@@ -980,12 +998,15 @@ fn position_path_completions(
     prefix: &str,
 ) -> Option<Vec<CompletionOut>> {
     let (head, rest) = segs.split_first()?;
-    let pkg = doc.pkg.as_deref();
     let doc_index = idxs[0];
-    let start = mods::resolve_position_head(doc, doc_index, idxs, head)?;
-    let path = mods::walk_position_mods(idxs, pkg, &start, rest)?;
+    let (pkg, start) = match mods::resolve_position_head(doc, doc_index, idxs, head) {
+        Some(start) => (doc.pkg.clone().unwrap_or_default(), start),
+        None => use_bound_dep_module(idxs, doc_index, head)?,
+    };
+    let pkg = pkg.as_str();
+    let path = mods::walk_position_mods(idxs, Some(pkg), &start, rest)?;
     let from = doc.mod_path.as_deref().unwrap_or("");
-    let Some(scope) = scope_index(idxs, doc, pkg, &path) else {
+    let Some(scope) = scope_index(idxs, doc, Some(pkg), &path) else {
         return Some(Vec::new());
     };
     let mut out: Vec<CompletionOut> = Vec::new();
@@ -996,7 +1017,10 @@ fn position_path_completions(
             &mut out,
             CompletionOut::plain(
                 m.name.clone(),
-                format!("file module — {}", mods::display_of(idxs, pkg, &child)),
+                format!(
+                    "file module — {}",
+                    mods::display_of(idxs, Some(pkg), &child)
+                ),
                 m.doc.clone(),
                 CompletionKind::Module,
             ),
@@ -1014,7 +1038,6 @@ fn position_path_completions(
                 t.doc.clone(),
                 match t.form {
                     TyForm::Interface => CompletionKind::Interface,
-                    TyForm::Namespace => CompletionKind::Module,
                     _ => CompletionKind::Type,
                 },
             ),
@@ -1045,6 +1068,30 @@ fn position_path_completions(
                 l.src.clone(),
                 l.doc.clone(),
                 CompletionKind::Const,
+            ),
+        );
+    }
+    // a `pub use` re-export: the imported name joined the module's
+    // surface — the same tier the use-path exports ride, gated by the
+    // use's declared vis (the engine's leaf gate reads the same row).
+    // The cap law picks the icon until real resolution (same as the
+    // use classifier)
+    for u in &scope.uses {
+        if !mods::vis_allows(from, &path, u.vis) {
+            continue;
+        }
+        let src = u.path.join("::");
+        push_item(
+            &mut out,
+            CompletionOut::plain(
+                u.name.clone(),
+                format!("re-export of {src}::{}", u.name),
+                Vec::new(),
+                if crate::hover::infer::is_cap(&u.name) {
+                    CompletionKind::Type
+                } else {
+                    CompletionKind::Fn
+                },
             ),
         );
     }
@@ -1127,7 +1174,6 @@ fn auto_import_completions(
                 &t.doc,
                 match t.form {
                     TyForm::Interface => CompletionKind::Interface,
-                    TyForm::Namespace => CompletionKind::Module,
                     _ => CompletionKind::Type,
                 },
             );

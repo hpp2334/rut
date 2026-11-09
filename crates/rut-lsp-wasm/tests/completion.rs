@@ -224,7 +224,6 @@ fn tag_dep() -> DefIndex {
         "gadgets",
         "file:///deps/gadgets/lib.rut",
         "pub struct Widget {\nid: i32;\n}\npub fn tag() -> i32 { return 1; }\n",
-        None,
         &[],
     );
     dep.direct_dep = true;
@@ -402,7 +401,7 @@ fn complete_over_std(doc: &str, needle: &str) -> Vec<CompletionOut> {
 /// — the auto-import tier's gate.
 fn std_dep_fixtures() -> Vec<DefIndex> {
     let mount = |name: &str, uri: &str, src: &str| {
-        let mut idx = rut_lsp_wasm::deps::index_dep(name, uri, src, None, &[]);
+        let mut idx = rut_lsp_wasm::deps::index_dep(name, uri, src, &[]);
         idx.direct_dep = true;
         idx
     };
@@ -478,37 +477,51 @@ fn use_path_completion_lists_the_modules_exports() {
 }
 
 #[test]
-fn use_path_completion_lists_the_dep_namespace_shape() {
-    // a dep index (the calc shape: namespace Math + consts): the
-    // names tier offers the minted head, the fns, and the consts
+fn use_path_completion_lists_the_dep_consts_and_mods() {
+    // a dep index (the calc_host shape: bare consts) + a mod-carrying
+    // dep (the calc shape): the names tier offers the consts and the
+    // dep's `pub mod` children — the namespace mint is gone, the
+    // module tree IS the qualified surface
     let src = "pub host fn sqrt(x: f64) -> f64;\n";
     let consts = vec![("PI".to_string(), std::f64::consts::PI)];
-    let calc = rut_lsp_wasm::deps::index_dep(
-        "calc",
-        "file:///deps/calc.d.rut",
-        src,
-        Some("Math"),
-        &consts,
+    let calc_host =
+        rut_lsp_wasm::deps::index_dep("calc_host", "file:///deps/calc_host.d.rut", src, &consts);
+    let mk_mod = |mod_path: &str, text: &str| {
+        let s = rut_lexer::lexer::normalize(text);
+        let (toks, _) = rut_lexer::lexer::lex(&s);
+        let ast = doc_ast(&s, Mode::Impl);
+        let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+        idx.module = Some("calc".to_string());
+        idx.mod_path = Some(mod_path.to_string());
+        idx
+    };
+    let calc_root = mk_mod("", "pub mod math;\n");
+    let calc_math = mk_mod(
+        "math",
+        "pub use calc_host::{ PI };\npub fn sqrt(x: f64) -> f64 { return x; }\n",
     );
+    let doc = "use calc_host::";
+    let s = rut_lexer::lexer::normalize(doc);
+    let (toks, _) = rut_lexer::lexer::lex(&s);
+    let ast = doc_ast(&s, Mode::Impl);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let idxs = [&di, &calc_host];
+    let items = complete(&idxs, &toks, &ast, s.len() as u32, &s, &DocMods::default());
+    let ls = labels(&items);
+    assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
+    assert!(ls.contains(&"PI"), "the bare consts complete: {ls:?}");
+    let pi = items.iter().find(|c| c.label == "PI").unwrap();
+    assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
+    // the dep's mod tree walks: `use calc::` offers the `pub mod` child
     let doc = "use calc::";
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
-    let idxs = [&di, &calc];
+    let idxs = [&di, &calc_root, &calc_math];
     let items = complete(&idxs, &toks, &ast, s.len() as u32, &s, &DocMods::default());
     let ls = labels(&items);
-    assert!(ls.contains(&"Math"), "the namespace head completes: {ls:?}");
-    assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
-    assert!(ls.contains(&"PI"), "the consts complete: {ls:?}");
-    let math = items.iter().find(|c| c.label == "Math").unwrap();
-    assert!(
-        matches!(math.kind, CompletionKind::Module),
-        "{:?}",
-        math.kind
-    );
-    let pi = items.iter().find(|c| c.label == "PI").unwrap();
-    assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
+    assert!(ls.contains(&"math"), "the pub mod child completes: {ls:?}");
 }
 
 // ---- the file-module walk (use-path + position tiers) ----
@@ -890,33 +903,46 @@ fn colon2_completion_lists_the_enum_members() {
 }
 
 #[test]
-fn colon2_completion_lists_the_namespace_statics() {
-    // `Math::⏐` over the calc dep — the namespace head's consts
-    // and fns (the mint the manifest's namespace/consts ride)
-    let src = "pub host fn sqrt(x: f64) -> f64;\n";
-    let consts = vec![("PI".to_string(), std::f64::consts::PI)];
-    let calc = rut_lsp_wasm::deps::index_dep(
-        "calc",
-        "file:///deps/calc.d.rut",
-        src,
-        Some("Math"),
-        &consts,
+fn colon2_completion_lists_the_dep_module_statics() {
+    // `math::⏐` over the calc dep's stamped module index — the
+    // module's pub fns and its re-exported consts (the dep-module
+    // lane the engine resolves)
+    let stamp = |text: &str, mod_path: &str| {
+        let s = rut_lexer::lexer::normalize(text);
+        let (toks, _) = rut_lexer::lexer::lex(&s);
+        let ast = doc_ast(&s, Mode::Impl);
+        let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+        idx.module = Some("calc".to_string());
+        idx.mod_path = Some(mod_path.to_string());
+        idx
+    };
+    let root = stamp("pub mod math;\n", "");
+    let math = stamp(
+        "pub use calc_host::{ PI };\npub fn sqrt(x: f64) -> f64 { return x; }\n",
+        "math",
     );
-    let doc = "entry fn main() -> nil {\n    let x = Math::\n}\n";
+    let doc = "use calc::{ math };\nentry fn main() -> nil {\n    let x = math::\n}\n";
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
-    let idxs = [&di, &calc];
-    let pos = s.rfind("Math::").unwrap() as u32 + "Math::".len() as u32;
+    let idxs = [&di, &root, &math];
+    let pos = s.rfind("math::").unwrap() as u32 + "math::".len() as u32;
     let items = complete(&idxs, &toks, &ast, pos, &s, &DocMods::default());
     let ls = labels(&items);
-    assert!(ls.contains(&"sqrt"), "the namespace's fns complete: {ls:?}");
-    assert!(ls.contains(&"PI"), "the consts complete: {ls:?}");
-    let pi = items.iter().find(|c| c.label == "PI").unwrap();
-    assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
+    assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
+    assert!(
+        ls.contains(&"PI"),
+        "the pub use's re-exported names complete: {ls:?}"
+    );
     let sqrt = items.iter().find(|c| c.label == "sqrt").unwrap();
     assert!(matches!(sqrt.kind, CompletionKind::Fn), "{:?}", sqrt.kind);
+    let pi = items.iter().find(|c| c.label == "PI").unwrap();
+    assert!(
+        matches!(pi.kind, CompletionKind::Type),
+        "the cap law picks the icon until real resolution: {:?}",
+        pi.kind
+    );
 }
 
 #[test]

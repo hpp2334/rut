@@ -1955,17 +1955,14 @@ fn an_inherent_impl_in_the_wrong_module_is_rejected() {
 
 #[test]
 fn a_package_head_in_a_position_names_the_use_fix() {
-    // dep is use-bound in pkg; `dep::alpha::top()` written directly in a
-    // position refuses — uses are the only cross-package door
+    // dep is use-bound in pkg; a FLAT dep's root fn written directly
+    // in a position (`dep::top()`) refuses — a module path never
+    // rooted inside a flat dep, so uses stay its only door
     let pkgs = vec![
-        modpkg(
-            "dep",
-            "pub mod alpha;\n",
-            vec![("alpha", Vis::Pub, "pub fn top() -> i32 { return 10; }\n")],
-        ),
+        modpkg("dep", "pub fn top() -> i32 { return 10; }\n", vec![]),
         modpkg(
             "pkg",
-            "use dep::{};\nentry fn main() -> i32 { return dep::alpha::top(); }\n",
+            "use dep::{};\nentry fn main() -> i32 { return dep::top(); }\n",
             vec![],
         ),
     ];
@@ -1974,9 +1971,43 @@ fn a_package_head_in_a_position_names_the_use_fix() {
         diags
             .iter()
             .any(|d| d.contains("uses are the only cross-package door")
-                && d.contains("use dep::alpha::{ top }")),
+                && d.contains("use dep::{ top }")),
         "{diags:?}"
     );
+}
+
+#[test]
+fn the_fully_qualified_module_path_needs_no_use() {
+    // a TREE-carrying dep's module path is the manifest's own naming:
+    // `dep::alpha::top()` resolves with NO use spelling the module
+    // (the plan's second caller form), and the module binding rides a
+    // use too (`use dep::{ alpha }` + `alpha::top()`)
+    let pkgs = vec![
+        modpkg(
+            "dep",
+            "pub mod alpha;\n",
+            vec![("alpha", Vis::Pub, "pub fn top() -> i32 { return 10; }\n")],
+        ),
+        modpkg(
+            "pkg",
+            "entry fn main() -> i32 { return dep::alpha::top(); }\n",
+            vec![],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 10);
+    let pkgs = vec![
+        modpkg(
+            "dep",
+            "pub mod alpha;\n",
+            vec![("alpha", Vis::Pub, "pub fn top() -> i32 { return 10; }\n")],
+        ),
+        modpkg(
+            "pkg",
+            "use dep::{ alpha };\nentry fn main() -> i32 { return alpha::top(); }\n",
+            vec![],
+        ),
+    ];
+    assert_eq!(run_main_pkgs(&pkgs, "pkg"), 10);
 }
 
 #[test]

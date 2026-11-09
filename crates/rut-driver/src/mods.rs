@@ -386,7 +386,24 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
                 );
                 BTreeMap::new()
             } else {
-                let decls = decl_rows(p.ast());
+                let mut decls = decl_rows(p.ast());
+                // the manifest consts ride the root's rows: they bind
+                // BARE at the pkg's root (the surface grammar has no
+                // `static` spelling), so the leaf gate reads them like
+                // any declared name — `use calc_host::{ PI }` names a
+                // row the pkg did declare
+                if let MountedBody::Host { consts, .. } = &pkg.body {
+                    for (name, _ty, _bits) in consts {
+                        if !decls.iter().any(|d| &d.name == name) {
+                            decls.push(DeclRow {
+                                name: name.clone(),
+                                vis: Vis::Pub,
+                                kind: DeclKind::ModuleLet,
+                                is_async: false,
+                            });
+                        }
+                    }
+                }
                 let declared: BTreeMap<String, Vis> = decls
                     .iter()
                     .filter(|d| d.kind == DeclKind::Mod)

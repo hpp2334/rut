@@ -214,7 +214,22 @@ fn pins_match_the_frozen_std_snapshot() {
     let lock_text = std::fs::read_to_string(dir.join("rut.lock")).unwrap();
     let lock = rut_driver::parse_lock(&lock_text).expect("the scaffolded rut.lock parses");
     assert_eq!(lock.deps().len(), 9, "the lock pins exactly the nine");
-    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v15");
+    // the live tag is DERIVED from the lock's own urls (the cut
+    // advances it; nothing here spells a number)
+    let tag = lock
+        .deps()
+        .iter()
+        .filter_map(|r| {
+            r.url
+                .split_once('@')
+                .and_then(|(_, r)| r.split_once('/').map(|(t, _)| t.to_string()))
+        })
+        .next()
+        .expect("the lock's urls spell the std tag");
+    assert!(tag.starts_with("std-v"), "the tag: {tag}");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../dist")
+        .join(&tag);
     for row in lock.deps() {
         assert!(
             row.url.ends_with(&format!("/dist/std/{}.zip", row.pkg)),
@@ -223,7 +238,7 @@ fn pins_match_the_frozen_std_snapshot() {
             row.url
         );
         let bytes = std::fs::read(frozen.join(format!("{}.zip", row.pkg)))
-            .unwrap_or_else(|e| panic!("the frozen dist/std-v15/{}.zip: {e}", row.pkg));
+            .unwrap_or_else(|e| panic!("the frozen dist/{tag}/{}.zip: {e}", row.pkg));
         assert_eq!(
             row.sha256,
             rut_driver::sha256_hex(&bytes),
@@ -300,8 +315,24 @@ impl BundleServer {
 fn scaffolded_project_runs_against_a_local_server() {
     // the wire: the whole frozen snapshot — the nine the manifest
     // names, plus the host surfaces they can pull (bundles are closed,
-    // but the server answers whatever the graph asks)
-    let frozen = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/std-v15");
+    // but the server answers whatever the graph asks). The tag is
+    // DERIVED from the scaffold's own lock (the cut advances it)
+    let (_probe_root, probe_dir) = scaffold("e2e-tag", "hello");
+    let probe_lock = std::fs::read_to_string(probe_dir.join("rut.lock")).unwrap();
+    let tag = rut_driver::parse_lock(&probe_lock)
+        .expect("the scaffolded rut.lock parses")
+        .deps()
+        .iter()
+        .filter_map(|r| {
+            r.url
+                .split_once('@')
+                .and_then(|(_, r)| r.split_once('/').map(|(t, _)| t.to_string()))
+        })
+        .next()
+        .expect("the lock's urls spell the std tag");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../dist")
+        .join(&tag);
     let mut payloads = BTreeMap::new();
     for e in std::fs::read_dir(&frozen).unwrap() {
         let e = e.unwrap();
@@ -325,7 +356,7 @@ fn scaffolded_project_runs_against_a_local_server() {
         std::fs::write(
             &path,
             text.replace(
-                "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/",
+                &format!("https://cdn.jsdelivr.net/gh/hpp2334/rut@{tag}/dist/std/"),
                 &format!("http://127.0.0.1:{}/", server.port),
             ),
         )

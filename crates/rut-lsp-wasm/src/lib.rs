@@ -197,19 +197,11 @@ impl Core {
     }
 
     /// the walk's named-dep index lane: index one dep source
-    /// file under its module NAME (replace-by-origin), the manifest's
-    /// namespace stamped on the row (the qualified-access head — the
-    /// check lane's world assembly reads it off the group's first
-    /// row), the direct-dep marker stamped from the set the way it is
+    /// file under its module NAME (replace-by-origin), the
+    /// direct-dep marker stamped from the set the way it is
     /// at this call.
-    pub(crate) fn add_def_named_at(
-        &mut self,
-        uri: &str,
-        name: &str,
-        namespace: Option<&str>,
-        src: &str,
-    ) {
-        let mut idx = crate::deps::index_dep(name, uri, src, namespace, &[]);
+    pub(crate) fn add_def_named_at(&mut self, uri: &str, name: &str, src: &str) {
+        let mut idx = crate::deps::index_dep(name, uri, src, &[]);
         idx.direct_dep = self.direct_deps.contains(name);
         self.replace_by_origin(uri, idx);
     }
@@ -223,11 +215,10 @@ impl Core {
         &mut self,
         uri: &str,
         name: &str,
-        namespace: Option<&str>,
         mod_path: &str,
         src: &str,
     ) -> Vec<wire::ModDecl> {
-        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, namespace, &[]);
+        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, &[]);
         idx.direct_dep = self.direct_deps.contains(name);
         let decls: Vec<wire::ModDecl> = idx
             .mods

@@ -172,14 +172,13 @@ pub struct Manifest {
     /// ignored (the forward-compat rule); unknown VALUES trip the
     /// formatter tool, never the loader.
     pub style: BTreeMap<String, String>,
-    /// `namespace` — the qualified-access head (`calc`'s `Math`): the
-    /// manifest's spelling of what the surface grammar cannot say.
-    /// The walk rides it onto the pkg; `use calc::{Math}` binds it.
-    pub namespace: Option<String>,
     /// `consts` — the host body's compiler-materialized constants
-    /// (name → f64; `calc`'s `Math.PI` family). The surface grammar
-    /// has no `static` field form, so the manifest is their only
-    /// spelling.
+    /// (name → f64; `calc_host`'s `PI` family), bound BARE at the
+    /// pkg's root. The surface grammar has no `static` field form,
+    /// so the manifest is their only spelling. (The retired
+    /// `namespace` key — the old qualified-access head — refuses at
+    /// parse: module paths and `pub use` re-exports are the
+    /// spellings now.)
     pub consts: BTreeMap<String, f64>,
 }
 

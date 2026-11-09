@@ -150,10 +150,27 @@ fn load_and_compile(
 /// [`every_committed_artifact_is_byte_fresh`].
 const NUMERAL_SENSITIVE: &[&str] = &["flow", "json", "http"];
 
+/// The packages whose trees moved past the frozen envelope BY DESIGN —
+/// the namespace death (std-v16): calc restructured into its `math`
+/// module and calc_host's manifest dropped the retired key, so the
+/// current pack can neither byte-match nor structurally echo the
+/// committed bytes. What stays enforced is the envelope's own
+/// immutability (the sha pin below) — the retired bin lane never
+/// repacks.
+const RESTRUCTURED: &[&str] = &["calc", "calc_host"];
+
 /// The frozen envelopes' sha256 pins (the corruption guard for the
 /// numeral-sensitive packages — their bytes are frozen forever and
 /// never repacked, so the pin IS their freshness law).
 const COMMITTED_ENVELOPE_SHA256: &[(&str, &str)] = &[
+    (
+        "calc",
+        "378f0be85be193c8e584233f2f9b19017edf86686db4068a569b81995434967e",
+    ),
+    (
+        "calc_host",
+        "bab25be0c5b359d930781476f95bd52e856af1b51542d9dc7dace120226c0757",
+    ),
     (
         "flow",
         "8a487b159a64c9b88be6d6a2783706dc4d5154ea17a0002bbc9bb3f3da693603",
@@ -176,6 +193,22 @@ fn every_committed_artifact_is_byte_fresh() {
         let committed = std::fs::read(dist_std().join(format!("{name}.rutbundle")))
             .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
         if fresh == committed {
+            continue;
+        }
+        if RESTRUCTURED.contains(name) {
+            // the namespace death moved the tree past the envelope by
+            // design — pin the frozen bytes (fixture corruption guard),
+            // never the shape
+            assert_eq!(
+                sha256_hex(&committed),
+                COMMITTED_ENVELOPE_SHA256
+                    .iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, h)| &h[..])
+                    .unwrap_or(""),
+                "dist/std/{name}.rutbundle: the frozen envelope's bytes changed — \
+                 restore the committed bytes (`git restore dist/std`), never repack"
+            );
             continue;
         }
         if NUMERAL_SENSITIVE.contains(name) {
@@ -289,6 +322,19 @@ fn the_artifact_set_spells_the_one_wire_number() {
     for (dir, name) in PKGS {
         let bytes = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
         let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
+        if *name == "calc_host" {
+            // the frozen envelope's manifest still carries the retired
+            // `namespace` key — the strict law refuses it LOUDLY,
+            // naming the fix (the plan's 4b: old zips carrying the key
+            // die at the parse, never silently)
+            let err =
+                rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap_err();
+            assert!(
+                err.to_string().contains("namespace: retired"),
+                "the refusal names the key: {err}"
+            );
+            continue;
+        }
         let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap();
         let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
         assert_eq!(

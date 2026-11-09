@@ -362,14 +362,18 @@ fn compile_program_inner(
     // `UseBinding` — one use leaf's row: `file` the importing file's
     // mod path, `head` the dep head text, `leaf` the bound bare name,
     // `qualified` flat vs `head::path::{leaf}`, `composed` the
-    // host-row spelling when qualified (`net::ping`), `span` the use
-    // item's span (the must-bind law's error site).
+    // host-row spelling when qualified (`net::ping`), `pub_use` the
+    // use's OWN vis (a `pub use` is a re-export edge — its const
+    // bindings ride the unit's surface, spelled by the file's mod
+    // path), `span` the use item's span (the must-bind law's error
+    // site).
     struct UseBinding {
         file: String,
         head: String,
         leaf: rut_core::IdentId,
         qualified: bool,
         composed: String,
+        pub_use: bool,
         span: rut_lexer::span::Span,
     }
     // the own-package claims: the graph validation's rows — a leaf
@@ -409,6 +413,7 @@ fn compile_program_inner(
                     leaf: n,
                     qualified,
                     composed,
+                    pub_use: u.vis != rut_ast::Vis::Self_,
                     span,
                 });
             }
@@ -579,37 +584,16 @@ fn compile_program_inner(
         std::collections::HashSet::new();
     let mut ambient_names: std::collections::HashSet<rut_core::IdentId> =
         std::collections::HashSet::new();
+    // the `pub use` const re-exports: (importing file's mod path, the
+    // bound name id, ty, bits) — laid onto the unit's own surface
+    // after the binding passes (spelled mod-qualified, like every
+    // module row)
+    let mut reexport_consts: Vec<(String, rut_core::IdentId, TypeId, u64)> = Vec::new();
     for (dep_scope, surface, _tmap, origin, head) in trait_maps.iter() {
         let dep_scope = *dep_scope;
-        // the namespace head's files (`use calc::{ Math }`): the
-        // namespace's MEMBER rows — the fns and consts the surface
-        // exposes through the head — resolve there, reached qualified
-        // (`Math::sqrt(..)`); the member names themselves are never in
-        // a use list
-        let ns_sites: Vec<String> = surface
-            .namespace
-            .and_then(|ns| frozen.lookup(surface.names.name(ns)))
-            .map(|ns_id| {
-                use_bindings
-                    .iter()
-                    .filter(|b| b.head == head.as_str() && b.leaf == ns_id)
-                    .map(|b| b.file.clone())
-                    .collect()
-            })
-            .unwrap_or_default();
         for f in &surface.funcs {
             let text = surface.names.name(f.name);
-            let mut sites = binding_sites(head, text);
-            // the namespace ride: the head's files resolve the members
-            if !ns_sites.is_empty() {
-                if let Some(id) = frozen.lookup(text) {
-                    for f2 in &ns_sites {
-                        if !sites.iter().any(|(s, _)| s == f2) {
-                            sites.push((f2.clone(), id));
-                        }
-                    }
-                }
-            }
+            let sites = binding_sites(head, text);
             if sites.is_empty() {
                 continue;
             }
@@ -668,28 +652,26 @@ fn compile_program_inner(
         // names ride ambient (builtin-surface phase 2 — `core` is bound
         // into every unit), its const does not — `NAN` is
         // `use core::{NAN}` explicit. Other pkgs' consts bind where
-        // their use (or their namespace head, whose members ride the
-        // head — `Math::PI` needs no `use` of `PI`) was written.
-        let is_prelude = !surface.native_types.is_empty();
+        // their use was written (bare at the pkg's root). A `pub use`
+        // const binding is a RE-EXPORT EDGE: the row also rides this
+        // unit's own surface, spelled by the importing file's mod path
+        // (`math::PI` for a `pub use calc_host::{ PI }` in `math.rut`)
+        // — self-contained rows (consts are f64-manifest rows, so the
+        // type is the universal `f64`, never a scope-packed id).
         for c in &surface.consts {
             let text = surface.names.name(c.name);
             let Some(id) = frozen.lookup(text) else {
                 continue;
             };
-            let mut sites: Vec<(String, rut_core::IdentId)> =
-                binding_sites(head, text).into_iter().collect();
-            if !is_prelude {
-                // the namespace head's files resolve the namespace's
-                // constants through the qualified form
-                for f in &ns_sites {
-                    if !sites.iter().any(|(s, _)| s == f) {
-                        sites.push((f.clone(), id));
-                    }
-                }
-            }
-            for (site, id) in sites {
+            for (site, id) in binding_sites(head, text) {
                 bound_sites.insert((site.clone(), id));
                 ctx.add_extern_const(&site, id, c.ty, c.bits);
+            }
+            for b in use_bindings
+                .iter()
+                .filter(|b| b.head == *head.as_str() && b.leaf == id && b.pub_use)
+            {
+                reexport_consts.push((b.file.clone(), id, c.ty, c.bits));
             }
         }
         for t in &surface.type_exports {
@@ -801,7 +783,7 @@ fn compile_program_inner(
         // legal; a non-ambient row (the `pub builtin` spellings)
         // binds per file — only in the files whose `use` spelled it
         // (the per-file law). Mounted mounting (ink/pouch/calc fns,
-        // consts, namespace heads) stays use-gated.
+        // consts) stays use-gated.
         for (n, kind, ambient) in &surface.native_types {
             if let Some(id) = frozen.lookup(surface.names.name(*n)) {
                 if *ambient {
@@ -828,13 +810,133 @@ fn compile_program_inner(
                 }
             }
         }
-        // the namespace head (`Math`): bound in the files whose `use`
-        // wrote it — resolving exactly there
-        if let Some(ns) = &surface.namespace {
-            if let Some(id) = frozen.lookup(surface.names.name(*ns)) {
-                for (site, leaf) in bare_sites(head, id) {
-                    bound_sites.insert((site.clone(), leaf));
-                    ctx.add_extern_namespace(&site, leaf);
+    }
+    // the dep-module bindings: a flat use leaf naming the dep's
+    // `pub mod` row binds the MODULE (`use calc::{ math }` — the
+    // qualified forms `math::sqrt(x)`/`math::PI` resolve through it),
+    // and a dep whose surface carries module-qualified rows (a mod
+    // tree) binds its own NAME at the ambient site — the pkg-rooted
+    // fully-qualified path (`calc::math::sqrt(x)`, no use) is the
+    // manifest's own naming, unit-global like the trait lane.
+    {
+        // one tree per head: the module rows composed off the dep
+        // surface's own spellings (`math::sqrt` → the child `math`,
+        // the member `sqrt`). `insert` walks/creates the path's child
+        // chain first (segments keyed by the CONSUMER's ids — only a
+        // segment the source spells can be walked), then lays the
+        // member row.
+        fn insert(
+            frozen: &rut_core::Interner,
+            tree: &mut rut_lir::check::DepMod,
+            path: &[&str],
+            lay: impl FnOnce(&mut rut_lir::check::DepMod),
+        ) {
+            let mut m = tree;
+            for seg in path {
+                let Some(id) = frozen.lookup(seg) else {
+                    return; // a segment this unit never spelled —
+                }; // unwalkable here, the row stays unreachable
+                m = m.children.entry(id).or_default();
+            }
+            lay(m);
+        }
+        for (dep_scope, surface, _tmap, origin, head) in trait_maps.iter() {
+            let dep_scope = *dep_scope;
+            let mut tree = rut_lir::check::DepMod::default();
+            let mut has_rows = false;
+            for f in &surface.funcs {
+                let text = surface.names.name(f.name);
+                let Some((path, member)) = split_qualified(text) else {
+                    continue; // a root row — the flat lane's own
+                };
+                let Some(id) = frozen.lookup(member) else {
+                    continue;
+                };
+                has_rows = true;
+                let exports: Vec<(rut_core::IdentId, TypeId)> = surface
+                    .type_exports
+                    .iter()
+                    .map(|t| (t.name, rut_core::pack(dep_scope, t.local)))
+                    .collect();
+                let ret2 = ctx.respell_future_ret(f.ret, &exports);
+                let row = rut_lir::check::ExternFn {
+                    func: rut_core::pack(dep_scope, f.local),
+                    params: f.params.clone(),
+                    ret: ret2,
+                    is_async: f.is_async,
+                    host: f.host.map(|h| surface.names.name(h).to_string()),
+                };
+                insert(&frozen, &mut tree, &path, |m| {
+                    m.fns.insert(id, row);
+                });
+            }
+            for g in &surface.fn_generics {
+                let text = surface.names.name(g.name);
+                let Some((path, member)) = split_qualified(text) else {
+                    continue;
+                };
+                let Some(id) = frozen.lookup(member) else {
+                    continue;
+                };
+                has_rows = true;
+                let params: Vec<rut_core::IdentId> = g
+                    .params
+                    .iter()
+                    .map(|&p| ctx.intern(surface.names.name(p)))
+                    .collect();
+                let row = rut_lir::check::ExternGenericFn {
+                    owner: origin.clone(),
+                    params,
+                    args: g.args.clone(),
+                    ret: g.ret,
+                };
+                insert(&frozen, &mut tree, &path, |m| {
+                    m.generic_fns.insert(id, row);
+                });
+            }
+            for c in &surface.consts {
+                let text = surface.names.name(c.name);
+                let Some((path, member)) = split_qualified(text) else {
+                    continue;
+                };
+                let Some(id) = frozen.lookup(member) else {
+                    continue;
+                };
+                has_rows = true;
+                let (ty, bits) = (c.ty, c.bits);
+                insert(&frozen, &mut tree, &path, |m| {
+                    m.consts.insert(id, (ty, bits));
+                });
+            }
+            if !has_rows {
+                continue; // a flat dep — no module path can root inside
+            }
+            // the pkg-name root binds AMBIENT: the fully-qualified
+            // path (`calc::math::sqrt(x)`) is the manifest's own
+            // naming, never a use's
+            if let Some(head_id) = frozen.lookup(head.as_str()) {
+                ctx.add_extern_mod(AMBIENT_SITE, head_id, tree.clone());
+            }
+            // a flat use leaf naming a `pub mod` row of the dep's root
+            // binds the MODULE in the use's file (the per-file law)
+            if let Some(table) = dep_decls.iter().find(|(h, _)| h == head.as_str()) {
+                if let Some(rows) = table.1.get("") {
+                    for b in &use_bindings {
+                        if b.head != *head.as_str() || b.qualified {
+                            continue;
+                        }
+                        let leaf_text = ast.name(b.leaf);
+                        if rows
+                            .iter()
+                            .any(|d| d.name == leaf_text && d.kind == crate::mods::DeclKind::Mod)
+                        {
+                            if let Some(child) = tree.children.get(&b.leaf) {
+                                bound_sites.insert((b.file.clone(), b.leaf));
+                                let child = child.clone();
+                                ctx.add_extern_mod(&b.file, b.leaf, child);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1068,7 +1170,7 @@ fn compile_program_inner(
             subst: vec![],
             iface_origins: vec![],
         }) {
-            if let Some(f) = ctx.funcs.get(fid as usize) {
+            if let Some(f) = ctx.funcs.get(fid as usize).cloned() {
                 // the async rows carry the REAL `is_async` (plan10
                 // phase 3): the woven body's ABI is the (frame, cx)
                 // pair, so the row's signature re-resolves off the DECL
@@ -1082,6 +1184,23 @@ fn compile_program_inner(
                     .find(|(n, _)| n == name)
                     .map(|(_, n)| *n);
                 let is_async = node.map(|n| n.get(ctx.ast).is_async).unwrap_or(false);
+                // a module's fn rides the surface MOD-QUALIFIED
+                // (`math::sqrt`, the host rows' `net::connect`
+                // convention): the consumer's qualified uses and
+                // dep-module paths match the composed spelling; a
+                // root fn stays bare (flat pkgs byte-identical)
+                let mod_path = node
+                    .map(|n| ctx.mod_of(n.span(ctx.ast)).to_string())
+                    .unwrap_or_default();
+                let row_name = if mod_path.is_empty() {
+                    *name
+                } else {
+                    ctx.intern(&format!(
+                        "{}::{}",
+                        mod_path.replace('/', "::"),
+                        ctx.name(*name)
+                    ))
+                };
                 let (params, ret, local) = if is_async {
                     let n = node.expect("an async export has its decl node");
                     let fd = n.get(ctx.ast);
@@ -1106,7 +1225,7 @@ fn compile_program_inner(
                     (f.params.clone(), f.ret, fid)
                 };
                 surface.funcs.push(rut_core::binary::SurfaceFn {
-                    name: *name,
+                    name: row_name,
                     params,
                     ret,
                     local,
@@ -1115,6 +1234,22 @@ fn compile_program_inner(
                 });
             }
         }
+    }
+    // the `pub use` const re-exports, laid as surface rows spelled by
+    // the importing file's mod path — the re-exported const's own
+    // spelling on this pkg's surface (the consumer's `math::PI` and
+    // the dep-module tree both read it)
+    for (file, name, ty, bits) in reexport_consts {
+        let row_name = if file.is_empty() {
+            name
+        } else {
+            ctx.intern(&format!("{}::{}", file.replace('/', "::"), ctx.name(name)))
+        };
+        surface.consts.push(rut_core::binary::SurfaceConst {
+            name: row_name,
+            ty,
+            bits,
+        });
     }
     // inherent method surface (the linkable-classes phase): one row
     // per class with exported methods — a plain class's row binds
@@ -1296,7 +1431,8 @@ fn compile_program_inner(
     // exported GENERIC fns (the linkable-classes phase): names +
     // placeholder signatures — the bodies exist per argument list, so
     // nothing compiles here; the consumer mints the mirror
-    // instantiation and requests the body from this pkg
+    // instantiation and requests the body from this pkg. A module's
+    // generic rides MOD-QUALIFIED like every module fn.
     for (name, node) in ctx.fn_nodes.clone() {
         let is_pub = ctx.exports.iter().any(|(n, _)| *n == name);
         if !is_pub {
@@ -1309,6 +1445,7 @@ fn compile_program_inner(
         // the placeholder signature resolves in the fn's module (phase 3)
         let saved_mod = ctx.cur_mod.clone();
         ctx.cur_mod = ctx.mod_of(node.span(ctx.ast)).to_string();
+        let mod_path = ctx.cur_mod.clone();
         // the placeholder substitution: each generic parameter spells
         // its `#<param>` row (interned BEFORE the type snapshot below
         // carries it)
@@ -1332,10 +1469,19 @@ fn compile_program_inner(
             .ret
             .map(|r| ctx.resolve_sig_ty(r, &env, None))
             .unwrap_or(TY_NIL);
+        let row_name = if mod_path.is_empty() {
+            name
+        } else {
+            ctx.intern(&format!(
+                "{}::{}",
+                mod_path.replace('/', "::"),
+                ctx.name(name)
+            ))
+        };
         surface
             .fn_generics
             .push(rut_core::binary::SurfaceGenericFn {
-                name,
+                name: row_name,
                 params: fd.generics.clone(),
                 args,
                 ret,
@@ -2432,6 +2578,26 @@ fn compile_program_inner(
         requests,
         template_failures,
     }
+}
+
+/// A surface row's module-qualified spelling (`math::sqrt`, the host
+/// rows' `net::tls::handshake`): `Some((path segments, member))` when
+/// the name carries a `::` separator, `None` for a root row (bare).
+/// The one convention the dep-module lane reads — a source pkg's
+/// module rows and a host pkg's mod rows spell their path the same
+/// way, so the consumer's tree builds off either surface unchanged.
+fn split_qualified(text: &str) -> Option<(Vec<&str>, &str)> {
+    let idx = text.rfind("::")?;
+    let (path, member) = text.split_at(idx);
+    let member = &member["::".len()..];
+    if path.is_empty() || member.is_empty() {
+        return None;
+    }
+    let segs = path.split("::").collect::<Vec<&str>>();
+    if segs.iter().any(|s| s.is_empty()) {
+        return None;
+    }
+    Some((segs, member))
 }
 
 /// The template stability law (v22): a template body's emission must

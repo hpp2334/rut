@@ -86,7 +86,7 @@ Two separators, one law:
 
 | token | role | spells |
 |---|---|---|
-| `::` | the path separator — segments of any **name-resolution** path | use paths, module positions, enum members, statics/associated fns, extern namespaces: `use pkg::a::b::{ C }`, `Light::Green`, `Rect::new(..)`, `Vec<T>::from(..)` |
+| `::` | the path separator — segments of any **name-resolution** path | use paths, module positions, enum members, statics/associated fns, dep module paths: `use pkg::a::b::{ C }`, `Light::Green`, `Rect::new(..)`, `math::sqrt(..)` |
 | `.` | **value access** on an expression | fields, instance methods, tuple indices: `p.x`, `v.push(..)`, `t.0` |
 
 A path never spells `.`; a value access never spells `::`. Qualified

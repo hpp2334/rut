@@ -46,7 +46,7 @@ Conversions are casts, truncating like C/Rust:
 - a conversion never traps (arithmetic still does).
 
 ```rut
-use calc::{ sqrt };
+use calc::{ math };
 use ink::{ Logger };
 
 entry fn main() {
@@ -54,7 +54,7 @@ entry fn main() {
     let cast = 300 as u8;      // 44
     let x = 3;
     let y = 4;
-    log.info(f"{cast} {sqrt((x * x + y * y) as f64)}");
+    log.info(f"{cast} {math::sqrt((x * x + y * y) as f64)}");
 }
 ```
 

@@ -2330,7 +2330,7 @@ async function main() {
         const manifestPath = path.join(REPO, 'examples', '03-plugin', 'plugin', 'rut.jsonc');
         const table = await core.parseManifest(fs.readFileSync(manifestPath, 'utf8'));
         assert.ok(!table.error, `manifest parse: ${JSON.stringify(table)}`);
-        eqKeys(table, ['name', 'entries', 'namespace', 'consts', 'deps', 'dev_deps'], 'dep table');
+        eqKeys(table, ['name', 'entries', 'consts', 'deps', 'dev_deps'], 'dep table');
         eqKeys(table.entries[0], ['path', 'mode'], 'entry source');
         eqKeys(table.deps[0], ['name', 'source', 'optional', 'lib'], 'dep row');
         eqKeys(

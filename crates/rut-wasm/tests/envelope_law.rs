@@ -45,10 +45,10 @@ fn compiles_clean(src: &str, man: Option<&str>) -> bool {
 
 const INK_CALC_SRC: &str = r#"
 use ink::{ Logger };
-use calc::{ sqrt };
+use calc::{ math };
 entry fn main() -> nil {
     let log = Logger("envelope");
-    log.info(f"sqrt={sqrt(4.0)}");
+    log.info(f"sqrt={math::sqrt(4.0)} pi={math::PI}");
 }
 "#;
 

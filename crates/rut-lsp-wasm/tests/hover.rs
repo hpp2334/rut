@@ -945,20 +945,29 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     // used to render `...f64;pub` — the span ran into the next
     // decl's `pub`); the hover markdown carries the clean signature
     // only. calc rides the PUBLIC dep lane — the repo's own source
-    // mounted as a fixture (`deps::index_dep`), exactly what the
+    // mounted as a fixture (`deps::index_dep`/`index_dep_mod`, the
+    // root shell + the math module beside it), exactly what the
     // walk indexes
     let doc = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Impl);
     let di = index(&s, &ast, &toks);
-    let std = [rut_lsp_wasm::deps::index_dep(
-        "calc",
-        "rut/calc/src/mod.rut",
-        include_str!("../../../rut/calc/src/mod.rut"),
-        None,
-        &[],
-    )];
+    let std = [
+        rut_lsp_wasm::deps::index_dep(
+            "calc",
+            "rut/calc/src/mod.rut",
+            include_str!("../../../rut/calc/src/mod.rut"),
+            &[],
+        ),
+        rut_lsp_wasm::deps::index_dep_mod(
+            "calc",
+            "rut/calc/src/math.rut",
+            "math",
+            include_str!("../../../rut/calc/src/math.rut"),
+            &[],
+        ),
+    ];
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.find("abs(").unwrap() as u32;
@@ -969,7 +978,7 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )
-    .expect("abs hovers through the calc surface")
+    .expect("abs hovers through the calc math module")
     .markdown;
     assert!(
         md.contains("fn abs<T requires f32 | f64>(x: T) -> T"),

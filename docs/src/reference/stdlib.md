@@ -128,8 +128,8 @@ declaration surface whose bodies the embedder binds.
 | `nmap_host` / `nmapset` | host pkg + rut pkg | the native key table; `HashMap`/`HashSet` |
 | `json` | rut pkg (`strbuild` + `pouch` + `nmapset` as deps) | `encodeJson` / `decodeJson` / `decodeJsonBytes` + the serde interfaces and the wrapper families |
 | `strbuild_host` / `strbuild` | host pkg + rut pkg | the builder rows; the `StringBuilder` class |
-| `calc` | rut pkg (over `calc_host`) | the generic float surface (`sqrt<T requires f32 \| f64>` — the width falls out of the argument) |
-| `calc_host` | host pkg | the math rows + the `Math::` constants |
+| `calc` | rut pkg (over `calc_host`) | the generic float surface — the `math` module (`sqrt<T requires f32 \| f64>`, the width falls out of the argument) |
+| `calc_host` | host pkg | the math rows + the `PI` constants (bound bare at its root, re-exported through `calc`'s `math`) |
 | `async_host` / `futures` | host pkg + rut pkg | the launcher rows; `launch_future` / `sleep` |
 | `http_host` / `http` | host pkg (a mod-tree surface: `net/` + `stream/`) + rut pkg | the std HTTP lanes |
 | `bench-cross` | host pkg | the crossing-tax benchmark rows |
@@ -272,16 +272,16 @@ the same key as its content, with no key cell minted on a probe
 ### `calc` — the generic float surface
 
 ```rut
-use calc::{ sqrt, abs };
+use calc::{ math };
 use ink::{ Logger };
 
 entry fn main() {
     let log = Logger("t");
     let x = 3.0f64;
     let y = 4.0f64;
-    let d = sqrt(x * x + y * y);
-    let a = abs(x);
-    let hf = sqrt(2.0);                    // f32 — the width falls out of the argument
+    let d = math::sqrt(x * x + y * y);
+    let a = math::abs(x);
+    let hf = math::sqrt(2.0);              // f32 — the width falls out of the argument
     log.info(f"{d} {a} {hf}");
 }
 ```
@@ -290,16 +290,19 @@ entry fn main() {
 5 3 1.4142135
 ```
 
+The surface is `calc`'s `math` module — bind it (`use calc::{ math }`)
+and reach the members qualified (`math::sqrt(x)`), or spell the path
+fully qualified off the package name (`calc::math::sqrt(x)`, no `use`).
 Functions (each a closed-union generic over `f32 | f64` — the width is
-inferred from the arguments, or spelled `sqrt<f32>(x)`): `sqrt`, `floor`,
-`ceil`, `round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`,
-`tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`,
-`hypot`, `copysign`, `fma`, plus the float helpers `abs`, `min`, `max`,
-`signum`. Constants: `Math::PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`,
-`LOG2_E`, `LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`,
-`MIN`, `MIN_POSITIVE` — through `use calc_host::{ Math }` (the host
-package behind `calc`; the `Math::` head lives there). Integer numeric
-methods are core's, not `calc`'s.
+inferred from the arguments, or spelled `math::sqrt<f32>(x)`): `sqrt`,
+`floor`, `ceil`, `round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`,
+`cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`,
+`atan2`, `hypot`, `copysign`, `fma`, plus the float helpers `abs`,
+`min`, `max`, `signum`. Constants: `math::PI`, `TAU`, `E`, `SQRT_2`,
+`LN_2`, `LN_10`, `LOG2_E`, `LOG10_E`, `INFINITY`, `NEG_INFINITY`,
+`EPSILON`, `MAX`, `MIN`, `MIN_POSITIVE` — `calc_host`'s manifest consts
+re-exported through the module's `pub use` (callers never touch the
+host package). Integer numeric methods are core's, not `calc`'s.
 
 ### `json` — the serde package
 

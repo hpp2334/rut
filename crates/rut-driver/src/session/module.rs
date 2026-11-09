@@ -150,9 +150,6 @@ impl Default for MountedBody {
 pub struct Mounted {
     /// the exact package name — bare `[a-zA-Z0-9_]+`
     pub spec: String,
-    /// The namespace head for qualified member access (`Math.sqrt`) —
-    /// `None` when the pkg has no namespace form.
-    pub namespace: Option<String>,
     pub entry: Entry,
     /// the body: `.rut` source, a decoded `.rutc`, or the native rows
     pub body: MountedBody,

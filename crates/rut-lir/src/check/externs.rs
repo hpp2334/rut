@@ -622,15 +622,23 @@ impl<'a> Ctx<'a> {
                 .contains(&(AMBIENT_SITE.to_string(), name))
     }
 
-    /// Bind a namespace head (`use calc::{Math}`) in `site`.
-    pub fn add_extern_namespace(&mut self, site: &str, name: IdentId) {
-        self.extern_namespaces.insert((site.to_string(), name));
+    /// Bind a dep module (`use calc::{ math }`) in `site`: the
+    /// module's member rows, composed off the dep's surface.
+    pub fn add_extern_mod(&mut self, site: &str, name: IdentId, module: DepMod) {
+        self.extern_mods.insert((site.to_string(), name), module);
     }
 
-    /// Is `name` a namespace head bound in the CURRENT file?
-    pub fn is_extern_namespace(&self, name: IdentId) -> bool {
-        self.extern_namespaces
-            .contains(&(self.cur_mod.clone(), name))
+    /// The dep module `name` resolves against in the CURRENT file: a
+    /// module the file's own `use` bound first, then the ambient
+    /// pkg-name roots (a declared dep's tree names the whole unit).
+    /// Cloned — the caller compiles against the rows while owning the
+    /// context. `None` = the head names no dep module (the caller's
+    /// ladder carries on).
+    pub fn extern_mod(&self, name: IdentId) -> Option<DepMod> {
+        self.extern_mods
+            .get(&(self.cur_mod.clone(), name))
+            .or_else(|| self.extern_mods.get(&(AMBIENT_SITE.to_string(), name)))
+            .cloned()
     }
 
     /// Does the CURRENT file's bindings arm the newtype call

@@ -319,7 +319,6 @@ impl<'a> GraphCompiler<'a> {
                     bits: *bits,
                 });
             }
-            surface.namespace = module.namespace.as_deref().map(|n| surface.names.intern(n));
             // each row keeps the ambient bit it was mounted with —
             // host rows default `true`, and core's mount copies the
             // decl spellings verbatim (the `pub builtin` disposal pair
@@ -585,12 +584,45 @@ impl<'a> GraphCompiler<'a> {
         // gates its leaves under the crossing predicate. The validated
         // dep heads ensure; the own bindings ride the compile.
         let (uses, own_uses) = self.validate_qualified_uses(spec, module, parsed.ast(), &layout)?;
+        // the pkg-rooted module path (`calc::math::sqrt(x)`) spells NO
+        // use — the fully-qualified form is self-sufficient — so a
+        // DECLARED dep that mounts a mod tree ensures beside the used
+        // heads (its surface is the path's resolution input; the
+        // binding stays the tree's own). Flat deps stay lazy: a path
+        // can never root inside them, so an unused flat dep never
+        // compiles.
+        let mut uses = uses;
+        let declared_trees: Vec<String> = {
+            let mut names: Vec<String> = module.manifest.deps.keys().cloned().collect();
+            names.sort();
+            names
+                .into_iter()
+                .filter(|d| {
+                    uses.iter().all(|u| u != d)
+                        // a back-edge (a dep mid-compile up the stack —
+                        // the loose hand-world tables declare both ways)
+                        // has no surface to offer yet; the real worlds
+                        // are DAGs and never trip this
+                        && !self.visiting.contains(d)
+                        && self
+                            .session
+                            .resolve_use(spec, d, &self.root)
+                            .ok()
+                            .is_some_and(|m| !m.mods.is_empty())
+                })
+                .collect()
+        };
+        for dep in declared_trees {
+            // the ensure's own refusals (a loud resolve error) fail the
+            // unit; a tree the walk cannot build never reaches here
+            self.ensure_use(spec, &dep)?;
+            uses.push(dep);
+        }
         // the mounted prelude rides every compilation unit: its AMBIENT
         // names need no `use` (a `use core::{ .. }` statement stays
         // legal but redundant for them), while the `pub builtin`
         // spellings bind only when the module's use named them — the
         // binding loops read each row's ambient bit.
-        let mut uses = uses;
         if spec != "core"
             && self.session.resolve("core").is_ok()
             && !uses.iter().any(|u| u == "core")
@@ -1090,23 +1122,19 @@ impl GraphCompiler<'_> {
             let dep_name = head_text;
             if path.len() < 2 {
                 // the flat spelling — each leaf must be a decl of the
-                // dep's root module (or the dep's namespace head). The
-                // gate names only what the dep never declared, plus the
-                // mod names no surface carries: visibility stays the
-                // binding's business exactly as today — a private row
-                // keeps importing, and what the surface never exported
-                // keeps failing at its use site. A compiled dep's decls
-                // ride its binary (the binding gate answers), and an
-                // undeclared head keeps its D5 shape at the binding.
+                // dep's root module: a fn/const/type/class row binds
+                // flat, a `mod` row binds the MODULE name (the
+                // qualified forms `math::sqrt(x)`/`math::PI` resolve
+                // through it). The gate names only what the dep never
+                // declared: visibility stays the binding's business
+                // exactly as today — a private row keeps importing, and
+                // what the surface never exported keeps failing at its
+                // use site. A compiled dep's decls ride its binary (the
+                // binding gate answers), and an undeclared head keeps
+                // its D5 shape at the binding.
                 if !self.dep_rows_readable(&dep_name) {
                     continue;
                 }
-                // the namespace head (`use calc::{Math}`) binds like a
-                // leaf — the manifest rides it, never a decl row
-                let ns = session
-                    .resolve(&dep_name)
-                    .ok()
-                    .and_then(|m| m.namespace.clone());
                 let bad: Vec<Diag> = {
                     let Some(table) = self.dep_mod_table(&dep_name) else {
                         continue;
@@ -1119,20 +1147,10 @@ impl GraphCompiler<'_> {
                         .iter()
                         .filter_map(|&n| {
                             let text = ast.name(n);
-                            if Some(text) == ns.as_deref() {
-                                return None;
-                            }
                             match rows.iter().find(|d| d.name == text) {
                                 None => Some(Diag::new(
                                     span,
                                     format!("`{dep_name}` has no `{text}` — unknown import"),
-                                )),
-                                Some(d) if d.kind == crate::mods::DeclKind::Mod => Some(Diag::new(
-                                    span,
-                                    format!(
-                                        "`{text}` is a module of `{dep_name}` — a module is not \
-                                         imported; walk it: `use {dep_name}::{text}::{{ .. }}`"
-                                    ),
                                 )),
                                 Some(_) => None,
                             }

@@ -56,7 +56,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
         }
         // the namespace mint renders like a class body: the consts as
         // fields, the module's fns as the method count
-        TyForm::Class | TyForm::Struct | TyForm::HostStruct | TyForm::Namespace => {
+        TyForm::Class | TyForm::Struct | TyForm::HostStruct => {
             let mut body = String::new();
             for f in &ty.fields {
                 body.push_str("    ");

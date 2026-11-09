@@ -541,11 +541,14 @@ pub struct Ctx<'a> {
     /// `(binding file, name)` — the name is callable only where bound;
     /// the ambient prelude rows bind under [`AMBIENT_SITE`]
     pub extern_native_fns: std::collections::HashSet<(String, IdentId)>,
-    /// Bound namespace heads (`Math` for `calc`) — the qualified
-    /// access form `<namespace>::<member>`, keyed `(binding file,
-    /// head)`. Name-generic: the LIR routes by membership here, never
-    /// by a hardcoded string. Per-file (the binding law).
-    pub extern_namespaces: std::collections::HashSet<(String, IdentId)>,
+    /// Dep modules bound by a use (`use calc::{ math }`) — the
+    /// module-qualified access forms (`math::sqrt(x)`, `math::PI`, and
+    /// the pkg-rooted `calc::math::sqrt(x)`) resolve through these
+    /// rows. Keyed `(binding file, module name)`; the pkg-name root
+    /// binds under [`AMBIENT_SITE`] (a declared dep's tree is the
+    /// whole unit's naming, like the trait lane). Per-file for the
+    /// module spellings (the binding law).
+    pub extern_mods: std::collections::HashMap<(String, IdentId), DepMod>,
     /// instantiated generic types: id -> (decl, type args)
     pub inst_data: std::collections::HashMap<TypeId, (IdentId, Vec<TypeId>)>,
     /// monomorphization cache: (decl, type args) -> id
@@ -723,6 +726,27 @@ pub struct ExternFn {
     pub host: Option<String>,
 }
 
+/// A dep module bound by a use — the module's exported member rows,
+/// composed off the dep's surface (whose module rows spell their path
+/// qualified: `math::sqrt`, the host rows' `net::connect` convention).
+/// The qualified forms resolve through it: `math::sqrt(x)` and
+/// `math::PI` after `use calc::{ math }`, and the pkg-rooted
+/// `calc::math::sqrt(x)` through the [`crate::check::AMBIENT_SITE`]
+/// binding of the dep's name.
+#[derive(Clone, Debug, Default)]
+pub struct DepMod {
+    /// the module's exported concrete fns: member name → row
+    pub fns: std::collections::HashMap<IdentId, ExternFn>,
+    /// the module's exported GENERIC fns (the mirror-instantiation
+    /// lane): member name → placeholder signature + owner
+    pub generic_fns: std::collections::HashMap<IdentId, ExternGenericFn>,
+    /// the module's exported constants (manifest consts, a `pub use`
+    /// re-export): member name → (type, raw bits)
+    pub consts: std::collections::HashMap<IdentId, (TypeId, u64)>,
+    /// the `pub mod` children, for deeper walks (`calc::math::deep::f()`)
+    pub children: std::collections::HashMap<IdentId, DepMod>,
+}
+
 /// The minted machinery of one async host fn (the host future lane,
 /// phase 4): the hidden `#hframe@` frame type the call site
 /// instantiates, the `__start` thunk's fid the call dispatches to, and
@@ -874,7 +898,7 @@ impl<'a> Ctx<'a> {
             extern_generic_fns: std::collections::HashMap::new(),
             for_of_sigs: std::collections::HashMap::new(),
             extern_native_fns: std::collections::HashSet::new(),
-            extern_namespaces: std::collections::HashSet::new(),
+            extern_mods: std::collections::HashMap::new(),
             inst_data: std::collections::HashMap::new(),
             type_inst: std::collections::HashMap::new(),
             iface_inst: std::collections::HashMap::new(),

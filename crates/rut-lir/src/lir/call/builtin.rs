@@ -139,11 +139,9 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             );
             return Err(());
         }
-        // a used namespace's members (`Math.sqrt`) —
-        // routed by the bound head, name-generic
-        if self.ctx.is_extern_namespace(base) {
-            return self.compile_namespace_member(base, member, &args, expected, sp);
-        }
+        // a used namespace's members (`Math.sqrt`) died with the
+        // namespace mechanism — the dep-module lane owns qualified
+        // member calls now (`math::sqrt(x)`)
         match (base, member) {
             (sym::BYTES, sym::FROM) => {
                 // bytes.from(a) — copy an Array<u8> into an immutable

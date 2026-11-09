@@ -57,7 +57,7 @@ What the editor face provides (the LSP slice landed early; the
     package's public exports (`use pkg::mod::⏐`, the `{ A, B }` brace
     form included, trigger key `{`)
   - after `modname::` in a package's own file — the module's members
-    by visibility tier; after `Type::` — enum members, namespace
+    by visibility tier; after `Type::` — enum members, a type's
     statics, a type's associated fns
   - auto-import — foreign public names from the document's DIRECT
     deps (the core prelude included) matching the bare prefix, each

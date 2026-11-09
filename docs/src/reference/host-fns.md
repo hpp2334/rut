@@ -317,7 +317,7 @@ A published package ships:
 
 - The surface rides the binary: a consumer binds `p`'s exports from
   `mod.rutc` alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn
-  ids, interface-table indices, and namespace/host rows are not derivable
+  ids, interface-table indices, and host rows are not derivable
   from text without guesswork.
 - Link compares the consumer's bound surface against the binary's
   export table — a pure data compare. Drift is a load error naming

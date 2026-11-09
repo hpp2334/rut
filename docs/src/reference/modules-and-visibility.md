@@ -265,7 +265,7 @@ package's own name, or one of its `mod` edges (see
 positions stay spelling-free: `imp::grid::Cell` never needed an
 import, and still spells. `::` is THE path separator — every
 name-resolution path (use paths, qualified positions, enum members,
-statics/associated fns, extern namespaces) spells its segments with
+statics/associated fns, dep module paths) spells its segments with
 it; `.` is value access only (fields, instance methods, tuple indices
 — see [Lexical structure](lexical-structure.md)). One separator, two
 doors:

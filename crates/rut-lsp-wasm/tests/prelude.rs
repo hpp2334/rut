@@ -20,20 +20,12 @@ const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/src/net/tls/mod.d
 
 fn myhost_chain() -> Vec<DefIndex> {
     vec![
-        index_dep_mod(
-            "myhost",
-            "rut/myhost/src/myhost.d.rut",
-            "",
-            MYHOST,
-            None,
-            &[],
-        ),
+        index_dep_mod("myhost", "rut/myhost/src/myhost.d.rut", "", MYHOST, &[]),
         index_dep_mod(
             "myhost",
             "rut/myhost/src/net/mod.d.rut",
             "net",
             MYHOST_NET,
-            None,
             &[],
         ),
         index_dep_mod(
@@ -41,7 +33,6 @@ fn myhost_chain() -> Vec<DefIndex> {
             "rut/myhost/src/net/tls/mod.d.rut",
             "net/tls",
             MYHOST_NET_TLS,
-            None,
             &[],
         ),
     ]
@@ -78,7 +69,6 @@ fn the_prelude_index_stamps_the_manifest_shape() {
         idx.direct_dep,
         "the prelude rides every chain as the ambient dep lane"
     );
-    assert_eq!(idx.namespace, None);
     assert!(
         !idx.fns.is_empty() && !idx.types.is_empty(),
         "the prelude carries rows"
@@ -226,7 +216,6 @@ fn a_std_source_mounts_as_an_ordinary_dep() {
         "pouch",
         "rut/pouch/src/mod.rut",
         include_str!("../../../rut/pouch/src/mod.rut"),
-        None,
         &[],
     );
     assert_eq!(idx.module.as_deref(), Some("pouch"));

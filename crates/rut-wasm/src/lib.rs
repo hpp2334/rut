@@ -341,7 +341,9 @@ fn host_surface(
 /// One std pkg mounted from the repo tree's OWN files — the source AND
 /// the manifest ride `include_str!`, so `rut/<name>/rut.jsonc` stays
 /// the single source of truth (no hand-maintained dep table here; the
-/// parsed structural form carries the `deps` rows).
+/// parsed structural form carries the `deps` rows). `children` mounts
+/// the pkg's file modules beside the root (calc's `math` module —
+/// `pub mod math;` in the root, `math.rut` the module file).
 macro_rules! std_pkg {
     ($name:literal) => {
         rut_driver::Mounted::source(
@@ -353,6 +355,22 @@ macro_rules! std_pkg {
                 .expect(concat!("the std `", $name, "` manifest is valid")),
         )
     };
+    ($name:literal, $($child:literal => $file:literal),+ $(,)?) => {{
+        let mut pkg = std_pkg!($name);
+        $( pkg.mods.insert(
+            $child.to_string(),
+            rut_driver::ModSource {
+                path: $child.to_string(),
+                vis: rut_ast::Vis::Pub,
+                text: include_str!(concat!(
+                    "../../../rut/", $name, "/src/", $file, ".rut"
+                ))
+                .to_string(),
+                file: concat!($file, ".rut").to_string(),
+            },
+        ); )+
+        pkg
+    }};
 }
 
 /// The playground's library offers (§0.9 of the host-pkgs plan): wasm
@@ -445,12 +463,14 @@ fn compile_playground(
         &[],
     );
     // calc_host rides as a lowered surface + the manifest's
-    // namespace/consts rows — the same shape a `tree_pkg("calc_host")`
-    // walk yields (the wasm host has no filesystem, so the files ride
-    // `include_str!`; the core prelude auto-offers in `.compile()`).
-    // The whole parsed manifest rides the pkg like every other offer's
-    // does. `calc` (the generic lib beside it) mounts through
-    // `std_pkg!` below — its `deps` row names this host surface.
+    // consts rows (bound bare at its root) — the same shape a
+    // `tree_pkg("calc_host")` walk yields (the wasm host has no
+    // filesystem, so the files ride `include_str!`; the core prelude
+    // auto-offers in `.compile()`). The whole parsed manifest rides
+    // the pkg like every other offer's does. `calc` (the generic lib
+    // beside it, its `math` module mounted through the children arm)
+    // mounts through `std_pkg!` below — its `deps` row names this
+    // host surface.
     let calc_host_manifest =
         rut_driver::parse_manifest(include_str!("../../../rut/calc_host/rut.jsonc"))
             .expect("the calc_host manifest is valid");
@@ -461,7 +481,6 @@ fn compile_playground(
         &[],
     )
     .manifest(calc_host_manifest);
-    calc_host.namespace = calc_host.manifest.namespace.clone();
     if let rut_driver::MountedBody::Host { consts, .. } = &mut calc_host.body {
         *consts = calc_host
             .manifest
@@ -491,7 +510,7 @@ fn compile_playground(
         std_pkg!("strbuild"),
         std_pkg!("json"),
         calc_host,
-        std_pkg!("calc"),
+        std_pkg!("calc", "math" => "math"),
     ];
     // the rows snapshot `run`'s installs answer to (owned; the
     // compile-time world dies here, the table travels)

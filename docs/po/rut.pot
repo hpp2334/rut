@@ -1703,7 +1703,7 @@ msgstr ""
 #: src/tutorial/functions.md:242 src/tutorial/types.md:283
 #: src/tutorial/interfaces.md:400 src/tutorial/errors.md:233
 #: src/tutorial/modules.md:300 src/tutorial/async.md:180
-#: src/tutorial/stdlib.md:405
+#: src/tutorial/stdlib.md:407
 msgid "Put it together"
 msgstr ""
 
@@ -2304,7 +2304,7 @@ msgstr ""
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
-"use calc::{ sqrt };\n"
+"use calc::{ math };\n"
 "use ink::{ Logger };\n"
 "\n"
 "struct Point { x: f32; y: f32 }\n"
@@ -2316,7 +2316,7 @@ msgid ""
 "}\n"
 "\n"
 "fn length(pt: Point) -> f64 {\n"
-"    return sqrt((pt.x * pt.x + pt.y * pt.y) as f64);\n"
+"    return math::sqrt((pt.x * pt.x + pt.y * pt.y) as f64);\n"
 "}\n"
 "\n"
 "entry fn main() {\n"
@@ -4995,8 +4995,7 @@ msgstr ""
 #: src/tutorial/stdlib.md:305
 msgid ""
 "```rut\n"
-"use calc::{ sqrt, max, signum, abs, min };\n"
-"use calc_host::{ Math };\n"
+"use calc::{ math };\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
@@ -5004,30 +5003,36 @@ msgid ""
 "    let x: f64 = -2.0;\n"
 "    let a: f64 = 3.0;\n"
 "    let b: f64 = 7.0;\n"
-"    let d = sqrt(2.0f64);      // f64 members: sin, pow, atan2, fma, ...\n"
-"    let f = sqrt(2.0);         // f32 — the width falls out of the argument\n"
-"    let mx = max(a, b);\n"
-"    let sg = signum(x);\n"
-"    log.info(f\"sqrt={d} sqrt_f={f} pi={Math::PI}\");\n"
-"    log.info(f\"abs={abs(x)} min={min(a, b)} max={mx} signum={sg}\");\n"
+"    let d = math::sqrt(2.0f64);      // f64 members: sin, pow, atan2, fma, "
+"...\n"
+"    let f = math::sqrt(2.0);         // f32 — the width falls out of the "
+"argument\n"
+"    let mx = math::max(a, b);\n"
+"    let sg = math::signum(x);\n"
+"    log.info(f\"sqrt={d} sqrt_f={f} pi={math::PI}\");\n"
+"    log.info(f\"abs={math::abs(x)} min={math::min(a, b)} max={mx} "
+"signum={sg}\");\n"
 "}\n"
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:329
+#: src/tutorial/stdlib.md:328
 msgid ""
-"Every member is a closed-union generic (`sqrt<T requires f32 | f64>`) — the "
-"width falls out of the argument, or an explicit `sqrt<f32>(x)` spells it. "
-"The constants keep the `Math::` head on `calc_host` (the host package behind "
-"`calc`). The integer ladder is _not_ here — those are core's, always "
-"available."
-msgstr ""
-
-#: src/tutorial/stdlib.md:335
-msgid "`json` — encode and decode"
+"The surface is `calc`'s `math` module: bind it and reach the members "
+"qualified (`math::sqrt(x)`), or spell the path fully qualified "
+"(`calc::math::sqrt(x)`, no `use`). Every member is a closed-union generic "
+"(`sqrt<T requires f32 | f64>`) — the width falls out of the argument, or an "
+"explicit `math::sqrt<f32>(x)` spells it. The constants are `calc_host`'s "
+"manifest consts re-exported through the module's `pub use` (callers never "
+"touch the host package). The integer ladder is _not_ here — those are "
+"core's, always available."
 msgstr ""
 
 #: src/tutorial/stdlib.md:337
+msgid "`json` — encode and decode"
+msgstr ""
+
+#: src/tutorial/stdlib.md:339
 msgid ""
 "```rut\n"
 "use json::{ decodeJson, encodeJson, JsonArr, JsonI64 };\n"
@@ -5046,7 +5051,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:355
+#: src/tutorial/stdlib.md:357
 msgid ""
 "A bare `[i64]` never satisfies anything — the wrapper is the manufacture, "
 "spelled at the call (`JsonArr([JsonI64(1), ..])`), and the decode direction "
@@ -5055,7 +5060,7 @@ msgid ""
 "on its own inherent impl."
 msgstr ""
 
-#: src/tutorial/stdlib.md:362
+#: src/tutorial/stdlib.md:364
 msgid ""
 "Decode is direct and schema-driven: your type's `decode` member reads "
 "exactly the fields it expects, no intermediate tree. Your types opt in with "
@@ -5066,15 +5071,15 @@ msgid ""
 "optionality](errors.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:371
+#: src/tutorial/stdlib.md:373
 msgid "`ink` — logging"
 msgstr ""
 
-#: src/tutorial/stdlib.md:373
+#: src/tutorial/stdlib.md:375
 msgid "All output goes through a logger:"
 msgstr ""
 
-#: src/tutorial/stdlib.md:375
+#: src/tutorial/stdlib.md:377
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -5088,7 +5093,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:393
+#: src/tutorial/stdlib.md:395
 msgid ""
 "`Logger` is a plain rut class over a host-provided handle; the embedder "
 "chooses the sink (the `rut` CLI prints to stdout). The same pattern — "
@@ -5097,24 +5102,23 @@ msgid ""
 "modules](../reference/embedding.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:399
+#: src/tutorial/stdlib.md:401
 msgid "`http`"
 msgstr ""
 
-#: src/tutorial/stdlib.md:401
+#: src/tutorial/stdlib.md:403
 msgid ""
 "The async HTTP client lives with the concurrency chapter — builder "
 "construction, `send(cx)` resolving at headers, body drains and byte streams "
 "— in [async: futures and await](async.md)."
 msgstr ""
 
-#: src/tutorial/stdlib.md:407
+#: src/tutorial/stdlib.md:409
 msgid ""
 "```rut\n"
 "use pouch::{ Vec };\n"
 "use strbuild::{ StringBuilder };\n"
-"use calc::{ sqrt };\n"
-"use calc_host::{ Math };\n"
+"use calc::{ math };\n"
 "use ink::{ Logger };\n"
 "\n"
 "// assert is plain rut code now: the helper a package writes over panic\n"
@@ -5143,11 +5147,12 @@ msgid ""
 "    let s = b.build();\n"
 "    log.info(s);\n"
 "\n"
-"    // calc's generic float surface (the width falls out of the\n"
-"    // argument); the constants ride calc_host's Math head\n"
-"    let d = sqrt(2.0f64);\n"
-"    let f = sqrt(2.0);\n"
-"    log.info(f\"sqrt2 f64~{d} f32~{f} pi={Math::PI}\");\n"
+"    // calc's generic float surface — the module qualifies the members\n"
+"    // (the width falls out of the argument); the constants ride the\n"
+"    // module's pub use re-export\n"
+"    let d = math::sqrt(2.0f64);\n"
+"    let f = math::sqrt(2.0);\n"
+"    log.info(f\"sqrt2 f64~{d} f32~{f} pi={math::PI}\");\n"
 "\n"
 "    // assert: the bug-catcher this file wrote itself\n"
 "    assert(v.len() == 2, \"vec should hold two\");\n"
@@ -5156,7 +5161,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/tutorial/stdlib.md:460
+#: src/tutorial/stdlib.md:462
 msgid ""
 "That completes the tutorial. From here, the [core "
 "concepts](../core-concepts/design-goals.md) explain _why_ the language is "
@@ -10488,9 +10493,9 @@ msgstr ""
 
 #: src/reference/lexical-structure.md:89
 msgid ""
-"use paths, module positions, enum members, statics/associated fns, extern "
-"namespaces: `use pkg::a::b::{ C }`, `Light::Green`, `Rect::new(..)`, "
-"`Vec<T>::from(..)`"
+"use paths, module positions, enum members, statics/associated fns, dep "
+"module paths: `use pkg::a::b::{ C }`, `Light::Green`, `Rect::new(..)`, "
+"`math::sqrt(..)`"
 msgstr ""
 
 #: src/reference/lexical-structure.md:90
@@ -10974,7 +10979,7 @@ msgid ""
 "imported; positions stay spelling-free: `imp::grid::Cell` never needed an "
 "import, and still spells. `::` is THE path separator — every name-resolution "
 "path (use paths, qualified positions, enum members, statics/associated fns, "
-"extern namespaces) spells its segments with it; `.` is value access only "
+"dep module paths) spells its segments with it; `.` is value access only "
 "(fields, instance methods, tuple indices — see [Lexical "
 "structure](lexical-structure.md)). One separator, two doors:"
 msgstr ""
@@ -11197,7 +11202,7 @@ msgstr ""
 msgid "seq"
 msgstr ""
 
-#: src/reference/primitive-types.md:15 src/reference/stdlib.md:342
+#: src/reference/primitive-types.md:15 src/reference/stdlib.md:345
 msgid "`Vec<T>`"
 msgstr ""
 
@@ -11207,7 +11212,7 @@ msgid ""
 "generic types](builtin-generic-types.md))"
 msgstr ""
 
-#: src/reference/primitive-types.md:16 src/reference/stdlib.md:341
+#: src/reference/primitive-types.md:16 src/reference/stdlib.md:344
 msgid "`[T]`"
 msgstr ""
 
@@ -11221,7 +11226,7 @@ msgstr ""
 
 #: src/reference/primitive-types.md:17
 #: src/reference/builtin-generic-types.md:56
-#: src/reference/by-reference-and-nullable.md:65 src/reference/stdlib.md:340
+#: src/reference/by-reference-and-nullable.md:65 src/reference/stdlib.md:343
 msgid "`?T`"
 msgstr ""
 
@@ -11695,7 +11700,7 @@ msgstr ""
 msgid "element access; out-of-bounds traps"
 msgstr ""
 
-#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:401
+#: src/reference/builtin-generic-types.md:101 src/reference/stdlib.md:404
 msgid "`len() -> i32`"
 msgstr ""
 
@@ -12178,7 +12183,7 @@ msgstr ""
 #: src/reference/literals-and-inference.md:48
 msgid ""
 "```rut\n"
-"use calc::{ sqrt };\n"
+"use calc::{ math };\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
@@ -12186,7 +12191,7 @@ msgid ""
 "    let cast = 300 as u8;      // 44\n"
 "    let x = 3;\n"
 "    let y = 4;\n"
-"    log.info(f\"{cast} {sqrt((x * x + y * y) as f64)}\");\n"
+"    log.info(f\"{cast} {math::sqrt((x * x + y * y) as f64)}\");\n"
 "}\n"
 "```"
 msgstr ""
@@ -19103,8 +19108,8 @@ msgstr ""
 msgid ""
 "the single-source lane: the core prelude auto-rides, the source offers as "
 "the root pkg, one `.compile()` — returns diags, AST/IR dumps, and the "
-"binary. The walked packages (`calc`'s `Math`, the async pair) are NOT here: "
-"a host that wants them offers `rut_native::tree_pkg(..)`"
+"binary. The walked packages (the calc pair, the async pair) are NOT here: a "
+"host that wants them offers `rut_native::tree_pkg(..)`"
 msgstr ""
 
 #: src/reference/embedding.md:395
@@ -20517,7 +20522,7 @@ msgstr ""
 
 #: src/reference/host-fns.md:289 src/reference/stdlib.md:36
 #: src/reference/stdlib.md:174 src/reference/stdlib.md:223
-#: src/reference/stdlib.md:395 src/reference/typed-bytecode.md:101
+#: src/reference/stdlib.md:398 src/reference/typed-bytecode.md:101
 #: src/reference/project-structure.md:59 src/reference/cli.md:384
 #: src/reference/glossary.md:9
 msgid "meaning"
@@ -20645,8 +20650,8 @@ msgstr ""
 msgid ""
 "The surface rides the binary: a consumer binds `p`'s exports from `mod.rutc` "
 "alone. Nothing is rebuilt from `.d.rut` text — impl-to-fn ids, "
-"interface-table indices, and namespace/host rows are not derivable from text "
-"without guesswork."
+"interface-table indices, and host rows are not derivable from text without "
+"guesswork."
 msgstr ""
 
 #: src/reference/host-fns.md:322
@@ -21261,7 +21266,7 @@ msgstr ""
 msgid "class"
 msgstr ""
 
-#: src/reference/stdlib.md:75 src/reference/stdlib.md:336
+#: src/reference/stdlib.md:75 src/reference/stdlib.md:339
 msgid "members"
 msgstr ""
 
@@ -21514,8 +21519,8 @@ msgstr ""
 
 #: src/reference/stdlib.md:131
 msgid ""
-"the generic float surface (`sqrt<T requires f32 \\| f64>` — the width falls "
-"out of the argument)"
+"the generic float surface — the `math` module (`sqrt<T requires f32 \\| "
+"f64>`, the width falls out of the argument)"
 msgstr ""
 
 #: src/reference/stdlib.md:132 src/reference/project-structure.md:266
@@ -21523,7 +21528,9 @@ msgid "`calc_host`"
 msgstr ""
 
 #: src/reference/stdlib.md:132
-msgid "the math rows + the `Math::` constants"
+msgid ""
+"the math rows + the `PI` constants (bound bare at its root, re-exported "
+"through `calc`'s `math`)"
 msgstr ""
 
 #: src/reference/stdlib.md:133
@@ -21634,7 +21641,7 @@ msgstr ""
 msgid "The growable sequence, written in rut over the fixed `[T]` array:"
 msgstr ""
 
-#: src/reference/stdlib.md:174 src/reference/stdlib.md:395
+#: src/reference/stdlib.md:174 src/reference/stdlib.md:398
 msgid "member"
 msgstr ""
 
@@ -21867,16 +21874,16 @@ msgstr ""
 #: src/reference/stdlib.md:274
 msgid ""
 "```rut\n"
-"use calc::{ sqrt, abs };\n"
+"use calc::{ math };\n"
 "use ink::{ Logger };\n"
 "\n"
 "entry fn main() {\n"
 "    let log = Logger(\"t\");\n"
 "    let x = 3.0f64;\n"
 "    let y = 4.0f64;\n"
-"    let d = sqrt(x * x + y * y);\n"
-"    let a = abs(x);\n"
-"    let hf = sqrt(2.0);                    // f32 — the width falls out of "
+"    let d = math::sqrt(x * x + y * y);\n"
+"    let a = math::abs(x);\n"
+"    let hf = math::sqrt(2.0);              // f32 — the width falls out of "
 "the argument\n"
 "    log.info(f\"{d} {a} {hf}\");\n"
 "}\n"
@@ -21885,23 +21892,26 @@ msgstr ""
 
 #: src/reference/stdlib.md:293
 msgid ""
-"Functions (each a closed-union generic over `f32 | f64` — the width is "
-"inferred from the arguments, or spelled `sqrt<f32>(x)`): `sqrt`, `floor`, "
-"`ceil`, `round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, "
-"`asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`, `hypot`, "
-"`copysign`, `fma`, plus the float helpers `abs`, `min`, `max`, `signum`. "
-"Constants: `Math::PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`, "
-"`LOG10_E`, `INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`, `MIN`, "
-"`MIN_POSITIVE` — through `use calc_host::{ Math }` (the host package behind "
-"`calc`; the `Math::` head lives there). Integer numeric methods are core's, "
+"The surface is `calc`'s `math` module — bind it (`use calc::{ math }`) and "
+"reach the members qualified (`math::sqrt(x)`), or spell the path fully "
+"qualified off the package name (`calc::math::sqrt(x)`, no `use`). Functions "
+"(each a closed-union generic over `f32 | f64` — the width is inferred from "
+"the arguments, or spelled `math::sqrt<f32>(x)`): `sqrt`, `floor`, `ceil`, "
+"`round`, `trunc`, `exp`, `ln`, `log2`, `log10`, `sin`, `cos`, `tan`, `asin`, "
+"`acos`, `atan`, `sinh`, `cosh`, `tanh`, `pow`, `atan2`, `hypot`, `copysign`, "
+"`fma`, plus the float helpers `abs`, `min`, `max`, `signum`. Constants: "
+"`math::PI`, `TAU`, `E`, `SQRT_2`, `LN_2`, `LN_10`, `LOG2_E`, `LOG10_E`, "
+"`INFINITY`, `NEG_INFINITY`, `EPSILON`, `MAX`, `MIN`, `MIN_POSITIVE` — "
+"`calc_host`'s manifest consts re-exported through the module's `pub use` "
+"(callers never touch the host package). Integer numeric methods are core's, "
 "not `calc`'s."
 msgstr ""
 
-#: src/reference/stdlib.md:304
+#: src/reference/stdlib.md:307
 msgid "`json` — the serde package"
 msgstr ""
 
-#: src/reference/stdlib.md:306
+#: src/reference/stdlib.md:309
 msgid ""
 "Pure rut, zero host fns — offering json adds no host bindings. Its container "
 "wrapper families are json's OWN source, and `strbuild`, `pouch`, and "
@@ -21909,21 +21919,21 @@ msgid ""
 "kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:320
+#: src/reference/stdlib.md:323
 msgid ""
 "**The pair law**: `(?T, ?E)` with exactly one nil — success = `(value, "
 "nil)`, failure = `(nil, err)`. Encode returns `?EncodeJsonError` because a "
 "cyclic structure is expected, recoverable data, not a trap."
 msgstr ""
 
-#: src/reference/stdlib.md:323
+#: src/reference/stdlib.md:326
 msgid ""
 "**Direct decode**: no intermediate document; a type's `decode` reads its "
 "expectations straight off the cursor. A `Vec<Row>` decode mints exactly the "
 "program's values, once."
 msgstr ""
 
-#: src/reference/stdlib.md:326
+#: src/reference/stdlib.md:329
 msgid ""
 "**Satisfaction is structural**: your type satisfies "
 "`JsonSerialize`/`JsonDeserialize` by spelling the members on its own "
@@ -21932,7 +21942,7 @@ msgid ""
 "them without asking."
 msgstr ""
 
-#: src/reference/stdlib.md:331
+#: src/reference/stdlib.md:334
 msgid ""
 "**The wrapper law**: primitives and bare containers never satisfy — no "
 "inherent members to have. The wrapper families are the spelled, per-call "
@@ -21940,95 +21950,95 @@ msgid ""
 "auto-inserted, forever."
 msgstr ""
 
-#: src/reference/stdlib.md:336
+#: src/reference/stdlib.md:339
 msgid "wrapper"
 msgstr ""
 
-#: src/reference/stdlib.md:336
+#: src/reference/stdlib.md:339
 msgid "wraps"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:341
 msgid "`JsonI64` / `JsonF64` / `JsonBool` / `JsonStr`"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:341
 msgid "`i64` / `f64` / `bool` / `str`"
 msgstr ""
 
-#: src/reference/stdlib.md:338
+#: src/reference/stdlib.md:341
 msgid "both directions; `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:339
+#: src/reference/stdlib.md:342
 msgid "`JsonU64`"
 msgstr ""
 
-#: src/reference/stdlib.md:339
+#: src/reference/stdlib.md:342
 msgid "`u64`"
 msgstr ""
 
-#: src/reference/stdlib.md:339
+#: src/reference/stdlib.md:342
 msgid ""
 "decode-only — satisfaction is per-interface, so it satisfies "
 "`JsonDeserialize` alone (an out-of-`i64`\\-range producer has no encode "
 "row); `get()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:340
+#: src/reference/stdlib.md:343
 msgid "`SOpt<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:340
+#: src/reference/stdlib.md:343
 msgid ""
 "both; `nil` → `null`, `null` → `nil`; `get()` unwraps (the encode-direction "
 "bound means a decode-only `T` cannot ride it)"
 msgstr ""
 
-#: src/reference/stdlib.md:341
+#: src/reference/stdlib.md:344
 msgid "`JsonArr<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:341
+#: src/reference/stdlib.md:344
 msgid "both; `to_arr()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:342
+#: src/reference/stdlib.md:345
 msgid "`JsonVec<T requires JsonSerialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:342
+#: src/reference/stdlib.md:345
 msgid "both (over pouch's `Vec<T>`); `to_vec()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:346
 msgid ""
 "`JMapStr<V>` / `JMapI64<V>` / `JMapBool<V>` / `JMapU64<V>` / `JMapBytes<V>`"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:346
 msgid "`HashMap<K, V>` per key shape"
 msgstr ""
 
-#: src/reference/stdlib.md:343
+#: src/reference/stdlib.md:346
 msgid ""
 "decode-only (over nmapset's `HashMap`); `to_map()` unwraps — `JMapBytes` "
 "answers the bytes-keys disclosure"
 msgstr ""
 
-#: src/reference/stdlib.md:344
+#: src/reference/stdlib.md:347
 msgid "`JSet<T requires JsonDeserialize>`"
 msgstr ""
 
-#: src/reference/stdlib.md:344
+#: src/reference/stdlib.md:347
 msgid "`HashSet<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:344
+#: src/reference/stdlib.md:347
 msgid "decode-only (over nmapset's `HashSet`); `to_set()` unwraps"
 msgstr ""
 
-#: src/reference/stdlib.md:346
+#: src/reference/stdlib.md:349
 msgid ""
 "**Numbers**: `i64` accepts integer lexemes only (overflow/decimal lexeme = "
 "`WrongType`, never a silent wrap); `f64` parses IEEE-exact in the common "
@@ -22036,13 +22046,13 @@ msgid ""
 "decimal."
 msgstr ""
 
-#: src/reference/stdlib.md:350
+#: src/reference/stdlib.md:353
 msgid ""
 "**Depth**: capped at 128 both directions, recoverable "
 "(`DecodeErrorKind::Depth` / `EncodeErrorKind::Depth`)."
 msgstr ""
 
-#: src/reference/stdlib.md:352
+#: src/reference/stdlib.md:355
 msgid ""
 "**Errors**: payloadless kind enums + fixed-field structs — `DecodeErrorKind "
 "{ Unexpected, Truncated, InvalidUtf8, WrongType, Depth, Trailing }`, "
@@ -22051,11 +22061,11 @@ msgid ""
 "`$.rows[3].name` path."
 msgstr ""
 
-#: src/reference/stdlib.md:357
+#: src/reference/stdlib.md:360
 msgid "`decodeJsonBytes` is strict UTF-8 (`InvalidUtf8`), never lossy."
 msgstr ""
 
-#: src/reference/stdlib.md:358
+#: src/reference/stdlib.md:361
 msgid ""
 "**Ownership**: json owns everything — the interfaces AND the container "
 "wrapper families (json's own source); `pouch` and `nmapset` are plain "
@@ -22063,17 +22073,17 @@ msgid ""
 "([dependency kinds](dependency-kinds.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:363
+#: src/reference/stdlib.md:366
 msgid ""
 "The writer accumulates through `strbuild`'s `StringBuilder`; the reader "
 "rides the core `str::scan`/`starts_with` primitives and O(1) string views."
 msgstr ""
 
-#: src/reference/stdlib.md:367
+#: src/reference/stdlib.md:370
 msgid "`strbuild` — the builder"
 msgstr ""
 
-#: src/reference/stdlib.md:369
+#: src/reference/stdlib.md:372
 msgid ""
 "The builder is a host package now (the `ink`/`Logger` pattern): the "
 "`strbuild_host` decl pkg declares the five rows (`sb_new` / `sb_push` / "
@@ -22083,7 +22093,7 @@ msgid ""
 "bodies:"
 msgstr ""
 
-#: src/reference/stdlib.md:376
+#: src/reference/stdlib.md:379
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -22101,54 +22111,54 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:397
+#: src/reference/stdlib.md:400
 msgid "`new()`"
 msgstr ""
 
-#: src/reference/stdlib.md:397
+#: src/reference/stdlib.md:400
 msgid ""
 "grow from small — the designated `[constructor]`: `StringBuilder()` spells it"
 msgstr ""
 
-#: src/reference/stdlib.md:398
+#: src/reference/stdlib.md:401
 msgid "`with_cap(cap: i32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:398
+#: src/reference/stdlib.md:401
 msgid ""
 "pre-size to an octet hint (negative traps; the hint is advisory — identical "
 "behavior for every cap)"
 msgstr ""
 
-#: src/reference/stdlib.md:399
+#: src/reference/stdlib.md:402
 msgid "`append(mut self, value: str)`"
 msgstr ""
 
-#: src/reference/stdlib.md:399
+#: src/reference/stdlib.md:402
 msgid "amortized O(\\|s\\|), in place"
 msgstr ""
 
-#: src/reference/stdlib.md:400
+#: src/reference/stdlib.md:403
 msgid "`append_code(mut self, cp: u32)`"
 msgstr ""
 
-#: src/reference/stdlib.md:400
+#: src/reference/stdlib.md:403
 msgid "one codepoint; invalid scalars mint U+FFFD"
 msgstr ""
 
-#: src/reference/stdlib.md:401
+#: src/reference/stdlib.md:404
 msgid "codepoints so far, O(1)"
 msgstr ""
 
-#: src/reference/stdlib.md:402
+#: src/reference/stdlib.md:405
 msgid "`build() -> str`"
 msgstr ""
 
-#: src/reference/stdlib.md:402
+#: src/reference/stdlib.md:405
 msgid "fresh immutable str; the builder keeps its buffer"
 msgstr ""
 
-#: src/reference/stdlib.md:404
+#: src/reference/stdlib.md:407
 msgid ""
 "Sharing is the default: appends through an alias (or a `mut` parameter) land "
 "in the caller's document; copies happen at exactly two engineered points — "
@@ -22158,25 +22168,25 @@ msgid ""
 "engine allocations."
 msgstr ""
 
-#: src/reference/stdlib.md:411
+#: src/reference/stdlib.md:414
 msgid ""
 "Embedder side: `.pkg(rut_std::strbuild::pkg())` on the run chain. Offering "
 "`strbuild` pulls `strbuild_host` along (`deps`); offering `json` pulls both "
 "(its writer rides the builder)."
 msgstr ""
 
-#: src/reference/stdlib.md:415
+#: src/reference/stdlib.md:418
 msgid ""
 "For the common accumulator shape no builder is needed at all: `out = "
 "f\"{out}{t}\"` appends in place, linear in the total output "
 "([f-strings](literals-and-inference.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:419
+#: src/reference/stdlib.md:422
 msgid "`calc`'s company: `async` and `http`"
 msgstr ""
 
-#: src/reference/stdlib.md:421
+#: src/reference/stdlib.md:424
 msgid ""
 "`async_host` declares the engine rows (`__launch`, `__abort`, `__sleep`, "
 "`__sleep_yield`); `futures` restores the typed surface: `launch_future(f: "
@@ -22187,7 +22197,7 @@ msgid ""
 "futures](launched-futures.md), [host futures](host-futures.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:429
+#: src/reference/stdlib.md:432
 msgid ""
 "`http_host` declares the transport rows (three async, five sync readbacks) "
 "as a surface tree — `net/` carries the send + the response readbacks, "
@@ -22197,7 +22207,7 @@ msgid ""
 "constructs through the designated `new`:"
 msgstr ""
 
-#: src/reference/stdlib.md:437
+#: src/reference/stdlib.md:440
 msgid ""
 "```rut\n"
 "use http::{ HttpClient, ClientQueryMethod };\n"
@@ -22212,18 +22222,18 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/stdlib.md:449
+#: src/reference/stdlib.md:452
 msgid ""
 "`send` resolves at headers; `body(cx)` drains the wire; "
 "`byte_stream()`/`next(cx)` walk it in chunks. Status `0` is reserved for "
 "transport failure. The reqwest lane is native-only."
 msgstr ""
 
-#: src/reference/stdlib.md:453
+#: src/reference/stdlib.md:456
 msgid "Offering"
 msgstr ""
 
-#: src/reference/stdlib.md:455
+#: src/reference/stdlib.md:458
 msgid ""
 "`core` auto-rides — every run's `.compile()` offers the core prelude unless "
 "a pkg named `core` was offered. `calc` and the async pair are ordinary tree "
@@ -22234,7 +22244,7 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:463
+#: src/reference/stdlib.md:466
 msgid ""
 "The rut packages over host rows (`ink`, `strbuild`, `nmapset`, `futures`, "
 "`http`) pull their decl pkg along (`deps`) — the embedder pairs the mount "
@@ -22244,7 +22254,7 @@ msgid ""
 "pipeline](compiler.md))."
 msgstr ""
 
-#: src/reference/stdlib.md:469
+#: src/reference/stdlib.md:472
 msgid ""
 "Generic exports link on their own: instantiation happens where the body "
 "lives, consumers request it, and `Vec<i64>` is one type program-wide ([the "
@@ -23655,7 +23665,7 @@ msgid ""
 "futures](launched-futures.md)."
 msgstr ""
 
-#: src/reference/compiler.md:192 src/reference/module-binary.md:129
+#: src/reference/compiler.md:192 src/reference/module-binary.md:130
 msgid "Determinism"
 msgstr ""
 
@@ -24456,7 +24466,7 @@ msgid ""
 "        funcs: u32 count, then per func (below)\n"
 "        exports: u32 count, then (name: IdentId, func: u32) pairs\n"
 "        instantiation ledger: type rows, then fn identities   # below\n"
-"        surface: namespace, funcs, consts, types + scope blocks + type\n"
+"        surface: funcs, consts, types + scope blocks + type\n"
 "                 exports, interface decls, inherent method surfaces,\n"
 "                 the native rows   # below\n"
 "        templates: window first fid, window end (exclusive), then\n"
@@ -24528,8 +24538,8 @@ msgstr ""
 
 #: src/reference/module-binary.md:113
 msgid ""
-"**Surface**: the exported surface rides after `exports` — the namespace "
-"head, funcs (with their async/host rows), consts, the carried type "
+"**Surface**: the exported surface rides after `exports` — funcs (module rows "
+"spelled mod-qualified, with their async/host rows), consts, the carried type "
 "descriptors + scope blocks + type exports (generic exports carry their "
 "parameter names in order), interface declarations (`SurfaceIface` — every "
 "module publishes the interfaces it declares; a consumer links them into one "
@@ -24540,7 +24550,7 @@ msgid ""
 "decode rejects any id its tables cannot resolve."
 msgstr ""
 
-#: src/reference/module-binary.md:124
+#: src/reference/module-binary.md:125
 msgid ""
 "**Versioning policy**: the version `u32` must equal the toolchain's exactly "
 "— there is no migration or best-effort decode. A byte that changes "
@@ -24548,7 +24558,7 @@ msgid ""
 "refused with the standard version error."
 msgstr ""
 
-#: src/reference/module-binary.md:131
+#: src/reference/module-binary.md:132
 msgid ""
 "Same AST + same dependency versions + same compiler version ⇒ byte-identical "
 "bytes. Serialization order is fixed (mount order, manifest order, pool "
@@ -24558,11 +24568,11 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:138
+#: src/reference/module-binary.md:139
 msgid "Strip levels"
 msgstr ""
 
-#: src/reference/module-binary.md:140
+#: src/reference/module-binary.md:141
 msgid ""
 "The symbolication data rides in every function: the `spans` table (pc → byte "
 "offset) and the parallel `pos` table (pc → line/col). A build that skips "
@@ -24573,7 +24583,7 @@ msgid ""
 "symbolication](diagnostics.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:148
+#: src/reference/module-binary.md:149
 msgid ""
 "Both strippable halves are format-legal encodings, not special cases: tail "
 "strings are opaque to the format (rewriting them to mangled `%N` names "
@@ -24584,11 +24594,11 @@ msgid ""
 "— is [Symbol stripping and `.rutsym` sidecars](symbol-stripping.md)."
 msgstr ""
 
-#: src/reference/module-binary.md:157
+#: src/reference/module-binary.md:158
 msgid "Type ids at rest and at link"
 msgstr ""
 
-#: src/reference/module-binary.md:159
+#: src/reference/module-binary.md:160
 msgid ""
 "Type ids are program-global in a linked binary only because **link** already "
 "rebased them. At rest (per module, pre-link) ids are module-local; the boot "
@@ -24599,7 +24609,7 @@ msgid ""
 "everything else."
 msgstr ""
 
-#: src/reference/module-binary.md:167
+#: src/reference/module-binary.md:168
 msgid ""
 "`type_id<T>()` values are `u32`, comparable, and unique per _instantiated_ "
 "type within a VM run: `Vec<f32>` ≠ `Vec<f64>`, `[i32; 3]` ≠ `[i32; 4]` (the "
@@ -24608,11 +24618,11 @@ msgid ""
 "layout](reified-types.md))."
 msgstr ""
 
-#: src/reference/module-binary.md:173
+#: src/reference/module-binary.md:174
 msgid "Interface and vtable tables"
 msgstr ""
 
-#: src/reference/module-binary.md:175
+#: src/reference/module-binary.md:176
 msgid ""
 "Interfaces serialize with their member signatures; interface ids merge by "
 "name at link — an interface imported in one module and declared in another "
@@ -24620,7 +24630,7 @@ msgid ""
 "same global table."
 msgstr ""
 
-#: src/reference/module-binary.md:179
+#: src/reference/module-binary.md:180
 msgid ""
 "Interface-member slots are a global table of `(iface, member)` pairs; "
 "vtables are per-type sparse maps slot → function id, merged at link. The "
@@ -24630,92 +24640,92 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: src/reference/module-binary.md:186
+#: src/reference/module-binary.md:187
 msgid "Verification (load time)"
 msgstr ""
 
-#: src/reference/module-binary.md:188
+#: src/reference/module-binary.md:189
 msgid ""
 "Before any code executes, the verifier re-checks every function in the "
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:191 src/reference/bundles.md:433
+#: src/reference/module-binary.md:192 src/reference/bundles.md:433
 msgid "check"
 msgstr ""
 
-#: src/reference/module-binary.md:191
+#: src/reference/module-binary.md:192
 msgid "rule"
 msgstr ""
 
-#: src/reference/module-binary.md:193
+#: src/reference/module-binary.md:194
 msgid "register range"
 msgstr ""
 
-#: src/reference/module-binary.md:193
+#: src/reference/module-binary.md:194
 msgid ""
 "every register operand \\< the function's register-file size; `NOREG` legal "
 "only where an optional operand is defined"
 msgstr ""
 
-#: src/reference/module-binary.md:194
+#: src/reference/module-binary.md:195
 msgid "pool spans"
 msgstr ""
 
-#: src/reference/module-binary.md:194
+#: src/reference/module-binary.md:195
 msgid ""
 "every `(off, argc)` span lands inside its function's `argv` / `labels` pool"
 msgstr ""
 
-#: src/reference/module-binary.md:195
+#: src/reference/module-binary.md:196
 msgid "type operands"
 msgstr ""
 
-#: src/reference/module-binary.md:195
+#: src/reference/module-binary.md:196
 msgid "every type id names a row of the type table"
 msgstr ""
 
-#: src/reference/module-binary.md:196
+#: src/reference/module-binary.md:197
 msgid "jump targets"
 msgstr ""
 
-#: src/reference/module-binary.md:196
+#: src/reference/module-binary.md:197
 msgid "every `jmp`/`br`/`brtable` target is in range"
 msgstr ""
 
-#: src/reference/module-binary.md:197
+#: src/reference/module-binary.md:198
 msgid "call arity"
 msgstr ""
 
-#: src/reference/module-binary.md:197
+#: src/reference/module-binary.md:198
 msgid "call argument counts match the callee's declared signature"
 msgstr ""
 
-#: src/reference/module-binary.md:198
+#: src/reference/module-binary.md:199
 msgid "enum members"
 msgstr ""
 
-#: src/reference/module-binary.md:198
+#: src/reference/module-binary.md:199
 msgid "`EnumNew` member indices in range, target actually an enum"
 msgstr ""
 
-#: src/reference/module-binary.md:199
+#: src/reference/module-binary.md:200
 msgid "interface slots"
 msgstr ""
 
-#: src/reference/module-binary.md:199
+#: src/reference/module-binary.md:200
 msgid "`CallI` slot ids name a row of the global iface-slot table"
 msgstr ""
 
-#: src/reference/module-binary.md:200
+#: src/reference/module-binary.md:201
 msgid "host thunks"
 msgstr ""
 
-#: src/reference/module-binary.md:200
+#: src/reference/module-binary.md:201
 msgid "bodyless functions are skipped (nothing to verify)"
 msgstr ""
 
-#: src/reference/module-binary.md:202
+#: src/reference/module-binary.md:203
 msgid ""
 "A failed verification is a **load error** naming the module and function — "
 "`function name (#i): op @pc: message`. Corrupted binaries never execute. "
@@ -24724,11 +24734,11 @@ msgid ""
 "misbehaving at runtime."
 msgstr ""
 
-#: src/reference/module-binary.md:208
+#: src/reference/module-binary.md:209
 msgid "The constant pool and load-time expressions"
 msgstr ""
 
-#: src/reference/module-binary.md:210
+#: src/reference/module-binary.md:211
 msgid ""
 "Module-level `let` and `static` initializers are **folded at compile time**. "
 "The surviving forms are: literals, enum members, operators over constants, "
@@ -24738,18 +24748,18 @@ msgid ""
 "initializer is a compile error — there is no deferred evaluation."
 msgstr ""
 
-#: src/reference/module-binary.md:218
+#: src/reference/module-binary.md:219
 msgid ""
 "`type_id<T>()` never executes: it folds to a constant from the type table. "
 "`debug` position folding and trace symbolication are covered in "
 "[Diagnostics, traces, and symbolication](diagnostics.md)."
 msgstr ""
 
-#: src/reference/module-binary.md:222 src/reference/symbol-stripping.md:151
+#: src/reference/module-binary.md:223 src/reference/symbol-stripping.md:151
 msgid "What is not here"
 msgstr ""
 
-#: src/reference/module-binary.md:224
+#: src/reference/module-binary.md:225
 msgid ""
 "A `.d.rut` declaration surface does not produce a binary — it has no bodies, "
 "so it compiles to a signature surface only ([Host fns and declaration "
@@ -27169,14 +27179,14 @@ msgstr ""
 
 #: src/reference/project-structure.md:265
 msgid ""
-"the math surface as a normal lib — generic fns over `calc_host`; a "
-"`deps`\\-carrying dir mounts through `load_dir`/`dir_pkgs`, never `tree_pkg` "
-"([stdlib](stdlib.md))"
+"the math surface as a normal lib (its `math` module) — generic fns over "
+"`calc_host`; a `deps`\\-carrying dir mounts through `load_dir`/`dir_pkgs`, "
+"never `tree_pkg` ([stdlib](stdlib.md))"
 msgstr ""
 
 #: src/reference/project-structure.md:266
 msgid ""
-"host pkg: the math rows + the `Math::` constants — offer "
+"host pkg: the math rows + the `PI` constants (bare at its root) — offer "
 "`rut_native::tree_pkg(\"calc_host\")`, bind `rut_std::math::pkg()` "
 "([stdlib](stdlib.md))"
 msgstr ""
