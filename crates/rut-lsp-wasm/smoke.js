@@ -67,12 +67,12 @@ fn go(g: Greeter) -> str {
   assert.strictEqual(bad.diags[0].source, "rut");
   assert.strictEqual(bad.diags[0].severity, 1);
 
-  // the std surface rides inside the module: `len` resolves on str
+  // the core prelude rides inside the module: `len` resolves on str
   const STD_SRC = "fn f(s: str) -> i32 {\n    return s.len();\n}\n";
   const stdUri = "file:///ws/std.rut";
   JSON.parse(await core.analyze(stdUri, STD_SRC));
   const stdHover = JSON.parse(await core.hover(stdUri, 1, STD_SRC.split("\n")[1].indexOf("len") + 1));
-  assert.ok(stdHover && stdHover.contents.value.includes("len"), "std surface hover");
+  assert.ok(stdHover && stdHover.contents.value.includes("len"), "core prelude hover");
 
   // references: the fn-local `g`'s decl -> its use in the body (the
   // definition index read backwards); includeDeclaration adds the decl

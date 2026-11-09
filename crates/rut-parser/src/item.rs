@@ -27,7 +27,7 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
     let sp = p.span();
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
-            "use" => Some(Frame::Use(UseFrame::new())),
+            "use" => Some(Frame::Use(UseFrame::new(Vis::Self_))),
             "mod" => Some(Frame::ModDecl(ModDeclFrame::new(Vis::Self_))),
             "pub" => Some(Frame::Pub(PubFrame::new())),
             "type" => Some(Frame::Alias(TypeAliasFrame::new(Vis::Self_))),
@@ -110,6 +110,9 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
         Tok::Ident(kw) => match kw.as_str() {
             "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(vis))),
             "mod" => Some(Frame::ModDecl(ModDeclFrame::new(vis))),
+            // `pub use` — the re-export: the imported names join the
+            // module's public surface (a private `use` imports only)
+            "use" => Some(Frame::Use(UseFrame::new(vis))),
             "type" => Some(Frame::Alias(TypeAliasFrame::new(vis))),
             "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
             "struct" => Some(Frame::Struct(TyDeclFrame::new(false, vis))),
@@ -150,12 +153,15 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
 
 // ---- use ----
 
-/// `use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — the path walks
+/// `pub? use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — the path walks
 /// `ident (:: ident)*` (`path[0]` is the package, the middle segments
 /// name modules), then the leaf is a brace list or a single name (the
 /// LAST path segment pops into names). The flat forms —
 /// `use pkg::{A, B};` / `use pkg::A;` — degenerate to `path = [pkg]`.
+/// The span starts at the `use` keyword (the `pub` prefix rides in
+/// `vis`, the other vis-carrying items' convention).
 pub(crate) struct UseFrame {
+    vis: Vis,
     lo: u32,
     path: Vec<IdentId>,
     path_spans: Vec<Span>,
@@ -164,8 +170,9 @@ pub(crate) struct UseFrame {
 }
 
 impl UseFrame {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(vis: Vis) -> Self {
         UseFrame {
+            vis,
             lo: 0,
             path: Vec::new(),
             path_spans: Vec::new(),
@@ -246,6 +253,7 @@ impl UseFrame {
             p,
             UseNode {
                 span: p.span_from(self.lo),
+                vis: self.vis,
                 path: std::mem::take(&mut self.path),
                 name_span: self.path_spans.first().copied().unwrap_or(Span::new(0, 0)),
                 names: std::mem::take(&mut self.names),

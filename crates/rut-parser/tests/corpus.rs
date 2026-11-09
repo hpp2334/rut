@@ -520,6 +520,43 @@ fn use_with_an_empty_leaf_diagnoses() {
 }
 
 #[test]
+fn pub_use_parses_with_the_reexport_vis() {
+    // `pub use` — the re-export tool: the use grammar is unchanged
+    // beneath the modifier (brace lists, paths, the single-name leaf),
+    // the vis rides the node. Plain `use` stays `Vis::Self_`.
+    for (src, want_vis) in [
+        ("pub use pkg::{A, B};\n", Vis::Pub),
+        ("pub use pkg::A::B::C;\n", Vis::Pub),
+        ("pub(super) use pkg::{A};\n", Vis::Super),
+        ("pub(pkg) use pkg::A;\n", Vis::Pkg),
+        ("use pkg::{A};\n", Vis::Self_),
+    ] {
+        let (ast, diags) = parse(src, Mode::Impl);
+        assert!(diags.is_empty(), "{src}: {diags:?}");
+        let items = ast.root().items(&ast);
+        match items[0] {
+            ItemRef::Use(h) => {
+                let u = h.get(&ast);
+                assert_eq!(u.vis, want_vis, "{src}: the re-export vis");
+                // the span starts at the `use` keyword (the `pub`
+                // prefix rides in vis — the vis-carrying items' law),
+                // so `pub` never leaks into the path queue walks
+                let text = u.span.text(src);
+                assert!(text.starts_with("use "), "{src}: span starts at `use`");
+            }
+            k => panic!("{src}: expected a use item, got {k:?}"),
+        }
+    }
+    // Decl-mode files parse it too (a `.d.rut` surface may re-export)
+    let (ast, diags) = parse("pub use core::{ opaque };\n", Mode::Decl);
+    assert!(diags.is_empty(), "{diags:?}");
+    match ast.root().items(&ast)[0] {
+        ItemRef::Use(h) => assert_eq!(h.get(&ast).vis, Vis::Pub),
+        k => panic!("expected a use item, got {k:?}"),
+    }
+}
+
+#[test]
 fn inline_mod_blocks_are_gone() {
     // no inline `mod { }` blocks — the body lives in `NAME/mod.rut`.
     // One diag naming the file location; the declaration survives and

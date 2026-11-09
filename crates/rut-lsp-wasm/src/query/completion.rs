@@ -661,6 +661,30 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
                 ),
             );
         }
+        // a `pub use` re-export: the imported name joined the module's
+        // surface — the tier's gate mirrors the fns/lets above (a
+        // walked path binds only `pub` edges across packages; the flat
+        // spelling keeps the ungated legacy shape). The cap law picks
+        // the icon until real resolution (same as the use classifier)
+        for u in &i.uses {
+            if crossed && u.vis != Vis::Pub {
+                continue;
+            }
+            let src = u.path.join("::");
+            push_item(
+                &mut out,
+                CompletionOut::plain(
+                    u.name.clone(),
+                    format!("re-export of {src}::{}", u.name),
+                    Vec::new(),
+                    if crate::hover::infer::is_cap(&u.name) {
+                        CompletionKind::Type
+                    } else {
+                        CompletionKind::Fn
+                    },
+                ),
+            );
+        }
     }
     out.retain(|c| prefix.is_empty() || c.label.starts_with(prefix));
     out.sort_by(|a, b| a.label.cmp(&b.label));

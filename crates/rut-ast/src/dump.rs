@@ -169,6 +169,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::Use(h) => {
             let d = h.get(a);
+            fields.push(field("vis", DumpVal::Vis(d.vis)));
             fields.push(field(
                 "path",
                 DumpVal::Idents(d.path.iter().map(|&x| a.name(x).to_string()).collect()),

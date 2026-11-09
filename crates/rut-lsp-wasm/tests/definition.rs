@@ -413,10 +413,10 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
 #[test]
 fn a_mounted_root_beats_the_ambient_surface_twin() {
     // the transitive-mount world: a pkg the walk mounted (a real
-    // file:// origin) AND the ambient std surface's embed of the
+    // file:// origin) AND the ambient dep-lane twin's index of the
     // same name (scheme-less `rut/…`) both carry a flat Decl root —
     // the mount wins for the pkg head and the leaf: the workspace
-    // pinned these bytes, the embed is only ever the fallback
+    // pinned these bytes, the ambient index is only ever the fallback
     let src = "use ink_host::{ create_logger };\nentry fn main() -> nil {\n    create_logger(\"a\");\n}\n";
     let d = doc(src);
     let ambient = rut_lsp_wasm::deps::index_dep(
@@ -530,10 +530,10 @@ fn a_doubled_twin_answer_is_one_answer() {
 
 #[test]
 fn a_mounted_member_beats_the_ambient_twin() {
-    // the member lane rides the same mounted-over-embed law the ty
-    // and fn layers carry: the chain holds class Logger twice — the
-    // ambient std surface (scheme-less `rut/…` src_path) and the dep
-    // walk's mounted tree (a real file:// origin) — and BOTH member
+    // the member lane rides the same mounted-over-ambient law the ty
+    // and fn layers carry: the chain holds class Logger twice — an
+    // ambient dep-lane index (scheme-less `rut/…` src_path) and the
+    // dep walk's mounted tree (a real file:// origin) — and BOTH member
     // shapes land in the mount: the impl method and the field read
     let src = [
         "use ink::{ Logger };",
@@ -860,7 +860,7 @@ fn the_unnamed_fallback_stays_verbatim() {
         !matches_pkg(&idx, "gadgets"),
         "src_path replaces origin as the hay"
     );
-    // the std surface's exact-origin lane
+    // the core prelude's exact-origin lane
     idx.origin = "core".to_string();
     idx.src_path = None;
     assert!(matches_pkg(&idx, "core"));

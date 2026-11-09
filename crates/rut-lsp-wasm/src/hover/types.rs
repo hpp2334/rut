@@ -88,16 +88,20 @@ pub struct LetDef {
     pub line: u32,
 }
 
-/// a `use pkg::A::B::{ Name, .. }` import edge — the name's span is a
-/// definition target (phase 2: ctrl+click on `Vec` in the use jumps
-/// to the pouch decl). The full path rides since the file-module phase:
-/// `path[0]` is the package, the rest name modules — the use-path
-/// completion walk and the segment hovers/definition targets key on
-/// them (the flat spelling degenerates to `path = [pkg]`).
+/// a `pub? use pkg::A::B::{ Name, .. }` import edge — the name's span
+/// is a definition target (phase 2: ctrl+click on `Vec` in the use
+/// jumps to the pouch decl). The full path rides since the file-module
+/// phase: `path[0]` is the package, the rest name modules — the
+/// use-path completion walk and the segment hovers/definition targets
+/// key on them (the flat spelling degenerates to `path = [pkg]`). The
+/// vis carries the re-export edge: a `pub use`'s names join the
+/// module's surface (the completion re-export tier's gate).
 #[derive(Debug, Clone)]
 pub struct UseDef {
     pub name: String,
     pub name_span: Option<Span>,
+    /// the use's declared visibility (`Vis::Self_` = a private import)
+    pub vis: Vis,
     pub pkg: String,
     /// the spelled path, pkg head included (`["pouch", "layout"]`)
     pub path: Vec<String>,

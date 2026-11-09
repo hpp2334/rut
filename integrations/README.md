@@ -60,7 +60,7 @@ What the editor face provides (the LSP slice landed early; the
     by visibility tier; after `Type::` — enum members, namespace
     statics, a type's associated fns
   - auto-import — foreign public names from the document's DIRECT
-    deps (and the std surface) matching the bare prefix, each
+    deps (the core prelude included) matching the bare prefix, each
     carrying the `use mod::Name;` insert (`additionalTextEdits`) and
     sorted after the locals (`sortText`); a transitive-only dep never
     offers (the compiler refuses `use` of a mounted-but-undeclared

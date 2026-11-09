@@ -189,6 +189,149 @@ fn a_flat_leaf_naming_a_module_diagnoses_with_the_walk_hint() {
     );
 }
 
+// ---- `pub use`: the re-export edge joins the module surface ----
+
+/// The re-export chain: `util` (the source), `mid` (re-exports `util`'s
+/// `helper` — `pub use` or private, per `reexport`), and `app` (imports
+/// the name flat off `mid`). `mid`'s own manifest declares `util`.
+fn reexport_graph_of(reexport: bool, app_src: &str) -> rut_driver::GraphOutput {
+    let mid_root = if reexport {
+        "pub use util::{ helper };\n"
+    } else {
+        "use util::{ helper };\n"
+    };
+    match rut_driver::RutRun::new()
+        .pkg(rut_driver::Mounted::source(
+            "util",
+            "pub fn helper() -> i32 { return 3; }\n",
+        ))
+        .pkg(
+            rut_driver::Mounted::source("mid", mid_root)
+                .manifest(rut_driver::Manifest::lib("mid", &["util"])),
+        )
+        .pkg(
+            rut_driver::Mounted::source("app", app_src)
+                .manifest(rut_driver::Manifest::lib("app", &["mid"])),
+        )
+        .entrypoint("app")
+        .compile()
+    {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
+            program: None,
+        },
+    }
+}
+
+#[test]
+fn a_pub_use_re_exported_name_is_the_pkgs_own_surface() {
+    // the leaf gate's read: a `pub use`'s imported names ride the
+    // module's decl rows, so `use mid::{ helper }` names a row mid
+    // DID declare — the `unknown import` refusal is gone. The
+    // compiled-surface binding does not chase the edge yet (the
+    // must-bind law still speaks, phase 4 threads the const lane) —
+    // but the surface question this gate owns answers "declared".
+    let src = "use mid::{ helper };\n\
+               entry fn main() -> i32 { return 0; }\n";
+    let g = reexport_graph_of(true, src);
+    let msgs = msgs(&g);
+    assert!(
+        !msgs.iter().any(|m| m.contains("unknown import")),
+        "the re-exported name is part of `mid`'s surface: {msgs:?}"
+    );
+    assert_eq!(g.diags.len(), 1, "the binding gap alone speaks: {msgs:?}");
+    assert!(
+        g.diags[0]
+            .msg
+            .contains("`helper` is not part of `mid`'s exported surface"),
+        "got: {}",
+        g.diags[0].msg
+    );
+}
+
+#[test]
+fn a_private_use_behind_the_same_import_stays_unknown() {
+    // the control: `mid`'s PRIVATE `use util::{ helper }` imports only
+    // — no row joins its surface, so the consumer's leaf is the
+    // unknown import it always was
+    let src = "use mid::{ helper };\n\
+               entry fn main() -> i32 { return 0; }\n";
+    let g = reexport_graph_of(false, src);
+    assert_eq!(g.diags.len(), 1, "exactly one diagnostic: {:?}", msgs(&g));
+    assert!(
+        g.diags[0]
+            .msg
+            .contains("`mid` has no `helper` — unknown import"),
+        "got: {}",
+        g.diags[0].msg
+    );
+}
+
+#[test]
+fn a_qualified_leaf_reads_the_re_exported_row_of_the_walked_module() {
+    // the qualified lane's leaf gate: `mid`'s `sub` module re-exports
+    // `util`'s `helper`, so `use mid::sub::{ helper }` names a pub row
+    // of the walked module — neither the `not declared` nor the `not
+    // pub` refusal speaks (the binding gap is the same as the flat
+    // shape's, the only diag left)
+    let mid = rut_driver::Mounted::source("mid", "pub mod sub;\n")
+        .manifest(rut_driver::Manifest::lib("mid", &["util"]));
+    let mut mid = mid;
+    mid.mods.insert(
+        "sub".to_string(),
+        rut_driver::ModSource {
+            path: "sub".to_string(),
+            vis: rut_ast::Vis::Pub,
+            text: "pub use util::{ helper };\n".to_string(),
+            file: "mod.rut".to_string(),
+        },
+    );
+    let g = match rut_driver::RutRun::new()
+        .pkg(rut_driver::Mounted::source(
+            "util",
+            "pub fn helper() -> i32 { return 3; }\n",
+        ))
+        .pkg(mid)
+        .pkg(
+            rut_driver::Mounted::source(
+                "app",
+                "use mid::sub::{ helper };\nentry fn main() -> i32 { return 0; }\n",
+            )
+            .manifest(rut_driver::Manifest::lib("app", &["mid"])),
+        )
+        .entrypoint("app")
+        .compile()
+    {
+        Ok(c) => c.graph,
+        Err(e) => rut_driver::GraphOutput {
+            diags: vec![rut_lexer::diag::Diag::new(
+                rut_lexer::span::Span::new(0, 0),
+                e.msg,
+            )],
+            program: None,
+        },
+    };
+    let msgs = msgs(&g);
+    assert!(
+        !msgs
+            .iter()
+            .any(|m| m.contains("is not declared in") || m.contains("is not `pub`")),
+        "the walked module's re-export row crosses: {msgs:?}"
+    );
+    assert_eq!(g.diags.len(), 1, "the binding gap alone speaks: {msgs:?}");
+    assert!(
+        g.diags[0]
+            .msg
+            .contains("`helper` is not part of `mid`'s exported surface"),
+        "got: {}",
+        g.diags[0].msg
+    );
+}
+
 // ---- the std lane: same gate, the toolchain tree's ink pkg ----
 
 /// The toolchain tree's ink walk (`rut/ink`): the pkg plus its

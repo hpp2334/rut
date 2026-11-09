@@ -780,6 +780,90 @@ fn the_use_path_tier_answers_an_own_package_head() {
     assert!(ls.contains(&"grid"), "{ls:?}");
 }
 
+// ---- the `pub use` re-export tier ----
+
+/// the re-export fixture: `mid`'s root and its `sub` module each `pub
+/// use` names off `util` (and keep a private use — the crossed tier's
+/// control)
+fn mid_dep() -> Vec<DefIndex> {
+    let mk = |mod_path: &str, src: &str| {
+        let s = rut_lexer::lexer::normalize(src);
+        let (toks, _) = rut_lexer::lexer::lex(&s);
+        let ast = doc_ast(&s, Mode::Impl);
+        let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+        idx.module = Some("mid".to_string());
+        idx.mod_path = Some(mod_path.to_string());
+        idx
+    };
+    vec![
+        mk(
+            "",
+            "pub mod sub;\npub use util::{ helper, Widget };\nuse util::{ secret_root };\n",
+        ),
+        mk("sub", "pub use util::{ tag };\nuse util::{ secret_sub };\n"),
+    ]
+}
+
+fn complete_over_mid(doc: &str, needle: &str) -> Vec<CompletionOut> {
+    let s = rut_lexer::lexer::normalize(doc);
+    let (toks, _) = rut_lexer::lexer::lex(&s);
+    let ast = doc_ast(&s, Mode::Impl);
+    let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let dep = mid_dep();
+    let mut chain: Vec<&DefIndex> = vec![&di];
+    chain.extend(dep.iter());
+    let pos = s
+        .rfind(needle)
+        .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}")) as u32
+        + needle.len() as u32;
+    complete(&chain, &toks, &ast, pos, &s, &DocMods::default())
+}
+
+#[test]
+fn use_path_completion_offers_the_reexported_names() {
+    // `use mid::{ ⏐` — the `pub use`'s names joined the module's
+    // surface: they offer like any export, the detail naming the edge
+    // (`re-export of util::..`); the cap law picks the icon
+    let items = complete_over_mid("use mid::{", "use mid::{");
+    let ls = labels(&items);
+    assert!(ls.contains(&"helper"), "the fn-shaped re-export: {ls:?}");
+    assert!(ls.contains(&"Widget"), "the type-shaped re-export: {ls:?}");
+    let helper = items.iter().find(|c| c.label == "helper").unwrap();
+    assert!(
+        helper.detail.contains("re-export of util::helper"),
+        "{}",
+        helper.detail
+    );
+    assert!(
+        matches!(helper.kind, CompletionKind::Fn),
+        "{:?}",
+        helper.kind
+    );
+    let widget = items.iter().find(|c| c.label == "Widget").unwrap();
+    assert!(
+        matches!(widget.kind, CompletionKind::Type),
+        "{:?}",
+        widget.kind
+    );
+    // the flat spelling mirrors the fns/lets legacy shape: ungated —
+    // the private use's name rides too, the crossing law speaks only
+    // on walked paths (the next test)
+    assert!(ls.contains(&"secret_root"), "{ls:?}");
+}
+
+#[test]
+fn a_walked_module_offers_only_pub_reexports() {
+    // `use mid::sub::{ ⏐` — a crossed path: only `pub` re-export edges
+    // cross packages, exactly the fns/lets gate
+    let items = complete_over_mid("use mid::sub::{", "use mid::sub::{");
+    let ls = labels(&items);
+    assert!(ls.contains(&"tag"), "the pub re-export crosses: {ls:?}");
+    assert!(
+        !ls.contains(&"secret_sub"),
+        "a private use's name never crosses: {ls:?}"
+    );
+}
+
 // ---- the type-head tier (after `Type::`) ----
 
 #[test]

@@ -215,8 +215,9 @@ it, by construction.
   root manifest's rows into the core when it parses them, and a
   transitive-only dep never offers — the compiler's
   closure check refuses `use` of a mounted-but-undeclared package,
-  so completing one would write a D5 error. The std surface rides
-  every chain as the ambient dep lane. The bare list itself stays
+  so completing one would write a D5 error. The core prelude rides
+  every chain as the ambient dep lane (std's other pkgs mount as
+  ordinary manifest deps). The bare list itself stays
   honest: the document's own decls, the ambient `prelude builtin`
   rows, and the names the document already `use`s — everything else
   lives on this tier only. Annotation positions (`let x: ⏐`,

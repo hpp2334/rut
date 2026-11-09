@@ -896,6 +896,26 @@ fn use_leaf_through_mods_hovers_and_the_mod_name_is_a_keyword_free_ident() {
 }
 
 #[test]
+fn use_rows_carry_the_reexport_vis() {
+    // `pub use` — the re-export edge: the index row carries the
+    // declared vis (the completion re-export tier's gate reads it);
+    // a plain `use` row stays private
+    let src = "pub use util::{ helper };\nuse util::{ hidden };\n";
+    let s = rut_lexer::lexer::normalize(src);
+    let (toks, _) = rut_lexer::lexer::lex(&s);
+    let ast = doc_ast(&s, Mode::Impl);
+    let idx = index(&s, &ast, &toks);
+    let row = |n: &str| {
+        idx.uses
+            .iter()
+            .find(|u| u.name == n)
+            .unwrap_or_else(|| panic!("use row `{n}` missing: {:?}", idx.uses))
+    };
+    assert_eq!(row("helper").vis, rut_ast::Vis::Pub, "the pub use row");
+    assert_eq!(row("hidden").vis, rut_ast::Vis::Self_, "the private row");
+}
+
+#[test]
 fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     // a bodiless fn's parser span runs to the NEXT decl's end (the
     // statement-span convention) — the verbatim slice must cut at the

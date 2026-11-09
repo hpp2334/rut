@@ -333,6 +333,21 @@ const SNIPPETS = [
         text: 'opaque',
         scope: 'storage.type.builtin.rut',
     },
+    // `pub use` — the re-export: the generic keyword pattern owns the
+    // `pub` prefix, and the use-line rules classify the path/imports
+    // unchanged beneath it.
+    {
+        name: 'pub use prefix stays keyword',
+        src: 'pub use calc_host::{ PI };',
+        text: 'pub',
+        scope: 'keyword.other.rut',
+    },
+    {
+        name: 'pub use imported const shape',
+        src: 'pub use calc_host::{ PI };',
+        text: 'PI',
+        scope: 'entity.name.type.rut',
+    },
 ];
 
 function checkSnippets(grammar, bad) {

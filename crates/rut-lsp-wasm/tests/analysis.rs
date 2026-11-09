@@ -56,6 +56,50 @@ fn encode_is_delta_correct() {
 }
 
 #[test]
+fn pub_on_a_use_classifies_as_the_keyword() {
+    // `pub use` — the re-export prefix: `pub` is a reserved word, so
+    // the token layer owns it (Keyword, index 0 — the same class it
+    // carries on every item), and the use's own names keep the cap-law
+    // classes (`util` a namespace head, `helper` a function leaf)
+    let src = "pub use util::{ helper };\n";
+    let a = analyze_unstamped(IMPL_URI, src);
+    let s = normalize(src);
+    let mut line = 0u32;
+    let mut ch = 0u32;
+    let mut seen: Vec<(String, u32)> = Vec::new();
+    for t in &a.tokens {
+        line += t.delta_line;
+        ch = if t.delta_line == 0 {
+            ch + t.delta_start
+        } else {
+            t.delta_start
+        };
+        let ix = LineIndex::new(&s);
+        let lo = ix.byte(&s, line, ch) as usize;
+        seen.push((s[lo..lo + t.length as usize].to_string(), t.token_type));
+    }
+    let ty_of = |w: &str| {
+        seen.iter()
+            .find(|(text, _)| text == w)
+            .map(|(_, ty)| *ty)
+            .unwrap_or_else(|| panic!("`{w}` not classified: {seen:?}"))
+    };
+    assert_eq!(ty_of("pub"), 0, "the Keyword index: {seen:?}");
+    assert_eq!(ty_of("use"), 0, "{seen:?}");
+    // the cap law rides unchanged beneath the modifier
+    assert_eq!(
+        ty_of("util"),
+        rut_semantic::TokenType::Namespace.index(),
+        "{seen:?}"
+    );
+    assert_eq!(
+        ty_of("helper"),
+        rut_semantic::TokenType::Function.index(),
+        "{seen:?}"
+    );
+}
+
+#[test]
 fn decl_mode_for_dot_d_rut() {
     assert_eq!(mode_of("x/y/plugin.d.rut"), Mode::Decl);
     assert_eq!(mode_of("x/y/main.rut"), Mode::Impl);

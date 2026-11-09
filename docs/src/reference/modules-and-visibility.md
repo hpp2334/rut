@@ -10,7 +10,7 @@ Allowed at module scope:
 
 | Declaration | Spelling |
 |---|---|
-| import | `use pkg::{ A, B };` / `use pkg::A;` / `use pkg::a::b::{ C };` (see below) |
+| import | `use pkg::{ A, B };` / `use pkg::A;` / `use pkg::a::b::{ C };` — `pub`-prefixed to re-export (see below) |
 | child module | `mod name;` / `pub mod name;` — declares a **file module** |
 | binding | `let name: T = expr;` (also under `pub`) |
 | enum / struct / class / interface | `enum E { .. }`, `struct S { .. }`, `class C { .. }`, `interface I { .. }` |
@@ -162,6 +162,37 @@ use pkgb::{ x };
 `use pkga::{ x }; use pkga::{ y }` is fine — the name is the rule,
 never the package or the list.
 
+**`pub use` — the re-export.** A use may carry the `pub` prefix, with
+the same scoped forms every declaration takes:
+
+```rut
+pub use util::{ helper, Widget };    // both names surface through THIS module
+pub(pkg) use util::{ scoped };       // package-wide, no further
+use util::{ hidden };                // a private import — nothing joins the surface
+```
+
+The prefix turns the import into a **re-export edge**: the imported
+names join the module's public surface as if declared there, each
+carrying the use's visibility — `pub` crosses packages,
+`pub(pkg)`/`pub(super)` cross per the scoped law, and a private `use`
+imports only (nothing joins the surface; consumers never see it).
+Consequences:
+
+- **The leaf gate reads the row.** A consumer importing the module may
+  spell a re-exported name like any of its `pub` names — `use
+  mid::{ helper }` names a name `mid` *did* declare — while the same
+  name behind a private `use` stays the unknown import it always was.
+- **A dependency's name may ride the edge.** `pub use` of a dep's
+  name is a re-export edge, not a private import: the name surfaces
+  through the re-exporting module, so a consumer validates its import
+  against *that* module — the deeper package stays an implementation
+  detail of the exporter. The exporter's compiled surface still owns
+  value binding: a leaf that binds nothing there states it at the use
+  line, exactly like any other import.
+- **The editor reads the edge.** Re-exported names complete through
+  the module (`use mid::{ ⏐` offers `helper`, the detail naming the
+  edge), and the imported names carry the re-export visibility.
+
 **`pub async fn` crosses package surfaces.** A plain `pub async fn`
 exports like any `pub fn`. The exporter materializes the sugar law's
 export shape beside the woven body — a hidden start wrapper spelling
@@ -304,8 +335,10 @@ and every class member — carries a visibility:
   private, or `pub(super)`/`pub(pkg)`/`pub`).
 - Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`,
   `impl` (an impl exports with its target type), `fn`, `type` aliases,
-  and the `mod` edge itself (`pub mod` opens the child's `pub` members
-  to other packages; a plain `mod` keeps the child package-internal).
+  the `mod` edge itself (`pub mod` opens the child's `pub` members
+  to other packages; a plain `mod` keeps the child package-internal),
+  and the `use` edge (`pub use` re-exports its imported names — see
+  [Uses](#uses)).
   On a `class` declaration it means the *type name* is visible.
 - **Class members take the same forms**: an unannotated field or method
   is module-private; `pub` (optionally scoped) exposes it. See

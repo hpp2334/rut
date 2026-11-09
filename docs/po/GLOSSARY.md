@@ -206,6 +206,8 @@ context; after that, use the zh-CN rendering alone.
 | every-field-covered law | 字段全覆盖法则 | 字面量必须覆盖每个字段——在字面量里写出，或由该字段的声明初始化器（declared initializer）覆盖；省略无初始化器字段是编译错误（`missing field … (the every-field-covered law)` 诊断原文保留） |
 | duplicate field | 重复字段 | `duplicate field … in the … literal` 诊断原文保留；无“后者胜”（last-wins） |
 | unknown import | 未知导入 | use 行即拒绝点；`` `X` has no `Y` — unknown import `` 诊断原文保留 |
+| re-export | 再导出 | `pub use` 的法则名；re-export edge → 再导出边；the imported names join the module's public surface → 被导入的名字加入模块的公开表面 |
+| leaf gate | 叶子门 | the qualified-use leaf gate reads the module's decl rows → use 叶子门读取模块的声明行 |
 | tail | 尾表达式 | block tail → 块的尾表达式；紧贴块的 `}`、不带 `;` 的最后一个表达式，即块的值；尾位置（tail position）；无尾表达式 → 无尾/保持无尾；首现标注英文（tail） |
 | `;`-decides law | “`;` 说了算”法则 | `;` 收尾的语句丢弃其值，紧贴 `}` 的表达式是块的尾表达式；`let` 始终要求 `;` |
 | implicit return | 隐式返回 | fn 体/lambda 块体的尾表达式即隐式返回；definite-return law → 必然返回法则（`missing return: …` 诊断原文保留） |

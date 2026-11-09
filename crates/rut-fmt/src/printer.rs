@@ -758,7 +758,12 @@ impl<'a> P<'a> {
             ItemRef::Use(h) => {
                 let d = h.get(self.a);
                 // the full path — package, modules, in order — then the
-                // leaf names in braces
+                // leaf names in braces; `pub use` re-exports print their
+                // prefix
+                if let Some(v) = vis_opt(d.vis) {
+                    self.text(v);
+                    self.sp();
+                }
                 self.text("use ");
                 for (i, seg) in d.path.iter().enumerate() {
                     if i > 0 {

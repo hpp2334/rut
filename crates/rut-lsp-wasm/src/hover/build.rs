@@ -546,6 +546,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     idx.uses.push(UseDef {
                         name: ast.name(*name_id).to_string(),
                         name_span: Some(*name_span),
+                        vis: d.vis,
                         pkg: use_path[0].clone(),
                         path: use_path.clone(),
                         path_spans: path_spans.clone(),

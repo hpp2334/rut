@@ -333,3 +333,44 @@ impl Circle {
         rut_fmt::format(&out, Mode::Impl, &rut_fmt::Style::default()).expect("fmt(fmt) accepts it");
     assert_eq!(out2, out, "formatting must be idempotent");
 }
+
+/// `pub use` — the re-export: the printer spells the vis prefix, the
+/// printed text reparses clean (with the vis back on the node), and
+/// formatting is idempotent. A private `use` prints bare, unchanged.
+#[test]
+fn pub_use_round_trips_with_its_prefix() {
+    let src = "\
+pub use util::{ helper, Widget };
+pub(pkg) use util::{ scoped };
+use util::{ hidden };
+";
+    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    assert!(
+        p.ast().is_clean(),
+        "the fixture must parse clean: {:?}",
+        p.ast().errors()
+    );
+    let out = rut_fmt::format(src, Mode::Impl, &rut_fmt::Style::default()).expect("fmt accepts it");
+    assert!(
+        out.contains("pub use util::{ helper, Widget };"),
+        "the pub prefix prints: {out}"
+    );
+    assert!(
+        out.contains("pub(pkg) use util::{ scoped };"),
+        "the scoped prefix prints: {out}"
+    );
+    let bare = out
+        .lines()
+        .find(|l| l.starts_with("use "))
+        .unwrap_or_else(|| panic!("the private use prints bare: {out}"));
+    assert_eq!(bare, "use util::{ hidden };", "{out}");
+    let q = parse_with_recover(&out, Mode::Impl, ParseOpts::default());
+    assert!(
+        q.ast().is_clean(),
+        "the formatted text must reparse clean: {:?}",
+        q.ast().errors()
+    );
+    let out2 =
+        rut_fmt::format(&out, Mode::Impl, &rut_fmt::Style::default()).expect("fmt(fmt) accepts it");
+    assert_eq!(out2, out, "formatting must be idempotent");
+}

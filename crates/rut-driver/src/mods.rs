@@ -280,6 +280,12 @@ pub enum DeclKind {
     ModuleLet,
     /// a `mod NAME;` declaration (the mounted child's edge)
     Mod,
+    /// a `pub use` re-export edge — the imported name joins the
+    /// module's surface as a row carrying the use's declared vis (a
+    /// private `use` imports only: no row, unchanged). The leaf gates
+    /// read it like any decl: `pub` crosses packages, the scoped
+    /// spellings cross per the crossing predicate
+    Use,
     /// a `host fn` surface row (a `type = "host"` pkg's `.d.rut`
     /// files) — the leaf a qualified use validates against
     HostFn,
@@ -480,10 +486,30 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
 
 /// The declaration rows off one parsed file. `pub(crate)`: the graph
 /// compiler's dep tables run it per module — a module's rows are the
-/// qualified-use leaf gate's reads.
+/// qualified-use leaf gate's reads. A `pub use`'s imported names ride
+/// as [`DeclKind::Use`] re-export rows (the use's declared vis on
+/// each); a private `use` contributes nothing.
 pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
     let mut out = Vec::new();
     for it in ast.root().items(ast) {
+        // a `pub use` re-export EDGE, not a private import: the
+        // imported names join the module's surface as rows carrying
+        // the use's declared vis — the leaf gates read them like any
+        // decl. A private `use` stays what it was: an import, no row.
+        if let ItemRef::Use(h) = it {
+            let d = h.get(ast);
+            if d.vis != Vis::Self_ {
+                for &n in &d.names {
+                    out.push(DeclRow {
+                        name: ast.name(n).to_string(),
+                        vis: d.vis,
+                        kind: DeclKind::Use,
+                        is_async: false,
+                    });
+                }
+            }
+            continue;
+        }
         let (name, vis, kind, is_async) = match it {
             ItemRef::Fn(h) => {
                 let d = h.get(ast);
@@ -1159,5 +1185,42 @@ mod tests {
             .decls
             .iter()
             .any(|d| d.kind == DeclKind::Fn && d.name == "span"));
+    }
+
+    #[test]
+    fn a_pub_use_joins_the_module_surface_a_private_use_does_not() {
+        // the re-export law: a `pub use`'s imported names ride the
+        // module's decl rows (the use's declared vis on each — the leaf
+        // gates read them like any decl), while a private `use` stays
+        // an import: no row, nothing crosses
+        let pkg = Mounted::source(
+            "mid",
+            "pub use util::{ helper, Widget };\n\
+             use util::{ hidden };\n\
+             pub(pkg) use util::{ scoped };\n",
+        );
+        let (set, problems) = collect_module_set("mid", &pkg);
+        assert!(problems.is_empty(), "{problems:?}");
+        let rows = &set.units[0].decls;
+        let row = |name: &str| rows.iter().find(|d| d.name == name);
+        assert_eq!(
+            row("helper").map(|d| (d.kind, d.vis)),
+            Some((DeclKind::Use, Vis::Pub)),
+            "a `pub use` leaf is a pub re-export row"
+        );
+        assert_eq!(
+            row("Widget").map(|d| (d.kind, d.vis)),
+            Some((DeclKind::Use, Vis::Pub)),
+            "every leaf of the one `pub use` rides"
+        );
+        assert_eq!(
+            row("scoped").map(|d| (d.kind, d.vis)),
+            Some((DeclKind::Use, Vis::Pkg)),
+            "the scoped spelling carries its own vis — the gates read it"
+        );
+        assert!(
+            row("hidden").is_none(),
+            "a private `use` imports only: no row"
+        );
     }
 }
