@@ -30,7 +30,6 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use crate::hover::DefIndex;
-use crate::std_surface;
 use ls_types::{Diagnostic, Uri};
 use rut_ast::Vis;
 use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
@@ -42,8 +41,9 @@ pub struct PkgFiles {
     /// the bare pkg name — the `use` head and the diag stamp's prefix
     pub module: String,
     /// the qualified-access head the pkg's manifest spells (`calc`'s
-    /// `Math`) — the surface grammar cannot say it, so the assembly
-    /// carries it; `None` mounts the pkg namespace-free
+    /// `Math`) — the source grammar cannot say it, so the lane that
+    /// read the manifest stamped it on the index row
+    /// (`DefIndex::namespace`); `None` mounts the pkg namespace-free
     pub namespace: Option<String>,
     pub files: BTreeMap<String, FileSrc>,
 }
@@ -65,7 +65,10 @@ pub struct FileSrc {
 /// or a bundle twin never doubles a file). Unstamped indexes (plain
 /// workspace files, the server's scan) are nobody's package and stay
 /// out; `core` stays out (the engine auto-offers the real prelude).
-/// Group order follows first appearance — deterministic runs.
+/// Group order follows first appearance — deterministic runs. The
+/// group's namespace head reads off its FIRST row's
+/// `DefIndex::namespace` stamp — the manifest's own spelling, carried
+/// by the lane that mounted it (no second table).
 pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
     let mut order: Vec<String> = Vec::new();
     let mut groups: BTreeMap<String, PkgFiles> = BTreeMap::new();
@@ -84,10 +87,10 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
             groups.insert(
                 name.clone(),
                 PkgFiles {
-                    namespace: std_surface::NAMESPACES
-                        .iter()
-                        .find(|(m, _)| *m == module)
-                        .map(|(_, head)| head.to_string()),
+                    // first-row-wins: the row that opened the group
+                    // names the head (every row of a manifest-mounted
+                    // pkg carries the same stamp)
+                    namespace: d.namespace.clone(),
                     module,
                     files: BTreeMap::new(),
                 },

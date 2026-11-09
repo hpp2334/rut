@@ -11,8 +11,8 @@
 //! miss is an empty list, never wrong text.
 //!
 //! The use-path tiers: at `use <cursor>` the chain's module names
-//! compete (every named index, std surface included — std is not
-//! special); at `use mod::<cursor>` that module's exported public
+//! compete (every named index — a walked dep, the prelude — no index
+//! is special); at `use mod::<cursor>` that module's exported public
 //! names. The bare position rides the compiler's bare-name law: the
 //! fn-local bindings ahead of the keyword table, then the document's
 //! own decls + the chain's ambient builtin rows + the names the
@@ -517,9 +517,8 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
     Some((segments, prefix))
 }
 
-/// `use <cursor>`: the chain's module names — every NAMED index, the
-/// std surface included (std is not special; the names come from the
-/// uniform index set, no hardcoded table).
+/// `use <cursor>`: the chain's module names — every NAMED index (the
+/// names come from the uniform index set, no hardcoded table).
 ///
 /// `use pkg::<cursor>`: the module's exported public names — pub
 /// types, free fns, module lets — PLUS its `pub mod` children as
@@ -527,10 +526,9 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
 /// walk the pub edges first (a bare `mod`/`pub(pkg)` child is never
 /// offered cross-package) and answer the resolved module's exports —
 /// now with the `pub` gate on fns/lets too, the gate the compiler's
-/// qualified-use check applies. The std surface is NOT special-cased:
-/// std packages carry no mod children, so the walk answers their flat
-/// exports exactly as before (the deps-batch law stands — a flat
-/// package's chain and gates are today's, byte for byte).
+/// qualified-use check applies. No index is special-cased: a flat
+/// package's chain and gates are today's, byte for byte (the
+/// deps-batch law stands).
 fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Vec<CompletionOut> {
     let Some(pkg) = segs.first() else {
         let mut out: Vec<CompletionOut> = Vec::new();
@@ -1044,8 +1042,8 @@ fn position_path_completions(
 /// stays off: the compiler's closure check
 /// (`Session::resolve_use` → `declares`) refuses `use` of a
 /// mounted-but-undeclared package, so only indexes stamped
-/// `direct_dep` (the open document's own manifest rows, plus the std
-/// surface) ride this tier.
+/// `direct_dep` (the open document's own manifest rows, plus the
+/// ambient prelude) ride this tier.
 fn auto_import_completions(
     idxs: &[&DefIndex],
     ast: &Ast,
@@ -1206,7 +1204,7 @@ fn body_start(src: &str) -> u32 {
     off as u32
 }
 
-/// first definition wins — the document shadows the std surface
+/// first definition wins — the document shadows the chain
 fn push_item(out: &mut Vec<CompletionOut>, c: CompletionOut) {
     if !out.iter().any(|x| x.label == c.label) {
         out.push(c);

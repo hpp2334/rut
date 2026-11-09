@@ -42,7 +42,7 @@ use crate::hover::{bindings, DefIndex};
 pub struct Ctx<'a> {
     pub toks: &'a [Token],
     pub ast: &'a Ast,
-    /// the lookup chain: the open document first, then std + workspace
+    /// the lookup chain: the open document first, then the prelude + workspace
     pub idxs: &'a [&'a DefIndex],
 }
 

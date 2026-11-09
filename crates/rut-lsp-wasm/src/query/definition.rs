@@ -19,9 +19,9 @@
 //!    the intra-package lanes instead: the head opens the resolved
 //!    module's file top, a middle segment lands on its mounting edge,
 //!    the leaf on the walked mod path's decl;
-//! 4. **stdlib** through the embedded surface — the `include_str!`
-//!    origins carry the true `rut/...` path (`DefIndex::src_path`), so a
-//!    jump lands in the real source file.
+//! 4. **the ambient prelude** — the one embedded index's
+//!    `include_str!` origin carries the true `rut/...` path
+//!    (`DefIndex::src_path`), so a jump lands in the real source file.
 //!
 //! Layering mirrors `hover` exactly (decl sites, then member position
 //! with the known-receiver-is-final law, then type position, then the
@@ -47,7 +47,7 @@ use crate::mods::DocMods;
 use rut_semantic::LineIndex;
 
 /// one resolved jump target — the uri is the doc itself, a workspace
-/// path/URI, or (for the embedded std surface) the true repo-relative
+/// path/URI, or (for the embedded prelude) the true repo-relative
 /// source path; the client face resolves it against the workspace
 #[derive(Debug, Clone, PartialEq)]
 pub struct DefLocation {
@@ -63,7 +63,7 @@ pub struct Ctx<'a> {
     pub doc_uri: &'a str,
     pub toks: &'a [Token],
     pub ast: &'a Ast,
-    /// the lookup chain: the open document first, then std + workspace
+    /// the lookup chain: the open document first, then the prelude + workspace
     pub idxs: &'a [&'a DefIndex],
     /// the face's knowledge of the open document's place in its
     /// package's mod tree — keys the OWN-package lanes (the
@@ -110,8 +110,8 @@ pub(crate) fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
 }
 
 /// a target index's origin as a URI — workspace origins are already
-/// paths or `file://` URIs; the std surface's provenance labels never
-/// become jump targets (they carry `src_path` instead)
+/// paths or `file://` URIs; the prelude's provenance label never
+/// becomes a jump target (it carries `src_path` instead)
 fn origin_uri(origin: &str) -> String {
     if origin.contains("://") {
         origin.to_string()
@@ -123,9 +123,9 @@ fn origin_uri(origin: &str) -> String {
 }
 
 /// does this index speak for `pkg`? — the explicit manifest module
-/// name FIRST (`DefIndex::module`, the dep/std surface's `Some`); on
-/// `None` the old derivation verbatim: exact origin (the std surface's
-/// label), a path segment named `pkg` (…/pouch/pouch.rut), or the file
+/// name FIRST (`DefIndex::module`, the dep/prelude index's `Some`); on
+/// `None` the old derivation verbatim: exact origin, a path segment
+/// named `pkg` (…/pouch/pouch.rut), or the file
 /// stem (…/gadgets/lib.rut for pkg `gadgets`)
 pub fn matches_pkg(i: &DefIndex, pkg: &str) -> bool {
     if let Some(m) = &i.module {
@@ -185,11 +185,11 @@ fn chain_for<'a>(
 /// kind.
 ///
 /// One precedence above the body law: a MOUNTED dep (the dep walk's
-/// or a pinned bundle's own index) outranks the ambient std embed —
-/// the embed is the zero-fetch fast path for toolchain pkgs, a
-/// fallback, never the answer when the real thing is mounted. The
-/// embed's indexes are the only ones carrying `src_path` (the true
-/// `rut/...` repo path), which marks them here.
+/// or a pinned bundle's own index) outranks the ambient prelude —
+/// the prelude is the zero-fetch fast path for the ONE embedded pkg,
+/// a fallback, never the answer when the real thing is mounted. The
+/// prelude's index is the only one carrying `src_path` (the true
+/// `rut/...` repo path), which marks it here.
 fn prefer_bodies<'a, T: Copy>(hits: &[(&'a DefIndex, T)]) -> Vec<(&'a DefIndex, T)> {
     let mounted: Vec<(&DefIndex, T)> = hits
         .iter()
@@ -527,12 +527,12 @@ fn use_graph_targets<'a>(
 /// chain's `matches_pkg` indexes only the root-shaped ones count: the
 /// lib root `mod.rut` (`mod_path == Some("")` — how a dep walk /
 /// bundle loader stamps the root) first, then the flat roots
-/// (`mod_path == None` — how a host `calc.d.rut` and the std
-/// surface's root files index), tie-broken body-over-decl (the
+/// (`mod_path == None` — how a host `calc.d.rut` and a flat dep's
+/// root file index), tie-broken body-over-decl (the
 /// `prefer_bodies` law). Equals once more tie-broken toward the
 /// MOUNTED closure: a scheme'd origin (`file://`, `bundle:`) is a real
-/// artifact this workspace pinned, the scheme-less one the ambient std
-/// surface answering for a name nothing mounted — the mount wins, the
+/// artifact this workspace pinned, the scheme-less one an ambient
+/// embed answering for a name nothing mounted — the mount wins, the
 /// embed is the fallback. No root-shaped index → `None` — an honest
 /// miss, never a wrong jump.
 fn pkg_root_index<'a>(idxs: &[&'a DefIndex], pkg: &str) -> Option<&'a DefIndex> {

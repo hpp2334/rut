@@ -139,7 +139,7 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
     );
 
     // workspace index off the hot activation path — hover/completion may
-    // briefly resolve against the std surface + open docs only. The dep
+    // briefly resolve against the prelude + open docs only. The dep
     // walk rides after it: the crate's read-only walk mounts the root
     // manifests' rows (path dirs, store-mounted url deps) into the same
     // index, through the injected env.

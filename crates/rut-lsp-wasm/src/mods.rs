@@ -39,7 +39,7 @@ pub struct DocMods {
 }
 
 /// the index's mod path — `None` answers the root (today's
-/// single-file shapes: the std surface, unnamed workspace files,
+/// single-file shapes: the prelude, unnamed workspace files,
 /// flat deps)
 pub(crate) fn mod_path_of(i: &DefIndex) -> &str {
     i.mod_path.as_deref().unwrap_or("")

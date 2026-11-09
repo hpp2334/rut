@@ -117,9 +117,11 @@ pub struct TyDef {
     /// the declared visibility — the completion/hover tier gate reads
     /// it (`pub(pkg)`/`pub(super)` are not `pub`)
     pub vis: Vis,
-    /// `pub` on the declaration — the std surface offers pub rows only
-    /// (the hashmap-surface batch: nmapset's internal lane classes
-    /// leave the bare-project surface)
+    /// `pub` on the declaration — the completion tiers' names face
+    /// (the use-path exports, the auto-import tier) offers pub rows
+    /// only, while the INDEX itself stays unfiltered: a pub-less row
+    /// still answers hover/definition (D2 — a mounted dep's internals
+    /// are readable, exactly like the source they mirror)
     pub is_pub: bool,
     /// the ambient builtin linkage (`prelude builtin`) — the name
     /// binds in every compilation unit with no `use`, so completion
@@ -213,8 +215,8 @@ pub struct DefIndex {
     pub src: String,
     /// byte offsets ⇄ (line, UTF-16 col) over `src`
     pub lines: LineIndex,
-    /// the true repo-relative path of an EMBEDDED source (the std
-    /// surface's `include_str!` origin: `rut/pouch/src/mod.rut`) — the
+    /// the true repo-relative path of an EMBEDDED source (the
+    /// prelude's `include_str!` origin: `rut/core/src/core.d.rut`) — the
     /// definition layer jumps there instead of the provenance label,
     /// so a workspace that is the rut repo lands in the real file
     pub src_path: Option<String>,
@@ -246,6 +248,13 @@ pub struct DefIndex {
     /// definition layer prefers body hits over decl-surface hits when
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
+    /// the manifest-spelled qualified-access head (`calc_host`'s
+    /// `Math`) — the spelling the source grammar cannot say, so the
+    /// lanes that READ the manifest stamp it on the row (the dep
+    /// indexers, the walk's mounts); `None` = namespace-free. The
+    /// check lane's world assembly reads it off the group's first row
+    /// (`check::groups_from_defs`) — never a second baked table.
+    pub namespace: Option<String>,
     /// the dep is a DIRECT dep of the open document's package —
     /// declared in its own manifest (`deps`, `dev-deps`
     /// at the walk root). The compiler's closure check
@@ -254,8 +263,10 @@ pub struct DefIndex {
     /// auto-import tier offers direct deps only: a transitive-only
     /// dep's names would complete into a compile the program rejects.
     /// The faces stamp it (the dep walks know the depth); unstamped
-    /// indexes — the embedded std surface, plain workspace files —
-    /// keep today's offer-everything shape. Never derived from text.
+    /// indexes — plain workspace files — keep today's offer-everything
+    /// shape; the prelude stamps it true (it is ambient, exactly the
+    /// shape a direct dep's mount answers with). Never derived from
+    /// text.
     pub direct_dep: bool,
 }
 

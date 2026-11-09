@@ -19,7 +19,7 @@
 //! `unsafe` anywhere in this crate):
 //!
 //!   new RutLsp()                               the language core, with
-//!                                              the std surface pre-indexed
+//!                                              the core prelude pre-indexed
 //!   set_env(env)                               hand the core the READ-ONLY
 //!                                              host environment (`HostEnv`:
 //!                                              read/readDir/isDir/notify,
@@ -124,14 +124,14 @@ pub mod mods;
 // historical `semantic` path so the queries keep one spelling (the
 // crate's ONLY frontend: no lexer/parser dep, see Cargo.toml)
 pub use rut_semantic as semantic;
-pub mod std_surface;
+pub mod prelude;
 
 // ---- the language core's state (one instance per editing session) ----
 
 struct Core {
     /// open documents by URI (the LSP's full-text sync)
     docs: HashMap<String, String>,
-    /// the std surface + workspace files, in lookup order
+    /// the core prelude + walked/workspace files, in lookup order
     defs: Vec<DefIndex>,
     /// url → pin, from the workspace root's `rut.lock` (the host reads
     /// the file and hands the bytes to `set_lock`; the manifest
@@ -155,14 +155,16 @@ struct Core {
 }
 
 impl Core {
-    /// the core as it boots — the std surface pre-indexed, no session
-    /// state yet. The loop task owns this value exclusively; both
-    /// constructors (`new` the wasm face, `spawn_native` the native
-    /// harness) hand a fresh one to [`event_loop::run`].
+    /// the core as it boots — the engine prelude pre-indexed (`core`
+    /// alone, the ONE ambient index; every other std pkg rides the dep
+    /// lane like any third-party lib), no session state yet. The loop
+    /// task owns this value exclusively; both constructors (`new` the
+    /// wasm face, `spawn_native` the native harness) hand a fresh one
+    /// to [`event_loop::run`].
     fn boot() -> Core {
         Core {
             docs: HashMap::new(),
-            defs: crate::std_surface::indexes(),
+            defs: vec![crate::prelude::index()],
             lock_pins: BTreeMap::new(),
             direct_deps: HashSet::new(),
             hints_shown: HashSet::new(),
@@ -195,10 +197,19 @@ impl Core {
     }
 
     /// the walk's named-dep index lane: index one dep source
-    /// file under its module NAME (replace-by-origin), the direct-dep
-    /// marker stamped from the set the way it is at this call.
-    pub(crate) fn add_def_named_at(&mut self, uri: &str, name: &str, src: &str) {
-        let mut idx = crate::deps::index_dep(name, uri, src, None, &[]);
+    /// file under its module NAME (replace-by-origin), the manifest's
+    /// namespace stamped on the row (the qualified-access head — the
+    /// check lane's world assembly reads it off the group's first
+    /// row), the direct-dep marker stamped from the set the way it is
+    /// at this call.
+    pub(crate) fn add_def_named_at(
+        &mut self,
+        uri: &str,
+        name: &str,
+        namespace: Option<&str>,
+        src: &str,
+    ) {
+        let mut idx = crate::deps::index_dep(name, uri, src, namespace, &[]);
         idx.direct_dep = self.direct_deps.contains(name);
         self.replace_by_origin(uri, idx);
     }
@@ -212,10 +223,11 @@ impl Core {
         &mut self,
         uri: &str,
         name: &str,
+        namespace: Option<&str>,
         mod_path: &str,
         src: &str,
     ) -> Vec<wire::ModDecl> {
-        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, None, &[]);
+        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, namespace, &[]);
         idx.direct_dep = self.direct_deps.contains(name);
         let decls: Vec<wire::ModDecl> = idx
             .mods
@@ -295,7 +307,7 @@ pub struct RutLsp {
 
 #[wasm_bindgen]
 impl RutLsp {
-    /// the core boots with the std surface pre-indexed — the same
+    /// the core boots with the prelude pre-indexed — the same
     /// the crate indexes at construction
     #[wasm_bindgen(constructor)]
     pub fn new() -> RutLsp {
@@ -353,14 +365,14 @@ impl RutLsp {
             .await
     }
 
-    /// close: drop the document (the workspace/std index stays). The
+    /// close: drop the document (the prelude/workspace index stays). The
     /// await is ordering only — this lane answers no payload.
     pub async fn forget(&self, uri: String) {
         let _ = self.rpc(|tx| event_loop::Msg::Forget { uri, tx }).await;
     }
 
-    /// hover at an LSP position — the doc index first, then std +
-    /// workspace; `null` when there's nothing to say
+    /// hover at an LSP position — the doc index first, then the
+    /// prelude + workspace; `null` when there's nothing to say
     pub async fn hover(&self, uri: String, line: u32, ch: u32) -> String {
         self.text(|tx| event_loop::Msg::Hover { uri, line, ch, tx })
             .await
@@ -384,10 +396,10 @@ impl RutLsp {
         .await
     }
 
-    /// definitions at an LSP position — the doc index first, then std +
-    /// workspace; `null` when the doc is unknown, `[]` when nothing
-    /// resolves. Targets carry the doc URI, a workspace origin, or the std
-    /// surface's true `rut/...` source path (relative — the extension
+    /// definitions at an LSP position — the doc index first, then the
+    /// prelude + workspace; `null` when the doc is unknown, `[]` when nothing
+    /// resolves. Targets carry the doc URI, a workspace origin, or the prelude's
+    /// true `rut/...` source path (relative — the extension
     /// resolves it against the workspace). The doc's file-module context
     /// rides from its stamped twin (see `doc_mods_of`) — the mod-edge
     /// clicks and the own-package use lanes key on it.

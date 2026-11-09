@@ -29,8 +29,8 @@ pub struct HoverOut {
     pub span: Span,
 }
 
-/// `idxs` in priority order — the open document first, then the std
-/// surface, then the rest of the workspace. `doc` is the open
+/// `idxs` in priority order — the open document first, then the
+/// ambient prelude, then the rest of the workspace. `doc` is the open
 /// document's file-module context (the face's knowledge): an
 /// own-package use-path segment hover resolves through it, the default
 /// keeps the cross-package lanes only.
@@ -379,7 +379,7 @@ pub(crate) fn enclosing_type<'a>(
 pub(crate) fn find_ty<'a>(idxs: &'a [&DefIndex], name: &str) -> Option<(&'a DefIndex, &'a TyDef)> {
     // mounted-over-embed (the `prefer_bodies` carrier rule): the chain
     // may carry the same ty twice — the dep walk's real origins and the
-    // ambient std surface answering for a name nothing mounted — and
+    // ambient prelude answering for a name nothing mounted — and
     // the MOUNTED carrier wins (chain order keeps the doc freshest
     // among equals); the embed is the zero-fetch fallback
     let mut fallback = None;

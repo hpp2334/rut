@@ -613,7 +613,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
             line: line_of(src, span.lo),
         });
     }
-    // the definition layer's target text: cross-file and std jumps
+    // the definition layer's target text: cross-file and prelude jumps
     // convert their spans to LSP ranges against THIS index's own source
     // (the editor face cannot re-read files)
     idx.src = src.to_string();

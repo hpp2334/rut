@@ -203,7 +203,7 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
         if let Some(bytes) = ctx.io.read(&path) {
             ctx.files -= 1;
             let src = String::from_utf8_lossy(&bytes).into_owned();
-            core.add_def_named_at(&path, &module, &src);
+            core.add_def_named_at(&path, &module, table.namespace.as_deref(), &src);
         } // a manifest naming a missing entry — index what exists
     }
     // the mod tree (file modules): the root module's `mod NAME;`
@@ -215,7 +215,15 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
         .filter(|e| e.mode == rut_semantic::Mode::Impl)
         .map(|e| e.path.clone())
         .collect();
-    mount_mod_tree(ctx, core, dir, &module, &entry_paths, depth);
+    mount_mod_tree(
+        ctx,
+        core,
+        dir,
+        &module,
+        table.namespace.as_deref(),
+        &entry_paths,
+        depth,
+    );
     for row in &table.deps {
         mount_row(ctx, core, dir, row, depth);
     }
@@ -257,12 +265,15 @@ fn mount_row(ctx: &mut WalkCtx, core: &mut Core, dir: &str, row: &DepRow, depth:
 /// one package's mod tree: the root module stamps at mod path `""`
 /// (the entries loop's flat stamp for the same file REPLACES with it —
 /// same origin), then each `mod NAME;` edge mounts beside the root
-/// file, recursively, depth- and file-budget-capped.
+/// file, recursively, depth- and file-budget-capped. The manifest's
+/// namespace head stamps on every row it mounts (the same stamp the
+/// entries loop laid down).
 fn mount_mod_tree(
     ctx: &mut WalkCtx,
     core: &mut Core,
     pkg_dir: &str,
     module: &str,
+    namespace: Option<&str>,
     entry_paths: &[String],
     depth: usize,
 ) {
@@ -280,7 +291,7 @@ fn mount_mod_tree(
             return;
         };
         let text = String::from_utf8_lossy(&bytes).into_owned();
-        decls = core.add_def_mod_at(&root_path, module, "", &text);
+        decls = core.add_def_mod_at(&root_path, module, namespace, "", &text);
     } else {
         // a host pkg (or surface-only dev state): no body row —
         // `src/mod.rut` under the shell is probed anyway; a read miss
@@ -292,7 +303,7 @@ fn mount_mod_tree(
         };
         ctx.files -= 1;
         let text = String::from_utf8_lossy(&bytes).into_owned();
-        decls = core.add_def_mod_at(&root_path, module, "", &text);
+        decls = core.add_def_mod_at(&root_path, module, namespace, "", &text);
     }
     // the children mount BESIDE THE ROOT FILE — inside the package's
     // `src/` shell
@@ -301,7 +312,9 @@ fn mount_mod_tree(
         if ctx.files == 0 {
             return; // the budget died — the set stays incomplete
         }
-        mount_child_mod(ctx, core, &root_dir, module, &decl.name, "", depth);
+        mount_child_mod(
+            ctx, core, &root_dir, module, namespace, &decl.name, "", depth,
+        );
     }
 }
 
@@ -312,11 +325,13 @@ fn mount_mod_tree(
 /// root, `parent/NAME` nested — and its own decls recurse from its
 /// physical directory (a file-form child's children mount beside it,
 /// not under `NAME/`).
+#[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn mount_child_mod(
     ctx: &mut WalkCtx,
     core: &mut Core,
     declaring_dir: &str,
     module: &str,
+    namespace: Option<&str>,
     name: &str,
     parent_path: &str,
     depth: usize,
@@ -348,7 +363,7 @@ fn mount_child_mod(
     } else {
         format!("{parent_path}/{name}")
     };
-    let decls = core.add_def_mod_at(&child_path, module, &mod_path, &text);
+    let decls = core.add_def_mod_at(&child_path, module, namespace, &mod_path, &text);
     // a file-form child's children mount BESIDE it, not under `NAME/`
     let child_dir = if child_path == dir_form {
         format!("{declaring_dir}/{name}")
@@ -364,6 +379,7 @@ fn mount_child_mod(
             core,
             &child_dir,
             module,
+            namespace,
             &decl.name,
             &mod_path,
             depth + 1,

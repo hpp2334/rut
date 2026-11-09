@@ -205,8 +205,8 @@ pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
     idx
 }
 
-/// the lookup chain — the open document first, then `extra` (the std
-/// surface + the workspace)
+/// the lookup chain — the open document first, then `extra` (the
+/// prelude + the workspace)
 fn doc_idxs<'a>(
     doc: &'a hover::DefIndex,
     extra: &'a [hover::DefIndex],
@@ -274,9 +274,10 @@ pub fn complete_at(
 }
 
 /// definitions at an LSP position: the survey §3.3 layers (binding pass
-/// → decl layer → use graph → std surface). Empty = nothing resolves;
-/// multiple entries = the candidate list. Targets carry the doc URI, a
-/// workspace origin, or the std surface's true `rut/...` source path —
+/// → decl layer → use graph → the chain's dep indexes). Empty = nothing
+/// resolves; multiple entries = the candidate list. Targets carry the
+/// doc URI, a workspace origin, or the prelude's true `rut/...` source
+/// path —
 /// the face resolves them (server: against the workspace root; wasm
 /// shim: the extension does). `doc` is the open document's file-module
 /// context — the mod-edge clicks and the own-package use lanes key on

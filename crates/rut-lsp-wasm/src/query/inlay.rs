@@ -44,7 +44,7 @@ pub struct Ctx<'a> {
     pub toks: &'a [Token],
     /// the document's own index — module-let hints and their renders
     pub doc: &'a DefIndex,
-    /// the lookup chain: the open document first, then std + workspace
+    /// the lookup chain: the open document first, then the prelude + workspace
     pub idxs: &'a [&'a DefIndex],
     pub index: &'a LineIndex,
     pub src: &'a str,

@@ -832,7 +832,9 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
 
 /// Index one dep source file: the ordinary [`analysis::index_at`] pass
 /// over `src` (origin stamped with `uri`, mode per the manifest), the
-/// module NAMED, and the manifest's `namespace`/`consts` minted on —
+/// module NAMED, the manifest's `namespace` stamped on the row (the
+/// check lane's world assembly reads the head off it — never a second
+/// baked table), and the `namespace`/`consts` minted on —
 /// a `TyForm::Namespace` type row for the head (the module's free fns
 /// as methods, the consts as fields: the qualified `Math::sqrt`/`Math::PI`
 /// shape resolves through the member machinery), module-scope lets for
@@ -851,6 +853,8 @@ pub fn index_dep(
     let mut idx = crate::hover::index(doc.src(), doc.ast(), doc.toks());
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
+    // the manifest's qualified-access head rides the row itself
+    idx.namespace = namespace.map(|n| n.to_string());
     // the parse mode rides the index — the definition layer's
     // body-over-decl preference reads it
     idx.mode = Some(rut_semantic::mode_of(uri));
@@ -913,6 +917,9 @@ pub fn index_dep_decl_group(
                 format!("{uri}#{path}")
             };
             idx.module = Some(name.to_string());
+            // the manifest's head rides every row of the group — the
+            // check lane's first-row read never misses it
+            idx.namespace = namespace.map(|n| n.to_string());
             // the parse mode rides the index — the definition layer's
             // body-over-decl preference reads it
             idx.mode = Some(rut_semantic::mode_of(uri));
