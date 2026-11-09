@@ -246,7 +246,7 @@ pub struct DefIndex {
     /// definition layer prefers body hits over decl-surface hits when
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
-    /// the dep is a DIRECT dep of the open document's package —
+    /// The dep is a DIRECT dep of the open document's package —
     /// declared in its own manifest (`deps`, `dev-deps`
     /// at the walk root). The compiler's closure check
     /// (`Session::resolve_use` → `declares`) refuses `use` of a
@@ -259,6 +259,12 @@ pub struct DefIndex {
     /// shape a direct dep's mount answers with). Never derived from
     /// text.
     pub direct_dep: bool,
+    /// the manifest's raw `consts` rows (name → value; `calc_host`'s
+    /// `PI` family) — the compiler-materialized constants the check
+    /// lane must hand the engine (a `pub use calc_host::{ PI }`
+    /// re-export resolves against them). Stamped by the dep walks at
+    /// the pkg's root row; the minted completion rows ride `lets`.
+    pub consts: Vec<(String, f64)>,
 }
 
 impl DefIndex {

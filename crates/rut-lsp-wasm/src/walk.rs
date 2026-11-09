@@ -203,19 +203,26 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
         if let Some(bytes) = ctx.io.read(&path) {
             ctx.files -= 1;
             let src = String::from_utf8_lossy(&bytes).into_owned();
-            core.add_def_named_at(&path, &module, &src);
+            // the manifest's consts ride the pkg's own rows (the check
+            // lane threads them into the engine's Manifest)
+            core.add_def_named_at(&path, &module, &src, &table.consts);
         } // a manifest naming a missing entry — index what exists
     }
-    // the mod tree (file modules): the root module's `mod NAME;`
-    // edges mount recursively — the walk follows the PARSED decls
-    // (`add_def_mod_at` answers them), never a directory listing
-    let entry_paths: Vec<String> = table
+    // the mod tree (the pkg's own modules): the root module stamps at
+    // mod path `""` (the entries loop's flat stamp for the same file
+    // REPLACES with it — same origin), then each `mod NAME;` edge
+    // mounts beside the root file, recursively, depth- and
+    // file-budget-capped. The flavor follows the pkg: a lib's root is
+    // its first Impl entry (`src/mod.rut`, `NAME/mod.rut`/`NAME.rut`
+    // children), a host pkg's root is its DECL entry (the `.d.rut`
+    // surface, `NAME/mod.d.rut` children — the loader's own flavor
+    // law), and an entry-less dev state probes the lib convention.
+    let entry_rows: Vec<(&str, rut_semantic::Mode)> = table
         .entries
         .iter()
-        .filter(|e| e.mode == rut_semantic::Mode::Impl)
-        .map(|e| e.path.clone())
+        .map(|e| (e.path.as_str(), e.mode))
         .collect();
-    mount_mod_tree(ctx, core, dir, &module, &entry_paths, depth);
+    mount_mod_tree(ctx, core, dir, &module, &entry_rows, &table.consts, depth);
     for row in &table.deps {
         mount_row(ctx, core, dir, row, depth);
     }
@@ -257,43 +264,53 @@ fn mount_row(ctx: &mut WalkCtx, core: &mut Core, dir: &str, row: &DepRow, depth:
 /// one package's mod tree: the root module stamps at mod path `""`
 /// (the entries loop's flat stamp for the same file REPLACES with it —
 /// same origin), then each `mod NAME;` edge mounts beside the root
-/// file, recursively, depth- and file-budget-capped.
+/// file, recursively, depth- and file-budget-capped. `entries` carries
+/// the manifest's own rows: a lib's first IMPL entry is its root
+/// (`src/mod.rut`), else a HOST pkg's DECL entry is (the `.d.rut`
+/// surface — its tree mounts with the Decl flavor, `NAME/mod.d.rut`
+/// children, the loader's own law), else the lib convention is probed
+/// (a surface-only dev state).
 fn mount_mod_tree(
     ctx: &mut WalkCtx,
     core: &mut Core,
     pkg_dir: &str,
     module: &str,
-    entry_paths: &[String],
+    entries: &[(&str, rut_semantic::Mode)],
+    consts: &[(String, f64)],
     depth: usize,
 ) {
     if depth > MAX_DEP_DEPTH || ctx.files == 0 {
         return; // the caps truncate — the set stays incomplete
     }
-    let root_path;
-    let decls;
-    if let Some(first) = entry_paths.first() {
+    let (root_path, decl_flavor, charged) = if let Some((first, _)) =
+        entries.iter().find(|(_, m)| *m == rut_semantic::Mode::Impl)
+    {
         // the root-module lane: `src/mod.rut` is the root (the entries
-        // loop already indexed it — this re-stamp at mod path "" is
-        // the same answer, replace-by-origin)
-        root_path = join(pkg_dir, first);
-        let Some(bytes) = ctx.io.read(&root_path) else {
-            return;
-        };
-        let text = String::from_utf8_lossy(&bytes).into_owned();
-        decls = core.add_def_mod_at(&root_path, module, "", &text);
+        // loop already indexed and charged it — this re-stamp at mod
+        // path "" is the same answer, replace-by-origin)
+        (join(pkg_dir, first), false, false)
+    } else if let Some((first, _)) = entries.iter().find(|(_, m)| *m == rut_semantic::Mode::Decl) {
+        // the HOST lane: the DECL entry is the root module (indexed
+        // flat by the entries loop — this re-stamp carries its own
+        // `mod` edges), and the tree mounts Decl-flavored
+        (join(pkg_dir, first), true, false)
     } else {
-        // a host pkg (or surface-only dev state): no body row —
-        // `src/mod.rut` under the shell is probed anyway; a read miss
-        // mounts nothing (the ROOT is always the directory form — only
-        // child edges carry the `NAME.rut` spelling)
-        root_path = format!("{pkg_dir}/src/mod.rut");
-        let Some(bytes) = ctx.io.read(&root_path) else {
-            return; // no root module — nothing mounts
-        };
+        // a surface-only dev state: no entry rows — `src/mod.rut`
+        // under the shell is probed anyway (the ROOT is always the
+        // directory form — only child edges carry the `NAME.rut`
+        // spelling); this lane's read is its own charge
+        (format!("{pkg_dir}/src/mod.rut"), false, true)
+    };
+    let Some(bytes) = ctx.io.read(&root_path) else {
+        return; // no root module — nothing mounts
+    };
+    if charged {
         ctx.files -= 1;
-        let text = String::from_utf8_lossy(&bytes).into_owned();
-        decls = core.add_def_mod_at(&root_path, module, "", &text);
     }
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    // the root re-stamp carries the manifest's consts (it REPLACES the
+    // entries loop's row — same origin — so the rows ride again)
+    let decls = core.add_def_mod_at(&root_path, module, "", &text, consts);
     // the children mount BESIDE THE ROOT FILE — inside the package's
     // `src/` shell
     let root_dir = dirname(&root_path);
@@ -301,17 +318,28 @@ fn mount_mod_tree(
         if ctx.files == 0 {
             return; // the budget died — the set stays incomplete
         }
-        mount_child_mod(ctx, core, &root_dir, module, &decl.name, "", depth);
+        mount_child_mod(
+            ctx,
+            core,
+            &root_dir,
+            module,
+            &decl.name,
+            "",
+            depth,
+            decl_flavor,
+        );
     }
 }
 
-/// one `mod NAME;` edge: `NAME/mod.rut` beside the declaring file
-/// first, then the single-file spelling `NAME.rut`; BOTH present is
-/// the loader's loud ambiguity (hinted once, mirrored). The found
-/// child stamps under the module at its mount path — `NAME` under the
-/// root, `parent/NAME` nested — and its own decls recurse from its
-/// physical directory (a file-form child's children mount beside it,
-/// not under `NAME/`).
+/// one `mod NAME;` edge: the lib flavor probes `NAME/mod.rut` beside
+/// the declaring file first, then the single-file spelling `NAME.rut`;
+/// BOTH present is the loader's loud ambiguity (hinted once, mirrored).
+/// The Decl flavor (a host pkg's surface tree) probes the loader's own
+/// spelling only — `NAME/mod.d.rut`, directory form, no single-file
+/// twin. The found child stamps under the module at its mount path —
+/// `NAME` under the root, `parent/NAME` nested — and its own decls
+/// recurse from its physical directory (a file-form child's children
+/// mount beside it, not under `NAME/`).
 #[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn mount_child_mod(
     ctx: &mut WalkCtx,
@@ -321,11 +349,27 @@ fn mount_child_mod(
     name: &str,
     parent_path: &str,
     depth: usize,
+    decl_flavor: bool,
 ) {
-    let dir_form = format!("{declaring_dir}/{name}/mod.rut");
+    let dir_form = if decl_flavor {
+        // the host surface tree's child spelling (the loader's
+        // DECL_CHILD_FILE law — dir form only)
+        format!(
+            "{declaring_dir}/{name}/{}",
+            rut_driver::decl::DECL_CHILD_FILE
+        )
+    } else {
+        format!("{declaring_dir}/{name}/mod.rut")
+    };
     let file_form = format!("{declaring_dir}/{name}.rut");
     let dir_bytes = ctx.io.read(&dir_form);
-    let file_bytes = ctx.io.read(&file_form);
+    // the Decl flavor never probes the single-file twin — a stray
+    // `NAME.rut` beside a host tree is nobody's module
+    let file_bytes = if decl_flavor {
+        None
+    } else {
+        ctx.io.read(&file_form)
+    };
     let (child_path, bytes) = match (dir_bytes, file_bytes) {
         (Some(_), Some(_)) => {
             core.hint_once(
@@ -349,7 +393,8 @@ fn mount_child_mod(
     } else {
         format!("{parent_path}/{name}")
     };
-    let decls = core.add_def_mod_at(&child_path, module, &mod_path, &text);
+    // the consts mint on the pkg-ROOT row only — a child carries none
+    let decls = core.add_def_mod_at(&child_path, module, &mod_path, &text, &[]);
     // a file-form child's children mount BESIDE it, not under `NAME/`
     let child_dir = if child_path == dir_form {
         format!("{declaring_dir}/{name}")
@@ -368,6 +413,7 @@ fn mount_child_mod(
             &decl.name,
             &mod_path,
             depth + 1,
+            decl_flavor,
         );
     }
 }

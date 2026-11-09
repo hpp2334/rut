@@ -284,9 +284,11 @@ fn compile_program_inner(
         diags.extend(ast.errors().iter().cloned());
         return fail(diags, ast_dump, ast_json);
     }
-    // Intern every used surface name, so a namespace use (`Math`)
-    // resolves its members by name even though the member name is never
-    // written in `use { .. }`. Surface names are
+    // Intern every used surface name, so a member reached qualified
+    // (`math::sqrt(x)` after a use, or the pkg-rooted
+    // `calc::math::sqrt(x)` with none) resolves by name even though
+    // the module's member names are never spelled in `use { .. }`.
+    // Surface names are
     // ids in the exporter's interner (`surface.names`) — re-interned by
     // text into this module's. The texts also feed `dep_exports` (the
     // terminal-miss hint's "a use statement could name it" table).

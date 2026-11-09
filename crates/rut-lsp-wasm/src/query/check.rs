@@ -41,6 +41,11 @@ pub struct PkgFiles {
     /// the bare pkg name — the `use` head and the diag stamp's prefix
     pub module: String,
     pub files: BTreeMap<String, FileSrc>,
+    /// the manifest's `consts` rows (the compiler-materialized
+    /// constants — a host pkg's `PI` family), folded off the group's
+    /// indexes; the engine binds them bare at the pkg's root, so a
+    /// `pub use` re-export (calc's `math.rut`) resolves against them
+    pub consts: Vec<(String, f64)>,
 }
 
 /// One file of an assembled package.
@@ -83,10 +88,17 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
                 PkgFiles {
                     module,
                     files: BTreeMap::new(),
+                    consts: d.consts.clone(),
                 },
             );
         }
         let g = groups.get_mut(&name).expect("just inserted");
+        // the consts fold first-non-empty-wins across the group's rows
+        // (a re-walk re-stamps them identically; an unstamped twin of
+        // the same pkg carries none and never erases them)
+        if g.consts.is_empty() && !d.consts.is_empty() {
+            g.consts = d.consts.clone();
+        }
         if g.files.contains_key(&path) {
             continue;
         }
@@ -167,6 +179,7 @@ pub fn check_doc(
             groups.push(PkgFiles {
                 module: doc_pkg.to_string(),
                 files: BTreeMap::new(),
+                consts: Vec::new(),
             });
             groups.last_mut().expect("just pushed")
         }
@@ -309,12 +322,32 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
             match lower_decl_module(&root.text, &children, &g.module) {
                 Ok(mut p) => {
                     p.spec = g.module.clone();
+                    // the manifest's consts fold into the HOST BODY
+                    // rows (the loader's own `fold` law): the engine's
+                    // surface build reads the body rows, and a `pub use
+                    // calc_host::{ PI }` re-export resolves against them
+                    if let rut_driver::MountedBody::Host { consts, .. } = &mut p.body {
+                        *consts = g
+                            .consts
+                            .iter()
+                            .map(|(name, v)| (name.clone(), rut_core::types::TY_F64, v.to_bits()))
+                            .collect();
+                    }
                     p
                 }
                 Err(_) => continue,
             }
         };
-        pkg = pkg.manifest(Manifest::lib(&g.module, &deps));
+        pkg = pkg.manifest({
+            let mut m = Manifest::lib(&g.module, &deps);
+            // the manifest's consts thread through: the engine binds
+            // them bare at the pkg's root (the compiler-materialized
+            // constants a `pub use` re-export resolves against —
+            // without them calc's `math.rut` errors and the entrypoint
+            // compile dies before the doc's own diags surface)
+            m.consts = g.consts.iter().cloned().collect();
+            m
+        });
         out.push(pkg);
     }
     out

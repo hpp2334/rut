@@ -371,7 +371,8 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             src,
             tx,
         } => {
-            let decls = core.add_def_mod_at(&uri, &name, &mod_path, &src);
+            // the host's scan-index lane carries no manifest — no consts
+            let decls = core.add_def_mod_at(&uri, &name, &mod_path, &src, &[]);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
         }
     }

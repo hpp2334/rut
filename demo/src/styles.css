@@ -86,13 +86,31 @@ button {
   font-family: var(--mono);
 }
 
-/* main grid: cases | editor | panes */
+/* main grid: cases+deps | editor | panes */
 
 .app-main {
   display: grid;
-  grid-template-columns: 220px 1fr 1fr;
+  grid-template-columns: 240px 1fr 1fr;
   flex: 1;
   min-height: 0;
+}
+
+/* the left column: the case list over the deps panel (the dep lane's
+   face — phase 5) */
+
+.app-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.app-side .case-list {
+  flex: 1;
+  min-height: 0;
+  border-right: none;
+  background: transparent;
 }
 
 /* case list */
@@ -155,6 +173,203 @@ button {
 
 .case-name {
   font-size: 13px;
+}
+
+/* deps panel (phase 5) — the dep lane's face: std rows with live
+   status, the custom-dep add, and the walk's notify hints */
+
+.deps-panel {
+  border-top: 1px solid var(--border);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.deps-title {
+  color: var(--fg-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 6px 0;
+}
+
+.deps-status {
+  color: var(--fg-dim);
+  padding: 0 6px;
+}
+
+.deps-count {
+  color: var(--accent);
+}
+
+.deps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.dep-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.dep-row .dep-name {
+  color: var(--fg);
+}
+
+.dep-row .dep-pin {
+  color: var(--fg-dim);
+}
+
+.dep-row .dep-status {
+  margin-left: auto;
+}
+
+.dep-row .dep-note {
+  display: none;
+}
+
+.dep-mounted .dep-status {
+  color: #98c379;
+}
+
+.dep-installed .dep-status,
+.dep-fetching .dep-status {
+  color: var(--fg-dim);
+}
+
+.dep-refused .dep-status,
+.dep-failed .dep-status {
+  color: var(--trap);
+}
+
+.dep-failed .dep-note,
+.dep-refused .dep-note {
+  display: inline;
+  color: var(--trap);
+  font-size: 10px;
+}
+
+.deps-add {
+  display: flex;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+.deps-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font: 11px var(--mono);
+}
+
+.deps-add input:disabled {
+  opacity: 0.45;
+}
+
+.deps-add button {
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: #232730;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.deps-add button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.deps-add-state {
+  color: var(--fg-dim);
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.deps-notices {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deps-notices li {
+  color: var(--warn);
+  font-size: 10px;
+  font-family: var(--mono);
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* the completion popup (phase 5): the editor's dep-lane face —
+   anchored under the caret, keyboard + mouse driven */
+
+.editor-complete {
+  position: absolute;
+  z-index: 6;
+  min-width: 220px;
+  max-width: 380px;
+  max-height: 206px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 40%);
+  overflow: hidden;
+}
+
+.editor-complete button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  background: transparent;
+  color: var(--fg);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font: 12px var(--mono);
+  text-align: left;
+}
+
+.editor-complete button.selected {
+  background: #1d2a3a;
+}
+
+.editor-complete .complete-label {
+  flex: 0 0 auto;
+}
+
+.editor-complete .complete-detail {
+  color: var(--fg-dim);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* editor */
@@ -665,7 +880,18 @@ button {
   }
 
   /* the case list becomes a horizontal chip strip: groups side by
-     side, one scrollable row of chips, no sidebar */
+     side, one scrollable row of chips, no sidebar; the deps panel
+     flows under it in the same first grid row */
+  .app-side {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .app-side .case-list {
+    flex: 0 0 auto;
+    max-height: 96px;
+  }
+
   .case-list {
     display: flex;
     flex-direction: row;

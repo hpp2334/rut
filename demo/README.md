@@ -47,6 +47,30 @@ command); `build:wasm` copies them with the same curated loud-fail.
   rides the analyzer or the page says so, never a monochrome shrug
   dressed up as success.
 
+## Deps (the playground is a real dep consumer)
+
+Std rides the DEP lane here, nothing ambient beyond `core`: the page
+boots std-less, then fetches the nine std source zips from jsDelivr's
+gh lane at a **pinned commit sha** (the urls + sha256 pins baked in
+`src/lsp/std-pins.ts`, mirroring `crates/rut-cli/template/rut.lock` —
+the sha ref serves before the tag exists and is stricter after),
+verifies each zip's hash, and installs it into an in-memory
+`$RUT_HOME` (`src/lsp/store-env.ts` — the exact shape `rut install`
+lays: `deps/<name>@<sha256[:16]>/meta.json` + `unpack/`). The
+analyzer's read-only dep walk mounts that world, so **completion,
+hover, and the check lane light up when the walk lands** — the deps
+panel shows the per-dep status.
+
+- **Custom deps**: paste any std-zip-shaped url (e.g. a jsDelivr
+  `dist/std/myhost.zip` ref) — the page fetches, hashes, installs, and
+  declares it (manifest + lock rows), then re-walks. The dep completes
+  and type-checks through the editor lanes.
+- **The RUN lane is a different world**: ▶ Run (and auto-run) compile
+  against the wasm engine's own mounted slice, which carries the std
+  heads but not your custom deps — a run of a custom-dep program
+  refuses honestly in the output pane while the editor stays clean.
+  Two lanes, two truths, both named.
+
 ## Auto-run and the editor (the journey batch's visible changes)
 
 Runs happen without the button:
@@ -143,13 +167,19 @@ src/
   lsp/
     rut-lsp.ts           the standalone rut-lsp.wasm binding:
                          the wasm-bindgen RutLsp class, ONE analyze call per change
+    store-env.ts         the virtual $RUT_HOME + workspace (MemoryEnv), the zip
+                         install lane (meta.json + unpack/ — rut install's shape)
+    std-pins.ts          the nine std rows: sha-pinned CDN urls + the lock's sha256s
     overlay.ts           tokens+diags -> overlay spans (pure, smoke-driven)
   wasm/rut-api.d.ts      the compile/run/resume contract
   smoke/smoke-entry.ts   the smoke bundle's exports (the app's own surface)
   components/
     CaseList.tsx         case selector (groups: cases, classics)
+    DepsPanel.tsx        the dep lane's face: per-dep status, the custom-dep add
+                         (url → fetch → install → declare → re-walk), the walk's hints
     Editor.tsx           transparent textarea OVER a highlighted <pre> overlay
-                         (same metrics, scroll-synced; squiggles + hover tip)
+                         (same metrics, scroll-synced; squiggles + hover tip; the
+                         completion popup — trigger chars + Ctrl+Space)
     Panes.tsx            Output / AST / IR tabs + compile diags
     StatusBar.tsx        run/resume, fuel+heap inputs, telemetry
 scripts/

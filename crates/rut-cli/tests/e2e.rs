@@ -2028,6 +2028,25 @@ entry fn main() -> nil {
 }
 
 #[test]
+fn the_fully_qualified_const_form_reads_the_re_export() {
+    // the pkg-rooted CONST form against the REAL calc pkg: no `use`
+    // at all — the path roots at the dep pkg name, walks the `pub mod
+    // math` tree, and reads THROUGH math's `pub use calc_host::{ PI }`
+    // re-export. The fq-FN twin rides
+    // `the_fully_qualified_module_path_needs_no_use` (driver tests,
+    // a synthetic dep); this pin holds the const lane end-to-end on
+    // the toolchain's own tree, fn beside const, with VM values.
+    let src = r#"
+entry fn main() -> nil {
+    Logger::new("fq").info(f"{calc::math::sqrt(4.0)} {calc::math::PI} {calc::math::E}");
+}
+"#;
+    let (lines, trap, _) = run_case(src, 1_000_000);
+    assert_eq!(trap, None);
+    assert_eq!(lines, vec!["2 3.141592653589793 2.718281828459045"]);
+}
+
+#[test]
 fn core_nan_const_is_name_explicit() {
     // `NAN` is core's one const: name-explicit — `use
     // core::{NAN}` — f64 bits materialized with `ConstRaw`; NaN

@@ -99,6 +99,11 @@ acceptance):
   `GET /rut.wasm`, the todolist page mounts into `#app` after the glue
   instantiates. Over a tunnel that is a few seconds — poll/snapshot
   again instead of declaring the page broken on the first empty tree.
+  The playground's STD is async too: the page renders std-less first,
+  then fetches the nine std zips from jsDelivr at a pinned commit sha
+  into an in-memory store (`demo/src/lsp/std-pins.ts` names the pins)
+  — completion/check light up when the deps panel says `mounted`, so
+  wait for that row before judging a `use pouch::{` probe.
 - Live demo lanes (rf. the READMEs): `demo/scripts/dev-channel.mjs`
   and `examples/05-todolist-web/scripts/dev-channel.mjs` serve the page
   on localhost and print a throwaway

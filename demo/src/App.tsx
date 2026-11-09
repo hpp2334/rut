@@ -3,10 +3,22 @@ import { CASES, DEFAULT_BUDGET, ENABLED_FUEL_DEFAULT, type RutCase } from "./cas
 import { EXAMPLES } from "./examples";
 import { BUILD_WASM_COMMAND, Runner } from "./runner";
 import { CaseList, type CaseGroup } from "./components/CaseList";
+import { DepsPanel, type DepRowView } from "./components/DepsPanel";
 import { Editor, type Highlight } from "./components/Editor";
 import { Panes, type PaneData } from "./components/Panes";
 import { StatusBar } from "./components/StatusBar";
-import { PLAYGROUND_DOC, RutLsp, decodeTokens } from "./lsp/rut-lsp";
+import { PLAYGROUND_DOC, RutLsp, decodeTokens, isEnvelope } from "./lsp/rut-lsp";
+import {
+  LOCK_PATH,
+  MANIFEST_PATH,
+  MemoryEnv,
+  WORKSPACE_ROOT,
+  renderLockText,
+  renderManifestText,
+  sha256Hex,
+  type LockRow,
+} from "./lsp/store-env";
+import { STD_PINS } from "./lsp/std-pins";
 import { buildOverlayCached, type OverlayCache } from "./lsp/overlay";
 import type { CompileResult, Diag, RunResult } from "./wasm/rut-api";
 
@@ -16,6 +28,13 @@ const EMPTY_PANES: PaneData = { output: [], irDump: "" };
  * auto-run. 120 ms: the analyze is 0.1 ms at case sizes, the budget is
  * all human patience; the number is the catch-up record, not a gate. */
 const ANALYZE_DEBOUNCE_MS = 120;
+/** the dep-walk debounce — the crate's `depEngine` default mirrored.
+ * The demo runs its own resolve lane (not `depEngine`) because the
+ * panel reads the walk's ANSWER (`WalkOut.missing` drives the per-dep
+ * status rows); the engine's discipline (debounce + one-run-in-flight
+ * + rerun-once-if-stirred) is the same law, the answer just lands in
+ * state instead of being dropped. */
+const RESOLVE_DEBOUNCE_MS = 250;
 /** the D-1 auto-run stance: case switches and the edit lane run at the
  * host's explicit WATCHDOG slice — the mechanism default is OFF, but
  * `rut_run` is a synchronous main-thread wasm call, so an uncapped
@@ -75,6 +94,17 @@ function LspError(props: { detail: string }): JSX.Element {
   );
 }
 
+/** the virtual world's initial declaration: the nine std zips as url
+ * rows (the `rut new` scaffold shape — std rides the dep lane, nothing
+ * ambient beyond `core`), pinned by the lock the walk reads */
+function initialDepRows(): Array<{ name: string; url: string }> {
+  return STD_PINS.map((p) => ({ name: p.name, url: p.url }));
+}
+
+function initialLockRows(): LockRow[] {
+  return STD_PINS.map((p) => ({ pkg: p.name, url: p.url, sha256: p.sha256 }));
+}
+
 export function App(): JSX.Element {
   const groups: CaseGroup[] = useMemo(
     () => [
@@ -114,6 +144,10 @@ export function App(): JSX.Element {
   );
   const [lspDetail, setLspDetail] = useState("");
   const [highlight, setHighlight] = useState<Highlight | null>(null);
+  /** the world version — every landed walk bumps it, and the analyze
+   * lane re-arms for the SAME source (a mounted dep changes the check
+   * lane's answer; the run lane never re-runs on it) */
+  const [worldTick, setWorldTick] = useState(0);
   /** the incremental overlay cache (the M-1 fix): untouched lines keep
    * their span-array identity across analyzes */
   const overlayCache = useRef<OverlayCache | undefined>(undefined);
@@ -126,12 +160,42 @@ export function App(): JSX.Element {
   const sourceRef = useRef(source);
   sourceRef.current = source;
 
+  // ---- the virtual dep world (phase 5): the in-memory `$RUT_HOME` +
+  // workspace the walk reads; the manifest/lock/demo rows are demo
+  // state the env serves at their walked paths ----
+  const envRef = useRef<MemoryEnv | null>(null);
+  const manifestRowsRef = useRef(initialDepRows());
+  const lockRowsRef = useRef(initialLockRows());
+  /** the walk may only run once the std boot settles — a premature
+   * walk would refuse every row (the store is still empty) and the
+   * panel would blink nine honest-looking lies */
+  const walkReady = useRef(false);
+  const [depRows, setDepRows] = useState<DepRowView[]>(() =>
+    STD_PINS.map((p) => ({ name: p.name, url: p.url, sha256: p.sha256, status: "fetching", std: true })),
+  );
+  const [notices, setNotices] = useState<string[]>([]);
+  const [addState, setAddState] = useState<string | null>(null);
+  if (envRef.current === null) {
+    const env = new MemoryEnv();
+    env.onNotify = (message) => {
+      setNotices((prev) =>
+        prev.includes(message) ? prev : [...prev, message].slice(-8),
+      );
+    };
+    env.setFile(MANIFEST_PATH, renderManifestText(manifestRowsRef.current));
+    env.setFile(LOCK_PATH, renderLockText(lockRowsRef.current));
+    env.setFile(PLAYGROUND_DOC, CASES[0].source);
+    envRef.current = env;
+  }
+  const env = envRef.current;
+
   useEffect(() => {
     void Runner.boot().then(setRunner);
     // the binding boots ONCE per page (its arena/legend live for the
     // session); a failure is the visible error state, never a
-    // monochrome shrug
-    RutLsp.boot()
+    // monochrome shrug. The env rides `load`'s own lane — the walk's
+    // read-only capability is in place before the first resolve.
+    RutLsp.boot(undefined, env)
       .then((l) => {
         setLsp(l);
         setLspMode("live");
@@ -140,7 +204,188 @@ export function App(): JSX.Element {
         setLspDetail(err instanceof Error ? err.message : String(err));
         setLspMode("error");
       });
-  }, []);
+  }, [env]);
+
+  // ---- the resolve lane: debounce + one-run-in-flight +
+  // rerun-once-if-stirred (the crate's depEngine law), keeping the
+  // ANSWER — WalkOut.missing is the panel's per-dep truth ----
+  const resolveTimer = useRef<number | undefined>(undefined);
+  const resolveRunning = useRef(false);
+  const resolveRerun = useRef(false);
+
+  const runResolve = useCallback(async () => {
+    if (!lsp) return;
+    if (resolveRunning.current) {
+      resolveRerun.current = true; // a stir landed mid-run — ONE rerun
+      return;
+    }
+    resolveRunning.current = true;
+    try {
+      const manifestText = renderManifestText(manifestRowsRef.current);
+      const table = await lsp.parseManifest(manifestText);
+      if (isEnvelope(table)) {
+        setNotices((prev) =>
+          prev.includes(table.error) ? prev : [...prev, table.error].slice(-8),
+        );
+        return; // a broken manifest walks nothing — the hint stands
+      }
+      const out = await lsp.resolveDeps([WORKSPACE_ROOT]);
+      setDepRows((prev) =>
+        prev.map((r) => {
+          // a FAILED fetch keeps its own reason — the walk's refusal
+          // would only name the empty store beneath it
+          if (r.status === "failed") return r;
+          const missing = out.missing.find((m) => m.url === r.url);
+          if (missing === undefined) {
+            return { ...r, status: "mounted", note: undefined };
+          }
+          return {
+            ...r,
+            status: "refused",
+            note:
+              missing.sha256 === null
+                ? "no sha256 pin in rut.lock"
+                : "not in the store (or the pin does not verify)",
+          };
+        }),
+      );
+      // the world moved: re-analyze the standing source (the check
+      // lane's answer changed), never re-run it
+      immediateRunSrc.current = sourceRef.current;
+      setWorldTick((t) => t + 1);
+    } finally {
+      resolveRunning.current = false;
+      if (resolveRerun.current) {
+        resolveRerun.current = false;
+        stirResolveRef.current();
+      }
+    }
+  }, [lsp]);
+
+  const stirResolve = useCallback(
+    (delay: number = RESOLVE_DEBOUNCE_MS) => {
+      window.clearTimeout(resolveTimer.current);
+      resolveTimer.current = window.setTimeout(() => {
+        resolveTimer.current = undefined;
+        void runResolve();
+      }, delay);
+    },
+    [runResolve],
+  );
+  /** the debounced lane reads the LATEST stir at fire time */
+  const stirResolveRef = useRef(stirResolve);
+  stirResolveRef.current = stirResolve;
+
+  // ---- the std boot: fetch the nine zips from the CDN in parallel,
+  // verify each against the pin table, install into the virtual store
+  // — then (and only then) the first walk runs ----
+  useEffect(() => {
+    if (!lsp) return;
+    let cancelled = false;
+    void (async () => {
+      const settled = await Promise.all(
+        STD_PINS.map(async (pin) => {
+          try {
+            const res = await fetch(pin.url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const bytes = new Uint8Array(await res.arrayBuffer());
+            const sha = await sha256Hex(bytes);
+            if (sha !== pin.sha256) {
+              throw new Error(`sha256 mismatch (fetched ${sha.slice(0, 8)}…)`);
+            }
+            const name = await env.install(pin.url, bytes, pin.name);
+            return { pin, name, err: null as string | null };
+          } catch (err) {
+            return {
+              pin,
+              name: pin.name,
+              err: err instanceof Error ? err.message : String(err),
+            };
+          }
+        }),
+      );
+      if (cancelled) return;
+      setDepRows((prev) =>
+        prev.map((r) => {
+          const hit = settled.find((s) => s.pin.url === r.url);
+          if (hit === undefined) return r;
+          return hit.err === null
+            ? { ...r, name: hit.name, status: "installed" }
+            : { ...r, status: "failed", note: hit.err };
+        }),
+      );
+      walkReady.current = true;
+      stirResolve(0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lsp, env, stirResolve]);
+
+  // ---- the custom-dep lane: fetch a zip url, install it into the
+  // store, declare it (manifest row + lock row at the computed sha),
+  // and re-walk — exactly the `rut add`-shaped flow over the same
+  // read-only walk ----
+  const addCustomDep = useCallback(
+    (url: string) => {
+      if (!lsp) return;
+      setAddState(`fetching ${url}…`);
+      void (async () => {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          const fallback =
+            url.split("/").pop()?.replace(/\.zip$/, "") ?? "dep";
+          setAddState(`installing ${fallback}…`);
+          const name = await env.install(url, bytes, fallback);
+          const sha = await sha256Hex(bytes);
+          // declare: the manifest row (replacing any earlier row at
+          // the same url) + the lock pin. A name another row already
+          // mounted keeps its first mount (the walk's
+          // first-mount-wins law — the world serves the standing pin)
+          manifestRowsRef.current = [
+            ...manifestRowsRef.current.filter((r) => r.url !== url),
+            { name, url },
+          ];
+          lockRowsRef.current = [
+            ...lockRowsRef.current.filter((r) => r.url !== url),
+            { pkg: name, url, sha256: sha },
+          ];
+          env.setFile(MANIFEST_PATH, renderManifestText(manifestRowsRef.current));
+          env.setFile(LOCK_PATH, renderLockText(lockRowsRef.current));
+          setDepRows((prev) => [
+            ...prev.filter((r) => r.url !== url),
+            { name, url, sha256: sha, status: "installed", std: false },
+          ]);
+          setAddState(null);
+          stirResolve(0);
+        } catch (err) {
+          setAddState(null);
+          setDepRows((prev) => [
+            ...prev,
+            {
+              name: url.split("/").pop()?.replace(/\.zip$/, "") ?? url,
+              url,
+              sha256: null,
+              status: "failed",
+              note: err instanceof Error ? err.message : String(err),
+              std: false,
+            },
+          ]);
+        }
+      })();
+    },
+    [lsp, env, stirResolve],
+  );
+
+  // the doc IS the workspace entry: every buffer move (an edit or a
+  // case switch) lands in the env and stirs the walk, so the doc's
+  // defs row and the check lane ride the live text
+  useEffect(() => {
+    env.setFile(PLAYGROUND_DOC, source);
+    if (walkReady.current) stirResolve();
+  }, [source, env, stirResolve]);
 
   const applyCompileFailure = useCallback((diags: Diag[]) => {
     setPanes({ output: [], irDump: "", diags });
@@ -283,7 +528,7 @@ export function App(): JSX.Element {
       stale = true;
       window.clearTimeout(timer);
     };
-  }, [lsp, source]);
+  }, [lsp, source, worldTick]);
 
   const selectCase = useCallback(
     (c: RutCase) => {
@@ -335,10 +580,36 @@ export function App(): JSX.Element {
     [runner, budget, applyRun],
   );
 
+  /** the editor popup's query — the mounted world answers through the
+   * binding's `complete` (the doc-sync law: the live text rides) */
+  const requestCompletions = useCallback(
+    async (line: number, character: number, src: string) => {
+      if (!lsp) return [];
+      return lsp.complete(PLAYGROUND_DOC, line, character, src);
+    },
+    [lsp],
+  );
+
   const banner = useMemo(() => {
     if (!runner) return "booting…";
     return runner.state.mode === "wasm" ? runner.state.banner : "";
   }, [runner]);
+
+  /** the deps panel's status line — the boot lane's one honest sentence */
+  const depsStatusLine = useMemo(() => {
+    const fetching = depRows.filter((r) => r.status === "fetching").length;
+    const failed = depRows.filter((r) => r.status === "failed").length;
+    if (fetching > 0) {
+      return `std deps: fetching from CDN (${depRows.length - fetching}/${depRows.length})…`;
+    }
+    if (failed === depRows.length && depRows.length > 0) {
+      return "std deps: CDN fetch failed — the page runs std-less";
+    }
+    if (failed > 0) {
+      return `std deps: ${failed} fetch failed — the rest ride the dep lane`;
+    }
+    return "std deps: riding the dep lane (manifest + store + walk)";
+  }, [depRows]);
 
   if (runner && runner.state.mode === "error") {
     return <BootError banner={runner.state.banner} />;
@@ -363,12 +634,26 @@ export function App(): JSX.Element {
       {banner && <div className="banner">{banner}</div>}
 
       <main className="app-main">
-        <CaseList
-          groups={groups}
-          selectedId={currentCase.id}
-          onSelect={selectCase}
+        <div className="app-side">
+          <CaseList
+            groups={groups}
+            selectedId={currentCase.id}
+            onSelect={selectCase}
+          />
+          <DepsPanel
+            rows={depRows}
+            statusLine={depsStatusLine}
+            notices={notices}
+            onAdd={addCustomDep}
+            addState={addState}
+          />
+        </div>
+        <Editor
+          value={source}
+          onChange={editSource}
+          highlight={highlight}
+          completions={requestCompletions}
         />
-        <Editor value={source} onChange={editSource} highlight={highlight} />
         <Panes data={panes} />
       </main>
 

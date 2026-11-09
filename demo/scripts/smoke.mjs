@@ -35,6 +35,13 @@
 //      ground truth through the shared decodeTokens, and the overlay
 //      builder (the exact paint path) reconstructing every source
 //      EXACTLY — the double-layer alignment law.
+//   7. THE DEP LANE (phase 5): the browser boot offline — the std zips
+//      read from the COMMITTED dist/std mirror, installed into the
+//      demo's own MemoryEnv (the virtual $RUT_HOME) exactly the way
+//      the page boots, the walk mounting them through the shipped
+//      binding; brace completion + the custom-dep lane + the check
+//      lane over the project doc, and the honest refusal for a
+//      declared-but-absent row.
 //
 // Exit 0 = every case really ran. Any failure exits 1 LOUD.
 'use strict';
@@ -446,8 +453,12 @@ if (!existsSync(LSP_ARTIFACT)) {
     ['tuple-errors', /^fn parse_u8\(s: str\) -> \(i32, str\) \{/, 'parse_u8', 'function'],
     ['closures-generics', /^fn map<T, U>\(v: Vec<T>, f: fn\(T\) -> U\) -> Vec<U> \{/, 'map', 'function'],
     ['ex-closures-generics', /fn sum\(xs: Vec<i32>\) -> i32 \{/, 'sum', 'function'],
-    // lowercase use imports classify function (imports by case)
-    ['ex-structs', /^use calc::\{ sqrt \};/, 'sqrt', 'function'],
+    // lowercase use imports classify function (imports by case); the
+    // calc restructure (the namespace death) made the import the
+    // MODULE `math` — still a lowercase leaf, so the import-by-case
+    // law classifies it function (the path HEAD `calc` is the
+    // namespace row; see the sieve census)
+    ['ex-structs', /^use calc::\{ math \};/, 'math', 'function'],
     ['ex-classes', /^use core::\{ panic \};/, 'panic', 'function'],
     // strings
     ['hello-format', /let name = "rut";/, '"rut"', 'string'],
@@ -543,6 +554,130 @@ if (!existsSync(LSP_ARTIFACT)) {
       JSON.stringify(lines[ln]),
     );
   }
+}
+
+// ---- 7. THE DEP LANE (phase 5): std rides the manifest+store+walk
+// through the demo's OWN pieces — MemoryEnv (the virtual `$RUT_HOME` +
+// workspace), the std pin table, the rendered manifest/lock — over the
+// SHIPPED public/rut-lsp.wasm, offline: the zips come from the
+// COMMITTED dist/std mirror (the same bytes the CDN serves at the
+// pinned sha), installed exactly the way the browser boots. ----
+
+console.log('\n[7] the dep lane: CDN-shaped boot over the virtual store (offline mirror)');
+
+{
+  const REPO = join(DEMO, '..');
+  const readZip = (n) => exactAB(readFileSync(join(REPO, 'dist', 'std', `${n}.zip`)));
+
+  // the browser boot, offline: install pouch (a std row) + myhost (a
+  // custom-dep shape — a committed zip OUTSIDE the pin table)
+  const env = new api.MemoryEnv();
+  const notes = [];
+  env.onNotify = (m) => notes.push(m);
+  const manifestRows = [];
+  const lockRows = [];
+  for (const pin of api.STD_PINS.filter((p) => p.name === 'pouch')) {
+    const bytes = readZip(pin.name);
+    check(
+      (await api.sha256Hex(bytes)) === pin.sha256,
+      `${pin.name}: the committed mirror hashes to the baked pin`,
+    );
+    const name = await env.install(pin.url, bytes, pin.name);
+    manifestRows.push({ name, url: pin.url });
+    lockRows.push({ pkg: name, url: pin.url, sha256: pin.sha256 });
+    check(
+      env.read(`${api.storeDir(name, pin.sha256)}/meta.json`) !== null,
+      `${pin.name}: the store address is <name>@<sha256[:16]> with a vouching meta`,
+    );
+  }
+  const myhostUrl = 'https://cdn.jsdelivr.net/gh/hpp2334/rut/example/myhost.zip';
+  const myhostBytes = readZip('myhost');
+  const myhostSha = await api.sha256Hex(myhostBytes);
+  const myhostName = await env.install(myhostUrl, myhostBytes, 'myhost');
+  check(myhostName === 'myhost', 'the custom dep names itself off its own manifest', myhostName);
+  manifestRows.push({ name: myhostName, url: myhostUrl });
+  lockRows.push({ pkg: myhostName, url: myhostUrl, sha256: myhostSha });
+  // a declared row whose store entry never landed: the honest refusal
+  const ghostUrl = 'https://cdn.jsdelivr.net/gh/hpp2334/rut/example/ghost.zip';
+  manifestRows.push({ name: 'ghost', url: ghostUrl });
+  lockRows.push({ pkg: 'ghost', url: ghostUrl, sha256: myhostSha });
+
+  env.setFile(api.MANIFEST_PATH, api.renderManifestText(manifestRows));
+  env.setFile(api.LOCK_PATH, api.renderLockText(lockRows));
+  env.setFile(api.PLAYGROUND_DOC, 'entry fn main() {\n}\n');
+
+  const dep = await api.RutLsp.boot(async () => exactAB(readFileSync(LSP_ARTIFACT)), env);
+  const table = await dep.parseManifest(api.renderManifestText(manifestRows));
+  check(!table.error, 'the rendered manifest parses', JSON.stringify(table));
+  const wout = await dep.resolveDeps(['/playground']);
+  check(
+    !wout.error && wout.missing.length === 1 && wout.missing[0].url === ghostUrl,
+    'the walk mounts the store rows and refuses exactly the absent one',
+    JSON.stringify(wout),
+  );
+  check(
+    notes.some((n) => n.includes("dep 'ghost'")),
+    'the refusal hints once through the notify lane',
+    JSON.stringify(notes),
+  );
+
+  // the mounted world answers through the project doc — the uri spelled
+  // the walk's origin way, so the doc rides its (pkg, mod-path) stamp
+  const brace = 'use pouch::{\nentry fn main() {\n}\n';
+  const items = await dep.complete(api.PLAYGROUND_DOC, 0, 'use pouch::{'.length, brace);
+  check(
+    items.some((i) => i.label === 'Vec'),
+    "the mounted pouch answers `use pouch::{ ⏐` with Vec",
+    JSON.stringify(items.map((i) => i.label)),
+  );
+  const hostItems = await dep.complete(
+    api.PLAYGROUND_DOC,
+    0,
+    'use myhost::{'.length,
+    'use myhost::{\nentry fn main() {\n}\n',
+  );
+  check(
+    hostItems.some((i) => i.label === 'legacy_ping'),
+    'the CUSTOM dep (myhost) mounts and completes its own rows',
+    JSON.stringify(hostItems.map((i) => i.label)),
+  );
+  check(
+    hostItems.some((i) => i.label === 'net'),
+    'the custom dep completes its MOD TREE child (the Decl-flavor walk)',
+    JSON.stringify(hostItems.map((i) => i.label)),
+  );
+
+  // the custom dep CHECKS too (the host mod tree lowers — not inert):
+  // a use of its flat row compiles clean over the mounted world
+  const hostUse = await dep.analyze(
+    api.PLAYGROUND_DOC,
+    'use myhost::{ legacy_ping };\nentry fn main() {\n    let ok = legacy_ping();\n}\n',
+  );
+  check(
+    hostUse.diags.length === 0,
+    'the custom host dep type-checks through the mounted tree',
+    JSON.stringify(hostUse.diags.map((d) => d.message)),
+  );
+
+  // the check lane lights for the project doc: a type error squiggles
+  // (parse-only would stay silent — the walk's stamp is the difference)
+  const bad = 'use pouch::{ Vec };\nentry fn main() {\n    let x = 1 + "nope";\n}\n';
+  const a = await dep.analyze(api.PLAYGROUND_DOC, bad);
+  check(
+    a.diags.some((d) => d.message.includes('operands must have equal width')),
+    'the doc compiles against the mounted world — a type error squiggles',
+    JSON.stringify(a.diags.map((d) => d.message)),
+  );
+  // and the happy path: the same doc over a clean use carries NO check diag
+  const clean = await dep.analyze(
+    api.PLAYGROUND_DOC,
+    'use pouch::{ Vec };\nentry fn main() {\n    let v: Vec<i32> = Vec::new();\n    v.push(1);\n}\n',
+  );
+  check(
+    clean.diags.length === 0,
+    'a clean doc over the mounted world carries zero diagnostics',
+    JSON.stringify(clean.diags.map((d) => d.message)),
+  );
 }
 
 // ---- verdict ----

@@ -199,9 +199,17 @@ impl Core {
     /// the walk's named-dep index lane: index one dep source
     /// file under its module NAME (replace-by-origin), the
     /// direct-dep marker stamped from the set the way it is
-    /// at this call.
-    pub(crate) fn add_def_named_at(&mut self, uri: &str, name: &str, src: &str) {
-        let mut idx = crate::deps::index_dep(name, uri, src, &[]);
+    /// at this call, and the manifest's `consts` riding the row
+    /// (the check lane's Manifest threading — `&[]` for the
+    /// host-indexed files, which carry no manifest).
+    pub(crate) fn add_def_named_at(
+        &mut self,
+        uri: &str,
+        name: &str,
+        src: &str,
+        consts: &[(String, f64)],
+    ) {
+        let mut idx = crate::deps::index_dep(name, uri, src, consts);
         idx.direct_dep = self.direct_deps.contains(name);
         self.replace_by_origin(uri, idx);
     }
@@ -210,15 +218,16 @@ impl Core {
     /// file at a MOD PATH (the pkg root `""`, a mounted child its
     /// `<path>`), answering the parsed file's own `mod` declarations —
     /// the walk's next hop (structure lives in the parse, never in
-    /// path munging).
+    /// path munging). The consts ride the pkg-ROOT stamp only.
     pub(crate) fn add_def_mod_at(
         &mut self,
         uri: &str,
         name: &str,
         mod_path: &str,
         src: &str,
+        consts: &[(String, f64)],
     ) -> Vec<wire::ModDecl> {
-        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, &[]);
+        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, consts);
         idx.direct_dep = self.direct_deps.contains(name);
         let decls: Vec<wire::ModDecl> = idx
             .mods

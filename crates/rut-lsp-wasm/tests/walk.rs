@@ -1162,6 +1162,106 @@ const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/st
 /// self-consistent only — readers never re-hash (meta vouches the pin)
 const POUCH_PIN: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
 
+/// THE FULL STD WORLD (the playground's own shape): all nine source
+/// zips declared + pinned + store-mounted at once. The pinning law
+/// this gate owns: the check lane must keep answering through a world
+/// that carries `calc` — `math.rut`'s `pub use calc_host::{ PI, .. }`
+/// resolves against calc_host's manifest CONSTS, and without the
+/// consts threading those fourteen unknown-import errors stamp
+/// `calc/math` and eat every one of the doc's own diags (foreign
+/// squiggles skip by law, and the graph stops at the failing pkg).
+const NINE_STD: &[(&str, &[u8])] = &[
+    ("calc", include_bytes!("../../../dist/std/calc.zip")),
+    ("flow", include_bytes!("../../../dist/std/flow.zip")),
+    ("futures", include_bytes!("../../../dist/std/futures.zip")),
+    ("http", include_bytes!("../../../dist/std/http.zip")),
+    ("ink", include_bytes!("../../../dist/std/ink.zip")),
+    ("json", include_bytes!("../../../dist/std/json.zip")),
+    ("nmapset", include_bytes!("../../../dist/std/nmapset.zip")),
+    ("pouch", include_bytes!("../../../dist/std/pouch.zip")),
+    ("strbuild", include_bytes!("../../../dist/std/strbuild.zip")),
+];
+/// one made-up pin the nine ride (distinct per name — the address is
+/// `<name>@<pin16>`; readers never re-hash, meta vouches)
+fn nine_pin(name: &str) -> String {
+    let salt = name.len();
+    (0..64)
+        .map(|i| char::from_digit(((i * 7 + salt * 13) % 16) as u32, 16).expect("hex digit"))
+        .collect()
+}
+
+#[test]
+fn the_full_std_world_keeps_the_check_lane_alive() {
+    let ws = scratch("nine");
+    let home = ws.join("store");
+    let proj = ws.join("proj");
+    let url = |n: &str| format!("https://cdn.example/rut/dist/std/{n}.zip");
+    let lock = rut_driver::render_lock(&rut_driver::LockFile::from_rows(
+        NINE_STD
+            .iter()
+            .map(|(n, _)| rut_driver::LockRow {
+                pkg: (*n).to_string(),
+                url: url(n),
+                sha256: nine_pin(n),
+            })
+            .collect(),
+    ))
+    .to_string();
+    let deps = format!(
+        "{{{}}}",
+        NINE_STD
+            .iter()
+            .map(|(n, _)| format!("\"{n}\": {{\"url\": \"{}\"}}", url(n)))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    project(
+        &proj,
+        "playground",
+        Some(&lock),
+        &deps,
+        "entry fn main() {\n}\n",
+    );
+    for (n, zip) in NINE_STD {
+        let dir = store_dep(&home, n, &nine_pin(n), &url(n));
+        for (rel, bytes) in rut_driver::bundle::read_srczip(zip).expect("the std zip unpacks") {
+            let p = dir.join(rut_driver::UNPACK_DIR).join(&rel);
+            std::fs::create_dir_all(p.parent().expect("a parent")).expect("the parent creates");
+            std::fs::write(p, bytes).expect("the file writes");
+        }
+    }
+
+    let (lsp, mut pool, io) = boot(&home);
+    let out = resolve(&lsp, &mut pool, &[proj.to_str().unwrap()]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+    assert_eq!(io.notes.borrow().len(), 0, "{:?}", io.notes.borrow());
+
+    // the doc IS the project's entry (the uri the walk's origin stamps)
+    // — the check lane compiles it against the whole mounted world
+    let uri = proj.join("src/mod.rut").to_str().unwrap().to_string();
+    // (a) the doc's own type error surfaces — the consts threading
+    // keeps calc's re-exports from eating it
+    let bad = "entry fn main() {\n    let x = 1 + \"nope\";\n}\n";
+    let a = take(pool.run_until(lsp.analyze(uri.clone(), bad.to_string())));
+    assert!(
+        a["diags"].as_array().unwrap().iter().any(|d| d["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("equal width")),
+        "the doc's own diag surfaces through the calc-carrying world: {a}"
+    );
+    // (b) the std caller forms check clean: the use-bound module path
+    // (`math::sqrt` / `math::PI` through the pub-use re-export) and a
+    // plain std use, over the SAME store-mounted world
+    let used = "use calc::{ math };\nuse ink::{ Logger };\nuse pouch::{ Vec };\nentry fn main() {\n    let log = Logger(\"w\");\n    log.info(f\"{math::sqrt(4.0)} {math::PI}\");\n    let v: Vec<i32> = Vec::new();\n    v.push(1);\n}\n";
+    let a = take(pool.run_until(lsp.analyze(uri, used.to_string())));
+    assert_eq!(
+        a["diags"].as_array().unwrap().len(),
+        0,
+        "the std caller forms check clean: {a}"
+    );
+}
+
 #[test]
 fn a_std_zip_store_dep_mounts_the_pouch_surface() {
     let ws = scratch("pouch");
@@ -1210,6 +1310,93 @@ fn a_std_zip_store_dep_mounts_the_pouch_surface() {
         targets.iter().all(|u| u.starts_with(&prefix)),
         "definitions land under the store's unpack tree: {targets:?}"
     );
+}
+
+/// the HOST flavor of the same transport: a `type = "host"` pkg whose
+/// surface is a MOD TREE (the myhost shape — `pub mod net;` in the
+/// root `.d.rut`, children in `NAME/mod.d.rut`, recursively). The
+/// walk mounts the tree Decl-flavored (the loader's own law): the rows
+/// complete, the surface really type-checks (a host tree that never
+/// mounts its children lowers inert — the check lane then squiggles
+/// `cannot resolve` on a dep the editor demonstrably serves; the
+/// playground's custom-dep lane found exactly that), and F12 lands in
+/// the real child files.
+const MYHOST_ZIP: &[u8] = include_bytes!("../../../dist/std/myhost.zip");
+const MYHOST_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v16/dist/std/myhost.zip";
+/// self-consistent only — readers never re-hash (meta vouches the pin)
+const MYHOST_PIN: &str = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+
+#[test]
+fn a_std_zip_store_dep_mounts_the_host_mod_tree() {
+    let ws = scratch("myhost");
+    let home = ws.join("store");
+    let proj = ws.join("proj");
+    project(
+        &proj,
+        "walkapp",
+        Some(&lock_text(vec![("myhost", MYHOST_URL, MYHOST_PIN)])),
+        &format!("{{\"myhost\": {{\"url\": \"{MYHOST_URL}\"}}}}"),
+        "fn main() -> nil {\n}\n",
+    );
+    let dir = store_dep(&home, "myhost", MYHOST_PIN, MYHOST_URL);
+    for (rel, bytes) in rut_driver::bundle::read_srczip(MYHOST_ZIP).expect("the myhost zip unpacks")
+    {
+        let p = dir.join(rut_driver::UNPACK_DIR).join(&rel);
+        std::fs::create_dir_all(p.parent().expect("a parent")).expect("the parent creates");
+        std::fs::write(p, bytes).expect("the file writes");
+    }
+
+    let (lsp, mut pool, io) = boot(&home);
+    let out = resolve(&lsp, &mut pool, &[proj.to_str().unwrap()]);
+    assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
+    assert_eq!(io.notes.borrow().len(), 0, "{:?}", io.notes.borrow());
+
+    // the rows complete through the mounted tree — the flat row and
+    // the module child
+    let uri = "file:///ws/uses-myhost.rut".to_string();
+    let doc = "use myhost::\nfn main() -> nil {\n}\n";
+    take(pool.run_until(lsp.analyze(uri.clone(), doc.to_string())));
+    let items = take(pool.run_until(lsp.complete(uri, doc.to_string(), 0, 12)));
+    let labels: Vec<&str> = items
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["label"].as_str().unwrap())
+        .collect();
+    assert!(labels.contains(&"legacy_ping"), "{labels:?}");
+    assert!(labels.contains(&"net"), "{labels:?}");
+
+    // the check lane fires at the PROJECT's own entry (the doc's pkg
+    // context rides the walk's origin stamp): the host surface really
+    // type-checks — and the lane demonstrably ran, pinned by the
+    // positive squiggle on the next line
+    let entry_uri = proj.join("src/mod.rut").to_str().unwrap().to_string();
+    let used = "use myhost::{ legacy_ping };\nfn main() -> nil {\n    let ok = legacy_ping();\n}\n";
+    let a = take(pool.run_until(lsp.analyze(entry_uri.clone(), used.to_string())));
+    assert_eq!(
+        a["diags"].as_array().unwrap().len(),
+        0,
+        "the host surface type-checks through the mounted tree: {a}"
+    );
+    let bad = "fn main() -> nil {\n    let x = 1 + \"nope\";\n}\n";
+    let a = take(pool.run_until(lsp.analyze(entry_uri.clone(), bad.to_string())));
+    assert!(
+        a["diags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["message"].as_str().unwrap().contains("equal width")),
+        "the check lane demonstrably ran: {a}"
+    );
+
+    // F12 lands in the REAL child file of the mounted decl tree
+    let netdoc = "use myhost::net::{ connect };\nfn main() -> nil {\n}\n";
+    let targets = def_uris_at(&lsp, &mut pool, &entry_uri, netdoc, "connect");
+    let want = file_uri(walk_path(
+        &dir,
+        &format!("{}/src/net/{}", rut_driver::UNPACK_DIR, "mod.d.rut"),
+    ));
+    assert_eq!(targets, vec![want], "the net child lands at its own file");
 }
 
 /// the store-mounted mod tree feeds completion AND the segment hover

@@ -54,7 +54,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 body
             )));
         }
-        // the namespace mint renders like a class body: the consts as
+        // a dep's host surface renders like a class body: the consts as
         // fields, the module's fns as the method count
         TyForm::Class | TyForm::Struct | TyForm::HostStruct => {
             let mut body = String::new();

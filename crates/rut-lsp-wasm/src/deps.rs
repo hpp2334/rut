@@ -839,6 +839,9 @@ pub fn index_dep(name: &str, uri: &str, src: &str, consts: &[(String, f64)]) -> 
     // the parse mode rides the index — the definition layer's
     // body-over-decl preference reads it
     idx.mode = Some(rut_semantic::mode_of(uri));
+    // the raw rows ride the index (the check lane's Manifest threading);
+    // the minted completion rows ride `lets`
+    idx.consts = consts.to_vec();
     mint_pkg_rows(&mut idx, consts);
     idx
 }
