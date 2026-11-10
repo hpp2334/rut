@@ -131,6 +131,13 @@ export function isEnvelope(v: unknown): v is Envelope;
  * strings; the crate joins them with `/` and the host normalizes. The
  * grant is read-only by construction: no write, no delete, no fetch
  * exists on this interface.
+ *
+ * The one machinery addition is the OPTIONAL clock: `wakeAfter` arms
+ * the core's debounce window (plain `setTimeout` covers it) and hands
+ * back a `wake` that posts one identity-free tick into the core's own
+ * event loop — the host supplies power, the ACTOR owns every when.
+ * Absent means "no clock": every deferral degrades to eager, in-turn
+ * work. No business callback exists on this interface.
  */
 export interface HostEnv {
     /** one file's bytes — `null` on a miss, never a throw */
@@ -141,6 +148,12 @@ export interface HostEnv {
     isDir(path: string): boolean;
     /** the hint lane — a message for the user, error-flagged or not */
     notify(message: string, isError: boolean): void;
+    /**
+     * the clock — schedule `wake`'s call `ms` milliseconds out (plain
+     * `setTimeout` covers it). Machinery only: the core's deferred
+     * work arms it; the host never interprets a wake.
+     */
+    wakeAfter?(ms: number, wake: () => void): void;
 }
 
 /**
@@ -210,10 +223,11 @@ export class RutLsp {
   /**
    * Load the shipped artifact once (the glue's `init` is module-global).
    * The core prelude is already indexed by the constructor. `env` — the
-   * injected read-only host environment — is optional: when present it
-   * rides `set_env` before the handle returns (the dep walk's
-   * capability); when omitted the core stays env-less, exactly the
-   * shape every host boots today.
+   * injected read-only host environment (read/readDir/isDir/notify,
+   * plus the optional clock `wakeAfter`) — is optional: when present
+   * it rides `set_env` before the handle returns (the dep walk's
+   * capability, and the clock its deferred walks arm); when omitted
+   * the core stays env-less, exactly the shape every host boots today.
    */
   static load(bytes: Uint8Array | ArrayBuffer, env?: HostEnv): Promise<RutLsp>;
 
@@ -282,6 +296,20 @@ export class RutLsp {
    * in the core's defs store, exactly like `addDef`-indexed files.
    */
   resolveDeps(roots: string[]): Promise<WalkOut>;
+
+  /**
+   * stir the dep walk — the level-triggered door onto the same walk
+   * `resolveDeps` runs eagerly: the walk defers under the core's own
+   * debounce window (200ms, armed through the env's optional
+   * `wakeAfter` clock) and coalesces, so a burst of stirs walks once
+   * over the freshest roots. This promise resolves with the `WalkOut`
+   * once the deferred walk runs — the answer rides this call's own
+   * reply channel, no push lane exists. A stir superseded by a later
+   * one resolves `null` (merged: the LAST stir's promise carries the
+   * world). No clock on the env ⇒ the walk runs eagerly in-turn,
+   * exactly `resolveDeps`.
+   */
+  stir(roots: string[]): Promise<WalkOut | null>;
 }
 
 /** one decoded semantic token — absolute 0-based LSP coordinates */

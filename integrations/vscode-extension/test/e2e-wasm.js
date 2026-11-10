@@ -2203,6 +2203,42 @@ async function main() {
             assert.strictEqual(runs, 3, 'a disposed engine never runs again');
             smokes++;
         }
+
+        // ---- phase 2's stir smoke: the ACTOR-owned scheduling — the
+        // env's one machinery capability is a dumb clock (`wakeAfter`
+        // = plain setTimeout), the loop defers + coalesces + wakes
+        // ITSELF through its own inbox; `stir`'s promise resolves with
+        // the WalkOut once the deferred walk runs (REAL Node timers).
+        // The dep engine above still passes — phase 3 deletes it. ----
+        {
+            const clockRut = await RutLsp.load(fs.readFileSync(WASM_PATH), {
+                ...fakeEnv,
+                wakeAfter: (ms, wake) => setTimeout(wake, ms),
+            });
+            const t0 = Date.now();
+            const out = await clockRut.stir(['/ws/walkproj']);
+            const waited = Date.now() - t0;
+            assert.ok(waited >= 150, `the stir defers under the window (took ${waited}ms)`);
+            // the WalkOut envelope over the SAME world the eager door
+            // walked: the gone dep refused, the store dep MOUNTED
+            assert.strictEqual(out.missing.length, 1, JSON.stringify(out));
+            assert.strictEqual(out.missing[0].url, GONE_URL);
+            const sdoc = 'use kit::{ KitBox };\nfn main() -> nil {\n}\n';
+            const suri = 'file:///ws/e2e-stir.rut';
+            const sa = await clockRut.analyze(suri, sdoc);
+            assert.strictEqual(sa.diags.length, 0, JSON.stringify(sa.diags));
+            const slocs = await clockRut.definition(suri, ...posOf(sdoc, 'KitBox'));
+            assert.strictEqual(slocs.length, 1, JSON.stringify(slocs));
+            assert.ok(slocs[0].uri === `${KIT_DIR}/unpack/src/mod.rut`, slocs[0].uri);
+            // coalescing through the ABI: the first stir of a burst is
+            // superseded (`null` — merged), the LAST carries the world
+            const p1 = clockRut.stir(['/ws/walkproj']);
+            const p2 = clockRut.stir(['/ws/walkproj']);
+            assert.strictEqual(await p1, null, 'the superseded stir merges');
+            const out2 = await p2;
+            assert.strictEqual(out2.missing.length, 1, JSON.stringify(out2));
+            smokes++;
+        }
     }
 
     // ---- the ABI wire shape (the .d.ts contract's runtime half) ----
@@ -2379,7 +2415,8 @@ async function main() {
             `eof-member+locals/` +
             `complete-doc-sync/check-lane-mismatch+missing-field/` +
             `env-injected+env-less/` +
-            `dep-walk-store-mount+missing-row+once-hint/dep-engine-debounce+rerun+dispose/wire-shape) ` +
+            `dep-walk-store-mount+missing-row+once-hint/dep-engine-debounce+rerun+dispose/` +
+            `stir-clock+coalesce/wire-shape) ` +
             `through bin/rut-lsp.wasm`,
     );
 }

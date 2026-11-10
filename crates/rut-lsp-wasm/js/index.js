@@ -41,9 +41,11 @@ export class RutLsp {
    * second call reuses the instantiated module.
    *
    * `env` — the injected READ-ONLY host environment (`HostEnv`: read /
-   * readDir / isDir / notify) — is optional: when present it rides
+   * readDir / isDir / notify, plus the OPTIONAL clock `wakeAfter`) —
+   * is optional: when present it rides
    * `set_env` right after the constructor (the capability the core's
-   * dep walk reads); when omitted the core stays env-less, exactly the
+   * dep walk reads, and the clock its deferred walks arm); when
+   * omitted the core stays env-less, exactly the
    * shape every host boots today.
    *
    * @param {Uint8Array | ArrayBuffer} bytes the `rut-lsp.wasm` artifact
@@ -141,12 +143,33 @@ export class RutLsp {
 
   /**
    * re-inject the read-only host environment (replace-on-reinject —
-   * the same lane `load`'s optional `env` rides, for hosts that swap
-   * the capability after boot)
+   * the same lane {@link RutLsp.load}'s optional `env` rides, for
+   * hosts that swap the capability after boot)
    * @param {HostEnv} env
    */
   async setEnv(env) {
     await this.lsp.set_env(env);
+  }
+
+  /**
+   * stir the dep walk — the level-triggered door onto the same walk
+   * `resolveDeps` runs eagerly: the walk DEFERS under the core's own
+   * 200ms debounce window (armed through the env's optional
+   * `wakeAfter` clock — plain `setTimeout` covers it) and COALESCES,
+   * so a burst of stirs walks once over the freshest roots.
+   *
+   * The returned promise resolves with the `WalkOut` once the
+   * deferred walk runs — the answer rides THIS call's own reply
+   * channel, no push lane exists. A stir superseded by a later one
+   * resolves `null` (merged: the LAST stir's promise carries the
+   * world). No `wakeAfter` on the env ⇒ the walk runs eagerly
+   * in-turn, exactly `resolveDeps`.
+   *
+   * @param {string[]} roots
+   * @returns {Promise<WalkOut | null>}
+   */
+  async stir(roots) {
+    return JSON.parse(await this.lsp.stir(JSON.stringify(roots)));
   }
 
   /**

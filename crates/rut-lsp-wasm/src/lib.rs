@@ -23,7 +23,9 @@
 //!   set_env(env)                               hand the core the READ-ONLY
 //!                                              host environment (`HostEnv`:
 //!                                              read/readDir/isDir/notify,
-//!                                              see `env`) — the dep walk's
+//!                                              plus the OPTIONAL clock
+//!                                              `wakeAfter` — see `env`)
+//!                                              — the dep walk's
 //!                                              capability
 //!   resolve_deps(roots_json) -> String         the READ-ONLY dep walk over
 //!                                              the injected env: one JSON
@@ -34,7 +36,17 @@
 //!                                              hosts) out; every mounted dep
 //!                                              lands in the SAME defs store
 //!                                              the add_def lanes write (see
-//!                                              `walk`)
+//!                                              `walk`) — the EAGER manual
+//!                                              door
+//!   stir(roots_json) -> String                 STIR the dep walk — the
+//!                                              level-triggered door: the
+//!                                              walk defers under the loop's
+//!                                              own 200ms window (the env's
+//!                                              optional `wakeAfter` clock)
+//!                                              and coalesces; the promise
+//!                                              carries the WalkOut once the
+//!                                              walk runs (`null` when a
+//!                                              later stir supersedes it)
 //!   legend() -> String                         token-type names, JSON array
 //!   analyze(uri, src) -> String                store the doc + return
 //!                                              {diags, tokens, symbols}
@@ -77,8 +89,8 @@
 //! queries above; the workspace-scan push (`add_def`/`add_def_mod`/
 //! `parse_manifest` — the host's `findFiles` sees editor ignore
 //! semantics the env cannot); and the dep pull (`set_env` +
-//! `resolve_deps`). NO entry mutates dep state except through the
-//! injected env — the lock feed, the direct-dep stamp, and the named
+//! `resolve_deps`/`stir`). NO entry mutates dep state except through
+//! the injected env — the lock feed, the direct-dep stamp, and the named
 //! index lanes are SessionState internals the walk drives, not messages. The
 //! old push family (`set_lock`, `set_direct_deps`, `add_def_named`,
 //! `add_bundle`, `extract_bundle`, `extract_srczip`, `doc_len`) lived
@@ -153,6 +165,13 @@ struct SessionState {
     /// itself exactly once per session (never spam, however often the
     /// world re-walks). The extension's `hintOnce` map, moved in.
     hints_shown: HashSet<String>,
+    /// the walk lane's coalescing state — the OUTSTANDING deferred
+    /// walk's [`event_loop::DeferTask`] handle, moved in from the JS
+    /// dep engine's flags (D1: policy lives in the `Cmd::Stir` arm,
+    /// the defer queue stays neutral). `None` = no walk queued; a
+    /// STALE handle (its walk already fired) is harmless —
+    /// `cancel_defer` answers `None` for it.
+    walk_task: Option<event_loop::DeferTask>,
 }
 
 impl SessionState {
@@ -169,6 +188,7 @@ impl SessionState {
             lock_pins: BTreeMap::new(),
             direct_deps: HashSet::new(),
             hints_shown: HashSet::new(),
+            walk_task: None,
         }
     }
 
@@ -344,7 +364,9 @@ impl RutLsp {
     async fn text(&self, build: impl FnOnce(event_loop::Tx) -> event_loop::Msg) -> String {
         match self.rpc(build).await {
             Ok(event_loop::Reply::Text(s)) => s,
-            Ok(_) => "null".to_string(), // unreachable: these arms answer Text
+            // a void completion (a superseded stir answers Done — its
+            // WalkOut merged into the later stir's promise)
+            Ok(_) => "null".to_string(),
             Err(_) => event_loop::loop_gone(),
         }
     }
@@ -540,6 +562,27 @@ impl RutLsp {
             .await
     }
 
+    /// STIR the dep walk — the level-triggered door onto the same walk
+    /// [`resolve_deps`](Self::resolve_deps) runs eagerly: the walk
+    /// DEFERS under the loop's own debounce window (200ms, armed
+    /// through the env's optional `wakeAfter` clock — see
+    /// [`env::Io::arm_wake`]) and COALESCES, so a burst of stirs walks
+    /// once over the freshest roots (a superseded stir's promise
+    /// answers `null` — merged, not lost; the LAST stir's promise
+    /// carries the world). The promise resolves with the walk's
+    /// `WalkOut` envelope once the deferred walk runs — the answer
+    /// rides this RPC's own reply channel, no push lane exists. No
+    /// clock on the env ⇒ the walk runs eagerly in-turn (D3), exactly
+    /// the eager door.
+    pub async fn stir(&self, roots_json: String) -> String {
+        let roots = match serde_json::from_str::<Vec<String>>(&roots_json) {
+            Ok(r) => r,
+            Err(e) => return json_envelope(wire::Error::new(e.to_string())),
+        };
+        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::Stir { roots, tx }))
+            .await
+    }
+
     /// index one dep source file under its module NAME at a MOD PATH —
     /// the mod-aware twin of `add_def_named` (the dep walk's per-file
     /// move for a mod-carrying package: the root at `""`, each child at
@@ -586,8 +629,11 @@ impl RutLsp {
         use futures::task::LocalSpawnExt;
         let (tx, rx) = event_loop::pair();
         let pool = futures::executor::LocalPool::new();
+        // tx.clone() is the loop's SELF-ADDRESS — the wake source the
+        // SetEnv arm installs captures it (the clock's tick re-enters
+        // this loop), while `tx` moves to the host handle
         pool.spawner()
-            .spawn_local(event_loop::run(SessionState::boot(), rx))
+            .spawn_local(event_loop::run(SessionState::boot(), tx.clone(), rx))
             .expect("the loop parks on the fresh pool");
         (RutLsp { tx }, pool)
     }
