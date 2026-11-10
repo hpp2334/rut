@@ -179,23 +179,29 @@ order:
   there is no second shell.
 - **The read-only env law (dep lane)**: the extension injects a
   READ-ONLY fs capability (`src/env.ts` — sync `read`/`readDir`/
-  `isDir`/`notify` over `node:fs`; no write, no delete, no fetch
-  exists on the `HostEnv` contract in the crate's `js/index.d.ts`)
-  and the crate's event loop owns ALL dep logic — the walk
-  (`resolveDeps`) and its scheduler (`depEngine`) ship in the crate;
-  the extension's whole dep lane is watchers + `stir()`. Url deps
-  mount from the global store (`$RUT_HOME` — the wasm cannot read env
-  vars, so its store spelling arrives relative and the adapter anchors
-  it at the real home); a cold store is ONE hint per dep naming
-  `rut install` (the rust-analyzer contract). The extension writes
-  NOTHING, anywhere — a pure reader.
+  `isDir`/`notify` over `node:fs`, plus the optional clock
+  `wakeAfter` — plain `setTimeout`, the one machinery addition; no
+  write, no delete, no fetch, and no business callback exists on the
+  `HostEnv` contract in the crate's `js/index.d.ts` — toward the host
+  the actor only ever ANSWERS, there is no event push) and the
+  crate's event loop owns ALL dep logic — the walk and its scheduling
+  live in the ACTOR (`stir` posts `Cmd::Stir`; the clock is an
+  injected capability); the extension's whole dep lane is watchers +
+  `void rut.stir(roots).then(() => re-schedule analysis of open
+  docs)`. Url deps mount from the global store (`$RUT_HOME` — the
+  wasm cannot read env vars, so its store spelling arrives relative
+  and the adapter anchors it at the real home); a cold store is ONE
+  hint per dep naming `rut install` (the rust-analyzer contract).
+  The extension writes NOTHING, anywhere — a pure reader.
 - **The three-lane ABI law**: `crates/rut-lsp-wasm`'s public surface
   is exactly three lanes — the provider queries (`analyze`, `hover`,
   `complete` with src, definition/inlay/references/signature-help,
   `legend`, `forget`), the workspace-scan push (`addDef`/
   `addDefMod`/`parseManifest` — the host's `findFiles` respects
   editor ignore semantics the env cannot), and the dep pull
-  (`setEnv` + `resolveDeps`). No entry may bypass the env capability
+  (`setEnv` + `stir`, the deferred door the hosts ride;
+  `resolveDeps` stays as the eager manual door — tests, cold boot,
+  env-less hosts). No entry may bypass the env capability
   to mutate dep state: the old push family (`setLock`,
   `setDirectDeps`, `addDefNamed`, `addBundle`, `extractBundle`,
   `extractSrczip`, `docLen`, the stored-`complete` variant) is

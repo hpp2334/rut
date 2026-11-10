@@ -123,7 +123,7 @@ async function main() {
     }
     // the extension's own binding (the wasm crate's js face, bundled by
     // src/wasm.ts), not a copy
-    const { RutLsp, depEngine } = require(BINDING_PATH);
+    const { RutLsp } = require(BINDING_PATH);
     const rut = await RutLsp.load(fs.readFileSync(WASM_PATH));
     const bad = [];
     let smokes = 0;
@@ -2165,51 +2165,13 @@ async function main() {
         await expectStoreLeaf('core_tag', 'unpack/deps/kitcore@feed0123456789abc/src/mod.rut');
         smokes++;
 
-        // ---- the engine shell through the shipped wasm: debounce
-        // coalesces, a mid-run stir reruns ONCE, dispose retires ----
-        {
-            let runs = 0;
-            let stirredMidRun = false;
-            let engine;
-            const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-            engine = depEngine(rut, {
-                env: fakeEnv,
-                roots: () => {
-                    runs++;
-                    if (runs === 1 && !stirredMidRun) {
-                        stirredMidRun = true;
-                        engine.stir(); // lands while run 1 is in flight
-                    }
-                    return ['/ws/walkproj'];
-                },
-                debounceMs: 15,
-            });
-            engine.stir();
-            engine.stir();
-            engine.stir(); // the window coalesces: ONE run leaves it
-            await wait(140);
-            assert.strictEqual(
-                runs,
-                2,
-                `3 stirs coalesce to 1 run + the mid-run stir reruns exactly once (got ${runs})`,
-            );
-            // quiescent again: a fresh stir runs; dispose then kills it
-            engine.stir();
-            await wait(90);
-            assert.strictEqual(runs, 3, 'a post-quiescence stir runs');
-            engine.dispose();
-            engine.stir();
-            await wait(60);
-            assert.strictEqual(runs, 3, 'a disposed engine never runs again');
-            smokes++;
-        }
-
-        // ---- phase 2's stir smoke: the ACTOR-owned scheduling — the
-        // env's one machinery capability is a dumb clock (`wakeAfter`
-        // = plain setTimeout), the loop defers + coalesces + wakes
-        // ITSELF through its own inbox; `stir`'s promise resolves with
-        // the WalkOut once the deferred walk runs (REAL Node timers).
-        // The dep engine above still passes — phase 3 deletes it. ----
+        // ---- the stir lane through the shipped wasm: the ACTOR-owned
+        // scheduling — the env's one machinery capability is a dumb
+        // clock (`wakeAfter` = plain setTimeout), the loop defers +
+        // coalesces + wakes ITSELF through its own inbox; `stir`'s
+        // promise resolves with the WalkOut once the deferred walk runs
+        // (REAL Node timers). The depEngine shell this block once drove
+        // is deleted — the actor owns the when now. ----
         {
             const clockRut = await RutLsp.load(fs.readFileSync(WASM_PATH), {
                 ...fakeEnv,
@@ -2415,7 +2377,7 @@ async function main() {
             `eof-member+locals/` +
             `complete-doc-sync/check-lane-mismatch+missing-field/` +
             `env-injected+env-less/` +
-            `dep-walk-store-mount+missing-row+once-hint/dep-engine-debounce+rerun+dispose/` +
+            `dep-walk-store-mount+missing-row+once-hint/` +
             `stir-clock+coalesce/wire-shape) ` +
             `through bin/rut-lsp.wasm`,
     );

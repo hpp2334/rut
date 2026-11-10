@@ -7,9 +7,9 @@
  * extension. This module adds only what a browser needs on top: a
  * same-origin fetch of `public/rut-lsp.wasm`, the playground's own
  * document URI, and the dep-lane methods the deps panel drives
- * (`parseManifest` / `resolveDeps` — the walk reads the virtual
- * `$RUT_HOME` through the injected `HostEnv`, see `store-env.ts`). No
- * LSP shape is declared here.
+ * (`parseManifest` / `stir` — the walk reads the virtual `$RUT_HOME`
+ * through the injected `HostEnv`, see `store-env.ts`). No LSP shape
+ * is declared here.
  *
  * The artifact is built from crates/rut-lsp-wasm by `npm run build:wasm`
  * (the same command that builds rut-wasm). The module is CONSUMED here,
@@ -103,9 +103,19 @@ export class RutLsp {
     return this.core.parseManifest(text);
   }
 
-  /** the READ-ONLY dep walk: mounts the store's world into the defs
-   * store; the answer carries the refused url rows (the deps panel's
-   * per-dep status) */
+  /** stir the dep walk — the ACTOR-owned door: the walk defers under
+   * the core's own 200ms debounce window (the env's `wakeAfter` clock
+   * is the dumb timer) and coalesces, so a burst of stirs walks once
+   * over the freshest world. The promise resolves with the `WalkOut`
+   * once the walk runs — `null` when a later stir superseded this one
+   * (the LAST stir's promise carries the world) */
+  stir(roots: string[]) {
+    return this.core.stir(roots);
+  }
+
+  /** the READ-ONLY dep walk, eager: mounts the store's world into the
+   * defs store; the answer carries the refused url rows. The panel
+   * rides `stir` (the deferred door) — this is the manual lane */
   resolveDeps(roots: string[]) {
     return this.core.resolveDeps(roots);
   }

@@ -4,7 +4,9 @@
 // fast handler turn inside the wasm — it cannot await); a miss is
 // null/false, never a throw; `notify` rides the vscode message lane.
 // The grant is read-only by construction: no write, no delete, no
-// fetch exists here — the extension writes NOTHING anymore.
+// fetch exists here; the one addition is the CLOCK (`wakeAfter` —
+// plain setTimeout, machinery only, never a business callback) — the
+// extension writes NOTHING, anywhere.
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -60,5 +62,13 @@ export const hostEnv: HostEnv = {
             ? vscode.window.showErrorMessage(message)
             : vscode.window.showInformationMessage(message);
         void Promise.resolve(shown).catch(() => undefined);
+    },
+    // the clock — the ONE machinery addition: the core's deferred work
+    // (the dep walk's debounce window) arms through this. Plain
+    // `setTimeout`, nothing more: the host supplies power, the ACTOR
+    // owns every when — the wake posts an identity-free tick into the
+    // core's own event loop, never a callback into host business.
+    wakeAfter(ms, wake) {
+        setTimeout(wake, ms);
     },
 };

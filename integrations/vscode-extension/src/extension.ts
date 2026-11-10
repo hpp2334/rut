@@ -9,11 +9,12 @@
 // Layout: `constants` (the budgets) → `util` (byte reads, the hint
 // gate) → `mapping` (LSP JSON → vscode values), `providers` (the nine
 // language features), `workspace` (the fs scan), `env` (the read-only
-// host environment the crate's dep walk reads through) — this file is
-// the lifecycle that wires them: one long-lived `RutLsp` instance,
-// loaded once, shared by every closure below. The dep walk itself
-// lives IN the crate (`resolveDeps` + the crate-shipped `depEngine`);
-// the extension only injects the capability, watches, and stirs.
+// host environment the crate's dep walk reads through, clock included)
+// — this file is the lifecycle that wires them: one long-lived
+// `RutLsp` instance, loaded once, shared by every closure below. The
+// dep walk and its SCHEDULING live in the crate's actor (`stir`
+// defers under the core's own clock and coalesces); the extension only
+// injects the capability, watches, and stirs.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -33,7 +34,7 @@ import {
     registerTypeDefinition,
 } from './providers';
 import { analyzeDoc } from './util';
-import { depEngine, RutLsp } from './wasm';
+import { RutLsp } from './wasm';
 import { indexWorkspace } from './workspace';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -48,8 +49,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     const bytes = await fs.promises.readFile(wasmPath);
     // the bytes are the shipped artifact — an invalid/missing file fails
-    // init LOUDLY inside the binding, never a silent half-working state
-    const rut = await RutLsp.load(bytes);
+    // init LOUDLY inside the binding, never a silent half-working state.
+    // The env rides `load`'s own lane: the read-only capability (and the
+    // clock its deferred walks arm) is in place before the first stir.
+    const rut = await RutLsp.load(bytes, hostEnv);
     await registerAll(context, rut);
 }
 
@@ -118,23 +121,28 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
         registerSignatureHelp(rut),
     );
 
-    // the crate-shipped dep engine: debounce + one-run-in-flight +
-    // rerun-once-if-stirred over `resolveDeps` — the extension's whole
-    // dep lane. `roots` is re-read at every run (the folders the host
-    // sees NOW), and `env` re-injects the read-only capability before
-    // each run; the engine itself is a disposable the host retires.
-    const engine = depEngine(rut, {
-        env: hostEnv,
-        roots: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
-    });
-    subscriptions.push(engine);
+    // the dep stir lane — the extension's WHOLE dep lane: the actor
+    // owns the when (the walk defers under the core's own 200ms window
+    // and coalesces; the env's `wakeAfter` clock is the dumb timer
+    // behind it). When the promise resolves the dep world MOVED — open
+    // diagnostics may have changed, so every open doc re-schedules its
+    // analysis (a superseded stir resolves null; the later stir's own
+    // resolution re-schedules, so the refresh is never lost).
+    const stirDeps = (): void => {
+        const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+        void rut.stir(roots).then(() => {
+            for (const doc of vscode.workspace.textDocuments) {
+                schedule(doc);
+            }
+        });
+    };
 
     // the palette's manual re-index — the same lane activation and the
     // folder-change hook ride, on demand: covers watcher misses (a mount
     // a glob never saw, a walk that raced an edit)
     subscriptions.push(
         vscode.commands.registerCommand('rut.reindexDeps', () => {
-            engine.stir();
+            stirDeps();
         }),
     );
 
@@ -143,17 +151,18 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
     // walk rides after it: the crate's read-only walk mounts the root
     // manifests' rows (path dirs, store-mounted url deps) into the same
     // index, through the injected env.
-    watchDeps(context, rut, engine);
-    void indexWorkspace(rut).then(() => engine.stir());
+    watchDeps(context, rut, stirDeps);
+    void indexWorkspace(rut).then(() => stirDeps());
 }
 
 // `**/rut.jsonc` + `**/mod.rut` re-run the walk (a manifest landing or
 // a mod tree moving re-mounts it); a workspace-folder change restarts
 // the whole index (watchers re-arm over the new folder set, the scan +
-// engine stir re-run — re-indexing is replace-by-origin, so this is
+// the stir re-run — re-indexing is replace-by-origin, so this is
 // idempotent). The extension is a pure READER: no write feedback loops
-// exist anymore, so one debounce window is all the dynamics there are.
-function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, engine: { stir(): void }): void {
+// exist anymore, so the core's own debounce window is all the dynamics
+// there are.
+function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, stir: () => void): void {
     const watchers: vscode.Disposable[] = [];
     const watchFolder = (folder: vscode.WorkspaceFolder): void => {
         for (const pattern of [`**/${MANIFEST_NAME}`, '**/mod.rut']) {
@@ -162,9 +171,9 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, engine: { stir
             );
             watchers.push(
                 watcher,
-                watcher.onDidChange(() => engine.stir()),
-                watcher.onDidCreate(() => engine.stir()),
-                watcher.onDidDelete(() => engine.stir()),
+                watcher.onDidChange(() => stir()),
+                watcher.onDidCreate(() => stir()),
+                watcher.onDidDelete(() => stir()),
             );
         }
     };
@@ -181,7 +190,7 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, engine: { stir
     context.subscriptions.push(
         vscode.workspace.onDidChangeWorkspaceFolders(() => {
             rearm();
-            void indexWorkspace(rut).then(() => engine.stir());
+            void indexWorkspace(rut).then(() => stir());
         }),
         {
             dispose: () => {

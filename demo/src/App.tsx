@@ -28,13 +28,6 @@ const EMPTY_PANES: PaneData = { output: [], irDump: "" };
  * auto-run. 120 ms: the analyze is 0.1 ms at case sizes, the budget is
  * all human patience; the number is the catch-up record, not a gate. */
 const ANALYZE_DEBOUNCE_MS = 120;
-/** the dep-walk debounce — the crate's `depEngine` default mirrored.
- * The demo runs its own resolve lane (not `depEngine`) because the
- * panel reads the walk's ANSWER (`WalkOut.missing` drives the per-dep
- * status rows); the engine's discipline (debounce + one-run-in-flight
- * + rerun-once-if-stirred) is the same law, the answer just lands in
- * state instead of being dropped. */
-const RESOLVE_DEBOUNCE_MS = 250;
 /** the D-1 auto-run stance: case switches and the edit lane run at the
  * host's explicit WATCHDOG slice — the mechanism default is OFF, but
  * `rut_run` is a synchronous main-thread wasm call, so an uncapped
@@ -206,75 +199,55 @@ export function App(): JSX.Element {
       });
   }, [env]);
 
-  // ---- the resolve lane: debounce + one-run-in-flight +
-  // rerun-once-if-stirred (the crate's depEngine law), keeping the
-  // ANSWER — WalkOut.missing is the panel's per-dep truth ----
-  const resolveTimer = useRef<number | undefined>(undefined);
-  const resolveRunning = useRef(false);
-  const resolveRerun = useRef(false);
-
-  const runResolve = useCallback(async () => {
+  // ---- the walk lane: the ACTOR owns the WHEN — `stir` defers the
+  // walk under the core's own 200ms debounce window and coalesces (a
+  // burst walks once over the freshest world; the clock is the env's
+  // `wakeAfter`, an injected dumb timer). The promise IS the world
+  // event (D2): the resolved `WalkOut` drives the deps panel's rows
+  // and the world tick — `WalkOut.missing` is the panel's per-dep
+  // truth. `null` means a later stir superseded this one (its promise
+  // carries the world) — nothing to apply here ----
+  const walkWorld = useCallback(async () => {
     if (!lsp) return;
-    if (resolveRunning.current) {
-      resolveRerun.current = true; // a stir landed mid-run — ONE rerun
-      return;
-    }
-    resolveRunning.current = true;
-    try {
-      const manifestText = renderManifestText(manifestRowsRef.current);
-      const table = await lsp.parseManifest(manifestText);
-      if (isEnvelope(table)) {
-        setNotices((prev) =>
-          prev.includes(table.error) ? prev : [...prev, table.error].slice(-8),
-        );
-        return; // a broken manifest walks nothing — the hint stands
-      }
-      const out = await lsp.resolveDeps([WORKSPACE_ROOT]);
-      setDepRows((prev) =>
-        prev.map((r) => {
-          // a FAILED fetch keeps its own reason — the walk's refusal
-          // would only name the empty store beneath it
-          if (r.status === "failed") return r;
-          const missing = out.missing.find((m) => m.url === r.url);
-          if (missing === undefined) {
-            return { ...r, status: "mounted", note: undefined };
-          }
-          return {
-            ...r,
-            status: "refused",
-            note:
-              missing.sha256 === null
-                ? "no sha256 pin in rut.lock"
-                : "not in the store (or the pin does not verify)",
-          };
-        }),
+    // the panel surfaces manifest errors: the App renders the
+    // manifest text from its own rows, so a parse error is the
+    // renderer's bug — surfaced honestly, and nothing walks
+    const manifestText = renderManifestText(manifestRowsRef.current);
+    const table = await lsp.parseManifest(manifestText);
+    if (isEnvelope(table)) {
+      setNotices((prev) =>
+        prev.includes(table.error) ? prev : [...prev, table.error].slice(-8),
       );
-      // the world moved: re-analyze the standing source (the check
-      // lane's answer changed), never re-run it
-      immediateRunSrc.current = sourceRef.current;
-      setWorldTick((t) => t + 1);
-    } finally {
-      resolveRunning.current = false;
-      if (resolveRerun.current) {
-        resolveRerun.current = false;
-        stirResolveRef.current();
-      }
+      return; // a broken manifest walks nothing — the hint stands
     }
+    const out = await lsp.stir([WORKSPACE_ROOT]);
+    if (out === null || isEnvelope(out)) {
+      return; // superseded (the LAST stir's promise carries the world)
+    }
+    setDepRows((prev) =>
+      prev.map((r) => {
+        // a FAILED fetch keeps its own reason — the walk's refusal
+        // would only name the empty store beneath it
+        if (r.status === "failed") return r;
+        const missing = out.missing.find((m) => m.url === r.url);
+        if (missing === undefined) {
+          return { ...r, status: "mounted", note: undefined };
+        }
+        return {
+          ...r,
+          status: "refused",
+          note:
+            missing.sha256 === null
+              ? "no sha256 pin in rut.lock"
+              : "not in the store (or the pin does not verify)",
+        };
+      }),
+    );
+    // the world moved: re-analyze the standing source (the check
+    // lane's answer changed), never re-run it
+    immediateRunSrc.current = sourceRef.current;
+    setWorldTick((t) => t + 1);
   }, [lsp]);
-
-  const stirResolve = useCallback(
-    (delay: number = RESOLVE_DEBOUNCE_MS) => {
-      window.clearTimeout(resolveTimer.current);
-      resolveTimer.current = window.setTimeout(() => {
-        resolveTimer.current = undefined;
-        void runResolve();
-      }, delay);
-    },
-    [runResolve],
-  );
-  /** the debounced lane reads the LATEST stir at fire time */
-  const stirResolveRef = useRef(stirResolve);
-  stirResolveRef.current = stirResolve;
 
   // ---- the std boot: fetch the nine zips from the CDN in parallel,
   // verify each against the pin table, install into the virtual store
@@ -315,12 +288,12 @@ export function App(): JSX.Element {
         }),
       );
       walkReady.current = true;
-      stirResolve(0);
+      void walkWorld();
     })();
     return () => {
       cancelled = true;
     };
-  }, [lsp, env, stirResolve]);
+  }, [lsp, env, walkWorld]);
 
   // ---- the custom-dep lane: fetch a zip url, install it into the
   // store, declare it (manifest row + lock row at the computed sha),
@@ -359,7 +332,7 @@ export function App(): JSX.Element {
             { name, url, sha256: sha, status: "installed", std: false },
           ]);
           setAddState(null);
-          stirResolve(0);
+          void walkWorld();
         } catch (err) {
           setAddState(null);
           setDepRows((prev) => [
@@ -376,7 +349,7 @@ export function App(): JSX.Element {
         }
       })();
     },
-    [lsp, env, stirResolve],
+    [lsp, env, walkWorld],
   );
 
   // the doc IS the workspace entry: every buffer move (an edit or a
@@ -384,8 +357,8 @@ export function App(): JSX.Element {
   // defs row and the check lane ride the live text
   useEffect(() => {
     env.setFile(PLAYGROUND_DOC, source);
-    if (walkReady.current) stirResolve();
-  }, [source, env, stirResolve]);
+    if (walkReady.current) void walkWorld();
+  }, [source, env, walkWorld]);
 
   const applyCompileFailure = useCallback((diags: Diag[]) => {
     setPanes({ output: [], irDump: "", diags });

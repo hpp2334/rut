@@ -1,9 +1,10 @@
 /**
  * The playground's virtual dep world — a `$RUT_HOME` in memory.
  *
- * The crate's dep walk (`resolveDeps`) is READ-ONLY by construction:
- * it sees the host only through the injected `HostEnv` capability
- * (read/readDir/isDir/notify — the crate's `js/index.d.ts`), and it
+ * The crate's dep walk (`stir` / `resolveDeps`) is READ-ONLY by
+ * construction: it sees the host only through the injected `HostEnv`
+ * capability (read/readDir/isDir/notify + the optional clock
+ * `wakeAfter` — the crate's `js/index.d.ts`), and it
  * spells its global-store paths `.rut/deps/<name>@<sha256[:16]>/…`
  * (the wasm sandbox cannot read env vars, so `rut_home()` degenerates
  * to `.rut` — the extension's adapter anchors that spelling onto the
@@ -143,6 +144,17 @@ export class MemoryEnv implements HostEnv {
 
   notify(message: string, isError: boolean): void {
     this.onNotify(message, isError);
+  }
+
+  /**
+   * the clock — the ONE machinery addition: the core's deferred work
+   * (the dep walk's debounce window) arms through this. Plain
+   * `setTimeout`, nothing more: the host supplies power, the ACTOR
+   * owns every when — the wake posts an identity-free tick into the
+   * core's own event loop, never a callback into demo business.
+   */
+  wakeAfter(ms: number, wake: () => void): void {
+    setTimeout(wake, ms);
   }
 
   /**

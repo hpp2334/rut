@@ -323,35 +323,3 @@ export interface DecodedToken {
 
 /** decode the flat `SemanticTokens.data` wire array */
 export function decodeTokens(data: number[]): DecodedToken[];
-
-// ---- the dep engine shell ----
-
-/** the dep engine's construction options */
-export interface DepEngineOptions {
-  /**
-   * the read-only host environment — re-injected before each run
-   * (replace-on-reinject). Optional: a core that carried one at
-   * `load` keeps it.
-   */
-  env?: HostEnv;
-  /** the workspace roots — a host callback, re-read at every run */
-  roots: () => string[];
-  /** the coalescing window in milliseconds (default 200) */
-  debounceMs?: number;
-}
-
-/** the dep engine handle — stir to schedule, dispose to retire */
-export interface DepEngine {
-  /** arm (or re-arm) the debounce; a stir mid-run coalesces into ONE rerun */
-  stir(): void;
-  /** retire the engine — pending timers clear, later stirs are no-ops */
-  dispose(): void;
-}
-
-/**
- * The dep engine shell: debounce + one-run-in-flight +
- * rerun-once-if-stirred over `resolveDeps` (the extension's walk
- * scheduler law, moved into the crate face — `setTimeout` + `Promise`
- * only, environment-neutral).
- */
-export function depEngine(rut: RutLsp, opts: DepEngineOptions): DepEngine;
