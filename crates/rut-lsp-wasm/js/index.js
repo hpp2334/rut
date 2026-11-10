@@ -25,13 +25,13 @@
 // lifetime — one `RutLsp` per editing session, mutated per request; the
 // loop task holds the state exclusively.
 
-import init, { RutLsp as Core } from '../pkg/rut_lsp_wasm.js';
+import init, { RutLsp as WasmLsp } from '../pkg/rut_lsp_wasm.js';
 
 /** the language core as the host holds it — one per editing session */
 export class RutLsp {
-  /** @param {Core} core the wasm-bindgen instance (see {@link RutLsp.load}) */
-  constructor(core) {
-    this.core = core;
+  /** @param {WasmLsp} lsp the wasm-bindgen instance (see {@link RutLsp.load}) */
+  constructor(lsp) {
+    this.lsp = lsp;
   }
 
   /**
@@ -54,31 +54,31 @@ export class RutLsp {
     await init({
       module_or_path: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
     });
-    const core = new Core();
+    const lsp = new WasmLsp();
     if (env !== undefined && env !== null) {
-      await core.set_env(env);
+      await lsp.set_env(env);
     }
-    return new RutLsp(core);
+    return new RutLsp(lsp);
   }
 
   /** the semantic-token legend, names in token-type index order */
   async legend() {
-    return JSON.parse(await this.core.legend());
+    return JSON.parse(await this.lsp.legend());
   }
 
   /** open / FULL-sync change: store the doc, answer diags + tokens + symbols */
   async analyze(uri, src) {
-    return JSON.parse(await this.core.analyze(uri, src));
+    return JSON.parse(await this.lsp.analyze(uri, src));
   }
 
   /** close: drop the doc (the workspace/std index stays) */
   async forget(uri) {
-    await this.core.forget(uri);
+    await this.lsp.forget(uri);
   }
 
   /** hover at an LSP position — null when there is nothing to say */
   async hover(uri, line, character) {
-    return JSON.parse(await this.core.hover(uri, line, character));
+    return JSON.parse(await this.lsp.hover(uri, line, character));
   }
 
   /**
@@ -88,24 +88,24 @@ export class RutLsp {
    * the text they lex even while an analyze debounce is pending.
    */
   async complete(uri, line, character, src) {
-    return JSON.parse(await this.core.complete(uri, src, line, character));
+    return JSON.parse(await this.lsp.complete(uri, src, line, character));
   }
 
   /** go-to-definition at an LSP position — [] when nothing resolves */
   async definition(uri, line, character) {
-    return (JSON.parse(await this.core.definition(uri, line, character)) ?? []);
+    return (JSON.parse(await this.lsp.definition(uri, line, character)) ?? []);
   }
 
   /** go-to-type-definition at an LSP position — [] when nothing resolves */
   async typeDefinition(uri, line, character) {
-    return (JSON.parse(await this.core.type_definition(uri, line, character)) ?? []);
+    return (JSON.parse(await this.lsp.type_definition(uri, line, character)) ?? []);
   }
 
   /** inlay hints for a document range — [] when nothing resolves */
   async inlayHint(uri, start, end) {
     return (
       (JSON.parse(
-        await this.core.inlay(uri, start.line, start.character, end.line, end.character),
+        await this.lsp.inlay(uri, start.line, start.character, end.line, end.character),
       ) ?? [])
     );
   }
@@ -114,29 +114,29 @@ export class RutLsp {
   async references(uri, line, character, includeDeclaration) {
     return (
       (JSON.parse(
-        await this.core.references(uri, line, character, includeDeclaration ? 1 : 0),
+        await this.lsp.references(uri, line, character, includeDeclaration ? 1 : 0),
       ) ?? [])
     );
   }
 
   /** signature help at an LSP position — null when there is none to give */
   async signatureHelp(uri, line, character) {
-    return JSON.parse(await this.core.signature_help(uri, line, character));
+    return JSON.parse(await this.lsp.signature_help(uri, line, character));
   }
 
   /** index one workspace file (the host's stand-in for the server's fs walk) */
   async addDef(uri, src) {
-    await this.core.add_def(uri, src);
+    await this.lsp.add_def(uri, src);
   }
 
   /** parse one `rut.jsonc` — the dep table, or the error envelope */
   async parseManifest(text) {
-    return JSON.parse(await this.core.parse_manifest(text));
+    return JSON.parse(await this.lsp.parse_manifest(text));
   }
 
   /** index one dep source file under its module NAME at a MOD PATH */
   async addDefMod(uri, name, modPath, src) {
-    return JSON.parse(await this.core.add_def_mod(uri, name, modPath, src));
+    return JSON.parse(await this.lsp.add_def_mod(uri, name, modPath, src));
   }
 
   /**
@@ -146,7 +146,7 @@ export class RutLsp {
    * @param {HostEnv} env
    */
   async setEnv(env) {
-    await this.core.set_env(env);
+    await this.lsp.set_env(env);
   }
 
   /**
@@ -160,7 +160,7 @@ export class RutLsp {
    * @returns {Promise<WalkOut>}
    */
   async resolveDeps(roots) {
-    return JSON.parse(await this.core.resolve_deps(JSON.stringify(roots)));
+    return JSON.parse(await this.lsp.resolve_deps(JSON.stringify(roots)));
   }
 }
 

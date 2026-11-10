@@ -3,7 +3,7 @@
 //! reading only through the injected host environment
 //! ([`crate::env::Io`]): pure reads, one fast handler turn, no walk
 //! task, no awaits (the actor seam's law — the walk is a sync body
-//! over `&mut Core` exactly like every other handler).
+//! over `&mut SessionState` exactly like every other handler).
 //!
 //! What the port keeps, law for law:
 //!
@@ -14,7 +14,7 @@
 //!   clears the previous root's ledger silently (multi-root
 //!   precedence: root order decides).
 //! - **entries + mod trees index through the ABI's own lanes** — the
-//!   [`Core::add_def_named_at`] / [`Core::add_def_mod_at`] bodies the
+//!   [`SessionState::add_def_named_at`] / [`SessionState::add_def_mod_at`] bodies the
 //!   `add_def_named` / `add_def_mod` handlers run, so a walked dep
 //!   resolves in hover/completion/definition exactly like a
 //!   host-indexed one (one store, replace-by-origin, no drift). The
@@ -50,7 +50,7 @@ use std::collections::HashSet;
 
 use crate::deps::{DepRow, DepSource};
 use crate::env::Io;
-use crate::Core;
+use crate::SessionState;
 
 /// the manifest recursion cap — the extension's `MAX_DEP_DEPTH`
 /// mirrored (a guest, not an indexer daemon)
@@ -101,14 +101,14 @@ struct WalkCtx<'a> {
 }
 
 /// the walk's entry: every root, in order — feed its lock, then walk
-/// its manifest. One fast handler turn; the core ends in the walked
+/// its manifest. One fast handler turn; the state ends in the walked
 /// world (the ledger of the LAST root fed, the defs replace-by-origin,
 /// the direct-dep set accumulated).
-pub(crate) fn resolve(core: &mut Core, io: &dyn Io, roots: &[String]) -> WalkOut {
+pub(crate) fn resolve(state: &mut SessionState, io: &dyn Io, roots: &[String]) -> WalkOut {
     let mut out = WalkOut::default();
     let mut mounted: HashSet<String> = HashSet::new();
     for root in roots {
-        feed_lock(core, io, root);
+        feed_lock(state, io, root);
         let mut ctx = WalkCtx {
             io,
             seen: HashSet::new(),
@@ -116,7 +116,7 @@ pub(crate) fn resolve(core: &mut Core, io: &dyn Io, roots: &[String]) -> WalkOut
             files: MAX_DEP_FILES,
             missing: &mut out.missing,
         };
-        walk_manifest(&mut ctx, core, root, 1);
+        walk_manifest(&mut ctx, state, root, 1);
     }
     out
 }
@@ -127,16 +127,16 @@ pub(crate) fn resolve(core: &mut Core, io: &dyn Io, roots: &[String]) -> WalkOut
 /// a MISSING lock hands over empty bytes — clearing the previous
 /// root's ledger silently (multi-root precedence: root order decides,
 /// and the miss lane is expected, not a hint).
-fn feed_lock(core: &mut Core, io: &dyn Io, root: &str) {
+fn feed_lock(state: &mut SessionState, io: &dyn Io, root: &str) {
     let path = format!("{root}/rut.lock");
     match io.read(&path) {
         None => {
-            let _ = core.set_lock_text("");
+            let _ = state.set_lock_text("");
         }
         Some(bytes) => {
             let text = String::from_utf8_lossy(&bytes).into_owned();
-            if let Err(e) = core.set_lock_text(&text) {
-                core.hint_once(io, &format!("lock:{path}"), &format!("rut: {path} — {e}"));
+            if let Err(e) = state.set_lock_text(&text) {
+                state.hint_once(io, &format!("lock:{path}"), &format!("rut: {path} — {e}"));
             }
         }
     }
@@ -147,7 +147,7 @@ fn feed_lock(core: &mut Core, io: &dyn Io, root: &str) {
 /// its mod tree mounts behind the parsed decls, then its dep rows walk
 /// — `deps` at any depth, `dev-deps` only at the root (the loader's
 /// law: a dep's dev table never enters a consumer's world).
-fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
+fn walk_manifest(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, depth: usize) {
     // the caps truncate: the referenced set stays incomplete, never a
     // failure
     if depth > MAX_DEP_DEPTH || ctx.files == 0 {
@@ -161,10 +161,10 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
         return; // no manifest here — nothing to parse, nothing to hint
     };
     let text = String::from_utf8_lossy(&bytes).into_owned();
-    let table = match crate::deps::dep_table_pinned(&text, &core.lock_pins) {
+    let table = match crate::deps::dep_table_pinned(&text, &state.lock_pins) {
         Ok(t) => t,
         Err(e) => {
-            core.hint_once(
+            state.hint_once(
                 ctx.io,
                 &format!("manifest:{dir}"),
                 &format!("rut: rut.jsonc — {e}"),
@@ -186,7 +186,7 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
             names.push(n.clone());
         }
         for n in names {
-            core.direct_deps.insert(n);
+            state.direct_deps.insert(n);
         }
     }
     // first mount wins — a module name an earlier row (or root, or
@@ -205,7 +205,7 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
             let src = String::from_utf8_lossy(&bytes).into_owned();
             // the manifest's consts ride the pkg's own rows (the check
             // lane threads them into the engine's Manifest)
-            core.add_def_named_at(&path, &module, &src, &table.consts);
+            state.add_def_named_at(&path, &module, &src, &table.consts);
         } // a manifest naming a missing entry — index what exists
     }
     // the mod tree (the pkg's own modules): the root module stamps at
@@ -222,13 +222,13 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
         .iter()
         .map(|e| (e.path.as_str(), e.mode))
         .collect();
-    mount_mod_tree(ctx, core, dir, &module, &entry_rows, &table.consts, depth);
+    mount_mod_tree(ctx, state, dir, &module, &entry_rows, &table.consts, depth);
     for row in &table.deps {
-        mount_row(ctx, core, dir, row, depth);
+        mount_row(ctx, state, dir, row, depth);
     }
     if depth == 1 {
         for row in &table.dev_deps {
-            mount_row(ctx, core, dir, row, depth);
+            mount_row(ctx, state, dir, row, depth);
         }
     }
 }
@@ -236,16 +236,16 @@ fn walk_manifest(ctx: &mut WalkCtx, core: &mut Core, dir: &str, depth: usize) {
 /// one dep row's mount door: url rows go through the store lane, path
 /// rows recurse into the directory beside the manifest (OUTSIDE the
 /// walk root is the point).
-fn mount_row(ctx: &mut WalkCtx, core: &mut Core, dir: &str, row: &DepRow, depth: usize) {
+fn mount_row(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, row: &DepRow, depth: usize) {
     if ctx.files == 0 {
         return; // the budget died — the set stays incomplete
     }
     match &row.source {
-        DepSource::Url { .. } => mount_url_dep(ctx, core, row, depth),
+        DepSource::Url { .. } => mount_url_dep(ctx, state, row, depth),
         DepSource::Path { dir: rel } => {
             let dep_dir = join(dir, rel);
             if ctx.io.read(&format!("{dep_dir}/rut.jsonc")).is_none() {
-                core.hint_once(
+                state.hint_once(
                     ctx.io,
                     &format!("path:{dir}:{}", row.name),
                     &format!(
@@ -256,7 +256,7 @@ fn mount_row(ctx: &mut WalkCtx, core: &mut Core, dir: &str, row: &DepRow, depth:
                 );
                 return;
             }
-            walk_manifest(ctx, core, &dep_dir, depth + 1);
+            walk_manifest(ctx, state, &dep_dir, depth + 1);
         }
     }
 }
@@ -272,7 +272,7 @@ fn mount_row(ctx: &mut WalkCtx, core: &mut Core, dir: &str, row: &DepRow, depth:
 /// (a surface-only dev state).
 fn mount_mod_tree(
     ctx: &mut WalkCtx,
-    core: &mut Core,
+    state: &mut SessionState,
     pkg_dir: &str,
     module: &str,
     entries: &[(&str, rut_semantic::Mode)],
@@ -310,7 +310,7 @@ fn mount_mod_tree(
     let text = String::from_utf8_lossy(&bytes).into_owned();
     // the root re-stamp carries the manifest's consts (it REPLACES the
     // entries loop's row — same origin — so the rows ride again)
-    let decls = core.add_def_mod_at(&root_path, module, "", &text, consts);
+    let decls = state.add_def_mod_at(&root_path, module, "", &text, consts);
     // the children mount BESIDE THE ROOT FILE — inside the package's
     // `src/` shell
     let root_dir = dirname(&root_path);
@@ -320,7 +320,7 @@ fn mount_mod_tree(
         }
         mount_child_mod(
             ctx,
-            core,
+            state,
             &root_dir,
             module,
             &decl.name,
@@ -343,7 +343,7 @@ fn mount_mod_tree(
 #[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn mount_child_mod(
     ctx: &mut WalkCtx,
-    core: &mut Core,
+    state: &mut SessionState,
     declaring_dir: &str,
     module: &str,
     name: &str,
@@ -372,7 +372,7 @@ fn mount_child_mod(
     };
     let (child_path, bytes) = match (dir_bytes, file_bytes) {
         (Some(_), Some(_)) => {
-            core.hint_once(
+            state.hint_once(
                 ctx.io,
                 &format!("mods:{file_form}"),
                 &format!("rut: {module} — both {name}/mod.rut and {name}.rut exist; keep one"),
@@ -394,7 +394,7 @@ fn mount_child_mod(
         format!("{parent_path}/{name}")
     };
     // the consts mint on the pkg-ROOT row only — a child carries none
-    let decls = core.add_def_mod_at(&child_path, module, &mod_path, &text, &[]);
+    let decls = state.add_def_mod_at(&child_path, module, &mod_path, &text, &[]);
     // a file-form child's children mount BESIDE it, not under `NAME/`
     let child_dir = if child_path == dir_form {
         format!("{declaring_dir}/{name}")
@@ -407,7 +407,7 @@ fn mount_child_mod(
         }
         mount_child_mod(
             ctx,
-            core,
+            state,
             &child_dir,
             module,
             &decl.name,
@@ -430,7 +430,7 @@ fn mount_child_mod(
 /// resolve into them). Anything else is ONE hint per dep naming
 /// `rut install`; never fetched, never written, never evicted — the
 /// store owns all of that.
-fn mount_url_dep(ctx: &mut WalkCtx, core: &mut Core, row: &DepRow, depth: usize) {
+fn mount_url_dep(ctx: &mut WalkCtx, state: &mut SessionState, row: &DepRow, depth: usize) {
     let DepSource::Url {
         url,
         sha256,
@@ -440,7 +440,7 @@ fn mount_url_dep(ctx: &mut WalkCtx, core: &mut Core, row: &DepRow, depth: usize)
         return;
     };
     let Some(pin) = sha256 else {
-        core.hint_once(
+        state.hint_once(
             ctx.io,
             &format!("unpinned:{url}"),
             &format!(
@@ -463,7 +463,7 @@ fn mount_url_dep(ctx: &mut WalkCtx, core: &mut Core, row: &DepRow, depth: usize)
         rut_driver::store_dir(&row.name, pin)
     );
     if !ctx.io.is_dir(&dir) {
-        core.hint_once(
+        state.hint_once(
             ctx.io,
             &format!("store:{url}"),
             &format!(
@@ -489,7 +489,7 @@ fn mount_url_dep(ctx: &mut WalkCtx, core: &mut Core, row: &DepRow, depth: usize)
         .and_then(|t| rut_driver::parse_store_meta(&t).ok())
         .is_some_and(|m| m.sha256 == pin.to_ascii_lowercase());
     if !verified {
-        core.hint_once(
+        state.hint_once(
             ctx.io,
             &format!("meta:{url}"),
             &format!(
@@ -510,7 +510,7 @@ fn mount_url_dep(ctx: &mut WalkCtx, core: &mut Core, row: &DepRow, depth: usize)
     // own path rows)
     walk_manifest(
         ctx,
-        core,
+        state,
         &format!("{dir}/{}", rut_driver::UNPACK_DIR),
         depth + 1,
     );

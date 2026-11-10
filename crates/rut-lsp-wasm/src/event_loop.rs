@@ -1,10 +1,10 @@
-//! The actor seam: ONE long-lived event loop owns the language core
+//! The actor seam: ONE long-lived event loop owns the session state
 //! exclusively, and every ABI entry is an async RPC bridge — post a
 //! [`Msg`] on the inbox, await the oneshot reply.
 //!
 //! The laws this buys (the plan's structural wins):
 //!
-//! - **Handlers are sync fns over `&mut Core`** — today's entry bodies,
+//! - **Handlers are sync fns over `&mut SessionState`** — today's entry bodies,
 //!   moved verbatim into [`handle`]'s match (plus the stored read-only
 //!   host env, `crate::env`). They cannot await, so the
 //!   borrow-across-await class of bug is unwritable.
@@ -17,7 +17,7 @@
 //!   resolve in send order.
 //! - **Panics isolate to one oneshot** — `catch_unwind` keeps the loop
 //!   alive; a panicked handler drops its reply channel and the bridge
-//!   answers the error envelope, never a dead core. (On the wasm32
+//!   answers the error envelope, never a dead loop. (On the wasm32
 //!   target the panic strategy is abort — the target default — so the
 //!   guard's isolation is fully observable on the native pool;
 //!   the structure is what ships either way.)
@@ -36,7 +36,7 @@ use futures::StreamExt;
 use ls_types::Uri;
 
 use crate::wire;
-use crate::{json_envelope, locations_envelope, Core};
+use crate::{json_envelope, locations_envelope, SessionState};
 
 /// one ABI call in flight. The `tx` rides IN the message — the handler
 /// replies on it, and the field set is owned data (the bridge copies the
@@ -145,25 +145,25 @@ pub enum Reply {
     Done,
 }
 
-/// the loop's body — own the core exclusively, answer one message at a
+/// the loop's body — own the state exclusively, answer one message at a
 /// time, never die on a bad handler. The injected read-only host env
-/// (`set_env`) lives beside the core: `None` until the host hands one
+/// (`set_env`) lives beside the state: `None` until the host hands one
 /// over, read only by the dep walk.
-pub(crate) async fn run(core: Core, mut inbox: UnboundedReceiver<Msg>) {
-    let mut core = core;
+pub(crate) async fn run(state: SessionState, mut inbox: UnboundedReceiver<Msg>) {
+    let mut state = state;
     let mut env: Option<Rc<dyn crate::env::Io>> = None;
     while let Some(msg) = inbox.next().await {
         // panic isolation: one bad handler drops ONE reply channel (the
         // bridge answers its error envelope); the loop never dies. The
-        // handler may leave the core half-mutated — accepted; the next
+        // handler may leave the state half-mutated — accepted; the next
         // message sees whatever state stands.
-        let _ = catch_unwind(AssertUnwindSafe(|| handle(&mut core, &mut env, msg)));
+        let _ = catch_unwind(AssertUnwindSafe(|| handle(&mut state, &mut env, msg)));
     }
 }
 
-/// the entries' bodies — sync arms over `&mut Core` (and the stored
+/// the entries' bodies — sync arms over `&mut SessionState` (and the stored
 /// env, which only the dep walk reads). No sender, no await.
-fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
+fn handle(state: &mut SessionState, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
     match msg {
         Msg::Legend { tx } => {
             let _ = tx.send(Reply::Text(json_envelope(serde_json::json!(
@@ -173,7 +173,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
         Msg::Analyze { uri, src, tx } => {
             // open / FULL-sync change: the doc stores FIRST (the analyze
             // lane's store — the queries below read the same text)
-            core.docs.insert(uri.clone(), src.clone());
+            state.docs.insert(uri.clone(), src.clone());
             // analyze_at stamps related-info URIs + hover provenance at
             // construction; a degenerate URI still analyzes (unstamped
             // twin below)
@@ -184,9 +184,9 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             // the envelope's rows move to the wire field by field (a
             // plain record — no consuming ceremony)
             let diags = {
-                let dm = core.doc_mods_of(&uri);
+                let dm = state.doc_mods_of(&uri);
                 let groups = if dm.pkg.is_some() {
-                    crate::check::groups_from_defs(&core.defs)
+                    crate::check::groups_from_defs(&state.defs)
                 } else {
                     Vec::new()
                 };
@@ -205,15 +205,15 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             let _ = tx.send(Reply::Text(answer));
         }
         Msg::Forget { uri, tx } => {
-            core.docs.remove(&uri);
+            state.docs.remove(&uri);
             let _ = tx.send(Reply::Done);
         }
         Msg::Hover { uri, line, ch, tx } => {
-            let answer = match core.docs.get(&uri).cloned() {
+            let answer = match state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
-                    let doc = core.doc_mods_of(&uri);
-                    let out = crate::analysis::hover_at(&uri, &src, &core.defs, &doc, line, ch);
+                    let doc = state.doc_mods_of(&uri);
+                    let out = crate::analysis::hover_at(&uri, &src, &state.defs, &doc, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -229,29 +229,35 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             // the doc-sync entry: the CURRENT text stores FIRST (see the
             // bridge's doc — the analyze lane debounces, completion fires
             // on the keystroke)
-            core.docs.insert(uri.clone(), src);
-            let answer = core.complete_stored(&uri, line, ch);
+            state.docs.insert(uri.clone(), src);
+            let answer = state.complete_stored(&uri, line, ch);
             let _ = tx.send(Reply::Text(answer));
         }
         Msg::Definition { uri, line, ch, tx } => {
-            let answer = match core.docs.get(&uri).cloned() {
+            let answer = match state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
-                    let doc = core.doc_mods_of(&uri);
+                    let doc = state.doc_mods_of(&uri);
                     let locs =
-                        crate::analysis::definition_at(&uri, &src, &core.defs, &doc, line, ch);
+                        crate::analysis::definition_at(&uri, &src, &state.defs, &doc, line, ch);
                     locations_envelope(&locs)
                 }
             };
             let _ = tx.send(Reply::Text(answer));
         }
         Msg::TypeDefinition { uri, line, ch, tx } => {
-            let answer = match core.docs.get(&uri).cloned() {
+            let answer = match state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
-                    let doc = core.doc_mods_of(&uri);
-                    let locs =
-                        crate::analysis::type_definition_at(&uri, &src, &core.defs, &doc, line, ch);
+                    let doc = state.doc_mods_of(&uri);
+                    let locs = crate::analysis::type_definition_at(
+                        &uri,
+                        &src,
+                        &state.defs,
+                        &doc,
+                        line,
+                        ch,
+                    );
                     locations_envelope(&locs)
                 }
             };
@@ -265,13 +271,13 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             end_ch,
             tx,
         } => {
-            let answer = match core.docs.get(&uri).cloned() {
+            let answer = match state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
                     let hints = crate::analysis::inlay_hints_at(
                         &uri,
                         &src,
-                        &core.defs,
+                        &state.defs,
                         ls_types::Range {
                             start: ls_types::Position {
                                 line: start_line,
@@ -295,14 +301,14 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             include_decl,
             tx,
         } => {
-            let answer = match core.docs.get(&uri).cloned() {
+            let answer = match state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
-                    let doc = core.doc_mods_of(&uri);
+                    let doc = state.doc_mods_of(&uri);
                     let locs = crate::analysis::references_at(
                         &uri,
                         &src,
-                        &core.defs,
+                        &state.defs,
                         &doc,
                         line,
                         ch,
@@ -314,10 +320,10 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             let _ = tx.send(Reply::Text(answer));
         }
         Msg::SignatureHelp { uri, line, ch, tx } => {
-            let answer = match core.docs.get(&uri).cloned() {
+            let answer = match state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
-                    let out = crate::analysis::signature_help_at(&uri, &src, &core.defs, line, ch);
+                    let out = crate::analysis::signature_help_at(&uri, &src, &state.defs, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -325,14 +331,14 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
         }
         Msg::AddDef { uri, src, tx } => {
             let idx = crate::analysis::index_at(&uri, &src);
-            match core.defs.iter().position(|d| d.origin == uri) {
-                Some(slot) => core.defs[slot] = idx,
-                None => core.defs.push(idx),
+            match state.defs.iter().position(|d| d.origin == uri) {
+                Some(slot) => state.defs[slot] = idx,
+                None => state.defs.push(idx),
             }
             let _ = tx.send(Reply::Done);
         }
         Msg::ParseManifest { text, tx } => {
-            let answer = match crate::deps::dep_table_pinned(&text, &core.lock_pins) {
+            let answer = match crate::deps::dep_table_pinned(&text, &state.lock_pins) {
                 Ok(t) => json_envelope(wire::DepTable::from(&t)),
                 Err(e) => json_envelope(wire::Error::new(e)),
             };
@@ -348,7 +354,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
         }
         Msg::ResolveDeps { roots, tx } => {
             // the read-only walk: one fast handler turn over the
-            // stored env — no walk task, no awaits. An env-less core
+            // stored env — no walk task, no awaits. An env-less session
             // answers the loud error envelope, never a silent empty
             // walk (the demo path never calls this entry).
             let answer = match env.as_ref() {
@@ -357,7 +363,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
                      (load(bytes, env) / set_env)",
                 )),
                 Some(io) => json_envelope(wire::WalkOut::from(&crate::walk::resolve(
-                    core,
+                    state,
                     io.as_ref(),
                     &roots,
                 ))),
@@ -372,7 +378,7 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
             tx,
         } => {
             // the host's scan-index lane carries no manifest — no consts
-            let decls = core.add_def_mod_at(&uri, &name, &mod_path, &src, &[]);
+            let decls = state.add_def_mod_at(&uri, &name, &mod_path, &src, &[]);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
         }
     }
@@ -382,17 +388,17 @@ fn handle(core: &mut Core, env: &mut Option<Rc<dyn crate::env::Io>>, msg: Msg) {
 /// queue (`spawn_local`); native ABI tests drive it on a `LocalPool`
 /// they own (`RutLsp::spawn_native`). Answers the inbox handle the
 /// bridges post on.
-pub(crate) fn spawn(core: Core) -> UnboundedSender<Msg> {
+pub(crate) fn spawn(state: SessionState) -> UnboundedSender<Msg> {
     let (tx, rx) = unbounded::<Msg>();
     #[cfg(target_family = "wasm")]
-    wasm_bindgen_futures::spawn_local(run(core, rx));
+    wasm_bindgen_futures::spawn_local(run(state, rx));
     // A native build has no executor for a plain `RutLsp::new()` — the
     // ABI face belongs to the wasm; native tests go through
     // `spawn_native`, which parks the loop on a pool IT hands back.
     // Here the inbox drops and every bridge answers the loop-gone
     // envelope — the honest dead-loop shape.
     #[cfg(not(target_family = "wasm"))]
-    drop((core, rx));
+    drop((state, rx));
     tx
 }
 

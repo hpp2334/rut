@@ -21,7 +21,7 @@ use crate::hover::{self, DefIndex};
 /// the prelude's single embedded source — the engine's own decl file
 pub const CORE: &str = include_str!("../../../rut/core/src/core.d.rut");
 
-/// the prelude's definition index — `Core::boot`'s one ambient row
+/// the prelude's definition index — `SessionState::boot`'s one ambient row
 /// (every other index in the chain arrives through a lane: the dep
 /// walk, the workspace scan, the open document).
 pub fn index() -> DefIndex {

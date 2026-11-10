@@ -9,8 +9,8 @@
 //! `new RutLsp()` and calls its methods. Every method is an ASYNC RPC
 //! bridge (a `Promise` — the actor seam): the call posts one
 //! [`event_loop::Msg`] on the loop's mpsc inbox and awaits a oneshot
-//! reply, while ONE long-lived loop task owns the `Core` exclusively and
-//! answers messages FIFO — sync handlers over `&mut Core` (see
+//! reply, while ONE long-lived loop task owns the `SessionState` exclusively and
+//! answers messages FIFO — sync handlers over `&mut SessionState` (see
 //! [`event_loop`]). A dropped loop answers the error envelope; a
 //! panicked handler isolates to its own reply channel. Every text
 //! answer is the JSON envelope; the wasm-bindgen runtime owns the
@@ -79,7 +79,7 @@
 //! semantics the env cannot); and the dep pull (`set_env` +
 //! `resolve_deps`). NO entry mutates dep state except through the
 //! injected env — the lock feed, the direct-dep stamp, and the named
-//! index lanes are Core internals the walk drives, not messages. The
+//! index lanes are SessionState internals the walk drives, not messages. The
 //! old push family (`set_lock`, `set_direct_deps`, `add_def_named`,
 //! `add_bundle`, `extract_bundle`, `extract_srczip`, `doc_len`) lived
 //! in the blind-wasm era and is gone; its behaviors survive through
@@ -89,10 +89,10 @@
 //! raw ABI: an LSP serves a long-lived editing session, so the instance
 //! OWNS its session state (open docs + the index) for its lifetime —
 //! the host holds one `RutLsp` per boot and mutates it per request.
-//! The state lives in `Core`, owned exclusively by the loop task
+//! The state lives in `SessionState`, owned exclusively by the loop task
 //! ([`event_loop`]); the host's `RutLsp` is the inbox handle. Calls
 //! serialize on the loop's FIFO — single-threaded JS makes the order
-//! total, and no caller ever borrows the core.
+//! total, and no caller ever borrows the state.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
@@ -126,9 +126,10 @@ pub mod mods;
 pub use rut_semantic as semantic;
 pub mod prelude;
 
-// ---- the language core's state (one instance per editing session) ----
+// ---- the session state (one instance per editing session — the
+// language core's accumulated facts) ----
 
-struct Core {
+struct SessionState {
     /// open documents by URI (the LSP's full-text sync)
     docs: HashMap<String, String>,
     /// the core prelude + walked/workspace files, in lookup order
@@ -154,15 +155,15 @@ struct Core {
     hints_shown: HashSet<String>,
 }
 
-impl Core {
-    /// the core as it boots — the engine prelude pre-indexed (`core`
-    /// alone, the ONE ambient index; every other std pkg rides the dep
-    /// lane like any third-party lib), no session state yet. The loop
+impl SessionState {
+    /// the session state as it boots — the engine prelude pre-indexed
+    /// (`core` alone, the ONE ambient index; every other std pkg rides
+    /// the dep lane like any third-party lib), no session facts yet. The loop
     /// task owns this value exclusively; both constructors (`new` the
     /// wasm face, `spawn_native` the native harness) hand a fresh one
     /// to [`event_loop::run`].
-    fn boot() -> Core {
-        Core {
+    fn boot() -> SessionState {
+        SessionState {
             docs: HashMap::new(),
             defs: vec![crate::prelude::index()],
             lock_pins: BTreeMap::new(),
@@ -295,10 +296,10 @@ impl Core {
 }
 
 /// the language core as the host holds it — one per editing session.
-/// Not the state itself: the INBOX HANDLE. The loop task owns `Core`
+/// Not the state itself: the INBOX HANDLE. The loop task owns `SessionState`
 /// exclusively; every entry posts one `event_loop::Msg` and awaits the
 /// oneshot reply (the actor seam — the handlers are sync bodies over
-/// `&mut Core`, so no bridge can borrow across an await and no handler
+/// `&mut SessionState`, so no bridge can borrow across an await and no handler
 /// can post).
 #[wasm_bindgen]
 pub struct RutLsp {
@@ -307,12 +308,12 @@ pub struct RutLsp {
 
 #[wasm_bindgen]
 impl RutLsp {
-    /// the core boots with the prelude pre-indexed — the same
+    /// the session boots with the prelude pre-indexed — the same
     /// the crate indexes at construction
     #[wasm_bindgen(constructor)]
     pub fn new() -> RutLsp {
         RutLsp {
-            tx: event_loop::spawn(Core::boot()),
+            tx: event_loop::spawn(SessionState::boot()),
         }
     }
 
@@ -575,7 +576,7 @@ impl RutLsp {
         let (tx, rx) = event_loop::pair();
         let pool = futures::executor::LocalPool::new();
         pool.spawner()
-            .spawn_local(event_loop::run(Core::boot(), rx))
+            .spawn_local(event_loop::run(SessionState::boot(), rx))
             .expect("the loop parks on the fresh pool");
         (RutLsp { tx }, pool)
     }
