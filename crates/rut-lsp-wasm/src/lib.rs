@@ -215,7 +215,7 @@ impl SessionState {
         self.replace_by_origin(uri, idx);
     }
 
-    /// [`event_loop::Msg::AddDefMod`]'s body: index one dep source
+    /// [`event_loop::Cmd::AddDefMod`]'s body: index one dep source
     /// file at a MOD PATH (the pkg root `""`, a mounted child its
     /// `<path>`), answering the parsed file's own `mod` declarations —
     /// the walk's next hop (structure lives in the parse, never in
@@ -351,7 +351,8 @@ impl RutLsp {
 
     /// the semantic-token legend (names in token-type index order)
     pub async fn legend(&self) -> String {
-        self.text(|tx| event_loop::Msg::Legend { tx }).await
+        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Legend { tx }))
+            .await
     }
 
     /// open / FULL-sync change: store the document, return one analysis —
@@ -362,20 +363,22 @@ impl RutLsp {
     /// diags map back through the file stamps. No package context →
     /// parse-only, exactly the pre-B1 answer.
     pub async fn analyze(&self, uri: String, src: String) -> String {
-        self.text(|tx| event_loop::Msg::Analyze { uri, src, tx })
+        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Analyze { uri, src, tx }))
             .await
     }
 
     /// close: drop the document (the prelude/workspace index stays). The
     /// await is ordering only — this lane answers no payload.
     pub async fn forget(&self, uri: String) {
-        let _ = self.rpc(|tx| event_loop::Msg::Forget { uri, tx }).await;
+        let _ = self
+            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Forget { uri, tx }))
+            .await;
     }
 
     /// hover at an LSP position — the doc index first, then the
     /// prelude + workspace; `null` when there's nothing to say
     pub async fn hover(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Hover { uri, line, ch, tx })
+        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Hover { uri, line, ch, tx }))
             .await
     }
 
@@ -387,12 +390,14 @@ impl RutLsp {
     /// (typing `log.` would hit the bare keyword dump when the stored
     /// doc still ended at `log`), so the source always rides the call.
     pub async fn complete(&self, uri: String, src: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Complete {
-            uri,
-            src,
-            line,
-            ch,
-            tx,
+        self.text(|tx| {
+            event_loop::Msg::Cmd(event_loop::Cmd::Complete {
+                uri,
+                src,
+                line,
+                ch,
+                tx,
+            })
         })
         .await
     }
@@ -405,14 +410,14 @@ impl RutLsp {
     /// rides from its stamped twin (see `doc_mods_of`) — the mod-edge
     /// clicks and the own-package use lanes key on it.
     pub async fn definition(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Definition { uri, line, ch, tx })
+        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Definition { uri, line, ch, tx }))
             .await
     }
 
     /// type definitions at an LSP position (an expression -> its type's
     /// declaration) — same shape as `definition`
     pub async fn type_definition(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::TypeDefinition { uri, line, ch, tx })
+        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::TypeDefinition { uri, line, ch, tx }))
             .await
     }
 
@@ -429,13 +434,15 @@ impl RutLsp {
         end_line: u32,
         end_ch: u32,
     ) -> String {
-        self.text(|tx| event_loop::Msg::Inlay {
-            uri,
-            start_line,
-            start_ch,
-            end_line,
-            end_ch,
-            tx,
+        self.text(|tx| {
+            event_loop::Msg::Cmd(event_loop::Cmd::Inlay {
+                uri,
+                start_line,
+                start_ch,
+                end_line,
+                end_ch,
+                tx,
+            })
         })
         .await
     }
@@ -448,12 +455,14 @@ impl RutLsp {
     /// resolves — the same `{uri, range}` Location JSON `definition`
     /// speaks.
     pub async fn references(&self, uri: String, line: u32, ch: u32, include_decl: u32) -> String {
-        self.text(|tx| event_loop::Msg::References {
-            uri,
-            line,
-            ch,
-            include_decl,
-            tx,
+        self.text(|tx| {
+            event_loop::Msg::Cmd(event_loop::Cmd::References {
+                uri,
+                line,
+                ch,
+                include_decl,
+                tx,
+            })
         })
         .await
     }
@@ -465,7 +474,7 @@ impl RutLsp {
     /// comma/paren depth at the request position. Ambiguity or arity
     /// mismatch → `null` (never wrong help).
     pub async fn signature_help(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::SignatureHelp { uri, line, ch, tx })
+        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::SignatureHelp { uri, line, ch, tx }))
             .await
     }
 
@@ -474,7 +483,7 @@ impl RutLsp {
     /// a URI replaces its entry. The await is ordering only.
     pub async fn add_def(&self, uri: String, src: String) {
         let _ = self
-            .rpc(|tx| event_loop::Msg::AddDef { uri, src, tx })
+            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::AddDef { uri, src, tx }))
             .await;
     }
 
@@ -486,7 +495,7 @@ impl RutLsp {
     /// pins). A malformed manifest is the error envelope — the host
     /// surfaces it as a hint.
     pub async fn parse_manifest(&self, text: String) -> String {
-        self.text(|tx| event_loop::Msg::ParseManifest { text, tx })
+        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::ParseManifest { text, tx }))
             .await
     }
 
@@ -527,7 +536,7 @@ impl RutLsp {
             Ok(r) => r,
             Err(e) => return json_envelope(wire::Error::new(e.to_string())),
         };
-        self.text(move |tx| event_loop::Msg::ResolveDeps { roots, tx })
+        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::ResolveDeps { roots, tx }))
             .await
     }
 
@@ -545,12 +554,14 @@ impl RutLsp {
         mod_path: String,
         src: String,
     ) -> String {
-        self.text(|tx| event_loop::Msg::AddDefMod {
-            uri,
-            name,
-            mod_path,
-            src,
-            tx,
+        self.text(|tx| {
+            event_loop::Msg::Cmd(event_loop::Cmd::AddDefMod {
+                uri,
+                name,
+                mod_path,
+                src,
+                tx,
+            })
         })
         .await
     }
