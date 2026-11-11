@@ -101,20 +101,25 @@
 //! raw ABI: an LSP serves a long-lived editing session, so the instance
 //! OWNS its session state (open docs + the index) for its lifetime —
 //! the host holds one `RutLsp` per boot and mutates it per request.
-//! The state lives in `SessionState`, owned exclusively by the loop task
-//! ([`event_loop`]); the host's `RutLsp` is the inbox handle. Calls
+//! The state lives in `SessionState` (see [`state`]), owned exclusively
+//! by the loop task ([`event_loop`]); the host's `RutLsp` is the inbox
+//! handle. Calls
 //! serialize on the loop's FIFO — single-threaded JS makes the order
 //! total, and no caller ever borrows the state.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
-use crate::hover::DefIndex;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod event_loop;
 mod walk;
 mod wire;
+
+// ---- the session state — the editing session's accumulated facts,
+// moved whole to `state`; the flat `crate::SessionState` path the
+// handlers spell stays through the re-export ----
+mod state;
+pub(crate) use state::SessionState;
 
 // ---- the language core — the queries and the values ----
 //
@@ -137,183 +142,6 @@ pub mod mods;
 // crate's ONLY frontend: no lexer/parser dep, see Cargo.toml)
 pub use rut_semantic as semantic;
 pub mod prelude;
-
-// ---- the session state (one instance per editing session — the
-// language core's accumulated facts) ----
-
-struct SessionState {
-    /// open documents by URI (the LSP's full-text sync)
-    docs: HashMap<String, String>,
-    /// the core prelude + walked/workspace files, in lookup order
-    defs: Vec<DefIndex>,
-    /// url → pin, from the workspace root's `rut.lock` (the host reads
-    /// the file and hands the bytes to `set_lock`; the manifest
-    /// grammar carries no pins). `parse_manifest` stamps the rows
-    /// onto its url deps.
-    lock_pins: BTreeMap<String, String>,
-    /// the direct-dep module names — the open document's own package
-    /// name plus every dep row its ROOT manifest declares (`deps`,
-    /// `dev-deps` at the walk root). The host hands the
-    /// set to `set_direct_deps` when it parses a root manifest;
-    /// every dep index named here stamps `direct_dep`, the
-    /// auto-import tier's gate (a transitive-only dep's `use` is the
-    /// compiler's D5 error). Union-accumulating: multi-folder walks
-    /// and re-walks re-add the same names, never shrink the world.
-    direct_deps: HashSet<String>,
-    /// the once-per-reason hint gate — every user-facing hint the
-    /// walk and the ledger feeds emit keys here, so a reason names
-    /// itself exactly once per session (never spam, however often the
-    /// world re-walks). The extension's `hintOnce` map, moved in.
-    hints_shown: HashSet<String>,
-    /// the walk lane's coalescing state — the OUTSTANDING deferred
-    /// walk's [`event_loop::DeferTask`] handle, moved in from the JS
-    /// dep engine's flags (D1: policy lives in the `Cmd::ReloadDeps` arm,
-    /// the defer queue stays neutral). `None` = no walk queued; a
-    /// STALE handle (its walk already fired) is harmless —
-    /// `cancel_defer` answers `None` for it.
-    walk_task: Option<event_loop::DeferTask>,
-}
-
-impl SessionState {
-    /// the session state as it boots — the engine prelude pre-indexed
-    /// (`core` alone, the ONE ambient index; every other std pkg rides
-    /// the dep lane like any third-party lib), no session facts yet. The loop
-    /// task owns this value exclusively; both constructors (`new` the
-    /// wasm face, `spawn_native` the native harness) hand a fresh one
-    /// to [`event_loop::run`].
-    fn boot() -> SessionState {
-        SessionState {
-            docs: HashMap::new(),
-            defs: vec![crate::prelude::index()],
-            lock_pins: BTreeMap::new(),
-            direct_deps: HashSet::new(),
-            hints_shown: HashSet::new(),
-            walk_task: None,
-        }
-    }
-
-    // ---- the lanes the ABI handlers and the dep walk SHARE (the
-    // lifted handler bodies — one implementation, two doors: the
-    // message arms and [`walk`]'s read-only walk index through the
-    // same code, so a walked dep and a host-indexed dep can never
-    // drift) ----
-
-    /// the walk's per-root lock feed: parse one `rut.lock` into
-    /// the url→pin ledger. Ok = the row count and the ledger standing;
-    /// Err = the ledger CLEARED (the honest unpinned refusal, never
-    /// half-parsed or stale pins) and the error for the caller to
-    /// surface.
-    pub(crate) fn set_lock_text(&mut self, text: &str) -> Result<usize, String> {
-        match crate::deps::lock_pins(text) {
-            Ok(pins) => {
-                let n = pins.len();
-                self.lock_pins = pins;
-                Ok(n)
-            }
-            Err(e) => {
-                self.lock_pins = BTreeMap::new();
-                Err(e)
-            }
-        }
-    }
-
-    /// the walk's named-dep index lane: index one dep source
-    /// file under its module NAME (replace-by-origin), the
-    /// direct-dep marker stamped from the set the way it is
-    /// at this call, and the manifest's `consts` riding the row
-    /// (the check lane's Manifest threading — `&[]` for the
-    /// host-indexed files, which carry no manifest).
-    pub(crate) fn index_named_at(
-        &mut self,
-        uri: &str,
-        name: &str,
-        src: &str,
-        consts: &[(String, f64)],
-    ) {
-        let mut idx = crate::deps::index_dep(name, uri, src, consts);
-        idx.direct_dep = self.direct_deps.contains(name);
-        self.replace_by_origin(uri, idx);
-    }
-
-    /// [`event_loop::Cmd::IndexModAt`]'s body: index one dep source
-    /// file at a MOD PATH (the pkg root `""`, a mounted child its
-    /// `<path>`), answering the parsed file's own `mod` declarations —
-    /// the walk's next hop (structure lives in the parse, never in
-    /// path munging). The consts ride the pkg-ROOT stamp only.
-    pub(crate) fn index_mod_at(
-        &mut self,
-        uri: &str,
-        pkg: &str,
-        mod_path: &str,
-        src: &str,
-        consts: &[(String, f64)],
-    ) -> Vec<wire::ModDecl> {
-        let mut idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src, consts);
-        idx.direct_dep = self.direct_deps.contains(pkg);
-        let decls: Vec<wire::ModDecl> = idx
-            .mods
-            .iter()
-            .map(|m| wire::ModDecl {
-                name: m.name.clone(),
-                vis: if matches!(m.vis, rut_ast::Vis::Pub) {
-                    "pub"
-                } else {
-                    "mod"
-                },
-            })
-            .collect();
-        self.replace_by_origin(uri, idx);
-        decls
-    }
-
-    /// the defs store's replace-by-origin law — one index per origin
-    /// uri, re-indexing replaces (the world stays idempotent under
-    /// re-walks).
-    fn replace_by_origin(&mut self, uri: &str, idx: crate::hover::DefIndex) {
-        match self.defs.iter().position(|d| d.origin == uri) {
-            Some(slot) => self.defs[slot] = idx,
-            None => self.defs.push(idx),
-        }
-    }
-
-    /// the once-per-reason hint gate: the first `key` notifies, every
-    /// later one is silent. All walk hints are error-flagged (the
-    /// extension's law for these lanes).
-    pub(crate) fn hint_once(&mut self, io: &dyn env::Io, key: &str, msg: &str) {
-        if self.hints_shown.insert(key.to_string()) {
-            io.notify(msg, true);
-        }
-    }
-
-    /// the open document's file-module context, read off the STAMPED
-    /// twin: whichever face indexed the file under its real uri (the
-    /// extension's dep walk / workspace indexer) laid down the (module,
-    /// mod_path) pair — the fresh per-query doc index borrows it.
-    /// Unstamped files answer the default (position-path completion off;
-    /// nothing else reads this).
-    fn doc_mods_of(&self, uri: &str) -> crate::mods::DocMods {
-        for d in &self.defs {
-            if d.origin == uri {
-                return crate::mods::DocMods {
-                    mod_path: d.mod_path.clone(),
-                    pkg: d.module.clone(),
-                };
-            }
-        }
-        crate::mods::DocMods::default()
-    }
-
-    /// the completion query over the stored doc — both completion
-    /// entries' body (`complete_in` has already re-stored the text)
-    fn complete_stored(&self, uri: &str, line: u32, ch: u32) -> String {
-        let Some(src) = self.docs.get(uri).cloned() else {
-            return "[]".to_string();
-        };
-        let doc = self.doc_mods_of(uri);
-        let items = crate::analysis::complete_at(uri, &src, &self.defs, line, ch, &doc);
-        json_envelope(serde_json::json!(items))
-    }
-}
 
 /// the language core as the host holds it — one per editing session.
 /// Not the state itself: the INBOX HANDLE. The loop task owns `SessionState`
