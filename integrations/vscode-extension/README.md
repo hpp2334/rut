@@ -46,7 +46,7 @@ references, inlay-hint, and signature-help providers against
 no JSON-RPC and no language-client dependency — the module's results
 are already LSP values, serialized by serde_json. The workspace is
 indexed with `workspace.findFiles` and pushed into the module
-(`add_def`) — the same scan the CLI's own lanes bound.
+(`index_file`) — the same scan the CLI's own lanes bound.
 
 The dep walk lives in the crate too, behind the actor ABI: the
 extension injects a **read-only host environment** (`src/env.ts` —
@@ -83,7 +83,7 @@ The extension rides the same model:
 
 - The **workspace scan** stamps every `mod.rut` under a folder-level
   package's `src/` shell with its mod path (the wasm indexes it via
-  `rut_add_def_mod`)
+  `index_mod_at`)
   — a nested package's own manifest keeps it out of the parent's tree —
   then follows each stamped file's `mod` decls to stamp the
   single-file `NAME.rut` children at their child paths.
@@ -173,7 +173,7 @@ delete, and no fetch on it, by construction.
   `pub? mod NAME;` decl hovers its kind, mounted file, and child
   count; and after `modname::` / `modname.` in a package's own file
   the module's members complete by visibility tier. The wasm parses
-  every file (`rut_add_def_mod` answers the declared children) — the
+  every file (`index_mod_at` answers the declared children) — the
   env only moves bytes. `**/mod.rut` watchers re-mount a moved tree.
 - **Ctrl+click walks the whole use path into the dep** — every
   segment of `use A::B::…::Z` lands in real files: path deps in their

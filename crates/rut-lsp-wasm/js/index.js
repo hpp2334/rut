@@ -127,8 +127,8 @@ export class RutLsp {
   }
 
   /** index one workspace file (the host's stand-in for the server's fs walk) */
-  async addDef(uri, src) {
-    await this.lsp.add_def(uri, src);
+  async indexFile(uri, src) {
+    await this.lsp.index_file(uri, src);
   }
 
   /** parse one `rut.jsonc` — the dep table, or the error envelope */
@@ -137,8 +137,8 @@ export class RutLsp {
   }
 
   /** index one dep source file under its module NAME at a MOD PATH */
-  async addDefMod(uri, name, modPath, src) {
-    return JSON.parse(await this.lsp.add_def_mod(uri, name, modPath, src));
+  async indexModAt(uri, pkg, modPath, src) {
+    return JSON.parse(await this.lsp.index_mod_at(uri, pkg, modPath, src));
   }
 
   /**
@@ -178,7 +178,7 @@ export class RutLsp {
    * (entries, mod trees, path rows recursing, url rows mounting from
    * the global dep store when its meta vouches the pin). The answer
    * carries the refused url rows (`missing`); the mounted world lands
-   * in the core's defs store, exactly like `addDef`-indexed files.
+   * in the core's defs store, exactly like `indexFile`-indexed files.
    * @param {string[]} roots
    * @returns {Promise<WalkOut>}
    */

@@ -48,7 +48,7 @@ pub struct ModDecl {
     pub vis: &'static str,
 }
 
-/// `add_def_mod`'s answer.
+/// `index_mod_at`'s answer.
 #[derive(Serialize)]
 pub struct ModDecls {
     pub decls: Vec<ModDecl>,

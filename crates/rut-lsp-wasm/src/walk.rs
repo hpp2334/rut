@@ -14,12 +14,12 @@
 //!   clears the previous root's ledger silently (multi-root
 //!   precedence: root order decides).
 //! - **entries + mod trees index through the ABI's own lanes** — the
-//!   [`SessionState::add_def_named_at`] / [`SessionState::add_def_mod_at`] bodies the
-//!   `add_def_named` / `add_def_mod` handlers run, so a walked dep
+//!   [`SessionState::index_named_at`] / [`SessionState::index_mod_at`] bodies the
+//!   `index_mod_at` handler runs, so a walked dep
 //!   resolves in hover/completion/definition exactly like a
 //!   host-indexed one (one store, replace-by-origin, no drift). The
 //!   mod-tree recursion follows the wasm-parsed decls (the
-//!   `add_def_mod_at` reply), `NAME/mod.rut` then `NAME.rut`
+//!   `index_mod_at` reply), `NAME/mod.rut` then `NAME.rut`
 //!   spellings, beside the declaring file.
 //! - **url rows mount from the GLOBAL DEP STORE** — the address is
 //!   DERIVED through rut-driver's helpers (`<name>@<sha256[:16]>`
@@ -205,7 +205,7 @@ fn walk_manifest(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, depth: 
             let src = String::from_utf8_lossy(&bytes).into_owned();
             // the manifest's consts ride the pkg's own rows (the check
             // lane threads them into the engine's Manifest)
-            state.add_def_named_at(&path, &module, &src, &table.consts);
+            state.index_named_at(&path, &module, &src, &table.consts);
         } // a manifest naming a missing entry — index what exists
     }
     // the mod tree (the pkg's own modules): the root module stamps at
@@ -310,7 +310,7 @@ fn mount_mod_tree(
     let text = String::from_utf8_lossy(&bytes).into_owned();
     // the root re-stamp carries the manifest's consts (it REPLACES the
     // entries loop's row — same origin — so the rows ride again)
-    let decls = state.add_def_mod_at(&root_path, module, "", &text, consts);
+    let decls = state.index_mod_at(&root_path, module, "", &text, consts);
     // the children mount BESIDE THE ROOT FILE — inside the package's
     // `src/` shell
     let root_dir = dirname(&root_path);
@@ -394,7 +394,7 @@ fn mount_child_mod(
         format!("{parent_path}/{name}")
     };
     // the consts mint on the pkg-ROOT row only — a child carries none
-    let decls = state.add_def_mod_at(&child_path, module, &mod_path, &text, &[]);
+    let decls = state.index_mod_at(&child_path, module, &mod_path, &text, &[]);
     // a file-form child's children mount BESIDE it, not under `NAME/`
     let child_dir = if child_path == dir_form {
         format!("{declaring_dir}/{name}")

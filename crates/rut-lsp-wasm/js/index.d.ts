@@ -202,7 +202,7 @@ export interface MissingDep {
 /**
  * `resolveDeps`'s answer — the walk's refused url rows. Mounted rows
  * carry no row: the defs store they mounted into IS the answer,
- * exactly the world an `addDef`-indexed file leaves.
+ * exactly the world an `indexFile`-indexed file leaves.
  */
 export interface WalkOut {
   missing: MissingDep[];
@@ -272,13 +272,13 @@ export class RutLsp {
   signatureHelp(uri: string, line: number, character: number): Promise<LspSignatureHelp | null>;
 
   /** index one workspace file (the host's stand-in for the fs walk) */
-  addDef(uri: string, src: string): Promise<void>;
+  indexFile(uri: string, src: string): Promise<void>;
 
   /** parse one `rut.jsonc` — the dep table, or the error envelope */
   parseManifest(text: string): Promise<DepTable | Envelope>;
 
   /** index one source file under its module NAME at a MOD PATH (the scan lane) */
-  addDefMod(uri: string, name: string, modPath: string, src: string): Promise<ModDecls | Envelope>;
+  indexModAt(uri: string, pkg: string, modPath: string, src: string): Promise<ModDecls | Envelope>;
 
   /**
    * re-inject the read-only host environment (replace-on-reinject —
@@ -293,7 +293,7 @@ export class RutLsp {
    * (entries, mod trees, path rows recursing, url rows mounting from
    * the global dep store when its meta vouches the pin). The answer
    * carries the refused url rows (`missing`); the mounted world lands
-   * in the core's defs store, exactly like `addDef`-indexed files.
+   * in the core's defs store, exactly like `indexFile`-indexed files.
    */
   resolveDeps(roots: string[]): Promise<WalkOut>;
 

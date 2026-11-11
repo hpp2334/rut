@@ -147,7 +147,7 @@ pub enum Cmd {
         ch: u32,
         tx: Tx,
     },
-    AddDef {
+    IndexFile {
         uri: String,
         src: String,
         tx: Tx,
@@ -181,9 +181,9 @@ pub enum Cmd {
         roots: Vec<String>,
         tx: Tx,
     },
-    AddDefMod {
+    IndexModAt {
         uri: String,
-        name: String,
+        pkg: String,
         mod_path: String,
         src: String,
         tx: Tx,
@@ -527,7 +527,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             };
             let _ = tx.send(Reply::Text(answer));
         }
-        Cmd::AddDef { uri, src, tx } => {
+        Cmd::IndexFile { uri, src, tx } => {
             let idx = crate::analysis::index_at(&uri, &src);
             match l.state.defs.iter().position(|d| d.origin == uri) {
                 Some(slot) => l.state.defs[slot] = idx,
@@ -571,15 +571,15 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             // (or the no-clock eager path dispatched it in-turn)
             let _ = tx.send(Reply::Text(walk_now(l, &roots)));
         }
-        Cmd::AddDefMod {
+        Cmd::IndexModAt {
             uri,
-            name,
+            pkg,
             mod_path,
             src,
             tx,
         } => {
             // the host's scan-index lane carries no manifest — no consts
-            let decls = l.state.add_def_mod_at(&uri, &name, &mod_path, &src, &[]);
+            let decls = l.state.index_mod_at(&uri, &pkg, &mod_path, &src, &[]);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
         }
     }

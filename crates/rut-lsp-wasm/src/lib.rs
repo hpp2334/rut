@@ -35,7 +35,7 @@
 //!                                              informational rows for
 //!                                              hosts) out; every mounted dep
 //!                                              lands in the SAME defs store
-//!                                              the add_def lanes write (see
+//!                                              the index lanes write (see
 //!                                              `walk`) — the EAGER manual
 //!                                              door
 //!   stir(roots_json) -> String                 STIR the dep walk — the
@@ -64,11 +64,11 @@
 //!   inlay(uri, sl, sc, el, ec) -> String       LSP InlayHint array or null
 //!   references(uri, line, ch, incl) -> String  LSP Location array or null
 //!   signature_help(uri, line, ch) -> String    LSP SignatureHelp or null
-//!   add_def(uri, src)                          index a workspace file
+//!   index_file(uri, src)                       index a workspace file
 //!   parse_manifest(text) -> String             rut.jsonc bytes -> the
 //!                                              dep-table JSON (or the
 //!                                              error envelope)
-//!   add_def_mod(uri, name, path, src)          index a source file at a
+//!   index_mod_at(uri, pkg, path, src)          index a source file at a
 //!                                              MOD PATH (the workspace
 //!                                              scan lane); the envelope
 //!                                              names the file's own mod
@@ -86,7 +86,7 @@
 //! the extension's wire-shape e2e block.
 //!
 //! THE SURFACE LAW — the ABI is exactly three lanes: the provider
-//! queries above; the workspace-scan push (`add_def`/`add_def_mod`/
+//! queries above; the workspace-scan push (`index_file`/`index_mod_at`/
 //! `parse_manifest` — the host's `findFiles` sees editor ignore
 //! semantics the env cannot); and the dep pull (`set_env` +
 //! `resolve_deps`/`stir`). NO entry mutates dep state except through
@@ -223,7 +223,7 @@ impl SessionState {
     /// at this call, and the manifest's `consts` riding the row
     /// (the check lane's Manifest threading — `&[]` for the
     /// host-indexed files, which carry no manifest).
-    pub(crate) fn add_def_named_at(
+    pub(crate) fn index_named_at(
         &mut self,
         uri: &str,
         name: &str,
@@ -235,21 +235,21 @@ impl SessionState {
         self.replace_by_origin(uri, idx);
     }
 
-    /// [`event_loop::Cmd::AddDefMod`]'s body: index one dep source
+    /// [`event_loop::Cmd::IndexModAt`]'s body: index one dep source
     /// file at a MOD PATH (the pkg root `""`, a mounted child its
     /// `<path>`), answering the parsed file's own `mod` declarations —
     /// the walk's next hop (structure lives in the parse, never in
     /// path munging). The consts ride the pkg-ROOT stamp only.
-    pub(crate) fn add_def_mod_at(
+    pub(crate) fn index_mod_at(
         &mut self,
         uri: &str,
-        name: &str,
+        pkg: &str,
         mod_path: &str,
         src: &str,
         consts: &[(String, f64)],
     ) -> Vec<wire::ModDecl> {
-        let mut idx = crate::deps::index_dep_mod(name, uri, mod_path, src, consts);
-        idx.direct_dep = self.direct_deps.contains(name);
+        let mut idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src, consts);
+        idx.direct_dep = self.direct_deps.contains(pkg);
         let decls: Vec<wire::ModDecl> = idx
             .mods
             .iter()
@@ -503,9 +503,9 @@ impl RutLsp {
     /// index one workspace file (the host's stand-in for an fs walk —
     /// server's fs walk — the 500-file cap is the caller's). Re-indexing
     /// a URI replaces its entry. The await is ordering only.
-    pub async fn add_def(&self, uri: String, src: String) {
+    pub async fn index_file(&self, uri: String, src: String) {
         let _ = self
-            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::AddDef { uri, src, tx }))
+            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::IndexFile { uri, src, tx }))
             .await;
     }
 
@@ -584,23 +584,23 @@ impl RutLsp {
     }
 
     /// index one dep source file under its module NAME at a MOD PATH —
-    /// the mod-aware twin of `add_def_named` (the dep walk's per-file
+    /// the mod-aware twin of `index_named_at` (the dep walk's per-file
     /// move for a mod-carrying package: the root at `""`, each child at
     /// its path). Returns the parsed file's own `mod` declarations —
     /// `{ "decls": [{ "name", "vis" }] }` — so the host's mount walk
     /// reads its next hop from the wasm's parse (JS moves bytes, the
     /// module parses; no JS-side rut parsing).
-    pub async fn add_def_mod(
+    pub async fn index_mod_at(
         &self,
         uri: String,
-        name: String,
+        pkg: String,
         mod_path: String,
         src: String,
     ) -> String {
         self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::AddDefMod {
+            event_loop::Msg::Cmd(event_loop::Cmd::IndexModAt {
                 uri,
-                name,
+                pkg,
                 mod_path,
                 src,
                 tx,

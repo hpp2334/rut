@@ -98,10 +98,10 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             const rel = path.relative(folder.fsPath, path.dirname(file.fsPath));
             const modPath = stripSrcShell(rel);
             if (modPath === null) {
-                await rut.addDef(file.toString(), dec.decode(bytes));
+                await rut.indexFile(file.toString(), dec.decode(bytes));
                 continue;
             }
-            const stamped = await rut.addDefMod(file.toString(), pkg, modPath, dec.decode(bytes));
+            const stamped = await rut.indexModAt(file.toString(), pkg, modPath, dec.decode(bytes));
             if (!isEnvelope(stamped) && stamped.decls.length > 0) {
                 frontier.push({
                     folder,
@@ -113,7 +113,7 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
             }
             continue;
         }
-        await rut.addDef(file.toString(), dec.decode(bytes));
+        await rut.indexFile(file.toString(), dec.decode(bytes));
     }
     // the declared children, breadth-first: each stamped edge probes
     // `NAME.rut` beside the declaring file (BOTH spellings is the
@@ -164,9 +164,9 @@ export async function indexWorkspace(rut: RutLsp): Promise<void> {
                 }
             }
             const bytes = await vscode.workspace.fs.readFile(childUri);
-            // addDefMod replaces per origin — a dir-form correction overrides
+            // indexModAt replaces per origin — a dir-form correction overrides
             // the path-shape stamp's bare-relative answer
-            const stamped = await rut.addDefMod(
+            const stamped = await rut.indexModAt(
                 childUri.toString(),
                 pkg,
                 childPath,

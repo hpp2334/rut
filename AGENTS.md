@@ -196,8 +196,8 @@ order:
 - **The three-lane ABI law**: `crates/rut-lsp-wasm`'s public surface
   is exactly three lanes — the provider queries (`analyze`, `hover`,
   `complete` with src, definition/inlay/references/signature-help,
-  `legend`, `forget`), the workspace-scan push (`addDef`/
-  `addDefMod`/`parseManifest` — the host's `findFiles` respects
+  `legend`, `forget`), the workspace-scan push (`indexFile`/
+  `indexModAt`/`parseManifest` — the host's `findFiles` respects
   editor ignore semantics the env cannot), and the dep pull
   (`setEnv` + `stir`, the deferred door the hosts ride;
   `resolveDeps` stays as the eager manual door — tests, cold boot,

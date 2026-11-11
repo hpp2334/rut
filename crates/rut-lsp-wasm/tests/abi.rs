@@ -192,13 +192,13 @@ fn definition_on_the_mod_edge_names_the_child_file_top() {
     let child = "pub struct Slot {\n    n: i32;\n}\n";
     let ru = "file:///ws/edgemod/mod.rut";
     let cu = "file:///ws/edgemod/helpers/mod.rut";
-    take(pool.run_until(lsp.add_def_mod(
+    take(pool.run_until(lsp.index_mod_at(
         ru.to_string(),
         "edgemod".to_string(),
         "".to_string(),
         root.to_string(),
     )));
-    take(pool.run_until(lsp.add_def_mod(
+    take(pool.run_until(lsp.index_mod_at(
         cu.to_string(),
         "edgemod".to_string(),
         "helpers".to_string(),
@@ -243,7 +243,7 @@ fn complete_syncs_the_doc_and_the_dot_guard_holds() {
     // purpose (the tail still short the dot — the analyze debounce's
     // window): the `_in` entry stores the CURRENT text first, so the
     // member tier still answers.
-    take(pool.run_until(lsp.add_def_mod(
+    take(pool.run_until(lsp.index_mod_at(
         "file:///ws/ink/src/mod.rut".to_string(),
         "ink".to_string(),
         String::new(),
@@ -281,7 +281,7 @@ fn complete_syncs_the_doc_and_the_dot_guard_holds() {
 }
 
 /// plan3 phase 4 (B1+B2): the CHECK LANE through the bindgen face —
-/// a doc whose package is STAMPED (`add_def_mod` named it) compiles
+/// a doc whose package is STAMPED (`index_mod_at` named it) compiles
 /// with its dep closure, and the checker's type errors surface with
 /// the right file and range: the bool→str assignment mismatch AND
 /// the missing record field, the diagnosis pair. An UNSTAMPED doc
@@ -293,7 +293,7 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
     // the dep: one mod-tree file mounted under its module NAME
     let dep_src = "pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n";
     let dep_uri = "file:///ws/chk/dep/mod.rut";
-    let stamped = take(pool.run_until(lsp.add_def_mod(
+    let stamped = take(pool.run_until(lsp.index_mod_at(
         dep_uri.to_string(),
         "chkdep".to_string(),
         "".to_string(),
@@ -308,7 +308,7 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
     // workspace indexer stamps it
     let doc = "use chkdep::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n    let t = Task { title: \"x\", completed: false };\n}\n";
     let app_uri = "file:///ws/chk/app/mod.rut";
-    let stamped = take(pool.run_until(lsp.add_def_mod(
+    let stamped = take(pool.run_until(lsp.index_mod_at(
         app_uri.to_string(),
         "chkapp".to_string(),
         "".to_string(),
@@ -359,13 +359,13 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
 }
 
 #[test]
-fn add_def_mod_stamps_the_tree_and_feeds_the_use_walk() {
+fn index_mod_at_stamps_the_tree_and_feeds_the_use_walk() {
     let (lsp, mut pool) = RutLsp::spawn_native();
     // the root: `pub mod layout;` rides back as the mount walk's
     // next hop (the host reads its children from the envelope)
     let root_src = "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n";
     let uri_root = "file:///ws/gadgets/mod.rut";
-    let out = take(pool.run_until(lsp.add_def_mod(
+    let out = take(pool.run_until(lsp.index_mod_at(
         uri_root.to_string(),
         "gadgets".to_string(),
         "".to_string(),
@@ -381,7 +381,7 @@ fn add_def_mod_stamps_the_tree_and_feeds_the_use_walk() {
     let layout_src =
         "pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n";
     let uri_layout = "file:///ws/gadgets/layout/mod.rut";
-    let out = take(pool.run_until(lsp.add_def_mod(
+    let out = take(pool.run_until(lsp.index_mod_at(
         uri_layout.to_string(),
         "gadgets".to_string(),
         "layout".to_string(),

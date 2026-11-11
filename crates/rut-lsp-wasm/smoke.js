@@ -54,7 +54,7 @@ fn go(g: Greeter) -> str {
   // bare tier stays honest (own decls + ambient builtins + the names
   // the document already uses; a foreign plain offer the compile
   // would reject is a trap, so an unused foreign name never offers)
-  await core.add_def("file:///ws/gadgets/lib.rut", "class Widget {\n    id: i32;\n}\n");
+  await core.index_file("file:///ws/gadgets/lib.rut", "class Widget {\n    id: i32;\n}\n");
   const honest = JSON.parse(await core.complete(URI, SRC, 0, 0));
   assert.ok(!honest.map((i) => i.label).includes("Widget"), "bare tier stays honest without a use");
   JSON.parse(await core.analyze(URI, "use gadgets::{ Widget };\n" + SRC));

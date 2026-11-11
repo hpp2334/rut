@@ -17,7 +17,7 @@
 // Phase 2 (lsp-features) adds the DEFINITION round trips: request
 // position → response span == the declaring ident EXACTLY, through all
 // three resolution layers — within-file (binding pass + decl layer),
-// cross-file (the use graph into a rut.add_def'ed module), and stdlib
+// cross-file (the use graph into a rut.indexFile'ed module), and stdlib
 // (a STORE-MOUNTED dep's true source file) — plus a typeDefinition
 // smoke. A feature without a gate through the shipped artifact does
 // not land.
@@ -40,7 +40,7 @@
 //
 // Phase 5 (manifest-deps) added the DEP ABI; today's shape is the
 // three-lane law: the provider queries, the workspace-scan push
-// (rut.add_def / rut.add_def_mod / rut.parse_manifest), and the dep
+// (rut.indexFile / rut.indexModAt / rut.parseManifest), and the dep
 // pull (set_env + rut.resolve_deps — the read-only walk over the
 // injected env). The std-zips phase then moved std OFF the ambient
 // wasm onto the dep lane for good: the core prelude is the ONE
@@ -910,12 +910,12 @@ async function main() {
     }
 
     // CROSS-FILE: a `use gadgets::{ Widget }` doc jumps into the
-    // exporting module (indexed via rut.add_def, pkg matched by its path
+    // exporting module (indexed via rut.indexFile, pkg matched by its path
     // segment) — both the use-statement name and the usage sites
     {
         const libUri = 'file:///ws/gadgets/lib.rut';
         const libSrc = ['class Widget {', '    id: i32;', '}', ''].join('\n');
-        await rut.addDef(libUri, libSrc);
+        await rut.indexFile(libUri, libSrc);
         const uri = 'file:///ws/e2e-def-cross.rut';
         const src = [
             'use gadgets::{ Widget };',
@@ -1311,7 +1311,7 @@ async function main() {
         smokes++;
     }
 
-    // CROSS-FILE, both directions: the lib is indexed via rut.add_def
+    // CROSS-FILE, both directions: the lib is indexed via rut.indexFile
     // (pkg matched by its path segment); the importing doc's use name +
     // usage are the EXACT reference set of the lib's decl — queried from
     // the doc side AND from the lib-decl side
@@ -1321,8 +1321,8 @@ async function main() {
         const mainUri = 'file:///ws/e2e-refs-cross.rut';
         const mainSrc =
             'use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget.new();\n}\n';
-        await rut.addDef(libUri, libSrc);
-        await rut.addDef(mainUri, mainSrc); // the extension indexes every workspace file
+        await rut.indexFile(libUri, libSrc);
+        await rut.indexFile(mainUri, mainSrc); // the extension indexes every workspace file
         const a = await rut.analyze(mainUri, mainSrc);
         if (a.diags.length !== 0) {
             bad.push(
@@ -1491,7 +1491,7 @@ async function main() {
     }
 
     // ---- phase 5 (manifest-deps): the DEP ABI — parse_manifest /
-    // add_def / add_def_mod / set_env + resolve_deps — through the
+    // index_file / index_mod_at / set_env + resolve_deps — through the
     // SHIPPED artifact's binding. Separate instance, loaded over the
     // SAME std store world (std rides the dep lane: ink mounts here,
     // so the doc-sync lane's Logger assertions read the real walk),
@@ -1671,14 +1671,14 @@ async function main() {
                 fs.mkdirSync(path.join(toolsDir, 'src', 'layout'), { recursive: true });
                 fs.writeFileSync(path.join(toolsDir, 'src', 'mod.rut'), rootSrc);
                 fs.writeFileSync(path.join(toolsDir, 'src', 'layout', 'mod.rut'), childSrc);
-                let ts = await rut.addDefMod(
+                let ts = await rut.indexModAt(
                     `file://${path.join(toolsDir, 'src', 'mod.rut')}`,
                     'tools2',
                     '',
                     rootSrc,
                 );
                 assert.ok(!ts.error, `tools2 root indexes: ${JSON.stringify(ts)}`);
-                ts = await rut.addDefMod(
+                ts = await rut.indexModAt(
                     `file://${path.join(toolsDir, 'src', 'layout', 'mod.rut')}`,
                     'tools2',
                     'layout',
@@ -1744,7 +1744,7 @@ async function main() {
                 // re-derived grid/mod.rut) ----
                 const gridSrc = 'pub fn dig() -> i32 { return 1; }\n';
                 fs.writeFileSync(path.join(toolsDir, 'src', 'layout', 'grid.rut'), gridSrc);
-                ts = await rut.addDefMod(
+                ts = await rut.indexModAt(
                     `file://${path.join(toolsDir, 'src', 'layout', 'grid.rut')}`,
                     'tools2',
                     'layout/grid',
@@ -1793,7 +1793,7 @@ async function main() {
             }
         }
 
-        // ---- file modules (the mod walk): rut_add_def_mod stamps the
+        // ---- file modules (the mod walk): index_mod_at stamps the
         // tree — the root's `pub mod layout;` rides back as the mount
         // walk's next hop, `use tools::layout::` completes the walked
         // module's exports (never the private edge), and the use-path
@@ -1801,7 +1801,7 @@ async function main() {
         // lane's earlier flat `gadgets` index stays the transitional shape
         // it was indexed as. ----
         const mRoot = 'pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n';
-        const rootOut = await dep.addDefMod('file:///ws/tools/src/mod.rut', 'tools', '', mRoot);
+        const rootOut = await dep.indexModAt('file:///ws/tools/src/mod.rut', 'tools', '', mRoot);
         assert.deepStrictEqual(
             rootOut.decls,
             [
@@ -1812,7 +1812,7 @@ async function main() {
         );
         const mChild =
             'pub struct Column {\n    w: i32;\n}\npub fn mk() -> Column { return Column { w: 1 }; }\n';
-        const childOut = await dep.addDefMod(
+        const childOut = await dep.indexModAt(
             'file:///ws/tools/src/layout/mod.rut',
             'tools',
             'layout',
@@ -1898,17 +1898,17 @@ async function main() {
         smokes++;
 
         // ---- plan3 phase 4 (B1+B2): SEMANTIC DIAGNOSTICS — the check lane.
-        // A doc whose package is STAMPED (rut_add_def_mod named it) compiles
+        // A doc whose package is STAMPED (index_mod_at named it) compiles
         // with its dep closure: the checker's type errors surface with the
         // right file and range — the bool→str assignment mismatch AND the
         // missing record field (the diagnosis pair). The dep rides the chain
-        // (mounted via rut_add_def_mod); an UNSTAMPED doc with the same text
+        // (mounted via index_mod_at); an UNSTAMPED doc with the same text
         // stays parse-only clean — today's behavior, the corpus lock above
         // depends on it. ----
         {
             const chkDepSrc =
                 'pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n';
-            const chkDep = await dep.addDefMod(
+            const chkDep = await dep.indexModAt(
                 'file:///ws/chk/dep/src/mod.rut',
                 'chkdep',
                 '',
@@ -1925,7 +1925,7 @@ async function main() {
                 '',
             ].join('\n');
             const chkAppUri = 'file:///ws/chk/app/src/mod.rut';
-            const chkApp = await dep.addDefMod(chkAppUri, 'chkapp', '', chkAppSrc);
+            const chkApp = await dep.indexModAt(chkAppUri, 'chkapp', '', chkAppSrc);
             assert.ok(Array.isArray(chkApp.decls), `chkapp stamps: ${JSON.stringify(chkApp)}`);
             const chkMerged = await dep.analyze(chkAppUri, chkAppSrc);
             const chkDiags = chkMerged.diags || [];
