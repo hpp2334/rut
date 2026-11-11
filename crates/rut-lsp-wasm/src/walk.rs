@@ -176,9 +176,9 @@ fn walk_manifest(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, depth: 
     // the ROOT manifest's own rows are the doc's DIRECT deps — the
     // compiler's closure check refuses `use` of a mounted-but-
     // undeclared package, so the auto-import tier gates on this set
-    // and the names must sit in it BEFORE anything mounts (the dep
-    // indexes stamp the marker at index time). Names accumulate
-    // across roots and re-walks, never shrink the world.
+    // (reads it LIVE at query time — no ordering against the mounts,
+    // the gate is structural). Names accumulate across roots and
+    // re-walks, never shrink the world.
     if depth == 1 {
         let mut names: Vec<String> = table.deps.iter().map(|r| r.name.clone()).collect();
         names.extend(table.dev_deps.iter().map(|r| r.name.clone()));

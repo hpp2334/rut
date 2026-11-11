@@ -38,11 +38,5 @@ pub fn index() -> DefIndex {
     idx.module = Some("core".to_string());
     // the mode rides too — `Decl`, the `.d.rut` surface's own split
     idx.mode = Some(rut_semantic::mode_of(path));
-    // the prelude rides every chain as the ambient dep lane: the
-    // auto-import tier offers its names wherever the doc's manifest
-    // stands (the same shape a direct dep's mount answers with). The
-    // direct-dep marker gates the MOUNTED dep walks; the prelude is
-    // not one of them.
-    idx.direct_dep = true;
     idx
 }

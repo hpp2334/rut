@@ -26,10 +26,10 @@ pub(crate) struct SessionState {
     /// name plus every dep row its ROOT manifest declares (`deps`,
     /// `dev-deps` at the walk root). The host hands the
     /// set to `set_direct_deps` when it parses a root manifest;
-    /// every dep index named here stamps `direct_dep`, the
-    /// auto-import tier's gate (a transitive-only dep's `use` is the
-    /// compiler's D5 error). Union-accumulating: multi-folder walks
-    /// and re-walks re-add the same names, never shrink the world.
+    /// the auto-import tier reads it live (a transitive-only dep's
+    /// `use` is the compiler's D5 error). Union-accumulating:
+    /// multi-folder walks and re-walks re-add the same names, never
+    /// shrink the world.
     pub(crate) direct_deps: HashSet<String>,
     /// the once-per-reason hint gate — every user-facing hint the
     /// walk and the ledger feeds emit keys here, so a reason names
@@ -89,9 +89,8 @@ impl SessionState {
     }
 
     /// the walk's named-dep index lane: index one dep source
-    /// file under its module NAME (replace-by-origin), the
-    /// direct-dep marker stamped from the set the way it is
-    /// at this call, and the manifest's `consts` riding the row
+    /// file under its module NAME (replace-by-origin), and the
+    /// manifest's `consts` riding the row
     /// (the check lane's Manifest threading — `&[]` for the
     /// host-indexed files, which carry no manifest).
     pub(crate) fn index_named_at(
@@ -101,8 +100,7 @@ impl SessionState {
         src: &str,
         consts: &[(String, f64)],
     ) {
-        let mut idx = crate::deps::index_dep(name, uri, src, consts);
-        idx.direct_dep = self.direct_deps.contains(name);
+        let idx = crate::deps::index_dep(name, uri, src, consts);
         self.replace_by_origin(uri, idx);
     }
 
@@ -119,8 +117,7 @@ impl SessionState {
         src: &str,
         consts: &[(String, f64)],
     ) -> Vec<wire::ModDecl> {
-        let mut idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src, consts);
-        idx.direct_dep = self.direct_deps.contains(pkg);
+        let idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src, consts);
         let decls: Vec<wire::ModDecl> = idx
             .mods
             .iter()
@@ -181,7 +178,8 @@ impl SessionState {
             return "[]".to_string();
         };
         let doc = self.doc_mods_of(uri);
-        let items = crate::analysis::complete_at(uri, &src, &self.defs, line, ch, &doc);
+        let items =
+            crate::analysis::complete_at(uri, &src, &self.defs, line, ch, &doc, &self.direct_deps);
         json_envelope(serde_json::json!(items))
     }
 }

@@ -2,6 +2,7 @@ use rut_lsp_wasm::completion::*;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::mods::DocMods;
 use rut_parser::Mode;
+use std::collections::HashSet;
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
 /// reads doc chains off the decl nodes) and the recovering entry (the
@@ -26,7 +27,15 @@ fn complete_after(src: &str, needle: &str) -> Vec<CompletionOut> {
     let idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
     let idxs = [&idx];
     let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
-    complete(&idxs, &toks, &ast, pos, &s, &DocMods::default())
+    complete(
+        &idxs,
+        &toks,
+        &ast,
+        pos,
+        &s,
+        &DocMods::default(),
+        &HashSet::new(),
+    )
 }
 
 fn labels(items: &[CompletionOut]) -> Vec<&str> {
@@ -71,7 +80,15 @@ fn member_completion_gates_foreign_interface_members() {
         let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
         let idxs = [&di, &surf];
         let pos = d2.rfind("g.").unwrap() as u32 + 2;
-        complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
+        complete(
+            &idxs,
+            &toks,
+            &ast,
+            pos,
+            &d2,
+            &DocMods::default(),
+            &HashSet::new(),
+        )
     };
 
     let gated = "fn go(g: Greeter) -> nil { g. }\n";
@@ -95,7 +112,16 @@ fn member_completion_gates_foreign_interface_members() {
     let idxs = [&di];
     let pos = d2.rfind("l.").unwrap() as u32 + 2;
     assert!(
-        labels(&complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())).contains(&"hi"),
+        labels(&complete(
+            &idxs,
+            &toks,
+            &ast,
+            pos,
+            &d2,
+            &DocMods::default(),
+            &HashSet::new()
+        ))
+        .contains(&"hi"),
         "own interface completes"
     );
 }
@@ -161,7 +187,15 @@ fn bare_completion_gates_pub_builtin_core_names() {
         let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
         let idxs = [&di, &core];
         let pos = d2.len() as u32;
-        complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
+        complete(
+            &idxs,
+            &toks,
+            &ast,
+            pos,
+            &d2,
+            &DocMods::default(),
+            &HashSet::new(),
+        )
     };
 
     let bare = "entry fn main() -> nil { }\n";
@@ -215,24 +249,27 @@ fn bare_completion_gates_pub_builtin_core_names() {
 // foreign name rides only the auto-import tier (the `use` insert
 // edit rides the item), and a transitive-only dep never offers. ----
 
-/// a direct dep index — the `gadgets` pkg with one pub fn and one
+/// a mounted dep index — the `gadgets` pkg with one pub fn and one
 /// pub struct, built the way the dep walk does (`index_dep`:
-/// module stamped; the direct-dep marker stamped — the root
-/// manifest's own dep row)
+/// module stamped). Directness is NOT an index fact — the tier
+/// derives it at read from the seeded set (`complete_with_dep`)
 fn tag_dep() -> DefIndex {
-    let mut dep = rut_lsp_wasm::deps::index_dep(
+    rut_lsp_wasm::deps::index_dep(
         "gadgets",
         "file:///deps/gadgets/lib.rut",
         "pub struct Widget {\nid: i32;\n}\npub fn tag() -> i32 { return 1; }\n",
         &[],
-    );
-    dep.direct_dep = true;
-    dep
+    )
 }
 
 /// completions over `doc` with `dep` in the chain, the cursor at
-/// the end of the document
-fn complete_with_dep(doc: &str, dep: &DefIndex) -> Vec<CompletionOut> {
+/// the end of the document; `direct_deps` is the doc's seeded dep
+/// set (the root manifest's rows — the tier's live gate)
+fn complete_with_dep(
+    doc: &str,
+    dep: &DefIndex,
+    direct_deps: &HashSet<String>,
+) -> Vec<CompletionOut> {
     let d2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
     let ast = doc_ast(&d2, Mode::Impl);
@@ -245,15 +282,18 @@ fn complete_with_dep(doc: &str, dep: &DefIndex) -> Vec<CompletionOut> {
         d2.len() as u32,
         &d2,
         &DocMods::default(),
+        direct_deps,
     )
 }
 
 #[test]
 fn a_foreign_dep_fn_rides_only_the_import_tier_until_used() {
     let dep = tag_dep();
+    // the doc's manifest declares the dep — the seeded set says so
+    let direct = HashSet::from(["gadgets".to_string()]);
     // bare doc: `tag` is NOT a plain bare item — the only offer is
     // the auto-import one (the `use gadgets::tag;` edit rides it)
-    let items = complete_with_dep("entry fn main() -> nil { }\n", &dep);
+    let items = complete_with_dep("entry fn main() -> nil { }\n", &dep, &direct);
     assert!(
         items
             .iter()
@@ -266,7 +306,11 @@ fn a_foreign_dep_fn_rides_only_the_import_tier_until_used() {
 
     // after the `use`, `tag` IS a plain bare item — and the
     // auto-import tier never re-offers it
-    let items = complete_with_dep("use gadgets::{ tag };\nentry fn main() -> nil { }\n", &dep);
+    let items = complete_with_dep(
+        "use gadgets::{ tag };\nentry fn main() -> nil { }\n",
+        &dep,
+        &direct,
+    );
     let plain = items
         .iter()
         .find(|c| c.label == "tag")
@@ -286,11 +330,12 @@ fn a_foreign_dep_fn_rides_only_the_import_tier_until_used() {
 fn a_transitive_only_dep_never_auto_imports() {
     // the compiler's closure check (`Session::resolve_use` →
     // `declares`) refuses `use` of a mounted-but-undeclared
-    // package — the auto-import tier mirrors it: an index NOT
-    // stamped `direct_dep` never rides the tier
-    let mut dep = tag_dep();
-    dep.direct_dep = false; // mounted, but the doc's manifest doesn't declare it
-    let items = complete_with_dep("entry fn main() -> nil { }\n", &dep);
+    // package — the auto-import tier mirrors it: a module NOT in
+    // the doc's seeded dep set never rides the tier
+    let dep = tag_dep();
+    // mounted, but the doc's manifest doesn't declare it — the set
+    // stays empty
+    let items = complete_with_dep("entry fn main() -> nil { }\n", &dep, &HashSet::new());
     assert!(
         import_item(&items, "tag").is_none(),
         "a transitive-only dep's fn must not auto-import: {:?}",
@@ -309,7 +354,12 @@ fn a_name_reachable_two_ways_offers_exactly_one_item() {
     // auto-import tier would offer it — the merged list retains
     // the plain one, exactly one item by the label
     let dep = tag_dep();
-    let items = complete_with_dep("use gadgets::{ tag };\nentry fn main() -> nil { }\n", &dep);
+    let direct = HashSet::from(["gadgets".to_string()]);
+    let items = complete_with_dep(
+        "use gadgets::{ tag };\nentry fn main() -> nil { }\n",
+        &dep,
+        &direct,
+    );
     let count = items.iter().filter(|c| c.label == "tag").count();
     assert_eq!(
         count,
@@ -331,8 +381,9 @@ fn a_name_reachable_two_ways_offers_exactly_one_item() {
 fn the_brace_form_rides_the_names_tier() {
     // `use gadgets::{⏐` — exports; the comma form too
     let dep = tag_dep();
+    let direct = HashSet::from(["gadgets".to_string()]);
     for doc in ["use gadgets::{", "use gadgets::{ tag, "] {
-        let items = complete_with_dep(doc, &dep);
+        let items = complete_with_dep(doc, &dep, &direct);
         let ls = labels(&items);
         assert!(
             ls.contains(&"Widget"),
@@ -341,10 +392,10 @@ fn the_brace_form_rides_the_names_tier() {
         assert!(ls.contains(&"tag"), "{ls:?}");
     }
     // `use gadgets::{ Widget, ⏐` — still the full exports
-    let items = complete_with_dep("use gadgets::{ Widget, ", &dep);
+    let items = complete_with_dep("use gadgets::{ Widget, ", &dep, &direct);
     assert!(labels(&items).contains(&"tag"), "{:?}", labels(&items));
     // `use gadgets::{ Widget, ta⏐` — the prefix filters
-    let items = complete_with_dep("use gadgets::{ Widget, ta", &dep);
+    let items = complete_with_dep("use gadgets::{ Widget, ta", &dep, &direct);
     let ls = labels(&items);
     assert!(ls.contains(&"tag"), "{ls:?}");
     assert!(
@@ -352,7 +403,7 @@ fn the_brace_form_rides_the_names_tier() {
         "the prefix filters the brace form: {ls:?}"
     );
     // an unmounted head stays an honest empty
-    assert!(complete_with_dep("use ghost::{", &dep).is_empty());
+    assert!(complete_with_dep("use ghost::{", &dep, &direct).is_empty());
 }
 
 #[test]
@@ -372,7 +423,15 @@ fn string_receiver_completes_str_surface() {
     let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
     let idxs = [&di, &core];
     let pos = d2.rfind("s.").unwrap() as u32 + 2;
-    let items = complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default());
+    let items = complete(
+        &idxs,
+        &toks,
+        &ast,
+        pos,
+        &d2,
+        &DocMods::default(),
+        &HashSet::new(),
+    );
     assert!(labels(&items).contains(&"len"), "{:?}", labels(&items));
 }
 
@@ -389,7 +448,18 @@ fn complete_over_std(doc: &str, needle: &str) -> Vec<CompletionOut> {
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
-    complete(&chain, &toks, &ast, pos, &s, &DocMods::default())
+    let direct = std_direct_deps();
+    complete(&chain, &toks, &ast, pos, &s, &DocMods::default(), &direct)
+}
+
+/// the std chain's direct-dep set — the names the doc's own manifest
+/// declares (the seeded twin of the walk's root-manifest feed; the
+/// auto-import tier reads it live)
+fn std_direct_deps() -> HashSet<String> {
+    ["pouch", "nmapset", "calc", "json", "ink"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 /// the std chain as the PUBLIC dep lane serves it: the ambient
@@ -397,14 +467,12 @@ fn complete_over_std(doc: &str, needle: &str) -> Vec<CompletionOut> {
 /// mounted as ordinary dep fixtures — `deps::index_dep`, the same
 /// door the walk rides (std is not special anymore; the library
 /// embeds nothing but core, tests embedding fixture sources is the
-/// normal shape). `direct_dep` mirrors the walk's root-manifest stamp
-/// — the auto-import tier's gate.
+/// normal shape). Directness is not an index fact — the seeded set
+/// (`std_direct_deps`) mirrors the walk's root-manifest rows, the
+/// auto-import tier's live gate.
 fn std_dep_fixtures() -> Vec<DefIndex> {
-    let mount = |name: &str, uri: &str, src: &str| {
-        let mut idx = rut_lsp_wasm::deps::index_dep(name, uri, src, &[]);
-        idx.direct_dep = true;
-        idx
-    };
+    let mount =
+        |name: &str, uri: &str, src: &str| rut_lsp_wasm::deps::index_dep(name, uri, src, &[]);
     vec![
         rut_lsp_wasm::prelude::index(),
         mount(
@@ -506,7 +574,16 @@ fn use_path_completion_lists_the_dep_consts_and_mods() {
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
     let idxs = [&di, &calc_host];
-    let items = complete(&idxs, &toks, &ast, s.len() as u32, &s, &DocMods::default());
+    let direct = HashSet::from(["calc_host".to_string()]);
+    let items = complete(
+        &idxs,
+        &toks,
+        &ast,
+        s.len() as u32,
+        &s,
+        &DocMods::default(),
+        &direct,
+    );
     let ls = labels(&items);
     assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
     assert!(ls.contains(&"PI"), "the bare consts complete: {ls:?}");
@@ -519,7 +596,16 @@ fn use_path_completion_lists_the_dep_consts_and_mods() {
     let ast = doc_ast(&s, Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
     let idxs = [&di, &calc_root, &calc_math];
-    let items = complete(&idxs, &toks, &ast, s.len() as u32, &s, &DocMods::default());
+    let direct = HashSet::from(["calc".to_string()]);
+    let items = complete(
+        &idxs,
+        &toks,
+        &ast,
+        s.len() as u32,
+        &s,
+        &DocMods::default(),
+        &direct,
+    );
     let ls = labels(&items);
     assert!(ls.contains(&"math"), "the pub mod child completes: {ls:?}");
 }
@@ -553,6 +639,7 @@ fn gadget_dep() -> Vec<DefIndex> {
 }
 
 /// completions over the gadget dep with the cursor after `needle`
+/// (`gadgets` seeded as the doc's own dep — the doc's `use` names it)
 fn complete_over_gadgets(doc: &str, needle: &str, doc_mods: DocMods) -> Vec<CompletionOut> {
     let s = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&s);
@@ -561,11 +648,12 @@ fn complete_over_gadgets(doc: &str, needle: &str, doc_mods: DocMods) -> Vec<Comp
     let dep = gadget_dep();
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(dep.iter());
+    let direct = HashSet::from(["gadgets".to_string()]);
     let pos = s
         .rfind(needle)
         .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}")) as u32
         + needle.len() as u32;
-    complete(&chain, &toks, &ast, pos, &s, &doc_mods)
+    complete(&chain, &toks, &ast, pos, &s, &doc_mods, &direct)
 }
 
 #[test]
@@ -825,11 +913,12 @@ fn complete_over_mid(doc: &str, needle: &str) -> Vec<CompletionOut> {
     let dep = mid_dep();
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(dep.iter());
+    let direct = HashSet::from(["mid".to_string()]);
     let pos = s
         .rfind(needle)
         .unwrap_or_else(|| panic!("needle {needle:?} not found in:\n{s}")) as u32
         + needle.len() as u32;
-    complete(&chain, &toks, &ast, pos, &s, &DocMods::default())
+    complete(&chain, &toks, &ast, pos, &s, &DocMods::default(), &direct)
 }
 
 #[test]
@@ -928,7 +1017,8 @@ fn colon2_completion_lists_the_dep_module_statics() {
     let di = rut_lsp_wasm::hover::index(&s, &ast, &toks);
     let idxs = [&di, &root, &math];
     let pos = s.rfind("math::").unwrap() as u32 + "math::".len() as u32;
-    let items = complete(&idxs, &toks, &ast, pos, &s, &DocMods::default());
+    let direct = HashSet::from(["calc".to_string()]);
+    let items = complete(&idxs, &toks, &ast, pos, &s, &DocMods::default(), &direct);
     let ls = labels(&items);
     assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
     assert!(
@@ -1130,7 +1220,15 @@ fn the_type_tier_offers_the_ambient_and_imported_foreign_types() {
         let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
         let idxs = [&di, &core];
         let pos = d2.rfind("let e:").unwrap() as u32 + "let e:".len() as u32;
-        complete(&idxs, &toks, &ast, pos, &d2, &DocMods::default())
+        complete(
+            &idxs,
+            &toks,
+            &ast,
+            pos,
+            &d2,
+            &DocMods::default(),
+            &HashSet::new(),
+        )
     };
 
     let items = mk("entry fn main() -> nil {\n    let e: \n}\n");
@@ -1173,7 +1271,15 @@ fn auto_import_offers_foreign_names_with_the_insert_edit() {
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
+    let items = complete(
+        &chain,
+        &toks,
+        &ast,
+        pos,
+        &s,
+        &DocMods::default(),
+        &std_direct_deps(),
+    );
     let imp = import_item(&items, "Vec").expect("Vec auto-imports from pouch");
     assert_eq!(imp.detail, "pouch::Vec — import");
     assert_eq!(
@@ -1201,7 +1307,15 @@ fn auto_import_lands_after_the_last_leading_use() {
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
+    let items = complete(
+        &chain,
+        &toks,
+        &ast,
+        pos,
+        &s,
+        &DocMods::default(),
+        &std_direct_deps(),
+    );
     let imp = import_item(&items, "Vec").expect("Vec auto-imports");
     let (range, text) = &imp.additional_text_edits[0];
     // right after the leading use's `;` — column 18 of line 0 —
@@ -1221,7 +1335,15 @@ fn auto_import_skips_leading_comments() {
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
+    let items = complete(
+        &chain,
+        &toks,
+        &ast,
+        pos,
+        &s,
+        &DocMods::default(),
+        &std_direct_deps(),
+    );
     let imp = import_item(&items, "Vec").expect("Vec auto-imports");
     let (range, text) = &imp.additional_text_edits[0];
     // top of the file BODY — after the comment block and the blank
@@ -1240,7 +1362,15 @@ fn already_imported_names_are_not_re_offered() {
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.rfind("Ve").unwrap() as u32 + 2;
-    let items = complete(&chain, &toks, &ast, pos, &s, &DocMods::default());
+    let items = complete(
+        &chain,
+        &toks,
+        &ast,
+        pos,
+        &s,
+        &DocMods::default(),
+        &std_direct_deps(),
+    );
     // the name still completes (the bare tier), but NO import edit
     // rides it — the document already imports it
     assert!(

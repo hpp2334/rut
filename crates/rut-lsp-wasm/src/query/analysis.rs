@@ -5,6 +5,7 @@
 
 use ls_types::*;
 use rut_semantic::{Diag, LineIndex, Span};
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use crate::completion;
@@ -249,7 +250,9 @@ pub fn hover_at(
 /// file-module context (`crate::mods::DocMods`) — the face's knowledge
 /// of where the file sits in its package's mod tree; the default
 /// (unknown) keeps the position-path tier off and changes nothing
-/// else.
+/// else. `direct_deps` is the open document's own dep set (its
+/// manifest's rows) — the auto-import tier derives its gate from it
+/// live.
 pub fn complete_at(
     uri: &str,
     src: &str,
@@ -257,6 +260,7 @@ pub fn complete_at(
     line: u32,
     ch: u32,
     doc: &crate::mods::DocMods,
+    direct_deps: &HashSet<String>,
 ) -> Vec<CompletionItem> {
     let (d, doc_index) = doc_ctx(uri, src);
     let idxs = doc_idxs(&doc_index, extra);
@@ -267,6 +271,7 @@ pub fn complete_at(
         byte_at(d.src(), line, ch),
         d.src(),
         doc,
+        direct_deps,
     )
     .into_iter()
     .map(completion::lsp_item)

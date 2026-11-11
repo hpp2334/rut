@@ -93,6 +93,8 @@ pub enum CompletionKind {
 /// auto-import edits' coordinates ride the same text the tokens were
 /// lexed from. `doc` is the open document's file-module context (the
 /// face's knowledge; the default keeps position-path completion off).
+/// `direct_deps` is the open document's own dep set (its manifest's
+/// rows) — the auto-import tier derives its gate from it live.
 pub fn complete(
     idxs: &[&DefIndex],
     toks: &[Token],
@@ -100,6 +102,7 @@ pub fn complete(
     pos: u32,
     src: &str,
     doc: &DocMods,
+    direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
     // the binding pass, computed once: the member tier keys receivers on
     // it and the bare position's locals tier enumerates it
@@ -153,7 +156,14 @@ pub fn complete(
         // being typed is most often a binding just declared
         let mut out = local_completions(&binds, pos);
         out.extend(bare_completions(idxs));
-        out.extend(auto_import_completions(idxs, ast, toks, pos, src));
+        out.extend(auto_import_completions(
+            idxs,
+            ast,
+            toks,
+            pos,
+            src,
+            direct_deps,
+        ));
         // one final retain-by-label over the merged list (A4): the
         // extend order IS the precedence — locals > keywords >
         // document decls > imported > auto-import — so the first
@@ -1106,22 +1116,35 @@ fn position_path_completions(
 /// the bare prefix, each carrying the `use mod::Name;` insert — after
 /// the local results (the caller extends bare_completions' output), so
 /// `sortText` sorts them after everything already offered. Names the
-/// document already imports are NOT re-offered, the `pub builtin`
+/// document already imports are NOT re-offered and the `pub builtin`
 /// gate keeps holding (an import offer for a gated name would complete
 /// a name the compile still rejects until the use lands — the gate is
-/// the compiler's ambient split, mirrored), and a TRANSITIVE-only dep
-/// stays off: the compiler's closure check
-/// (`Session::resolve_use` → `declares`) refuses `use` of a
-/// mounted-but-undeclared package, so only indexes stamped
-/// `direct_dep` (the open document's own manifest rows, plus the
-/// ambient prelude) ride this tier.
+/// the compiler's ambient split, mirrored).
+///
+/// `direct_deps` is the open document's own dep set — its manifest's
+/// `deps`/`dev-deps` rows, state-derived FACT threaded the
+/// [`DocMods`](crate::mods::DocMods) way (never the state itself). The
+/// direct-dep gate DERIVES here, at the read, never stamped on the
+/// index: the compiler's closure check (`Session::resolve_use` →
+/// `declares`) refuses `use` of a mounted-but-undeclared package (the
+/// D5 diagnostic), so a TRANSITIVE-only dep stays off — its names
+/// would complete into a compile the program rejects. The gate speaks
+/// only on mounted dep indexes (a named module); plain workspace
+/// files never ride this tier.
 fn auto_import_completions(
     idxs: &[&DefIndex],
     ast: &Ast,
     toks: &[Token],
     pos: u32,
     src: &str,
+    direct_deps: &HashSet<String>,
 ) -> Vec<CompletionOut> {
+    // the gate itself: the ambient prelude (origin `core` — a walked
+    // dep's origin is always a uri, never the bare label, so no
+    // collision) or a module the document's own manifest names
+    let direct = |i: &DefIndex| {
+        i.origin == "core" || i.module.as_deref().is_some_and(|m| direct_deps.contains(m))
+    };
     let prefix = bare_prefix(toks, pos);
     let imported: HashSet<(&str, &str)> = idxs[0]
         .uses
@@ -1136,7 +1159,7 @@ fn auto_import_completions(
     let mut out: Vec<CompletionOut> = Vec::new();
     for i in idxs.iter().skip(1) {
         let Some(m) = &i.module else { continue };
-        if !i.direct_dep {
+        if !direct(i) {
             continue; // a transitive-only dep — `use` of it is the D5 error
         }
         let mut foreign = |name: &str, doc: &[String], kind: CompletionKind| {

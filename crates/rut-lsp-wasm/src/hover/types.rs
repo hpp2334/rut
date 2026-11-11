@@ -246,19 +246,6 @@ pub struct DefIndex {
     /// definition layer prefers body hits over decl-surface hits when
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
-    /// The dep is a DIRECT dep of the open document's package —
-    /// declared in its own manifest (`deps`, `dev-deps`
-    /// at the walk root). The compiler's closure check
-    /// (`Session::resolve_use` → `declares`) refuses `use` of a
-    /// mounted-but-undeclared package (the D5 diagnostic), so the
-    /// auto-import tier offers direct deps only: a transitive-only
-    /// dep's names would complete into a compile the program rejects.
-    /// The faces stamp it (the dep walks know the depth); unstamped
-    /// indexes — plain workspace files — keep today's offer-everything
-    /// shape; the prelude stamps it true (it is ambient, exactly the
-    /// shape a direct dep's mount answers with). Never derived from
-    /// text.
-    pub direct_dep: bool,
     /// the manifest's raw `consts` rows (name → value; `calc_host`'s
     /// `PI` family) — the compiler-materialized constants the check
     /// lane must hand the engine (a `pub use calc_host::{ PI }`

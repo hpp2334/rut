@@ -10,6 +10,7 @@
 use rut_lsp_wasm::deps::{index_dep, index_dep_mod};
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::prelude;
+use std::collections::HashSet;
 
 /// the myhost fixture tree — the repo's own host pkg, mounted the way
 /// the dep walk mounts it: one index per file, the (module, mod_path)
@@ -57,8 +58,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     // the ONE ambient index: origin `core`, the TRUE repo-relative
     // source path (the definition layer jumps there), the module
     // name (the use-path tier reads the same named set as any dep),
-    // the Decl mode, and the ambient-dep marker (the auto-import
-    // tier's gate). Namespace-free — the head mechanism is the
+    // and the Decl mode. Namespace-free — the head mechanism is the
     // manifest's, and no manifest ever delivers core.
     let idx = prelude::index();
     assert_eq!(idx.origin, "core");
@@ -66,12 +66,46 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     assert_eq!(idx.module.as_deref(), Some("core"));
     assert_eq!(idx.mode, Some(rut_parser::Mode::Decl));
     assert!(
-        idx.direct_dep,
-        "the prelude rides every chain as the ambient dep lane"
-    );
-    assert!(
         !idx.fns.is_empty() && !idx.types.is_empty(),
         "the prelude carries rows"
+    );
+
+    // the ambient rule the auto-import tier DERIVES at read: origin
+    // `core` ⇒ offered — the prelude rides every chain as the
+    // ambient dep lane (the same shape a direct dep's mount answers
+    // with), no manifest row and no set membership asked. The
+    // direct-dep gate keys the MOUNTED dep walks; the prelude is not
+    // one of them (a walked dep's origin is always a uri, never the
+    // bare label, so no collision). Driven over a core-origin
+    // fixture with a plain pub row (the real prelude's pub rows are
+    // `pub builtin` — gated — and its ambient ones already complete
+    // plain), the doc's dep set EMPTY.
+    let doc = "entry fn main() -> nil { }\n";
+    let d2 = rut_lexer::lexer::normalize(doc);
+    let (toks, _) = rut_lexer::lexer::lex(&d2);
+    let ast = doc_ast(&d2, rut_parser::Mode::Impl);
+    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+    let core = index_dep(
+        "core",
+        "core",
+        "pub fn ambient_offered() -> i32 { return 1; }\n",
+        &[],
+    );
+    let idxs = [&di, &core];
+    let items = rut_lsp_wasm::completion::complete(
+        &idxs,
+        &toks,
+        &ast,
+        d2.len() as u32,
+        &d2,
+        &rut_lsp_wasm::mods::DocMods::default(),
+        &HashSet::new(),
+    );
+    assert!(
+        items
+            .iter()
+            .any(|c| c.label == "ambient_offered" && !c.additional_text_edits.is_empty()),
+        "origin `core` rides the auto-import tier with an empty dep set: {items:?}"
     );
 }
 
@@ -222,8 +256,7 @@ fn a_std_source_mounts_as_an_ordinary_dep() {
     assert_eq!(idx.mode, Some(rut_parser::Mode::Impl));
     assert_eq!(idx.origin, "rut/pouch/src/mod.rut");
     assert!(idx.ty("Vec").is_some(), "Vec indexes through the dep lane");
-    assert!(
-        !idx.direct_dep,
-        "the marker is the walk's root-manifest stamp — index_dep never sets it"
-    );
+    // directness is NOT an index fact — nothing to assert here: the
+    // auto-import tier derives it at read from the doc's dep set
+    // (the transitive negative lives in tests/completion.rs)
 }
