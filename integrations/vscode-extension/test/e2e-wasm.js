@@ -2165,10 +2165,10 @@ async function main() {
         await expectStoreLeaf('core_tag', 'unpack/deps/kitcore@feed0123456789abc/src/mod.rut');
         smokes++;
 
-        // ---- the stir lane through the shipped wasm: the ACTOR-owned
+        // ---- the reload lane through the shipped wasm: the ACTOR-owned
         // scheduling — the env's one machinery capability is a dumb
         // clock (`wakeAfter` = plain setTimeout), the loop defers +
-        // coalesces + wakes ITSELF through its own inbox; `stir`'s
+        // coalesces + wakes ITSELF through its own inbox; `reloadDeps`'s
         // promise resolves with the WalkOut once the deferred walk runs
         // (REAL Node timers). The depEngine shell this block once drove
         // is deleted — the actor owns the when now. ----
@@ -2178,25 +2178,25 @@ async function main() {
                 wakeAfter: (ms, wake) => setTimeout(wake, ms),
             });
             const t0 = Date.now();
-            const out = await clockRut.stir(['/ws/walkproj']);
+            const out = await clockRut.reloadDeps(['/ws/walkproj']);
             const waited = Date.now() - t0;
-            assert.ok(waited >= 150, `the stir defers under the window (took ${waited}ms)`);
+            assert.ok(waited >= 150, `the reload defers under the window (took ${waited}ms)`);
             // the WalkOut envelope over the SAME world the eager door
             // walked: the gone dep refused, the store dep MOUNTED
             assert.strictEqual(out.missing.length, 1, JSON.stringify(out));
             assert.strictEqual(out.missing[0].url, GONE_URL);
             const sdoc = 'use kit::{ KitBox };\nfn main() -> nil {\n}\n';
-            const suri = 'file:///ws/e2e-stir.rut';
+            const suri = 'file:///ws/e2e-reload.rut';
             const sa = await clockRut.analyze(suri, sdoc);
             assert.strictEqual(sa.diags.length, 0, JSON.stringify(sa.diags));
             const slocs = await clockRut.definition(suri, ...posOf(sdoc, 'KitBox'));
             assert.strictEqual(slocs.length, 1, JSON.stringify(slocs));
             assert.ok(slocs[0].uri === `${KIT_DIR}/unpack/src/mod.rut`, slocs[0].uri);
-            // coalescing through the ABI: the first stir of a burst is
+            // coalescing through the ABI: the first reload of a burst is
             // superseded (`null` — merged), the LAST carries the world
-            const p1 = clockRut.stir(['/ws/walkproj']);
-            const p2 = clockRut.stir(['/ws/walkproj']);
-            assert.strictEqual(await p1, null, 'the superseded stir merges');
+            const p1 = clockRut.reloadDeps(['/ws/walkproj']);
+            const p2 = clockRut.reloadDeps(['/ws/walkproj']);
+            assert.strictEqual(await p1, null, 'the superseded reload merges');
             const out2 = await p2;
             assert.strictEqual(out2.missing.length, 1, JSON.stringify(out2));
             smokes++;
@@ -2378,7 +2378,7 @@ async function main() {
             `complete-doc-sync/check-lane-mismatch+missing-field/` +
             `env-injected+env-less/` +
             `dep-walk-store-mount+missing-row+once-hint/` +
-            `stir-clock+coalesce/wire-shape) ` +
+            `reload-clock+coalesce/wire-shape) ` +
             `through bin/rut-lsp.wasm`,
     );
 }

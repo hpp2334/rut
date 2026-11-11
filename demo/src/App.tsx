@@ -199,14 +199,14 @@ export function App(): JSX.Element {
       });
   }, [env]);
 
-  // ---- the walk lane: the ACTOR owns the WHEN — `stir` defers the
+  // ---- the walk lane: the ACTOR owns the WHEN — `reloadDeps` defers the
   // walk under the core's own 200ms debounce window and coalesces (a
   // burst walks once over the freshest world; the clock is the env's
   // `wakeAfter`, an injected dumb timer). The promise IS the world
   // event (D2): the resolved `WalkOut` drives the deps panel's rows
   // and the world tick — `WalkOut.missing` is the panel's per-dep
-  // truth. `null` means a later stir superseded this one (its promise
-  // carries the world) — nothing to apply here ----
+  // truth. `null` means a later reload superseded this one (its
+  // promise carries the world) — nothing to apply here ----
   const walkWorld = useCallback(async () => {
     if (!lsp) return;
     // the panel surfaces manifest errors: the App renders the
@@ -220,9 +220,9 @@ export function App(): JSX.Element {
       );
       return; // a broken manifest walks nothing — the hint stands
     }
-    const out = await lsp.stir([WORKSPACE_ROOT]);
+    const out = await lsp.reloadDeps([WORKSPACE_ROOT]);
     if (out === null || isEnvelope(out)) {
-      return; // superseded (the LAST stir's promise carries the world)
+      return; // superseded (the LAST reload's promise carries the world)
     }
     setDepRows((prev) =>
       prev.map((r) => {
@@ -353,7 +353,7 @@ export function App(): JSX.Element {
   );
 
   // the doc IS the workspace entry: every buffer move (an edit or a
-  // case switch) lands in the env and stirs the walk, so the doc's
+  // case switch) lands in the env and reloads the deps, so the doc's
   // defs row and the check lane ride the live text
   useEffect(() => {
     env.setFile(PLAYGROUND_DOC, source);

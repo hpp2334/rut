@@ -237,7 +237,7 @@ async function depWalkChecks(log) {
         // (c) the store hit: publish the dep dir the walk derives
         // (`<name>@<pin16>` under `$RUT_HOME/deps` — rut-driver's
         // address, the same one `rut install` writes) with a meta.json
-        // vouching the lock pin, then stir the engine through the
+        // vouching the lock pin, then reload the deps through the
         // palette command — the dep mounts, go-to-definition lands in
         // the store's real `unpack/` file
         const depDir = join(process.env.RUT_HOME, 'deps', `pouch@${pin.slice(0, 16)}`);

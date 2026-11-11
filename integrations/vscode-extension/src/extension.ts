@@ -12,9 +12,9 @@
 // host environment the crate's dep walk reads through, clock included)
 // — this file is the lifecycle that wires them: one long-lived
 // `RutLsp` instance, loaded once, shared by every closure below. The
-// dep walk and its SCHEDULING live in the crate's actor (`stir`
+// dep walk and its SCHEDULING live in the crate's actor (`reloadDeps`
 // defers under the core's own clock and coalesces); the extension only
-// injects the capability, watches, and stirs.
+// injects the capability, watches, and reloads.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -51,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // the bytes are the shipped artifact — an invalid/missing file fails
     // init LOUDLY inside the binding, never a silent half-working state.
     // The env rides `load`'s own lane: the read-only capability (and the
-    // clock its deferred walks arm) is in place before the first stir.
+    // clock its deferred walks arm) is in place before the first reload.
     const rut = await RutLsp.load(bytes, hostEnv);
     await registerAll(context, rut);
 }
@@ -121,16 +121,16 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
         registerSignatureHelp(rut),
     );
 
-    // the dep stir lane — the extension's WHOLE dep lane: the actor
+    // the dep reload lane — the extension's WHOLE dep lane: the actor
     // owns the when (the walk defers under the core's own 200ms window
     // and coalesces; the env's `wakeAfter` clock is the dumb timer
     // behind it). When the promise resolves the dep world MOVED — open
     // diagnostics may have changed, so every open doc re-schedules its
-    // analysis (a superseded stir resolves null; the later stir's own
-    // resolution re-schedules, so the refresh is never lost).
-    const stirDeps = (): void => {
+    // analysis (a superseded reload resolves null; the later reload's
+    // own resolution re-schedules, so the refresh is never lost).
+    const reloadDeps = (): void => {
         const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
-        void rut.stir(roots).then(() => {
+        void rut.reloadDeps(roots).then(() => {
             for (const doc of vscode.workspace.textDocuments) {
                 schedule(doc);
             }
@@ -142,7 +142,7 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
     // a glob never saw, a walk that raced an edit)
     subscriptions.push(
         vscode.commands.registerCommand('rut.reindexDeps', () => {
-            stirDeps();
+            reloadDeps();
         }),
     );
 
@@ -151,18 +151,18 @@ async function registerAll(context: vscode.ExtensionContext, rut: RutLsp): Promi
     // walk rides after it: the crate's read-only walk mounts the root
     // manifests' rows (path dirs, store-mounted url deps) into the same
     // index, through the injected env.
-    watchDeps(context, rut, stirDeps);
-    void indexWorkspace(rut).then(() => stirDeps());
+    watchDeps(context, rut, reloadDeps);
+    void indexWorkspace(rut).then(() => reloadDeps());
 }
 
 // `**/rut.jsonc` + `**/mod.rut` re-run the walk (a manifest landing or
 // a mod tree moving re-mounts it); a workspace-folder change restarts
 // the whole index (watchers re-arm over the new folder set, the scan +
-// the stir re-run — re-indexing is replace-by-origin, so this is
+// the reload re-run — re-indexing is replace-by-origin, so this is
 // idempotent). The extension is a pure READER: no write feedback loops
 // exist anymore, so the core's own debounce window is all the dynamics
 // there are.
-function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, stir: () => void): void {
+function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, reloadDeps: () => void): void {
     const watchers: vscode.Disposable[] = [];
     const watchFolder = (folder: vscode.WorkspaceFolder): void => {
         for (const pattern of [`**/${MANIFEST_NAME}`, '**/mod.rut']) {
@@ -171,9 +171,9 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, stir: () => vo
             );
             watchers.push(
                 watcher,
-                watcher.onDidChange(() => stir()),
-                watcher.onDidCreate(() => stir()),
-                watcher.onDidDelete(() => stir()),
+                watcher.onDidChange(() => reloadDeps()),
+                watcher.onDidCreate(() => reloadDeps()),
+                watcher.onDidDelete(() => reloadDeps()),
             );
         }
     };
@@ -190,7 +190,7 @@ function watchDeps(context: vscode.ExtensionContext, rut: RutLsp, stir: () => vo
     context.subscriptions.push(
         vscode.workspace.onDidChangeWorkspaceFolders(() => {
             rearm();
-            void indexWorkspace(rut).then(() => stir());
+            void indexWorkspace(rut).then(() => reloadDeps());
         }),
         {
             dispose: () => {

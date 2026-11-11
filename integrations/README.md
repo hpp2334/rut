@@ -7,8 +7,9 @@ wasm-bindgen face that serves them. The VS Code extension runs it
 in-process — no server process, no per-platform binaries; the
 playground bundles the same module. The extension's dep lane is the
 crate's too: it injects a read-only filesystem capability (the
-`HostEnv` the crate's walk reads through) and stirs the crate-shipped
-engine — the editor NEVER fetches and NEVER writes; url deps mount
+`HostEnv` the crate's walk reads through) and reloads the deps
+through the crate-shipped engine — the editor NEVER fetches and
+NEVER writes; url deps mount
 from the global dep store (`$RUT_HOME`, `rut install`'s address), and
 a cold store is one hint naming `rut install` (the rust-analyzer
 contract). See

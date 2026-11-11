@@ -7,7 +7,7 @@
  * extension. This module adds only what a browser needs on top: a
  * same-origin fetch of `public/rut-lsp.wasm`, the playground's own
  * document URI, and the dep-lane methods the deps panel drives
- * (`parseManifest` / `stir` — the walk reads the virtual `$RUT_HOME`
+ * (`parseManifest` / `reloadDeps` — the walk reads the virtual `$RUT_HOME`
  * through the injected `HostEnv`, see `store-env.ts`). No LSP shape
  * is declared here.
  *
@@ -103,19 +103,19 @@ export class RutLsp {
     return this.core.parseManifest(text);
   }
 
-  /** stir the dep walk — the ACTOR-owned door: the walk defers under
+  /** reload the deps — the ACTOR-owned door: the walk defers under
    * the core's own 200ms debounce window (the env's `wakeAfter` clock
-   * is the dumb timer) and coalesces, so a burst of stirs walks once
+   * is the dumb timer) and coalesces, so a burst of reloads walks once
    * over the freshest world. The promise resolves with the `WalkOut`
-   * once the walk runs — `null` when a later stir superseded this one
-   * (the LAST stir's promise carries the world) */
-  stir(roots: string[]) {
-    return this.core.stir(roots);
+   * once the walk runs — `null` when a later reload superseded this
+   * one (the LAST reload's promise carries the world) */
+  reloadDeps(roots: string[]) {
+    return this.core.reloadDeps(roots);
   }
 
   /** the READ-ONLY dep walk, eager: mounts the store's world into the
    * defs store; the answer carries the refused url rows. The panel
-   * rides `stir` (the deferred door) — this is the manual lane */
+   * rides `reloadDeps` (the deferred door) — this is the manual lane */
   resolveDeps(roots: string[]) {
     return this.core.resolveDeps(roots);
   }

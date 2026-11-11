@@ -38,7 +38,7 @@
 //!                                              the index lanes write (see
 //!                                              `walk`) — the EAGER manual
 //!                                              door
-//!   stir(roots_json) -> String                 STIR the dep walk — the
+//!   reload_deps(roots_json) -> String          RELOAD the deps — the
 //!                                              level-triggered door: the
 //!                                              walk defers under the loop's
 //!                                              own 200ms window (the env's
@@ -46,7 +46,7 @@
 //!                                              and coalesces; the promise
 //!                                              carries the WalkOut once the
 //!                                              walk runs (`null` when a
-//!                                              later stir supersedes it)
+//!                                              later reload supersedes it)
 //!   legend() -> String                         token-type names, JSON array
 //!   analyze(uri, src) -> String                store the doc + return
 //!                                              {diags, tokens, symbols}
@@ -89,7 +89,7 @@
 //! queries above; the workspace-scan push (`index_file`/`index_mod_at`/
 //! `parse_manifest` — the host's `findFiles` sees editor ignore
 //! semantics the env cannot); and the dep pull (`set_env` +
-//! `resolve_deps`/`stir`). NO entry mutates dep state except through
+//! `resolve_deps`/`reload_deps`). NO entry mutates dep state except through
 //! the injected env — the lock feed, the direct-dep stamp, and the named
 //! index lanes are SessionState internals the walk drives, not messages. The
 //! old push family (`set_lock`, `set_direct_deps`, `add_def_named`,
@@ -167,7 +167,7 @@ struct SessionState {
     hints_shown: HashSet<String>,
     /// the walk lane's coalescing state — the OUTSTANDING deferred
     /// walk's [`event_loop::DeferTask`] handle, moved in from the JS
-    /// dep engine's flags (D1: policy lives in the `Cmd::Stir` arm,
+    /// dep engine's flags (D1: policy lives in the `Cmd::ReloadDeps` arm,
     /// the defer queue stays neutral). `None` = no walk queued; a
     /// STALE handle (its walk already fired) is harmless —
     /// `cancel_defer` answers `None` for it.
@@ -364,8 +364,8 @@ impl RutLsp {
     async fn text(&self, build: impl FnOnce(event_loop::Tx) -> event_loop::Msg) -> String {
         match self.rpc(build).await {
             Ok(event_loop::Reply::Text(s)) => s,
-            // a void completion (a superseded stir answers Done — its
-            // WalkOut merged into the later stir's promise)
+            // a void completion (a superseded reload answers Done — its
+            // WalkOut merged into the later reload's promise)
             Ok(_) => "null".to_string(),
             Err(_) => event_loop::loop_gone(),
         }
@@ -562,24 +562,24 @@ impl RutLsp {
             .await
     }
 
-    /// STIR the dep walk — the level-triggered door onto the same walk
+    /// RELOAD the deps — the level-triggered door onto the same walk
     /// [`resolve_deps`](Self::resolve_deps) runs eagerly: the walk
     /// DEFERS under the loop's own debounce window (200ms, armed
     /// through the env's optional `wakeAfter` clock — see
-    /// [`env::Io::arm_wake`]) and COALESCES, so a burst of stirs walks
-    /// once over the freshest roots (a superseded stir's promise
-    /// answers `null` — merged, not lost; the LAST stir's promise
-    /// carries the world). The promise resolves with the walk's
+    /// [`env::Io::arm_wake`]) and COALESCES, so a burst of reloads
+    /// walks once over the freshest roots (a superseded reload's
+    /// promise answers `null` — merged, not lost; the LAST reload's
+    /// promise carries the world). The promise resolves with the walk's
     /// `WalkOut` envelope once the deferred walk runs — the answer
     /// rides this RPC's own reply channel, no push lane exists. No
     /// clock on the env ⇒ the walk runs eagerly in-turn (D3), exactly
     /// the eager door.
-    pub async fn stir(&self, roots_json: String) -> String {
+    pub async fn reload_deps(&self, roots_json: String) -> String {
         let roots = match serde_json::from_str::<Vec<String>>(&roots_json) {
             Ok(r) => r,
             Err(e) => return json_envelope(wire::Error::new(e.to_string())),
         };
-        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::Stir { roots, tx }))
+        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::ReloadDeps { roots, tx }))
             .await
     }
 

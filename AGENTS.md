@@ -185,10 +185,10 @@ order:
   `HostEnv` contract in the crate's `js/index.d.ts` — toward the host
   the actor only ever ANSWERS, there is no event push) and the
   crate's event loop owns ALL dep logic — the walk and its scheduling
-  live in the ACTOR (`stir` posts `Cmd::Stir`; the clock is an
-  injected capability); the extension's whole dep lane is watchers +
-  `void rut.stir(roots).then(() => re-schedule analysis of open
-  docs)`. Url deps mount from the global store (`$RUT_HOME` — the
+  live in the ACTOR (`reloadDeps` posts `Cmd::ReloadDeps`; the clock
+  is an injected capability); the extension's whole dep lane is
+  watchers + `void rut.reloadDeps(roots).then(() => re-schedule
+  analysis of open docs)`. Url deps mount from the global store (`$RUT_HOME` — the
   wasm cannot read env vars, so its store spelling arrives relative
   and the adapter anchors it at the real home); a cold store is ONE
   hint per dep naming `rut install` (the rust-analyzer contract).
@@ -199,7 +199,7 @@ order:
   `legend`, `forget`), the workspace-scan push (`indexFile`/
   `indexModAt`/`parseManifest` — the host's `findFiles` respects
   editor ignore semantics the env cannot), and the dep pull
-  (`setEnv` + `stir`, the deferred door the hosts ride;
+  (`setEnv` + `reloadDeps`, the deferred door the hosts ride;
   `resolveDeps` stays as the eager manual door — tests, cold boot,
   env-less hosts). No entry may bypass the env capability
   to mutate dep state: the old push family (`setLock`,

@@ -1,4 +1,4 @@
-//! The clock + defer + Stir/Wake lane's gate — the walk's SCHEDULING
+//! The clock + defer + ReloadDeps/Wake lane's gate — the walk's SCHEDULING
 //! POLICY, moved from the JS `depEngine` into the actor, proven
 //! through the public ABI over `spawn_native` with the native fake
 //! clock of D8: the env STORES the wake source `Rc` and RECORDS every
@@ -9,7 +9,7 @@
 //! root is its `rut.jsonc` + `src/mod.rut`, so which manifest got
 //! read names which walk ran. The machinery laws (the neutral queue,
 //! the cancel door) live in `event_loop`'s own unit gate; this file
-//! drives the LANE — `Cmd::Stir`'s composition of those doors.
+//! drives the LANE — `Cmd::ReloadDeps`'s composition of those doors.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -145,16 +145,16 @@ fn take(json: String) -> serde_json::Value {
     serde_json::from_str(&json).expect("the envelope is valid JSON")
 }
 
-/// post a stir and let the loop take its turn: the message lands, the
-/// walk DEFERS (the future stays pending), the window arms. Binds
+/// post a reload and let the loop take its turn: the message lands,
+/// the walk DEFERS (the future stays pending), the window arms. Binds
 /// `$name` (a `Pin<&mut …>`) at the CALL site — poll it with
 /// `as_mut()`, resolve it with `pool.run_until($name)`.
-macro_rules! stir_pending {
+macro_rules! reload_pending {
     ($name:ident = $lsp:expr, $pool:expr, [$($root:expr),* $(,)?]) => {
-        let mut $name = std::pin::pin!($lsp.stir(rjson(&[$($root),*])));
+        let mut $name = std::pin::pin!($lsp.reload_deps(rjson(&[$($root),*])));
         assert!(
             $name.as_mut().now_or_never().is_none(),
-            "the stir stays pending under the window"
+            "the reload stays pending under the window"
         );
         $pool.run_until_stalled(); // the loop's turn: defer + arm, no walk
     };
@@ -163,7 +163,7 @@ macro_rules! stir_pending {
 // ---- the lane ----
 
 #[test]
-fn stir_arms_the_window_and_the_oneshot_carries_walkout() {
+fn reload_arms_the_window_and_the_oneshot_carries_walkout() {
     let mut io = MemIo {
         clock: true,
         ..Default::default()
@@ -171,24 +171,24 @@ fn stir_arms_the_window_and_the_oneshot_carries_walkout() {
     root(&mut io, "/ws/a", "appa");
     let (lsp, mut pool, io) = boot(io);
 
-    stir_pending!(stir = lsp, pool, ["/ws/a"]);
+    reload_pending!(reload = lsp, pool, ["/ws/a"]);
     assert!(
-        (&mut stir).now_or_never().is_none(),
+        (&mut reload).now_or_never().is_none(),
         "the oneshot stays unanswered before the tick"
     );
     assert_eq!(*io.arms.borrow(), vec![WINDOW_MS], "the window armed");
     assert!(io.manifests().is_empty(), "NO walk ran before the tick");
 
-    // the tick: ONE walk, and the STIR's own oneshot carries the
+    // the tick: ONE walk, and the reload's own oneshot carries the
     // WalkOut envelope (D2 — the answer rides the RPC's reply channel)
     io.fire();
-    let out = take(pool.run_until(stir));
+    let out = take(pool.run_until(reload));
     assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
     assert_eq!(io.manifests(), vec!["/ws/a/rut.jsonc".to_string()]);
 }
 
 #[test]
-fn a_burst_of_stirs_coalesces_to_one_walk_over_the_freshest_roots() {
+fn a_burst_of_reloads_coalesces_to_one_walk_over_the_freshest_roots() {
     let mut io = MemIo {
         clock: true,
         ..Default::default()
@@ -197,20 +197,20 @@ fn a_burst_of_stirs_coalesces_to_one_walk_over_the_freshest_roots() {
     root(&mut io, "/ws/new", "newa");
     let (lsp, mut pool, io) = boot(io);
 
-    let mut s1 = std::pin::pin!(lsp.stir(rjson(&["/ws/old"])));
-    let mut s2 = std::pin::pin!(lsp.stir(rjson(&["/ws/new"])));
+    let mut s1 = std::pin::pin!(lsp.reload_deps(rjson(&["/ws/old"])));
+    let mut s2 = std::pin::pin!(lsp.reload_deps(rjson(&["/ws/new"])));
     assert!(
         s1.as_mut().now_or_never().is_none() && s2.as_mut().now_or_never().is_none(),
-        "both stirs post"
+        "both reloads post"
     );
     pool.run_until_stalled();
     // ONE window for the whole burst, no walk yet
     assert_eq!(*io.arms.borrow(), vec![WINDOW_MS]);
     assert!(io.manifests().is_empty());
-    // the FIRST stir is superseded — merged, answered Done (`null` on
-    // the wire): the LAST stir's promise carries the world
+    // the FIRST reload is superseded — merged, answered Done (`null` on
+    // the wire): the LAST reload's promise carries the world
     assert_eq!(
-        take(s1.now_or_never().expect("the superseded stir answers")),
+        take(s1.now_or_never().expect("the superseded reload answers")),
         serde_json::Value::Null
     );
 
@@ -222,7 +222,7 @@ fn a_burst_of_stirs_coalesces_to_one_walk_over_the_freshest_roots() {
 }
 
 #[test]
-fn a_stir_after_the_window_fired_sends_no_done_and_gets_its_own_walk() {
+fn a_reload_after_the_window_fired_sends_no_done_and_gets_its_own_walk() {
     let mut io = MemIo {
         clock: true,
         ..Default::default()
@@ -231,17 +231,17 @@ fn a_stir_after_the_window_fired_sends_no_done_and_gets_its_own_walk() {
     root(&mut io, "/ws/two", "twoa");
     let (lsp, mut pool, io) = boot(io);
 
-    // the first window fires: the walk runs, its own stir answers WalkOut
-    stir_pending!(s1 = lsp, pool, ["/ws/one"]);
+    // the first window fires: the walk runs, its own reload answers WalkOut
+    reload_pending!(s1 = lsp, pool, ["/ws/one"]);
     io.fire();
     let out1 = take(pool.run_until(s1));
     assert_eq!(out1["missing"].as_array().unwrap().len(), 0, "{out1}");
 
-    // the LATER stir: the lane's remembered handle is STALE (its walk
-    // already fired and answered its own stir), so cancel answers None
+    // the LATER reload: the lane's remembered handle is STALE (its walk
+    // already fired and answered its own reload), so cancel answers None
     // and NO Done is sent — the earlier promise already carried its
-    // WalkOut. The stir arms its OWN window (never starves) and walks.
-    stir_pending!(s2 = lsp, pool, ["/ws/two"]);
+    // WalkOut. The reload arms its OWN window (never starves) and walks.
+    reload_pending!(s2 = lsp, pool, ["/ws/two"]);
     assert_eq!(*io.arms.borrow(), vec![WINDOW_MS, WINDOW_MS]);
     io.fire();
     let out2 = take(pool.run_until(s2));
@@ -256,28 +256,28 @@ fn a_stir_after_the_window_fired_sends_no_done_and_gets_its_own_walk() {
 }
 
 #[test]
-fn a_clockless_env_stirs_eagerly_in_turn() {
+fn a_clockless_env_reloads_eagerly_in_turn() {
     // D3 through the ABI: `clock: false` — arm_wake answers false, so
-    // the walk runs inside the Stir turn itself (the spent-sentinel
+    // the walk runs inside the ReloadDeps turn itself (the spent-sentinel
     // path); the biz observable is identical, no window ever arms
     let mut io = MemIo::default(); // clock: false
     root(&mut io, "/ws/eager", "eagera");
     let (lsp, mut pool, io) = boot(io);
 
-    let mut stir = std::pin::pin!(lsp.stir(rjson(&["/ws/eager"])));
-    assert!(stir.as_mut().now_or_never().is_none()); // only unpolled
-    let out = take(pool.run_until(stir));
+    let mut reload = std::pin::pin!(lsp.reload_deps(rjson(&["/ws/eager"])));
+    assert!(reload.as_mut().now_or_never().is_none()); // only unpolled
+    let out = take(pool.run_until(reload));
     assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
     assert_eq!(io.manifests(), vec!["/ws/eager/rut.jsonc".to_string()]);
     assert!(io.arms.borrow().is_empty(), "no clock, no arms");
 }
 
 #[test]
-fn an_envless_stir_answers_the_error_envelope_eagerly() {
+fn an_envless_reload_answers_the_error_envelope_eagerly() {
     // no env at all: the walk cannot read anything — the loud error
     // envelope, in-turn (the eager degrade again, the no-env body)
     let (lsp, mut pool) = RutLsp::spawn_native();
-    let out = take(pool.run_until(lsp.stir(rjson(&["/ws/nowhere"]))));
+    let out = take(pool.run_until(lsp.reload_deps(rjson(&["/ws/nowhere"]))));
     assert!(
         out["error"]
             .as_str()
@@ -288,7 +288,7 @@ fn an_envless_stir_answers_the_error_envelope_eagerly() {
 }
 
 #[test]
-fn resolve_deps_and_stir_answer_the_same_envelope() {
+fn resolve_deps_and_reload_deps_answer_the_same_envelope() {
     // D9 through the ABI: the eager manual door and the deferred door
     // run ONE body — identical bytes for identical worlds
     let mk = || {
@@ -303,9 +303,9 @@ fn resolve_deps_and_stir_answer_the_same_envelope() {
     let eager = pool1.run_until(lsp1.resolve_deps(rjson(&["/ws/par"])));
 
     let (lsp2, mut pool2, io2) = boot(mk());
-    stir_pending!(stir = lsp2, pool2, ["/ws/par"]);
+    reload_pending!(reload = lsp2, pool2, ["/ws/par"]);
     io2.fire();
-    let deferred = pool2.run_until(stir);
+    let deferred = pool2.run_until(reload);
     assert_eq!(eager, deferred, "one walk body, two doors");
 }
 
@@ -335,12 +335,12 @@ fn env_reinjection_installs_the_new_wake_and_a_stale_wake_is_harmless() {
         "the NEW env's set_wake ran at reinject"
     );
 
-    // a stir deferred under env2's clock — but the STALE env1 timer
+    // a reload deferred under env2's clock — but the STALE env1 timer
     // fires: its wake posts the same inbox; the current queue drains
-    stir_pending!(stir = lsp, pool, ["/ws/r2"]);
+    reload_pending!(reload = lsp, pool, ["/ws/r2"]);
     assert_eq!(*io2.arms.borrow(), vec![WINDOW_MS]);
     io1.fire(); // the OLD env's stored wake
-    let out = take(pool.run_until(stir));
+    let out = take(pool.run_until(reload));
     assert_eq!(out["missing"].as_array().unwrap().len(), 0, "{out}");
     assert_eq!(io2.manifests(), vec!["/ws/r2/rut.jsonc".to_string()]);
 }
@@ -348,7 +348,7 @@ fn env_reinjection_installs_the_new_wake_and_a_stale_wake_is_harmless() {
 #[test]
 fn two_instances_each_wake_their_own_loop() {
     // case 9: each wake closure posts into its OWN captured inbox —
-    // instance 1's tick never answers instance 2's stir
+    // instance 1's tick never answers instance 2's reload
     let mk = |path: &str, name: &str| {
         let mut io = MemIo {
             clock: true,
@@ -360,15 +360,15 @@ fn two_instances_each_wake_their_own_loop() {
     let (lsp1, mut pool1, io1) = boot(mk("/ws/i1", "i1a"));
     let (lsp2, mut pool2, io2) = boot(mk("/ws/i2", "i2a"));
 
-    stir_pending!(s1 = lsp1, pool1, ["/ws/i1"]);
-    stir_pending!(s2 = lsp2, pool2, ["/ws/i2"]);
+    reload_pending!(s1 = lsp1, pool1, ["/ws/i1"]);
+    reload_pending!(s2 = lsp2, pool2, ["/ws/i2"]);
 
-    io1.fire(); // only instance 1's loop stirred
+    io1.fire(); // only instance 1's reload ran
     let out1 = take(pool1.run_until(s1));
     assert_eq!(out1["missing"].as_array().unwrap().len(), 0, "{out1}");
     assert!(
         s2.as_mut().now_or_never().is_none(),
-        "the other loop's stir stays pending"
+        "the other loop's reload stays pending"
     );
 
     io2.fire();
@@ -379,9 +379,9 @@ fn two_instances_each_wake_their_own_loop() {
 #[test]
 fn a_panicking_walk_drops_one_turn_and_the_loop_lives() {
     // case 8: the walk panics inside the tick — catch_unwind drops ONE
-    // turn (the deferred tx drops in the unwind, so the awaiting stir
+    // turn (the deferred tx drops in the unwind, so the awaiting reload
     // answers the canceled-oneshot error envelope — today's
-    // panicking-handler shape), and the NEXT stir re-arms and walks
+    // panicking-handler shape), and the NEXT reload re-arms and walks
     let mut io = MemIo {
         clock: true,
         ..Default::default()
@@ -396,7 +396,7 @@ fn a_panicking_walk_drops_one_turn_and_the_loop_lives() {
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
 
-    stir_pending!(s1 = lsp, pool, ["/ws/boom"]);
+    reload_pending!(s1 = lsp, pool, ["/ws/boom"]);
     io.fire();
     let out = take(pool.run_until(s1));
     assert!(
@@ -404,8 +404,8 @@ fn a_panicking_walk_drops_one_turn_and_the_loop_lives() {
         "the dropped tx answers the bridge's dead-loop envelope: {out}"
     );
 
-    // the loop LIVES: the next stir re-arms and walks the clean world
-    stir_pending!(s2 = lsp, pool, ["/ws/fine"]);
+    // the loop LIVES: the next reload re-arms and walks the clean world
+    reload_pending!(s2 = lsp, pool, ["/ws/fine"]);
     assert_eq!(*io.arms.borrow(), vec![WINDOW_MS, WINDOW_MS]);
     io.fire();
     let out2 = take(pool.run_until(s2));
@@ -416,9 +416,9 @@ fn a_panicking_walk_drops_one_turn_and_the_loop_lives() {
 }
 
 #[test]
-fn resolve_deps_walks_eagerly_beside_a_pending_stir() {
+fn resolve_deps_walks_eagerly_beside_a_pending_reload() {
     // case 10: the eager manual door walks NOW — no tick needed; the
-    // later tick walks the (same, idempotent) world for the stir's own
+    // later tick walks the (same, idempotent) world for the reload's own
     // oneshot — both promises carry WalkOut, the world stays whole
     let mut io = MemIo {
         clock: true,
@@ -427,12 +427,12 @@ fn resolve_deps_walks_eagerly_beside_a_pending_stir() {
     root(&mut io, "/ws/par", "para");
     let (lsp, mut pool, io) = boot(io);
 
-    stir_pending!(stir = lsp, pool, ["/ws/par"]);
+    reload_pending!(reload = lsp, pool, ["/ws/par"]);
     let eager = take(pool.run_until(lsp.resolve_deps(rjson(&["/ws/par"]))));
     assert_eq!(eager["missing"].as_array().unwrap().len(), 0, "{eager}");
     assert_eq!(io.manifests(), vec!["/ws/par/rut.jsonc".to_string()]);
 
     io.fire();
-    let out = take(pool.run_until(stir));
+    let out = take(pool.run_until(reload));
     assert_eq!(out, eager, "the idempotent re-walk answers identically");
 }

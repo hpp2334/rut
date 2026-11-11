@@ -152,24 +152,24 @@ export class RutLsp {
   }
 
   /**
-   * stir the dep walk — the level-triggered door onto the same walk
+   * reload the deps — the level-triggered door onto the same walk
    * `resolveDeps` runs eagerly: the walk DEFERS under the core's own
    * 200ms debounce window (armed through the env's optional
    * `wakeAfter` clock — plain `setTimeout` covers it) and COALESCES,
-   * so a burst of stirs walks once over the freshest roots.
+   * so a burst of reloads walks once over the freshest roots.
    *
    * The returned promise resolves with the `WalkOut` once the
    * deferred walk runs — the answer rides THIS call's own reply
-   * channel, no push lane exists. A stir superseded by a later one
-   * resolves `null` (merged: the LAST stir's promise carries the
+   * channel, no push lane exists. A reload superseded by a later one
+   * resolves `null` (merged: the LAST reload's promise carries the
    * world). No `wakeAfter` on the env ⇒ the walk runs eagerly
    * in-turn, exactly `resolveDeps`.
    *
    * @param {string[]} roots
    * @returns {Promise<WalkOut | null>}
    */
-  async stir(roots) {
-    return JSON.parse(await this.lsp.stir(JSON.stringify(roots)));
+  async reloadDeps(roots) {
+    return JSON.parse(await this.lsp.reload_deps(JSON.stringify(roots)));
   }
 
   /**

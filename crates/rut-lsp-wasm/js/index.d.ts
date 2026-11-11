@@ -298,18 +298,18 @@ export class RutLsp {
   resolveDeps(roots: string[]): Promise<WalkOut>;
 
   /**
-   * stir the dep walk — the level-triggered door onto the same walk
+   * reload the deps — the level-triggered door onto the same walk
    * `resolveDeps` runs eagerly: the walk defers under the core's own
    * debounce window (200ms, armed through the env's optional
-   * `wakeAfter` clock) and coalesces, so a burst of stirs walks once
+   * `wakeAfter` clock) and coalesces, so a burst of reloads walks once
    * over the freshest roots. This promise resolves with the `WalkOut`
    * once the deferred walk runs — the answer rides this call's own
-   * reply channel, no push lane exists. A stir superseded by a later
-   * one resolves `null` (merged: the LAST stir's promise carries the
+   * reply channel, no push lane exists. A reload superseded by a later
+   * one resolves `null` (merged: the LAST reload's promise carries the
    * world). No clock on the env ⇒ the walk runs eagerly in-turn,
    * exactly `resolveDeps`.
    */
-  stir(roots: string[]): Promise<WalkOut | null>;
+  reloadDeps(roots: string[]): Promise<WalkOut | null>;
 }
 
 /** one decoded semantic token — absolute 0-based LSP coordinates */

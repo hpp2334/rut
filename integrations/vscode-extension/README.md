@@ -53,16 +53,16 @@ extension injects a **read-only host environment** (`src/env.ts` —
 `read`/`readDir`/`isDir`/`notify` over `node:fs` sync calls plus the
 optional clock `wakeAfter`, plain `setTimeout`; no write, no delete,
 no fetch, and no business callback exists on the capability) and
-stirs the **actor-owned walk** (`stir` — the core's own event loop
-defers under its 200ms window, coalesces, and wakes itself through
-the injected clock). Each walk runs every workspace root: the root
-`rut.lock` feeds the pin ledger and the
+reloads the **actor-owned deps** (`reloadDeps` — the core's own
+event loop defers under its 200ms window, coalesces, and wakes
+itself through the injected clock). Each walk runs every workspace
+root: the root `rut.lock` feeds the pin ledger and the
 root `rut.jsonc`'s rows mount — path deps from their directories,
 url deps from the global dep store (`$RUT_HOME/deps/<name>@<sha256[:16]>`,
 the same address `rut install` publishes to) when its `meta.json`
 vouches the lock pin. A cold or drifted store is ONE hint per dep
 naming `rut install` (the rust-analyzer contract); the extension's
-whole dep lane is watchers + `stir()`.
+whole dep lane is watchers + `reloadDeps()`.
 
 The module IS the language core: the queries (`analysis`, `hover`,
 `completion`, `definition`, `check`, …) live in the same crate as this
@@ -129,8 +129,9 @@ makes an editor worse than the compiler-less lane it extends.
 ## Deps — the crate's read-only walk, the editor's store
 
 The dep lane is the crate's, not the extension's: after the workspace
-scan the extension stirs the actor-owned walk (`rut.stir(roots)` —
-the core defers under its own debounce window and coalesces), and one
+scan the extension reloads the deps through the actor-owned walk
+(`rut.reloadDeps(roots)` — the core defers under its own debounce
+window and coalesces), and one
 walk per window runs every workspace folder — the wasm
 parses the root `rut.jsonc` and its whole dep closure over the
 injected read-only env, mounting everything into the same defs store
@@ -203,10 +204,11 @@ delete, and no fetch on it, by construction.
 - The manifest and its dep tables re-walk on change
   (`**/rut.jsonc` and `**/mod.rut` watchers, debounced by the core's
   own clock), a workspace-folder change restarts the whole index, and
-  the `rut.reindexDeps` palette command stirs the walk on demand —
-  the extension's whole dep lane is watchers + `stir()`. When a stir's
-  promise resolves the dep world moved, so every open document
-  re-schedules its analysis (open diagnostics may have changed).
+  the `rut.reindexDeps` palette command reloads the deps on demand —
+  the extension's whole dep lane is watchers + `reloadDeps()`. When
+  a reload's promise resolves the dep world moved, so every open
+  document re-schedules its analysis (open diagnostics may have
+  changed).
 - **One engine, one face** — the dep tables
   (`crates/rut-lsp-wasm/src/deps.rs`) are the CLI's own parsers and
   the walk (`crates/rut-lsp-wasm/src/walk.rs`) is the crate's; the

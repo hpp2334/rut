@@ -32,7 +32,7 @@
 //!   queue. No clock ⇒ every deferral runs eagerly in-turn (D3).
 //!   Business policy — the walk's coalescing — composes the NEUTRAL
 //!   doors (`defer` + [`Loop::cancel_defer`] over pure [`DeferTask`]
-//!   handles) inside the `Cmd::Stir` arm; the shell never inspects a
+//!   handles) inside the `Cmd::ReloadDeps` arm; the shell never inspects a
 //!   `Cmd`.
 //! - **Panics isolate to one oneshot** — `catch_unwind` keeps the loop
 //!   alive; a panicked handler drops its reply channel and the bridge
@@ -159,24 +159,24 @@ pub enum Cmd {
     /// the read-only dep walk (`crate::walk`): the roots walk NOW, in
     /// one fast handler turn — no walk task, no awaits. The reply is
     /// the `WalkOut` envelope. The EAGER manual door (tests, cold
-    /// boot, env-less hosts); the deferred door is [`Cmd::Stir`].
+    /// boot, env-less hosts); the deferred door is [`Cmd::ReloadDeps`].
     ResolveDeps {
         roots: Vec<String>,
         tx: Tx,
     },
-    /// STIR the dep walk — the level-triggered door: the walk DEFERS
-    /// under the debounce window and coalesces (a later stir
+    /// RELOAD the deps — the level-triggered door: the walk DEFERS
+    /// under the debounce window and coalesces (a later reload
     /// supersedes an earlier one, whose oneshot answers `Done` —
     /// merged, not lost). With no clock on the env the walk runs
     /// eagerly in-turn (D3): the same answer, no window.
-    Stir {
+    ReloadDeps {
         roots: Vec<String>,
         tx: Tx,
     },
     /// the deferred walk — minted ONLY by the deferral doors (the
-    /// `Stir` arm's `defer`); no bridge posts it. The tx it carries is
-    /// the stir's own oneshot: the answer rides the RPC's reply
-    /// channel, no push lane (D2).
+    /// `ReloadDeps` arm's `defer`); no bridge posts it. The tx it
+    /// carries is the reload's own oneshot: the answer rides the RPC's
+    /// reply channel, no push lane (D2).
     WalkDeps {
         roots: Vec<String>,
         tx: Tx,
@@ -547,7 +547,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             // The walk body is the SAME one the deferred door runs (D9).
             let _ = tx.send(Reply::Text(walk_now(l, &roots)));
         }
-        Cmd::Stir { roots, tx } => {
+        Cmd::ReloadDeps { roots, tx } => {
             // the ONLY place coalescing is chosen (D1): the lane
             // composes the neutral doors over its remembered handle —
             // level-triggered, latest wins. `defer` may have run the
@@ -556,10 +556,10 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let t = l.defer(Cmd::WalkDeps { roots, tx });
             if let Some(prev) = l.state.walk_task.replace(t) {
                 // cancel ⇒ Some: the queued walk never fires — answer
-                // its stir `Done` (superseded, merged into the newer;
-                // the LAST stir's promise carries the world).
+                // its reload `Done` (superseded, merged into the newer;
+                // the LAST reload's promise carries the world).
                 // cancel ⇒ None: the previous walk already fired and
-                // answered its own stir — nothing to do, a
+                // answered its own reload — nothing to do, a
                 // double-answer is unwritable.
                 if let Some(Cmd::WalkDeps { tx: old, .. }) = l.cancel_defer(prev) {
                     let _ = old.send(Reply::Done);

@@ -1,7 +1,7 @@
 /**
  * The playground's virtual dep world — a `$RUT_HOME` in memory.
  *
- * The crate's dep walk (`stir` / `resolveDeps`) is READ-ONLY by
+ * The crate's dep walk (`reloadDeps` / `resolveDeps`) is READ-ONLY by
  * construction: it sees the host only through the injected `HostEnv`
  * capability (read/readDir/isDir/notify + the optional clock
  * `wakeAfter` — the crate's `js/index.d.ts`), and it
@@ -16,7 +16,7 @@
  * The env also serves the virtual WORKSPACE: `/playground/rut.jsonc`
  * (the manifest, demo state), `/playground/rut.lock` (the pin ledger,
  * demo state), and `/playground/src/mod.rut` (the CURRENT editor
- * buffer) — the walk re-reads them on every run, so edits stir it.
+ * buffer) — the walk re-reads them on every run, so edits re-trigger it.
  */
 
 import { unzipSync } from "fflate";
