@@ -178,3 +178,63 @@ pub fn has_generic_bodies(prog: &rut_core::binary::Program) -> bool {
             class_generic || ih.methods.iter().any(|m| !m.generics.is_empty())
         })
 }
+
+/// The LEAF of a (possibly module-qualified) surface name — the
+/// reconciliation spelling: the surface's rows qualify module-resident
+/// decls (`math::sqrt`), the unit-local ids the checker keys (and the
+/// template rows carry) spell the bare leaf.
+fn leaf_of(text: &str) -> &str {
+    text.rsplit("::").next().unwrap_or(text)
+}
+
+/// The templates-must-emit law's SERVING check: a generic-owning
+/// program ([`has_generic_bodies`]) passes when every exported generic
+/// FN is served — by a template row (the placeholder body) or by its
+/// closed-union enumeration's LEDGER rows (the members compile at pack
+/// time as ordinary fns with REAL bodies, below the template window —
+/// the ledger IS the closed-surface evidence, which is why no wire
+/// section spells it) — and any generic METHOD surface by templates
+/// (methods never enumerate). The name match reconciles the qualified
+/// surface spelling against the checker's bare keys by leaf; a
+/// same-leaf collision across two modules could over-serve a row, but
+/// the delivery lane never reads this table — a false pass here only
+/// weakens the anti-doctoring trip, never correctness.
+pub fn generic_surface_served(prog: &rut_core::binary::Program) -> bool {
+    let s = &prog.surface;
+    let body_at = |fid: u32| {
+        prog.funcs
+            .get(fid as usize)
+            .map(|f| !f.code.is_empty() || f.host_id.is_some())
+            .unwrap_or(false)
+    };
+    for g in &s.fn_generics {
+        let row_leaf = leaf_of(prog.interner.name(g.name));
+        let templated = prog.templates.iter().any(|t| {
+            matches!(&t.kind,
+                rut_core::binary::TemplateKind::Free { name }
+                    if leaf_of(prog.interner.name(*name)) == row_leaf)
+        });
+        let enumerated = prog.inst_fns.iter().any(|r| {
+            matches!(&r.kind,
+                rut_core::binary::InstFnKind::Free { name, .. }
+                    if leaf_of(prog.interner.name(*name)) == row_leaf)
+                && body_at(r.fid)
+        });
+        if !templated && !enumerated {
+            return false;
+        }
+    }
+    let methods_generic = s.inherents.iter().any(|ih| {
+        let cname = prog.types.type_at(ih.target).name;
+        let class_generic = s
+            .type_exports
+            .iter()
+            .find(|t| t.name == cname)
+            .is_some_and(|t| t.is_generic);
+        class_generic || ih.methods.iter().any(|m| !m.generics.is_empty())
+    });
+    if methods_generic && prog.templates.is_empty() {
+        return false;
+    }
+    true
+}

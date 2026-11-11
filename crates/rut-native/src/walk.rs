@@ -1377,9 +1377,11 @@ fn mount_bundle_bytes(
     // gate 5 — the root: a compiled module (the packer refuses any
     // other); the anti-doctoring law (v22): a generic-owning unit must
     // carry its template bodies inside the binary
-    if rut_driver::pack::has_generic_bodies(&root) && root.templates.is_empty() {
+    if rut_driver::pack::has_generic_bodies(&root)
+        && !rut_driver::pack::generic_surface_served(&root)
+    {
         return Err(LoadError::law(format!(
-            "{url}: `{root_spec}` owns an open generic surface but its binary carries no template bodies — corrupt or doctored, re-pack the directory"
+            "{url}: `{root_spec}` owns an open generic surface but its binary serves none of it — no template bodies, no closed-union ledger rows — corrupt or doctored, re-pack the directory"
         )));
     }
     let mods = rut_driver::loader::rows_mods(&entries, "")
@@ -1475,9 +1477,11 @@ fn mount_bundle_bytes(
                         )));
                     }
                 }
-                if rut_driver::pack::has_generic_bodies(&program) && program.templates.is_empty() {
+                if rut_driver::pack::has_generic_bodies(&program)
+                    && !rut_driver::pack::generic_surface_served(&program)
+                {
                     return Err(LoadError::law(format!(
-                        "{url}: `{key}` owns an open generic surface but its binary carries no template bodies — corrupt or doctored, re-pack the directory"
+                        "{url}: `{key}` owns an open generic surface but its binary serves none of it — no template bodies, no closed-union ledger rows — corrupt or doctored, re-pack the directory"
                     )));
                 }
                 Mounted {

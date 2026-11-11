@@ -242,6 +242,32 @@ pub fn compile_program_pre(
     )
 }
 
+/// Resolve a surface `fn_generics` row back to its unit-local fn decl.
+/// The surface spells a module-resident fn MOD-QUALIFIED
+/// (`reactive::mutate` — the qualified-use composition law), while the
+/// unit's fn table (and every checker-side instantiation key) spells
+/// the BARE leaf per module. Both the closed-union enumeration and the
+/// template pass must find the real node — keyed the way the checker
+/// knows it — or the row silently falls through as a bodyless template
+/// (and, once bodies DO compile, the closed-union shapes refuse the
+/// stability law). Answers the `(name id, fn node)` pair, matched on
+/// the leaf text + the row's module path; `None` leaves the row on its
+/// surface id (a doctored surface refuses loudly downstream).
+fn resolve_local_fn<'a>(
+    ctx: &Ctx<'a>,
+    row: IdentId,
+) -> Option<(IdentId, rut_ast::Handle<rut_ast::FnNode>)> {
+    let row_text = ctx.name(row).to_string();
+    let (mod_path, leaf) = match row_text.rsplit_once("::") {
+        Some((m, l)) => (m.replace("::", "/"), l.to_string()),
+        None => (String::new(), row_text.clone()),
+    };
+    ctx.fn_nodes
+        .iter()
+        .find(|(n, node)| ctx.name(*n) == leaf && ctx.mod_of(node.span(ctx.ast)) == mod_path)
+        .map(|(n, node)| (*n, *node))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn compile_program_inner(
     pre: rut_parser::Parsed,
@@ -2173,16 +2199,10 @@ fn compile_program_inner(
     // impossible in a sound bundle (an out-of-union request is the
     // loud refusal).
     let mut enumerated: std::collections::HashSet<IdentId> = std::collections::HashSet::new();
-    let mut enum_roots: Vec<(rut_lir::check::Inst, u32)> = Vec::new();
     if !surface.fn_generics.is_empty() {
         let mut seeds: Vec<rut_lir::check::Inst> = Vec::new();
         for g in &surface.fn_generics {
-            let Some(node) = ctx
-                .fn_nodes
-                .iter()
-                .find(|(n, _)| *n == g.name)
-                .map(|(_, n)| *n)
-            else {
+            let Some((local_name, node)) = resolve_local_fn(&ctx, g.name) else {
                 continue;
             };
             let bounds = node.get(ctx.ast).bounds.clone();
@@ -2225,8 +2245,12 @@ fn compile_program_inner(
             }
             for combo in combos {
                 let subst: Vec<(IdentId, TypeId)> = g.params.iter().copied().zip(combo).collect();
+                // the seed keys the LOCAL name id — the checker's
+                // FnKey::Free resolution walks `fn_nodes` by that id,
+                // and a surface-qualified key misses it (the silent
+                // empty-body lane: "unknown fn — already diagnosed")
                 seeds.push(rut_lir::check::Inst {
-                    key: rut_lir::check::FnKey::Free(g.name),
+                    key: rut_lir::check::FnKey::Free(local_name),
                     subst,
                     iface_origins: vec![],
                 });
@@ -2235,8 +2259,7 @@ fn compile_program_inner(
         }
         if !seeds.is_empty() {
             for inst in seeds {
-                let fid = ctx.ensure_inst(inst.clone());
-                enum_roots.push((inst, fid));
+                let _ = ctx.ensure_inst(inst.clone());
             }
             if ctx.drain_queue().is_err() {
                 diags.append(&mut ctx.diags);
@@ -2297,19 +2320,26 @@ fn compile_program_inner(
             if enumerated.contains(&g.name) {
                 continue;
             }
-            let node = ctx
-                .fn_nodes
-                .iter()
-                .find(|(n, _)| *n == g.name)
-                .map(|(_, n)| *n);
+            // The surface row spells a module-resident fn MOD-QUALIFIED
+            // while the unit's fn table (and every checker-side
+            // instantiation key) spells the BARE leaf per module —
+            // resolve the row back to its unit-local decl (see
+            // [`resolve_local_fn`]) so the template roots key the ids
+            // the checker knows and the placeholder bodies actually
+            // compile. An unresolved row (a doctored surface) keeps the
+            // surface id: the row emits, but the materialization match
+            // refuses it loudly.
+            let (local_name, node) = resolve_local_fn(&ctx, g.name)
+                .map(|(n, node)| (n, Some(node)))
+                .unwrap_or((g.name, None));
             let bounds = node
-                .map(|n| {
-                    let fd = n.get(ctx.ast);
+                .map(|node| {
+                    let fd = node.get(ctx.ast);
                     fd.bounds.iter().map(|(g, _)| *g).collect()
                 })
                 .unwrap_or_default();
             decls.push(Decl::Free {
-                name: g.name,
+                name: local_name,
                 generics: g.params.clone(),
                 bounds,
             });
@@ -2419,25 +2449,11 @@ fn compile_program_inner(
                     fid,
                 });
             }
-            // the closed-union exports' member rows: their bodies ride
-            // the LEDGER (compiled concretely in the enumeration — no
-            // placeholder window fid), but the rows still ship, one per
-            // member. The wire's surface cannot spell a bound, so these
-            // rows ARE the closed-surface evidence the
-            // templates-must-emit gate reads — and an out-of-union
-            // request (never a sound consumer's shape) materializes a
-            // mismatched body the verifier refuses loudly.
-            for (inst, fid) in &enum_roots {
-                let rut_lir::check::FnKey::Free(name) = inst.key else {
-                    continue;
-                };
-                templates.push(rut_core::binary::TemplateRow {
-                    kind: rut_core::binary::TemplateKind::Free { name },
-                    param_rows: inst.subst.iter().map(|(_, t)| *t).collect(),
-                    bounds: Vec::new(),
-                    fid: *fid,
-                });
-            }
+            // the closed-union evidence never rides the wire: the members'
+            // LEDGER rows (concrete subst + real bodies, below the template
+            // window) are what the pack/mount gates read as proof the
+            // open-looking surface is closed (`generic_surface_served`).
+
             // the window's end: every body + stub the drain appended —
             // link drops the whole range from the merged table (the
             // templates serve the PRE-link owner mount only)

@@ -264,10 +264,11 @@ pub(crate) fn walk_decoded(
     // surface with an empty template section is a torn or doctored
     // bundle (the pack could not have produced it). Non-generic units
     // pass trivially.
-    if crate::pack::has_generic_bodies(&root) && root.templates.is_empty() {
+    if crate::pack::has_generic_bodies(&root) && !crate::pack::generic_surface_served(&root) {
         return Err(err(format!(
-            "`{root_spec}` owns an open generic surface but its binary carries no template \
-             bodies — corrupt or doctored, re-pack the directory"
+            "`{root_spec}` owns an open generic surface but its binary serves none of it — no \
+             template bodies, no closed-union ledger rows — corrupt or doctored, re-pack the \
+             directory"
         )));
     }
     let mods = rows_mods(entries, "").map_err(err)?;
@@ -346,10 +347,13 @@ pub(crate) fn walk_decoded(
                         )));
                     }
                 }
-                if crate::pack::has_generic_bodies(&program) && program.templates.is_empty() {
+                if crate::pack::has_generic_bodies(&program)
+                    && !crate::pack::generic_surface_served(&program)
+                {
                     return Err(err(format!(
-                        "`{key}` owns an open generic surface but its binary carries no template \
-                         bodies — corrupt or doctored, re-pack the directory"
+                        "`{key}` owns an open generic surface but its binary serves none of it \
+                         — no template bodies, no closed-union ledger rows — corrupt or \
+                         doctored, re-pack the directory"
                     )));
                 }
                 Mounted {

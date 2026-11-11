@@ -53,7 +53,7 @@ pub use decl_entry::{
 };
 
 pub use error::PackError;
-pub use groups::{collect_source_group, has_generic_bodies};
+pub use groups::{collect_source_group, generic_surface_served, has_generic_bodies};
 use groups::{group_file, group_manifest, rides_compiled};
 use strip::strip_arm;
 
@@ -309,10 +309,11 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
         if !rides_compiled(&session, &spec, &units) {
             continue;
         }
-        if has_generic_bodies(prog) && prog.templates.is_empty() {
+        if has_generic_bodies(prog) && !generic_surface_served(prog) {
             return Err(PackError::law(format!(
-                "pack: `{spec}` owns an open generic surface but its binary carries no template \
-                 bodies — corrupt or doctored, re-pack the directory"
+                "pack: `{spec}` owns an open generic surface but its binary serves none of it — \
+                 no template bodies, no closed-union ledger rows — corrupt or doctored, re-pack \
+                 the directory"
             )));
         }
         // the stability law's pack half: a template body whose
