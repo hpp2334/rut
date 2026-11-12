@@ -300,44 +300,21 @@ fn zip_text(entries: &[(String, Vec<u8>)], rel: &str) -> Option<String> {
         .map(|(_, b)| String::from_utf8_lossy(b).into_owned())
 }
 
-/// Mount one package under `prefix` — the archive root (`""`), or an
-/// embedded `deps/<name>@<fp16>/` group (`spec` then carries the
-/// identity spelling, `mounted_by` the declaring pkg). The tree
-/// mounts by DECLARATION over the entries
-/// ([`crate::mods::mount_mod_children`] with a lookup resolving the
-/// two child spellings against the archive), and the embedded groups
-/// recurse with their identity VERIFIED — `fp16_of_tree` over the
-/// group's own files must equal the directory's spelling (the
-/// packer's half of the law).
-fn srczip_pkg(
+/// The declaration-driven mod tree over the archive: every
+/// `mod NAME;` in `root_text` resolves against the zip's two child
+/// spellings (`<stem>/<child_file>` and `<stem>.rut`) — both present
+/// is the loader's loud ambiguity, either alone mounts, neither the
+/// loud miss. [`crate::mods::mount_mod_children`] with the archive
+/// lookup; `root_rel` (prefix-joined) is the root's file identity
+/// for the cycle guard.
+fn srczip_mods(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
-    spec: Option<String>,
-    mounted_by: Option<String>,
-    pkgs: &mut Vec<Mounted>,
-) -> Result<(), String> {
-    let manifest_text = zip_text(entries, &format!("{prefix}rut.jsonc"))
-        .ok_or_else(|| format!("{prefix}: the archive carries no rut.jsonc"))?;
-    let manifest = crate::bundle::parse_manifest(&manifest_text)
-        .map_err(|e| format!("{prefix}rut.jsonc: {e}"))?;
-    let name = manifest
-        .name
-        .clone()
-        .ok_or_else(|| format!("{prefix}rut.jsonc: no `name`"))?;
-    // the entry module: a declared `.d.rut` surface (a host pkg — the
-    // tree speaks Decl) or the lib default `src/mod.rut` (Impl)
-    let (root_rel, mode, child_file) = match &manifest.entry.type_path {
-        Some(tp) => {
-            let rel = tp.trim_start_matches("./");
-            (format!("src/{rel}"), crate::Mode::Decl, "mod.d.rut")
-        }
-        None => ("src/mod.rut".to_string(), crate::Mode::Impl, "mod.rut"),
-    };
-    let root_text = zip_text(entries, &format!("{prefix}{root_rel}"))
-        .ok_or_else(|| format!("{prefix}: no {root_rel} — the entry module the manifest names"))?;
-    // the tree, by declaration: every `mod NAME;` resolves against the
-    // archive's two child spellings — both present is the loud
-    // ambiguity, the loader's own law
+    root_rel: &str,
+    root_text: &str,
+    mode: crate::Mode,
+    child_file: &str,
+) -> Result<BTreeMap<String, crate::mods::ModSource>, String> {
     let base = format!("{prefix}src/");
     let mut read = |parent: &str, child: &str| -> Result<crate::mods::ChildLookup, String> {
         let stem = if parent.is_empty() {
@@ -362,13 +339,111 @@ fn srczip_pkg(
             (None, None) => Ok(crate::mods::ChildLookup::Missing),
         }
     };
-    let mods = crate::mods::mount_mod_children(
-        &root_text,
+    crate::mods::mount_mod_children(
+        root_text,
         &format!("{prefix}{root_rel}"),
         mode,
         child_file,
         &mut read,
-    )?;
+    )
+}
+
+/// Mount one package under `prefix` — the archive root (`""`), or an
+/// embedded `deps/<name>@<fp16>/` group (`spec` then carries the
+/// identity spelling, `mounted_by` the declaring pkg). The tree
+/// mounts by DECLARATION over the entries
+/// ([`crate::mods::mount_mod_children`] with a lookup resolving the
+/// two child spellings against the archive), and the embedded groups
+/// recurse with their identity VERIFIED — `fp16_of_tree` over the
+/// group's own files must equal the directory's spelling (the
+/// packer's half of the law).
+fn srczip_pkg(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+    spec: Option<String>,
+    mounted_by: Option<String>,
+    pkgs: &mut Vec<Mounted>,
+) -> Result<(), String> {
+    let manifest_text = zip_text(entries, &format!("{prefix}rut.jsonc"))
+        .ok_or_else(|| format!("{prefix}: the archive carries no rut.jsonc"))?;
+    let manifest = crate::bundle::parse_manifest(&manifest_text)
+        .map_err(|e| format!("{prefix}rut.jsonc: {e}"))?;
+    let name = manifest
+        .name
+        .clone()
+        .ok_or_else(|| format!("{prefix}rut.jsonc: no `name`"))?;
+    // the entry mount, by pkg type — the dir lane's own dispatch: a
+    // HOST pkg's surface is a `.d.rut` (a spelled `entry.type` wins,
+    // `src/mod.d.rut` the default root), LOWERED to host rows with
+    // the manifest's `consts` stamped; a LIB pkg's body is
+    // `src/mod.rut` (a spelled decl surface on a lib is the dir
+    // lane's law — refused here, named)
+    let mut pkg = match manifest.pkg_type {
+        crate::bundle::PkgType::Host => {
+            let rel = match &manifest.entry.type_path {
+                Some(tp) => tp.trim_start_matches("./").to_string(),
+                None => "mod.d.rut".to_string(),
+            };
+            let root_rel = format!("src/{rel}");
+            let root_text = zip_text(entries, &format!("{prefix}{root_rel}")).ok_or_else(|| {
+                format!("{prefix}: no {root_rel} — the entry surface the manifest names")
+            })?;
+            let mods = srczip_mods(
+                entries,
+                prefix,
+                &root_rel,
+                &root_text,
+                crate::Mode::Decl,
+                "mod.d.rut",
+            )?;
+            let mut m = crate::lower_decl_module(&root_text, &mods, &format!("{prefix}{root_rel}"))
+                .map_err(|e| format!("{prefix}{root_rel}: {e}"))?;
+            m.entry = manifest.entry.clone();
+            // the manifest's `consts` rows ride the host body — the
+            // surface grammar has no spelling for them (the dir lane's
+            // own law, mirrored bit for bit: f64 rows → TY_F64 bits)
+            if let MountedBody::Host { consts: rows, .. } = &mut m.body {
+                *rows = manifest
+                    .consts
+                    .iter()
+                    .map(|(n, v)| (n.clone(), rut_core::types::TY_F64, v.to_bits()))
+                    .collect();
+            }
+            m
+        }
+        crate::bundle::PkgType::Lib => {
+            if manifest.entry.type_path.is_some() {
+                return Err(format!(
+                    "{prefix}: a lib pkg with a spelled decl surface is the dir \
+                     lane's law — from_srczip carries body-only libs"
+                ));
+            }
+            let root_rel = "src/mod.rut";
+            let root_text = zip_text(entries, &format!("{prefix}{root_rel}")).ok_or_else(|| {
+                format!("{prefix}: no {root_rel} — the entry module the manifest names")
+            })?;
+            let mods = srczip_mods(
+                entries,
+                prefix,
+                root_rel,
+                &root_text,
+                crate::Mode::Impl,
+                "mod.rut",
+            )?;
+            Mounted {
+                spec: String::new(),
+                entry: manifest.entry.clone(),
+                body: MountedBody::Source {
+                    text: root_text,
+                    is_decl: false,
+                },
+                bundle_scopes: Vec::new(),
+                mods,
+                manifest: crate::bundle::Manifest::default(),
+                mounted_by: None,
+            }
+        }
+    };
     // the embedded groups the manifest's rewritten rows name —
     // collected before the manifest moves into the pkg
     let groups: Vec<(String, String)> = manifest
@@ -381,18 +456,10 @@ fn srczip_pkg(
         })
         .collect();
     let my_spec = spec.clone().unwrap_or_else(|| name.clone());
-    pkgs.push(Mounted {
-        spec: spec.unwrap_or_else(|| name.clone()),
-        entry: manifest.entry.clone(),
-        body: MountedBody::Source {
-            text: root_text,
-            is_decl: matches!(mode, crate::Mode::Decl),
-        },
-        bundle_scopes: Vec::new(),
-        mods,
-        manifest,
-        mounted_by,
-    });
+    pkg.spec = my_spec.clone();
+    pkg.manifest = manifest;
+    pkg.mounted_by = mounted_by;
+    pkgs.push(pkg);
     for (key, path) in groups {
         // identity is the directory's own spelling — read, never
         // hand-typed — and the group's bytes must vouch for it
@@ -466,8 +533,8 @@ mod srczip_tests {
         let host = &walk.pkgs[1];
         assert_eq!(host.manifest.name.as_deref(), Some("nmap_host"));
         assert!(
-            matches!(host.body, MountedBody::Source { is_decl: true, .. }),
-            "the host pkg's `.d.rut` surface mounts decl-mode"
+            matches!(&host.body, MountedBody::Host { host_funcs, .. } if !host_funcs.is_empty()),
+            "the host pkg's `.d.rut` surface lowers to host rows"
         );
         assert_eq!(host.mounted_by.as_deref(), Some("nmapset"));
     }

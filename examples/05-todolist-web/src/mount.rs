@@ -5,7 +5,7 @@
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is walked by
 //! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
-//! dist/std-v12 plays the wire — the PINNED artifacts, so no gate
+//! dist/std-v16 plays the wire — the PINNED source zips, so no gate
 //! networks). The four passes run FOR
 //! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
 //! walks a test probe the same way.
@@ -57,22 +57,26 @@ use std::collections::BTreeMap;
 /// The `web` pkg's surface, verbatim — the contract the bodies bind.
 pub const WEB_D_RUT: &str = include_str!("../web/src/web.d.rut");
 
-// the url-dep mounts, from the COMMITTED CDN artifacts (the v11
-// bundles, sha256-pinned by the pins gate). THE BUNDLE LAW: the
-// mirror's offer is `Mounted::from_bundle` per artifact — the in-memory
-// twin of the walk's cache lane. pouch and nmapset mount the SAME way
-// (their own committed bundles): v21 offered them as verbatim sources
-// because a compiled bundle then served only its own pack closure —
-// v22's templates serve the consumer's shapes, so the bundle twin is
-// EXACT, and both lanes compiling the same mounted programs is what
-// mount_lane's byte pin means.
-// the PINNED envelope (`dist/std-v12`) — the same bytes the offline
-// cache primes below, so the mirror's hand offers and the manifest
-// lane's walk ride ONE wire. dist/std is the working envelope; the
-// committed pins name the std-v12 bytes.
-const NMAP_HOST_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v12/nmap_host.rutbundle");
-const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v12/pouch.rutbundle");
-const NMAPSET_BUNDLE: &[u8] = include_bytes!("../../../dist/std-v12/nmapset.rutbundle");
+// the url-dep mounts, from the COMMITTED CDN artifacts — the std-v16
+// SOURCE ZIPS the locks pin (the sha256 is law at the mount door).
+// THE OFFER LAW: the mirror mounts `Mounted::from_srczip` per
+// artifact — the in-memory twin of the walk's cache lane over the
+// SAME bytes, so both lanes compile the same mounted programs
+// (mount_lane's byte pin; the old bundle twin's pack-closure
+// subtleties are gone — source in, source compiled, both sides).
+// nmap_host rides INSIDE nmapset.zip as the embedded
+// `deps/nmap_host@<fp16>/` group — the std lane's own host-pkg
+// treatment (the calc_host precedent: a host surface ships in its
+// consumer's zip, no standalone artifact) — its identity verified
+// against the group's bytes at the mount; its BODIES still cross as
+// the embedder's registration (`rut_std::nmap::pkg()`, the offer
+// lane's install below).
+// the PINNED envelope (`dist/std-v16`) — the same bytes the offline
+// cache primes below, so the mirror's offers and the manifest lane's
+// walk ride ONE wire; the committed pins name the std-v16 bytes
+// (pack-std --check's mirror == envelope is the byte law).
+const POUCH_ZIP: &[u8] = include_bytes!("../../../dist/std-v16/pouch.zip");
+const NMAPSET_ZIP: &[u8] = include_bytes!("../../../dist/std-v16/nmapset.zip");
 
 // the module trees, verbatim: root + every mounted child — the
 // mirror's whole job is an independent embedder spelling what the
@@ -119,7 +123,9 @@ fn declare_web(mut m: rut_driver::Manifest) -> rut_driver::Manifest {
 
 /// The specs that name `web` in this project — the walk lane stamps
 /// [`declare_web`] onto exactly these walked manifests (their
-/// rut.jsonc text cannot carry the row).
+/// rut.jsonc text cannot carry the row). The WALK is native-only, so
+/// the table rides its cfg (the wasm lane offers the surface itself).
+#[cfg(not(target_arch = "wasm32"))]
 const WEB_CONSUMERS: [&str; 3] = ["app", "ui", "harness"];
 
 /// ui's manifest, from its REAL rut.jsonc (the same text the walk lane
@@ -225,37 +231,24 @@ pub fn web_pkg() -> Result<Mounted, String> {
 
 /// THE MIRROR — every package `rut/biz/rut.jsonc` names, offered by
 /// hand (the wasm lane; also mount_lane's comparison world): `web`
-/// (the crossing surface) + `pouch` + `nmap_host` (the committed CDN
-// artifact — the url-dep mount's in-memory twin) + `nmapset` + `ui`.
-/// Every hand offer rides its real manifest — the same rut.jsonc text
-/// the walk lane parses ([`declare_web`] adds the structural `web` row
-/// where the pkg names the surface). The ROOT is deliberately absent:
-/// the app's SOURCE crosses the ABI ([`compile_app`] offers and
-/// compiles it).
+/// (the crossing surface) + `pouch` + `nmapset` (the committed CDN
+/// source zips — the url-dep mounts' in-memory twin) + the embedded
+/// `nmap_host` group + `ui`. Every offer rides its real manifest —
+/// the same rut.jsonc text the zip carries. The ROOT is deliberately
+/// absent: the app's SOURCE crosses the ABI ([`compile_app`] offers
+/// and compiles it).
 pub fn mirror_pkgs() -> Result<Vec<Mounted>, String> {
     // every CDN row the manifest spells, mounted from the committed
-    // artifact — the walk's cache lane answers the SAME bytes, so the
-    // two offered closures are the same programs. The v11 law names an
-    // in-archive group by its CONTENT IDENTITY (`name@<fp16>` — the
-    // rode source set's fingerprint); the standalone nmap_host bundle's
-    // root mounts bare, so the mirror derives the identity spelling
-    // from the artifact's own entries — never hand-typed — and the
-    // host registration still spells the bare name half
-    // (`identity::mount_name`).
-    let entries = rut_driver::bundle::parse_bundle(NMAP_HOST_BUNDLE).map_err(|e| e.to_string())?;
-    let fp16 = rut_driver::bundle::identity::fp16_of(&entries, "");
-    let nmap_host_spec = rut_driver::bundle::identity::identity("nmap_host", &fp16);
+    // source zip — from_srczip over the SAME bytes the walk's cache
+    // lane serves, so the two offered closures are the same programs
+    // (mount_lane's byte pin). The embedded nmap_host group rides
+    // with its identity spec — the archive's own
+    // `deps/nmap_host@<fp16>/` spelling, verified against the group's
+    // bytes at the mount — and the host registration still spells the
+    // bare name half (`identity::mount_name`).
     let mut pkgs = vec![web_pkg()?];
-    for bytes in [NMAP_HOST_BUNDLE, POUCH_BUNDLE, NMAPSET_BUNDLE] {
-        let mut mounted = rut_driver::Mounted::from_bundle(bytes)
-            .map_err(|e| e.to_string())?
-            .pkgs;
-        for p in mounted.iter_mut() {
-            if rut_driver::bundle::identity::mount_name(&p.spec) == "nmap_host" {
-                p.spec = nmap_host_spec.clone();
-            }
-        }
-        pkgs.extend(mounted);
+    for zip in [POUCH_ZIP, NMAPSET_ZIP] {
+        pkgs.extend(Mounted::from_srczip(zip).map_err(|e| e.to_string())?.pkgs);
     }
     pkgs.push(ui_pkg());
     Ok(pkgs)
@@ -272,7 +265,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std-v12 plays the wire: the pinned artifacts prime ONE
+/// dist/std-v16 plays the wire: the pinned source zips prime ONE
 /// cache-only cache per process (`DepRemote::write` is the stand-in
 /// for the GET — the ONCE-gated priming is the 03-plugin precedent),
 /// and every manifest-lane walk rides an `HttpRemote::at` over it — a
@@ -293,7 +286,7 @@ fn std_remote() -> rut_native::HttpRemote {
         // (harness/softfail are dep-free) — walked for url rows exactly
         // like the loader's own prefetch walks
         let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dist = base.join("../../dist/std-v12");
+        let dist = base.join("../../dist/std-v16");
         let mut urls = std::collections::BTreeSet::new();
         for rel in [
             "rut/biz/rut.jsonc",

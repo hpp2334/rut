@@ -28,7 +28,7 @@ use std::rc::{Rc, Weak};
 
 use wasm_bindgen::prelude::{Closure, JsCast, JsValue};
 
-use rut_vm::interp::{HostHooks, HostRegistry, Vm};
+use rut_vm::interp::{HostHooks, Vm};
 use rut_vm::OpaqueRef;
 
 use crate::backend::DomBackend;
