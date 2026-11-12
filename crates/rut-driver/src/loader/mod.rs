@@ -579,24 +579,18 @@ pub fn bundle_entry_pkg(
 /// root `.d.rut`, each child its mod path), else the flat surface
 /// entry lowers alone — the root file is `mod.d.rut`, the ONE
 /// canonical name the packer emits at both levels. The manifest's
-/// `consts` rows fold in either way (bound bare at the pkg's root).
+/// `consts` rows fold in either way, BESIDE the surface `let` rows
+/// (the merge law; bound bare at the pkg's root).
 fn host_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
 ) -> Result<Mounted, String> {
-    let fold = |mut m: Mounted| -> Mounted {
+    let fold = |mut m: Mounted, origin: &str| -> Result<Mounted, String> {
         m.entry = manifest.entry.clone();
         m.manifest = manifest.clone();
-        let consts = manifest
-            .consts
-            .iter()
-            .map(|(name, v)| (name.clone(), rut_core::types::TY_F64, v.to_bits()))
-            .collect();
-        if let MountedBody::Host { consts: rows, .. } = &mut m.body {
-            *rows = consts;
-        }
-        m
+        crate::decl::fold_manifest_consts(&mut m.body, &manifest.consts, origin)?;
+        Ok(m)
     };
     if let Some((root, children)) = decl_rows_body(entries, prefix)? {
         let rel = manifest
@@ -606,7 +600,7 @@ fn host_entry_pkg(
             .unwrap_or(DECL_CHILD_FILE);
         let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
         let m = crate::decl::lower_decl_module(&root, &children, &origin)?;
-        return Ok(fold(m));
+        return fold(m, &origin);
     }
     // the flat lane's root file is `mod.d.rut` beside the manifest —
     // the ONE canonical name (wire v11 canonicalizes the directory
@@ -623,7 +617,7 @@ fn host_entry_pkg(
     })?;
     let origin = format!("{prefix}{DECL_CHILD_FILE}");
     let m = crate::decl::lower_decl_module(&src, &Default::default(), &origin)?;
-    Ok(fold(m))
+    fold(m, &origin)
 }
 
 /// The plain (non-decl) entry pkg. The root module is the `mod.rut`

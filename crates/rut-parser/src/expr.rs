@@ -15,7 +15,7 @@ use rut_ast::{
     TryNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
 };
 use rut_lexer::span::Span;
-use rut_lexer::token::{FPart, FStrTok, Tok, Token};
+use rut_lexer::token::{FPart, FStrTok, FloatSuffix, Tok, Token};
 
 use crate::frame::{Done, Frame, Step};
 use crate::item::ParamsFrame;
@@ -579,6 +579,22 @@ impl AtomFrame {
                     let e = LitNode {
                         span: sp,
                         lit: Lit::Nil,
+                    }
+                    .allocate(&mut p.ast);
+                    return self.finish(p, e);
+                }
+                // `inf` — the infinity float literal (the ident fold,
+                // the `true`/`false` precedent — no lexer keyword; the
+                // family is f64 END-TO-END, so the row carries the f64
+                // suffix and no f32-default question ever opens).
+                // `-inf` is unary negation on this literal, folded at
+                // the const lowering. `inf` as a NAME stays a plain
+                // ident — only expression position folds.
+                if name == "inf" {
+                    p.bump();
+                    let e = LitNode {
+                        span: sp,
+                        lit: Lit::Float(f64::INFINITY.to_bits(), Some(FloatSuffix::F64)),
                     }
                     .allocate(&mut p.ast);
                     return self.finish(p, e);

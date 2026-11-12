@@ -21,14 +21,23 @@
 //! `is_async` flag rides the row); the compiler weaves its call
 //! sites into the host future and the embedder registers the row
 //! family with `rut_vm::register_async!`.
+//!
+//! A surface `let` lowers as a CONST: every `ModuleLet` whose type is
+//! `f64` (spelled or inferred off a float literal) and whose
+//! initializer is a float literal — or its negation, `inf`/`-inf`
+//! included — folds into the host body's const rows (the literal-only
+//! law, D3: the surface computes nothing). Anything else refuses
+//! loudly at the lowering; the manifest's `consts` rows keep riding
+//! beside the surface rows (their stamp is [`fold_manifest_consts`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rut_ast::{Ast, ItemRef, Linkage, ParamRef, TyRef};
+use rut_ast::{Ast, ExprRef, ItemRef, Linkage, Lit, ParamRef, TyRef, UnOp};
 use rut_core::types::{
     TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
     TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
 };
+use rut_lexer::token::FloatSuffix;
 use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::mods::ModSource;
@@ -129,14 +138,23 @@ pub fn lower_decl_module(
     }
     let (ast, _) = p.into_parts();
     let mut host_funcs: Vec<HostRow> = Vec::new();
+    let mut consts: Vec<(String, TypeId, u64)> = Vec::new();
     // first mount wins, mirrored in the lowering: a repeated
     // `mod NAME;` names the same mounted child — lower it once
     let mut lowered: BTreeSet<String> = BTreeSet::new();
-    lower_module(&ast, "", children, origin, &mut host_funcs, &mut lowered)?;
+    lower_module(
+        &ast,
+        "",
+        children,
+        origin,
+        &mut host_funcs,
+        &mut consts,
+        &mut lowered,
+    )?;
     Ok(Mounted {
         body: MountedBody::Host {
             host_funcs,
-            consts: vec![],
+            consts,
             native_types: vec![],
             native_fns: vec![],
             native_impls: vec![],
@@ -145,6 +163,75 @@ pub fn lower_decl_module(
         mods: children.clone(),
         ..Default::default()
     })
+}
+
+/// One const row as the lowering folds it: the f64 bits of a float
+/// literal (or its negation) — `None` when the shape is not one. This
+/// is the literal-only law's READ side: `f32`-suffixed literals are
+/// not the family (f64 end-to-end), and any other expression computes
+/// something — the surface computes nothing.
+fn const_lit_bits(ast: &Ast, e: ExprRef) -> Option<u64> {
+    match e {
+        ExprRef::Lit(h) => match &h.get(ast).lit {
+            Lit::Float(bits, None) | Lit::Float(bits, Some(FloatSuffix::F64)) => Some(*bits),
+            _ => None,
+        },
+        ExprRef::Unary(h) => {
+            let n = h.get(ast);
+            if n.op == UnOp::Neg {
+                // the negation is exact at the bit level (the sign
+                // flip), `-inf` and `-0.0` included
+                const_lit_bits(ast, n.expr).map(|b| (-f64::from_bits(b)).to_bits())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The surface-const law's refusal text — one sentence, every shape
+/// (a non-`f64` type, a non-literal initializer, an `f32` literal).
+/// `lead` names the offender (`let X: i64` / `let X`).
+fn const_law(display: &str, lead: &str) -> String {
+    format!(
+        "{display}: `{lead}` — a surface const is a FLOAT LITERAL \
+         (f64, `inf`/`-inf` allowed); the surface computes nothing"
+    )
+}
+
+/// Fold one module's `let` items into const rows: the type must be
+/// `f64` (spelled or inferred off the literal — the family is f64
+/// end-to-end), the initializer a float literal or its negation.
+/// Names ride BARE (the manifest consts' own binding shape), mod
+/// path aside.
+fn lower_const_rows(
+    ast: &Ast,
+    items: &[ItemRef],
+    display: &str,
+    consts: &mut Vec<(String, TypeId, u64)>,
+) -> Result<(), String> {
+    for &it in items {
+        let ItemRef::ModuleLet(h) = it else {
+            continue;
+        };
+        let ml = h.get(ast);
+        let name = ast.name(ml.name).to_string();
+        if let Some(t) = ml.ty {
+            let tyname = ty_text(ast, t);
+            if tyname != "f64" {
+                return Err(const_law(display, &format!("let {name}: {tyname}")));
+            }
+        }
+        let Some(bits) = const_lit_bits(ast, ml.init) else {
+            // inferred-off-the-literal covers the untyped spelling;
+            // everything else — a call, an arithmetic shape, an `f32`
+            // literal, an int/str/bool — refuses here
+            return Err(const_law(display, &format!("let {name}")));
+        };
+        consts.push((name, TY_F64, bits));
+    }
+    Ok(())
 }
 
 /// One module's `host fn` rows, off the module's OWN items — the
@@ -213,12 +300,13 @@ fn lower_rows_in(
 }
 
 /// Lower one module of the surface tree: its own `host fn`s as
-/// path-carrying rows, then each `mod NAME;` recursed (first mount
-/// wins — a repeated declaration lowers its child once, `lowered`
-/// tracking the paths already walked). `display` is the declaring
-/// file's diagnostics name (the root's `origin`, a child's
-/// `<mod path>/mod.d.rut`); a child that is not in the mounted map —
-/// or one that does not parse — is the loud error.
+/// path-carrying rows and its `let` items as const rows, then each
+/// `mod NAME;` recursed (first mount wins — a repeated declaration
+/// lowers its child once, `lowered` tracking the paths already
+/// walked). `display` is the declaring file's diagnostics name (the
+/// root's `origin`, a child's `<mod path>/mod.d.rut`); a child that
+/// is not in the mounted map — or one that does not parse — is the
+/// loud error.
 ///
 /// The INLINE form (`mod NAME { .. }`, wire v12) lowers in place: the
 /// nested declarations are walked at the child's mod path, no mounted
@@ -232,6 +320,7 @@ fn lower_module(
     children: &BTreeMap<String, ModSource>,
     origin: &str,
     rows: &mut Vec<HostRow>,
+    consts: &mut Vec<(String, TypeId, u64)>,
     lowered: &mut BTreeSet<String>,
 ) -> Result<(), String> {
     let display = if path.is_empty() {
@@ -240,6 +329,7 @@ fn lower_module(
         format!("{path}/{DECL_CHILD_FILE}")
     };
     lower_rows(ast, path, &display, rows)?;
+    lower_const_rows(ast, ast.root().items(ast), &display, consts)?;
     for it in ast.root().items(ast).to_vec() {
         match it {
             ItemRef::ModDecl(h) => {
@@ -264,7 +354,15 @@ fn lower_module(
                         msgs.join("; ")
                     ));
                 }
-                lower_module(cp.ast(), &child_path, children, origin, rows, lowered)?;
+                lower_module(
+                    cp.ast(),
+                    &child_path,
+                    children,
+                    origin,
+                    rows,
+                    consts,
+                    lowered,
+                )?;
             }
             ItemRef::ModInline(h) => {
                 let d = h.get(ast);
@@ -282,7 +380,7 @@ fn lower_module(
                          (one declaration per name, the one-name-one-decl law)"
                     ));
                 }
-                lower_inline(ast, &d.items, &child_path, &display, rows, lowered)?;
+                lower_inline(ast, &d.items, &child_path, &display, rows, consts, lowered)?;
             }
             _ => continue,
         }
@@ -290,19 +388,22 @@ fn lower_module(
     Ok(())
 }
 
-/// Lower an INLINE module's items: its `host fn` rows at its mod path,
-/// then its nested `mod` edges (file-form refuses — no children map
-/// backs a nested file lookup; inline blocks recurse). The structural
-/// twin of [`lower_module`], one parse deeper.
+/// Lower an INLINE module's items: its `host fn` rows and `let`
+/// const rows at its mod path, then its nested `mod` edges (file-form
+/// refuses — no children map backs a nested file lookup; inline
+/// blocks recurse). The structural twin of [`lower_module`], one
+/// parse deeper.
 fn lower_inline(
     ast: &Ast,
     items: &[ItemRef],
     path: &str,
     display: &str,
     rows: &mut Vec<HostRow>,
+    consts: &mut Vec<(String, TypeId, u64)>,
     lowered: &mut BTreeSet<String>,
 ) -> Result<(), String> {
     lower_rows_in(ast, items, path, display, rows)?;
+    lower_const_rows(ast, items, display, consts)?;
     for &it in items {
         let ItemRef::ModInline(h) = it else {
             continue;
@@ -316,7 +417,7 @@ fn lower_inline(
                  (one declaration per name, the one-name-one-decl law)"
             ));
         }
-        lower_inline(ast, &d.items, &child_path, display, rows, lowered)?;
+        lower_inline(ast, &d.items, &child_path, display, rows, consts, lowered)?;
     }
     Ok(())
 }
@@ -356,6 +457,34 @@ pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
              and depend on it",
             row.name
         ));
+    }
+    Ok(())
+}
+
+/// Stamp a host pkg's manifest `consts` rows onto its lowered body —
+/// the merge the three mount lanes (directory, srczip, bundle) fold
+/// through. The surface `let` spelling is the primary form and the
+/// manifest rows ride BESIDE it (manifest consts stay fully
+/// accepted); one name spelled BOTH ways is the loud refusal — the
+/// two are alternative spellings of one const, never a layering.
+/// f64 rows only, exactly as the manifest walk shaped them.
+pub fn fold_manifest_consts(
+    body: &mut MountedBody,
+    consts: &BTreeMap<String, f64>,
+    origin: &str,
+) -> Result<(), String> {
+    let MountedBody::Host { consts: rows, .. } = body else {
+        return Ok(()); // a non-host body carries no const rows
+    };
+    for (name, v) in consts {
+        if rows.iter().any(|(n, _, _)| n == name) {
+            return Err(format!(
+                "{origin}: the const `{name}` is spelled twice — on the surface \
+                 (`pub let {name}: f64 = ..`) and in the manifest's `consts`; \
+                 one const, one spelling"
+            ));
+        }
+        rows.push((name.clone(), TY_F64, v.to_bits()));
     }
     Ok(())
 }

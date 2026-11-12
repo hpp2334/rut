@@ -109,6 +109,17 @@ fn floats_keep_their_dot_and_suffix() {
 }
 
 #[test]
+fn inf_reprints_bare_with_no_suffix() {
+    // the ident-fold literal's digits are `inf` — no suffix spelling
+    // exists for the non-finite family (`inff64` does not lex), and
+    // the parser's ident lane re-reads the bare word exactly
+    assert_eq!(
+        fmt("fn f() {\n    let a = inf;\n    let b = -inf;\n}"),
+        "fn f() {\n    let a = inf;\n    let b = -inf;\n}\n"
+    );
+}
+
+#[test]
 fn ints_lose_the_radix_and_keep_the_suffix() {
     assert_eq!(
         fmt("fn f() {\n    let a = 0xff;\n}"),

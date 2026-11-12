@@ -604,3 +604,53 @@ fn pub_mod_and_pub_self_are_gone_everywhere() {
     assert_eq!(vis(1), Vis::Pkg);
     assert_eq!(vis(2), Vis::Pub);
 }
+
+#[test]
+fn inf_is_the_infinity_float_literal() {
+    // D2: ident `inf` in EXPRESSION position folds to the infinity
+    // float literal (the `true`/`false` precedent — no lexer keyword),
+    // f64 always (D1, the family end-to-end); `-inf` is unary
+    // negation on it (folded at the const lowering), and `inf` as a
+    // NAME stays a plain ident — only expression position folds
+    use rut_ast::{ExprRef, Lit, StmtRef, UnOp};
+    use rut_lexer::token::FloatSuffix;
+
+    let (ast, diags) = parse("fn f() -> nil { let a = inf; let b = -inf; }", Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    let body = common::first_fn_body(&ast);
+    let stmts = body.get(&ast).stmts.to_vec();
+    let inf_lit = |e: ExprRef, what: &str| match e {
+        ExprRef::Lit(lh) => match &lh.get(&ast).lit {
+            Lit::Float(bits, Some(FloatSuffix::F64)) => {
+                assert_eq!(*bits, f64::INFINITY.to_bits(), "{what} carries inf bits");
+            }
+            l => panic!("{what} is the f64 infinity literal, got {l:?}"),
+        },
+        e => panic!("{what} folds to a literal, got {e:?}"),
+    };
+    match stmts[0] {
+        StmtRef::Let(h) => inf_lit(h.get(&ast).init, "`inf`"),
+        s => panic!("expected a let, got {s:?}"),
+    }
+    match stmts[1] {
+        StmtRef::Let(h) => match h.get(&ast).init {
+            ExprRef::Unary(uh) => {
+                let u = uh.get(&ast);
+                assert_eq!(u.op, UnOp::Neg, "`-inf` is unary negation");
+                inf_lit(u.expr, "`-inf`'s operand");
+            }
+            e => panic!("`-inf` is unary negation, got {e:?}"),
+        },
+        s => panic!("expected a let, got {s:?}"),
+    }
+
+    // `inf` as a NAME — a plain ident, zero diags (expression USE of
+    // the name reads the literal; the binding itself is ordinary)
+    let (ast, diags) = parse("fn f() -> nil { let inf = 1.0; }", Mode::Impl);
+    assert!(diags.is_empty(), "{diags:?}");
+    let body = common::first_fn_body(&ast);
+    match body.get(&ast).stmts[0] {
+        StmtRef::Let(h) => assert_eq!(ast.name(h.get(&ast).name), "inf"),
+        s => panic!("expected a let named `inf`, got {s:?}"),
+    }
+}

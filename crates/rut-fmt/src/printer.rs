@@ -2156,7 +2156,12 @@ impl<'a> P<'a> {
             Lit::Float(bits, sfx) => {
                 // the shortest round-trip digits; a float with no `.`
                 // and no exponent would re-lex as a SUFFIXED INT, so
-                // `.0` rides whenever the digits came out integral
+                // `.0` rides whenever the digits came out integral.
+                // The NON-FINITE family reprints BARE: the digits are
+                // `inf`/`NaN` (the ident-fold literal's shape), no
+                // suffix spelling exists for them (`inff64` does not
+                // lex), and the parser's ident lane re-reads the bare
+                // word exactly.
                 let val = f64::from_bits(*bits);
                 let digits = match *sfx {
                     Some(FloatSuffix::F32) => {
@@ -2164,11 +2169,9 @@ impl<'a> P<'a> {
                     }
                     _ => format!("{}", val),
                 };
-                let s = if digits.contains('.')
-                    || digits.contains('e')
-                    || digits.contains("inf")
-                    || digits.contains("NaN")
-                {
+                let s = if digits.contains("inf") || digits.contains("NaN") {
+                    digits
+                } else if digits.contains('.') || digits.contains('e') {
                     format!("{digits}{}", float_suffix(*sfx))
                 } else {
                     format!("{digits}.0{}", float_suffix(*sfx))
