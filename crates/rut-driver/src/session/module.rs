@@ -268,4 +268,290 @@ impl Mounted {
     pub fn from_bundle(bytes: &[u8]) -> Result<crate::run::Walk, crate::run::RunError> {
         crate::run::Bundle::parse(bytes)?.walk()
     }
+
+    /// The pure source-zip parse: a packed `.zip`'s bytes → the
+    /// walked yield — the in-memory twin of the native lane's url-dep
+    /// mount ([`crate::bundle::read_srczip`] → the manifest → the
+    /// entry module → the declaration-driven mod tree → the embedded
+    /// dep groups, each identity-verified against the archive's own
+    /// `deps/<name>@<fp16>/` spelling). No filesystem, no network:
+    /// the mirror lanes' door onto the SAME bytes a primed cache
+    /// serves — the [`Mounted::from_bundle`] of the source-zip era
+    /// (which it supersedes for `--mode source` artifacts).
+    pub fn from_srczip(bytes: &[u8]) -> Result<crate::run::Walk, crate::run::RunError> {
+        let entries = crate::bundle::read_srczip(bytes)
+            .map_err(|e| crate::run::RunError::law(format!("srczip: {e}")))?;
+        let mut pkgs = Vec::new();
+        srczip_pkg(&entries, "", None, None, &mut pkgs).map_err(crate::run::RunError::law)?;
+        let root = pkgs
+            .first()
+            .map(|p| crate::bundle::identity::mount_name(&p.spec).to_string())
+            .unwrap_or_default();
+        Ok(crate::run::Walk { pkgs, root })
+    }
+}
+
+/// one zip entry's text, decoded — `None` when the name is absent
+/// (a missing module is the caller's loud error to name)
+fn zip_text(entries: &[(String, Vec<u8>)], rel: &str) -> Option<String> {
+    entries
+        .iter()
+        .find(|(n, _)| n == rel)
+        .map(|(_, b)| String::from_utf8_lossy(b).into_owned())
+}
+
+/// Mount one package under `prefix` — the archive root (`""`), or an
+/// embedded `deps/<name>@<fp16>/` group (`spec` then carries the
+/// identity spelling, `mounted_by` the declaring pkg). The tree
+/// mounts by DECLARATION over the entries
+/// ([`crate::mods::mount_mod_children`] with a lookup resolving the
+/// two child spellings against the archive), and the embedded groups
+/// recurse with their identity VERIFIED — `fp16_of_tree` over the
+/// group's own files must equal the directory's spelling (the
+/// packer's half of the law).
+fn srczip_pkg(
+    entries: &[(String, Vec<u8>)],
+    prefix: &str,
+    spec: Option<String>,
+    mounted_by: Option<String>,
+    pkgs: &mut Vec<Mounted>,
+) -> Result<(), String> {
+    let manifest_text = zip_text(entries, &format!("{prefix}rut.jsonc"))
+        .ok_or_else(|| format!("{prefix}: the archive carries no rut.jsonc"))?;
+    let manifest = crate::bundle::parse_manifest(&manifest_text)
+        .map_err(|e| format!("{prefix}rut.jsonc: {e}"))?;
+    let name = manifest
+        .name
+        .clone()
+        .ok_or_else(|| format!("{prefix}rut.jsonc: no `name`"))?;
+    // the entry module: a declared `.d.rut` surface (a host pkg — the
+    // tree speaks Decl) or the lib default `src/mod.rut` (Impl)
+    let (root_rel, mode, child_file) = match &manifest.entry.type_path {
+        Some(tp) => {
+            let rel = tp.trim_start_matches("./");
+            (format!("src/{rel}"), crate::Mode::Decl, "mod.d.rut")
+        }
+        None => ("src/mod.rut".to_string(), crate::Mode::Impl, "mod.rut"),
+    };
+    let root_text = zip_text(entries, &format!("{prefix}{root_rel}"))
+        .ok_or_else(|| format!("{prefix}: no {root_rel} — the entry module the manifest names"))?;
+    // the tree, by declaration: every `mod NAME;` resolves against the
+    // archive's two child spellings — both present is the loud
+    // ambiguity, the loader's own law
+    let base = format!("{prefix}src/");
+    let mut read = |parent: &str, child: &str| -> Result<crate::mods::ChildLookup, String> {
+        let stem = if parent.is_empty() {
+            format!("{base}{child}")
+        } else {
+            format!("{base}{parent}/{child}")
+        };
+        let dir_form = format!("{stem}/{child_file}");
+        let file_form = format!("{stem}.rut");
+        match (zip_text(entries, &dir_form), zip_text(entries, &file_form)) {
+            (Some(_), Some(_)) => Ok(crate::mods::ChildLookup::Ambiguous),
+            (Some(text), None) => Ok(crate::mods::ChildLookup::Found {
+                text,
+                canon: dir_form,
+                file: child_file.to_string(),
+            }),
+            (None, Some(text)) => Ok(crate::mods::ChildLookup::Found {
+                text,
+                canon: file_form,
+                file: format!("{child}.rut"),
+            }),
+            (None, None) => Ok(crate::mods::ChildLookup::Missing),
+        }
+    };
+    let mods = crate::mods::mount_mod_children(
+        &root_text,
+        &format!("{prefix}{root_rel}"),
+        mode,
+        child_file,
+        &mut read,
+    )?;
+    // the embedded groups the manifest's rewritten rows name —
+    // collected before the manifest moves into the pkg
+    let groups: Vec<(String, String)> = manifest
+        .deps
+        .iter()
+        .filter_map(|(key, desc)| {
+            desc.get("path")
+                .filter(|p| p.starts_with("deps/"))
+                .map(|p| (key.clone(), p.clone()))
+        })
+        .collect();
+    let my_spec = spec.clone().unwrap_or_else(|| name.clone());
+    pkgs.push(Mounted {
+        spec: spec.unwrap_or_else(|| name.clone()),
+        entry: manifest.entry.clone(),
+        body: MountedBody::Source {
+            text: root_text,
+            is_decl: matches!(mode, crate::Mode::Decl),
+        },
+        bundle_scopes: Vec::new(),
+        mods,
+        manifest,
+        mounted_by,
+    });
+    for (key, path) in groups {
+        // identity is the directory's own spelling — read, never
+        // hand-typed — and the group's bytes must vouch for it
+        let id = path.rsplit('/').next().unwrap_or_default();
+        let Some((dname, fp)) = crate::bundle::identity::parse_identity(id) else {
+            return Err(format!(
+                "{prefix}: dep `{key}` names {path} — not an identity spelling"
+            ));
+        };
+        let group_prefix = format!("{prefix}{path}/");
+        let files: Vec<(String, Vec<u8>)> = entries
+            .iter()
+            .filter(|(n, _)| n.starts_with(&group_prefix))
+            .map(|(n, b)| (n[group_prefix.len()..].to_string(), b.clone()))
+            .collect();
+        if files.is_empty() {
+            return Err(format!(
+                "{prefix}: dep `{key}` names {path} — the archive carries no such group"
+            ));
+        }
+        let computed = crate::bundle::identity::fp16_of_tree(&files);
+        if computed != fp {
+            return Err(format!(
+                "{prefix}: dep `{key}` — the identity {dname}@{fp} does not match the group's bytes (@{computed})"
+            ));
+        }
+        srczip_pkg(
+            entries,
+            &group_prefix,
+            Some(crate::bundle::identity::identity(dname, fp)),
+            Some(my_spec.clone()),
+            pkgs,
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod srczip_tests {
+    use super::*;
+
+    fn entries_of(list: &[(&str, &str)]) -> Vec<(String, Vec<u8>)> {
+        list.iter()
+            .map(|(n, t)| (n.to_string(), t.as_bytes().to_vec()))
+            .collect()
+    }
+
+    #[test]
+    fn from_srczip_mounts_the_real_std_nmapset() {
+        // the frozen std-v16 envelope — committed, immutable, the
+        // exact bytes a primed cache serves for the pinned url
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../dist/std-v16/nmapset.zip"
+        );
+        let bytes = std::fs::read(path).expect("the committed std-v16 envelope");
+        let walk = Mounted::from_srczip(&bytes).expect("the real zip mounts");
+        assert_eq!(walk.root, "nmapset");
+        let specs: Vec<&str> = walk.pkgs.iter().map(|p| p.spec.as_str()).collect();
+        assert_eq!(
+            specs,
+            vec!["nmapset", "nmap_host@9d688d1ca40944fd"],
+            "the embedded group rides with its identity spec"
+        );
+        let root = &walk.pkgs[0];
+        assert_eq!(root.manifest.name.as_deref(), Some("nmapset"));
+        assert!(matches!(
+            root.body,
+            MountedBody::Source { is_decl: false, .. }
+        ));
+        let host = &walk.pkgs[1];
+        assert_eq!(host.manifest.name.as_deref(), Some("nmap_host"));
+        assert!(
+            matches!(host.body, MountedBody::Source { is_decl: true, .. }),
+            "the host pkg's `.d.rut` surface mounts decl-mode"
+        );
+        assert_eq!(host.mounted_by.as_deref(), Some("nmapset"));
+    }
+
+    #[test]
+    fn from_srczip_mounts_a_flat_lib() {
+        let entries = entries_of(&[
+            ("rut.jsonc", r#"{"name": "flat"}"#),
+            ("src/mod.rut", "fn f() -> i64 {\n    7\n}\n"),
+        ]);
+        let zip = crate::bundle::write_srczip(&entries).expect("zip writes");
+        let walk = Mounted::from_srczip(&zip).expect("the flat lib mounts");
+        assert_eq!(walk.pkgs.len(), 1);
+        assert_eq!(walk.pkgs[0].spec, "flat");
+        assert!(walk.pkgs[0].mods.is_empty());
+    }
+
+    #[test]
+    fn from_srczip_mounts_children_by_declaration_with_vis() {
+        let entries = entries_of(&[
+            ("rut.jsonc", r#"{"name": "tree"}"#),
+            (
+                "src/mod.rut",
+                "pub mod math;\nmod imp;\npub mod layout;\nfn f() -> i64 {\n    1\n}\n",
+            ),
+            ("src/math.rut", "fn g() -> i64 {\n    2\n}\n"),
+            ("src/imp.rut", "fn h() -> i64 {\n    3\n}\n"),
+            ("src/layout/mod.rut", "fn k() -> i64 {\n    4\n}\n"),
+        ]);
+        let zip = crate::bundle::write_srczip(&entries).expect("zip writes");
+        let walk = Mounted::from_srczip(&zip).expect("the tree mounts");
+        let tree = &walk.pkgs[0];
+        assert_eq!(tree.mods.len(), 3);
+        let math = tree.mods.get("math").expect("the single-file child");
+        assert_eq!(math.vis, rut_ast::Vis::Pub);
+        assert_eq!(math.file, "math.rut");
+        let imp = tree.mods.get("imp").expect("the private child");
+        assert_eq!(imp.vis, rut_ast::Vis::Self_);
+        let layout = tree.mods.get("layout").expect("the directory-form child");
+        assert_eq!(layout.file, "mod.rut");
+    }
+
+    #[test]
+    fn from_srczip_refuses_a_tampered_identity() {
+        // a root naming an embedded group whose directory spelling no
+        // longer matches its bytes
+        let entries: Vec<(String, Vec<u8>)> = vec![
+            (
+                "rut.jsonc".to_string(),
+                br#"{"name": "root", "deps": {"x": {"path": "deps/x@0000000000000000"}}}"#.to_vec(),
+            ),
+            (
+                "src/mod.rut".to_string(),
+                b"fn f() -> i64 {\n    1\n}\n".to_vec(),
+            ),
+            (
+                "deps/x@0000000000000000/rut.jsonc".to_string(),
+                br#"{"name": "x"}"#.to_vec(),
+            ),
+            (
+                "deps/x@0000000000000000/src/mod.rut".to_string(),
+                b"fn g() -> i64 {\n    2\n}\n".to_vec(),
+            ),
+        ];
+        let zip = crate::bundle::write_srczip(&entries).expect("zip writes");
+        let err = Mounted::from_srczip(&zip).expect_err("the identity must not verify");
+        assert!(
+            err.to_string().contains("identity"),
+            "the error names the identity law: {err}"
+        );
+    }
+
+    #[test]
+    fn from_srczip_names_the_child_spelling_ambiguity() {
+        let entries = entries_of(&[
+            ("rut.jsonc", r#"{"name": "amb"}"#),
+            ("src/mod.rut", "mod m;\nfn f() -> i64 {\n    1\n}\n"),
+            ("src/m/mod.rut", "fn g() -> i64 {\n    2\n}\n"),
+            ("src/m.rut", "fn h() -> i64 {\n    3\n}\n"),
+        ]);
+        let zip = crate::bundle::write_srczip(&entries).expect("zip writes");
+        assert!(
+            Mounted::from_srczip(&zip).is_err(),
+            "both child spellings is the loader's loud ambiguity"
+        );
+    }
 }
