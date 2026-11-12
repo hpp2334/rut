@@ -425,10 +425,11 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
         } => {
             // the doc-sync entry: the CURRENT text stores FIRST (see the
             // bridge's doc — the analyze lane debounces, completion fires
-            // on the keystroke)
+            // on the keystroke). The typed body; the envelope writes
+            // HERE, at the reply boundary (hover's arm's own shape)
             l.state.docs.insert(uri.clone(), src);
-            let answer = l.state.complete_stored(&uri, line, ch);
-            let _ = tx.send(Reply::Text(answer));
+            let items = l.state.complete_stored(&uri, line, ch);
+            let _ = tx.send(Reply::Text(json_envelope(serde_json::json!(items))));
         }
         Cmd::Definition { uri, line, ch, tx } => {
             let answer = match l.state.docs.get(&uri).cloned() {
@@ -544,8 +545,12 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
         }
         Cmd::ResolveDeps { roots, tx } => {
             // the eager manual door — tests, cold boot, env-less hosts.
-            // The walk body is the SAME one the deferred door runs (D9).
-            let _ = tx.send(Reply::Text(walk_now(l, &roots)));
+            // The walk body is the SAME one the deferred door runs (D9);
+            // the envelope writes here, at the reply boundary
+            let _ = tx.send(Reply::Text(match walk_now(l, &roots) {
+                Ok(w) => json_envelope(w),
+                Err(e) => json_envelope(e),
+            }));
         }
         Cmd::ReloadDeps { roots, tx } => {
             // the ONLY place coalescing is chosen (D1): the lane
@@ -568,8 +573,12 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
         }
         Cmd::WalkDeps { roots, tx } => {
             // minted ONLY by the deferral doors: the tick drains it
-            // (or the no-clock eager path dispatched it in-turn)
-            let _ = tx.send(Reply::Text(walk_now(l, &roots)));
+            // (or the no-clock eager path dispatched it in-turn);
+            // the envelope writes here, at the reply boundary
+            let _ = tx.send(Reply::Text(match walk_now(l, &roots) {
+                Ok(w) => json_envelope(w),
+                Err(e) => json_envelope(e),
+            }));
         }
         Cmd::IndexModAt {
             uri,
@@ -588,15 +597,16 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
 /// the walk BODY both doors share (D9 — one implementation, two
 /// doors): the eager `Cmd::ResolveDeps` and the deferred
 /// `Cmd::WalkDeps` run exactly this — one fast handler turn over the
-/// stored env, no walk task, no awaits. An env-less session answers
-/// the loud error envelope, never a silent empty walk.
-fn walk_now(l: &mut Loop, roots: &[String]) -> String {
+/// stored env, no walk task, no awaits. TYPED: the calling arms own
+/// the envelope; an env-less session answers the loud error value,
+/// never a silent empty walk.
+fn walk_now(l: &mut Loop, roots: &[String]) -> Result<wire::WalkOut, wire::Error> {
     match l.env.as_ref() {
-        None => json_envelope(wire::Error::new(
+        None => Err(wire::Error::new(
             "no host environment — the dep walk reads through the injected env \
              (load(bytes, env) / set_env)",
         )),
-        Some(io) => json_envelope(wire::WalkOut::from(&crate::walk::resolve(
+        Some(io) => Ok(wire::WalkOut::from(&crate::walk::resolve(
             &mut l.state,
             io.as_ref(),
             roots,
