@@ -1,10 +1,13 @@
 //! Surface consts (P1): a `.d.rut` surface's `let` rows fold into the
 //! host body's const table — the literal-only law (D3: f64 typed or
 //! inferred off a FLOAT LITERAL, `inf`/`-inf` included, negation
-//! folded at the lowering; the surface computes nothing). The
-//! manifest's `consts` rows keep riding BESIDE the surface rows (their
-//! stamp is the merge in `fold_manifest_consts` — one name spelled
-//! both ways is the loud refusal).
+//! folded at the lowering; the surface computes nothing). One const,
+//! one name: the rows bind BARE at the pkg's root, so a name spelled
+//! twice — here or in a sibling module — is the loud refusal. (The
+//! manifest's `consts` table is RETIRED: the directory grammar
+//! refuses the key naming this spelling; the compat lane — the
+//! zip/bundle/store boundary — discards the rows whole, so old
+//! published bytes keep mounting while binding nothing.)
 
 use std::collections::BTreeMap;
 
@@ -262,35 +265,40 @@ fn inf_literals_in_impl_code_compile_and_run() {
 }
 
 #[test]
-fn manifest_consts_ride_beside_surface_lets_and_collisions_refuse() {
-    // manifest consts stay FULLY accepted: their stamp MERGES with the
-    // surface rows (both spellings ride), and one name spelled both
-    // ways is the loud refusal — one const, one spelling
-    use rut_driver::fold_manifest_consts;
-
-    let mut manifest = BTreeMap::new();
-    manifest.insert("TAU".to_string(), std::f64::consts::TAU);
-    let mut m = host_pkg("pub let PI: f64 = 3.141592653589793;\n");
-    fold_manifest_consts(&mut m.body, &manifest, "h.d.rut").expect("the merge folds");
-    {
-        let rows = consts_of(&m);
-        assert_eq!(rows.len(), 2, "surface + manifest both ride: {rows:?}");
-        assert_eq!(rows[0].0, "PI", "the surface row keeps its place");
-        assert_eq!(
-            rows[1],
-            (
-                "TAU".into(),
-                rut_core::types::TY_F64,
-                std::f64::consts::TAU.to_bits()
-            )
-        );
-    }
-    // the collision: the manifest also names PI
-    manifest.insert("PI".to_string(), 1.5);
-    let err =
-        fold_manifest_consts(&mut m.body, &manifest, "h.d.rut").expect_err("the collision refuses");
+fn one_const_one_name_across_the_whole_pkg() {
+    // the rows bind BARE at the pkg's root, so a name folds ONCE: a
+    // second `let` of an already-folded name — in the same module or
+    // a sibling — is the loud refusal
+    let err = lower_decl_module(
+        "pub let PI: f64 = 3.141592653589793;\npub let PI: f64 = 3.14;\n",
+        &BTreeMap::new(),
+        "h.d.rut",
+    )
+    .expect_err("the duplicate refuses");
     assert!(
-        err.contains("PI") && err.contains("one const, one spelling"),
+        err.contains("PI") && err.contains("one const, one name"),
         "the refusal names the const and the law: {err}"
+    );
+    // across sibling modules: the root and a mounted child both
+    // spelling `PI` refuse the same way
+    let mut children = BTreeMap::new();
+    children.insert(
+        "net".to_string(),
+        rut_driver::ModSource {
+            path: "net".to_string(),
+            vis: rut_ast::Vis::Pub,
+            text: "pub let PI: f64 = 3.141592653589793;\n".to_string(),
+            file: "mod.d.rut".to_string(),
+        },
+    );
+    let err = lower_decl_module(
+        "pub mod net;\npub let PI: f64 = 3.141592653589793;\n",
+        &children,
+        "h.d.rut",
+    )
+    .expect_err("the sibling duplicate refuses");
+    assert!(
+        err.contains("net/mod.d.rut") && err.contains("one const, one name"),
+        "the refusal names the second site and the law: {err}"
     );
 }

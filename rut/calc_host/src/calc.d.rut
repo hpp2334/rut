@@ -3,8 +3,8 @@
 // (`sqrt_f64` / `sqrt_f32`) — these are the INTERNAL spellings;
 // callers reach the math through `calc`'s math module
 // (`use calc::{ math }` — `math::sqrt<T requires f32 | f64>` routes
-// per member), never through this pkg. The constants are this pkg's
-// manifest consts, bound BARE at its root and re-exported through
+// per member), never through this pkg. The constants below are this
+// pkg's SURFACE LETS, bound BARE at its root and re-exported through
 // calc's math module (`math::PI`).
 //
 // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
@@ -14,6 +14,24 @@
 // Contract (std/core.d.rut): the surface is kept TRUE to the
 // implementation — signatures match the mount tables, never
 // aspirational.
+
+// ---- the constants (surface lets — f64 literals, the one spelling;
+// the non-finite pair is `inf` / `-inf`) ----
+
+pub let PI: f64 = 3.141592653589793;
+pub let TAU: f64 = 6.283185307179586;
+pub let E: f64 = 2.718281828459045;
+pub let SQRT_2: f64 = 1.4142135623730951;
+pub let LN_2: f64 = 0.6931471805599453;
+pub let LN_10: f64 = 2.302585092994046;
+pub let LOG2_E: f64 = 1.4426950408889634;
+pub let LOG10_E: f64 = 0.4342944819032518;
+pub let INFINITY: f64 = inf;
+pub let NEG_INFINITY: f64 = -inf;
+pub let EPSILON: f64 = 2.220446049250313e-16;
+pub let MAX: f64 = 1.7976931348623157e308;
+pub let MIN: f64 = -1.7976931348623157e308;
+pub let MIN_POSITIVE: f64 = 2.2250738585072014e-308;
 
 // ---- f64 host functions (the embedding Rust implements them) ----
 

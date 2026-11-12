@@ -88,7 +88,7 @@ fn packed_module_generic_serves_consumer_typed_instantiation() {
     write(
         &world,
         "root/rut.jsonc",
-        r#"{ "name": "root", "format": "rutbundle", "format_version": 12, "deps": { "lib_x": { "path": "../lib_x" } } }"#,
+        r#"{ "name": "root", "deps": { "lib_x": { "path": "../lib_x" } } }"#,
     );
     write(
         &world,

@@ -64,11 +64,7 @@ fn remove_at_exit(dir: &Path) {
 fn hello_world(tag: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(&dir, "src/mod.rut", "entry fn main() -> nil { return; }\n");
     root
 }
@@ -198,11 +194,7 @@ fn a_typo_path_never_gets_past_the_door() {
 fn two_entries(tag: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(
         &dir,
         "src/mod.rut",
@@ -267,11 +259,7 @@ fn entry_naming_a_non_entry_fn_is_loud() {
 fn no_entry_fn_is_nothing_to_run_not_a_source_error() {
     let root = scratch("entryless");
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     // a pure library shape compiles clean — the designation is where
     // the run stops, never a source diagnostic
     write(
@@ -313,11 +301,7 @@ fn a_dangling_entry_value_is_a_usage_error() {
 fn a_root_parse_error_names_the_file_line_and_column() {
     let root = scratch("diag-root");
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(
         &dir,
         "src/mod.rut",
@@ -345,11 +329,7 @@ fn a_root_parse_error_names_the_file_line_and_column() {
 fn an_error_in_a_mod_child_names_the_spec_path_label() {
     let root = scratch("diag-child");
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(
         &dir,
         "src/mod.rut",
@@ -380,7 +360,7 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
     write(
         &hello,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
+        r#"{"name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
     );
     write(
         &hello,
@@ -388,11 +368,7 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
         "use calc::{pi};\nentry fn main() -> nil { return; }\n",
     );
     let calc = root.join("calc");
-    write(
-        &calc,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "calc"}"#,
-    );
+    write(&calc, "rut.jsonc", r#"{"name": "calc"}"#);
     write(
         &calc,
         "src/mod.rut",
@@ -417,11 +393,7 @@ fn an_error_in_a_dep_names_the_dep_spec_label() {
 fn a_missing_return_diagnoses_with_a_position_not_a_crash() {
     let root = scratch("missing-return");
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(
         &dir,
         "src/mod.rut",

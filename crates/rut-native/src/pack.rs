@@ -11,12 +11,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use rut_driver::bundle::{
-    parse_manifest, read_srczip, rewrite_for_zip, write_bundle, Manifest, PkgType,
+    parse_manifest, parse_manifest_compat, read_srczip, rewrite_for_zip, write_bundle, Manifest,
+    PkgType,
 };
 use rut_driver::pack::{PackError, PackOpts, PackWorld, PkgSource};
 
 use crate::source::{FsSource, Source};
-use crate::walk::{mount_dev_table, read_manifest, walk_dir, Archive, World, MANIFEST_RETIRED};
+use crate::walk::{
+    mount_dev_table, read_manifest, read_manifest_compat, walk_dir, Archive, World,
+    MANIFEST_RETIRED,
+};
 
 /// What the root becomes. `Source` (the default) is the source zip —
 /// the directory grammar over the wire: `rut.jsonc` + `src/` +
@@ -338,7 +342,7 @@ fn collect_url_node(
                     rut_driver::bundle::MANIFEST_NAME
                 ))
             })?;
-        let dm = parse_manifest(&manifest_text)?;
+        let dm = parse_manifest_compat(&manifest_text)?;
         let pkg_name = dm
             .name
             .ok_or_else(|| PackError::law(format!("{url}: rut.jsonc has no `name`")))?;
@@ -362,7 +366,7 @@ fn collect_url_node(
         let manifest_text =
             rut_driver::bundle::read_entry(&bundle_entries, rut_driver::bundle::MANIFEST_NAME)
                 .map_err(|e| PackError::law(format!("{url}: {e}")))?;
-        let dm = parse_manifest(&manifest_text)?;
+        let dm = parse_manifest_compat(&manifest_text)?;
         let pkg_name = dm
             .name
             .ok_or_else(|| PackError::law(format!("{url}: rut.jsonc has no `name`")))?;
@@ -540,35 +544,36 @@ fn pack_dir_opts_locked(
         .name
         .clone()
         .ok_or_else(|| PackError::law(format!("{} has no `name`", manifest_path.display())))?;
-    // the packed rut.jsonc is the directory's rut.jsonc — with the
-    // wire rows ENSURED: a source-authored manifest (no
-    // `format`/`format_version`) gains them at the pack door, because
-    // the bundle reader refuses without them and the same project
-    // should publish both ways without hand-editing. Everything else
-    // rides byte-for-byte (the law).
-    let want_version = rut_driver::pack::FORMAT_VERSION;
-    let (manifest, manifest_bytes) = if manifest.format.as_deref() != Some("rutbundle")
-        || manifest.format_version != Some(want_version)
-    {
+    // the packed rut.jsonc is the directory's rut.jsonc PLUS the wire
+    // rows STAMPED at the pack door: a directory manifest carries
+    // neither key (the grammar retired the pair — the strict lane
+    // refuses them), and the bundle reader refuses without them, so
+    // the packer is the ONE writer of the pair and the same project
+    // publishes both ways without hand-editing. Everything else rides
+    // byte-for-byte (the law). The staged text re-parses through the
+    // COMPAT lane (the same lane the reader will) under a name-stability
+    // gate — staged after the walk for a lib root, so the tree's own
+    // refusals (a missing surface, a broken closure) fire first.
+    let stage = |manifest: &Manifest| -> Result<(Manifest, Vec<u8>), PackError> {
         let staged = ensure_wire_rows(
             &String::from_utf8(manifest_bytes.clone())
                 .map_err(|_| PackError::law(format!("{}: not UTF-8", manifest_path.display())))?,
-            want_version,
+            rut_driver::pack::FORMAT_VERSION,
         )?;
-        let staged_manifest = parse_manifest(&staged)?;
+        let staged_manifest = parse_manifest_compat(&staged)?;
         if staged_manifest.name != manifest.name {
             return Err(PackError::law(format!(
                 "{}: staging the wire rows moved the `name` — normalize the manifest",
                 manifest_path.display()
             )));
         }
-        (staged_manifest, staged.into_bytes())
-    } else {
-        (manifest, manifest_bytes)
+        Ok((staged_manifest, staged.into_bytes()))
     };
     // the host-root arm: no closure (the grammar refuses a host
     // manifest's deps tables), no compile walk — the surface verifies
-    // by parsing + lowering once, then rides as source
+    // by parsing + lowering once, then rides as source. A host pkg
+    // always SPELLS its kind, so the staged re-parse is ambiguity-free
+    // here
     if manifest.pkg_type == PkgType::Host {
         if opts.strip {
             return Err(PackError::law(
@@ -576,8 +581,7 @@ fn pack_dir_opts_locked(
                  not a program; there is no binary and no sidecar",
             ));
         }
-        // the wire rows are ENSURED above (the gate covers host
-        // manifests too) — the host arm rides the staged bytes as-is
+        let (manifest, manifest_bytes) = stage(&manifest)?;
         return pack_host_root(dir, &manifest, manifest_bytes).map(|bytes| (bytes, None));
     }
     // the closure's world: the [deps] walk + the dev pass
@@ -592,6 +596,7 @@ fn pack_dir_opts_locked(
             manifest_path.display()
         )));
     }
+    let (manifest, manifest_bytes) = stage(&manifest)?;
     // the closure's group set: dir deps as directories, url deps as
     // their archive's locations (enumerated closed — no recursion)
     let sources = collect_group_sources(&src, &dir_key, &manifest, &world)?;
@@ -608,8 +613,8 @@ fn pack_dir_opts_locked(
                 // a source-zip dep's dev tables never travel — its tree
                 // is sealed, the same law an archive-backed group keeps
                 if world.unpacked_of(spec).is_some() {
-                    let dm =
-                        read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
+                    let dm = read_manifest_compat(&src, gdir)
+                        .map_err(rut_driver::pack::PackError::from)?;
                     if !dm.dev_deps.is_empty() {
                         return Err(PackError::law(format!(
                             "packed dep `{spec}` needs its own [dev-deps] directories, which do \
@@ -811,8 +816,10 @@ fn collect_group_sources_walk(
             if let Some(unpacked) = world.unpacked_of(spec) {
                 let unpack_key = unpacked.to_string_lossy().into_owned();
                 out.insert(spec.clone(), PkgSource::Unpacked(unpack_key.clone()));
-                let dm =
-                    read_manifest(src, &unpack_key).map_err(rut_driver::pack::PackError::from)?;
+                // the unpacked tree rode the wire — its manifest (and
+                // its embedded groups') reads ride the compat lane
+                let dm = read_manifest_compat(src, &unpack_key)
+                    .map_err(rut_driver::pack::PackError::from)?;
                 collect_group_sources_walk(src, &unpack_key, &dm, world, out, seen, true)?;
                 continue;
             }
@@ -871,13 +878,15 @@ fn collect_group_sources_walk(
 }
 
 /// One archive group's parsed manifest — the emission's decisions read
-/// it (its deps keys, its surface).
+/// it (its deps keys, its surface). An archive group rode the wire
+/// (its manifest carries the stamped wire pair), so the read rides
+/// the compat lane.
 pub(crate) fn group_manifest(
     source: &PkgSource,
     archives: &[Archive],
 ) -> Result<Manifest, PackError> {
     let bytes = group_file(source, rut_driver::bundle::MANIFEST_NAME, archives)?;
-    parse_manifest(
+    parse_manifest_compat(
         &String::from_utf8(bytes).map_err(|_| {
             PackError::law(format!("{}: not UTF-8", rut_driver::bundle::MANIFEST_NAME))
         })?,

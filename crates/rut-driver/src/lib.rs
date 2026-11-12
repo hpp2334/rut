@@ -24,7 +24,7 @@ pub use compile::{
     compile_module, compile_program, compile_program_pre, compile_program_resolved, ir_dump_of,
     CompileOutput, ProgramOutput, SeedGroup, Seeds,
 };
-pub use decl::{fold_manifest_consts, lower_decl_module};
+pub use decl::lower_decl_module;
 pub use graph::GraphOutput;
 #[allow(deprecated)] // bundle_walk_bytes retires with its family (one release)
 pub use loader::bundle_walk_bytes;

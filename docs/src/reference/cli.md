@@ -325,11 +325,12 @@ root** (its `.d.rut` surface riding as source at the canonical
 `mod.d.rut` name, single-package) and refuses `--strip` there (`no
 symbols to strip`); `run` accepts either bundle directly — though
 running a host bundle refuses with intent: bind its rows from the
-embedder ([module bundles](bundles.md)). A manifest without the
-`format`/`format_version` rows gains them at the bin-mode pack door —
-the same project publishes both ways without hand-editing (a source
-zip's manifest does not claim the compiled wire; the rows drop
-there).
+embedder ([module bundles](bundles.md)). The bin-mode pack door STAMPS
+the `format`/`format_version` rows into the packed manifest — the
+directory grammar retired the pair (writing it in `rut.jsonc` refuses
+loudly), and the packer is its one writer, so the same project
+publishes both ways without hand-editing (a source zip's manifest
+does not claim the compiled wire; the rows drop there).
 
 **The source zip's manifest is rewritten at pack.** Every `[deps]`
 descriptor becomes `{ "path": "deps/<name>@<fp16>" }` — `url` fields

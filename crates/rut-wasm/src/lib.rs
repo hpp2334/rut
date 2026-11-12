@@ -462,33 +462,27 @@ fn compile_playground(
         "strbuild_host.d.rut",
         &[],
     );
-    // calc_host rides as a lowered surface + the manifest's
-    // consts rows (bound bare at its root) — the same shape a
+    // calc_host rides as a lowered surface — the same shape a
     // `tree_pkg("calc_host")` walk yields (the wasm host has no
     // filesystem, so the files ride `include_str!`; the core prelude
-    // auto-offers in `.compile()`). The whole parsed manifest rides
-    // the pkg like every other offer's does. `calc` (the generic lib
-    // beside it, its `math` module mounted through the children arm)
-    // mounts through `std_pkg!` below — its `deps` row names this
-    // host surface.
+    // auto-offers in `.compile()`). The PI family folds into the
+    // host body's const rows INSIDE the lowering — the surface's own
+    // `pub let NAME: f64 = <literal>;` rows (the manifest's `consts`
+    // table is retired; `inf`/`-inf` spell the non-finite pair). The
+    // whole parsed manifest rides the pkg like every other offer's
+    // does. `calc` (the generic lib beside it, its `math` module
+    // mounted through the children arm) mounts through `std_pkg!`
+    // below — its `deps` row names this host surface.
     let calc_host_manifest =
         rut_driver::parse_manifest(include_str!("../../../rut/calc_host/rut.jsonc"))
             .expect("the calc_host manifest is valid");
-    let mut calc_host = host_surface(
+    let calc_host = host_surface(
         "calc_host",
         include_str!("../../../rut/calc_host/src/calc.d.rut"),
         "calc.d.rut",
         &[],
     )
     .manifest(calc_host_manifest);
-    if let rut_driver::MountedBody::Host { consts, .. } = &mut calc_host.body {
-        *consts = calc_host
-            .manifest
-            .consts
-            .iter()
-            .map(|(n, v)| (n.clone(), rut_core::types::TY_F64, v.to_bits()))
-            .collect();
-    }
     // the library world (everything but the program's own source): the
     // run-side install snapshot reads its declared rows. Every source
     // pkg mounts through `std_pkg!` — the tree's own rut.jsonc is the

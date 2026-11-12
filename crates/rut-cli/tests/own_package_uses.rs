@@ -63,11 +63,7 @@ fn remove_at_exit(dir: &Path) {
 fn todolist(tag: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join("todolist");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "todolist"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
     write(
         &dir,
         "src/mod.rut",
@@ -191,11 +187,7 @@ fn a_private_own_member_refuses_at_the_use_line() {
 fn the_single_file_private_refusal_spells_the_file() {
     let root = scratch("file-form-private");
     let dir = root.join("todolist");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "todolist"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
     write(
         &dir,
         "src/mod.rut",
@@ -226,11 +218,7 @@ fn the_single_file_private_refusal_spells_the_file() {
 fn the_single_file_module_shape_runs() {
     let root = scratch("file-form");
     let dir = root.join("todolist");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "todolist"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "todolist"}"#);
     write(
         &dir,
         "src/mod.rut",

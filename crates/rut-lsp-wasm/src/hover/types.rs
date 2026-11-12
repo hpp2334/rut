@@ -246,12 +246,6 @@ pub struct DefIndex {
     /// definition layer prefers body hits over decl-surface hits when
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
-    /// the manifest's raw `consts` rows (name → value; `calc_host`'s
-    /// `PI` family) — the compiler-materialized constants the check
-    /// lane must hand the engine (a `pub use calc_host::{ PI }`
-    /// re-export resolves against them). Stamped by the dep walks at
-    /// the pkg's root row; the minted completion rows ride `lets`.
-    pub consts: Vec<(String, f64)>,
 }
 
 impl DefIndex {

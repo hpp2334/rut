@@ -8,7 +8,7 @@
 //
 // — or spell the path fully qualified off the pkg name
 // (`calc::math::sqrt(x)`, no use). The constants are `calc_host`'s
-// manifest consts, re-exported through `math` by its
+// SURFACE LETS, re-exported through `math` by its
 // `pub use calc_host::{ PI, .. }` (callers never touch `calc_host`).
 // The INTEGER numeric methods (`wrapping_*`, `saturating_*`,
 // `checked_*`) are core's `builtin impl` methods; `NAN` is core's too

@@ -258,7 +258,6 @@ fn tag_dep() -> DefIndex {
         "gadgets",
         "file:///deps/gadgets/lib.rut",
         "pub struct Widget {\nid: i32;\n}\npub fn tag() -> i32 { return 1; }\n",
-        &[],
     )
 }
 
@@ -471,8 +470,7 @@ fn std_direct_deps() -> HashSet<String> {
 /// (`std_direct_deps`) mirrors the walk's root-manifest rows, the
 /// auto-import tier's live gate.
 fn std_dep_fixtures() -> Vec<DefIndex> {
-    let mount =
-        |name: &str, uri: &str, src: &str| rut_lsp_wasm::deps::index_dep(name, uri, src, &[]);
+    let mount = |name: &str, uri: &str, src: &str| rut_lsp_wasm::deps::index_dep(name, uri, src);
     vec![
         rut_lsp_wasm::prelude::index(),
         mount(
@@ -545,15 +543,14 @@ fn use_path_completion_lists_the_modules_exports() {
 }
 
 #[test]
-fn use_path_completion_lists_the_dep_consts_and_mods() {
-    // a dep index (the calc_host shape: bare consts) + a mod-carrying
-    // dep (the calc shape): the names tier offers the consts and the
-    // dep's `pub mod` children — the namespace mint is gone, the
-    // module tree IS the qualified surface
-    let src = "pub host fn sqrt(x: f64) -> f64;\n";
-    let consts = vec![("PI".to_string(), std::f64::consts::PI)];
-    let calc_host =
-        rut_lsp_wasm::deps::index_dep("calc_host", "file:///deps/calc_host.d.rut", src, &consts);
+fn use_path_completion_lists_the_dep_lets_and_mods() {
+    // a dep index (the calc_host shape: surface `pub let` rows) + a
+    // mod-carrying dep (the calc shape): the names tier offers the
+    // lets and the dep's `pub mod` children — the surface `pub let`
+    // row is the one const spelling (the manifest's `consts` table is
+    // retired), and the module tree IS the qualified surface
+    let src = "pub host fn sqrt(x: f64) -> f64;\npub let PI: f64 = 3.141592653589793;\n";
+    let calc_host = rut_lsp_wasm::deps::index_dep("calc_host", "file:///deps/calc_host.d.rut", src);
     let mk_mod = |mod_path: &str, text: &str| {
         let s = rut_lexer::lexer::normalize(text);
         let (toks, _) = rut_lexer::lexer::lex(&s);
@@ -586,7 +583,7 @@ fn use_path_completion_lists_the_dep_consts_and_mods() {
     );
     let ls = labels(&items);
     assert!(ls.contains(&"sqrt"), "the module's fns complete: {ls:?}");
-    assert!(ls.contains(&"PI"), "the bare consts complete: {ls:?}");
+    assert!(ls.contains(&"PI"), "the surface lets complete: {ls:?}");
     let pi = items.iter().find(|c| c.label == "PI").unwrap();
     assert!(matches!(pi.kind, CompletionKind::Const), "{:?}", pi.kind);
     // the dep's mod tree walks: `use calc::` offers the `pub mod` child
@@ -628,13 +625,22 @@ fn gadget_dep() -> Vec<DefIndex> {
         idx
     };
     vec![
-        mk("", "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n"),
+        mk(
+            "",
+            "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n",
+        ),
         mk(
             "layout",
             "pub mod grid;\npub struct Column {\n    w: i32;\n}\nfn internal() -> i32 { return 2; }\npub(super) fn for_parent() -> i32 { return 3; }\n",
         ),
-        mk("layout/grid", "pub struct Cell {\n    x: i32;\n}\npub fn mk() -> Cell { return Cell { x: 1 }; }\n"),
-        mk("secret", "pub fn open() -> i32 { return 4; }\nfn hidden() -> i32 { return 5; }\n"),
+        mk(
+            "layout/grid",
+            "pub struct Cell {\n    x: i32;\n}\npub fn mk() -> Cell { return Cell { x: 1 }; }\n",
+        ),
+        mk(
+            "secret",
+            "pub fn open() -> i32 { return 4; }\nfn hidden() -> i32 { return 5; }\n",
+        ),
     ]
 }
 

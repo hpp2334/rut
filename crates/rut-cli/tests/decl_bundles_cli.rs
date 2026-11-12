@@ -64,7 +64,7 @@ fn host_world(tag: &str) -> PathBuf {
     write(
         &dir,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "logger_host", "type": "host", "entry": {"type": "./logger_host.d.rut"}}"#,
+        r#"{"name": "logger_host", "type": "host", "entry": {"type": "./logger_host.d.rut"}}"#,
     );
     write(
         &dir,

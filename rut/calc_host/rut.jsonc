@@ -9,40 +9,20 @@
   // install (`.host_pkg(rut_std::math::pkg())`) — the declaration
   // mounts, the embedding Rust binds.
   //
-  // The CONSTANTS stay HERE (the surface grammar has no spelling for
-  // them, so the manifest is their only form) but bind BARE at this
-  // pkg's root (`use calc_host::{ PI }`); `calc`'s math module
-  // re-exports the family (`pub use calc_host::{ PI, .. }`), so
-  // callers reach them as `math::PI` through the ordinary module path
-  // and never spell `calc_host`:
-  //   "consts" — f64, compiler-materialized (JSON has no spelling
-  //              for the non-finite pair; `"inf"` / `"-inf"` name it):
-  //              PI TAU E SQRT_2 LN_2 LN_10 LOG2_E LOG10_E INFINITY
-  //              NEG_INFINITY EPSILON MAX MIN MIN_POSITIVE.
+  // The CONSTANTS are the SURFACE LETS (calc.d.rut's `pub let PI:
+  // f64 = ..;` rows — the manifest's `consts` key is retired) and
+  // bind BARE at this pkg's root (`use calc_host::{ PI }`); `calc`'s
+  // math module re-exports the family (`pub use calc_host::{ PI, .. }`),
+  // so callers reach them as `math::PI` through the ordinary module
+  // path and never spell `calc_host`:
+  //   PI TAU E SQRT_2 LN_2 LN_10 LOG2_E LOG10_E INFINITY
+  //   NEG_INFINITY EPSILON MAX MIN MIN_POSITIVE.
   //
   // Contract (std/core.d.rut): the surface is kept TRUE to the
   // implementation — signatures match the mount tables, never
   // aspirational.
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "calc_host",
   "type": "host",
-  "consts": {
-    "PI": 3.141592653589793,
-    "TAU": 6.283185307179586,
-    "E": 2.718281828459045,
-    "SQRT_2": 1.4142135623730951,
-    "LN_2": 0.6931471805599453,
-    "LN_10": 2.302585092994046,
-    "LOG2_E": 1.4426950408889634,
-    "LOG10_E": 0.4342944819032518,
-    "INFINITY": "inf",
-    "NEG_INFINITY": "-inf",
-    "EPSILON": 2.220446049250313e-16,
-    "MAX": 1.7976931348623157e308,
-    "MIN": -1.7976931348623157e308,
-    "MIN_POSITIVE": 2.2250738585072014e-308
-  },
   "entry": {
     "type": "./calc.d.rut"
   }

@@ -8,13 +8,10 @@ const CALC_HOST_MANIFEST: &str = include_str!("../../../rut/calc_host/rut.jsonc"
 const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
 
 /// The plugin manifest's dep shape, INLINE and unpinned: the real
-/// `examples/03-plugin/plugin/rut.jsonc` migrates off the retired
-/// manifest `sha256` key in the docs/examples phase — the grammar
-/// refuses the key today, so the editor's fixture is the shape
-/// every manifest must now spell (pins live in rut.lock).
+/// `examples/03-plugin/plugin/rut.jsonc` — the directory grammar's
+/// spelling (the bundle wire pair retired; the pin lives in rut.lock,
+/// never the manifest).
 const PLUGIN_SHAPE: &str = r#"{
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
@@ -135,10 +132,14 @@ fn a_malformed_lock_is_the_error_not_silent_pins() {
 }
 
 #[test]
-fn calc_manifest_carries_bare_consts() {
-    // the consts live on the HOST pkg's manifest (calc_host), bound
-    // bare at its root; `calc` beside it is the generic lib whose
-    // math module re-exports the family
+fn the_consts_table_retired_from_the_manifest_grammar() {
+    // the consts RETIRED from the manifest: the strict lane (a
+    // directory's rut.jsonc) refuses the key loudly, naming the
+    // surface spelling; the compat lane (the zip/bundle/store
+    // boundary, where today's published bytes still carry the rows)
+    // DISCARDS the table whole — an old artifact keeps mounting, the
+    // rows bind nothing. The real calc_host manifest — the surface
+    // lets are the one spelling now — parses strict with no residue.
     let t = dep_table(CALC_HOST_MANIFEST).expect("the real calc_host manifest parses");
     assert_eq!(t.name.as_deref(), Some("calc_host"));
     // the host surface: decl mode, no body — the spelled surface
@@ -150,20 +151,29 @@ fn calc_manifest_carries_bare_consts() {
             mode: Mode::Decl
         }]
     );
-    let pi = t
-        .consts
-        .iter()
-        .find(|(n, _)| n == "PI")
-        .expect("PI in consts");
-    assert_eq!(pi.1, std::f64::consts::PI);
-    // the non-finite spelling rides as the f64 it names
-    let inf = t
-        .consts
-        .iter()
-        .find(|(n, _)| n == "INFINITY")
-        .expect("INFINITY in consts");
-    assert!(inf.1.is_infinite() && inf.1.is_sign_positive());
-    // the retired `namespace` key refuses loudly, naming the fix
+    // the strict refusal names the fix: the surface `pub let` row
+    let err =
+        dep_table(r#"{"name": "calc_host", "type": "host", "consts": {"PI": 3.141592653589793}}"#)
+            .unwrap_err();
+    assert!(
+        err.contains("consts: retired")
+            && err.contains("declare `pub let NAME: f64 = <literal>;` in the surface"),
+        "the refusal names the fix: {err}"
+    );
+    // the compat lane discards the rows — the old bytes keep mounting
+    // (the non-finite pair rode the strings "inf"/"-inf")
+    let t = dep_table_compat(
+        r#"{"name": "calc_host", "type": "host", "consts": {"PI": 3.141592653589793, "INFINITY": "inf"}}"#,
+    )
+    .expect("an old manifest still parses on the compat lane");
+    assert_eq!(t.name.as_deref(), Some("calc_host"));
+    // the wire pair refuses strict too (the packer stamps it at the
+    // bin pack door) but parses compat — the reader gates on it
+    let err =
+        dep_table(r#"{"name": "x", "format": "rutbundle", "format_version": 12}"#).unwrap_err();
+    assert!(err.contains("format: retired"), "{err}");
+    // the retired `namespace` key refuses loudly, naming the spellings
+    // that replaced it
     let err = dep_table(&CALC_HOST_MANIFEST.replace(
         "\"type\": \"host\",",
         "\"type\": \"host\",\n  \"namespace\": \"Math\",",
@@ -223,7 +233,6 @@ fn pouch_bundle_indexes_its_declaration_entry() {
     // fields, the bodiless method signatures, the free fn.
     let b = bundle_sources(POUCH_BUNDLE).expect("the committed pouch bundle parses");
     assert_eq!(b.module, "pouch");
-    assert!(b.consts.is_empty());
     assert_eq!(
         b.files.len(),
         1,
@@ -276,7 +285,7 @@ fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
     let f = &b.files[0];
     assert_eq!(f.path, "mod.d.rut");
     assert_eq!(f.mode, Mode::Decl);
-    let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", &f.src, &b.consts);
+    let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", &f.src);
     assert_eq!(idxs.len(), 1, "a flat entry: one module");
     let idx = &idxs[0].1;
     assert_eq!(idx.mode, Some(Mode::Decl));
@@ -320,7 +329,7 @@ pub mod net {
 }
 pub host fn legacy_ping() -> bool;
 ";
-    let idxs = index_dep_decl_group("myhost", "bundle:myhost/mod.d.rut", "", src, &[]);
+    let idxs = index_dep_decl_group("myhost", "bundle:myhost/mod.d.rut", "", src);
     let paths: Vec<&str> = idxs.iter().map(|(p, _)| p.as_str()).collect();
     assert_eq!(paths, vec!["", "net"], "{paths:?}");
     let (root, net) = (&idxs[0].1, &idxs[1].1);
@@ -397,12 +406,13 @@ fn srczip_rides_the_unpack_ingredients() {
 }
 
 #[test]
-fn index_dep_names_the_module_and_mints_the_bare_consts() {
+fn index_dep_names_the_module_and_indexes_the_surface_lets() {
     let src = "\
 pub host fn sqrt(x: f64) -> f64;
+pub let PI: f64 = 3.141592653589793;
+pub let INFINITY: f64 = inf;
 ";
-    let consts = vec![("PI".to_string(), std::f64::consts::PI)];
-    let idx = index_dep("calc", "file:///deps/calc.d.rut", src, &consts);
+    let idx = index_dep("calc", "file:///deps/calc.d.rut", src);
     // the explicit name rides the index …
     assert_eq!(idx.module.as_deref(), Some("calc"));
     assert_eq!(idx.origin, "file:///deps/calc.d.rut");
@@ -414,27 +424,32 @@ pub host fn sqrt(x: f64) -> f64;
         .fns
         .iter()
         .any(|f| f.name == "sqrt" && f.owner.is_none()));
-    // … and the consts mint module-scope lets — the bare
-    // `use calc_host::{ PI }` form (the qualified forms ride the
-    // dep's own `mod` tree, never a minted head)
+    // … and the surface `pub let` rows ride the ordinary ModuleLet
+    // path — the bare `use calc_host::{ PI }` form, indexed exactly
+    // as authored source is (the manifest's `consts` table is
+    // retired; `inf`/`-inf` spell the non-finite pair)
     let pi = idx
         .lets
         .iter()
         .find(|l| l.name == "PI")
         .expect("PI as a module let");
     assert_eq!(pi.ty.as_deref(), Some("f64"));
-    assert!(pi.src.starts_with("let PI = 3.141592653589793"));
+    assert!(
+        pi.src.starts_with("let PI: f64 = 3.141592653589793"),
+        "the verbatim row: {}",
+        pi.src
+    );
     assert_eq!(pi.vis, Vis::Pub);
+    assert!(
+        idx.lets.iter().any(|l| l.name == "INFINITY"),
+        "the inf literal indexes like any float: {:?}",
+        idx.lets.iter().map(|l| &l.name).collect::<Vec<_>>()
+    );
 }
 
 #[test]
-fn index_dep_without_consts_mints_nothing() {
-    let idx = index_dep(
-        "pouch",
-        "file:///deps/pouch.rut",
-        "class Vec<T> {\n}\n",
-        &[],
-    );
+fn index_dep_without_lets_indexes_none() {
+    let idx = index_dep("pouch", "file:///deps/pouch.rut", "class Vec<T> {\n}\n");
     assert_eq!(idx.module.as_deref(), Some("pouch"));
     assert!(idx.lets.is_empty());
 }
@@ -446,7 +461,6 @@ fn index_dep_mod_stamps_the_mod_path() {
         "file:///deps/gadgets/layout/mod.rut",
         "layout",
         "pub struct Column {\n    w: i32;\n}\n",
-        &[],
     );
     assert_eq!(idx.module.as_deref(), Some("gadgets"));
     assert_eq!(idx.mod_path.as_deref(), Some("layout"));
@@ -456,7 +470,6 @@ fn index_dep_mod_stamps_the_mod_path() {
         "file:///deps/gadgets/mod.rut",
         "",
         "pub mod layout;\n",
-        &[],
     );
     assert_eq!(root.mod_path.as_deref(), Some(""));
     assert_eq!(root.mods.len(), 1);
@@ -480,7 +493,7 @@ fn dep_impl_methods_ride_the_dep_index() {
         "    pub fn info(self, msg: str) -> nil { logger_log(self.internal, 1, msg); }\n",
         "}\n",
     );
-    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK, &[]);
+    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK);
     let info = idx.fns.iter().find(|f| f.name == "info");
     assert_eq!(
         info.map(|f| f.owner.as_deref()),

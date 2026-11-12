@@ -4,8 +4,6 @@
   // Publishes COMPILED (the linkable-classes phase): the classes' methods
   // cross on the surface's inherent rows, so every consumer's call site
   // binds them from this pkg's binary.
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "http",
     "deps": {
     "http_host": {

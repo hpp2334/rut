@@ -34,7 +34,25 @@ magnitude is the trigger, precision is not — `0.1` is fine anywhere;
 `1.0e300` needs `f64` even in an `f64` position.
 
 Numeric literals: decimal and `0x` / `0b` / `0o`, `_` separators,
-suffixes `u8..u64 i8..i64 f32 f64` (`3.14159f32`, `0xFF_u32`).
+suffixes `u8..u64 i8..i64 f32 f64` (`3.14159f32`, `0xFF_u32`). The
+non-finite pair spells `inf` / `-inf` — the identifier folds to the
+infinity float literal in expression position (f64 always; a *type*
+context may still narrow its use), and `-inf` is its negation:
+
+```rut
+use ink::{ Logger };
+
+entry fn main() {
+    let log = Logger("t");
+    let big = inf;
+    let small = -inf;
+    log.info(f"{big > 1.0e308f64} {small < -1.0e308f64}");
+}
+```
+
+```text
+true true
+```
 
 ## The cast — `expr as T`
 

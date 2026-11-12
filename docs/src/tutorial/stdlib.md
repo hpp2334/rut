@@ -330,8 +330,9 @@ qualified (`math::sqrt(x)`), or spell the path fully qualified
 (`calc::math::sqrt(x)`, no `use`). Every member is a closed-union
 generic (`sqrt<T requires f32 | f64>`) — the width falls out of the
 argument, or an explicit `math::sqrt<f32>(x)` spells it. The constants
-are `calc_host`'s manifest consts re-exported through the module's
-`pub use` (callers never touch the host package). The integer ladder
+are `calc_host`'s SURFACE LETS (`pub let PI: f64 = ..;` rows in its
+declaration file) re-exported through the module's `pub use` (callers
+never touch the host package). The integer ladder
 is *not* here — those are core's, always available.
 
 ## `json` — encode and decode

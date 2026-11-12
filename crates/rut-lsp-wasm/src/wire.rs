@@ -100,9 +100,6 @@ pub struct EntrySource {
 pub struct DepTable {
     pub name: Option<String>,
     pub entries: Vec<EntrySource>,
-    /// the compiler-materialized constants (`calc_host`'s `PI`
-    /// family), bound bare at the pkg's root — name → value
-    pub consts: Vec<(String, f64)>,
     pub deps: Vec<DepRow>,
     pub dev_deps: Vec<DepRow>,
 }
@@ -192,7 +189,6 @@ impl From<&crate::deps::DepTable> for DepTable {
                     mode: mode_str(e.mode),
                 })
                 .collect(),
-            consts: t.consts.clone(),
             deps: t.deps.iter().map(DepRow::from).collect(),
             dev_deps: t.dev_deps.iter().map(DepRow::from).collect(),
         }

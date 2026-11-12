@@ -171,8 +171,6 @@ plus its deps, loadable as-is and packable unchanged
 ```jsonc
 // plugin/rut.jsonc
 {
-  "format": "rutbundle",
-  "format_version": 11,
   "name": "plugin",
 
   "deps": {
@@ -180,6 +178,10 @@ plus its deps, loadable as-is and packable unchanged
   }
 }
 ```
+
+(The bundle wire pair — `format`/`format_version` — is the packer's
+stamp: `rut pack --mode bin` adds it to the packed manifest at the
+pack door; a directory manifest spelling it refuses loudly.)
 
 `server/` is the interesting dependency: a **pure declaration
 surface** — a host package whose manifest points at a `.d.rut` decl

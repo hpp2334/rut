@@ -154,8 +154,6 @@ fn a_packed_zip_embeds_its_path_deps_and_the_consumer_sees_them() {
         "rut.jsonc",
         r#"{
   // ink — the lib over the host surface (a path dep, the dev shape)
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "ink",
   "deps": {
     "ink_host": { "path": "../ink_host" }

@@ -65,11 +65,7 @@ fn remove_at_exit(dir: &Path) {
 fn panic_world(tag: &str) -> PathBuf {
     let root = scratch(tag);
     let app = root.join("app");
-    write(
-        &app,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
-    );
+    write(&app, "rut.jsonc", r#"{"name": "app"}"#);
     let mut src = String::from("fn boom() -> str {\n");
     for i in 0..25 {
         src.push_str(&format!("    let p{i} = {i};\n"));

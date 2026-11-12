@@ -123,9 +123,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, deps: &str) -> String {
-    format!(
-        r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "deps": {{{deps}}}}}"#
-    )
+    format!(r#"{{"name": "{name}", "deps": {{{deps}}}}}"#)
 }
 
 /// `rut <args>` with this lane's rut home, env-cleaned (no XDG/HOME

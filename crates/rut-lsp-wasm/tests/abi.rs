@@ -19,13 +19,10 @@ fn take(json: String) -> serde_json::Value {
 }
 
 /// The plugin manifest's dep shape, INLINE and unpinned: the real
-/// `examples/03-plugin/plugin/rut.jsonc` migrates off the retired
-/// manifest `sha256` key in the docs/examples phase — the grammar
-/// refuses the key today, so the host-side fixture is the shape
-/// every manifest must now spell (pins ride the walk's lock feed).
+/// `examples/03-plugin/plugin/rut.jsonc` — the directory grammar's
+/// spelling (the bundle wire pair retired; the pin lives in rut.lock,
+/// never the manifest).
 const PLUGIN_SHAPE: &str = r#"{
-  "format": "rutbundle",
-  "format_version": 11,
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },

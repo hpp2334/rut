@@ -43,9 +43,7 @@ fn make_pkg(base: &Path, files: &[(&str, &str)]) -> std::path::PathBuf {
 }
 
 fn host_manifest(name: &str, surface: &str) -> String {
-    format!(
-        r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
-    )
+    format!(r#"{{"name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#)
 }
 
 fn scratch(tag: &str) -> std::path::PathBuf {

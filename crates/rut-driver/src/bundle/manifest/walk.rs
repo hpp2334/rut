@@ -105,9 +105,28 @@ pub(super) fn walk_top_lane(
                 }
             }
         }
-        // bundle-shaped manifests
-        "format" => m.format = Some(expect_string(key, value)?),
-        "format_version" => m.format_version = Some(expect_u64(key, value)?),
+        // the bundle wire pair RETIRED from the directory grammar: the
+        // version lives in the bundle CONTAINER, and the packer stamps
+        // the pair at the bin pack door (`rut pack --mode bin`) — the
+        // only writer. A manifest riding INSIDE a published artifact
+        // still parses it (the compat lane below); the directory lane
+        // refuses LOUDLY, naming the fix
+        "format" if compat => m.format = Some(expect_string(key, value)?),
+        "format_version" if compat => m.format_version = Some(expect_u64(key, value)?),
+        "format" => {
+            return Err(ManifestError(
+                "format: retired — the version lives in the bundle container; the packer stamps \
+                 it (rut pack --mode bin); delete the key"
+                    .into(),
+            ));
+        }
+        "format_version" => {
+            return Err(ManifestError(
+                "format_version: retired — the version lives in the bundle container; the packer \
+                 stamps it; delete the key"
+                    .into(),
+            ));
+        }
         // `host_scope` (the retired registration-prefix override)
         // refuses LOUDLY: the key was load-bearing for
         // registration names, so a silent ignore would surface as
@@ -121,21 +140,33 @@ pub(super) fn walk_top_lane(
         }
         // `namespace` (the qualified-access head) refuses LOUDLY: the
         // mechanism died — module paths (`use calc::{ math }` +
-        // `math::sqrt(x)`) and bare consts (`use calc_host::{ PI }`, or
-        // a `pub use` re-export) are the grammar's own spellings now.
-        // A silent ignore would strand an old manifest's meaning at
-        // some call site far from the manifest.
+        // `math::sqrt(x)`) and `pub use` re-exports are the grammar's
+        // own spellings now. A silent ignore would strand an old
+        // manifest's meaning at some call site far from the manifest.
         "namespace" => {
             return Err(ManifestError(
-                "namespace: retired — module paths (`use calc::{ math }`) and bare consts; delete the key"
+                "namespace: retired — module paths (`use calc::{ math }`) and `pub use` \
+                 re-exports are the spellings now; delete the key"
                     .into(),
             ));
         }
-        // the host body's constants (`calc_host`'s `PI` family): name →
-        // f64, compiler-materialized and bound BARE at the pkg's root —
-        // the surface grammar has no `static` field form, so the
-        // manifest is their only spelling
-        "consts" => walk_consts(value, m)?,
+        // the host body's constants (`calc_host`'s `PI` family) RETIRED
+        // from the grammar: the surface `let` row is the one spelling
+        // (`pub let PI: f64 = 3.141592653589793;`, `inf`/`-inf` for
+        // the non-finite pair). The directory lane refuses LOUDLY,
+        // naming the fix; the compat lane — the manifest read at the
+        // zip/bundle/store boundary, where today's published bytes
+        // still carry the rows — DISCARDS the table whole (the
+        // `entry.ir` precedent: an old artifact keeps mounting, the
+        // rows bind nothing)
+        "consts" if compat => {}
+        "consts" => {
+            return Err(ManifestError(
+                "consts: retired — declare `pub let NAME: f64 = <literal>;` in the surface; \
+                 delete the key"
+                    .into(),
+            ));
+        }
         "entry" => walk_entry(value, m, compat)?,
         "deps" => walk_deps(value, m, compat)?,
         "dev-deps" => walk_dev_table(value, m)?,
@@ -251,44 +282,6 @@ pub(super) fn walk_style(value: &Value, m: &mut Manifest) -> Result<(), Manifest
         }
         m.style
             .insert(key.clone(), expect_field_string("style", key, v)?);
-    }
-    Ok(())
-}
-
-/// The `consts` object: name → f64 — the host body's compiler-
-/// materialized constants (`Math.PI`). Each value is a JSON number;
-/// the non-finite pair has no JSON spelling, so the strings `"inf"` /
-/// `"-inf"` (and `"nan"`) name it. f64 is the only width the manifest
-/// carries.
-fn walk_consts(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
-    let table = expect_object("consts", value)?;
-    for (key, v) in table {
-        if key.starts_with('_') {
-            return Err(underscore_refused("consts", key));
-        }
-        let n = match v {
-            Value::Number(_) => v.as_f64().ok_or_else(|| {
-                ManifestError(format!("consts.{key}: expected a number, found {}", raw(v)))
-            })?,
-            Value::String(s) => match s.as_str() {
-                "inf" | "+inf" => f64::INFINITY,
-                "-inf" => f64::NEG_INFINITY,
-                "nan" => f64::NAN,
-                other => {
-                    return Err(ManifestError(format!(
-                        "consts.{key}: `{other}` is not a number — spell a JSON number (the \
-                         non-finite spellings are \"inf\", \"-inf\", \"nan\")"
-                    )));
-                }
-            },
-            other => {
-                return Err(ManifestError(format!(
-                    "consts.{key}: expected a number, found {}",
-                    raw(other)
-                )));
-            }
-        };
-        m.consts.insert(key.clone(), n);
     }
     Ok(())
 }

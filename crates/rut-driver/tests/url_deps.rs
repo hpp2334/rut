@@ -87,7 +87,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
     // the entry keys are repealed: the body is `src/mod.rut` in the
     // package's `src/` shell (the `_entry` arg names the file the
     // caller writes)
-    format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}"{extra}}}"#)
+    format!(r#"{{"name": "{name}"{extra}}}"#)
 }
 
 /// A plain linkable leaf pkg — packs to a one-group compiled bundle.
@@ -326,14 +326,12 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     // fetches at bundle load (load_bundle_bytes owns no fetcher at all)
     let root = leaf_world("closed", "util", UTIL_BODY);
     let bytes = pack_dir(&root.join("util")).expect("pack util");
+    // the resealed manifest rides INSIDE the bundle — it carries the
+    // wire pair the pack door stamps (the version gate reads it)
     let doctored = resealed(
         &bytes,
         "rut.jsonc",
-        &manifest(
-            "util",
-            "mod.rut",
-            r#", "deps": {"ghost": {"url": "https://fixtures.test/ghost.rutbundle"}}"#,
-        ),
+        r#"{"format": "rutbundle", "format_version": 12, "name": "util", "deps": {"ghost": {"url": "https://fixtures.test/ghost.rutbundle"}}}"#,
     );
 
     // the direct bundle lane

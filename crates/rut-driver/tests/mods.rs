@@ -50,17 +50,14 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 /// The two-level fixture: `pkg/src/mod.rut` declares `layout`;
-/// `layout` declares `pub mod grid`. `bundle` spells the bundle keys
-/// (for the pack lanes) or not (plain directory pkg).
-fn world(tag: &str, bundle: bool) -> PathBuf {
+/// `layout` declares `pub mod grid`. `bundle` stays in the signature
+/// for the pack lanes' call sites — the bundle wire pair retired from
+/// the directory grammar (the pack door stamps it), so both spellings
+/// write the same plain manifest now.
+fn world(tag: &str, _bundle: bool) -> PathBuf {
     let root = scratch(tag);
     let pkg = root.join("pkg");
-    let keys = if bundle {
-        r#""format": "rutbundle", "format_version": 12, "#
-    } else {
-        ""
-    };
-    write(&pkg, "rut.jsonc", &format!("{{{keys}\"name\": \"pkg\"}}"));
+    write(&pkg, "rut.jsonc", "{\"name\": \"pkg\"}");
     write(
         &pkg,
         "src/mod.rut",
@@ -536,11 +533,7 @@ fn flat_packages_pack_without_a_rows_entry() {
     // bundles is the exhaustive version of this)
     let root = scratch("flat-pack");
     let pkg = root.join("pkg");
-    write(
-        &pkg,
-        "rut.jsonc",
-        r#"{"name": "pkg", "format": "rutbundle", "format_version": 12}"#,
-    );
+    write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
     write(
         &pkg,
         "src/mod.rut",
@@ -666,7 +659,7 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
     write(
         &app,
         "rut.jsonc",
-        r#"{"name": "app", "format": "rutbundle", "format_version": 12, "deps": {"pkg": {"path": "../pkg"}}}"#,
+        r#"{"name": "app", "deps": {"pkg": {"path": "../pkg"}}}"#,
     );
     write(
         &app,

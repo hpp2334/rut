@@ -1,6 +1,4 @@
 {
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "nmap_host",
   "type": "host",
   "entry": {

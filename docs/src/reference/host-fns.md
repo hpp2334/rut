@@ -58,6 +58,11 @@ host struct Name { fields }           // flat record; every field a crossing
                                       // type; no methods, no field
                                       // initializers — the shape IS the
                                       // whole surface
+pub let NAME: f64 = <float literal>;  // a SURFACE CONST — f64 end-to-end, a
+                                      // float literal (or its negation) only,
+                                      // `inf`/`-inf` included; the surface
+                                      // computes nothing. Binds bare at the
+                                      // pkg's root (`use calc_host::{ PI }`)
 prelude builtin fn name<T>(params) -> T;   // engine fn, compiler-lowered
 prelude builtin class Name<T> { .. }       // engine type member contract
                                            // (the closed async pair among
@@ -76,6 +81,16 @@ Rules:
   ([value boundary](value-boundary.md)). Everything else (user classes,
   `Vec<T>`, `[T]`, interface-typed values, closures) is a compile error on the
   declaration.
+- **A surface const is a float literal** — the type must be `f64`
+  (spelled or inferred off the literal), the initializer a float
+  literal or its negation (`pub let INFINITY: f64 = inf;`, `pub let
+  MIN: f64 = -1.7976931348623157e308;`). Anything else — a call,
+  arithmetic, an `f32` literal, another type — refuses loudly at the
+  lowering. One const, one name across the pkg: the rows bind bare at
+  the root, so a name folded twice (here or in a sibling module)
+  refuses. This is the one spelling — the manifest's old `consts`
+  table is retired (the directory grammar refuses the key; a published
+  artifact's rows discard on the reader's compat lane).
 - **`any` is not in the language.** An `any` spelling fails at
   resolution as an unknown type — there is no `any` type to write.
   Seal polymorphic values with `opaque(v)` / `opaque::downcast<T>(v)`

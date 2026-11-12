@@ -7,7 +7,7 @@
 //
 // The module is the caller's qualification unit: `use calc::{ math }`
 // then `math::sqrt(x)` / `math::PI` (or `calc::math::sqrt(x)` with no
-// use at all). The constants below are `calc_host`'s manifest consts,
+// use at all). The constants below are `calc_host`'s SURFACE LETS,
 // re-exported bare through this module's `pub use` — the compiler
 // materializes each as an f64 const row.
 //

@@ -60,7 +60,7 @@ fn make_dir_manifest() -> String {
     // and directory loading ignores them (layout 12 — the current
     // wire; the packer emits 12 and the loader reads 12 plus the old
     // 11 lane forever)
-    r#"{"format": "rutbundle", "format_version": 12, "name": "mod"}"#.to_string()
+    r#"{"name": "mod"}"#.to_string()
 }
 
 /// A one-file module in a temp dir (one directory, one entry file).
@@ -234,7 +234,7 @@ fn refusals() {
     .unwrap();
     std::fs::write(
         dir.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 12, "name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
+        r#"{"name": "mod", "entry": {"type": "./surface.d.rut"}}"#,
     )
     .unwrap();
     std::fs::remove_file(dir.join("src/surface.d.rut")).unwrap();
@@ -273,7 +273,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(
         m.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s"}}}"#,
+        r#"{"name": "main", "deps": {"s": {"path": "../s"}}}"#,
     )
     .unwrap();
     std::fs::create_dir_all(m.join("src")).unwrap();
@@ -308,7 +308,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m_lib).unwrap();
     std::fs::write(
         m_lib.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s_lib"}}}"#,
+        r#"{"name": "main", "deps": {"s": {"path": "../s_lib"}}}"#,
     )
     .unwrap();
 
@@ -343,7 +343,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
     std::fs::create_dir_all(&m2).unwrap();
     std::fs::write(
         m2.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"s": {"path": "../s2"}}}"#,
+        r#"{"name": "main", "deps": {"s": {"path": "../s2"}}}"#,
     )
     .unwrap();
     std::fs::create_dir_all(m2.join("src")).unwrap();
@@ -425,7 +425,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     std::fs::create_dir_all(&main).unwrap();
     std::fs::write(
         main.join("rut.jsonc"),
-        r#"{"format": "rutbundle", "format_version": 12, "name": "main", "deps": {"m": {"path": "../m"}}}"#,
+        r#"{"name": "main", "deps": {"m": {"path": "../m"}}}"#,
     )
     .unwrap();
 
@@ -568,8 +568,6 @@ fn the_directory_manifest_speaks_jsonc() {
         r#"// mod — the JSONC manifest
 {
   // the header prose
-  "format": "rutbundle",
-  "format_version": 11, /* the one wire number */
   "name": "mod", /* beside the value */
   "style": { "indent": "2", }, // a trailing comma, the JSONC way
 }

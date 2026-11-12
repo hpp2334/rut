@@ -300,9 +300,11 @@ inferred from the arguments, or spelled `math::sqrt<f32>(x)`): `sqrt`,
 `atan2`, `hypot`, `copysign`, `fma`, plus the float helpers `abs`,
 `min`, `max`, `signum`. Constants: `math::PI`, `TAU`, `E`, `SQRT_2`,
 `LN_2`, `LN_10`, `LOG2_E`, `LOG10_E`, `INFINITY`, `NEG_INFINITY`,
-`EPSILON`, `MAX`, `MIN`, `MIN_POSITIVE` — `calc_host`'s manifest consts
-re-exported through the module's `pub use` (callers never touch the
-host package). Integer numeric methods are core's, not `calc`'s.
+`EPSILON`, `MAX`, `MIN`, `MIN_POSITIVE` — `calc_host`'s SURFACE LETS
+(`pub let PI: f64 = 3.141592653589793;` rows in its declaration file,
+`inf`/`-inf` for the non-finite pair) re-exported through the module's
+`pub use` (callers never touch the host package). Integer numeric
+methods are core's, not `calc`'s.
 
 ### `json` — the serde package
 

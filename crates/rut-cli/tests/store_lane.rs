@@ -102,9 +102,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 }
 
 fn manifest(name: &str, deps: &str) -> String {
-    format!(
-        r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "deps": {{{deps}}}}}"#
-    )
+    format!(r#"{{"name": "{name}", "deps": {{{deps}}}}}"#)
 }
 
 /// `rut <args>` with this lane's rut home, env-cleaned: (exit, stdout,
@@ -189,10 +187,13 @@ fn install_publishes_the_store_layout_and_reruns_are_store_first() {
     assert_eq!(meta.format_version, rut_driver::STORE_META_FORMAT_VERSION);
     let unpack = dir.join("unpack");
     // the extracted tree rides the bundle's entries verbatim — the
-    // compiled wire: the manifest, the scopes, the compiled root
-    let unpacked =
-        rut_driver::parse_manifest(&std::fs::read_to_string(unpack.join("rut.jsonc")).unwrap())
-            .expect("the extracted manifest parses");
+    // compiled wire: the manifest, the scopes, the compiled root (the
+    // manifest carries the pair the pack door stamps — the compat lane
+    // reads it back)
+    let unpacked = rut_driver::bundle::parse_manifest_compat(
+        &std::fs::read_to_string(unpack.join("rut.jsonc")).unwrap(),
+    )
+    .expect("the extracted manifest parses");
     assert_eq!(unpacked.name.as_deref(), Some("util"));
     assert!(unpack.join("mod.rutc").is_file(), "the compiled root rode");
     assert!(unpack.join("rut.scopes").is_file(), "the scopes rode");
@@ -248,8 +249,6 @@ fn a_zip_dep_publishes_the_unpacked_tree_and_runs_offline() {
         &gen,
         "rut.jsonc",
         r#"{
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "gen"
 }"#,
     );

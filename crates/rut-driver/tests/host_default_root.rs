@@ -145,10 +145,7 @@ fn neither_door_is_the_loud_no_entry_error() {
     // pack lane gates on the bundle keys first, so spell them)
     let dir = make_pkg(
         &scratch("neither-pack"),
-        &[(
-            "rut.jsonc",
-            r#"{"format": "rutbundle", "format_version": 12, "name": "h", "type": "host"}"#,
-        )],
+        &[("rut.jsonc", r#"{"name": "h", "type": "host"}"#)],
     );
     let err = pack_dir(&dir).unwrap_err().to_string();
     assert!(err.contains("host pkg with no entry"), "{err}");
@@ -193,10 +190,7 @@ fn the_default_root_packs_and_loads_back() {
     let dir = make_pkg(
         &scratch("pack-flat"),
         &[
-            (
-                "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 12, "name": "flat_host", "type": "host"}"#,
-            ),
+            ("rut.jsonc", r#"{"name": "flat_host", "type": "host"}"#),
             ("src/mod.d.rut", "pub host fn ping() -> bool;\n"),
         ],
     );
@@ -221,10 +215,7 @@ fn the_default_root_packs_and_loads_back() {
     let dir = make_pkg(
         &scratch("pack-tree"),
         &[
-            (
-                "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 12, "name": "myhost", "type": "host"}"#,
-            ),
+            ("rut.jsonc", r#"{"name": "myhost", "type": "host"}"#),
             (
                 "src/mod.d.rut",
                 "pub mod net;\npub host fn legacy_ping() -> bool;\n",
@@ -273,7 +264,7 @@ fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
         &[
             (
                 "rut.jsonc",
-                r#"{"format": "rutbundle", "format_version": 12, "name": "http_host", "type": "host", "entry": {"type": "./http_host.d.rut"}}"#,
+                r#"{"name": "http_host", "type": "host", "entry": {"type": "./http_host.d.rut"}}"#,
             ),
             (
                 "src/http_host.d.rut",

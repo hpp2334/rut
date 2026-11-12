@@ -264,7 +264,7 @@ fn bundle_world(tag: &str) -> (PathBuf, Vec<u8>) {
     write(
         &app,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"u": {"path": "../u"}, "g": {"path": "../g"}}}"#,
+        r#"{"name": "app", "deps": {"u": {"path": "../u"}, "g": {"path": "../g"}}}"#,
     );
     write(
         &app,
@@ -359,7 +359,7 @@ fn the_pack_lane_refuses_through_the_same_resolver() {
     write(
         &root.join("app"),
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"a": {"path": "../a"}}}"#,
+        r#"{"name": "app", "deps": {"a": {"path": "../a"}}}"#,
     );
     write(
         &root.join("a"),

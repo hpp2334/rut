@@ -27,8 +27,12 @@
 //! initializer is a float literal — or its negation, `inf`/`-inf`
 //! included — folds into the host body's const rows (the literal-only
 //! law, D3: the surface computes nothing). Anything else refuses
-//! loudly at the lowering; the manifest's `consts` rows keep riding
-//! beside the surface rows (their stamp is [`fold_manifest_consts`]).
+//! loudly at the lowering; one const, one name — a `let` spelling a
+//! name another module of the same pkg already folded is the loud
+//! refusal (the rows bind BARE at the pkg's root). (The manifest's
+//! `consts` table is RETIRED: the directory grammar refuses the key,
+//! and the compat lane — the zip/bundle boundary — discards the rows
+//! whole; this lowering is the one spelling.)
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -203,8 +207,9 @@ fn const_law(display: &str, lead: &str) -> String {
 /// Fold one module's `let` items into const rows: the type must be
 /// `f64` (spelled or inferred off the literal — the family is f64
 /// end-to-end), the initializer a float literal or its negation.
-/// Names ride BARE (the manifest consts' own binding shape), mod
-/// path aside.
+/// Names ride BARE at the pkg's root, so one name folds ONCE across
+/// the whole pkg — a second `let` of an already-folded name (here or
+/// in a sibling module) is the loud refusal, mod path aside.
 fn lower_const_rows(
     ast: &Ast,
     items: &[ItemRef],
@@ -229,6 +234,12 @@ fn lower_const_rows(
             // literal, an int/str/bool — refuses here
             return Err(const_law(display, &format!("let {name}")));
         };
+        if consts.iter().any(|(n, _, _)| *n == name) {
+            return Err(format!(
+                "{display}: `let {name}` — the const `{name}` is already declared in this \
+                 pkg (one const, one name; the rows bind bare at the pkg's root)"
+            ));
+        }
         consts.push((name, TY_F64, bits));
     }
     Ok(())
@@ -457,34 +468,6 @@ pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
              and depend on it",
             row.name
         ));
-    }
-    Ok(())
-}
-
-/// Stamp a host pkg's manifest `consts` rows onto its lowered body —
-/// the merge the three mount lanes (directory, srczip, bundle) fold
-/// through. The surface `let` spelling is the primary form and the
-/// manifest rows ride BESIDE it (manifest consts stay fully
-/// accepted); one name spelled BOTH ways is the loud refusal — the
-/// two are alternative spellings of one const, never a layering.
-/// f64 rows only, exactly as the manifest walk shaped them.
-pub fn fold_manifest_consts(
-    body: &mut MountedBody,
-    consts: &BTreeMap<String, f64>,
-    origin: &str,
-) -> Result<(), String> {
-    let MountedBody::Host { consts: rows, .. } = body else {
-        return Ok(()); // a non-host body carries no const rows
-    };
-    for (name, v) in consts {
-        if rows.iter().any(|(n, _, _)| n == name) {
-            return Err(format!(
-                "{origin}: the const `{name}` is spelled twice — on the surface \
-                 (`pub let {name}: f64 = ..`) and in the manifest's `consts`; \
-                 one const, one spelling"
-            ));
-        }
-        rows.push((name.clone(), TY_F64, v.to_bits()));
     }
     Ok(())
 }

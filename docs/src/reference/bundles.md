@@ -48,7 +48,8 @@ is forever old yet loadable forever ([the wire version](#the-wire-version)).
 ## The compiled root (lib)
 
 ```text
-rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 12
+rut.jsonc                the directory's manifest + the wire rows stamped at the
+                           pack door ("format": "rutbundle", "format_version": 12)
 rut.scopes               the pack-time scope ledger — one `<scope> = "<identity>"`
                            row per linked module, ascending by scope; every row
                            spells name@<16 hex> (the group identities; the loader
@@ -157,7 +158,8 @@ bundle is the manifest plus that ONE entry — single-package, no ledger,
 no groups, nothing to decode:
 
 ```text
-rut.jsonc                byte-for-byte; "format": "rutbundle", "format_version": 12
+rut.jsonc                the directory's manifest + the wire rows stamped at the
+                           pack door; "format": "rutbundle", "format_version": 12
 mod.d.rut                the ONE consolidated declaration entry — the tree
                            normalized into the inline form, whatever the
                            directory grammar spelled
@@ -186,13 +188,17 @@ lowers into the pkg's host rows.
 
 First entry in the zip; JSONC (the directory grammar: `//` and `/* */`
 comments and trailing commas are legal); the same manifest grammar the
-directory form uses, byte-for-byte the directory's manifest — which is
-what makes a bundle-shaped directory pack unchanged:
+directory form uses — the directory's own text PLUS the wire rows the
+pack door stamps in, which is what makes any directory pack unchanged
+without hand-editing:
 
 ```jsonc
 {
   // the bundle wire — 12, always; the manifest's `type` routes the
-  // root kind (the module-binary version is a different constant)
+  // root kind (the module-binary version is a different constant).
+  // The pair is the PACKER's stamp: the directory grammar retired the
+  // keys (writing them in rut.jsonc refuses loudly), and `rut pack
+  // --mode bin` adds them right after the opening brace
   "format": "rutbundle",
   "format_version": 12,
   // the package this bundle answers to
@@ -206,10 +212,13 @@ what makes a bundle-shaped directory pack unchanged:
 }
 ```
 
-Directory loading **ignores** `format`/`format_version` — a directory is
-not a bundle — which is why the keys are safe to write into every module
-manifest today: `examples/03-plugin/plugin` is a working directory that
-also packs unchanged.
+The directory grammar **refuses** `format`/`format_version` — a
+directory is not a bundle, and the version lives in the bundle
+container; each refusal names the fix. A manifest riding INSIDE a
+published artifact (this one, a group's, a source zip's) parses
+through the reader's **compat lane**, where the pair still parses (the
+version gate reads it) and the retired `consts` table discards whole —
+published bytes are frozen history, and the loader keeps them mounting.
 
 The rest of the manifest grammar — the dep tables, `dev-deps`,
 `style`, and the strict-keys law — is defined in [Project structure
@@ -330,11 +339,14 @@ README, LICENSE, …       inert files at a package root — nothing reads
 **The published manifest.** Every `[deps]` row's descriptor becomes
 `{ "path": "deps/<name>@<fp16>" }` — the `url` fields and the external
 `path` values drop (everything embeds), the row keys stay, and every
-comment outside the replaced descriptor blocks rides. The
-`format`/`format_version` rows drop too: a source zip's manifest does
-not claim the compiled wire. The surgery is textual and comment-aware,
-and the result is re-parsed and gated against the original — any drift
-refuses at pack (`normalize the manifest's dep rows and re-pack`).
+comment outside the replaced descriptor blocks rides. A source zip's
+manifest does not claim the compiled wire: the directory grammar
+retired the `format`/`format_version` pair (a manifest spelling it
+refuses at the strict parse before the pack), and the rewrite's
+line-wise strip still removes any stray pair. The surgery is textual
+and comment-aware, and the result is re-parsed and gated against the
+original — any drift refuses at pack (`normalize the manifest's dep
+rows and re-pack`).
 
 **The identity is the TREE flavor.** A dep dirname's `name@<fp16>` is
 the first 16 lowercase hex of sha256 over that package's own

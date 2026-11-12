@@ -83,7 +83,7 @@ fn manifest(name: &str, _entry: &str, extra: &str) -> String {
 
 /// The bundle-shaped spelling: the pack gate's keys ride inside.
 fn bundle_manifest(name: &str, _entry: &str, extra: &str) -> String {
-    format!(r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}"{extra}}}"#)
+    format!(r#"{{"name": "{name}"{extra}}}"#)
 }
 
 /// The mixed-closure world: `app` (linkable root) uses `util` (linked
@@ -313,11 +313,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     // ledger names the row
     let root = scratch("genroot");
     let app = root.join("app");
-    write(
-        &app,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
-    );
+    write(&app, "rut.jsonc", r#"{"name": "app"}"#);
     write(
         &app,
         "src/mod.rut",
@@ -353,11 +349,7 @@ fn generic_and_iface_param_roots_publish_compiled() {
     // unit) — no splice
     let root = scratch("ifaceroot");
     let app = root.join("app");
-    write(
-        &app,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
-    );
+    write(&app, "rut.jsonc", r#"{"name": "app"}"#);
     write(
         &app,
         "src/mod.rut",

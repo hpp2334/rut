@@ -177,7 +177,6 @@ export interface DepRow {
 export interface DepTable {
   name: string | null;
   entries: Array<{ path: string; mode: 'Decl' | 'Impl' }>;
-  consts: Array<[string, number]>;
   deps: DepRow[];
   dev_deps: DepRow[];
 }

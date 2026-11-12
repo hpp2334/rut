@@ -1,11 +1,13 @@
 {
   // plugin/ — the moderator module (one directory is one module).
   //
-  // The manifest is bundle-shaped (layout 10): directory
-  // loading ignores the format keys, and `rut pack plugin/` needs them —
-  // so the same directory packs to a compiled `.rutbundle` unchanged,
-  // with linkable deps riding as `.rutc` groups and splice-needed deps
-  // (server's host surface) as source groups.
+  // The manifest is the plain directory grammar: the bundle wire pair
+  // retired from it (the version lives in the bundle container), and
+  // `rut pack --mode bin plugin/` STAMPS the pair into the packed
+  // manifest at the pack door — so the same directory packs to a
+  // compiled `.rutbundle` unchanged, with linkable deps riding as
+  // `.rutc` groups and splice-needed deps (server's host surface) as
+  // source groups.
   //
   // THE CDN ROW: `pouch` ships as a COMMITTED compiled bundle
   // (dist/std-v12/pouch.rutbundle, jsDelivr-served at the tag, pinned in
@@ -19,8 +21,6 @@
   // gates never touch the network — and the pack's
   // rode-along law carries the pouch group inside the plugin's own
   // bundle, so the packed form stays closed.
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "plugin",
     "deps": {
     "server": {

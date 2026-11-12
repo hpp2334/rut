@@ -225,7 +225,21 @@ pub(crate) const MANIFEST_RETIRED: &str = "rut.json";
 /// bundle module's reader (the module itself never touches the
 /// filesystem). A directory still holding the RETIRED `rut.json` name
 /// gets the pointed cutover refusal — no fallback lane reads it.
+/// STRICT: this is the directory grammar's door.
 pub(crate) fn read_manifest(src: &dyn Source, dir: &str) -> Result<Manifest, LoadError> {
+    read_manifest_lane(src, dir, false)
+}
+
+/// [`read_manifest`] on the compat lane — the manifest read at the
+/// ZIP boundary: bytes unpacked from a source zip rode the wire, so
+/// the retired keys (the bundle wire pair, the `consts` table) parse
+/// or discard there instead of refusing — the same reader-compat law
+/// the `.rutbundle` lanes keep.
+pub(crate) fn read_manifest_compat(src: &dyn Source, dir: &str) -> Result<Manifest, LoadError> {
+    read_manifest_lane(src, dir, true)
+}
+
+fn read_manifest_lane(src: &dyn Source, dir: &str, compat: bool) -> Result<Manifest, LoadError> {
     let key = src.resolve(dir, MANIFEST_NAME).map_err(LoadError::law)?;
     let text = match read_source_text(src, &key) {
         Ok(text) => text,
@@ -240,7 +254,12 @@ pub(crate) fn read_manifest(src: &dyn Source, dir: &str) -> Result<Manifest, Loa
             return Err(missing);
         }
     };
-    parse_manifest(&text).map_err(LoadError::from)
+    let parsed = if compat {
+        parse_manifest_compat(&text)
+    } else {
+        parse_manifest(&text)
+    };
+    parsed.map_err(LoadError::from)
 }
 
 // ---------------------------------------------------------------------
@@ -603,9 +622,9 @@ fn lib_pkg(
 /// refused at parse (the manifest walk); a published BUNDLE's old
 /// manifest rides the reader's compat lane instead (a loading law).
 ///
-/// The manifest's `consts` rows ride the host body's constants, bound
-/// bare at the pkg's root — the surface grammar has no spelling for
-/// them, so the manifest carries what the engine mounts.
+/// The consts are the SURFACE's own `pub let` rows (folded inside the
+/// lowering, bound bare at the pkg's root) — the manifest's retired
+/// `consts` table binds nothing.
 fn load_entry_module(
     src: &dyn Source,
     dir: &str,
@@ -653,11 +672,9 @@ fn load_entry_module(
             let mut m =
                 rut_driver::lower_decl_module(&src_text, &mods, &key).map_err(LoadError::law)?;
             m.entry = manifest.entry.clone();
-            // the manifest's `consts` rows ride the host body BESIDE
-            // the surface `let` rows (the merge law — a name spelled
-            // both ways is the loud refusal)
-            rut_driver::decl::fold_manifest_consts(&mut m.body, &manifest.consts, &key)
-                .map_err(LoadError::law)?;
+            // the surface `pub let` rows fold into the const rows
+            // inside the lowering (bound bare at the pkg's root) —
+            // the manifest's retired `consts` table binds nothing
             m.manifest = manifest.clone();
             Ok(m)
         }
@@ -827,6 +844,7 @@ pub(crate) fn walk_dir(
         &manifest.deps,
         &mut visiting,
         &mut fetched,
+        false,
     )?;
     // the dev pass — the ROOT's dev table mounts exactly like `[deps]`;
     // a dep's dev table is never walked (pass 2 is root-only)
@@ -838,6 +856,7 @@ pub(crate) fn walk_dir(
         &manifest.dev_deps,
         &mut visiting,
         &mut fetched,
+        false,
     )?;
     Ok(root)
 }
@@ -904,7 +923,10 @@ pub(crate) fn mount_key_for(dep_dir: &str, spec: &str) -> String {
 
 /// Resolve a manifest's `[deps]` recursively — pass 1 of
 /// the mount order. `parent` is the spec of the pkg whose table walks
-/// (the first-mount edge every mount below records).
+/// (the first-mount edge every mount below records). `compat` rides
+/// true inside an unpacked source zip's tree (its manifests rode the
+/// wire; the retired keys parse or discard there).
+#[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn resolve_deps(
     world: &mut World,
     src: &dyn Source,
@@ -913,8 +935,18 @@ fn resolve_deps(
     manifest: &Manifest,
     visiting: &mut Vec<PathBuf>,
     fetched: &mut Fetched<'_>,
+    compat: bool,
 ) -> Result<(), LoadError> {
-    resolve_table(world, src, dir, parent, &manifest.deps, visiting, fetched)
+    resolve_table(
+        world,
+        src,
+        dir,
+        parent,
+        &manifest.deps,
+        visiting,
+        fetched,
+        compat,
+    )
 }
 
 /// The dev-table mount — the pack lane's compile-once-per-owner pass:
@@ -945,6 +977,7 @@ pub(crate) fn mount_dev_table(
         &manifest.dev_deps,
         &mut visiting,
         &mut fetched,
+        false,
     )
 }
 
@@ -961,7 +994,9 @@ pub(crate) fn mount_dev_table(
 /// — the first-mount edge every pkg mounted here records
 /// ([`Mounted::mounted_by`]). Every mounted pkg's manifest and directory
 /// (or archive location) are recorded — the pack lanes' group reads
-/// dispatch on them.
+/// dispatch on them. `compat` rides true inside an unpacked source
+/// zip's tree (the wire-carried manifests parse on the compat lane).
+#[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn resolve_table(
     world: &mut World,
     src: &dyn Source,
@@ -970,6 +1005,7 @@ fn resolve_table(
     table: &BTreeMap<String, BTreeMap<String, String>>,
     visiting: &mut Vec<PathBuf>,
     fetched: &mut Fetched<'_>,
+    compat: bool,
 ) -> Result<(), LoadError> {
     for (spec, desc) in table {
         if world.pkgs.contains_key(spec) {
@@ -1034,7 +1070,7 @@ fn resolve_table(
                 &bytes,
             );
         }
-        let dm = read_manifest(src, &dep_dir)?;
+        let dm = read_manifest_lane(src, &dep_dir, compat)?;
         if dm.name.as_deref() != Some(rut_driver::bundle::mount_name(&mount_key)) {
             return Err(LoadError::DepName {
                 spec: spec.clone(),
@@ -1051,7 +1087,9 @@ fn resolve_table(
         visiting.push(dep_canon);
         // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
         // consumer's world never contains another pkg's dev table
-        resolve_deps(world, src, &dep_dir, &mount_key, &dm, visiting, fetched)?;
+        resolve_deps(
+            world, src, &dep_dir, &mount_key, &dm, visiting, fetched, compat,
+        )?;
         visiting.pop();
     }
     Ok(())
@@ -1086,10 +1124,12 @@ fn mount_zip_dep(
     // the directory lane over the unpacked tree — the manifest, the
     // name-vs-key gate, the entry mount, then the dep recursion (the
     // rewritten rows resolve inside; the first-mount edge records the
-    // declaring pkg's spec)
+    // declaring pkg's spec). The manifest reads ride the COMPAT lane
+    // here and through the tree: these bytes rode the wire, where the
+    // retired keys still parse (the wire pair) or discard (`consts`)
     let dir_key = dir.to_string_lossy().into_owned();
     let src = FsSource::at(&dir);
-    let manifest = read_manifest(&src, &dir_key)?;
+    let manifest = read_manifest_compat(&src, &dir_key)?;
     let root_name = manifest
         .name
         .clone()
@@ -1117,6 +1157,7 @@ fn mount_zip_dep(
         &manifest,
         &mut visiting,
         fetched,
+        true,
     )?;
     Ok(())
 }
@@ -1635,6 +1676,7 @@ pub(crate) fn offer_dir(
         &manifest,
         &mut visiting,
         &mut fetched,
+        false,
     )?;
     Ok(name)
 }

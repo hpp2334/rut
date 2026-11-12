@@ -77,11 +77,7 @@ fn count(needle: &str, hay: &str) -> usize {
 fn pkg(tag: &str, src: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(&dir, "src/mod.rut", src);
     dir
 }

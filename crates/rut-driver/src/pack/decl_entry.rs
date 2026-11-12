@@ -154,9 +154,10 @@ pub fn render_program_entry(prog: &Program) -> String {
         out.push_str(&i);
         out.push('\n');
     }
-    // ---- the consts, as comments (same law: the surface grammar has
-    // no spelling for a manifest const — the manifest is its only
-    // form; the entry documents the name)
+    // ---- the consts, as comments (the compiled binary is their
+    // truth; the source tree's `pub let` rows are the surface
+    // spelling, and the generated entry does not re-derive their
+    // literal values here — the entry documents the name)
     let mut consts: Vec<String> = s
         .consts
         .iter()

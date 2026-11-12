@@ -82,9 +82,7 @@ fn write(dir: &Path, rel: &str, text: &str) {
 
 /// A host manifest — the keys PREPEND (before any table).
 fn host_manifest(name: &str, surface: &str) -> String {
-    format!(
-        r#"{{"format": "rutbundle", "format_version": 12, "name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#
-    )
+    format!(r#"{{"name": "{name}", "type": "host", "entry": {{"type": "./{surface}"}}}}"#)
 }
 
 /// A host pkg world: one `.d.rut`, one manifest. Returns the pkg dir.
@@ -148,16 +146,22 @@ fn host_root_packs_v6_and_loads_back() {
         vec!["rut.jsonc".to_string(), "mod.d.rut".to_string()],
         "a host bundle is its manifest + its surface (the canonical name), nothing else: {names:?}"
     );
-    // the riding manifest is byte-for-byte the directory's (v6 declared)
+    // the riding manifest is the directory's own PLUS the wire rows
+    // the pack door stamps (the directory grammar carries neither key;
+    // the staged rows land right after the opening brace, everything
+    // else byte-for-byte)
     let toml = rut_driver::bundle::Bundle::parse(&bytes)
         .unwrap()
         .read("rut.jsonc")
         .unwrap();
-    assert_eq!(
-        toml,
-        std::fs::read_to_string(dir.join("rut.jsonc")).unwrap()
+    let dir_manifest = std::fs::read_to_string(dir.join("rut.jsonc")).unwrap();
+    let staged = format!(
+        "{}\n  \"format\": \"rutbundle\",\n  \"format_version\": 12,{}",
+        &dir_manifest[..dir_manifest.find('{').unwrap() + 1],
+        &dir_manifest[dir_manifest.find('{').unwrap() + 1..]
     );
-    let m = rut_driver::bundle::parse_manifest(&toml).unwrap();
+    assert_eq!(toml, staged, "the dir manifest + the stamped wire rows");
+    let m = rut_driver::bundle::parse_manifest_compat(&toml).unwrap();
     assert_eq!(m.format_version, Some(12), "a decl root declares 12");
 
     // load: the root mounts as the pkg's host rows
@@ -293,18 +297,14 @@ fn a_lib_root_packs_the_one_wire_number_too() {
     // `type` row (absent ⇒ lib) routes the layout, never the version
     let base = scratch("onewire");
     let lib = base.join("util");
-    write(
-        &lib,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "util"}"#,
-    );
+    write(&lib, "rut.jsonc", r#"{"name": "util"}"#);
     write(
         &lib,
         "src/mod.rut",
         "pub fn twice(v: i64) -> i64 {\n    return v * 2;\n}\n",
     );
     let bytes = pack_dir(&lib).expect("pack the lib");
-    let m = rut_driver::bundle::parse_manifest(
+    let m = rut_driver::bundle::parse_manifest_compat(
         &rut_driver::bundle::Bundle::parse(&bytes)
             .unwrap()
             .read("rut.jsonc")

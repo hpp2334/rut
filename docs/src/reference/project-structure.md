@@ -63,8 +63,17 @@ The keys, all of them:
 | `type` | the declared kind: `type = "host"` for a **host pkg** — a pure declaration surface whose `host fn`s the embedder binds at load ([Host fns and declaration files](host-fns.md)); the surface organizes as a module tree of `mod.d.rut` files under `src/`, rooted at the default root or the spelled `entry.type` ([below](#host-surface-trees)); `type = "lib"` (or absent) is the ordinary source package. The kind is never inferred — an `entry.type`-only manifest with no kind and no `src/mod.rut` is an error naming both fixes |
 | `deps` | the transitively mounted dependencies — and the declaration table: a pkg may `use` exactly the heads its manifest names (`deps` ∪ `core`, plus `dev-deps` at the program root), so a head riding someone else's `deps` is mounted but not nameable ([Nameability](dependency-kinds.md#nameability)). One source per descriptor: `pkg = { path = "..." }` (relative to this manifest) or `pkg = { url = "https://…" }` (a remote artifact — a `.zip` source archive or a `.rutbundle` compiled bundle; the extension is the kind) — never both, never neither. Url rows carry **no pin**: the `sha256` key is retired from the grammar, and the pins live in the walk root's `rut.lock` beside this manifest — `rut install` writes it and every load verifies against it ([Dependency kinds](dependency-kinds.md), [The rut CLI](cli.md)). `optional` is rejected here. |
 | `dev-deps` | mounted only while building/testing this pkg itself — never in a consumer's world. Descriptors are **`path`-only**: a dev row is directory-time metadata for the declarer's own build, nothing to fetch ([Dependency kinds](dependency-kinds.md)) |
-| `format`, `format_version` | bundle keys — ignored by directory loading; `rut pack --mode bin` writes them into the packed manifest when this one omits them, and the source-zip pack drops them ([Module bundles](bundles.md)) |
 | `style` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
+
+Three keys are **retired** and refuse loudly, each error naming the
+fix: `format`/`format_version` (the bundle wire pair — the version
+lives in the bundle container, and `rut pack --mode bin` stamps the
+pair into the packed manifest at the pack door; a manifest riding
+*inside* a published artifact still parses it through the reader's
+compat lane), `consts` (declare `pub let NAME: f64 = <literal>;` in
+the surface instead — see [Host fns and declaration
+files](host-fns.md)), and `namespace` (module paths and `pub use`
+re-exports are the spellings).
 
 The **grammar is strict at the top level**: the keys above are all of
 them, and any other top-level key refuses naming the key — `manifest:

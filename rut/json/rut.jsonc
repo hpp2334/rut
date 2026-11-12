@@ -18,8 +18,6 @@
   // carries the strbuild + pouch + nmapset groups under identity dirs
   // (the v11 wire), so the wrappers' `use` heads resolve wherever json
   // travels.
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "json",
   "deps": {
     "strbuild": {

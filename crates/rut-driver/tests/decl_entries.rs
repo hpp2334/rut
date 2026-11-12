@@ -83,11 +83,7 @@ entry fn main() -> i64 {
 fn a_compiled_group_carries_one_generated_entry() {
     let root = scratch("compiled");
     let app = root.join("app");
-    write(
-        &app,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
-    );
+    write(&app, "rut.jsonc", r#"{"name": "app"}"#);
     write(&app, "src/mod.rut", LIB_SRC);
     let bytes = pack_dir(&app).expect("pack");
 
@@ -158,11 +154,7 @@ fn the_loader_never_reads_a_compiled_groups_entry() {
     // unchanged.
     let root = scratch("l2");
     let app = root.join("app");
-    write(
-        &app,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
-    );
+    write(&app, "rut.jsonc", r#"{"name": "app"}"#);
     write(
         &app,
         "src/mod.rut",
@@ -198,11 +190,7 @@ fn strip_omits_the_declaration_entry() {
     // private sidecar's twin law: OFF the wire entirely.
     let root = scratch("strip");
     let app = root.join("app");
-    write(
-        &app,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app"}"#,
-    );
+    write(&app, "rut.jsonc", r#"{"name": "app"}"#);
     write(&app, "src/mod.rut", LIB_SRC);
     let (bytes, symtab) = pack_dir_opts(&app, &PackOpts { strip: true }).expect("strip-pack");
     assert!(symtab.is_some(), "the sidecar still rides");
@@ -336,11 +324,7 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
     // re-label its manifest 11 and re-seal — exactly the bytes a v11
     // publish shipped (the layout grammar is one; the label routes)
     let dep_dir = root.join("dep");
-    write(
-        &dep_dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "dep"}"#,
-    );
+    write(&dep_dir, "rut.jsonc", r#"{"name": "dep"}"#);
     write(
         &dep_dir,
         "src/mod.rut",
@@ -360,7 +344,7 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
     write(
         &root,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"dep": {"url": "https://cdn.test/dep.rutbundle"}}}"#,
+        r#"{"name": "app", "deps": {"dep": {"url": "https://cdn.test/dep.rutbundle"}}}"#,
     );
     write(
         &root,

@@ -661,8 +661,6 @@ mod tests {
     const MANIFEST: &str = r#"{
   // ink — the logger package: rut source wrapping the `ink_host`
   // host surface in the `Logger` class. Publishes COMPILED.
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "ink",
     "deps": {
     "ink_host": {

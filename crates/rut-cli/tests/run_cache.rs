@@ -49,11 +49,7 @@ fn rut_run(home: &Path, args: &[&str]) -> (i32, String) {
 fn hello_world(tag: &str) -> PathBuf {
     let root = scratch(tag);
     let dir = root.join("hello");
-    write(
-        &dir,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
-    );
+    write(&dir, "rut.jsonc", r#"{"name": "hello"}"#);
     write(&dir, "src/mod.rut", "entry fn main() -> nil { return; }\n");
     root
 }
@@ -177,7 +173,7 @@ fn a_dir_with_a_path_dep_caches_one_closed_entry() {
     write(
         &hello,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
+        r#"{"name": "hello", "deps": {"calc": {"path": "../calc"}}}"#,
     );
     write(
         &hello,
@@ -284,8 +280,6 @@ fn gen_app_manifest(dep: &str, url: Option<&str>) -> String {
     };
     format!(
         r#"{{
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "app",
   "deps": {{
     "gen": {row}
@@ -322,8 +316,6 @@ fn a_generic_path_dep_runs_identically_on_the_miss_and_the_hit() {
     let (app, root) = generic_dep_world(
         "generic-path",
         r#"{
-  "format": "rutbundle",
-  "format_version": 12,
   "name": "gen"
 }"#,
     );
@@ -411,11 +403,7 @@ fn serve(payload: Vec<u8>) -> u16 {
 fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     let util_root = scratch("url-leaf");
     let util = util_root.join("util");
-    write(
-        &util,
-        "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "util"}"#,
-    );
+    write(&util, "rut.jsonc", r#"{"name": "util"}"#);
     write(
         &util,
         "src/mod.rut",
@@ -431,9 +419,7 @@ fn a_url_dep_closure_writes_only_the_resolved_key_and_the_second_run_hits_it() {
     write(
         &app,
         "rut.jsonc",
-        &format!(
-            r#"{{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {{"util": {{"url": "{url}"}}}}}}"#
-        ),
+        &format!(r#"{{"name": "app", "deps": {{"util": {{"url": "{url}"}}}}}}"#),
     );
     // the pin ledger: the manifest row is unpinned — the lock pins it
     write(
