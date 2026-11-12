@@ -9,7 +9,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use crate::env;
 use crate::event_loop;
 use crate::hover::DefIndex;
-use crate::json_envelope;
 use crate::wire;
 
 pub(crate) struct SessionState {
@@ -171,15 +170,20 @@ impl SessionState {
         crate::mods::DocMods::default()
     }
 
-    /// the completion query over the stored doc — both completion
-    /// entries' body (`complete_in` has already re-stored the text)
-    pub(crate) fn complete_stored(&self, uri: &str, line: u32, ch: u32) -> String {
+    /// the completion query's body over the stored doc — TYPED: the
+    /// state layer speaks values, and the calling arm owns the
+    /// envelope (one law with every other query: JSON writes happen
+    /// once, at the `Reply::Text` boundary)
+    pub(crate) fn complete_stored(
+        &self,
+        uri: &str,
+        line: u32,
+        ch: u32,
+    ) -> Vec<ls_types::CompletionItem> {
         let Some(src) = self.docs.get(uri).cloned() else {
-            return "[]".to_string();
+            return Vec::new();
         };
         let doc = self.doc_mods_of(uri);
-        let items =
-            crate::analysis::complete_at(uri, &src, &self.defs, line, ch, &doc, &self.direct_deps);
-        json_envelope(serde_json::json!(items))
+        crate::analysis::complete_at(uri, &src, &self.defs, line, ch, &doc, &self.direct_deps)
     }
 }
