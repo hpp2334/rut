@@ -47,7 +47,7 @@ use crate::comments::CommentRun;
 use crate::style::Style;
 
 // operator levels — the parser's reduce levels, mined from
-// rut-parser/src/expr.rs:247-316 (the fmt survey §2 table)
+// rut-ast/src/parser/expr.rs:247-316 (the fmt survey §2 table)
 const L_OR: u8 = 3;
 const L_AND: u8 = 4;
 const L_EQ: u8 = 5;
@@ -121,7 +121,7 @@ fn assign_str(op: Option<BinOp>) -> &'static str {
         BinOp::Shr => ">>=",
         // unreachable family: Eq/Ne/Lt/Gt/Le/Ge/And/Or never compound
         // — shift_assign only arms the arithmetic + bitwise table
-        // (rut-parser/src/expr.rs:266-276)
+        // (rut-ast/src/parser/expr.rs:266-276)
         _ => "=",
     }
 }

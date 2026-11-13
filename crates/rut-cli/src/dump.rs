@@ -35,10 +35,10 @@ fn load(path: &str) -> String {
 
 /// `.d.rut` parses in declaration mode — a surface, not a
 /// runnable module.
-fn mode_of(path: &str) -> rut_parser::Mode {
+fn mode_of(path: &str) -> rut_ast::parser::Mode {
     if path.ends_with(".d.rut") {
-        rut_parser::Mode::Decl
+        rut_ast::parser::Mode::Decl
     } else {
-        rut_parser::Mode::Impl
+        rut_ast::parser::Mode::Impl
     }
 }

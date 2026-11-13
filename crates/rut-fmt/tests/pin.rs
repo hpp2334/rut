@@ -2,8 +2,8 @@
 //! deliberately does NOT pin: comment reattachment shapes, literal
 //! requoting, re-paren decisions, `[style]` parsing.
 
+use rut_ast::parser::Mode;
 use rut_fmt::{format, Style};
-use rut_parser::Mode;
 
 fn fmt(src: &str) -> String {
     format(src, Mode::Impl, &Style::default()).unwrap_or_else(|ds| panic!("refused: {}", ds[0].msg))

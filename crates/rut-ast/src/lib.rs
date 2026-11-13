@@ -1,64 +1,28 @@
-//! rut-ast v2 — the typed-arena AST.
+//! rut-ast — the tree and its grammar, one crate.
 //!
-//! THE CONTRACT (see AGENTS.md):
-//! - every node kind is its own struct; span + name_span + doc live
-//!   IN the node (D1); per-kind private arenas (D2)
-//! - `Ast` is a CAPSULE: plain mut doors for the parse lane
-//!   (`new`/`intern`/`set_root`/`alloc`/`set_errors`), reads
-//!   (`root`/`name`/`errors`/`is_clean`) — behavior binds to
-//!   nodes/handles with the store as ctx (D4/D5)
-//! - `Ast` holds NO src — `Parsed { ast, src }` is the pair artifact;
-//!   text queries are span×src joins (`Span::text(src)`) (law v3)
-//! - every child list is SLOTS (`Vec<XxxRef>`), every slot enum carries
-//!   `Error(Handle<ErrorNode>)` — the recovery ladder (D10)
-//! - docs ride decl nodes as `DocData` (spans, never text), populated
-//!   at allocation when `include_comments` is set (D7)
+//! Two modules, one law each:
+//! - [`ast`] — PURE STRUCTURE: the typed-arena AST. `Ast` is a
+//!   CAPSULE whose mut doors are `pub(crate)` — only the in-crate
+//!   parse lane may build a tree; every other consumer reads.
+//!   The artifact is the PAIR `Parsed { ast, src }` (law v3): the
+//!   tree holds no text, `src` is the normalized text every span
+//!   indexes, and `Span::text(&src)` is the join.
+//! - [`parser`] — the grammar: the explicit-frame machine that
+//!   turns text into that pair (`parse` fail-fast /
+//!   `parse_with_recover` always a tree).
 //!
-//! This lib re-exports the whole vocabulary FLAT — consumers never
-//! spell a module path; file layout stays free to move.
+//! The tree vocabulary is re-exported FLAT at the crate root —
+//! consumers never spell a module path; file layout stays free to
+//! move. The grammar's entries live under `parser::` on purpose:
+//! the parse lane is reachable by name, so hosts that only read
+//! trees (the LSP wasm rides `rut-semantic`) can be checked to
+//! never drive it directly.
 
-mod ast;
-mod doc;
-mod dump;
-mod error;
-mod expr;
-mod handle;
-mod item;
-mod pat;
-mod stmt;
-mod ty;
+pub mod ast;
+pub mod parser;
 
-pub use ast::Ast;
-pub use doc::{CommentData, DocData};
-pub use error::ErrorNode;
-pub use handle::{Arena, Handle, NodeStore};
-pub use rut_core::IdentId;
-pub use rut_lexer::span::Span;
+pub use ast::*;
 
-// items
-pub use item::{
-    AliasNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, EnumMemberNode,
-    EnumNode, FieldDeclNode, FieldRef, FnNode, ImplNode, InterfaceNode, ItemRef, Linkage,
-    MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModKind, ModifierNode,
-    ModuleLetNode, ModuleNode, ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode,
-    SurfaceStructNode, UseNode, Vis,
-};
-// statements
-pub use stmt::{
-    BreakNode, ContinueNode, ElseBranch, ForCNode, ForOfNode, IfNode, LetStmtNode, ReturnNode,
-    StmtRef, WhenStmtNode, WhileNode,
-};
-// expressions
-pub use expr::{
-    ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
-    BlockNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode,
-    IsNode, LambdaNode, Lit, LitNode, MethodNode, PathNode, PathSeg, StructLitNode, TryNode,
-    TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
-};
-// types + patterns
-pub use pat::{PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};
-pub use ty::{
-    TyArrayNode, TyConstNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode, TyUnionNode,
-};
-
-pub use dump::{render_json, render_text, to_dump_tree, DumpNode};
+// the parse lane's construction macros, crate-root reachable for the
+// `use crate::slot_alloc;` house style — never public
+pub(crate) use ast::{plain_alloc, slot_alloc, slot_span};

@@ -12,7 +12,7 @@
 //! INSTANCE-method frames computing like free fns, and deterministic
 //! generic-instance emission (two compiles, byte-identical binaries).
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 /// A compile-and-run harness: core + the std surfaces mounted, the test
 /// source compiled as the root module, encoded + decoded —

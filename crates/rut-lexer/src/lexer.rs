@@ -46,7 +46,7 @@ pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comm
 }
 
 /// Lex ALREADY-normalized text — the path that normalizes once and
-/// shares: the parser's entry pair (`rut_parser::parse` /
+/// shares: the parser's entry pair (`rut_ast::parser::parse` /
 /// `parse_with_recover`) and every consumer re-deriving the leaf
 /// layer over a `Parsed` artifact ride `p.src` (the normalized text
 /// every span indexes). `lex`/`lex_collect`/`lex_mode` normalize

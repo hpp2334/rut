@@ -8,7 +8,7 @@
 //! original's storage is rewritten engine-side — lives beside the
 //! native in rut-vm's `interp::tests`.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(

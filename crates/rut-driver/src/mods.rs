@@ -34,8 +34,8 @@
 
 use std::collections::BTreeMap;
 
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_ast::{Ast, ItemRef, Linkage, Vis};
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::session::{Mounted, MountedBody};
 

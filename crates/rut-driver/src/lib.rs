@@ -44,13 +44,13 @@ pub use run::{
     declared_host_fns, host_pkg_ctx, Bundle, Compiled, Loaded, Mounted, MountedBody, Offer, Pkg,
     PkgBody, RunError, RutRun, Walk,
 };
-/// The file-module compile inputs (phase 3) — re-exported for the
-/// tests and embedders that spell a unit's module layout directly.
-pub use rut_lir::check::{ModInputs, ModScope};
 /// The parse mode the mount flavors speak (`Mode::Impl` for a lib
 /// body tree, `Mode::Decl` for a host surface tree) — re-exported so
 /// the FS/archive lanes can name the mount core's parameter.
-pub use rut_parser::Mode;
+pub use rut_ast::parser::Mode;
+/// The file-module compile inputs (phase 3) — re-exported for the
+/// tests and embedders that spell a unit's module layout directly.
+pub use rut_lir::check::{ModInputs, ModScope};
 pub use session::HostRow;
 /// The global dep store's derivation core — addresses, file names,
 /// the meta shape (`$RUT_HOME` resolution included): one helper set,

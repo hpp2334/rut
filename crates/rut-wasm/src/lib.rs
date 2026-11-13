@@ -399,10 +399,10 @@ fn compile_playground(
     // the string lane's own render: the tree UI's structured AST rides
     // every envelope, diags or not — the recovering ENTRY is the
     // recover choice; always a tree
-    let p = rut_parser::parse_with_recover(
+    let p = rut_ast::parser::parse_with_recover(
         src,
-        rut_parser::Mode::Impl,
-        rut_parser::ParseOpts::default(),
+        rut_ast::parser::Mode::Impl,
+        rut_ast::parser::ParseOpts::default(),
     );
     let parse_diags = p.ast().errors().to_vec();
     let tree = rut_ast::to_dump_tree(p.ast());

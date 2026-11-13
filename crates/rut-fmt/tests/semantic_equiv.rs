@@ -83,13 +83,17 @@ fn run(src: &str) -> Result<Vec<String>, String> {
 fn probe(name: &str, src: &str) {
     let want = run(src).unwrap_or_else(|e| panic!("{name}: original does not run: {e}"));
     assert!(!want.is_empty(), "{name}: the probe logged nothing");
-    let fmted = rut_fmt::format(src, rut_parser::Mode::Impl, &rut_fmt::Style::default())
+    let fmted = rut_fmt::format(src, rut_ast::parser::Mode::Impl, &rut_fmt::Style::default())
         .unwrap_or_else(|ds| panic!("{name}: fmt refused: {}", ds[0].msg));
     let got = run(&fmted).unwrap_or_else(|e| panic!("{name}: FORMATTED text does not run: {e}"));
     assert_eq!(want, got, "{name}: the VM output changed under formatting");
     // idempotence rides along (cheap here, asserted corpus-wide elsewhere)
-    let again = rut_fmt::format(&fmted, rut_parser::Mode::Impl, &rut_fmt::Style::default())
-        .unwrap_or_else(|ds| panic!("{name}: fmt(fmt) refused: {}", ds[0].msg));
+    let again = rut_fmt::format(
+        &fmted,
+        rut_ast::parser::Mode::Impl,
+        &rut_fmt::Style::default(),
+    )
+    .unwrap_or_else(|ds| panic!("{name}: fmt(fmt) refused: {}", ds[0].msg));
     assert_eq!(fmted, again, "{name}: fmt(fmt(x)) != fmt(x)");
 }
 
@@ -240,7 +244,7 @@ entry fn main() {
 "#;
     let want = run(src).unwrap_or_else(|e| panic!("shorthand: original does not run: {e}"));
     assert_eq!(want, vec!["7 Eat an apple false"]);
-    let fmted = rut_fmt::format(src, rut_parser::Mode::Impl, &rut_fmt::Style::default())
+    let fmted = rut_fmt::format(src, rut_ast::parser::Mode::Impl, &rut_fmt::Style::default())
         .unwrap_or_else(|ds| panic!("shorthand: fmt refused: {}", ds[0].msg));
     assert!(
         fmted.contains("id: id"),
@@ -251,8 +255,12 @@ entry fn main() {
         want, got,
         "shorthand: the VM output changed under formatting"
     );
-    let again = rut_fmt::format(&fmted, rut_parser::Mode::Impl, &rut_fmt::Style::default())
-        .unwrap_or_else(|ds| panic!("shorthand: fmt(fmt) refused: {}", ds[0].msg));
+    let again = rut_fmt::format(
+        &fmted,
+        rut_ast::parser::Mode::Impl,
+        &rut_fmt::Style::default(),
+    )
+    .unwrap_or_else(|ds| panic!("shorthand: fmt(fmt) refused: {}", ds[0].msg));
     assert_eq!(fmted, again, "shorthand: fmt(fmt(x)) != fmt(x)");
 }
 

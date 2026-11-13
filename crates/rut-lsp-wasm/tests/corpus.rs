@@ -2,20 +2,20 @@
 //! playground classics (`demo/src/examples/`) classify cleanly:
 //! sorted, non-overlapping, in-file tokens; every reserved word keyword;
 //! every Impl file yields symbols; `.d.rut` parses in `Mode::Decl`.
-//! Mirrors rut-parser's corpus test from the LSP side.
+//! Mirrors the parser corpus test (rut-ast) from the LSP side.
 
+use rut_ast::parser::{is_reserved_kw, Mode};
 use rut_lsp_wasm::semantic::{classify, symbols, TokenType};
 use rut_lsp_wasm::LineIndex;
-use rut_parser::{is_reserved_kw, Mode};
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
 /// reads doc chains off the decl nodes) and the recovering entry (the
 /// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
-    rut_parser::parse_with_recover(
+fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
+    rut_ast::parser::parse_with_recover(
         src,
         mode,
-        rut_parser::ParseOpts {
+        rut_ast::parser::ParseOpts {
             include_comments: true,
         },
     )
@@ -124,7 +124,7 @@ fn corpus_parses_clean_lsp() {
     // the honest gate `corpus_classifies` lacks: it discards parse
     // diagnostics (`analyzed` drops them), so classification invariants
     // could pass over a corpus full of red squiggles. Mirrors
-    // rut-parser's `corpus_parses_clean` (lsp-align survey
+    // the parser's `corpus_parses_clean` (lsp-align survey
     // §6): every corpus file parses with ZERO diagnostics through the
     // same lex → parse(mode) pipeline the LSP serves.
     let files = corpus();

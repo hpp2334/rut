@@ -7,8 +7,8 @@
 //! The builtin TRAITS are the other half of the split: every one is
 //! `pub builtin` (import-gated) — see `the_gated_traits_require_the_import`.
 
+use rut_ast::parser::Mode;
 use rut_core::binary::Surface;
-use rut_parser::Mode;
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

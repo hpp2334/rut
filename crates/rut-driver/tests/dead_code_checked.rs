@@ -5,7 +5,7 @@
 //! call-site shapes (no substitution / weave without a call), so a
 //! dead one of those still compiles unchecked, by design.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 fn compile(src: &str) -> rut_driver::ProgramOutput {
     // core + pouch bound as the uses; these tests exercise root

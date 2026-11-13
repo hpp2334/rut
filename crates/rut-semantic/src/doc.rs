@@ -1,6 +1,6 @@
 //! `ParsedDoc` — the document layer's ONE artifact: the editor's whole
 //! per-document derivation, computed once. The recovering entry
-//! (`rut_parser::parse_with_recover`, mode supplied by the caller — the
+//! (`rut_ast::parser::parse_with_recover`, mode supplied by the caller — the
 //! editor never fails fast) parses with `include_comments` so doc
 //! chains graft onto the decl nodes at allocation (D7); the leaf layer
 //! (tokens) is re-derived in the same linear pass (`lex_normalized`);
@@ -15,12 +15,12 @@
 //! everything else full `Mode::Impl`), and every uri-holding call site
 //! derives through it. `src` is the pair artifact's other half
 //! (v2: the tree carries no text) — every span indexes it.
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_ast::Ast;
 use rut_lexer::diag::Diag;
 use rut_lexer::lexer::lex_normalized;
 use rut_lexer::span::Span;
 use rut_lexer::token::Token;
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::line_index::LineIndex;
 use crate::{classify, symbols, Symbol, TokenType};

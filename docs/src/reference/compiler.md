@@ -7,7 +7,7 @@ deterministic reference, the archive, instantiate + link — is
 [The compilation model](compilation-model.md).
 
 ```
-source ─► lex/parse (rut-lexer, rut-parser)      [The frontend](frontend.md)
+source ─► lex/parse (rut-lexer, rut-ast/parser)      [The frontend](frontend.md)
       ─► resolve + typecheck (rut-lir/check)
       ─► monomorphize + compile bodies (rut-lir/lir)
       ─► optimize (fold, inline, CSE/LICM, peephole, SROA)
@@ -24,7 +24,7 @@ publishes a signature surface, never code.
 
 | stage | crate | in → out | notes |
 |---|---|---|---|
-| lex + parse | `rut-lexer`, `rut-parser` | source → AST + diags | flat arena, no recursion |
+| lex + parse | `rut-lexer`, `rut-ast` | source → AST + diags | flat arena, no recursion |
 | collect | `rut-lir/check/collect` | AST → types, interfaces | per-module symbol tables |
 | resolve | `rut-lir/check/resolve` | paths → symbols | imports, `Self`, visibility, use-path routing |
 | typecheck | `rut-lir/check` (`Ctx`) | expressions → `TyId`s | bidirectional inference, fused with body compilation |

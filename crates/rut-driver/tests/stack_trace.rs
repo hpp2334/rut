@@ -22,7 +22,7 @@
 //! 24-statement budget where REAL frames are wanted (`pad`), so the pins
 //! are against genuinely separate FuncCodes.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(

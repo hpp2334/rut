@@ -75,7 +75,7 @@ impl TokenType {
 }
 
 /// The highlighting keyword set: the grammar's reserved words
-/// (`rut_parser::is_reserved_kw`) plus the contextual/statement words the
+/// (`rut_ast::parser::is_reserved_kw`) plus the contextual/statement words the
 /// parser matches by text (`break`, `continue`, `as`, `super`, `default`)
 /// and the receiver `self`. `entry` joins by TEXT for highlighting only:
 /// contextual before `fn` in the grammar, never an identifier in
@@ -89,12 +89,12 @@ pub fn is_keyword(s: &str) -> bool {
     matches!(
         s,
         "self" | "break" | "continue" | "as" | "super" | "default" | "entry"
-    ) || rut_parser::is_reserved_kw(s)
+    ) || rut_ast::parser::is_reserved_kw(s)
 }
 
 pub fn is_primitive_ty(s: &str) -> bool {
     // canonical table lives with the grammar (shared with `host primitive`)
-    rut_parser::is_primitive_ty(s)
+    rut_ast::parser::is_primitive_ty(s)
 }
 
 /// A word the token layer already owns by text (keywords, `Self`) — never

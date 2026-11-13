@@ -8,8 +8,8 @@
 //! write-through semantics, and threaded-vs-parked parity holds on a
 //! hot index loop.
 
+use rut_ast::parser::Mode;
 use rut_core::binary::Surface;
-use rut_parser::Mode;
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

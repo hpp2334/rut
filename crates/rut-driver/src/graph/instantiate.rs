@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_core::binary::Program;
 use rut_core::ops::Op;
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use super::build_seed_groups;
 use super::compiler::{attribute_diags, GraphCompiler};

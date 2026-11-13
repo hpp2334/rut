@@ -5,7 +5,7 @@
 //! interface objects satisfy nothing), and cross-module `pub type`
 //! export.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 use rut_core::types::TY_I64;
 

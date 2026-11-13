@@ -14,7 +14,7 @@
  * highlight.js language definition for rut — pure data, zero dependencies.
  *
  * Derived from the compiler's own tables (the code is the truth):
- *   - keywords:  `crates/rut-parser/src/lib.rs` `RESERVED_KW`, plus the
+ *   - keywords:  `crates/rut-ast/src/parser/mod.rs` `RESERVED_KW`, plus the
  *     contextual words the parser matches by interner text: `entry`,
  *     `host`-lane siblings `builtin`/`primitive` (item.rs), `break`/
  *     `continue` (stmt.rs), `self`/`Self` (expr.rs, item.rs), `super`

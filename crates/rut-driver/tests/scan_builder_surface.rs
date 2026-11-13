@@ -6,8 +6,8 @@
 //! table rule. (The builder half of the old phase's surface left core
 //! with the host strbuild pkg — `strbuild_pkg.rs` pins it now.)
 
+use rut_ast::parser::Mode;
 use rut_core::binary::Surface;
-use rut_parser::Mode;
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

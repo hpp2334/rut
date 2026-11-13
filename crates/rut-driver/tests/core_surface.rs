@@ -8,8 +8,8 @@
 //! says the surface is kept TRUE to the implementation; this test makes
 //! it enforced, not aspirational.
 
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_ast::{ItemRef, Linkage, MethodRef};
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 const CORE_DECL: &str = include_str!("../../../rut/core/src/core.d.rut");
 
@@ -103,7 +103,7 @@ fn declared_names() -> DeclSurfaces {
                 let n = ast.name(d.name).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
-                if !rut_parser::is_primitive_ty(&n) {
+                if !rut_ast::parser::is_primitive_ty(&n) {
                     builtin_types.push((n, d.ambient));
                 }
             }
@@ -112,7 +112,7 @@ fn declared_names() -> DeclSurfaces {
                 let n = ast.name(d.name).to_string();
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
-                if rut_parser::is_primitive_ty(&n) {
+                if rut_ast::parser::is_primitive_ty(&n) {
                     continue;
                 }
                 builtin_types.push((n, d.ambient));

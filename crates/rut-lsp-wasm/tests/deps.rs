@@ -1,8 +1,8 @@
+use rut_ast::parser::Mode;
 use rut_ast::Vis;
 use rut_driver::bundle::files::MANIFEST_NAME;
 use rut_lsp_wasm::deps::*;
 use rut_lsp_wasm::hover::TyForm;
-use rut_parser::Mode;
 
 const CALC_HOST_MANIFEST: &str = include_str!("../../../rut/calc_host/rut.jsonc");
 const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");

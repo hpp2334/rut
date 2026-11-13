@@ -7,7 +7,7 @@
 //! recycled arena slot.
 
 /// Compile, flatten, verify, and run a single-module `main` returning i32.
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 fn run_main(src: &str) -> i32 {
     let out = rut_driver::compile_program(

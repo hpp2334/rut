@@ -20,7 +20,7 @@
 //! - cross-module: the marker byte crosses the surface row, a used
 //!   class's `Point(..)` mints at a distance.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
 /// One source pkg over the auto core — the chain's graph. Closure and
@@ -421,10 +421,10 @@ fn unknown_words_name_the_three_designated_surfaces() {
 fn markers_outside_inherent_bodies_stay_parse_rejects() {
     // Law 4's pin: parse_member_marker only runs in the inherent arm —
     // an interface member's marker dies at the parser
-    let p = rut_parser::parse_with_recover(
+    let p = rut_ast::parser::parse_with_recover(
         "interface I { [constructor] fn make() -> i32; }",
         Mode::Impl,
-        rut_parser::ParseOpts::default(),
+        rut_ast::parser::ParseOpts::default(),
     );
     let diags = p.ast().errors().to_vec();
     assert!(
@@ -435,10 +435,10 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
     );
     // a free fn's marker never parses either (the top level takes no
     // bracket groups)
-    let p = rut_parser::parse_with_recover(
+    let p = rut_ast::parser::parse_with_recover(
         "[constructor] fn make() -> i32 { return 0; }",
         Mode::Impl,
-        rut_parser::ParseOpts::default(),
+        rut_ast::parser::ParseOpts::default(),
     );
     assert!(
         !p.ast().is_clean(),
@@ -447,12 +447,12 @@ fn markers_outside_inherent_bodies_stay_parse_rejects() {
     );
     // the trait-impl spelling is gone entirely — the marker never
     // reaches a `for` body
-    let p = rut_parser::parse_with_recover(
+    let p = rut_ast::parser::parse_with_recover(
         "class C { }\
          interface I { fn m(self); }\
          impl I for C { [constructor] fn m(self) { } }",
         Mode::Impl,
-        rut_parser::ParseOpts::default(),
+        rut_ast::parser::ParseOpts::default(),
     );
     assert!(
         p.ast()

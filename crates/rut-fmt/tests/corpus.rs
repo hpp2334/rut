@@ -6,7 +6,7 @@
 //! byte-frozen: the files keep their hand-written layout; only the
 //! three laws above are asserted.
 
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 
 fn corpus() -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();

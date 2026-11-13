@@ -18,10 +18,10 @@
 //! same rows its file-tree form did. A mismatch refuses the pack —
 //! never a doctored entry.
 
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_ast::{Ast, FieldRef, ItemRef, MethodRef, ParamRef, TyRef};
 use rut_core::binary::Program;
 use rut_core::types::{TyKind, TypeId};
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::session::HostRow;
 

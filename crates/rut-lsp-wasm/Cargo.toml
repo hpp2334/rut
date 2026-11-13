@@ -26,10 +26,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # THE LAYER LAW — this crate's ONLY frontend is rut-semantic (the
 # document layer: ParsedDoc, classify, symbols, mode derivation, the
-# position math). NO rut-lexer / rut-parser: nobody here drives
-# normalize → lex → parse by hand. rut-ast stays as shared tree
-# VOCABULARY (hover walks trees); rut-driver carries the manifest/
-# bundle bytes; rut-core the checker's run chain.
+# position math). NO rut-lexer, and src/ never touches
+# rut_ast::parser:: — nobody here drives normalize → lex → parse by
+# hand (the grammar/corpus TESTS may, via dev-dependencies: the
+# sanctioned seam). rut-ast stays as shared tree VOCABULARY (hover
+# walks trees); rut-driver carries the manifest/bundle bytes;
+# rut-core the checker's run chain.
 rut-semantic = { path = "../rut-semantic" }
 rut-ast = { path = "../rut-ast" }
 rut-core = { path = "../rut-core" }
@@ -74,7 +76,6 @@ futures = { version = "0.3", features = ["executor"] }
 # the TEST seam: the grammar/corpus tests drive the parser directly —
 # production code never may (the [dependencies] block above is the law;
 # this block is the sanctioned exception, like the futures LocalPool)
-rut-parser = { path = "../rut-parser" }
 rut-lexer = { path = "../rut-lexer" }
 # the mod-carrying bundle fixture is packed through the same writer the
 # CLI uses (wasm32-clean — it rides the main graph already)

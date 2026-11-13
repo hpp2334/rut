@@ -1,20 +1,20 @@
 use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip};
+use rut_ast::parser::Mode;
 use rut_ast::*;
 use rut_lexer::lexer::{lex, normalize};
 use rut_lexer::token::Token;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::inlay::*;
 use rut_lsp_wasm::LineIndex;
-use rut_parser::Mode;
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
 /// reads doc chains off the decl nodes) and the recovering entry (the
 /// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
-    rut_parser::parse_with_recover(
+fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
+    rut_ast::parser::parse_with_recover(
         src,
         mode,
-        rut_parser::ParseOpts {
+        rut_ast::parser::ParseOpts {
             include_comments: true,
         },
     )

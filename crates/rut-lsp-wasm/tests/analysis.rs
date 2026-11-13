@@ -8,10 +8,10 @@ use rut_lsp_wasm::analysis::*;
 /// grammar behavior through the unstamped facade entry, the uri
 /// spelling the mode (the filename convention)
 const IMPL_URI: &str = "file:///t/x.rut";
+use rut_ast::parser::Mode;
 use rut_lsp_wasm::check;
 use rut_lsp_wasm::check::{FileSrc, PkgFiles};
 use rut_lsp_wasm::LineIndex;
-use rut_parser::Mode;
 use std::collections::BTreeMap;
 
 #[test]

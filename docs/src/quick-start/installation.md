@@ -39,7 +39,7 @@ Name the engine crates as git dependencies:
 [dependencies]
 rut-driver = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-core   = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
-rut-parser = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
+rut-ast    = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-vm     = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 ```
 
@@ -78,7 +78,7 @@ One rut module — compiled, verified, booted, called from Rust — the
 ```rust
 use std::rc::Rc;
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
 
 const SRC: &str = "entry fn answer() -> i32 { return 6 * 7; }";

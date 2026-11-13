@@ -19,8 +19,8 @@
 //!   through the raw compile_program path (the no-map inertness, in its
 //!   modern form).
 
+use rut_ast::parser::Mode;
 use rut_driver::GraphOutput;
-use rut_parser::Mode;
 
 /// An interface pkg — LINKED into its users (its names bind as used
 /// decls carrying the exporter's spec).

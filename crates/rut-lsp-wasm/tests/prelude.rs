@@ -34,11 +34,11 @@ fn myhost_chain() -> Vec<DefIndex> {
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
 /// reads doc chains off the decl nodes)
-fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
-    rut_parser::parse_with_recover(
+fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
+    rut_ast::parser::parse_with_recover(
         src,
         mode,
-        rut_parser::ParseOpts {
+        rut_ast::parser::ParseOpts {
             include_comments: true,
         },
     )
@@ -57,7 +57,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     assert_eq!(idx.origin, "core");
     assert_eq!(idx.src_path.as_deref(), Some("rut/core/src/core.d.rut"));
     assert_eq!(idx.module.as_deref(), Some("core"));
-    assert_eq!(idx.mode, Some(rut_parser::Mode::Decl));
+    assert_eq!(idx.mode, Some(rut_ast::parser::Mode::Decl));
     assert!(
         !idx.fns.is_empty() && !idx.types.is_empty(),
         "the prelude carries rows"
@@ -76,7 +76,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     let doc = "entry fn main() -> nil { }\n";
     let d2 = rut_lexer::lexer::normalize(doc);
     let (toks, _) = rut_lexer::lexer::lex(&d2);
-    let ast = doc_ast(&d2, rut_parser::Mode::Impl);
+    let ast = doc_ast(&d2, rut_ast::parser::Mode::Impl);
     let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
     let core = index_dep(
         "core",
@@ -156,7 +156,7 @@ fn the_host_tree_mounts_root_and_children_through_the_dep_lane() {
     // every row of the pkg carries the manifest-shape stamps
     for i in &idxs {
         assert_eq!(i.module.as_deref(), Some("myhost"));
-        assert_eq!(i.mode, Some(rut_parser::Mode::Decl));
+        assert_eq!(i.mode, Some(rut_ast::parser::Mode::Decl));
     }
 }
 
@@ -168,7 +168,7 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let src = "use myhost::net::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n";
     let normalized = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&normalized);
-    let ast = doc_ast(&normalized, rut_parser::Mode::Impl);
+    let ast = doc_ast(&normalized, rut_ast::parser::Mode::Impl);
     let mut doc_idx = rut_lsp_wasm::hover::index(&normalized, &ast, &toks);
     let doc_uri = "file:///t/main.rut";
     doc_idx.origin = doc_uri.to_string();
@@ -207,7 +207,7 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     let src = "use myhost::net::{ connect };\n";
     let normalized = rut_lexer::lexer::normalize(src);
     let (toks, _) = rut_lexer::lexer::lex(&normalized);
-    let ast = doc_ast(&normalized, rut_parser::Mode::Impl);
+    let ast = doc_ast(&normalized, rut_ast::parser::Mode::Impl);
     let mut doc_idx = rut_lsp_wasm::hover::index(&normalized, &ast, &toks);
     let doc_uri = "file:///t/main.rut";
     doc_idx.origin = doc_uri.to_string();
@@ -244,7 +244,7 @@ fn a_std_source_mounts_as_an_ordinary_dep() {
         include_str!("../../../rut/pouch/src/mod.rut"),
     );
     assert_eq!(idx.module.as_deref(), Some("pouch"));
-    assert_eq!(idx.mode, Some(rut_parser::Mode::Impl));
+    assert_eq!(idx.mode, Some(rut_ast::parser::Mode::Impl));
     assert_eq!(idx.origin, "rut/pouch/src/mod.rut");
     assert!(idx.ty("Vec").is_some(), "Vec indexes through the dep lane");
     // directness is NOT an index fact — nothing to assert here: the

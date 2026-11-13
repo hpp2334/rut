@@ -6,7 +6,7 @@
 //! all-or-nothing), and the third-party adapter crosses modules on the
 //! surface row's flag.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 use rut_vm::interp::{HostRegistry, Limits, Vm};
 
 /// One source pkg over the auto core — the chain's graph. Closure and

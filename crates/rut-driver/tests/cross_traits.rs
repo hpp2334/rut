@@ -8,8 +8,8 @@
 //! member), and the use statement governs which names the call site
 //! sees.
 
+use rut_ast::parser::Mode;
 use rut_driver::GraphOutput;
-use rut_parser::Mode;
 
 /// The shapes library: the interface AND both satisfying types live
 /// here (each type's inherent impl carries `area`).

@@ -1,8 +1,8 @@
 //! Classifier + symbol tests.
 
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_lexer::span::Span;
 use rut_lexer::token::Token;
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use super::recover::push_name;
 use super::*;

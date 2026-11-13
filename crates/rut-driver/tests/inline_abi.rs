@@ -7,8 +7,8 @@
 //! primitive carries no members — capability rides wrapper classes),
 //! and method-inlining retired with it: methods stay real `CallM`s.
 
+use rut_ast::parser::Mode;
 use rut_core::ops::Op;
-use rut_parser::Mode;
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

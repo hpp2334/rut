@@ -24,7 +24,7 @@ crates.io. Name the repository once per crate, every crate on the
 rut-driver = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-native = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-core   = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
-rut-parser = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
+rut-ast    = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 rut-vm     = { git = "https://github.com/hpp2334/rut.git", rev = "<commit-hash>" }
 ```
 

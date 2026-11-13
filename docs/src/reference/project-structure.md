@@ -219,8 +219,9 @@ bundle, and a FLAT host pkg packs byte-identically (no rows entry) —
 rut/
 ├── crates/
 │   ├── rut-lexer/        # spans, tokens, the lexer, diagnostics
-│   ├── rut-ast/          # the flat arena AST + dumper
-│   ├── rut-parser/       # the frame machine, Mode::Impl | Mode::Decl
+│   ├── rut-ast/          # the flat arena AST + dumper, and the
+│   │                     #   frame machine (src/parser: Mode::Impl
+│   │                     #   | Mode::Decl)
 │   ├── rut-semantic/     # the semantic classifier (spans + token classes)
 │   ├── rut-lir/          # the fused middle end: check/ (resolve,
 │   │                     #   typecheck, monomorphize) + lir/ (bodies,
@@ -244,7 +245,7 @@ rut/
 └── integrations/         # editor configs; the vscode extension
 ```
 
-Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver →
+Dependency line: `rut-lexer ← rut-ast (tree + grammar) ← rut-driver →
 rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the
 driver sits on the vm's `HostPkgContext`/`HostRegistry` for the
 install law), `rut-native` beside the driver (it depends on the

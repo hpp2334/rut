@@ -20,8 +20,8 @@ type TraitMapRow<'a> = (
     String,
     String,
 );
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_lir::check::{Ctx, FnKey, Inst, AMBIENT_SITE};
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use super::dump::ir_dump_of;
 use super::seeds::Seeds;
@@ -215,7 +215,7 @@ pub fn compile_program_resolved(
 /// and decline the AST dump renders (embedded lanes never read them).
 #[allow(clippy::too_many_arguments)]
 pub fn compile_program_pre(
-    parsed: rut_parser::Parsed,
+    parsed: rut_ast::parser::Parsed,
     module_name: &str,
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],
@@ -270,7 +270,7 @@ fn resolve_local_fn<'a>(
 
 #[allow(clippy::too_many_arguments)]
 fn compile_program_inner(
-    pre: rut_parser::Parsed,
+    pre: rut_ast::parser::Parsed,
     module_name: &str,
     scope: rut_core::ScopeId,
     uses: &[(rut_core::ScopeId, rut_core::binary::Surface, String, String)],

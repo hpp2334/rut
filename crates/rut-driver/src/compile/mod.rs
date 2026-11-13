@@ -15,10 +15,10 @@ pub use dump::ir_dump_of;
 pub use program::{compile_program, compile_program_pre, compile_program_resolved, ProgramOutput};
 pub use seeds::{SeedGroup, Seeds};
 
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_ast::{render_json as ast_render_json, render_text as ast_render_text, to_dump_tree};
 use rut_lexer::diag::Diag;
 use rut_lexer::span::Span;
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::run::{Compiled, RunError, RutRun};
 pub use crate::session::Mounted;

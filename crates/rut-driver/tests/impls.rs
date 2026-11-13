@@ -7,7 +7,7 @@
 //! manufactured by a spelled wrapper (a newtype class) whose inherent
 //! impl carries the members.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

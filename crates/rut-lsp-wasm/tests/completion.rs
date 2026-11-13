@@ -1,17 +1,17 @@
+use rut_ast::parser::Mode;
 use rut_lsp_wasm::completion::*;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::mods::DocMods;
-use rut_parser::Mode;
 use std::collections::HashSet;
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
 /// reads doc chains off the decl nodes) and the recovering entry (the
 /// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_parser::Mode) -> rut_ast::Ast {
-    rut_parser::parse_with_recover(
+fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
+    rut_ast::parser::parse_with_recover(
         src,
         mode,
-        rut_parser::ParseOpts {
+        rut_ast::parser::ParseOpts {
             include_comments: true,
         },
     )
@@ -1225,10 +1225,10 @@ fn the_type_tier_enumerates_exactly_the_primitive_table() {
     let items = complete_after(src, "let c:");
     let mut got: Vec<&str> = labels(&items)
         .into_iter()
-        .filter(|l| rut_parser::is_primitive_ty(l))
+        .filter(|l| rut_ast::parser::is_primitive_ty(l))
         .collect();
     got.sort_unstable();
-    let mut want = rut_parser::PRIMITIVE_TYS.to_vec();
+    let mut want = rut_ast::parser::PRIMITIVE_TYS.to_vec();
     want.sort_unstable();
     assert_eq!(got, want, "the tier's primitives are exactly PRIMITIVE_TYS");
 }

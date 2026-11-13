@@ -3,7 +3,7 @@
 //! the `Array` name — the type is `[T]`, and a retired name is an
 //! ordinary unknown name now.
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 /// One source pkg over the auto core — the chain's graph. Closure and
 /// shape refusals come back as one span-0 diagnostic.

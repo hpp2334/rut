@@ -672,7 +672,7 @@ fn version_gate_rejects_stale_artifacts() {
     assert_eq!(VERSION, 22, "the templates section owns this VERSION bump");
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
-        rut_parser::Mode::Impl,
+        rut_ast::parser::Mode::Impl,
         "gate",
     );
     assert!(

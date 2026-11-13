@@ -125,10 +125,10 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
     let combined = with_logger_use(src);
     // the recovering ENTRY is the recover choice — always a tree; the
     // dumps ride the pair (text slices the NORMALIZED `p.src`)
-    let p = rut_parser::parse_with_recover(
+    let p = rut_ast::parser::parse_with_recover(
         &combined,
-        rut_parser::Mode::Impl,
-        rut_parser::ParseOpts::default(),
+        rut_ast::parser::Mode::Impl,
+        rut_ast::parser::ParseOpts::default(),
     );
     let diags = p.ast().errors().to_vec();
     let tree = rut_ast::to_dump_tree(p.ast());
@@ -1851,7 +1851,7 @@ entry fn main() -> nil {
     // level — anything else leaves `as` unmatched, so `1 as str` is a
     // syntax error
     let bad = "entry fn main() -> nil { let x = 1 as str; }";
-    let out = rut_driver::compile_module(bad, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(bad, rut_ast::parser::Mode::Impl, "main");
     assert!(out.diags.iter().any(|d| d.msg.contains("expected")));
 }
 
@@ -1862,7 +1862,7 @@ fn unsuffixed_int_literals_must_fit_i32() {
     // declare its width, even in a `u64` position, so a dropped or
     // doubled digit can't masquerade as a constant
     let ok = "entry fn main() -> nil { let x: u64 = 5; let y = 2147483647; }";
-    let out = rut_driver::compile_module(ok, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(ok, rut_ast::parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
         "diags: {:?}",
@@ -1870,21 +1870,21 @@ fn unsuffixed_int_literals_must_fit_i32() {
     );
 
     let in_u64_ctx = "entry fn main() -> nil { let x: u64 = 13503953896175478587; }";
-    let out = rut_driver::compile_module(in_u64_ctx, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(in_u64_ctx, rut_ast::parser::Mode::Impl, "main");
     assert!(out
         .diags
         .iter()
         .any(|d| d.msg.contains("exceeds the `i32` default") && d.msg.contains("u64")));
 
     let no_ctx = "entry fn main() -> nil { let x = 99999999999; }";
-    let out = rut_driver::compile_module(no_ctx, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(no_ctx, rut_ast::parser::Mode::Impl, "main");
     assert!(out
         .diags
         .iter()
         .any(|d| d.msg.contains("exceeds the `i32` default")));
 
     let fixed = "entry fn main() -> nil { let x: u64 = 13503953896175478587u64; }";
-    let out = rut_driver::compile_module(fixed, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(fixed, rut_ast::parser::Mode::Impl, "main");
     assert!(
         out.diags.is_empty(),
         "diags: {:?}",
@@ -1893,18 +1893,18 @@ fn unsuffixed_int_literals_must_fit_i32() {
 
     // floats: magnitude is the trigger, precision is not
     let float_ok = "entry fn main() -> nil { let x: f64 = 0.1; }";
-    let out = rut_driver::compile_module(float_ok, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(float_ok, rut_ast::parser::Mode::Impl, "main");
     assert!(out.diags.is_empty());
 
     let float_bad = "entry fn main() -> nil { let x: f64 = 1.0e300; }";
-    let out = rut_driver::compile_module(float_bad, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(float_bad, rut_ast::parser::Mode::Impl, "main");
     assert!(out
         .diags
         .iter()
         .any(|d| d.msg.contains("exceeds the `f32` default")));
 
     let float_fixed = "entry fn main() -> nil { let x: f64 = 1.0e300f64; }";
-    let out = rut_driver::compile_module(float_fixed, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(float_fixed, rut_ast::parser::Mode::Impl, "main");
     assert!(out.diags.is_empty());
 }
 
@@ -2068,7 +2068,7 @@ entry fn main() -> nil {
     let x = NAN;
 }
 "#;
-    let out = rut_driver::compile_module(without, rut_parser::Mode::Impl, "main");
+    let out = rut_driver::compile_module(without, rut_ast::parser::Mode::Impl, "main");
     assert!(
         out.diags.iter().any(|d| d.msg.contains("NAN")),
         "the bare name must be diagnosed: {:?}",
@@ -2815,7 +2815,7 @@ entry fn f(s: str) -> (bytes, str) {
 #[test]
 fn dbg_digest_diags() {
     let src = std::fs::read_to_string("../../examples/02-digest/src/mod.rut").unwrap();
-    let out = rut_driver::compile_module(&src, rut_parser::Mode::Impl, "digests");
+    let out = rut_driver::compile_module(&src, rut_ast::parser::Mode::Impl, "digests");
     for d in &out.diags {
         let line = src[..d.span.lo as usize]
             .bytes()
@@ -2990,7 +2990,7 @@ fn retired_unit_name_is_an_ordinary_unknown_type() {
     // migration table — stdlib.md — carries the `nil` mapping)
     let out = rut_driver::compile_module(
         "entry fn main() -> unit { }",
-        rut_parser::Mode::Impl,
+        rut_ast::parser::Mode::Impl,
         "main",
     );
     assert!(out

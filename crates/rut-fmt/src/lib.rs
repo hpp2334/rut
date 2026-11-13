@@ -27,8 +27,8 @@ pub mod style;
 pub use comments::CommentRun;
 pub use style::Style;
 
+use rut_ast::parser::Mode;
 use rut_lexer::diag::Diag;
-use rut_parser::Mode;
 
 /// Format one rut source.
 ///
@@ -43,7 +43,7 @@ use rut_parser::Mode;
 /// recovering parse collects every diag, not just the first). The
 /// caller renders them (`rut fmt` labels the group with the real path).
 pub fn format(src: &str, mode: Mode, style: &Style) -> Result<String, Vec<Diag>> {
-    let p = rut_parser::parse_with_recover(src, mode, rut_parser::ParseOpts::default());
+    let p = rut_ast::parser::parse_with_recover(src, mode, rut_ast::parser::ParseOpts::default());
     if !p.ast().is_clean() {
         return Err(p.ast().errors().to_vec());
     }

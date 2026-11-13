@@ -2,8 +2,8 @@
 //! prints back in its positional spelling — never as the desugared
 //! braced body — reparses clean, and is idempotent.
 
+use rut_ast::parser::Mode;
 use rut_fmt::format;
-use rut_parser::Mode;
 
 fn fmt(src: &str) -> String {
     format(src, Mode::Impl, &rut_fmt::Style::default()).expect("formats")

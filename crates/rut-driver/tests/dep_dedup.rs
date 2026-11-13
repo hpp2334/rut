@@ -17,8 +17,8 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
+use rut_ast::parser::Mode;
 use rut_driver::Seeds;
-use rut_parser::Mode;
 
 const SIBS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/sibs");
 

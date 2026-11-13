@@ -17,8 +17,8 @@ type GraphOut = (
 /// `validate_qualified_uses`'s ok-result: the validated own-uses
 /// triples plus any ifaces needing consumer-side respell rows.
 type IfaceRespell = (Vec<String>, Vec<(String, String, String)>);
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_lexer::span::Span;
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use rut_ast::{Ast, ItemRef, Vis};
 

@@ -60,9 +60,9 @@ pub(crate) fn fmt(args: &FmtArgs) {
             }
         };
         let mode = if f.to_string_lossy().ends_with(".d.rut") {
-            rut_parser::Mode::Decl
+            rut_ast::parser::Mode::Decl
         } else {
-            rut_parser::Mode::Impl
+            rut_ast::parser::Mode::Impl
         };
         match rut_fmt::format(&src, mode, &style) {
             Ok(out) => {

@@ -194,7 +194,7 @@ struct A { n: i32 = 0; }
 impl A { [disposal] fn release(mut self, cx: DisposalContext) { } }
 entry fn main() -> i32 { let a = A { n: 9 }; return 0; }
 "#;
-    let out = rut_driver::compile_module(src, rut_parser::Mode::Impl, "app_main");
+    let out = rut_driver::compile_module(src, rut_ast::parser::Mode::Impl, "app_main");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
     let bytes = out.binary.expect("encoded module");
     let prog = rut_core::binary::decode(&bytes).expect("decode");
@@ -236,7 +236,7 @@ impl A { [disposal] fn release(mut self, cx: DisposalContext) { } }
 entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
 "#;
     // no use at all: the cx-type miss names the fix
-    let out = rut_driver::compile_module(body, rut_parser::Mode::Impl, "app_main");
+    let out = rut_driver::compile_module(body, rut_ast::parser::Mode::Impl, "app_main");
     assert!(
         out.diags
             .iter()
@@ -250,7 +250,7 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
     // (the `for` branch is deleted from the impl grammar — disposal is
     // the `[disposal]` marker on the type's own inherent impl)
     let gone = "use core::{ DisposalContext };\nclass Q { }\nimpl Disposal for Q { fn dispose(mut self, cx: DisposalContext) { } }\nentry fn main() -> i32 { return 0; }\n".to_string();
-    let out = rut_driver::compile_module(&gone, rut_parser::Mode::Impl, "app_main");
+    let out = rut_driver::compile_module(&gone, rut_ast::parser::Mode::Impl, "app_main");
     assert!(
         out.diags
             .iter()
@@ -260,7 +260,7 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
     );
 
     let with = format!("use core::{{ DisposalContext }};\n{body}");
-    let out = rut_driver::compile_module(&with, rut_parser::Mode::Impl, "app_main");
+    let out = rut_driver::compile_module(&with, rut_ast::parser::Mode::Impl, "app_main");
     assert!(out.diags.is_empty(), "diags: {:?}", out.diags);
     let bytes = out.binary.expect("encoded module");
     let prog = rut_core::link::flatten(rut_core::binary::decode(&bytes).expect("decode"));

@@ -39,13 +39,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_ast::{Ast, ExprRef, ItemRef, Linkage, Lit, ParamRef, TyRef, UnOp};
 use rut_core::types::{
     TypeId, TY_BOOL, TY_BYTES, TY_F32, TY_F64, TY_I16, TY_I32, TY_I64, TY_I8, TY_NIL, TY_OPAQUE,
     TY_OPT_BYTES, TY_OPT_OPAQUE, TY_OPT_STR, TY_STR, TY_U16, TY_U32, TY_U64, TY_U8,
 };
 use rut_lexer::token::FloatSuffix;
-use rut_parser::{parse_with_recover, Mode, ParseOpts};
 
 use crate::mods::ModSource;
 use crate::session::{HostRow, Mounted, MountedBody};

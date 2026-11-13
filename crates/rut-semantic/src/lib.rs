@@ -34,11 +34,11 @@ pub use self::line_index::LineIndex;
 // the document layer's vocabulary re-exports — ONLY what this crate's
 // own API hands out, so the layer above (`rut-lsp-wasm`) needs no
 // direct frontend Cargo dep to spell what ParsedDoc/classify return
+pub use rut_ast::parser::{is_reserved_kw, Mode, ParseOpts, PRIMITIVE_TYS, RESERVED_KW};
 pub use rut_lexer::diag::Diag;
 pub use rut_lexer::lexer::normalize;
 pub use rut_lexer::span::Span;
 pub use rut_lexer::token::{Comment, FloatSuffix, IntSuffix, Tok, Token};
-pub use rut_parser::{is_reserved_kw, Mode, ParseOpts, PRIMITIVE_TYS, RESERVED_KW};
 
 /// Classify a whole document: token-level classes, then AST-level name
 /// classes (which win at equal positions). Output is sorted by start and

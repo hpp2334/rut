@@ -8,7 +8,6 @@ description = "01-sort — a Rust app embedding rut: the rut side is a five-algo
 [dependencies]
 rut-core = { path = "../../crates/rut-core" }
 rut-lexer = { path = "../../crates/rut-lexer" }
-rut-parser = { path = "../../crates/rut-parser" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-native = { path = "../../crates/rut-native" }
 rut-vm = { path = "../../crates/rut-vm" }

@@ -5,9 +5,10 @@ The frontend turns source text into a checked-syntax tree: source (UTF-8) →
 diagnostics model flowing out of every stage. It has no type knowledge —
 resolution and checking begin in [the compiler pipeline](compiler.md).
 
-The implementation is three crates: `rut-lexer`
-(`span`, `token`, `lexer`, `diag`), `rut-ast` (the arena tree and its
-dumper), and `rut-parser` (the frame machine and its expression engine).
+The implementation is two crates: `rut-lexer`
+(`span`, `token`, `lexer`, `diag`) and `rut-ast` — the arena tree and
+its dumper, plus the parser itself (the frame machine and its
+expression engine) under `rut_ast::parser`.
 Everything is `no_std`-clean and wasm-compatible, so the same code runs in
 the CLI, the LSP, the formatter, and the browser playground.
 

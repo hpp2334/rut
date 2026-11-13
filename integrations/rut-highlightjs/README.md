@@ -77,7 +77,7 @@ Idempotent: already-baked blocks are skipped.
 The grammar is transcribed from the compiler's own tables, and where
 prose and code disagree the code wins:
 
-- **keywords** — `RESERVED_KW` in `crates/rut-parser/src/lib.rs` (28
+- **keywords** — `RESERVED_KW` in `crates/rut-ast/src/parser/mod.rs` (28
   words) plus the contextual words the parser matches by interner text
   (`entry`, `builtin`, `primitive`, `break`, `continue`, `self`,
   `Self`, `super`, `as`, `type`). The keyword table in

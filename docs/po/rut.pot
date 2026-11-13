@@ -33,7 +33,7 @@ msgid "Your first rut program"
 msgstr ""
 
 #: src/SUMMARY.md:11 src/quick-start/playground.md:1
-#: src/reference/project-structure.md:288
+#: src/reference/project-structure.md:289
 msgid "The playground"
 msgstr ""
 
@@ -576,7 +576,7 @@ msgid ""
 "\"<commit-hash>\" }\n"
 "rut-core   = { git = \"https://github.com/hpp2334/rut.git\", rev = "
 "\"<commit-hash>\" }\n"
-"rut-parser = { git = \"https://github.com/hpp2334/rut.git\", rev = "
+"rut-ast    = { git = \"https://github.com/hpp2334/rut.git\", rev = "
 "\"<commit-hash>\" }\n"
 "rut-vm     = { git = \"https://github.com/hpp2334/rut.git\", rev = "
 "\"<commit-hash>\" }\n"
@@ -18240,7 +18240,7 @@ msgid ""
 "\"<commit-hash>\" }\n"
 "rut-core   = { git = \"https://github.com/hpp2334/rut.git\", rev = "
 "\"<commit-hash>\" }\n"
-"rut-parser = { git = \"https://github.com/hpp2334/rut.git\", rev = "
+"rut-ast    = { git = \"https://github.com/hpp2334/rut.git\", rev = "
 "\"<commit-hash>\" }\n"
 "rut-vm     = { git = \"https://github.com/hpp2334/rut.git\", rev = "
 "\"<commit-hash>\" }\n"
@@ -20301,7 +20301,7 @@ msgid ""
 "then Rust `Drop` ([the Rc heap](rc-heap.md))."
 msgstr ""
 
-#: src/reference/host-fns.md:146 src/reference/frontend.md:165
+#: src/reference/host-fns.md:146 src/reference/frontend.md:166
 #: src/reference/cli.md:374
 msgid "Declaration mode"
 msgstr ""
@@ -21459,7 +21459,7 @@ msgid ""
 "whose bodies the embedder binds."
 msgstr ""
 
-#: src/reference/stdlib.md:122 src/reference/project-structure.md:271
+#: src/reference/stdlib.md:122 src/reference/project-structure.md:272
 msgid "package"
 msgstr ""
 
@@ -21494,7 +21494,7 @@ msgstr ""
 msgid "the `Logger` class"
 msgstr ""
 
-#: src/reference/stdlib.md:126 src/reference/project-structure.md:279
+#: src/reference/stdlib.md:126 src/reference/project-structure.md:280
 msgid "`pouch`"
 msgstr ""
 
@@ -21506,7 +21506,7 @@ msgstr ""
 msgid "the growable sequence `Vec<T>`"
 msgstr ""
 
-#: src/reference/stdlib.md:127 src/reference/project-structure.md:280
+#: src/reference/stdlib.md:127 src/reference/project-structure.md:281
 msgid "`flow`"
 msgstr ""
 
@@ -21531,7 +21531,7 @@ msgstr ""
 msgid "the native key table; `HashMap`/`HashSet`"
 msgstr ""
 
-#: src/reference/stdlib.md:129 src/reference/project-structure.md:281
+#: src/reference/stdlib.md:129 src/reference/project-structure.md:282
 msgid "`json`"
 msgstr ""
 
@@ -21553,7 +21553,7 @@ msgstr ""
 msgid "the builder rows; the `StringBuilder` class"
 msgstr ""
 
-#: src/reference/stdlib.md:131 src/reference/project-structure.md:274
+#: src/reference/stdlib.md:131 src/reference/project-structure.md:275
 msgid "`calc`"
 msgstr ""
 
@@ -21567,7 +21567,7 @@ msgid ""
 "f64>`, the width falls out of the argument)"
 msgstr ""
 
-#: src/reference/stdlib.md:132 src/reference/project-structure.md:275
+#: src/reference/stdlib.md:132 src/reference/project-structure.md:276
 msgid "`calc_host`"
 msgstr ""
 
@@ -21650,7 +21650,7 @@ msgstr ""
 msgid "`info(msg)` / `log(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:162 src/reference/frontend.md:103
+#: src/reference/stdlib.md:162 src/reference/frontend.md:104
 msgid "1"
 msgstr ""
 
@@ -21658,7 +21658,7 @@ msgstr ""
 msgid "`warn(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:163 src/reference/frontend.md:104
+#: src/reference/stdlib.md:163 src/reference/frontend.md:105
 msgid "2"
 msgstr ""
 
@@ -21666,7 +21666,7 @@ msgstr ""
 msgid "`error(msg)`"
 msgstr ""
 
-#: src/reference/stdlib.md:164 src/reference/frontend.md:105
+#: src/reference/stdlib.md:164 src/reference/frontend.md:106
 msgid "3"
 msgstr ""
 
@@ -22597,77 +22597,78 @@ msgstr ""
 
 #: src/reference/frontend.md:8
 msgid ""
-"The implementation is three crates: `rut-lexer` (`span`, `token`, `lexer`, "
-"`diag`), `rut-ast` (the arena tree and its dumper), and `rut-parser` (the "
-"frame machine and its expression engine). Everything is `no_std`\\-clean and "
-"wasm-compatible, so the same code runs in the CLI, the LSP, the formatter, "
-"and the browser playground."
+"The implementation is two crates: `rut-lexer` (`span`, `token`, `lexer`, "
+"`diag`) and `rut-ast` — the arena tree and its dumper, plus the parser "
+"itself (the frame machine and its expression engine) under "
+"`rut_ast::parser`. Everything is `no_std`\\-clean and wasm-compatible, so "
+"the same code runs in the CLI, the LSP, the formatter, and the browser "
+"playground."
 msgstr ""
 
-#: src/reference/frontend.md:14
+#: src/reference/frontend.md:15
 msgid "The contract"
 msgstr ""
 
-#: src/reference/frontend.md:16
+#: src/reference/frontend.md:17
 msgid "Four invariants hold for any input, hostile included:"
 msgstr ""
 
-#: src/reference/frontend.md:18
+#: src/reference/frontend.md:19
 msgid "invariant"
 msgstr ""
 
-#: src/reference/frontend.md:18 src/reference/frontend.md:128
+#: src/reference/frontend.md:19 src/reference/frontend.md:129
 msgid "mechanism"
 msgstr ""
 
-#: src/reference/frontend.md:20
+#: src/reference/frontend.md:21
 msgid "C1"
 msgstr ""
 
-#: src/reference/frontend.md:20
+#: src/reference/frontend.md:21
 msgid ""
 "**Flat AST** — nodes are records in one arena; children are `NodeId`s, never "
 "boxed pointers, built bottom-up. Drop/clone are flat `Vec` ops."
 msgstr ""
 
-#: src/reference/frontend.md:20
+#: src/reference/frontend.md:21
 msgid "[AST](#the-ast)"
 msgstr ""
 
-#: src/reference/frontend.md:21
+#: src/reference/frontend.md:22
 msgid "C2"
 msgstr ""
 
-#: src/reference/frontend.md:21
+#: src/reference/frontend.md:22
 msgid ""
 "**No native recursion** — an explicit frame stack handles structure; "
 "expressions use an iterative operator/operand engine. Host stack use is "
 "constant regardless of input."
 msgstr ""
 
-#: src/reference/frontend.md:21
+#: src/reference/frontend.md:22
 msgid "[parser](#the-parser)"
 msgstr ""
 
-#: src/reference/frontend.md:22
+#: src/reference/frontend.md:23
 msgid "C3"
 msgstr ""
 
-#: src/reference/frontend.md:22
+#: src/reference/frontend.md:23
 msgid ""
 "**Depth budget, not stack exhaustion** — nesting over the budget is a normal "
 "diagnostic, never a host crash."
 msgstr ""
 
-#: src/reference/frontend.md:22
+#: src/reference/frontend.md:23
 msgid "[budgets](#nesting-budgets)"
 msgstr ""
 
-#: src/reference/frontend.md:23
+#: src/reference/frontend.md:24
 msgid "C4"
 msgstr ""
 
-#: src/reference/frontend.md:23
+#: src/reference/frontend.md:24
 msgid ""
 "**Lookahead discipline** — local decisions peek at most 4 tokens; the two "
 "decisions that need more use read-only balancing scans. The cursor is "
@@ -22675,22 +22676,22 @@ msgid ""
 "checkpoint/rollback."
 msgstr ""
 
-#: src/reference/frontend.md:23
+#: src/reference/frontend.md:24
 msgid "[lookahead](#lookahead)"
 msgstr ""
 
-#: src/reference/frontend.md:25
+#: src/reference/frontend.md:26
 msgid ""
 "The lexer and parser are pure functions — `lex(src) -> (Vec<Token>, "
 "Vec<Diag>)` and `parse(src, mode) -> (Ast, Vec<Diag>)` — so they are "
 "fuzzable and reusable in an LSP or formatter with no VM present."
 msgstr ""
 
-#: src/reference/frontend.md:29
+#: src/reference/frontend.md:30
 msgid "The lexer"
 msgstr ""
 
-#: src/reference/frontend.md:31
+#: src/reference/frontend.md:32
 msgid ""
 "One flat `Tok` enum for literals, punctuation, and operators. Keywords are "
 "ordinary `Ident`s; the parser matches them by interner name. **Reserved "
@@ -22699,45 +22700,45 @@ msgid ""
 "rejections, a separate mechanism."
 msgstr ""
 
-#: src/reference/frontend.md:36
+#: src/reference/frontend.md:37
 msgid ""
 "Maximal munch with an explicit longest-match table; `/` vs `//` vs `/*` "
 "resolves with one lookahead. Compound assignment operators are one token "
 "each (`+=`, `<<=`, `&&=`, …), so there is no munch ambiguity."
 msgstr ""
 
-#: src/reference/frontend.md:39
+#: src/reference/frontend.md:40
 msgid ""
 "Numeric literals: `0x`/`0b`/`0o`, `_` separators, and per-width suffixes "
 "(`u8..u64`, `i8..i64`, `f32`/`f64`). Unsuffixed integers default to `i32`, "
 "unsuffixed floats to `f32`."
 msgstr ""
 
-#: src/reference/frontend.md:42
+#: src/reference/frontend.md:43
 msgid ""
 "Comments are dropped (doc comments are re-attached by the formatter's "
 "gap-scan, below)."
 msgstr ""
 
-#: src/reference/frontend.md:45
+#: src/reference/frontend.md:46
 msgid "Format strings"
 msgstr ""
 
-#: src/reference/frontend.md:47
+#: src/reference/frontend.md:48
 msgid ""
 "`f\"...\"` is the one construct the lexer must understand structurally, "
 "because placeholders hold expressions, not strings:"
 msgstr ""
 
-#: src/reference/frontend.md:53
+#: src/reference/frontend.md:54
 msgid "// decoded like a plain string; {{ }} -> { }\n"
 msgstr ""
 
-#: src/reference/frontend.md:54
+#: src/reference/frontend.md:55
 msgid "// a FULLY LEXED token stream, `}`-terminated\n"
 msgstr ""
 
-#: src/reference/frontend.md:58
+#: src/reference/frontend.md:59
 msgid ""
 "The lexer enters hole mode after `{` (not `{{`), balances braces, and lexes "
 "normally until depth 0. Holes are re-lexed, not stored as text, so "
@@ -22747,7 +22748,7 @@ msgid ""
 "[Templates](templates.md) for the surface semantics."
 msgstr ""
 
-#: src/reference/frontend.md:65
+#: src/reference/frontend.md:66
 msgid ""
 "Raw strings `r\"...\"` carry everything up to the closing `\"` literally; "
 "`\\\"` inside a raw string does not close it. The `#` count after the "
@@ -22758,42 +22759,42 @@ msgid ""
 "Holes stay single-line at every level."
 msgstr ""
 
-#: src/reference/frontend.md:73
+#: src/reference/frontend.md:74
 msgid "Nesting budgets"
 msgstr ""
 
-#: src/reference/frontend.md:75
+#: src/reference/frontend.md:76
 msgid "Two budgets make C3 a law:"
 msgstr ""
 
-#: src/reference/frontend.md:77
+#: src/reference/frontend.md:78
 msgid ""
 "`NEST_MAX = 1024` — the lexer's bracket depth budget (`rut-lexer/span.rs`). "
 "Exceeding it is one clean diagnostic at the offending opener."
 msgstr ""
 
-#: src/reference/frontend.md:79
+#: src/reference/frontend.md:80
 msgid ""
 "`EXPR_MAX = 64` — the parser's expression-nesting budget. The frame machine "
 "itself has no host-stack cost, but downstream recursive walks (AST dump, "
 "typecheck) do; the cap keeps the trees they visit shallow."
 msgstr ""
 
-#: src/reference/frontend.md:83
+#: src/reference/frontend.md:84
 msgid ""
 "Both produce the same diagnostic — _nesting too deep_ — and neither can "
 "overflow the host stack."
 msgstr ""
 
-#: src/reference/frontend.md:86
+#: src/reference/frontend.md:87
 msgid "The parser"
 msgstr ""
 
-#: src/reference/frontend.md:88
+#: src/reference/frontend.md:89
 msgid "One loop over the token slice drives two mechanisms:"
 msgstr ""
 
-#: src/reference/frontend.md:90
+#: src/reference/frontend.md:91
 msgid ""
 "A **frame stack** handles structure — one frame kind per grammar rule "
 "(`Module`, `Item`, `Block`, `TypeArgList`, `Pattern`, `Arm`, `Impl`, …). A "
@@ -22801,161 +22802,161 @@ msgid ""
 "`NodeId` to the parent."
 msgstr ""
 
-#: src/reference/frontend.md:94
+#: src/reference/frontend.md:95
 msgid ""
 "An embedded **Pratt engine** handles expressions — an operator stack plus an "
 "operand stack of `NodeId`s. Binary and assignment steps push an operator; "
 "reductions pop operands and push one node, bottom-up."
 msgstr ""
 
-#: src/reference/frontend.md:98
+#: src/reference/frontend.md:99
 msgid ""
 "There is no grammar generator and no left-recursion handling. Binding "
 "powers, loosest to tightest:"
 msgstr ""
 
-#: src/reference/frontend.md:101
+#: src/reference/frontend.md:102
 msgid "prec"
 msgstr ""
 
-#: src/reference/frontend.md:101
+#: src/reference/frontend.md:102
 msgid "assoc"
 msgstr ""
 
-#: src/reference/frontend.md:101
+#: src/reference/frontend.md:102
 msgid "operators"
 msgstr ""
 
-#: src/reference/frontend.md:103 src/reference/frontend.md:115
+#: src/reference/frontend.md:104 src/reference/frontend.md:116
 msgid "right"
 msgstr ""
 
-#: src/reference/frontend.md:103
+#: src/reference/frontend.md:104
 msgid ""
 "`=` `+=` `-=` `*=` `/=` `%=` `&=` `\\|=` `^=` `<<=` `>>=` `&&=` `\\|\\|=` "
 "(target must be a path or index)"
 msgstr ""
 
-#: src/reference/frontend.md:104
+#: src/reference/frontend.md:105
 msgid "–"
 msgstr ""
 
-#: src/reference/frontend.md:104
+#: src/reference/frontend.md:105
 msgid "`=>` lambda bodies — decided by the scan below, not by binding powers"
 msgstr ""
 
-#: src/reference/frontend.md:105 src/reference/frontend.md:106
-#: src/reference/frontend.md:107 src/reference/frontend.md:108
-#: src/reference/frontend.md:109 src/reference/frontend.md:110
-#: src/reference/frontend.md:111 src/reference/frontend.md:112
-#: src/reference/frontend.md:113 src/reference/frontend.md:114
-#: src/reference/frontend.md:116
+#: src/reference/frontend.md:106 src/reference/frontend.md:107
+#: src/reference/frontend.md:108 src/reference/frontend.md:109
+#: src/reference/frontend.md:110 src/reference/frontend.md:111
+#: src/reference/frontend.md:112 src/reference/frontend.md:113
+#: src/reference/frontend.md:114 src/reference/frontend.md:115
+#: src/reference/frontend.md:117
 msgid "left"
 msgstr ""
 
-#: src/reference/frontend.md:105
+#: src/reference/frontend.md:106
 msgid "`\\|\\|`"
 msgstr ""
 
-#: src/reference/frontend.md:106
+#: src/reference/frontend.md:107
 msgid "4"
 msgstr ""
 
-#: src/reference/frontend.md:106
+#: src/reference/frontend.md:107
 msgid "`&&`"
 msgstr ""
 
-#: src/reference/frontend.md:107
+#: src/reference/frontend.md:108
 msgid "5"
 msgstr ""
 
-#: src/reference/frontend.md:107
+#: src/reference/frontend.md:108
 msgid "`==` `!=`"
 msgstr ""
 
-#: src/reference/frontend.md:108
+#: src/reference/frontend.md:109
 msgid "6"
 msgstr ""
 
-#: src/reference/frontend.md:108
+#: src/reference/frontend.md:109
 msgid "`<` `>` `<=` `>=`"
 msgstr ""
 
-#: src/reference/frontend.md:109
+#: src/reference/frontend.md:110
 msgid "7"
 msgstr ""
 
-#: src/reference/frontend.md:109
+#: src/reference/frontend.md:110
 msgid "`\\|` `^`"
 msgstr ""
 
-#: src/reference/frontend.md:110
+#: src/reference/frontend.md:111
 msgid "8"
 msgstr ""
 
-#: src/reference/frontend.md:110
+#: src/reference/frontend.md:111
 msgid "`&`"
 msgstr ""
 
-#: src/reference/frontend.md:111
+#: src/reference/frontend.md:112
 msgid "9"
 msgstr ""
 
-#: src/reference/frontend.md:111
+#: src/reference/frontend.md:112
 msgid "`<<` `>>`"
 msgstr ""
 
-#: src/reference/frontend.md:112
+#: src/reference/frontend.md:113
 msgid "10"
 msgstr ""
 
-#: src/reference/frontend.md:112
+#: src/reference/frontend.md:113
 msgid "`+` `-`"
 msgstr ""
 
-#: src/reference/frontend.md:113
+#: src/reference/frontend.md:114
 msgid "11"
 msgstr ""
 
-#: src/reference/frontend.md:113
+#: src/reference/frontend.md:114
 msgid "`*` `/` `%`"
 msgstr ""
 
-#: src/reference/frontend.md:114
+#: src/reference/frontend.md:115
 msgid "12"
 msgstr ""
 
-#: src/reference/frontend.md:114
+#: src/reference/frontend.md:115
 msgid "`as` — numeric cast; the RHS is a type-naming position"
 msgstr ""
 
-#: src/reference/frontend.md:115
+#: src/reference/frontend.md:116
 msgid "13"
 msgstr ""
 
-#: src/reference/frontend.md:115
+#: src/reference/frontend.md:116
 msgid "unary `-` `!` `~`"
 msgstr ""
 
-#: src/reference/frontend.md:116
+#: src/reference/frontend.md:117
 msgid "14"
 msgstr ""
 
-#: src/reference/frontend.md:116
+#: src/reference/frontend.md:117
 msgid "postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`, `?`"
 msgstr ""
 
-#: src/reference/frontend.md:118
+#: src/reference/frontend.md:119
 msgid ""
 "Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose "
 "without special cases. `is` (type test) is a keyword; `as` is the only cast."
 msgstr ""
 
-#: src/reference/frontend.md:121
+#: src/reference/frontend.md:122
 msgid "Lookahead"
 msgstr ""
 
-#: src/reference/frontend.md:123
+#: src/reference/frontend.md:124
 msgid ""
 "rut's grammar makes shallow peeking enough: statements are keyword-led, `{` "
 "never starts an expression, imports are flat, and paths are `::`\\-separated "
@@ -22963,91 +22964,91 @@ msgid ""
 "lookahead)."
 msgstr ""
 
-#: src/reference/frontend.md:128
+#: src/reference/frontend.md:129
 msgid "decision"
 msgstr ""
 
-#: src/reference/frontend.md:130
+#: src/reference/frontend.md:131
 msgid "item dispatch"
 msgstr ""
 
-#: src/reference/frontend.md:130
+#: src/reference/frontend.md:131
 msgid "peek 1 (`use` `let` `enum` `struct` `class` `interface` `impl` `fn`)"
 msgstr ""
 
-#: src/reference/frontend.md:131
+#: src/reference/frontend.md:132
 msgid "statement vs expression-statement"
 msgstr ""
 
-#: src/reference/frontend.md:131
+#: src/reference/frontend.md:132
 msgid "peek 1 (leading keyword)"
 msgstr ""
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:133
 msgid "`for`\\-of vs C-style `for`"
 msgstr ""
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:133
 msgid "peek 4: `for ( let Ident <of or =>`"
 msgstr ""
 
-#: src/reference/frontend.md:133
+#: src/reference/frontend.md:134
 msgid "instance vs class method"
 msgstr ""
 
-#: src/reference/frontend.md:133
+#: src/reference/frontend.md:134
 msgid "peek 4: `fn Ident ( <mut? self? …>`"
 msgstr ""
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:135
 msgid "struct literal vs path expression"
 msgstr ""
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:135
 msgid "peek 2: `Ident {` ⇒ literal (classes have no instance literal)"
 msgstr ""
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:136
 msgid "`when`\\-arm body form"
 msgstr ""
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:136
 msgid "peek 1 after `->` (`{` ⇒ block arm, else expression arm)"
 msgstr ""
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:137
 msgid "`if` atom vs statement"
 msgstr ""
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:137
 msgid ""
 "peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` "
 "is claimed by the statement grammar first)"
 msgstr ""
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:138
 msgid "postfix loop step"
 msgstr ""
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:138
 msgid "peek 1 (`.` `(` `[` `?`)"
 msgstr ""
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:139
 msgid "assignment target"
 msgstr ""
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:139
 msgid "no lookahead — parse, then validate"
 msgstr ""
 
-#: src/reference/frontend.md:140
+#: src/reference/frontend.md:141
 msgid ""
 "Two decisions need more than 4 tokens and use **scans** — read-only, "
 "commit-once, never a guess:"
 msgstr ""
 
-#: src/reference/frontend.md:143
+#: src/reference/frontend.md:144
 msgid ""
 "**Lambda vs parenthesized expression.** Scan to the matching `)`; it is a "
 "lambda iff the tokens form a valid parameter list and `=>` follows (an "
@@ -23056,7 +23057,7 @@ msgid ""
 "note: _if you meant a lambda, add `=>`_."
 msgstr ""
 
-#: src/reference/frontend.md:148
+#: src/reference/frontend.md:149
 msgid ""
 "**Generic call vs `<` comparison** (`Vec<f32>(n)` vs `a < b > (c)`). Scan "
 "from the `<` tracking angle depth; a `>>`/`<<` consumed where a "
@@ -23066,25 +23067,25 @@ msgid ""
 "write `(a < b) > (c)`."
 msgstr ""
 
-#: src/reference/frontend.md:155
+#: src/reference/frontend.md:156
 msgid ""
 "Scans never mutate parser state. Peeking at arbitrary distance is allowed; "
 "checkpoint/rollback is not — the API does not exist, so the monotone-cursor "
 "invariant (debug-asserted) cannot be violated, even during error recovery."
 msgstr ""
 
-#: src/reference/frontend.md:159
+#: src/reference/frontend.md:160
 msgid "Recovery"
 msgstr ""
 
-#: src/reference/frontend.md:161
+#: src/reference/frontend.md:162
 msgid ""
 "Within a file the parser resynchronizes at `;`, `}`, or the token after a "
 "balanced block and keeps parsing — a file yields many diagnostics, not one. "
 "Resync only ever skips forward."
 msgstr ""
 
-#: src/reference/frontend.md:167
+#: src/reference/frontend.md:168
 msgid ""
 "The mode is chosen by file extension: `Mode::Impl` for `.rut`, `Mode::Decl` "
 "for `.d.rut`. Both share one grammar; declaration mode adds the surface "
@@ -23096,7 +23097,7 @@ msgid ""
 "bind at load time live in [Host fns and declaration files](host-fns.md)."
 msgstr ""
 
-#: src/reference/frontend.md:178
+#: src/reference/frontend.md:179
 msgid ""
 "Declarations-only module scope is enforced by the parser itself: a statement "
 "at module top level is a syntax error, not a semantic one. The grammar "
@@ -23104,11 +23105,11 @@ msgid ""
 "[Modules and visibility](modules-and-visibility.md)."
 msgstr ""
 
-#: src/reference/frontend.md:183
+#: src/reference/frontend.md:184
 msgid "The AST"
 msgstr ""
 
-#: src/reference/frontend.md:185
+#: src/reference/frontend.md:186
 msgid ""
 "Nodes are plain records in one arena; children are `NodeId`s into it. Spans "
 "sit on every node; there are no `String` keys — names are `IdentId`s into an "
@@ -23120,76 +23121,76 @@ msgid ""
 "equality, never by text."
 msgstr ""
 
-#: src/reference/frontend.md:199
+#: src/reference/frontend.md:200
 msgid "// items\n"
 msgstr ""
 
-#: src/reference/frontend.md:203
+#: src/reference/frontend.md:204
 msgid "// fields only\n"
 msgstr ""
 
-#: src/reference/frontend.md:204
+#: src/reference/frontend.md:205
 msgid ""
 "// fields only —\n"
 "                                                           // methods live "
 "in impls\n"
 msgstr ""
 
-#: src/reference/frontend.md:206
+#: src/reference/frontend.md:207
 msgid "// signatures only\n"
 msgstr ""
 
-#: src/reference/frontend.md:207
+#: src/reference/frontend.md:208
 msgid ""
 "// inherent only —\n"
 "              // no trait_ref: `impl I for T` does not parse\n"
 msgstr ""
 
-#: src/reference/frontend.md:210
+#: src/reference/frontend.md:211
 msgid ""
 "// .d.rut only\n"
 "    // statements\n"
 msgstr ""
 
-#: src/reference/frontend.md:213
+#: src/reference/frontend.md:214
 msgid "// expressions\n"
 msgstr ""
 
-#: src/reference/frontend.md:219
+#: src/reference/frontend.md:220
 msgid "// the block value; tail: Option\n"
 msgstr ""
 
-#: src/reference/frontend.md:221
+#: src/reference/frontend.md:222
 msgid "// the if ATOM (statement-if above)\n"
 msgstr ""
 
-#: src/reference/frontend.md:222
+#: src/reference/frontend.md:223
 msgid "// postfix ?\n"
 msgstr ""
 
-#: src/reference/frontend.md:223
+#: src/reference/frontend.md:224
 msgid "// holes are NodeIds\n"
 msgstr ""
 
-#: src/reference/frontend.md:228
+#: src/reference/frontend.md:229
 msgid ""
 "Stable `NodeId`s are the rest of the pipeline's currency: the checker keys "
 "side tables by node id, diagnostics reach spans through them, and the LSP, "
 "formatter, and dumper hold copyable references with no reparenting."
 msgstr ""
 
-#: src/reference/frontend.md:232
+#: src/reference/frontend.md:233
 msgid ""
 "What the AST does **not** contain: no `new`, no `switch`/`case`, no `?.` or "
 "`??` — the lexer rejects those words before parsing. There are no paren "
 "nodes either: the parse's grouping _is_ the tree."
 msgstr ""
 
-#: src/reference/frontend.md:236
+#: src/reference/frontend.md:237
 msgid "Diagnostics"
 msgstr ""
 
-#: src/reference/frontend.md:243
+#: src/reference/frontend.md:244
 msgid ""
 "One renderer serves every frontend stage: a primary `error:` line, the "
 "rustc-style `--> file:line:col` arrow (1-based line and char column; the "
@@ -23204,24 +23205,24 @@ msgid ""
 "for `Circle { .. }` on a class."
 msgstr ""
 
-#: src/reference/frontend.md:255
+#: src/reference/frontend.md:256
 msgid ""
 "The compile stops before IR if any diagnostic exists — a module with "
 "diagnostics never produces bytecode. See [Diagnostics, traces, and "
 "symbolication](diagnostics.md) for the runtime half of the story."
 msgstr ""
 
-#: src/reference/frontend.md:260
+#: src/reference/frontend.md:261
 msgid "The formatter"
 msgstr ""
 
-#: src/reference/frontend.md:262
+#: src/reference/frontend.md:263
 msgid ""
 "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module "
 "from the AST:"
 msgstr ""
 
-#: src/reference/frontend.md:265
+#: src/reference/frontend.md:266
 msgid ""
 "**Comment gap-scan** — comments live in the byte gaps between token spans, "
 "so the formatter recovers every `//` and block comment with zero "
@@ -23229,7 +23230,7 @@ msgid ""
 "runs at the enclosing indent."
 msgstr ""
 
-#: src/reference/frontend.md:269
+#: src/reference/frontend.md:270
 msgid ""
 "**Parens and literals re-derived** — the printer re-parens only where flat "
 "precedence would invert the tree, re-spells floats shortest round-trip from "
@@ -23237,20 +23238,20 @@ msgid ""
 "set (`0xff` legitimately becomes `255`)."
 msgstr ""
 
-#: src/reference/frontend.md:273
+#: src/reference/frontend.md:274
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is "
 "idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full "
 "pipeline before and after formatting and log identical output."
 msgstr ""
 
-#: src/reference/frontend.md:276
+#: src/reference/frontend.md:277
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered "
 "diagnostics, exit 1, nothing rewritten. The formatter never guesses."
 msgstr ""
 
-#: src/reference/frontend.md:278
+#: src/reference/frontend.md:279
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` "
 "block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default "
@@ -23258,11 +23259,11 @@ msgid ""
 "rut.jsonc](project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:283
+#: src/reference/frontend.md:284
 msgid "Testing"
 msgstr ""
 
-#: src/reference/frontend.md:285
+#: src/reference/frontend.md:286
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, "
 "`examples/**/*.d.rut`, and playground classic must parse with zero "
@@ -23306,7 +23307,7 @@ msgid "lex + parse"
 msgstr ""
 
 #: src/reference/compiler.md:27
-msgid "`rut-lexer`, `rut-parser`"
+msgid "`rut-lexer`, `rut-ast`"
 msgstr ""
 
 #: src/reference/compiler.md:27
@@ -27194,124 +27195,124 @@ msgstr ""
 msgid "The toolchain tree"
 msgstr ""
 
-#: src/reference/project-structure.md:247
+#: src/reference/project-structure.md:248
 msgid ""
-"Dependency line: `rut-lexer ← rut-ast ← rut-parser ← rut-driver → rut-lir → "
-"rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver sits on the "
-"vm's `HostPkgContext`/`HostRegistry` for the install law), `rut-native` "
-"beside the driver (it depends on the driver, never the reverse — the driver "
-"is provably pure: no fs, no net, no `std::path`), hosts (`rut-std`, "
-"`rut-wasm`) on top, and `rut-cli`/`demo` above those. `rut-lsp-wasm` sits on "
-"the frontend crates — tokens, diagnostics, and symbols need no VM — plus the "
-"driver's pure core for manifest and bundle parsing (the dep tables behind "
-"the editor's dep walk). It is the language core and its editor ABI in ONE "
-"crate: the queries (`analysis`, `completion`, `definition`, `check`, and the "
-"rest) live beside the wasm-bindgen face that serves them, so a feature "
-"cannot land on one and miss the other. The VS Code extension and the "
-"playground bundle it; there is no second face to keep in step. The crate's "
-"classifier is `rut-semantic` (re-exported as `rut_lsp_wasm::semantic`), "
-"which sits on the frontend crates for the same reason — embedders take it "
-"without an editor at all."
+"Dependency line: `rut-lexer ← rut-ast (tree + grammar) ← rut-driver → "
+"rut-lir → rut-core ← rut-vm` (with `rut-vm-threaded` behind it; the driver "
+"sits on the vm's `HostPkgContext`/`HostRegistry` for the install law), "
+"`rut-native` beside the driver (it depends on the driver, never the reverse "
+"— the driver is provably pure: no fs, no net, no `std::path`), hosts "
+"(`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those. "
+"`rut-lsp-wasm` sits on the frontend crates — tokens, diagnostics, and "
+"symbols need no VM — plus the driver's pure core for manifest and bundle "
+"parsing (the dep tables behind the editor's dep walk). It is the language "
+"core and its editor ABI in ONE crate: the queries (`analysis`, `completion`, "
+"`definition`, `check`, and the rest) live beside the wasm-bindgen face that "
+"serves them, so a feature cannot land on one and miss the other. The VS Code "
+"extension and the playground bundle it; there is no second face to keep in "
+"step. The crate's classifier is `rut-semantic` (re-exported as "
+"`rut_lsp_wasm::semantic`), which sits on the frontend crates for the same "
+"reason — embedders take it without an editor at all."
 msgstr ""
 
-#: src/reference/project-structure.md:266
+#: src/reference/project-structure.md:267
 msgid "The in-tree packages"
 msgstr ""
 
-#: src/reference/project-structure.md:268
+#: src/reference/project-structure.md:269
 msgid ""
 "`rut/` carries the standard and swappable packages the CLI offers on demand:"
 msgstr ""
 
-#: src/reference/project-structure.md:271
+#: src/reference/project-structure.md:272
 msgid "shape"
 msgstr ""
 
-#: src/reference/project-structure.md:273
+#: src/reference/project-structure.md:274
 msgid "`core`"
 msgstr ""
 
-#: src/reference/project-structure.md:273
+#: src/reference/project-structure.md:274
 msgid ""
 "the only standard package — the builtin surface, auto-offered by every run's "
 "`.compile()`"
 msgstr ""
 
-#: src/reference/project-structure.md:274
+#: src/reference/project-structure.md:275
 msgid ""
 "the math surface as a normal lib (its `math` module) — generic fns over "
 "`calc_host`; a `deps`\\-carrying dir mounts through `load_dir`/`dir_pkgs`, "
 "never `tree_pkg` ([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:275
+#: src/reference/project-structure.md:276
 msgid ""
 "host pkg: the math rows + the `PI` constants (bare at its root) — offer "
 "`rut_native::tree_pkg(\"calc_host\")`, bind `rut_std::math::pkg()` "
 "([stdlib](stdlib.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:276
+#: src/reference/project-structure.md:277
 msgid "`ink_host`, `nmap_host`, `async_host`, `bench_cross`"
 msgstr ""
 
-#: src/reference/project-structure.md:276
+#: src/reference/project-structure.md:277
 msgid "host pkgs — flat `.d.rut` surfaces; bodies live in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:277
+#: src/reference/project-structure.md:278
 msgid "`http_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:277
+#: src/reference/project-structure.md:278
 msgid ""
 "host pkg, the surface-tree pilot — the default `src/mod.d.rut` root over the "
 "std HTTP rows, `net/` + `stream/` mods ([project "
 "structure](#host-surface-trees)); bodies in `rut-std`"
 msgstr ""
 
-#: src/reference/project-structure.md:278
+#: src/reference/project-structure.md:279
 msgid "`ink`, `http`, `strbuild`, `futures`"
 msgstr ""
 
-#: src/reference/project-structure.md:278
+#: src/reference/project-structure.md:279
 msgid ""
 "rut classes over host rows (published compiled — methods cross on the "
 "surface's inherent rows)"
 msgstr ""
 
-#: src/reference/project-structure.md:279
+#: src/reference/project-structure.md:280
 msgid "the growable sequence `Vec<T>` (plain linked package)"
 msgstr ""
 
-#: src/reference/project-structure.md:280
+#: src/reference/project-structure.md:281
 msgid ""
 "the push pipeline (`Flow<E>`; its `VecFlow`/`SetFlow` wrappers over "
 "`pouch`/`nmapset`)"
 msgstr ""
 
-#: src/reference/project-structure.md:281
+#: src/reference/project-structure.md:282
 msgid ""
 "the serde pkg — owns the wrapper families over `pouch`/`nmapset`, plain "
 "`deps` ([Dependency kinds](dependency-kinds.md))"
 msgstr ""
 
-#: src/reference/project-structure.md:282
+#: src/reference/project-structure.md:283
 msgid "`nmapset`"
 msgstr ""
 
-#: src/reference/project-structure.md:282
+#: src/reference/project-structure.md:283
 msgid "native-key maps/sets over `nmap_host`"
 msgstr ""
 
-#: src/reference/project-structure.md:284
+#: src/reference/project-structure.md:285
 msgid ""
 "Nothing in the engine knows the swappable packages' names — deps are "
 "resolved by name from manifests; a host may replace the non-`core` set "
 "wholesale ([Embedding and native modules](embedding.md))."
 msgstr ""
 
-#: src/reference/project-structure.md:290
+#: src/reference/project-structure.md:291
 msgid ""
 "`demo/` is a React + rspack + TypeScript page over the wasm build. The wasm "
 "ABI is two calls — `compile(src)` returning diagnostics, an AST dump, an IR "

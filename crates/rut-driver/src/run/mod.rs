@@ -51,7 +51,7 @@ mod archive;
 
 use std::collections::BTreeMap;
 
-use rut_parser::Mode;
+use rut_ast::parser::Mode;
 
 use crate::graph::{compile_graph, GraphOutput};
 pub use crate::session::{Mounted, MountedBody};
@@ -512,8 +512,11 @@ impl RutRun {
                 let mode = if *is_decl { Mode::Decl } else { Mode::Impl };
                 // the recovering entry: the closure check wants the
                 // whole file's `use` heads even beside syntax diags
-                let p =
-                    rut_parser::parse_with_recover(text, mode, rut_parser::ParseOpts::default());
+                let p = rut_ast::parser::parse_with_recover(
+                    text,
+                    mode,
+                    rut_ast::parser::ParseOpts::default(),
+                );
                 if p.ast().is_clean() {
                     let layout = layout_for("");
                     for name in crate::graph::dep_use_heads(&session, spec, &root, &layout, p.ast())
@@ -530,10 +533,10 @@ impl RutRun {
             for m in pkg.mods.values() {
                 // recovering: a file beside its syntax diags still
                 // joins the closure check
-                let p = rut_parser::parse_with_recover(
+                let p = rut_ast::parser::parse_with_recover(
                     &m.text,
                     Mode::Impl,
-                    rut_parser::ParseOpts::default(),
+                    rut_ast::parser::ParseOpts::default(),
                 );
                 if !p.ast().is_clean() {
                     continue; // the compile reports the syntax

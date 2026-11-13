@@ -40,7 +40,6 @@ http = ["dep:reqwest"]
 # compile a probe, `verify_against` — dev-deps never propagate
 rut-driver = { path = "../rut-driver" }
 rut-native = { path = "../rut-native" }
-rut-parser = { path = "../rut-parser" }
 rut-lexer = { path = "../rut-lexer" }
 
 # opt into the workspace lint gate (warnings = deny)

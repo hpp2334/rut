@@ -7,7 +7,6 @@ description = "the rut source formatter: `rut fmt`"
 
 [dependencies]
 rut-lexer = { path = "../rut-lexer" }
-rut-parser = { path = "../rut-parser" }
 rut-ast = { path = "../rut-ast" }
 
 [dev-dependencies]

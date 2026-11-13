@@ -9,7 +9,7 @@
 // §7). No VS Code host needed: plain node, runs in milliseconds.
 //
 // Asserts the M1-M8 alignment invariants from docs/lsp-survey-extension.md
-// against RFC ground truth (crates/rut-parser `RESERVED_KW` /
+// against RFC ground truth (crates/rut-ast/src/parser `RESERVED_KW` /
 // `is_primitive_ty`, RFCs 0009 v1.1, 0042, 0043, 0044).
 
 const assert = require('node:assert');

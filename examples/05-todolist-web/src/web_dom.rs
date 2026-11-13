@@ -234,8 +234,9 @@ fn boot_page(rows: &str) -> Result<(), String> {
     // bundle rides), parsed and mounted exactly as the loader would
     let (root, children) = rut_driver::mods::parse_rows(rows)
         .map_err(|e| format!("the app's module rows did not parse: {e}"))?;
-    let mods = rut_driver::mods::mount_rows(&root, &children, rut_parser::Mode::Impl, "mod.rut")
-        .map_err(|e| format!("the app's module tree did not mount: {e}"))?;
+    let mods =
+        rut_driver::mods::mount_rows(&root, &children, rut_ast::parser::Mode::Impl, "mod.rut")
+            .map_err(|e| format!("the app's module tree did not mount: {e}"))?;
     // the SAME declaration the native mirror's `biz_pkg` states
     // (mount.rs): the manifest row set (ui + the std closure + the
     // structural `web` row) is what makes the app's crossings nameable

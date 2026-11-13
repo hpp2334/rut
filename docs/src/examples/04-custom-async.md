@@ -19,7 +19,7 @@ There is no harness. The file is exercised by the parser conformance
 test, which walks every `.rut` file in `examples/`:
 
 ```sh
-cargo test -p rut-parser --test corpus    # parses every example, incl. this one
+cargo test -p rut-ast --test corpus      # parses every example, incl. this one
 ```
 
 To *read* the same machinery running, see
