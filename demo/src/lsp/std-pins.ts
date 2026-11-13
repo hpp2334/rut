@@ -1,6 +1,6 @@
 /**
  * The playground's std pin table — the SAME pins `rut new` scaffolds
- * (the phase-4 std-v16 re-cut's `crates/rut-cli/template/rut.lock`),
+ * (the std-v17 re-cut's `crates/rut-cli/template/rut.lock`),
  * baked here because the browser never reads the repo: the shas are
  * the committed `dist/std/*.zip` bytes the lock vouches, and the urls
  * pin the LANDED COMMIT that carries them on jsDelivr's gh lane (an
@@ -15,7 +15,7 @@
  */
 
 /** the landed commit whose `dist/std/` mirror the fetches pin */
-export const PIN_SHA = "a1ef8b41d032dacc356cbc7b58ae7da067983f4e";
+export const PIN_SHA = "b0c7f0fb5bed46e192725abd00ed5ae0f35bf1d9";
 
 /** the jsDelivr gh-lane url one std zip serves at (the sha-pinned ref) */
 export function stdZipUrl(name: string): string {
@@ -31,7 +31,7 @@ export interface StdPin {
 
 /** the nine std source pkgs, in lock order (sorted by url) */
 export const STD_PINS: StdPin[] = [
-  { name: "calc", url: stdZipUrl("calc"), sha256: "2d77cec7ad941d1a551c6a335b4e4b70c8988477dc45c43110bebd1fad23201b" },
+  { name: "calc", url: stdZipUrl("calc"), sha256: "794f823b8af9d1c1bcf4e1c30c51f1c405954b6ffc1be9cbf9b64739faa3fa24" },
   { name: "flow", url: stdZipUrl("flow"), sha256: "19545c61748bffa057cf6e5bea29bab728417fbcc6b84759216f7f3f68bbebc1" },
   { name: "futures", url: stdZipUrl("futures"), sha256: "e143211a0a6e9ddb0a3ccb5e3e79796d85b2ee627ee4c63f046dc583a55eb711" },
   { name: "http", url: stdZipUrl("http"), sha256: "9c6855cd58d7d888515fff691787a42708cef512423dc6040f8e214dbd00cbac" },
