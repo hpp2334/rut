@@ -16,6 +16,9 @@ use rut_lexer::span::Span;
 #[derive(Clone, Debug)]
 pub struct StructNode {
     pub span: Span,
+    /// the `{..}` region, braces included — the head slice's right cut
+    /// (the LSP verbatim law: decl text is a span×src slice)
+    pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
@@ -38,6 +41,10 @@ impl StructNode {
 #[derive(Clone, Debug)]
 pub struct ClassNode {
     pub span: Span,
+    /// the `{..}` region, braces included — the head slice's right cut.
+    /// The newtype spelling (`class Name(Wrapped);`) has no braces: the
+    /// span degenerates to the decl's own terminator cut
+    pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
@@ -66,6 +73,8 @@ impl ClassNode {
 #[derive(Clone, Debug)]
 pub struct InterfaceNode {
     pub span: Span,
+    /// the `{..}` region, braces included — the head slice's right cut
+    pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,

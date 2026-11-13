@@ -16,42 +16,21 @@ fn provenance(origin: &str, line: u32) -> String {
 
 pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
     let mut out = String::new();
-    let gens = if ty.generics.is_empty() {
-        String::new()
-    } else {
-        format!("<{}>", ty.generics.join(", "))
-    };
-    // the decl head as written — the verbatim slice from the item's
-    // FIRST token (span law v3.1: modifiers included) up to the name,
-    // so `pub class` / `prelude builtin class` / `host struct` render
-    // their spelled prefix. Falls back to the form's keyword when the
-    // row carries no name span (a synthesized row)
-    let head = ty
-        .name_span
-        .filter(|ns| {
-            ty.span.hi as usize <= i.src.len()
-                && ns.lo >= ty.span.lo
-                && ns.lo as usize <= i.src.len()
-        })
-        .map(|ns| i.src[ty.span.lo as usize..ns.lo as usize].to_string())
-        .unwrap_or_else(|| format!("{} ", ty.form.keyword()));
+    // the decl head is the row's own verbatim slice (`head` — from the
+    // first token through the name and generics, modifiers included);
+    // the arms shape only the BODY layout. No synthesized text: the
+    // LSP verbatim law renders source-less rows nowhere
     match ty.form {
         TyForm::Alias => {
-            // `type X = A;` / `type X = A | B;`
-            out.push_str(&code_block(&format!(
-                "{}{} = {};",
-                head,
-                ty.name,
-                ty.alias_target.clone().unwrap_or_default()
-            )));
+            // `type X = A;` — the whole decl as written
+            out.push_str(&code_block(&format!("{};", ty.head)));
         }
         TyForm::Enum => {
-            let members: Vec<&str> = ty.fields.iter().map(|f| f.name.as_str()).collect();
+            // the member rows are the source-true slices
+            let members: Vec<&str> = ty.fields.iter().map(|f| f.src.as_str()).collect();
             out.push_str(&code_block(&format!(
-                "{}{}{} {{ {} }}",
-                head,
-                ty.name,
-                gens,
+                "{} {{ {} }}",
+                ty.head,
                 members.join(", ")
             )));
         }
@@ -62,10 +41,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 body.push_str(&m.src);
                 body.push('\n');
             }
-            out.push_str(&code_block(&format!(
-                "{}{}{} {{\n{}}}",
-                head, ty.name, gens, body
-            )));
+            out.push_str(&code_block(&format!("{} {{\n{}}}", ty.head, body)));
         }
         // a dep's host surface renders like a class body: the consts as
         // fields, the module's fns as the method count
@@ -76,10 +52,7 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 body.push_str(&f.src);
                 body.push('\n');
             }
-            out.push_str(&code_block(&format!(
-                "{}{}{} {{\n{}}}",
-                head, ty.name, gens, body
-            )));
+            out.push_str(&code_block(&format!("{} {{\n{}}}", ty.head, body)));
             if !ty.methods.is_empty() {
                 out.push_str(&format!(
                     "\n{} method{} — hover one for its signature",

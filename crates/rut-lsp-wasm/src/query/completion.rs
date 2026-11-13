@@ -29,7 +29,7 @@ use rut_ast::{Ast, ItemRef, Vis};
 use rut_semantic::{Tok, Token};
 
 use crate::hover::lookup::{find_ty, used_ifaces};
-use crate::hover::types::{DefIndex, TyDef, TyForm};
+use crate::hover::types::{DefIndex, TyForm};
 use crate::mods::{self, DocMods};
 use rut_semantic::LineIndex;
 
@@ -413,7 +413,7 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
                 &mut out,
                 CompletionOut::plain(
                     t.name.clone(),
-                    format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
+                    t.head.clone(),
                     t.doc.clone(),
                     match t.form {
                         TyForm::Interface => CompletionKind::Interface,
@@ -627,7 +627,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
                 &mut out,
                 CompletionOut::plain(
                     t.name.clone(),
-                    format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
+                    t.head.clone(),
                     t.doc.clone(),
                     match t.form {
                         TyForm::Interface => CompletionKind::Interface,
@@ -833,7 +833,7 @@ fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut>
                 &mut out,
                 CompletionOut::plain(
                     t.name.clone(),
-                    format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
+                    t.head.clone(),
                     t.doc.clone(),
                     match t.form {
                         TyForm::Interface => CompletionKind::Interface,
@@ -1039,7 +1039,7 @@ fn position_path_completions(
             &mut out,
             CompletionOut::plain(
                 t.name.clone(),
-                format!("{} {}{}", t.form.keyword(), t.name, gens(t)),
+                t.head.clone(),
                 t.doc.clone(),
                 match t.form {
                     TyForm::Interface => CompletionKind::Interface,
@@ -1296,14 +1296,6 @@ fn body_start(src: &str) -> u32 {
 fn push_item(out: &mut Vec<CompletionOut>, c: CompletionOut) {
     if !out.iter().any(|x| x.label == c.label) {
         out.push(c);
-    }
-}
-
-fn gens(t: &TyDef) -> String {
-    if t.generics.is_empty() {
-        String::new()
-    } else {
-        format!("<{}>", t.generics.join(", "))
     }
 }
 

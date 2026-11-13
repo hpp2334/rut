@@ -1186,6 +1186,25 @@ fn the_type_tier_answers_the_bare_colon_boundary() {
 }
 
 #[test]
+fn type_completion_details_are_the_verbatim_heads() {
+    // the detail label rides the row's verbatim `head` — the keyword,
+    // the spelled modifiers and the generics exactly as written (the
+    // re-synthesized `class Stack<T>` spelling is gone)
+    let src = "\
+pub class Stack<T> {
+items: Vec<T>;
+}
+enum Color { Red, Green }
+entry fn main() -> nil { let s: \n}
+";
+    let items = complete_after(src, "let s:");
+    let stack = items.iter().find(|c| c.label == "Stack").unwrap();
+    assert_eq!(stack.detail, "pub class Stack<T>");
+    let color = items.iter().find(|c| c.label == "Color").unwrap();
+    assert_eq!(color.detail, "enum Color");
+}
+
+#[test]
 fn the_type_tier_answers_the_arrow_boundary() {
     // `fn f() -> ⏐` — the return annotation rides the same tier …
     let src = "struct Thing {\nx: i32;\n}\nfn f() -> \n";

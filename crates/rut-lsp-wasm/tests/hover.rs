@@ -255,6 +255,24 @@ entry fn main() -> nil { let s: Stack<i32> = nil; }
 }
 
 #[test]
+fn generic_heads_render_verbatim_including_bounds() {
+    // the head is the verbatim slice through the body's `{` — the
+    // admission bound rides it exactly as written (the old render
+    // re-synthesized `<K, V>` and silently dropped the bound)
+    let src = "\
+pub class Map<K requires Hashable, V> {
+items: Vec<(K, V)>;
+}
+entry fn main() -> nil { let m: Map<i32, i32> = nil; }
+";
+    let md = hover_at(src, "Map").unwrap();
+    assert!(
+        md.contains("pub class Map<K requires Hashable, V> {"),
+        "{md}"
+    );
+}
+
+#[test]
 fn surface_prefixes_render_verbatim() {
     // the Decl-mode rows: `pub host async fn`, `pub builtin fn`, and
     // `prelude builtin fn` all render as written; the builtin class

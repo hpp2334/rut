@@ -60,6 +60,27 @@ fn sig_src(src: &str, ast: &Ast, span: Span, body: Option<Handle<BlockNode>>) ->
         .to_string()
 }
 
+/// the verbatim decl slice through the item's own `;`, trimmed — the
+/// shared cut of the `mod` edges and the alias head (the render never
+/// re-synthesizes the spelling)
+fn decl_src(src: &str, span: Span) -> String {
+    src[span.lo as usize..span.hi as usize]
+        .trim_end()
+        .trim_end_matches(';')
+        .trim_end()
+        .to_string()
+}
+
+/// verbatim head: the source from the item's FIRST token (span law
+/// v3.1 — modifiers included, generics and admission bounds as
+/// written) up to the body's `{` — the brace pair's left edge, the
+/// head slice's right cut
+fn head_src(src: &str, span: Span, body: Span) -> String {
+    src[span.lo as usize..body.lo as usize]
+        .trim_end()
+        .to_string()
+}
+
 fn member(
     src: &str,
     name: &str,
@@ -148,10 +169,11 @@ fn field_members(src: &str, ast: &Ast, fields: &[FieldRef]) -> Vec<MemberSrc> {
         .collect()
 }
 
-/// enum member list — the members are nodes since v2: their name
-/// spans are the parse's own verdict and their doc chains ride the
-/// node (the KNOWN DELTA: member docs render where the old scan could
-/// not reach)
+/// enum member list — the members are nodes since v2: their spans are
+/// the parse's own verdict, so the row slices the member's span
+/// verbatim (source-true text, never the re-interned name), and their
+/// doc chains ride the node (the KNOWN DELTA: member docs render where
+/// the old scan could not reach)
 fn enum_members(src: &str, ast: &Ast, members: &[rut_ast::MemberRef]) -> Vec<MemberSrc> {
     let mut out = Vec::new();
     for m in members {
@@ -162,7 +184,7 @@ fn enum_members(src: &str, ast: &Ast, members: &[rut_ast::MemberRef]) -> Vec<Mem
         out.push(member(
             src,
             ast.name(d.name),
-            ast.name(d.name).to_string(),
+            d.span.text(src).to_string(),
             None,
             d.span,
             d.name_span,
@@ -178,6 +200,7 @@ fn ty_def(
     name: &str,
     name_span: Span,
     form: TyForm,
+    head: String,
     vis: Vis,
     generics: Vec<String>,
     fields: Vec<MemberSrc>,
@@ -189,6 +212,7 @@ fn ty_def(
         name: name.to_string(),
         name_span: Some(name_span),
         form,
+        head,
         vis,
         is_pub: vis == Vis::Pub,
         // plain decls are not ambient — the `prelude builtin` rows set
@@ -197,7 +221,6 @@ fn ty_def(
         generics,
         fields,
         methods,
-        alias_target: None,
         doc,
         span,
         line: line_of(src, span.lo),
@@ -248,6 +271,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Class,
+                    head_src(src, span, d.body_span),
                     d.vis(),
                     generics_of(ast, &d.generics),
                     fs,
@@ -265,6 +289,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Struct,
+                    head_src(src, span, d.body_span),
                     d.vis(),
                     generics_of(ast, &d.generics),
                     fs,
@@ -281,6 +306,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Interface,
+                    head_src(src, span, d.body_span),
                     d.vis(),
                     generics_of(ast, &d.generics),
                     Vec::new(),
@@ -291,13 +317,15 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
             }
             ItemRef::Enum(h) => {
                 let d = h.get(ast);
-                // the members are nodes — name spans and docs recorded
+                // the members are nodes — their slices, name spans and
+                // docs recorded
                 let ms = enum_members(src, ast, &d.members);
                 idx.types.push(ty_def(
                     src,
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Enum,
+                    head_src(src, span, d.body_span),
                     d.vis(),
                     Vec::new(),
                     ms,
@@ -389,6 +417,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Builtin,
+                    head_src(src, span, d.body_span),
                     Vis::Pub,
                     generics_of(ast, &d.generics),
                     Vec::new(),
@@ -411,6 +440,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Primitive,
+                    head_src(src, span, d.body_span),
                     Vis::Pub,
                     Vec::new(),
                     Vec::new(),
@@ -429,6 +459,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::HostStruct,
+                    head_src(src, span, d.body_span),
                     Vis::Pub,
                     Vec::new(),
                     fs,
@@ -443,13 +474,15 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
             }
             ItemRef::Alias(h) => {
                 let d = h.get(ast);
-                // `type X = A;` / `type X = A | B;` — the
-                // target renders as written
+                // `type X = A;` / `type X = A | B;` — the whole decl is
+                // the verbatim slice (target as written, terminator
+                // trimmed); the row's `head` IS the decl text
                 let name = ast.name(d.name);
                 idx.types.push(TyDef {
                     name: name.to_string(),
                     name_span: Some(d.name_span),
                     form: TyForm::Alias,
+                    head: decl_src(src, span),
                     vis: d.vis(),
                     is_pub: d.vis() == Vis::Pub,
                     ambient: false,
@@ -459,7 +492,6 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     doc: doc_of(&d.doc, src),
                     span,
                     line: line_of(src, span.lo),
-                    alias_target: Some(ty_src(ast, d.target)),
                 });
             }
             ItemRef::ModuleLet(h) => {
@@ -518,14 +550,10 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     name: ast.name(d.name).to_string(),
                     name_span: Some(d.name_span),
                     vis: d.vis(),
-                    // the edge as spelled (`pub mod NAME;` — span law
-                    // v3.1 starts the item at its first modifier), the
-                    // trailing `;` trimmed: render never re-synthesizes
-                    src: src[span.lo as usize..span.hi as usize]
-                        .trim_end()
-                        .trim_end_matches(';')
-                        .trim_end()
-                        .to_string(),
+                    // the edge as spelled (span law v3.1 starts the
+                    // item at its first modifier), the trailing `;`
+                    // trimmed: render never re-synthesizes
+                    src: decl_src(src, span),
                     doc: doc_of(&d.doc, src),
                     span,
                     line: line_of(src, span.lo),
@@ -541,14 +569,10 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     name: ast.name(d.name).to_string(),
                     name_span: Some(d.name_span),
                     vis: d.vis(),
-                    // the edge as spelled (`pub mod NAME;` — span law
-                    // v3.1 starts the item at its first modifier), the
-                    // trailing `;` trimmed: render never re-synthesizes
-                    src: src[span.lo as usize..span.hi as usize]
-                        .trim_end()
-                        .trim_end_matches(';')
-                        .trim_end()
-                        .to_string(),
+                    // the edge as spelled (span law v3.1 starts the
+                    // item at its first modifier), the trailing `;`
+                    // trimmed: render never re-synthesizes
+                    src: decl_src(src, span),
                     doc: doc_of(&d.doc, src),
                     span,
                     line: line_of(src, span.lo),

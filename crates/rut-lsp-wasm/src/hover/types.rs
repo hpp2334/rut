@@ -26,21 +26,6 @@ pub enum TyForm {
     Alias,
 }
 
-impl TyForm {
-    pub(crate) fn keyword(self) -> &'static str {
-        match self {
-            TyForm::Class => "class",
-            TyForm::Struct => "struct",
-            TyForm::Interface => "interface",
-            TyForm::Enum => "enum",
-            TyForm::Builtin => "builtin",
-            TyForm::Primitive => "primitive",
-            TyForm::HostStruct => "host struct",
-            TyForm::Alias => "type",
-        }
-    }
-}
-
 use rut_semantic::LineIndex;
 
 #[derive(Debug, Clone)]
@@ -117,6 +102,13 @@ pub struct TyDef {
     /// not the whole decl)
     pub name_span: Option<Span>,
     pub form: TyForm,
+    /// the decl head as WRITTEN — the verbatim `span × src` slice from
+    /// the item's first token (span law v3.1: modifiers included,
+    /// generics and admission bounds as written) cut at the body's
+    /// `{`; an alias slices through its own terminator. The render and
+    /// the completion labels use it directly — they never
+    /// re-synthesize `class`/`pub`/`<T>` text
+    pub head: String,
     /// the declared visibility — the completion/hover tier gate reads
     /// it (`pub(pkg)`/`pub(super)` are not `pub`)
     pub vis: Vis,
@@ -135,8 +127,6 @@ pub struct TyDef {
     pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
     pub methods: Vec<MemberSrc>,
-    /// `type X = A;` — the target as written; `None` otherwise
-    pub alias_target: Option<String>,
     pub doc: Vec<String>,
     pub span: Span,
     pub line: u32,

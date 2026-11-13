@@ -45,8 +45,10 @@ pub(crate) enum Done {
     Pat(PatRef),
     Members(Vec<ParamRef>),
     Method(crate::MethodRef),
-    /// a struct/class/interface/impl body: (fields, methods) — slots
-    Body(Vec<crate::FieldRef>, Vec<crate::MethodRef>),
+    /// a struct/class/interface/impl/host-struct body: (fields,
+    /// methods, the brace pair's span — braces included; the decl
+    /// node's `body_span`, the LSP head slice's right cut)
+    Body(Vec<crate::FieldRef>, Vec<crate::MethodRef>, Span),
     WhenParts {
         scrut: ExprRef,
         arms: Vec<Handle<crate::WhenArmNode>>,

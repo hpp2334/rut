@@ -85,6 +85,9 @@ pub enum DumpVal {
     FParts(Vec<DumpFPart>),
     /// stored strings: interned names
     Str(String),
+    /// a raw span pair (`body` — the brace region): `[lo,hi]`, no
+    /// fabrication
+    Span(u32, u32),
     /// only emitted when true (quietness, not fabrication)
     Flag(bool),
     Vis(Vis),
@@ -207,6 +210,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             let d: &EnumNode = h.get(a);
             fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field("body", DumpVal::Span(d.body_span.lo, d.body_span.hi)));
             fields.push(field(
                 "members",
                 DumpVal::Members(
@@ -230,6 +234,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             decl_fields(
                 a,
                 &mut fields,
+                (d.body_span.lo, d.body_span.hi),
                 d.vis(),
                 d.name,
                 &d.generics,
@@ -244,6 +249,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             decl_fields(
                 a,
                 &mut fields,
+                (d.body_span.lo, d.body_span.hi),
                 d.vis(),
                 d.name,
                 &d.generics,
@@ -263,6 +269,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             let d: &InterfaceNode = h.get(a);
             fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field("body", DumpVal::Span(d.body_span.lo, d.body_span.hi)));
             if !d.generics.is_empty() {
                 fields.push(field(
                     "generics",
@@ -358,6 +365,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             let d: &SurfaceStructNode = h.get(a);
             fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field("body", DumpVal::Span(d.body_span.lo, d.body_span.hi)));
             fields.push(field(
                 "fields",
                 DumpVal::Nodes(d.fields.iter().map(|f| field_dump(a, *f, next)).collect()),
@@ -379,6 +387,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
                 ),
             ));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field("body", DumpVal::Span(d.body_span.lo, d.body_span.hi)));
             if !d.generics.is_empty() {
                 fields.push(field(
                     "generics",
@@ -405,6 +414,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
                 ),
             ));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
+            fields.push(field("body", DumpVal::Span(d.body_span.lo, d.body_span.hi)));
             fields.push(field(
                 "members",
                 DumpVal::Nodes(d.members.iter().map(|m| method_dump(a, *m, next)).collect()),
@@ -441,6 +451,7 @@ fn module_fields(a: &Ast, d: &ModuleNode, fields: &mut Vec<DumpField>, next: &mu
 fn decl_fields(
     a: &Ast,
     fields: &mut Vec<DumpField>,
+    body: (u32, u32),
     vis: Vis,
     name: IdentId,
     generics: &[IdentId],
@@ -450,6 +461,7 @@ fn decl_fields(
 ) {
     fields.push(field("vis", DumpVal::Vis(vis)));
     fields.push(field("name", DumpVal::Str(a.name(name).to_string())));
+    fields.push(field("body", DumpVal::Span(body.0, body.1)));
     if !generics.is_empty() {
         fields.push(field(
             "generics",
@@ -1314,6 +1326,7 @@ fn val_json(v: &DumpVal, out: &mut String) {
             out.push(']');
         }
         DumpVal::Str(s) => json_escape(s, out),
+        DumpVal::Span(lo, hi) => out.push_str(&format!("[{lo},{hi}]")),
         DumpVal::Flag(b) => out.push_str(if *b { "true" } else { "false" }),
         DumpVal::Vis(v) => out.push_str(&format!("\"{}\"", vis_tag(*v))),
         DumpVal::OptVis(v) => match v {
@@ -1488,6 +1501,7 @@ fn val_text(label: &str, v: &DumpVal, d: usize, src: &str, out: &mut String) {
             }
         }
         DumpVal::Str(s) => out.push_str(&format!("{i}{label}: {s}\n")),
+        DumpVal::Span(lo, hi) => out.push_str(&format!("{i}{label}: [{lo},{hi})\n")),
         DumpVal::Flag(b) => out.push_str(&format!("{i}{label}: {b}\n")),
         DumpVal::Vis(v) => out.push_str(&format!("{i}{label}: {}\n", vis_str(*v))),
         DumpVal::OptVis(v) => {

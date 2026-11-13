@@ -36,6 +36,19 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   is the join (text queries are span×src joins; nothing else stores
   text). The leaf layer (tokens + comments) stays one deterministic
   linear pass away: `rut_lexer::lexer::lex_normalized(&src, collect)`.
+- **The span law (v3.1)**: a decl's span starts at its FIRST source
+  token — modifiers included — and ends at its own terminator (`}` /
+  `;`). The brace-bodied type decls (class/struct/interface/enum and
+  the surface/builtin family) also record `body_span` (the `{..}`
+  region, braces included) — the head slice's right cut.
+- **The modifier-node law**: modifiers are spanned child nodes
+  (`ModifierNode`/`ModKind`) riding the decl in source order; the old
+  flag fields are gone — flags are DERIVED accessors on the node
+  structs (`vis()`/`is_async()`/`is_static()`/`marker()`/`linkage()`/
+  `ambient()`), single truth in the tree.
+- **The LSP verbatim law**: decl text in hover/completion is a
+  span×src slice; only source-less text (inferred/semantic/absent) is
+  rendered.
 - **The capsule law**: `Ast` is the capsule store. Its mut doors
   (`new`/`intern`/`set_root`/`alloc*`/`set_errors`) are `pub(crate)` —
   the parse lane is the parser module INSIDE the crate, so the

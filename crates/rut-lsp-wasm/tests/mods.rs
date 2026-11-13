@@ -37,13 +37,17 @@ fn pub_ty(name: &str, vis: Vis) -> TyDef {
         name: name.to_string(),
         name_span: None,
         form: TyForm::Struct,
+        head: if vis == Vis::Pub {
+            format!("pub struct {name}")
+        } else {
+            format!("struct {name}")
+        },
         vis,
         is_pub: vis == Vis::Pub,
         ambient: false,
         generics: Vec::new(),
         fields: Vec::new(),
         methods: Vec::new(),
-        alias_target: None,
         doc: Vec::new(),
         span: Span::new(0, 0),
         line: 1,

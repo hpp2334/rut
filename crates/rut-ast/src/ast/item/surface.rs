@@ -81,6 +81,8 @@ pub struct SurfaceStructNode {
     /// starts at the item's FIRST token — the leading modifier when
     /// one is spelled, the linkage keyword otherwise
     pub span: Span,
+    /// the `{..}` region, braces included — the head slice's right cut
+    pub body_span: Span,
     /// the modifier chain in source order — `vis()`/`linkage()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
@@ -108,6 +110,8 @@ pub struct BuiltinTyNode {
     /// starts at the item's FIRST token — the leading modifier when
     /// one is spelled, the linkage keyword otherwise
     pub span: Span,
+    /// the `{..}` region, braces included — the head slice's right cut
+    pub body_span: Span,
     /// the modifier chain in source order — `vis()`/`ambient()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,
@@ -136,6 +140,8 @@ pub struct BuiltinPrimitiveNode {
     /// starts at the item's FIRST token — the leading modifier when
     /// one is spelled, the linkage keyword otherwise
     pub span: Span,
+    /// the `{..}` region, braces included — the head slice's right cut
+    pub body_span: Span,
     /// the modifier chain in source order — `vis()`/`ambient()` derive
     /// from it
     pub modifiers: Vec<ModifierNode>,

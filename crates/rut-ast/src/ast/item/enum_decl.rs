@@ -17,6 +17,8 @@ pub struct EnumNode {
     /// starts at the item's FIRST token — the leading modifier when
     /// one is spelled, `enum` otherwise
     pub span: Span,
+    /// the `{..}` region, braces included — the head slice's right cut
+    pub body_span: Span,
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,

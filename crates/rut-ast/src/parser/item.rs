@@ -627,6 +627,8 @@ pub(crate) struct EnumFrame {
     modifiers: Vec<ModifierNode>,
     lo: u32,
     name: Name,
+    /// the body's left boundary — the `{` (hi recorded at the pop)
+    body_lo: u32,
     members: Vec<MemberRef>,
 }
 
@@ -639,6 +641,7 @@ impl EnumFrame {
                 id: IdentId(0),
                 span: Span::new(0, 0),
             },
+            body_lo: 0,
             members: Vec::new(),
         }
     }
@@ -657,7 +660,8 @@ impl EnumFrame {
             return Step::Pop(Done::Failed);
         };
         self.name = name;
-        p.expect(Tok::LBrace);
+        // the body's left boundary — lo at the `{`, hi at the pop's `}`
+        self.body_lo = p.expect(Tok::LBrace).map_or(p.prev_end, |s| s.lo);
         loop {
             if p.eat_punct(Tok::RBrace) {
                 break;
@@ -710,6 +714,9 @@ impl EnumFrame {
             p,
             EnumNode {
                 span: p.span_from(self.lo),
+                // braces included — the `{`..`}` region the loop just
+                // consumed (a missing brace degenerates to the cut)
+                body_span: p.span_from(self.body_lo),
                 modifiers: std::mem::take(&mut self.modifiers),
                 name: self.name.id,
                 name_span: self.name.span,
@@ -908,6 +915,9 @@ impl TyDeclFrame {
                     p,
                     ClassNode {
                         span: p.span_from(self.lo),
+                        // no braces on the newtype spelling — the
+                        // boundary degenerates to the terminator cut
+                        body_span: p.span_from(self.lo),
                         modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
@@ -922,12 +932,13 @@ impl TyDeclFrame {
                 Step::Pop(Done::Item(node.allocate(&mut p.ast)))
             }
             (TdStage::NewtypeTy, Done::Failed) => Step::Pop(Done::Failed),
-            (TdStage::Body, Done::Body(fields, methods)) => {
+            (TdStage::Body, Done::Body(fields, methods, body_span)) => {
                 let item = if self.is_class {
                     with_doc!(
                         p,
                         ClassNode {
                             span: p.span_from(self.lo),
+                            body_span,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
@@ -945,6 +956,7 @@ impl TyDeclFrame {
                         p,
                         StructNode {
                             span: p.span_from(self.lo),
+                            body_span,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
@@ -1003,11 +1015,12 @@ impl InterfaceFrame {
 
     pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
         match d {
-            Done::Body(_, methods) => {
+            Done::Body(_, methods, body_span) => {
                 let node = with_doc!(
                     p,
                     InterfaceNode {
                         span: p.span_from(self.lo),
+                        body_span,
                         modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
@@ -1093,7 +1106,7 @@ impl ImplFrame {
                 self.stage = ImStage::Methods;
                 Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::Inherent)))
             }
-            (ImStage::Methods, Done::Body(_, methods)) => {
+            (ImStage::Methods, Done::Body(_, methods, _body)) => {
                 let node = ImplNode {
                     span: p.span_from(self.lo),
                     generics: std::mem::take(&mut self.generics),
@@ -1137,6 +1150,9 @@ pub(crate) struct TypeBodyFrame {
     /// member start + diag watermark (the fence's extent)
     before: usize,
     dmark: usize,
+    /// the body's left boundary — the `{` (hi recorded at the pop);
+    /// the frame's own boundary bookkeeping, braces byte-exact
+    body_lo: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -1164,6 +1180,7 @@ impl TypeBodyFrame {
             f_ty: None,
             before: 0,
             dmark: 0,
+            body_lo: 0,
         }
     }
 
@@ -1181,13 +1198,13 @@ impl TypeBodyFrame {
             self.mode,
             BodyMode::Class { .. } | BodyMode::HostStruct | BodyMode::Interface
         );
-        if strict {
-            if p.expect(Tok::LBrace).is_none() {
-                return Step::Pop(Done::Failed);
-            }
-        } else {
-            p.expect(Tok::LBrace);
+        let brace = p.expect(Tok::LBrace);
+        if strict && brace.is_none() {
+            return Step::Pop(Done::Failed);
         }
+        // the body's left boundary — lo at the `{` (a missing brace in
+        // the recovering mode degenerates to the last consumed token)
+        self.body_lo = brace.map_or(p.prev_end, |s| s.lo);
         self.stage = TbStage::Members;
         self.members_top(p)
     }
@@ -1221,7 +1238,9 @@ impl TypeBodyFrame {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
                 let fields = std::mem::take(&mut self.fields);
                 let methods = std::mem::take(&mut self.methods);
-                return Step::Pop(Done::Body(fields, methods));
+                // hi at the `}` — braces included, byte-exact
+                let body = p.span_from(self.body_lo);
+                return Step::Pop(Done::Body(fields, methods, body));
             }
             self.before = p.pos;
             self.dmark = p.mark();
@@ -1895,6 +1914,9 @@ pub(crate) struct SurfaceFrame {
     name: Name,
     generics: Vec<IdentId>,
     methods: Vec<MethodRef>,
+    /// the brace body's left boundary — the `{` (hi recorded at the
+    /// pop); the brace-bodied surface rows' `body_span`
+    body_lo: u32,
     params: Option<Vec<ParamRef>>,
     ret: Option<TyRef>,
 }
@@ -1921,6 +1943,7 @@ impl SurfaceFrame {
             },
             generics: Vec::new(),
             methods: Vec::new(),
+            body_lo: 0,
             params: None,
             ret: None,
         }
@@ -2073,7 +2096,8 @@ impl SurfaceFrame {
                     debug_assert!(pending.is_none(), "rejected bounds never suspend");
                 }
                 self.stage = SuStage::Members;
-                p.expect(Tok::LBrace);
+                // the body's left boundary — lo at the `{`, hi at the pop
+                self.body_lo = p.expect(Tok::LBrace).map_or(p.prev_end, |s| s.lo);
                 self.members_top(p)
             }
             Tok::Ident(k) if k == "primitive" => {
@@ -2090,7 +2114,7 @@ impl SurfaceFrame {
                     }
                 }
                 self.stage = SuStage::Members;
-                p.expect(Tok::LBrace);
+                self.body_lo = p.expect(Tok::LBrace).map_or(p.prev_end, |s| s.lo);
                 self.members_top(p)
             }
             Tok::Ident(k) if k == "impl" => {
@@ -2101,7 +2125,7 @@ impl SurfaceFrame {
                 self.name = prim;
                 self.is_impl = true;
                 self.stage = SuStage::Members;
-                p.expect(Tok::LBrace);
+                self.body_lo = p.expect(Tok::LBrace).map_or(p.prev_end, |s| s.lo);
                 self.members_top(p)
             }
             Tok::Ident(_) => {
@@ -2123,6 +2147,7 @@ impl SurfaceFrame {
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
+                let body = p.span_from(self.body_lo);
                 let item = if self.is_impl {
                     BuiltinImplNode {
                         span: p.span_from(self.lo),
@@ -2137,6 +2162,7 @@ impl SurfaceFrame {
                         p,
                         BuiltinPrimitiveNode {
                             span: p.span_from(self.lo),
+                            body_span: body,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
@@ -2150,6 +2176,7 @@ impl SurfaceFrame {
                         p,
                         BuiltinTyNode {
                             span: p.span_from(self.lo),
+                            body_span: body,
                             modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
@@ -2208,11 +2235,12 @@ impl SurfaceFrame {
             }
             // a host struct body arrives as (fields, no methods) — any
             // `fn` member was diagnosed by the body frame and is dropped
-            (SuStage::Members, Done::Body(fields, _methods)) => {
+            (SuStage::Members, Done::Body(fields, _methods, body_span)) => {
                 let node = with_doc!(
                     p,
                     SurfaceStructNode {
                         span: p.span_from(self.lo),
+                        body_span,
                         modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
