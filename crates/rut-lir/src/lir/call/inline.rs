@@ -365,7 +365,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             return false;
         }
         let fd = fnode.get(self.ctx.ast).clone();
-        if fd.is_async {
+        if fd.is_async() {
             return false; // `async` is diagnosed when the body is compiled
         }
         let body = fd.body;

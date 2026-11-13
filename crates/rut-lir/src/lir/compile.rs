@@ -135,7 +135,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             FnKey::HostThunk(_) => unreachable!(),
         };
         let is_async = match found {
-            FoundDecl::Fn(fh) => fh.get(ctx.ast).is_async,
+            FoundDecl::Fn(fh) => fh.get(ctx.ast).is_async(),
             FoundDecl::Method(mh) => mh.get(ctx.ast).is_async(),
         };
         if is_async {

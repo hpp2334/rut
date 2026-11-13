@@ -153,13 +153,13 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::ModDecl(h) => {
             let d = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             "ModDecl"
         }
         ItemRef::ModInline(h) => {
             let d = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             fields.push(field(
                 "items",
@@ -169,7 +169,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::Use(h) => {
             let d = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field(
                 "path",
                 DumpVal::Idents(d.path.iter().map(|&x| a.name(x).to_string()).collect()),
@@ -182,7 +182,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::Alias(h) => {
             let d: &AliasNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             fields.push(field(
                 "target",
@@ -192,7 +192,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::ModuleLet(h) => {
             let d: &ModuleLetNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             if let Some(t) = d.ty {
                 fields.push(field("ty", DumpVal::Node(Box::new(ty_dump(a, t, next)))));
@@ -205,7 +205,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::Enum(h) => {
             let d: &EnumNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             fields.push(field(
                 "members",
@@ -230,7 +230,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             decl_fields(
                 a,
                 &mut fields,
-                d.vis,
+                d.vis(),
                 d.name,
                 &d.generics,
                 &d.fields,
@@ -244,7 +244,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             decl_fields(
                 a,
                 &mut fields,
-                d.vis,
+                d.vis(),
                 d.name,
                 &d.generics,
                 &d.fields,
@@ -261,7 +261,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::Interface(h) => {
             let d: &InterfaceNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             if !d.generics.is_empty() {
                 fields.push(field(
@@ -295,8 +295,8 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::Fn(h) => {
             let f: &FnNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(f.vis)));
-            if f.is_async {
+            fields.push(field("vis", DumpVal::Vis(f.vis())));
+            if f.is_async() {
                 fields.push(field("async", DumpVal::Flag(true)));
             }
             fields.push(field("name", DumpVal::Str(a.name(f.name).to_string())));
@@ -324,18 +324,18 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::SurfaceFn(h) => {
             let d: &SurfaceFnNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field(
                 "linkage",
                 DumpVal::Str(
-                    match d.linkage {
+                    match d.linkage() {
                         crate::ast::item::Linkage::Host => "host",
                         crate::ast::item::Linkage::Builtin { .. } => "builtin",
                     }
                     .to_string(),
                 ),
             ));
-            if d.is_async {
+            if d.is_async() {
                 fields.push(field("is_async", DumpVal::Flag(true)));
             }
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
@@ -356,7 +356,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::SurfaceStruct(h) => {
             let d: &SurfaceStructNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             fields.push(field(
                 "fields",
@@ -366,11 +366,11 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::BuiltinTy(h) => {
             let d: &BuiltinTyNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
+            fields.push(field("vis", DumpVal::Vis(d.vis())));
             fields.push(field(
                 "linkage",
                 DumpVal::Str(
-                    if d.ambient {
+                    if d.ambient() {
                         "prelude builtin"
                     } else {
                         "pub builtin"
@@ -396,7 +396,7 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             fields.push(field(
                 "linkage",
                 DumpVal::Str(
-                    if d.ambient {
+                    if d.ambient() {
                         "prelude builtin"
                     } else {
                         "pub builtin"
@@ -413,7 +413,6 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
         }
         ItemRef::BuiltinImpl(h) => {
             let d: &BuiltinImplNode = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis)));
             fields.push(field("prim", DumpVal::Str(a.name(d.prim).to_string())));
             fields.push(field(
                 "methods",

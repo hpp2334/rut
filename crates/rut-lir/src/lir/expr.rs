@@ -1121,7 +1121,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 return Some(Err(()));
             }
             if let Some(fnode) = self.ctx.fn_in(&m, name) {
-                let vis = fnode.get(self.ctx.ast).vis;
+                let vis = fnode.get(self.ctx.ast).vis();
                 if !self.ctx.vis_crosses(&from, &m, vis) {
                     self.ctx.err(
                         sp,
@@ -1304,7 +1304,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(target) = self.ctx.own_use_target(name) {
             if let Some(fnode) = self.ctx.fn_in(&target, name) {
                 let from = self.ctx.cur_mod.clone();
-                let vis = fnode.get(self.ctx.ast).vis;
+                let vis = fnode.get(self.ctx.ast).vis();
                 if !self.ctx.vis_crosses(&from, &target, vis) {
                     self.ctx.err(
                         sp,
@@ -1363,7 +1363,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let fd = fnode.get(self.ctx.ast).clone();
-        if fd.is_async {
+        if fd.is_async() {
             self.ctx.err(
                 sp,
                 format!(

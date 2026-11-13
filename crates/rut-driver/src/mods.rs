@@ -181,7 +181,7 @@ fn mount_rec(
             continue;
         };
         let d = h.get(ast);
-        let (vis, name) = (d.vis, d.name);
+        let (vis, name) = (d.vis(), d.name);
         let name = ast.name(name).to_string();
         let child_path = if parent.is_empty() {
             name.clone()
@@ -515,11 +515,11 @@ pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
         // decl. A private `use` stays what it was: an import, no row.
         if let ItemRef::Use(h) = it {
             let d = h.get(ast);
-            if d.vis != Vis::Self_ {
+            if d.vis() != Vis::Self_ {
                 for &n in &d.names {
                     out.push(DeclRow {
                         name: ast.name(n).to_string(),
-                        vis: d.vis,
+                        vis: d.vis(),
                         kind: DeclKind::Use,
                         is_async: false,
                     });
@@ -530,42 +530,42 @@ pub(crate) fn decl_rows(ast: &Ast) -> Vec<DeclRow> {
         let (name, vis, kind, is_async) = match it {
             ItemRef::Fn(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::Fn, d.is_async)
+                (d.name, d.vis(), DeclKind::Fn, d.is_async())
             }
             ItemRef::Alias(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::Alias, false)
+                (d.name, d.vis(), DeclKind::Alias, false)
             }
             ItemRef::ModuleLet(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::ModuleLet, false)
+                (d.name, d.vis(), DeclKind::ModuleLet, false)
             }
             ItemRef::Enum(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::Enum, false)
+                (d.name, d.vis(), DeclKind::Enum, false)
             }
             ItemRef::Struct(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::Struct, false)
+                (d.name, d.vis(), DeclKind::Struct, false)
             }
             ItemRef::Class(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::Class, false)
+                (d.name, d.vis(), DeclKind::Class, false)
             }
             ItemRef::Interface(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::Interface, false)
+                (d.name, d.vis(), DeclKind::Interface, false)
             }
             ItemRef::ModDecl(h) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::Mod, false)
+                (d.name, d.vis(), DeclKind::Mod, false)
             }
             // a `host fn` surface row — the host tree's leaf decl: the
             // declaring `pub` rides it, so a qualified use validates
             // (`pub host fn` crosses, a bare `host fn` is private)
-            ItemRef::SurfaceFn(h) if matches!(h.get(ast).linkage, Linkage::Host) => {
+            ItemRef::SurfaceFn(h) if matches!(h.get(ast).linkage(), Linkage::Host) => {
                 let d = h.get(ast);
-                (d.name, d.vis, DeclKind::HostFn, d.is_async)
+                (d.name, d.vis(), DeclKind::HostFn, d.is_async())
             }
             _ => continue,
         };

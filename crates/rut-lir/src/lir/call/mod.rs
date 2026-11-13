@@ -500,7 +500,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         if let Some(target) = self.ctx.own_use_target(name) {
             if let Some(fnode) = self.ctx.fn_in(&target, name) {
                 let from = self.ctx.cur_mod.clone();
-                let vis = fnode.get(self.ctx.ast).vis;
+                let vis = fnode.get(self.ctx.ast).vis();
                 if !self.ctx.vis_crosses(&from, &target, vis) {
                     self.ctx.err(
                         sp,
@@ -899,7 +899,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
         };
         if let Some(fnode) = self.ctx.fn_in(&m, name) {
-            if let Some(msg) = vis_gate(self.ctx, name, fnode.get(self.ctx.ast).vis) {
+            if let Some(msg) = vis_gate(self.ctx, name, fnode.get(self.ctx.ast).vis()) {
                 self.ctx.err(sp, msg);
                 return Some(Err(()));
             }

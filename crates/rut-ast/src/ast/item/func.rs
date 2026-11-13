@@ -7,6 +7,7 @@ use crate::ast::doc::DocData;
 use crate::ast::error::ErrorNode;
 use crate::ast::expr::BlockNode;
 use crate::ast::handle::Handle;
+use crate::ast::item::class::{item_is_async, item_vis, ModKind, ModifierNode};
 use crate::ast::item::{ItemRef, Vis};
 use crate::ast::ty::TyRef;
 use crate::slot_alloc;
@@ -16,11 +17,12 @@ use rut_lexer::span::Span;
 /// `pub(..)? async? entry? fn Name<..>(params) -> T { body }`
 #[derive(Clone, Debug)]
 pub struct FnNode {
+    /// starts at the item's FIRST token — the leading modifier when
+    /// one is spelled, `fn` otherwise
     pub span: Span,
-    pub vis: Vis,
-    pub is_async: bool,
-    /// `entry fn` — host-callable: lands in the binary's entry table
-    pub entry: bool,
+    /// the modifier chain in source order — `vis()`/`is_async()`/
+    /// `entry()` derive from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub generics: Vec<IdentId>,
@@ -30,6 +32,23 @@ pub struct FnNode {
     pub ret: Option<TyRef>,
     pub body: Handle<BlockNode>,
     pub doc: DocData,
+}
+
+impl FnNode {
+    /// the spelled item visibility — `Vis::Self_` when unannotated
+    pub fn vis(&self) -> Vis {
+        item_vis(&self.modifiers)
+    }
+    /// spelled `async`?
+    pub fn is_async(&self) -> bool {
+        item_is_async(&self.modifiers)
+    }
+    /// spelled `entry`? — the host-callable surface
+    pub fn entry(&self) -> bool {
+        self.modifiers
+            .iter()
+            .any(|m| matches!(m.kind, ModKind::Entry))
+    }
 }
 
 /// `mut`? name: ty — or a type-less lambda param `(x)`

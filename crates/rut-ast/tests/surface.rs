@@ -29,7 +29,7 @@ fn host_fn_parses() {
         panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
     let d = h.get(&ast);
-    assert_eq!(d.linkage, Linkage::Host);
+    assert_eq!(d.linkage(), Linkage::Host);
     assert_eq!(ast.name(d.name), "string_len");
     assert_eq!(d.params.len(), 1);
     let ItemRef::SurfaceFn(h2) = items[1] else {
@@ -37,11 +37,81 @@ fn host_fn_parses() {
     };
     let d2 = h2.get(&ast);
     assert!(
-        matches!(d2.linkage, Linkage::Builtin { ambient: true }),
+        matches!(d2.linkage(), Linkage::Builtin { ambient: true }),
         "`prelude builtin fn` is the ambient builtin linkage: {:?}",
-        d2.linkage
+        d2.linkage()
     );
     assert_eq!(d2.generics.len(), 1, "builtin fn keeps its generics");
+}
+
+#[test]
+fn surface_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
+    // span law v3.1 for items: the span starts at the item's FIRST
+    // token and every modifier rides the node as a spanned child in
+    // source order. `prelude builtin` is ONE Builtin modifier covering
+    // both tokens; `pub builtin` spells Pub + Builtin { ambient: false }.
+    let src = "prelude builtin fn own<T>(x: T) -> T;\n\
+               pub builtin fn take<T>(x: T) -> T;\n\
+               pub host async fn fetch(u: str) -> bytes;\n";
+    let (ast, diags) = parse(src, Mode::Decl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.root().items(&ast);
+
+    let ItemRef::SurfaceFn(ah) = items[0] else {
+        panic!("expected a SurfaceFn, got {:?}", items[0]);
+    };
+    let a = ah.get(&ast);
+    let a_lo = src.find("prelude").unwrap() as u32;
+    assert_eq!(a.span.lo, a_lo, "the span starts at `prelude`");
+    assert_eq!(a.modifiers.len(), 1, "prelude builtin — one modifier");
+    let rut_ast::ModKind::Builtin { ambient } = a.modifiers[0].kind else {
+        panic!("a builtin modifier, got {:?}", a.modifiers[0].kind);
+    };
+    assert!(ambient);
+    assert_eq!(
+        a.modifiers[0].span.text(src),
+        "prelude builtin",
+        "the modifier covers both tokens"
+    );
+    assert!(matches!(a.linkage(), Linkage::Builtin { ambient: true }));
+    assert_eq!(a.vis(), Vis::Self_);
+    assert!(!a.is_async());
+
+    let ItemRef::SurfaceFn(bh) = items[1] else {
+        panic!("expected a SurfaceFn, got {:?}", items[1]);
+    };
+    let b = bh.get(&ast);
+    let b_lo = src.find("pub builtin").unwrap() as u32;
+    assert_eq!(b.span.lo, b_lo);
+    assert_eq!(b.modifiers.len(), 2, "pub + builtin, in source order");
+    assert!(matches!(
+        b.modifiers[0].kind,
+        rut_ast::ModKind::Pub(Vis::Pub)
+    ));
+    assert_eq!(b.modifiers[0].span.text(src), "pub");
+    let rut_ast::ModKind::Builtin { ambient } = b.modifiers[1].kind else {
+        panic!("a builtin modifier, got {:?}", b.modifiers[1].kind);
+    };
+    assert!(!ambient, "`pub builtin` is the import-gated spelling");
+    assert_eq!(b.modifiers[1].span.text(src), "builtin");
+    assert!(matches!(b.linkage(), Linkage::Builtin { ambient: false }));
+    assert_eq!(b.vis(), Vis::Pub);
+
+    let ItemRef::SurfaceFn(ch) = items[2] else {
+        panic!("expected a SurfaceFn, got {:?}", items[2]);
+    };
+    let c = ch.get(&ast);
+    assert_eq!(c.span.lo, src.find("pub host").unwrap() as u32);
+    assert_eq!(c.modifiers.len(), 3, "pub + host + async, in source order");
+    assert!(matches!(c.modifiers[1].kind, rut_ast::ModKind::Host));
+    assert!(matches!(c.modifiers[2].kind, rut_ast::ModKind::Async));
+    assert_eq!(c.linkage(), Linkage::Host);
+    assert!(c.is_async());
+    assert!(
+        c.span.text(src).starts_with("pub host async fn"),
+        "the span covers the whole prefix: {}",
+        c.span.text(src)
+    );
 }
 
 #[test]
@@ -62,7 +132,7 @@ pub host fn legacy_ping() -> bool;
     let edge = |i: usize| match items[i] {
         ItemRef::ModDecl(h) => {
             let d = h.get(&ast);
-            (d.vis, ast.name(d.name).to_string())
+            (d.vis(), ast.name(d.name).to_string())
         }
         k => panic!("expected a mod decl at {i}, got {k:?}"),
     };
@@ -73,11 +143,11 @@ pub host fn legacy_ping() -> bool;
     };
     let d = h.get(&ast);
     assert_eq!(
-        d.vis,
+        d.vis(),
         Vis::Pub,
         "`pub host fn` keeps its pub beside mod edges"
     );
-    assert_eq!(d.linkage, Linkage::Host);
+    assert_eq!(d.linkage(), Linkage::Host);
     assert_eq!(ast.name(d.name), "legacy_ping");
 }
 
@@ -240,8 +310,8 @@ fn host_async_fn_parses() {
         panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
     let d = h.get(&ast);
-    assert_eq!(d.linkage, Linkage::Host);
-    assert!(d.is_async, "the async marker must land on the decl");
+    assert_eq!(d.linkage(), Linkage::Host);
+    assert!(d.is_async(), "the async marker must land on the decl");
     assert_eq!(ast.name(d.name), "fetch");
     assert_eq!(d.params.len(), 1);
     assert!(d.ret.is_some());
@@ -249,7 +319,7 @@ fn host_async_fn_parses() {
     let ItemRef::SurfaceFn(h2) = items[1] else {
         panic!("expected a SurfaceFn item, got {:?}", items[1]);
     };
-    assert!(!h2.get(&ast).is_async);
+    assert!(!h2.get(&ast).is_async());
 }
 
 #[test]
@@ -378,9 +448,9 @@ fn the_two_builtin_spellings_parse_clean() {
         panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
     assert!(
-        matches!(h.get(&ast).linkage, Linkage::Builtin { ambient: true }),
+        matches!(h.get(&ast).linkage(), Linkage::Builtin { ambient: true }),
         "`prelude builtin` is the ambient spelling: {:?}",
-        h.get(&ast).linkage
+        h.get(&ast).linkage()
     );
 
     let (ast, diags) = parse("pub builtin fn own<T>(x: T) -> T;", Mode::Decl);
@@ -393,9 +463,9 @@ fn the_two_builtin_spellings_parse_clean() {
         panic!("expected a SurfaceFn item, got {:?}", items[0]);
     };
     assert!(
-        matches!(h.get(&ast).linkage, Linkage::Builtin { ambient: false }),
+        matches!(h.get(&ast).linkage(), Linkage::Builtin { ambient: false }),
         "`pub builtin` is the import-gated spelling: {:?}",
-        h.get(&ast).linkage
+        h.get(&ast).linkage()
     );
 
     // the kind words compose with both spellings (the `builtin trait`
@@ -600,7 +670,7 @@ pub host fn legacy() -> bool;
         panic!("expected a ModInline, got {:?}", items[0]);
     };
     let net = nh.get(&ast);
-    assert_eq!(net.vis, Vis::Pub);
+    assert_eq!(net.vis(), Vis::Pub);
     assert_eq!(ast.name(net.name), "net");
     assert_eq!(
         net.items.len(),

@@ -88,14 +88,14 @@ fn declared_names() -> DeclSurfaces {
             ItemRef::SurfaceFn(h) => {
                 let d = h.get(&ast);
                 assert!(
-                    matches!(d.linkage, Linkage::Builtin { .. }),
+                    matches!(d.linkage(), Linkage::Builtin { .. }),
                     "the prelude's fns are all engine-lowered"
                 );
                 assert!(
-                    d.generics.is_empty() || !matches!(d.linkage, Linkage::Host),
+                    d.generics.is_empty() || !matches!(d.linkage(), Linkage::Host),
                     "crossing signatures are concrete"
                 );
-                let ambient = matches!(d.linkage, Linkage::Builtin { ambient: true });
+                let ambient = matches!(d.linkage(), Linkage::Builtin { ambient: true });
                 builtin_fns.push((ast.name(d.name).to_string(), ambient));
             }
             ItemRef::BuiltinTy(h) => {
@@ -104,7 +104,7 @@ fn declared_names() -> DeclSurfaces {
                 // `str`/`bytes` are language primitives — their
                 // member contracts are doc surface, not registered natives
                 if !rut_ast::parser::is_primitive_ty(&n) {
-                    builtin_types.push((n, d.ambient));
+                    builtin_types.push((n, d.ambient()));
                 }
             }
             ItemRef::BuiltinPrimitive(h) => {
@@ -115,7 +115,7 @@ fn declared_names() -> DeclSurfaces {
                 if rut_ast::parser::is_primitive_ty(&n) {
                     continue;
                 }
-                builtin_types.push((n, d.ambient));
+                builtin_types.push((n, d.ambient()));
             }
             ItemRef::Interface(h) => {
                 plain_ifaces.push(ast.name(h.get(&ast).name).to_string());

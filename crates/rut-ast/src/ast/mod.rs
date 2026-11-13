@@ -19,7 +19,6 @@
 //! root globs it) — consumers never spell a module path; file layout
 //! stays free to move.
 
-mod store;
 mod doc;
 mod dump;
 mod error;
@@ -28,12 +27,13 @@ mod handle;
 mod item;
 mod pat;
 mod stmt;
+mod store;
 mod ty;
 
-pub use store::Ast;
 pub use doc::{CommentData, DocData};
 pub use error::ErrorNode;
 pub use handle::{Arena, Handle, NodeStore};
+pub use store::Ast;
 // the construction macros ride the same chain (crate-root reachable,
 // crate-only visible — the capsule's allocation lane)
 pub(crate) use handle::{plain_alloc, slot_alloc, slot_span};

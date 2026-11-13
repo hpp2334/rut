@@ -441,7 +441,7 @@ fn compile_program_inner(
                     leaf: n,
                     qualified,
                     composed,
-                    pub_use: u.vis != rut_ast::Vis::Self_,
+                    pub_use: u.vis() != rut_ast::Vis::Self_,
                     span,
                 });
             }
@@ -1059,7 +1059,7 @@ fn compile_program_inner(
                 .fn_nodes
                 .iter()
                 .find(|(n, _)| *n == name)
-                .map(|(_, n)| n.get(ctx.ast).is_async)
+                .map(|(_, n)| n.get(ctx.ast).is_async())
                 .unwrap()
             {
                 continue;
@@ -1211,7 +1211,7 @@ fn compile_program_inner(
                     .iter()
                     .find(|(n, _)| n == name)
                     .map(|(_, n)| *n);
-                let is_async = node.map(|n| n.get(ctx.ast).is_async).unwrap_or(false);
+                let is_async = node.map(|n| n.get(ctx.ast).is_async()).unwrap_or(false);
                 // a module's fn rides the surface MOD-QUALIFIED
                 // (`math::sqrt`, the host rows' `net::connect`
                 // convention): the consumer's qualified uses and
@@ -1467,7 +1467,7 @@ fn compile_program_inner(
             continue;
         }
         let fd = node.get(ctx.ast);
-        if fd.generics.is_empty() || fd.is_async {
+        if fd.generics.is_empty() || fd.is_async() {
             continue;
         }
         // the placeholder signature resolves in the fn's module (phase 3)
@@ -2085,7 +2085,7 @@ fn compile_program_inner(
                 continue;
             }
             let fd = node.get(ctx.ast);
-            if !fd.generics.is_empty() || fd.is_async {
+            if !fd.generics.is_empty() || fd.is_async() {
                 continue;
             }
             // the signature resolves in the fn's module (phase 3)

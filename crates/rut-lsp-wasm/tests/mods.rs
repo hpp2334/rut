@@ -18,6 +18,11 @@ fn mod_index(pkg: &str, mod_path: &str, edges: &[(&str, Vis)]) -> DefIndex {
             name: name.to_string(),
             name_span: None,
             vis: *vis,
+            src: if *vis == Vis::Pub {
+                format!("pub mod {name}")
+            } else {
+                format!("mod {name}")
+            },
             doc: Vec::new(),
             span: Span::new(0, 0),
             line: 1,

@@ -248,7 +248,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Class,
-                    d.vis,
+                    d.vis(),
                     generics_of(ast, &d.generics),
                     fs,
                     ms,
@@ -265,7 +265,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Struct,
-                    d.vis,
+                    d.vis(),
                     generics_of(ast, &d.generics),
                     fs,
                     ms,
@@ -281,7 +281,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Interface,
-                    d.vis,
+                    d.vis(),
                     generics_of(ast, &d.generics),
                     Vec::new(),
                     ms,
@@ -298,7 +298,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ast.name(d.name),
                     d.name_span,
                     TyForm::Enum,
-                    d.vis,
+                    d.vis(),
                     Vec::new(),
                     ms,
                     Vec::new(),
@@ -346,7 +346,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ret: d.ret.map(|r| ty_src(ast, r)),
                     params: param_names(ast, &d.params),
                     doc: doc_of(&d.doc, src),
-                    vis: d.vis,
+                    vis: d.vis(),
                     ambient: false,
                     owner: None,
                     span,
@@ -357,7 +357,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                 let d = h.get(ast);
                 // the import-gated builtin linkage (`pub builtin`) — the
                 // name completes only through the document's `use`
-                if matches!(d.linkage, rut_ast::Linkage::Builtin { ambient: false }) {
+                if matches!(d.linkage(), rut_ast::Linkage::Builtin { ambient: false }) {
                     idx.pub_gated.push(ast.name(d.name).to_string());
                 }
                 idx.fns.push(FnDef {
@@ -369,10 +369,10 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     ret: None,
                     params: param_names(ast, &d.params),
                     doc: doc_of(&d.doc, src),
-                    vis: d.vis,
+                    vis: d.vis(),
                     // the ambient spelling (`prelude builtin fn`) binds
                     // in every unit — completion offers it bare
-                    ambient: matches!(d.linkage, rut_ast::Linkage::Builtin { ambient: true }),
+                    ambient: matches!(d.linkage(), rut_ast::Linkage::Builtin { ambient: true }),
                     owner: None,
                     span,
                     line: line_of(src, span.lo),
@@ -380,7 +380,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
             }
             ItemRef::BuiltinTy(h) => {
                 let d = h.get(ast);
-                if !d.ambient {
+                if !d.ambient() {
                     idx.pub_gated.push(ast.name(d.name).to_string());
                 }
                 let ms = members_of(src, ast, &d.members);
@@ -397,12 +397,12 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     doc_of(&d.doc, src),
                 );
                 // `prelude builtin` — ambient, offered bare
-                def.ambient = d.ambient;
+                def.ambient = d.ambient();
                 idx.types.push(def);
             }
             ItemRef::BuiltinPrimitive(h) => {
                 let d = h.get(ast);
-                if !d.ambient {
+                if !d.ambient() {
                     idx.pub_gated.push(ast.name(d.name).to_string());
                 }
                 let ms = members_of(src, ast, &d.members);
@@ -418,7 +418,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     span,
                     doc_of(&d.doc, src),
                 );
-                def.ambient = d.ambient;
+                def.ambient = d.ambient();
                 idx.types.push(def);
             }
             ItemRef::SurfaceStruct(h) => {
@@ -450,8 +450,8 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     name: name.to_string(),
                     name_span: Some(d.name_span),
                     form: TyForm::Alias,
-                    vis: d.vis,
-                    is_pub: d.vis == Vis::Pub,
+                    vis: d.vis(),
+                    is_pub: d.vis() == Vis::Pub,
                     ambient: false,
                     generics: Vec::new(),
                     fields: Vec::new(),
@@ -501,7 +501,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     idx.uses.push(UseDef {
                         name: ast.name(*name_id).to_string(),
                         name_span: Some(*name_span),
-                        vis: d.vis,
+                        vis: d.vis(),
                         pkg: use_path[0].clone(),
                         path: use_path.clone(),
                         path_spans: path_spans.clone(),
@@ -517,7 +517,15 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                 idx.mods.push(ModDef {
                     name: ast.name(d.name).to_string(),
                     name_span: Some(d.name_span),
-                    vis: d.vis,
+                    vis: d.vis(),
+                    // the edge as spelled (`pub mod NAME;` — span law
+                    // v3.1 starts the item at its first modifier), the
+                    // trailing `;` trimmed: render never re-synthesizes
+                    src: src[span.lo as usize..span.hi as usize]
+                        .trim_end()
+                        .trim_end_matches(';')
+                        .trim_end()
+                        .to_string(),
                     doc: doc_of(&d.doc, src),
                     span,
                     line: line_of(src, span.lo),
@@ -532,7 +540,15 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                 idx.mods.push(ModDef {
                     name: ast.name(d.name).to_string(),
                     name_span: Some(d.name_span),
-                    vis: d.vis,
+                    vis: d.vis(),
+                    // the edge as spelled (`pub mod NAME;` — span law
+                    // v3.1 starts the item at its first modifier), the
+                    // trailing `;` trimmed: render never re-synthesizes
+                    src: src[span.lo as usize..span.hi as usize]
+                        .trim_end()
+                        .trim_end_matches(';')
+                        .trim_end()
+                        .to_string(),
                     doc: doc_of(&d.doc, src),
                     span,
                     line: line_of(src, span.lo),
@@ -564,7 +580,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
             ty: ty_text,
             src: src_text,
             doc: doc_of(&d.doc, src),
-            vis: d.vis,
+            vis: d.vis(),
             span,
             line: line_of(src, span.lo),
         });

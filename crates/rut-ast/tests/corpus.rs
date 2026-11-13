@@ -429,7 +429,7 @@ pub(super) mod internal;
     let decl = |i: usize| match items[i] {
         ItemRef::ModDecl(h) => {
             let d = h.get(&ast);
-            (d.vis, ast.name(d.name).to_string())
+            (d.vis(), ast.name(d.name).to_string())
         }
         k => panic!("expected a mod decl at {i}, got {k:?}"),
     };
@@ -537,12 +537,21 @@ fn pub_use_parses_with_the_reexport_vis() {
         match items[0] {
             ItemRef::Use(h) => {
                 let u = h.get(&ast);
-                assert_eq!(u.vis, want_vis, "{src}: the re-export vis");
-                // the span starts at the `use` keyword (the `pub`
-                // prefix rides in vis — the vis-carrying items' law),
-                // so `pub` never leaks into the path queue walks
+                assert_eq!(u.vis(), want_vis, "{src}: the re-export vis");
+                // span law v3.1: the span starts at the item's FIRST
+                // token — the `pub`/`pub(..)` modifier when one is
+                // spelled, `use` otherwise
+                let want_head = match want_vis {
+                    Vis::Pub => "pub use",
+                    Vis::Super => "pub(super) use",
+                    Vis::Pkg => "pub(pkg) use",
+                    Vis::Self_ => "use",
+                };
                 let text = u.span.text(src);
-                assert!(text.starts_with("use "), "{src}: span starts at `use`");
+                assert!(
+                    text.starts_with(want_head),
+                    "{src}: the span starts at its first token: {text}"
+                );
             }
             k => panic!("{src}: expected a use item, got {k:?}"),
         }
@@ -551,7 +560,7 @@ fn pub_use_parses_with_the_reexport_vis() {
     let (ast, diags) = parse("pub use core::{ opaque };\n", Mode::Decl);
     assert!(diags.is_empty(), "{diags:?}");
     match ast.root().items(&ast)[0] {
-        ItemRef::Use(h) => assert_eq!(h.get(&ast).vis, Vis::Pub),
+        ItemRef::Use(h) => assert_eq!(h.get(&ast).vis(), Vis::Pub),
         k => panic!("expected a use item, got {k:?}"),
     }
 }
@@ -597,7 +606,7 @@ fn pub_mod_and_pub_self_are_gone_everywhere() {
     assert!(diags.is_empty(), "{diags:?}");
     let items = ast.root().items(&ast);
     let vis = |i: usize| match items[i] {
-        ItemRef::ModDecl(h) => h.get(&ast).vis,
+        ItemRef::ModDecl(h) => h.get(&ast).vis(),
         _ => panic!("expected a mod decl"),
     };
     assert_eq!(vis(0), Vis::Super);

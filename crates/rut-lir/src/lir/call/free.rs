@@ -28,7 +28,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // the frame — the cx is engine-minted like `self`, the call's
         // value IS the frame cell (widening to `Future<T>` through the
         // registered impl)
-        if fd.is_async {
+        if fd.is_async() {
             if !generics.is_empty() {
                 self.ctx
                     .err(sp, "generic async fns are not woven in this build");

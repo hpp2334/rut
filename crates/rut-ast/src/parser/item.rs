@@ -10,7 +10,7 @@ use crate::{
     EnumNode, FieldDeclNode, FieldRef, FnNode, Handle, IdentId, ImplNode, InterfaceNode, ItemRef,
     Linkage, MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModKind,
     ModifierNode, ModuleLetNode, ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode,
-    SurfaceStructNode, TyRef, UseNode, Vis,
+    SurfaceStructNode, TyRef, UseNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
@@ -23,56 +23,84 @@ use crate::parser::{with_doc, Mode, Name, Parser};
 
 // ---- item dispatch ----
 
+/// the item-span law's lo: the first modifier's own lo when one is
+/// spelled, the keyword's otherwise (v3.1: an item's span starts at
+/// its FIRST source token)
+pub(crate) fn item_lo(mods: &[ModifierNode], kw_lo: u32) -> u32 {
+    mods.first().map(|m| m.span.lo).unwrap_or(kw_lo)
+}
+
+/// append one modifier node — the span covers exactly the modifier's
+/// spelled tokens
+fn with_mod(mut mods: Vec<ModifierNode>, span: Span, kind: ModKind) -> Vec<ModifierNode> {
+    mods.push(ModifierNode { span, kind });
+    mods
+}
+
 pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
     let sp = p.span();
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
-            "use" => Some(Frame::Use(UseFrame::new(Vis::Self_))),
-            "mod" => Some(Frame::ModDecl(ModDeclFrame::new(Vis::Self_))),
+            "use" => Some(Frame::Use(UseFrame::new(Vec::new()))),
+            "mod" => Some(Frame::ModDecl(ModDeclFrame::new(Vec::new()))),
             "pub" => Some(Frame::Pub(PubFrame::new())),
-            "type" => Some(Frame::Alias(TypeAliasFrame::new(Vis::Self_))),
-            "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vis::Self_))),
-            "enum" => Some(Frame::Enum(EnumFrame::new(Vis::Self_))),
-            "struct" => Some(Frame::Struct(TyDeclFrame::new(false, Vis::Self_))),
-            "class" => Some(Frame::Class(TyDeclFrame::new(true, Vis::Self_))),
-            "interface" => Some(Frame::Interface(InterfaceFrame::new(Vis::Self_))),
+            "type" => Some(Frame::Alias(TypeAliasFrame::new(Vec::new()))),
+            "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(Vec::new()))),
+            "enum" => Some(Frame::Enum(EnumFrame::new(Vec::new()))),
+            "struct" => Some(Frame::Struct(TyDeclFrame::new(false, Vec::new()))),
+            "class" => Some(Frame::Class(TyDeclFrame::new(true, Vec::new()))),
+            "interface" => Some(Frame::Interface(InterfaceFrame::new(Vec::new()))),
             "impl" => Some(Frame::Impl(ImplFrame::new())),
-            // `async fn` — the async declaration
+            // `async fn` — the async declaration; the keyword rides as
+            // the item's first modifier
             "async" if p.at_kw2("fn") => {
                 p.bump();
-                Some(Frame::Fn(FnFrame::new(Vis::Self_, true, false)))
+                Some(Frame::Fn(FnFrame::new(with_mod(
+                    Vec::new(),
+                    sp,
+                    ModKind::Async,
+                ))))
             }
-            "fn" => Some(Frame::Fn(FnFrame::new(Vis::Self_, false, false))),
+            "fn" => Some(Frame::Fn(FnFrame::new(Vec::new()))),
             // `entry fn` — the host-callable surface:
             // contextual; only special directly before `fn`
             "entry" if p.at_kw2("fn") => {
                 p.bump();
-                Some(Frame::Fn(FnFrame::new(Vis::Self_, false, true)))
+                Some(Frame::Fn(FnFrame::new(with_mod(
+                    Vec::new(),
+                    sp,
+                    ModKind::Entry,
+                ))))
             }
             // `host` — the one native linkage left: the embedding Rust.
             // `extern` is removed — the loader + `entry fn`
-            // cover it.
-            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host, Vis::Self_))),
+            // cover it. The keyword is still ahead — the frame records
+            // it as the item's own leading modifier
+            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host, Vec::new()))),
             // `prelude builtin` — the AMBIENT engine surface (core only,
             // compiler-lowered). `prelude` is contextual: a legal
-            // identifier everywhere except directly before `builtin`
+            // identifier everywhere except directly before `builtin`.
+            // The `prelude` half is recorded here; the frame widens the
+            // modifier over the `builtin` token
             "prelude" if p.at_kw2("builtin") => {
                 p.bump();
                 Some(Frame::Surface(SurfaceFrame::new(
                     Linkage::Builtin { ambient: true },
-                    Vis::Self_,
+                    with_mod(Vec::new(), sp, ModKind::Builtin { ambient: true }),
                 )))
             }
             // bare `builtin` — the old spelling is gone: diagnosed, then
-            // recovered as ambient so downstream diagnostics stay sane
+            // recovered as ambient so downstream diagnostics stay sane.
+            // The keyword IS the modifier (the diag aims at it)
             "builtin" => {
                 p.err(
                     sp,
                     "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)",
                 );
+                p.bump();
                 Some(Frame::Surface(SurfaceFrame::new(
                     Linkage::Builtin { ambient: true },
-                    Vis::Self_,
+                    with_mod(Vec::new(), sp, ModKind::Builtin { ambient: true }),
                 )))
             }
             "extern" => {
@@ -103,34 +131,39 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
     }
 }
 
-/// v1's parse_export_item inner dispatch (the visibility was parsed by
-/// the pub frame itself)
-pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
+/// v1's parse_export_item inner dispatch — the `pub` frame records its
+/// modifier (span covering the `(..)` scope) and hands the chain down;
+/// every arm moves it into its item frame
+pub(crate) fn classify_pub(p: &mut Parser, mods: Vec<ModifierNode>) -> Option<Frame> {
     match p.tok().clone() {
         Tok::Ident(kw) => match kw.as_str() {
-            "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(vis))),
-            "mod" => Some(Frame::ModDecl(ModDeclFrame::new(vis))),
+            "let" => Some(Frame::ModuleLet(ModuleLetFrame::new(mods))),
+            "mod" => Some(Frame::ModDecl(ModDeclFrame::new(mods))),
             // `pub use` — the re-export: the imported names join the
             // module's public surface (a private `use` imports only)
-            "use" => Some(Frame::Use(UseFrame::new(vis))),
-            "type" => Some(Frame::Alias(TypeAliasFrame::new(vis))),
-            "enum" => Some(Frame::Enum(EnumFrame::new(vis))),
-            "struct" => Some(Frame::Struct(TyDeclFrame::new(false, vis))),
-            "class" => Some(Frame::Class(TyDeclFrame::new(true, vis))),
-            "interface" => Some(Frame::Interface(InterfaceFrame::new(vis))),
-            // `async fn` — the async declaration
+            "use" => Some(Frame::Use(UseFrame::new(mods))),
+            "type" => Some(Frame::Alias(TypeAliasFrame::new(mods))),
+            "enum" => Some(Frame::Enum(EnumFrame::new(mods))),
+            "struct" => Some(Frame::Struct(TyDeclFrame::new(false, mods))),
+            "class" => Some(Frame::Class(TyDeclFrame::new(true, mods))),
+            "interface" => Some(Frame::Interface(InterfaceFrame::new(mods))),
+            // `pub async fn` — the async keyword rides as the chain's
+            // second modifier (`entry` does not combine with `pub` —
+            // the documented law; classify_item owns the bare forms)
             "async" if p.at_kw2("fn") => {
+                let sp = p.span();
                 p.bump();
-                Some(Frame::Fn(FnFrame::new(vis, true, false)))
+                Some(Frame::Fn(FnFrame::new(with_mod(mods, sp, ModKind::Async))))
             }
-            "fn" => Some(Frame::Fn(FnFrame::new(vis, false, false))),
-            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host, vis))),
+            "fn" => Some(Frame::Fn(FnFrame::new(mods))),
+            "host" => Some(Frame::Surface(SurfaceFrame::new(Linkage::Host, mods))),
             // `pub builtin` — the IMPORT-GATED engine surface spelling:
             // the decl resolves only through `use <pkg>::{ .. }` (the
-            // ambient twin is `prelude builtin`)
+            // ambient twin is `prelude builtin`). The `builtin` keyword
+            // is still ahead — the frame records it
             "builtin" => Some(Frame::Surface(SurfaceFrame::new(
                 Linkage::Builtin { ambient: false },
-                vis,
+                mods,
             ))),
             "extern" => {
                 p.err_here(
@@ -158,10 +191,10 @@ pub(crate) fn classify_pub(p: &mut Parser, vis: Vis) -> Option<Frame> {
 /// name modules), then the leaf is a brace list or a single name (the
 /// LAST path segment pops into names). The flat forms —
 /// `use pkg::{A, B};` / `use pkg::A;` — degenerate to `path = [pkg]`.
-/// The span starts at the `use` keyword (the `pub` prefix rides in
-/// `vis`, the other vis-carrying items' convention).
+/// The span starts at the item's FIRST token (the leading modifier
+/// when one is spelled, `use` otherwise).
 pub(crate) struct UseFrame {
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     path: Vec<IdentId>,
     path_spans: Vec<Span>,
@@ -170,9 +203,9 @@ pub(crate) struct UseFrame {
 }
 
 impl UseFrame {
-    pub(crate) fn new(vis: Vis) -> Self {
+    pub(crate) fn new(modifiers: Vec<ModifierNode>) -> Self {
         UseFrame {
-            vis,
+            modifiers,
             lo: 0,
             path: Vec::new(),
             path_spans: Vec::new(),
@@ -191,7 +224,8 @@ impl UseFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // use
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // use — the lo already covers a leading modifier
         let Some(pkg) = p.expect_ident("a package name") else {
             p.sync_stmt();
             return Step::Pop(Done::Failed);
@@ -253,7 +287,7 @@ impl UseFrame {
             p,
             UseNode {
                 span: p.span_from(self.lo),
-                vis: self.vis,
+                modifiers: std::mem::take(&mut self.modifiers),
                 path: std::mem::take(&mut self.path),
                 name_span: self.path_spans.first().copied().unwrap_or(Span::new(0, 0)),
                 names: std::mem::take(&mut self.names),
@@ -297,7 +331,7 @@ impl UseFrame {
 /// DECLARATION file (`Mode::Decl`) the inline form IS legal and the
 /// block parses as a `ModInlineNode`.
 pub(crate) struct ModDeclFrame {
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     name: Name,
     /// the inline form is out for its block (Decl mode): the frame
@@ -306,9 +340,9 @@ pub(crate) struct ModDeclFrame {
 }
 
 impl ModDeclFrame {
-    pub(crate) fn new(vis: Vis) -> Self {
+    pub(crate) fn new(modifiers: Vec<ModifierNode>) -> Self {
         ModDeclFrame {
-            vis,
+            modifiers,
             lo: 0,
             name: Name {
                 id: IdentId(0),
@@ -319,7 +353,8 @@ impl ModDeclFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // mod
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // mod
         let Some(name) = p.expect_ident("a module name") else {
             return Step::Pop(Done::Failed);
         };
@@ -330,8 +365,11 @@ impl ModDeclFrame {
                 // nested declarations (it consumed the `{` above); this
                 // frame stays underneath and relays its item
                 self.inline = true;
-                let (vis, lo, name) = (self.vis, self.lo, self.name);
-                return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(vis, lo, name)));
+                let (modifiers, lo, name) =
+                    (std::mem::take(&mut self.modifiers), self.lo, self.name);
+                return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(
+                    modifiers, lo, name,
+                )));
             }
             p.err_here(
                 "inline `mod { }` blocks are gone — the body lives in `NAME/mod.rut` beside this file",
@@ -355,7 +393,7 @@ impl ModDeclFrame {
             p,
             ModDeclNode {
                 span: p.span_from(self.lo),
-                vis: self.vis,
+                modifiers: std::mem::take(&mut self.modifiers),
                 name: self.name.id,
                 name_span: self.name.span,
                 doc: DocData::default(),
@@ -380,7 +418,7 @@ impl ModDeclFrame {
 /// The inline declaration module's frame — `pub? mod NAME { <decls> }`
 /// in a `.d.rut` (Decl mode only). Declarations only, recursively.
 pub(crate) struct ModInlineFrame {
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     name: Name,
     items: Vec<ItemRef>,
@@ -391,9 +429,9 @@ pub(crate) struct ModInlineFrame {
 
 impl ModInlineFrame {
     /// The `{` was already consumed by [`ModDeclFrame::step`].
-    fn from_decl(vis: Vis, lo: u32, name: Name) -> Self {
+    fn from_decl(modifiers: Vec<ModifierNode>, lo: u32, name: Name) -> Self {
         ModInlineFrame {
-            vis,
+            modifiers,
             lo,
             name,
             items: Vec::new(),
@@ -409,7 +447,7 @@ impl ModInlineFrame {
                     p,
                     ModInlineNode {
                         span: p.span_from(self.lo),
-                        vis: self.vis,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
                         items: std::mem::take(&mut self.items),
@@ -455,15 +493,15 @@ impl ModInlineFrame {
 /// `Target` spelled `A | B` for the bound-only union. Aliases are
 /// NON-GENERIC — `type Name<K, ..>` is a parse error.
 pub(crate) struct TypeAliasFrame {
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     name: Name,
 }
 
 impl TypeAliasFrame {
-    pub(crate) fn new(vis: Vis) -> Self {
+    pub(crate) fn new(modifiers: Vec<ModifierNode>) -> Self {
         TypeAliasFrame {
-            vis,
+            modifiers,
             lo: 0,
             name: Name {
                 id: IdentId(0),
@@ -473,7 +511,8 @@ impl TypeAliasFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // type
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // type
         let Some(name) = p.expect_ident("a type alias name") else {
             return Step::Pop(Done::Failed);
         };
@@ -490,7 +529,7 @@ impl TypeAliasFrame {
                     p,
                     AliasNode {
                         span: p.span_from(self.lo),
-                        vis: self.vis,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
                         target: ty,
@@ -508,7 +547,7 @@ impl TypeAliasFrame {
 // ---- module-level `let` ----
 
 pub(crate) struct ModuleLetFrame {
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     stage: MlStage,
     name: Name,
@@ -522,9 +561,9 @@ enum MlStage {
 }
 
 impl ModuleLetFrame {
-    pub(crate) fn new(vis: Vis) -> Self {
+    pub(crate) fn new(modifiers: Vec<ModifierNode>) -> Self {
         ModuleLetFrame {
-            vis,
+            modifiers,
             lo: 0,
             stage: MlStage::Ty,
             name: Name {
@@ -536,7 +575,8 @@ impl ModuleLetFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // let
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // let
         let Some(name) = p.expect_ident("a binding name") else {
             return Step::Pop(Done::Failed);
         };
@@ -565,7 +605,7 @@ impl ModuleLetFrame {
                     p,
                     ModuleLetNode {
                         span: p.span_from(self.lo),
-                        vis: self.vis,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
                         ty: self.ty.take(),
@@ -584,16 +624,16 @@ impl ModuleLetFrame {
 // ---- enum ----
 
 pub(crate) struct EnumFrame {
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     name: Name,
     members: Vec<MemberRef>,
 }
 
 impl EnumFrame {
-    pub(crate) fn new(vis: Vis) -> Self {
+    pub(crate) fn new(modifiers: Vec<ModifierNode>) -> Self {
         EnumFrame {
-            vis,
+            modifiers,
             lo: 0,
             name: Name {
                 id: IdentId(0),
@@ -611,7 +651,8 @@ impl EnumFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // enum
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // enum
         let Some(name) = p.expect_ident("an enum name") else {
             return Step::Pop(Done::Failed);
         };
@@ -669,7 +710,7 @@ impl EnumFrame {
             p,
             EnumNode {
                 span: p.span_from(self.lo),
-                vis: self.vis,
+                modifiers: std::mem::take(&mut self.modifiers),
                 name: self.name.id,
                 name_span: self.name.span,
                 members: std::mem::take(&mut self.members),
@@ -741,7 +782,7 @@ fn generic_params_more(
 
 pub(crate) struct TyDeclFrame {
     is_class: bool,
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     stage: TdStage,
     name: Name,
@@ -763,10 +804,10 @@ enum TdStage {
 }
 
 impl TyDeclFrame {
-    pub(crate) fn new(is_class: bool, vis: Vis) -> Self {
+    pub(crate) fn new(is_class: bool, modifiers: Vec<ModifierNode>) -> Self {
         TyDeclFrame {
             is_class,
-            vis,
+            modifiers,
             lo: 0,
             stage: TdStage::Body,
             name: Name {
@@ -780,7 +821,8 @@ impl TyDeclFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // struct | class
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // struct | class
         let what = if self.is_class {
             "a class name"
         } else {
@@ -866,7 +908,7 @@ impl TyDeclFrame {
                     p,
                     ClassNode {
                         span: p.span_from(self.lo),
-                        vis: self.vis,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
                         generics: std::mem::take(&mut self.generics),
@@ -886,7 +928,7 @@ impl TyDeclFrame {
                         p,
                         ClassNode {
                             span: p.span_from(self.lo),
-                            vis: self.vis,
+                            modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
                             generics: std::mem::take(&mut self.generics),
@@ -903,7 +945,7 @@ impl TyDeclFrame {
                         p,
                         StructNode {
                             span: p.span_from(self.lo),
-                            vis: self.vis,
+                            modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
                             generics: std::mem::take(&mut self.generics),
@@ -925,16 +967,16 @@ impl TyDeclFrame {
 // ---- interface ----
 
 pub(crate) struct InterfaceFrame {
-    vis: Vis,
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     name: Name,
     generics: Vec<IdentId>,
 }
 
 impl InterfaceFrame {
-    pub(crate) fn new(vis: Vis) -> Self {
+    pub(crate) fn new(modifiers: Vec<ModifierNode>) -> Self {
         InterfaceFrame {
-            vis,
+            modifiers,
             lo: 0,
             name: Name {
                 id: IdentId(0),
@@ -945,7 +987,8 @@ impl InterfaceFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // interface
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // interface
         let Some(name) = p.expect_ident("an interface name") else {
             return Step::Pop(Done::Failed);
         };
@@ -965,7 +1008,7 @@ impl InterfaceFrame {
                     p,
                     InterfaceNode {
                         span: p.span_from(self.lo),
-                        vis: self.vis,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
                         generics: std::mem::take(&mut self.generics),
@@ -1645,12 +1688,13 @@ impl MethodFrame {
 // ---- free functions ----
 
 pub(crate) struct FnFrame {
-    vis: Vis,
-    pre_async: bool,
-    entry: bool,
+    /// the item's first-token lo — the span law starts the decl there
+    /// (the leading modifier when one is spelled, `fn` otherwise)
     lo: u32,
+    /// the spelled modifiers, in source order — the node's `vis()`/
+    /// `is_async()`/`entry()` derive from them
+    modifiers: Vec<ModifierNode>,
     stage: FnSStage,
-    is_async: bool,
     name: Name,
     generics: Vec<IdentId>,
     pending: Option<IdentId>,
@@ -1670,14 +1714,11 @@ enum FnSStage {
 }
 
 impl FnFrame {
-    pub(crate) fn new(vis: Vis, pre_async: bool, entry: bool) -> Self {
+    pub(crate) fn new(modifiers: Vec<ModifierNode>) -> Self {
         FnFrame {
-            vis,
-            pre_async,
-            entry,
             lo: 0,
+            modifiers,
             stage: FnSStage::Params,
-            is_async: false,
             name: Name {
                 id: IdentId(0),
                 span: Span::new(0, 0),
@@ -1692,14 +1733,25 @@ impl FnFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // fn
-        self.is_async = self.pre_async || {
-            let s = p.at_kw("async");
-            if s {
-                p.bump();
-            }
-            s
-        };
+        self.lo = item_lo(&self.modifiers, p.span().lo);
+        p.bump(); // fn — the lo already covers a leading modifier
+                  // the postfix `async` spelling (`fn async f(..)`) — recorded
+                  // as the modifier it spells. The `async fn` prefix already
+                  // carries its own Async modifier, so `async fn async(..)`
+                  // keeps that `async` as the NAME (the old short-circuit)
+        if !self
+            .modifiers
+            .iter()
+            .any(|m| matches!(m.kind, ModKind::Async))
+            && p.at_kw("async")
+        {
+            let sp = p.span();
+            p.bump();
+            self.modifiers.push(ModifierNode {
+                span: sp,
+                kind: ModKind::Async,
+            });
+        }
         let Some(name) = p.expect_ident("a function name") else {
             return Step::Pop(Done::Failed);
         };
@@ -1765,9 +1817,7 @@ impl FnFrame {
             p,
             FnNode {
                 span: p.span_from(self.lo),
-                vis: self.vis,
-                is_async: self.is_async,
-                entry: self.entry,
+                modifiers: std::mem::take(&mut self.modifiers),
                 name: self.name.id,
                 name_span: self.name.span,
                 generics: std::mem::take(&mut self.generics),
@@ -1810,9 +1860,7 @@ impl FnFrame {
                     p,
                     FnNode {
                         span: p.span_from(self.lo),
-                        vis: self.vis,
-                        is_async: self.is_async,
-                        entry: self.entry,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
                         generics: std::mem::take(&mut self.generics),
@@ -1834,11 +1882,14 @@ impl FnFrame {
 // ---- host/builtin surface declarations (.d.rut) ----
 
 pub(crate) struct SurfaceFrame {
+    /// the dispatch linkage (the modifier chain's derived view stays
+    /// the node's truth — the frame needs it before the members parse)
     linkage: Linkage,
-    vis: Vis,
+    /// the spelled modifiers, in source order — the node's `vis()`/
+    /// `linkage()`/`is_async()`/`ambient()` derive from them
+    modifiers: Vec<ModifierNode>,
     lo: u32,
     stage: SuStage,
-    is_async: bool,
     is_impl: bool,
     is_primitive: bool,
     name: Name,
@@ -1856,13 +1907,12 @@ enum SuStage {
 }
 
 impl SurfaceFrame {
-    pub(crate) fn new(linkage: Linkage, vis: Vis) -> Self {
+    pub(crate) fn new(linkage: Linkage, modifiers: Vec<ModifierNode>) -> Self {
         SurfaceFrame {
             linkage,
-            vis,
+            modifiers,
             lo: 0,
             stage: SuStage::Params,
-            is_async: false,
             is_impl: false,
             is_primitive: false,
             name: Name {
@@ -1876,6 +1926,11 @@ impl SurfaceFrame {
         }
     }
 
+    /// the ambient gate of this frame's builtin linkage
+    fn ambient(&self) -> bool {
+        matches!(self.linkage, Linkage::Builtin { ambient: true })
+    }
+
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         let sp = p.span();
         if p.mode == Mode::Impl {
@@ -1884,7 +1939,36 @@ impl SurfaceFrame {
                 "declaration keyword in an implementation file —`host`/`builtin` belong in a `.d.rut`",
             );
         }
-        self.lo = p.bump().span.lo;
+        // the linkage keyword — `host`, or the `builtin` of a builtin
+        // spelling — is the item's own leading modifier. `prelude`'s
+        // half is already recorded (classify bumped it): the modifier
+        // WIDENS over the `builtin` token, one node per spelling; the
+        // bare and `pub builtin` keywords are still ahead and land
+        // here. Diagnostics aimed at the keyword keep its own span.
+        match p.tok().clone() {
+            Tok::Ident(k) if k == "host" => {
+                self.modifiers.push(ModifierNode {
+                    span: sp,
+                    kind: ModKind::Host,
+                });
+                p.bump();
+            }
+            Tok::Ident(k) if k == "builtin" => {
+                match self.modifiers.last_mut() {
+                    // `prelude builtin` — one modifier covering both tokens
+                    Some(m) if matches!(m.kind, ModKind::Builtin { .. }) => m.span.hi = sp.hi,
+                    _ => self.modifiers.push(ModifierNode {
+                        span: sp,
+                        kind: ModKind::Builtin {
+                            ambient: self.ambient(),
+                        },
+                    }),
+                }
+                p.bump();
+            }
+            _ => {}
+        }
+        self.lo = item_lo(&self.modifiers, sp.lo);
         match self.linkage {
             Linkage::Host => self.host_step(p),
             Linkage::Builtin { .. } => self.builtin_step(p),
@@ -1894,8 +1978,12 @@ impl SurfaceFrame {
     fn host_step(&mut self, p: &mut Parser) -> Step {
         match p.tok().clone() {
             Tok::Ident(k) if k == "async" => {
+                let sp = p.span();
                 p.bump();
-                self.is_async = true;
+                self.modifiers.push(ModifierNode {
+                    span: sp,
+                    kind: ModKind::Async,
+                });
                 match p.tok().clone() {
                     Tok::Ident(k) if k == "fn" => self.host_fn_tail(p),
                     _ => {
@@ -2035,11 +2123,10 @@ impl SurfaceFrame {
     fn members_top(&mut self, p: &mut Parser) -> Step {
         loop {
             if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let ambient = matches!(self.linkage, Linkage::Builtin { ambient: true });
                 let item = if self.is_impl {
                     BuiltinImplNode {
                         span: p.span_from(self.lo),
-                        vis: Vis::Self_,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         prim: self.name.id,
                         name_span: self.name.span,
                         methods: std::mem::take(&mut self.methods),
@@ -2050,7 +2137,7 @@ impl SurfaceFrame {
                         p,
                         BuiltinPrimitiveNode {
                             span: p.span_from(self.lo),
-                            ambient,
+                            modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
                             members: std::mem::take(&mut self.methods),
@@ -2063,8 +2150,7 @@ impl SurfaceFrame {
                         p,
                         BuiltinTyNode {
                             span: p.span_from(self.lo),
-                            vis: Vis::Self_,
-                            ambient,
+                            modifiers: std::mem::take(&mut self.modifiers),
                             name: self.name.id,
                             name_span: self.name.span,
                             generics: std::mem::take(&mut self.generics),
@@ -2127,7 +2213,7 @@ impl SurfaceFrame {
                     p,
                     SurfaceStructNode {
                         span: p.span_from(self.lo),
-                        vis: Vis::Self_,
+                        modifiers: std::mem::take(&mut self.modifiers),
                         name: self.name.id,
                         name_span: self.name.span,
                         fields,
@@ -2152,9 +2238,7 @@ impl SurfaceFrame {
             p,
             SurfaceFnNode {
                 span: p.span_from(self.lo),
-                vis: self.vis,
-                linkage: self.linkage,
-                is_async: self.is_async,
+                modifiers: std::mem::take(&mut self.modifiers),
                 name: self.name.id,
                 name_span: self.name.span,
                 generics: std::mem::take(&mut self.generics),

@@ -18,7 +18,7 @@ fn alias_parses_transparent_shape() {
         panic!("expected an alias");
     };
     let d = h.get(&ast);
-    assert_eq!(d.vis, Vis::Self_);
+    assert_eq!(d.vis(), Vis::Self_);
     assert_eq!(ast.name(d.name), "Meters");
     let TyRef::Path(t) = d.target else {
         panic!("expected a path target");
@@ -276,7 +276,7 @@ pub(pkg) type P = i64;
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.root().items(&ast);
     let expect = |i: usize| match items[i] {
-        ItemRef::Alias(h) => h.get(&ast).vis,
+        ItemRef::Alias(h) => h.get(&ast).vis(),
         k => panic!("expected an alias, got {k:?}"),
     };
     assert_eq!(expect(0), Vis::Pub);
@@ -301,7 +301,11 @@ fn pub_mod_self_scopes_are_gone_on_type_alias() {
     for item in items.iter().take(2) {
         match item {
             ItemRef::Alias(h) => {
-                assert_eq!(h.get(&ast).vis, Vis::Self_, "the default survives recovery")
+                assert_eq!(
+                    h.get(&ast).vis(),
+                    Vis::Self_,
+                    "the default survives recovery"
+                )
             }
             k => panic!("expected an alias, got {k:?}"),
         }

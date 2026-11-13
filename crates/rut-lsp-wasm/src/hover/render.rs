@@ -21,11 +21,26 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
     } else {
         format!("<{}>", ty.generics.join(", "))
     };
+    // the decl head as written — the verbatim slice from the item's
+    // FIRST token (span law v3.1: modifiers included) up to the name,
+    // so `pub class` / `prelude builtin class` / `host struct` render
+    // their spelled prefix. Falls back to the form's keyword when the
+    // row carries no name span (a synthesized row)
+    let head = ty
+        .name_span
+        .filter(|ns| {
+            ty.span.hi as usize <= i.src.len()
+                && ns.lo >= ty.span.lo
+                && ns.lo as usize <= i.src.len()
+        })
+        .map(|ns| i.src[ty.span.lo as usize..ns.lo as usize].to_string())
+        .unwrap_or_else(|| format!("{} ", ty.form.keyword()));
     match ty.form {
         TyForm::Alias => {
             // `type X = A;` / `type X = A | B;`
             out.push_str(&code_block(&format!(
-                "type {} = {};",
+                "{}{} = {};",
+                head,
                 ty.name,
                 ty.alias_target.clone().unwrap_or_default()
             )));
@@ -33,7 +48,8 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
         TyForm::Enum => {
             let members: Vec<&str> = ty.fields.iter().map(|f| f.name.as_str()).collect();
             out.push_str(&code_block(&format!(
-                "enum {}{} {{ {} }}",
+                "{}{}{} {{ {} }}",
+                head,
                 ty.name,
                 gens,
                 members.join(", ")
@@ -47,11 +63,8 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 body.push('\n');
             }
             out.push_str(&code_block(&format!(
-                "{} {}{} {{\n{}}}",
-                ty.form.keyword(),
-                ty.name,
-                gens,
-                body
+                "{}{}{} {{\n{}}}",
+                head, ty.name, gens, body
             )));
         }
         // a dep's host surface renders like a class body: the consts as
@@ -64,11 +77,8 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
                 body.push('\n');
             }
             out.push_str(&code_block(&format!(
-                "{} {}{} {{\n{}}}",
-                ty.form.keyword(),
-                ty.name,
-                gens,
-                body
+                "{}{}{} {{\n{}}}",
+                head, ty.name, gens, body
             )));
             if !ty.methods.is_empty() {
                 out.push_str(&format!(
@@ -257,23 +267,19 @@ pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
     out
 }
 
-/// the `pub? mod NAME;` decl render — the edge as spelled, the kind,
-/// the mounted file the namespace resolves to, and the child's own
-/// `mod` count (the walkable path segments beneath it). `children` is
-/// `None` when the mounted index is not in the chain (an honest dash,
-/// never a wrong count).
+/// the `pub? mod NAME;` decl render — the edge as spelled (the
+/// verbatim slice — never re-synthesized), the kind, the mounted file
+/// the namespace resolves to, and the child's own `mod` count (the
+/// walkable path segments beneath it). `children` is `None` when the
+/// mounted index is not in the chain (an honest dash, never a wrong
+/// count).
 pub(crate) fn render_mod(
     i: &DefIndex,
     m: &ModDef,
     mounted: &str,
     children: Option<usize>,
 ) -> String {
-    let edge = if m.vis == rut_ast::Vis::Pub {
-        "pub mod".to_string()
-    } else {
-        "mod".to_string()
-    };
-    let mut out = code_block(&format!("{edge} {};", m.name));
+    let mut out = code_block(&format!("{};", m.src));
     out.push_str(&format!("\nfile module — `{}`", mounted));
     if let Some(n) = children {
         out.push_str(&match n {

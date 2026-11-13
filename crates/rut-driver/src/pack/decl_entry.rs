@@ -508,7 +508,7 @@ fn facts_of_items(ast: &Ast, items: &[ItemRef], facts: &mut std::collections::BT
                 let fact = if gens.is_empty() {
                     format!(
                         "{}fn {}({}) -> {}",
-                        if d.is_async { "async " } else { "" },
+                        if d.is_async() { "async " } else { "" },
                         ast.name(d.name),
                         ps.join(";"),
                         ret
@@ -671,11 +671,14 @@ fn splice_tree(
             continue; // the loud missing-child error is the lowering's —
                       // the pack has already walked this tree
         };
-        // the spelled `pub` prefix sits BEFORE the item's span
-        // (the node starts at the `mod` keyword) and rides
-        // verbatim — the replacement starts at `mod`
+        // the spelled modifier prefix rides verbatim — span law v3.1
+        // starts the item at its FIRST token, so the slice up to the
+        // name IS the prefix (`pub mod`); the replacement re-spells the
+        // `mod` keyword itself, the prefix rides before it
+        let head = src[span.lo as usize..d.name_span.lo as usize].trim_end();
+        let prefix = head.strip_suffix("mod").unwrap_or("").to_string();
         let body = splice_tree(&child.text, &child_path, mods)?;
-        edits.push((span.lo, end, format!("mod {name} {{\n{body}\n}}")));
+        edits.push((span.lo, end, format!("{prefix}mod {name} {{\n{body}\n}}")));
     }
     // splice descending — spans stay valid
     edits.sort_by_key(|e| std::cmp::Reverse(e.0));

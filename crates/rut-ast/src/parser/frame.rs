@@ -11,7 +11,8 @@
 //! the very list the region belongs to, carrying the region's diags.
 
 use crate::{
-    BlockNode, ExprRef, Handle, IfNode, ItemRef, ModuleNode, ParamRef, PatRef, StmtRef, TyRef, Vis,
+    BlockNode, ExprRef, Handle, IfNode, ItemRef, ModKind, ModifierNode, ModuleNode, ParamRef,
+    PatRef, StmtRef, TyRef, Vis,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
@@ -234,19 +235,25 @@ impl ModuleFrame {
 
 // ---- pub ----
 
-pub(crate) struct PubFrame {
-    vis: Vis,
-}
+pub(crate) struct PubFrame;
 
 impl PubFrame {
     pub(crate) fn new() -> Self {
-        PubFrame { vis: Vis::Self_ }
+        PubFrame
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
+        let lo = p.span().lo;
         p.bump(); // pub
-        self.vis = pub_scope(p);
-        match classify_pub(p, self.vis) {
+        let vis = pub_scope(p);
+        // the modifier's span covers the whole spelling (the `(..)`
+        // scope included) — recorded here and handed to the item frame
+        // (the item nodes store their modifiers; no flag fields)
+        let mods = vec![ModifierNode {
+            span: Span::new(lo, p.prev_end.max(lo)),
+            kind: ModKind::Pub(vis),
+        }];
+        match classify_pub(p, mods) {
             Some(fr) => Step::Push(fr),
             None => Step::Pop(Done::Failed),
         }

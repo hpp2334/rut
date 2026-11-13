@@ -267,7 +267,7 @@ fn lower_rows_in(
             continue;
         };
         let sf = h.get(ast);
-        if !matches!(sf.linkage, Linkage::Host) {
+        if !matches!(sf.linkage(), Linkage::Host) {
             continue;
         }
         let fname = ast.name(sf.name).to_string();
@@ -307,7 +307,7 @@ fn lower_rows_in(
             name: fname,
             params: ptys,
             ret: rty,
-            is_async: sf.is_async,
+            is_async: sf.is_async(),
         });
     }
     Ok(())

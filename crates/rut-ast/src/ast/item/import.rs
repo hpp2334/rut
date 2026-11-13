@@ -1,7 +1,8 @@
 //! `pub? use pkg::A::B::{C, D};` — the import (re-export) edge.
 
 use crate::ast::doc::DocData;
-use crate::ast::item::{ItemRef, Vis};
+use crate::ast::item::class::{item_vis, ModifierNode};
+use crate::ast::item::ItemRef;
 use crate::slot_alloc;
 use rut_core::IdentId;
 use rut_lexer::span::Span;
@@ -9,20 +10,31 @@ use rut_lexer::span::Span;
 /// `pub? use pkg::A::B::{C, D};` / `use pkg::A::B::C;` — `path[0]` is
 /// the package, the middle segments name modules, and the leaf names
 /// are the imports. The flat forms (`use pkg::{A, B};` / `use pkg::A;`)
-/// degenerate to `path = [pkg]`. `vis` is the re-export edge: a `pub
+/// degenerate to `path = [pkg]`. `vis()` is the re-export edge: a `pub
 /// use`'s imported names join the module's public surface (a private
 /// `use` imports only). `name_span` is the PACKAGE ident's span (the
 /// head — definition targets key on it); `name_spans` are the leaf
 /// idents' spans, parallel to `names`.
 #[derive(Clone, Debug)]
 pub struct UseNode {
+    /// starts at the item's FIRST token — the leading modifier when
+    /// one is spelled, `use` otherwise
     pub span: Span,
-    pub vis: Vis,
+    /// the modifier chain in source order — `vis()` derives from it
+    pub modifiers: Vec<ModifierNode>,
     pub path: Vec<IdentId>,
     pub name_span: Span,
     pub names: Vec<IdentId>,
     pub name_spans: Vec<Span>,
     pub doc: DocData,
+}
+
+impl UseNode {
+    /// the spelled re-export visibility — `Vis::Self_` (a private
+    /// import) when unannotated
+    pub fn vis(&self) -> crate::ast::item::Vis {
+        item_vis(&self.modifiers)
+    }
 }
 
 slot_alloc!(UseNode, ItemRef::Use);

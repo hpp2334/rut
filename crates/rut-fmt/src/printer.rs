@@ -730,7 +730,7 @@ impl<'a> P<'a> {
             }
             ItemRef::ModDecl(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -742,7 +742,7 @@ impl<'a> P<'a> {
                 let d = h.get(self.a);
                 // the declaration file's inline module (wire v12): the
                 // nested declarations print through the item walk
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -760,7 +760,7 @@ impl<'a> P<'a> {
                 // the full path — package, modules, in order — then the
                 // leaf names in braces; `pub use` re-exports print their
                 // prefix
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -789,7 +789,7 @@ impl<'a> P<'a> {
             }
             ItemRef::Alias(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -801,7 +801,7 @@ impl<'a> P<'a> {
             }
             ItemRef::ModuleLet(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -816,7 +816,7 @@ impl<'a> P<'a> {
             }
             ItemRef::Enum(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -839,7 +839,7 @@ impl<'a> P<'a> {
             }
             ItemRef::Struct(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -849,7 +849,7 @@ impl<'a> P<'a> {
             }
             ItemRef::Class(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -870,7 +870,7 @@ impl<'a> P<'a> {
             }
             ItemRef::Interface(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -909,13 +909,13 @@ impl<'a> P<'a> {
             }
             ItemRef::SurfaceFn(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
-                self.text(linkage_str(d.linkage));
+                self.text(linkage_str(d.linkage()));
                 self.sp();
-                if d.is_async {
+                if d.is_async() {
                     self.text("async ");
                 }
                 self.text("fn ");
@@ -930,7 +930,7 @@ impl<'a> P<'a> {
             }
             ItemRef::SurfaceStruct(h) => {
                 let d = h.get(self.a);
-                if let Some(v) = vis_opt(d.vis) {
+                if let Some(v) = vis_opt(d.vis()) {
                     self.text(v);
                     self.sp();
                 }
@@ -943,7 +943,7 @@ impl<'a> P<'a> {
                 // the type-shaped builtin items carry the strict spelling
                 // they were declared with (`prelude builtin` ambient /
                 // `pub builtin` import-gated)
-                self.text(if d.ambient {
+                self.text(if d.ambient() {
                     "prelude builtin class "
                 } else {
                     "pub builtin class "
@@ -954,7 +954,7 @@ impl<'a> P<'a> {
             }
             ItemRef::BuiltinPrimitive(h) => {
                 let d = h.get(self.a);
-                self.text(if d.ambient {
+                self.text(if d.ambient() {
                     "prelude builtin primitive "
                 } else {
                     "pub builtin primitive "
@@ -1264,15 +1264,15 @@ impl<'a> P<'a> {
 
     fn fn_header(&mut self, f: &FnNode, with_vis: bool) {
         if with_vis {
-            if let Some(v) = vis_opt(f.vis) {
+            if let Some(v) = vis_opt(f.vis()) {
                 self.text(v);
                 self.sp();
             }
         }
-        if f.is_async {
+        if f.is_async() {
             self.text("async ");
         }
-        if f.entry {
+        if f.entry() {
             self.text("entry ");
         }
         self.text("fn ");

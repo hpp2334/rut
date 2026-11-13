@@ -3,6 +3,7 @@
 
 use crate::ast::doc::DocData;
 use crate::ast::handle::Handle;
+use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::{ItemRef, Vis};
 use crate::slot_alloc;
 use rut_core::IdentId;
@@ -20,8 +21,11 @@ pub struct ModuleNode {
 /// sibling `NAME/mod.rut`; the loader mounts it.
 #[derive(Clone, Debug)]
 pub struct ModDeclNode {
+    /// starts at the item's FIRST token — the leading modifier when
+    /// one is spelled, `mod` otherwise
     pub span: Span,
-    pub vis: Vis,
+    /// the modifier chain in source order — `vis()` derives from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub doc: DocData,
@@ -32,12 +36,31 @@ pub struct ModDeclNode {
 /// grammar. Declarations only, recursively.
 #[derive(Clone, Debug)]
 pub struct ModInlineNode {
+    /// starts at the item's FIRST token — the leading modifier when
+    /// one is spelled, `mod` otherwise
     pub span: Span,
-    pub vis: Vis,
+    /// the modifier chain in source order — `vis()` derives from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub items: Vec<ItemRef>,
     pub doc: DocData,
+}
+
+impl ModDeclNode {
+    /// the spelled edge visibility — `Vis::Self_` (bare `mod`) when
+    /// unannotated
+    pub fn vis(&self) -> Vis {
+        item_vis(&self.modifiers)
+    }
+}
+
+impl ModInlineNode {
+    /// the spelled edge visibility — `Vis::Self_` (bare `mod`) when
+    /// unannotated
+    pub fn vis(&self) -> Vis {
+        item_vis(&self.modifiers)
+    }
 }
 
 impl Handle<ModInlineNode> {

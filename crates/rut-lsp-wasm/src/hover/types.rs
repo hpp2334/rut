@@ -193,6 +193,10 @@ pub struct ModDef {
     pub name_span: Option<Span>,
     /// the edge's declared visibility (`Vis::Self_` = bare `mod`)
     pub vis: Vis,
+    /// the edge as spelled — the verbatim `span × src` slice (span law
+    /// v3.1 starts the item at its first modifier), trailing `;`
+    /// trimmed: the render never re-synthesizes `pub mod NAME;`
+    pub src: String,
     pub doc: Vec<String>,
     pub span: Span,
     pub line: u32,

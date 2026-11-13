@@ -91,7 +91,7 @@ fn pub_newtype_decl_parses() {
         panic!("expected a class, got {:?}", items[0]);
     };
     let c = ch.get(&ast);
-    assert_eq!(c.vis, Vis::Pub);
+    assert_eq!(c.vis(), Vis::Pub);
     assert!(c.newtype);
 }
 

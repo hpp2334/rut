@@ -317,7 +317,13 @@ fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
         .iter()
         .find(|f| f.name == "freeze_bytes")
         .expect("freeze_bytes");
-    assert!(freeze.src.starts_with("fn freeze_bytes"), "{}", freeze.src);
+    // span law v3.1: the decl span starts at its FIRST token — the
+    // spelled `pub` rides the verbatim slice
+    assert!(
+        freeze.src.starts_with("pub fn freeze_bytes"),
+        "{}",
+        freeze.src
+    );
     assert!(freeze.owner.is_none());
 }
 
@@ -437,8 +443,9 @@ pub let INFINITY: f64 = inf;
         .find(|l| l.name == "PI")
         .expect("PI as a module let");
     assert_eq!(pi.ty.as_deref(), Some("f64"));
+    // span law v3.1: the spelled `pub` rides the verbatim slice
     assert!(
-        pi.src.starts_with("let PI: f64 = 3.141592653589793"),
+        pi.src.starts_with("pub let PI: f64 = 3.141592653589793"),
         "the verbatim row: {}",
         pi.src
     );

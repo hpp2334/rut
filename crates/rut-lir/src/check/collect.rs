@@ -97,14 +97,14 @@ impl<'a> Ctx<'a> {
                             MemberRef::Error(_) => None,
                         })
                         .collect();
-                    self.collect_enum(*it, d.vis, d.name, &members)
+                    self.collect_enum(*it, d.vis(), d.name, &members)
                 }
                 ItemRef::Struct(h) => {
                     let d = h.get(self.ast).clone();
                     self.declare_data(
                         *it,
                         DataKind::Struct,
-                        d.vis,
+                        d.vis(),
                         d.name,
                         &d.generics,
                         &[],
@@ -116,7 +116,7 @@ impl<'a> Ctx<'a> {
                     self.declare_data(
                         *it,
                         DataKind::Class,
-                        d.vis,
+                        d.vis(),
                         d.name,
                         &d.generics,
                         &d.requires,
@@ -125,7 +125,7 @@ impl<'a> Ctx<'a> {
                 }
                 ItemRef::Interface(h) => {
                     let d = h.get(self.ast).clone();
-                    self.declare_iface(*it, d.vis, d.name, &d.generics, &d.methods)
+                    self.declare_iface(*it, d.vis(), d.name, &d.generics, &d.methods)
                 }
                 ItemRef::Alias(h) => self.declare_alias(*it, h.get(self.ast)),
                 _ => {}
@@ -193,7 +193,7 @@ impl<'a> Ctx<'a> {
                 }
                 ItemRef::Fn(fh) => {
                     let f = fh.get(self.ast).clone();
-                    let is_pub = f.vis == Vis::Pub;
+                    let is_pub = f.vis() == Vis::Pub;
                     if self.fn_index.contains(&f.name) {
                         let msg = match self.fn_nodes.iter().find(|(n, _)| *n == f.name) {
                             Some((_, node)) if self.mod_of(node.span(self.ast)) != self.cur_mod => {
@@ -213,7 +213,7 @@ impl<'a> Ctx<'a> {
                     self.fn_nodes.push((f.name, fh));
                     // `entry fn` — the host-callable surface;
                     // signature checked against the crossing rule below
-                    if f.entry {
+                    if f.entry() {
                         self.entries.push(f.name);
                     }
                     if is_pub {
@@ -223,7 +223,7 @@ impl<'a> Ctx<'a> {
                 }
                 ItemRef::ModuleLet(h) => {
                     let d = h.get(self.ast);
-                    self.lets.push((d.name, d.ty, d.init, d.vis));
+                    self.lets.push((d.name, d.ty, d.init, d.vis()));
                 }
                 _ => {}
             }
@@ -436,7 +436,7 @@ impl<'a> Ctx<'a> {
             node,
             target: d.target,
             resolved: None,
-            vis: d.vis,
+            vis: d.vis(),
         });
     }
 

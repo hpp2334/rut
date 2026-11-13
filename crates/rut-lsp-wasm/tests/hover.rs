@@ -202,6 +202,90 @@ fn main() -> nil { let x = length(3); }
     assert!(md.contains("euclidean length"), "doc: {md}");
 }
 
+/// hover in DECLARATION mode — the surface lanes' shape (`.d.rut`)
+fn hover_decl_at(src: &str, needle: &str) -> Option<String> {
+    let src2 = rut_lexer::lexer::normalize(src);
+    let (toks, _) = rut_lexer::lexer::lex(&src2);
+    let ast = doc_ast(&src2, Mode::Decl);
+    let idx = index(&src2, &ast, &toks);
+    let idxs = [&idx];
+    let pos = find_ident_pos(&toks, needle, 0)?;
+    hover(
+        &idxs,
+        &toks,
+        &ast,
+        &rut_lsp_wasm::mods::DocMods::default(),
+        pos,
+    )
+    .map(|h| h.markdown)
+}
+
+#[test]
+fn item_modifier_prefixes_render_verbatim() {
+    // span law v3.1 for items: the decl span starts at the item's
+    // FIRST token, so the verbatim signature IS the whole prefix —
+    // `pub async fn` and `entry fn` render as written (the old rows
+    // rendered bare `fn tick() -> bool`)
+    let src = "\
+pub async fn tick() -> bool { return true; }
+entry fn main() -> nil { let b = tick(); }
+";
+    let md = hover_at(src, "tick").unwrap();
+    assert!(md.contains("pub async fn tick() -> bool"), "{md}");
+    let src = "\
+entry fn run() -> i32 { return 7; }
+entry fn main() -> nil { let n = run(); }
+";
+    let md = hover_at(src, "run").unwrap();
+    assert!(md.contains("entry fn run() -> i32"), "{md}");
+}
+
+#[test]
+fn pub_type_prefixes_render_verbatim() {
+    // the type render slices the item's head (first token → the name):
+    // the spelled `pub` rides it
+    let src = "\
+pub class Stack<T> {
+items: Vec<T>;
+}
+entry fn main() -> nil { let s: Stack<i32> = nil; }
+";
+    let md = hover_at(src, "Stack").unwrap();
+    assert!(md.contains("pub class Stack<T> {"), "{md}");
+}
+
+#[test]
+fn surface_prefixes_render_verbatim() {
+    // the Decl-mode rows: `pub host async fn`, `pub builtin fn`, and
+    // `prelude builtin fn` all render as written; the builtin class
+    // carries its spelled head
+    let src = "\
+pub host async fn fetch(u: str) -> bytes;
+pub builtin fn own<T>(x: T) -> T;
+prelude builtin fn keep<T>(x: T) -> T;
+prelude builtin class Result<T> {
+fn is_ok(self) -> bool;
+}
+";
+    let s = rut_lexer::lexer::normalize(src);
+    let (toks, _) = rut_lexer::lexer::lex(&s);
+    let ast = doc_ast(&s, Mode::Decl);
+    let idx = index(&s, &ast, &toks);
+    let src_of = |n: &str| {
+        idx.fns
+            .iter()
+            .find(|f| f.name == n)
+            .unwrap_or_else(|| panic!("no fn row `{n}`"))
+            .src
+            .clone()
+    };
+    assert_eq!(src_of("fetch"), "pub host async fn fetch(u: str) -> bytes");
+    assert_eq!(src_of("own"), "pub builtin fn own<T>(x: T) -> T");
+    assert_eq!(src_of("keep"), "prelude builtin fn keep<T>(x: T) -> T");
+    let md = hover_decl_at(src, "Result").unwrap();
+    assert!(md.contains("prelude builtin class Result<T> {"), "{md}");
+}
+
 #[test]
 fn ambiguity_lists_candidates() {
     // two workspace files each defining `helper`
@@ -951,14 +1035,15 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     let (toks, _) = rut_lexer::lexer::lex(&s);
     let ast = doc_ast(&s, Mode::Decl);
     let idx = index(&s, &ast, &toks);
-    // the surface decl span starts at `fn` (`pub` rides before it) — the
-    // old slice was `host fn abs(x: f64) -> f64;\npub`
+    // the surface decl span starts at the item's FIRST token (span
+    // law v3.1) — the spelled `pub` rides the slice; each row still
+    // cuts at its own `;` (no `;pub` artifact)
     assert_eq!(
-        idx.fns[0].src, "host fn abs(x: f64) -> f64",
+        idx.fns[0].src, "pub host fn abs(x: f64) -> f64",
         "no `;pub` artifact"
     );
     assert_eq!(
-        idx.fns[1].src, "host fn ceil(x: f64) -> f64",
+        idx.fns[1].src, "pub host fn ceil(x: f64) -> f64",
         "each row cuts at its own `;`"
     );
 }

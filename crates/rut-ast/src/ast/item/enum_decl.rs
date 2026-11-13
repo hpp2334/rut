@@ -5,6 +5,7 @@
 use crate::ast::doc::DocData;
 use crate::ast::error::ErrorNode;
 use crate::ast::handle::Handle;
+use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::ItemRef;
 use crate::slot_alloc;
 use rut_core::IdentId;
@@ -13,12 +14,22 @@ use rut_lexer::span::Span;
 /// `pub? enum Name { A, B, .. }`
 #[derive(Clone, Debug)]
 pub struct EnumNode {
+    /// starts at the item's FIRST token — the leading modifier when
+    /// one is spelled, `enum` otherwise
     pub span: Span,
-    pub vis: crate::ast::item::Vis,
+    /// the modifier chain in source order — `vis()` derives from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub members: Vec<MemberRef>,
     pub doc: DocData,
+}
+
+impl EnumNode {
+    /// the spelled item visibility — `Vis::Self_` when unannotated
+    pub fn vis(&self) -> crate::ast::item::Vis {
+        item_vis(&self.modifiers)
+    }
 }
 
 /// one enum member — a node since v2 (its `name_span` is recorded at

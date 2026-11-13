@@ -304,9 +304,85 @@ fn interface_vis_parses_into_the_item() {
         panic!("expected an interface, got {:?}", items[0]);
     };
     let d = ih.get(&ast);
-    assert_eq!(d.vis, Vis::Pub);
+    assert_eq!(d.vis(), Vis::Pub);
     assert_eq!(ast.name(d.name), "Show");
     assert_eq!(d.methods.len(), 1);
+}
+
+#[test]
+fn item_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
+    // span law v3.1 for items: an item's span starts at its FIRST
+    // source token — the leading modifier when one is spelled, the
+    // keyword otherwise — and every modifier rides the node as a
+    // spanned child in source order (the flags a checker asks for are
+    // the node's own derived accessors)
+    let src = "pub async fn tick() -> bool { return true; }\n\
+               entry fn main() -> nil { }\n\
+               pub(super) use pkg::{A};\n\
+               pub mod net;\n\
+               mod solo;\n";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.root().items(&ast);
+
+    let ItemRef::Fn(fh) = items[0] else {
+        panic!("expected a fn, got {:?}", items[0]);
+    };
+    let f = fh.get(&ast);
+    let f_lo = src.find("pub async").unwrap() as u32;
+    assert_eq!(f.span.lo, f_lo, "the fn span starts at its first modifier");
+    assert_eq!(f.modifiers.len(), 2, "pub + async, in source order");
+    let rut_ast::ModKind::Pub(v) = f.modifiers[0].kind else {
+        panic!("a pub modifier, got {:?}", f.modifiers[0].kind);
+    };
+    assert_eq!(v, Vis::Pub);
+    assert_eq!(f.modifiers[0].span.text(src), "pub");
+    assert!(matches!(f.modifiers[1].kind, rut_ast::ModKind::Async));
+    assert_eq!(f.modifiers[1].span.text(src), "async");
+    assert!(f.vis() == Vis::Pub && f.is_async() && !f.entry());
+
+    let ItemRef::Fn(eh) = items[1] else {
+        panic!("expected a fn, got {:?}", items[1]);
+    };
+    let e = eh.get(&ast);
+    let e_lo = src.find("entry fn").unwrap() as u32;
+    assert_eq!(e.span.lo, e_lo, "the entry fn starts at `entry`");
+    assert_eq!(e.modifiers.len(), 1, "entry alone");
+    assert!(matches!(e.modifiers[0].kind, rut_ast::ModKind::Entry));
+    assert_eq!(e.modifiers[0].span.text(src), "entry");
+    assert!(e.entry() && !e.is_async() && e.vis() == Vis::Self_);
+
+    let ItemRef::Use(uh) = items[2] else {
+        panic!("expected a use, got {:?}", items[2]);
+    };
+    let u = uh.get(&ast);
+    let u_lo = src.find("pub(super)").unwrap() as u32;
+    assert_eq!(u.span.lo, u_lo, "the use span covers the scoped pub");
+    assert_eq!(u.modifiers.len(), 1);
+    let rut_ast::ModKind::Pub(v) = u.modifiers[0].kind else {
+        panic!("a pub modifier, got {:?}", u.modifiers[0].kind);
+    };
+    assert_eq!(v, Vis::Super, "the scoped vis rides the modifier payload");
+    assert_eq!(u.modifiers[0].span.text(src), "pub(super)");
+    assert_eq!(u.vis(), Vis::Super);
+
+    let ItemRef::ModDecl(ph) = items[3] else {
+        panic!("expected a mod decl, got {:?}", items[3]);
+    };
+    let pd = ph.get(&ast);
+    assert_eq!(pd.span.lo, src.find("pub mod").unwrap() as u32);
+    assert_eq!(pd.vis(), Vis::Pub);
+    let ItemRef::ModDecl(sh) = items[4] else {
+        panic!("expected a mod decl, got {:?}", items[4]);
+    };
+    let sd = sh.get(&ast);
+    assert_eq!(
+        sd.span.lo,
+        src.find("mod solo").unwrap() as u32,
+        "a bare item starts at its keyword"
+    );
+    assert!(sd.modifiers.is_empty());
+    assert_eq!(sd.vis(), Vis::Self_, "the unannotated default");
 }
 
 #[test]

@@ -16,7 +16,8 @@ use rut_lexer::span::Span;
 #[derive(Clone, Debug)]
 pub struct StructNode {
     pub span: Span,
-    pub vis: Vis,
+    /// the modifier chain in source order — `vis()` derives from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub generics: Vec<IdentId>,
@@ -25,12 +26,20 @@ pub struct StructNode {
     pub doc: DocData,
 }
 
+impl StructNode {
+    /// the spelled item visibility — `Vis::Self_` when unannotated
+    pub fn vis(&self) -> Vis {
+        item_vis(&self.modifiers)
+    }
+}
+
 /// `class Name<..> { fields; methods }` — or the positional newtype
 /// `class Name(Wrapped);` (the desugared one-`inner`-field shape).
 #[derive(Clone, Debug)]
 pub struct ClassNode {
     pub span: Span,
-    pub vis: Vis,
+    /// the modifier chain in source order — `vis()` derives from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub generics: Vec<IdentId>,
@@ -45,12 +54,20 @@ pub struct ClassNode {
     pub doc: DocData,
 }
 
+impl ClassNode {
+    /// the spelled item visibility — `Vis::Self_` when unannotated
+    pub fn vis(&self) -> Vis {
+        item_vis(&self.modifiers)
+    }
+}
+
 /// `interface Name<..> { fn sig(..) -> T; .. }` — signatures only;
 /// satisfaction is structural.
 #[derive(Clone, Debug)]
 pub struct InterfaceNode {
     pub span: Span,
-    pub vis: Vis,
+    /// the modifier chain in source order — `vis()` derives from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub generics: Vec<IdentId>,
@@ -58,8 +75,15 @@ pub struct InterfaceNode {
     pub doc: DocData,
 }
 
-/// one member modifier — a SPANNED child node riding the decl in
-/// source order; the decl's flags are the DERIVED view (the node's
+impl InterfaceNode {
+    /// the spelled item visibility — `Vis::Self_` when unannotated
+    pub fn vis(&self) -> Vis {
+        item_vis(&self.modifiers)
+    }
+}
+
+/// one modifier — a SPANNED child node riding the decl in source
+/// order; the decl's flags are the DERIVED view (the node's
 /// accessors), never the storage
 #[derive(Clone, Debug)]
 pub struct ModifierNode {
@@ -67,8 +91,33 @@ pub struct ModifierNode {
     pub kind: ModKind,
 }
 
-/// the member modifier set. Item-level kinds (`entry`/`host`/
-/// `builtin`) belong to the item decls and land with them.
+impl ModifierNode {
+    /// the `pub(..)` visibility this modifier spells, if any
+    pub fn vis(&self) -> Option<Vis> {
+        match self.kind {
+            ModKind::Pub(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+/// the spelled item visibility — `Vis::Self_` (module-private) when
+/// unannotated; the item accessors' shared derivation
+pub(crate) fn item_vis(modifiers: &[ModifierNode]) -> Vis {
+    modifiers
+        .iter()
+        .find_map(ModifierNode::vis)
+        .unwrap_or(Vis::Self_)
+}
+
+/// spelled `async`? — the item accessors' shared derivation
+pub(crate) fn item_is_async(modifiers: &[ModifierNode]) -> bool {
+    modifiers.iter().any(|m| matches!(m.kind, ModKind::Async))
+}
+
+/// the item modifier set. Member kinds (`static`/`marker`) land on the
+/// decls inside type bodies; the item kinds (`entry`/`host`/`builtin`)
+/// belong to the module-level item decls and land with them.
 #[derive(Clone, Debug)]
 pub enum ModKind {
     /// `pub`, `pub(super)`, `pub(pkg)` — the span covers the parens
@@ -79,6 +128,13 @@ pub enum ModKind {
     Static,
     /// `[disposal]` etc. — the span covers the brackets
     Marker(IdentId),
+    /// `entry fn` — the host-callable declaration surface
+    Entry,
+    /// `host` — the native linkage (the embedding Rust)
+    Host,
+    /// `builtin` with its ambient gate — the span covers the whole
+    /// spelling (`prelude builtin` ambient / `pub builtin` import-gated)
+    Builtin { ambient: bool },
 }
 
 /// struct/class field: `pub(..)`? `static`? name: ty (= init)?
