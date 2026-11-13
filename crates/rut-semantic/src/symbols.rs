@@ -35,6 +35,37 @@ pub struct Symbol {
     pub children: Vec<Symbol>,
 }
 
+impl Symbol {
+    /// the construction door — enforces the one invariant the wire
+    /// contract rides on: selection ⊆ range (LSP's selectionRange must
+    /// be contained in range). Always on: drift traps loudly (a
+    /// malformed outline entry is a contract violation) instead of
+    /// shipping silently.
+    fn new(
+        name: String,
+        kind: SymKind,
+        range: Span,
+        selection: Span,
+        children: Vec<Symbol>,
+    ) -> Symbol {
+        assert!(
+            selection.lo >= range.lo && selection.hi <= range.hi,
+            "`{name}` selection [{}, {}) outside range [{}, {})",
+            selection.lo,
+            selection.hi,
+            range.lo,
+            range.hi
+        );
+        Symbol {
+            name,
+            kind,
+            range,
+            selection,
+            children,
+        }
+    }
+}
+
 pub fn symbols(toks: &[Token], ast: &Ast) -> Vec<Symbol> {
     ast.root()
         .items(ast)
@@ -47,12 +78,14 @@ fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<Symbol> {
     // the walk surface's own span read (modifiers excluded where the
     // node's own span excludes them — fn/method spans start at `fn`)
     let span = item.span(ast);
-    let sym = |name: &str, kind, selection: Option<Span>, children| Symbol {
-        name: name.to_string(),
-        kind,
-        range: span,
-        selection: selection.unwrap_or(span),
-        children,
+    let sym = |name: &str, kind, selection: Option<Span>, children| {
+        Symbol::new(
+            name.to_string(),
+            kind,
+            span,
+            selection.unwrap_or(span),
+            children,
+        )
     };
     match item {
         ItemRef::Fn(h) => {
@@ -253,13 +286,13 @@ fn member_symbol(ast: &Ast, enum_span: Span, m: &rut_ast::MemberRef) -> Option<S
         rut_ast::MemberRef::Member(h) => h.get(ast),
         rut_ast::MemberRef::Error(_) => return None,
     };
-    Some(Symbol {
-        name: ast.name(d.name).to_string(),
-        kind: SymKind::EnumMember,
-        range: enum_span,
-        selection: d.name_span,
-        children: vec![],
-    })
+    Some(Symbol::new(
+        ast.name(d.name).to_string(),
+        SymKind::EnumMember,
+        enum_span,
+        d.name_span,
+        vec![],
+    ))
 }
 
 fn member_symbols(
@@ -280,15 +313,15 @@ fn field_symbols(toks: &[Token], ast: &Ast, fields: &[FieldRef]) -> Vec<Symbol> 
             continue; // the recovery slot renders no entry
         };
         let d: &FieldDeclNode = h.get(ast);
-        out.push(Symbol {
-            name: ast.name(d.name).to_string(),
-            kind: SymKind::Field,
-            range: d.span,
+        out.push(Symbol::new(
+            ast.name(d.name).to_string(),
+            SymKind::Field,
+            d.span,
             // the field's span covers its modifiers (`pub static ..`);
             // the recorded name ident is the honest selection
-            selection: find_name(toks, d.span, ast.name(d.name), false).unwrap_or(d.span),
-            children: vec![],
-        });
+            find_name(toks, d.span, ast.name(d.name), false).unwrap_or(d.span),
+            vec![],
+        ));
     }
     out
 }
@@ -300,13 +333,13 @@ fn method_symbols(ast: &Ast, methods: &[MethodRef]) -> Vec<Symbol> {
             continue;
         };
         let d: &MethodDeclNode = h.get(ast);
-        out.push(Symbol {
-            name: ast.name(d.name).to_string(),
-            kind: SymKind::Method,
-            range: d.span,
-            selection: d.name_span,
-            children: vec![],
-        });
+        out.push(Symbol::new(
+            ast.name(d.name).to_string(),
+            SymKind::Method,
+            d.span,
+            d.name_span,
+            vec![],
+        ));
     }
     out
 }

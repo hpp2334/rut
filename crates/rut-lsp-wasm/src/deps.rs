@@ -848,7 +848,7 @@ pub fn index_dep(name: &str, uri: &str, src: &str) -> DefIndex {
     // the ordinary index pass — `mode_of(uri)` spells the filename
     // convention (every caller already derived it that way)
     let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
-    let mut idx = crate::hover::index(doc.src(), doc.ast(), doc.toks());
+    let mut idx = crate::hover::index(&doc);
     idx.origin = uri.to_string();
     idx.module = Some(name.to_string());
     // the parse mode rides the index — the definition layer's

@@ -74,9 +74,16 @@ fn decl_src(src: &str, span: Span) -> String {
 /// verbatim head: the source from the item's FIRST token (span law
 /// v3.1 — modifiers included, generics and admission bounds as
 /// written) up to the body's `{` — the brace pair's left edge, the
-/// head slice's right cut
+/// head slice's right cut. A brace-less decl has no `{` to cut at —
+/// its `body_span` degenerates to the whole decl span (the newtype
+/// class spelling's own `;` terminator) — so the cut rides the span's
+/// end and the trailing `;` trims off (the [`decl_src`] chain), else
+/// the render grows a `; {` artifact
 fn head_src(src: &str, span: Span, body: Span) -> String {
-    src[span.lo as usize..body.lo as usize]
+    let hi = if body.lo > span.lo { body.lo } else { span.hi };
+    src[span.lo as usize..hi as usize]
+        .trim_end()
+        .trim_end_matches(';')
         .trim_end()
         .to_string()
 }
@@ -244,11 +251,17 @@ fn param_names(ast: &Ast, params: &[ParamRef]) -> Vec<String> {
         .collect()
 }
 
-/// Build the index for one document. `toks` is the same lex the parser
+/// Build the index for one document. The doc is the context — src, ast,
+/// and toks are its read doors (`toks` is the same lex the parser
 /// consumed — the use-path interior segments' name-span recovery rides
-/// it (the only span the nodes do not record).
-pub fn index(src: &str, ast: &Ast, toks: &[Token]) -> DefIndex {
-    index_items(src, ast, toks, ast.root().items(ast))
+/// it; the only span the nodes do not record).
+pub fn index(doc: &rut_semantic::ParsedDoc) -> DefIndex {
+    index_items(
+        doc.src(),
+        doc.ast(),
+        doc.toks(),
+        doc.ast().root().items(doc.ast()),
+    )
 }
 
 /// [`index`] over a GIVEN item list — one module slice of a document.

@@ -32,18 +32,12 @@ fn myhost_chain() -> Vec<DefIndex> {
     ]
 }
 
-/// parse with doc grafting ON — the editor lane's shape (hover's index
-/// reads doc chains off the decl nodes)
-fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
-    rut_ast::parser::parse_with_recover(
-        src,
-        mode,
-        rut_ast::parser::ParseOpts {
-            include_comments: true,
-        },
-    )
-    .into_parts()
-    .0
+/// one doc artifact — the (normalized src, toks, ast) triple from ONE
+/// parse, read through the doc's doors (the test lane's replacement
+/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
+/// grafting ON — the editor lane's shape)
+fn doc_of(src: &str, mode: rut_ast::parser::Mode) -> rut_semantic::ParsedDoc {
+    rut_semantic::ParsedDoc::parse(mode, src)
 }
 
 #[test]
@@ -74,10 +68,9 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     // `pub builtin` — gated — and its ambient ones already complete
     // plain), the doc's dep set EMPTY.
     let doc = "entry fn main() -> nil { }\n";
-    let d2 = rut_lexer::lexer::normalize(doc);
-    let (toks, _) = rut_lexer::lexer::lex(&d2);
-    let ast = doc_ast(&d2, rut_ast::parser::Mode::Impl);
-    let di = rut_lsp_wasm::hover::index(&d2, &ast, &toks);
+    let ddoc = doc_of(doc, rut_ast::parser::Mode::Impl);
+    let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
+    let di = rut_lsp_wasm::hover::index(&ddoc);
     let core = index_dep(
         "core",
         "core",
@@ -86,10 +79,10 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     let idxs = [&di, &core];
     let items = rut_lsp_wasm::completion::complete(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         d2.len() as u32,
-        &d2,
+        d2,
         &rut_lsp_wasm::mods::DocMods::default(),
         &HashSet::new(),
     );
@@ -166,10 +159,9 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     // `net/mod.d.rut` (the mounted module's own file); F12 on the
     // `net` segment lands on the declaring `pub mod net;` edge
     let src = "use myhost::net::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n";
-    let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&normalized);
-    let ast = doc_ast(&normalized, rut_ast::parser::Mode::Impl);
-    let mut doc_idx = rut_lsp_wasm::hover::index(&normalized, &ast, &toks);
+    let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
+    let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
+    let mut doc_idx = rut_lsp_wasm::hover::index(&ddoc);
     let doc_uri = "file:///t/main.rut";
     doc_idx.origin = doc_uri.to_string();
     let idxs = myhost_chain();
@@ -177,8 +169,8 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let dm = rut_lsp_wasm::mods::DocMods::default();
     let ctx = rut_lsp_wasm::definition::Ctx {
         doc_uri,
-        toks: &toks,
-        ast: &ast,
+        toks,
+        ast,
         idxs: &chain,
         doc_mods: &dm,
     };
@@ -205,10 +197,9 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     // the hover face rides the same chain: the leaf renders the
     // row's signature from the child file
     let src = "use myhost::net::{ connect };\n";
-    let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&normalized);
-    let ast = doc_ast(&normalized, rut_ast::parser::Mode::Impl);
-    let mut doc_idx = rut_lsp_wasm::hover::index(&normalized, &ast, &toks);
+    let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
+    let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
+    let mut doc_idx = rut_lsp_wasm::hover::index(&ddoc);
     let doc_uri = "file:///t/main.rut";
     doc_idx.origin = doc_uri.to_string();
     let idxs = myhost_chain();
@@ -216,8 +207,8 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     let leaf = normalized.find("connect").expect("the leaf") as u32;
     let h = rut_lsp_wasm::hover::hover(
         &chain,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         leaf,
     )

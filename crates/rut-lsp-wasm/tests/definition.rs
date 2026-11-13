@@ -1,48 +1,46 @@
 use rut_ast::parser::Mode;
 use rut_ast::Ast;
-use rut_lexer::lexer::{lex, normalize};
+use rut_lexer::lexer::normalize;
 use rut_lexer::token::Token;
 use rut_lsp_wasm::definition::*;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::mods::DocMods;
 use rut_lsp_wasm::LineIndex;
 
-/// parse with doc grafting ON — the editor lane's shape (hover's index
-/// reads doc chains off the decl nodes) and the recovering entry (the
-/// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
-    rut_ast::parser::parse_with_recover(
-        src,
-        mode,
-        rut_ast::parser::ParseOpts {
-            include_comments: true,
-        },
-    )
-    .into_parts()
-    .0
+/// one doc artifact — the (normalized src, toks, ast) triple from ONE
+/// parse, read through the doc's doors (the test lane's replacement
+/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
+/// grafting ON — the editor lane's shape, the recovering entry)
+fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
+    rut_semantic::ParsedDoc::parse(mode, src)
 }
 
 const DOC: &str = "file:///t/main.rut";
 
+/// a document + its hover index — the doc is the context (src, toks,
+/// and ast read through its doors)
 struct Doc {
-    src: String,
-    toks: Vec<Token>,
-    ast: Ast,
+    pd: rut_semantic::ParsedDoc,
     index: DefIndex,
 }
 
-fn doc_at(uri: &str, src: &str) -> Doc {
-    let src = normalize(src);
-    let (toks, _) = lex(&src);
-    let ast = doc_ast(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
-    index.origin = uri.to_string();
-    Doc {
-        src,
-        toks,
-        ast,
-        index,
+impl Doc {
+    fn src(&self) -> &str {
+        self.pd.src()
     }
+    fn toks(&self) -> &[Token] {
+        self.pd.toks()
+    }
+    fn ast(&self) -> &Ast {
+        self.pd.ast()
+    }
+}
+
+fn doc_at(uri: &str, src: &str) -> Doc {
+    let pd = doc_of(src, Mode::Impl);
+    let mut index = rut_lsp_wasm::hover::index(&pd);
+    index.origin = uri.to_string();
+    Doc { pd, index }
 }
 
 fn doc(src: &str) -> Doc {
@@ -61,8 +59,8 @@ fn run(
     let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
     let ctx = Ctx {
         doc_uri: &d.index.origin,
-        toks: &d.toks,
-        ast: &d.ast,
+        toks: d.toks(),
+        ast: d.ast(),
         idxs: &idxs,
         doc_mods: dm,
     };
@@ -115,12 +113,12 @@ fn widget_index() -> DefIndex {
 fn local_binding_jumps_to_declaring_ident() {
     let src = "fn go() -> i32 {\n    let c = 1;\n    return c;\n}\n";
     let d = doc(src);
-    let hits = def(&d, at(&d.src, "return c;", 1) + 7, &[]);
+    let hits = def(&d, at(d.src(), "return c;", 1) + 7, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, DOC);
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "let c", 1) + 4; // the `c` inside `let c`
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 1));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "let c", 1) + 4; // the `c` inside `let c`
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 1));
 }
 
 #[test]
@@ -139,11 +137,11 @@ fn shadowing_picks_the_latest_decl() {
     ]
     .join("\n");
     let d = doc(&src);
-    let hits = def(&d, at(&d.src, "return v;", 1) + 7, &[]);
+    let hits = def(&d, at(d.src(), "return v;", 1) + 7, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "let v = 2;", 1) + 4; // the INNER `v`
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 1));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "let v = 2;", 1) + 4; // the INNER `v`
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 1));
 }
 
 #[test]
@@ -160,23 +158,23 @@ fn scope_exit_keeps_the_outer_binding() {
     ]
     .join("\n");
     let d = doc(&src);
-    let hits = def(&d, at(&d.src, "return v;", 1) + 7, &[]);
+    let hits = def(&d, at(d.src(), "return v;", 1) + 7, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "let v = 1;", 1) + 4; // the OUTER `v` — the inner one is out of scope
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 1));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "let v = 1;", 1) + 4; // the OUTER `v` — the inner one is out of scope
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 1));
 }
 
 #[test]
 fn param_jumps_to_its_decl() {
     let src = "fn go(p: Point) -> f64 {\n    return p.x;\n}\nstruct Point {\n    x: f64;\n}\n";
     let d = doc(src);
-    let hits = def(&d, at(&d.src, "p: Point", 1), &[]); // the param decl site → itself
+    let hits = def(&d, at(d.src(), "p: Point", 1), &[]); // the param decl site → itself
     assert_eq!(hits.len(), 1);
-    let hits = def(&d, at(&d.src, "return p", 1) + 7, &[]); // the use site
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "go(p: Point)", 1) + 3;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 1));
+    let hits = def(&d, at(d.src(), "return p", 1) + 7, &[]); // the use site
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "go(p: Point)", 1) + 3;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 1));
 }
 
 // ---- layer 2: the decl layer ----
@@ -199,14 +197,14 @@ fn field_read_jumps_to_the_field_decl() {
     .join("\n");
     let d = doc(&src);
     // `wrap.c` — the `c` after the dot → the field decl ident
-    let hits = def(&d, at(&d.src, "wrap.c;", 1) + 5, &[]);
+    let hits = def(&d, at(d.src(), "wrap.c;", 1) + 5, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "c: Circle;", 1); // the declaring `c`
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 1));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "c: Circle;", 1); // the declaring `c`
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 1));
     // the field DECL site answers itself
-    let hits = def(&d, at(&d.src, "c: Circle;", 1), &[]);
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 1));
+    let hits = def(&d, at(d.src(), "c: Circle;", 1), &[]);
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 1));
 }
 
 #[test]
@@ -226,22 +224,22 @@ fn method_call_jumps_to_the_impl_fn_name() {
     ]
     .join("\n");
     let d = doc(&src);
-    let hits = def(&d, at(&d.src, "c.area();", 1) + 2, &[]);
+    let hits = def(&d, at(d.src(), "c.area();", 1) + 2, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "fn area(self)", 1) + 3;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 4));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "fn area(self)", 1) + 3;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 4));
 }
 
 #[test]
 fn enum_member_jumps_to_its_decl_ident() {
     let src = "enum Color { Red, Blue }\nfn pick(c: Color) -> Color {\n    return c;\n}\nfn go() -> Color {\n    return Color::Red;\n}\n";
     let d = doc(src);
-    let hits = def(&d, at(&d.src, "Color::Red;", 1) + 7, &[]);
+    let hits = def(&d, at(d.src(), "Color::Red;", 1) + 7, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "Red,", 1);
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 3));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "Red,", 1);
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 3));
 }
 
 #[test]
@@ -262,27 +260,27 @@ fn type_and_fn_names_jump_to_their_decls() {
     .join("\n");
     let d = doc(&src);
     // the type token in `Circle::new` → the class decl ident
-    let hits = def(&d, at(&d.src, "Circle::new(1.0);", 1), &[]);
+    let hits = def(&d, at(d.src(), "Circle::new(1.0);", 1), &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "class Circle", 1) + 6;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 6));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "class Circle", 1) + 6;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 6));
     // a free-fn call site → the fn decl ident
-    let hits = def(&d, at(&d.src, "= make();", 2) + 2, &[]);
+    let hits = def(&d, at(d.src(), "= make();", 2) + 2, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let want = at(&d.src, "fn make()", 1) + 3;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 4));
+    let want = at(d.src(), "fn make()", 1) + 3;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 4));
 }
 
 #[test]
 fn module_let_use_site_jumps_to_the_decl() {
     let src = "let TOTAL = 41;\nfn bump() -> i32 {\n    return TOTAL + 1;\n}\n";
     let d = doc(src);
-    let hits = def(&d, at(&d.src, "return TOTAL", 1) + 7, &[]);
+    let hits = def(&d, at(d.src(), "return TOTAL", 1) + 7, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "let TOTAL", 1) + 4;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 5));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "let TOTAL", 1) + 4;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 5));
 }
 
 // ---- layer 3: the use graph ----
@@ -294,7 +292,7 @@ fn use_name_jumps_to_the_exporting_module() {
     let gadgets = widget_index();
     let extra = [gadgets];
     // the use-statement name itself
-    let hits = def(&d, at(&d.src, "use gadgets::{ Widget }", 1) + 15, &extra);
+    let hits = def(&d, at(d.src(), "use gadgets::{ Widget }", 1) + 15, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, WIDGET_URI);
     let ix = LineIndex::new(&normalize(WIDGET_DOC));
@@ -304,7 +302,7 @@ fn use_name_jumps_to_the_exporting_module() {
         (want, want + 6)
     );
     // and a usage site resolves through the same edge
-    let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
+    let hits = def(&d, at(d.src(), "= Widget::new();", 1) + 2, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, WIDGET_URI);
 }
@@ -316,7 +314,7 @@ fn the_use_graph_restricts_the_search_to_the_imported_pkg() {
     let mut foreign = doc("class Widget {\n    other: i32;\n}\n").index;
     foreign.origin = "file:///ws/other/lib.rut".to_string();
     let extra = [widget_index(), foreign];
-    let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
+    let hits = def(&d, at(d.src(), "= Widget::new();", 1) + 2, &extra);
     assert_eq!(
         hits.len(),
         1,
@@ -330,7 +328,7 @@ fn unimported_names_keep_the_flat_chain() {
     let src = "entry fn main() -> nil {\n    let w = Widget::new();\n}\n";
     let d = doc(src);
     let extra = [widget_index()];
-    let hits = def(&d, at(&d.src, "= Widget::new();", 1) + 2, &extra);
+    let hits = def(&d, at(d.src(), "= Widget::new();", 1) + 2, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, WIDGET_URI);
 }
@@ -360,17 +358,17 @@ fn a_both_files_dep_answers_from_the_body() {
     let body_src = normalize("pub fn make() -> i32 { return 1; }\n");
     let ix = LineIndex::new(&body_src);
     // the use leaf: the body's `make`, not the surface's
-    let hits = def(&d, at(&d.src, "use pkg::{ make }", 1) + 11, &extra);
+    let hits = def(&d, at(d.src(), "use pkg::{ make }", 1) + 11, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/pkg/mod.rut");
     let want = at(&body_src, "fn make()", 1) + 3;
     assert_eq!(span_of(&body_src, &ix, &hits[0]), (want, want + 4));
     // a use site rides the same preference
-    let hits = def(&d, at(&d.src, "= make();", 1) + 2, &extra);
+    let hits = def(&d, at(d.src(), "= make();", 1) + 2, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/pkg/mod.rut");
     // the pkg head: the body root, file top
-    let hits = def(&d, at(&d.src, "use pkg::", 1) + 4, &extra);
+    let hits = def(&d, at(d.src(), "use pkg::", 1) + 4, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/pkg/mod.rut");
     assert_eq!(span_of(&body_src, &ix, &hits[0]), (0, 0));
@@ -393,12 +391,12 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
     let ix = LineIndex::new(&surface_src);
     let want = at(&surface_src, "fn sqrt", 1) + 3;
     // the leaf
-    let hits = def(&d, at(&d.src, "use calc::{ sqrt }", 1) + 12, &extra);
+    let hits = def(&d, at(d.src(), "use calc::{ sqrt }", 1) + 12, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/calc/calc.d.rut");
     assert_eq!(span_of(&surface_src, &ix, &hits[0]), (want, want + 4));
     // the pkg head: the flat root, file top
-    let hits = def(&d, at(&d.src, "use calc::", 1) + 4, &extra);
+    let hits = def(&d, at(d.src(), "use calc::", 1) + 4, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/calc/calc.d.rut");
     assert_eq!(span_of(&surface_src, &ix, &hits[0]), (0, 0));
@@ -427,19 +425,19 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
     // init, before any mount)
     let extra = [ambient, mounted];
     // the pkg head: the MOUNTED surface's file top, never the embed
-    let hits = def(&d, at(&d.src, "use ink_host::", 1) + 4, &extra);
+    let hits = def(&d, at(d.src(), "use ink_host::", 1) + 4, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri,
         "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut"
     );
-    assert_eq!(span_of(&d.src, &LineIndex::new(&d.src), &hits[0]), (0, 0));
+    assert_eq!(span_of(d.src(), &LineIndex::new(d.src()), &hits[0]), (0, 0));
     // the leaf: the ambiguity peek may answer both twins, the
     // MOUNTED one among them (the real defs store coalesces the
     // module's twins to one — one answer, the mounted file)
     let hits = def(
         &d,
-        at(&d.src, "use ink_host::{ create_logger }", 1) + 18,
+        at(d.src(), "use ink_host::{ create_logger }", 1) + 18,
         &extra,
     );
     assert!(
@@ -473,12 +471,12 @@ fn a_ctor_decl_click_answers_itself() {
         "class Ctx {\n    internal: opaque;\n}\n\nimpl Ctx {\n    [constructor] pub fn new(cap: i32) -> Self {\n        return Self { internal: 2 };\n    }\n}\n",
     )
     .index;
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "fn new", 1) + 3;
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "fn new", 1) + 3;
     let hits = def(&d, want, &[other]);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, DOC);
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 3));
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 3));
 }
 
 #[test]
@@ -493,12 +491,12 @@ fn a_fn_decl_click_answers_itself_despite_a_foreign_twin() {
         "fn make() -> i32 { return 2; }\n",
     )
     .index;
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "fn make", 1) + 3;
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "fn make", 1) + 3;
     let hits = def(&d, want, &[other]);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, DOC);
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 4));
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 4));
 }
 
 #[test]
@@ -510,12 +508,12 @@ fn a_doubled_twin_answer_is_one_answer() {
     let src = "class Widget {\n    id: i32;\n}\n";
     let d = doc(src);
     let twin = doc_at(DOC, src).index; // the same origin, stamped twin
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "Widget", 1);
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "Widget", 1);
     let hits = def(&d, want, &[twin]);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, DOC);
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 6));
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 6));
 }
 
 #[test]
@@ -544,7 +542,7 @@ fn a_mounted_member_beats_the_ambient_twin() {
     let surface_src = normalize(surface);
     let six = LineIndex::new(&surface_src);
     // the impl method: `info` in `log.info("x")`
-    let hits = def(&d, at(&d.src, "log.info", 1) + 4, &extra);
+    let hits = def(&d, at(d.src(), "log.info", 1) + 4, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri,
@@ -553,7 +551,7 @@ fn a_mounted_member_beats_the_ambient_twin() {
     let want = at(&surface_src, "fn info", 1) + 3;
     assert_eq!(span_of(&surface_src, &six, &hits[0]), (want, want + 4));
     // the field read: `internal` in `print(log.internal)`
-    let hits = def(&d, at(&d.src, "log.internal", 1) + 4, &extra);
+    let hits = def(&d, at(d.src(), "log.internal", 1) + 4, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri,
@@ -584,7 +582,7 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
     let root_src = normalize("pub mod layout;\npub fn tag() -> i32 { return 1; }\n");
     let ix = LineIndex::new(&root_src);
     // the `layout` segment (not the pkg head, not the leaf)
-    let hits = def(&d, at(&d.src, "gadgets::layout", 1) + 9, &extra);
+    let hits = def(&d, at(d.src(), "gadgets::layout", 1) + 9, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///deps/gadgets/mod.rut");
     let want = at(&root_src, "mod layout;", 1) + 4;
@@ -597,7 +595,7 @@ fn a_pkg_head_with_no_indexed_pkg_is_an_honest_miss() {
     // answers empty — never a wrong jump
     let src = "use ghost::{ Thing };\nentry fn main() -> nil {\n}\n";
     let d = doc(src);
-    assert!(def(&d, at(&d.src, "use ghost::", 1) + 4, &[]).is_empty());
+    assert!(def(&d, at(d.src(), "use ghost::", 1) + 4, &[]).is_empty());
 }
 
 // ---- the own-package lanes (the doc context keys them) ----
@@ -634,7 +632,7 @@ fn root_dm() -> DocMods {
 fn an_edge_click_opens_the_child_file_top() {
     let d = app_root();
     let extra = [app_helpers()];
-    let hits = def_as(&d, at(&d.src, "mod helpers;", 1) + 4, &extra, &root_dm());
+    let hits = def_as(&d, at(d.src(), "mod helpers;", 1) + 4, &extra, &root_dm());
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
     assert_eq!(hits[0].range.start.line, 0, "the file top");
@@ -646,7 +644,7 @@ fn an_edge_click_on_an_unstamped_doc_is_a_miss() {
     // no doc context — the own lanes stay off (today's answer)
     let d = app_root();
     let extra = [app_helpers()];
-    assert!(def(&d, at(&d.src, "mod helpers;", 1) + 4, &extra).is_empty());
+    assert!(def(&d, at(d.src(), "mod helpers;", 1) + 4, &extra).is_empty());
 }
 
 #[test]
@@ -654,7 +652,7 @@ fn an_edge_click_on_an_unmounted_child_is_a_miss() {
     // the doc is stamped but the chain carries no index at the
     // child's mod path — an empty jump, never a wrong one
     let d = app_root();
-    assert!(def_as(&d, at(&d.src, "mod helpers;", 1) + 4, &[], &root_dm()).is_empty());
+    assert!(def_as(&d, at(d.src(), "mod helpers;", 1) + 4, &[], &root_dm()).is_empty());
 }
 
 #[test]
@@ -676,7 +674,7 @@ fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
         pkg: Some("app".into()),
     };
     let extra = [deep];
-    let hits = def_as(&d, at(&d.src, "mod deep;", 1) + 4, &extra, &dm);
+    let hits = def_as(&d, at(d.src(), "mod deep;", 1) + 4, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/deep.rut");
     assert_eq!(hits[0].range.start.line, 0);
@@ -695,7 +693,7 @@ fn an_edge_click_never_leaks_across_packages() {
         "pub struct Slot {\n    n: i32;\n}\n",
     );
     let extra = [other];
-    assert!(def_as(&d, at(&d.src, "mod helpers;", 1) + 4, &extra, &root_dm()).is_empty());
+    assert!(def_as(&d, at(d.src(), "mod helpers;", 1) + 4, &extra, &root_dm()).is_empty());
 }
 
 #[test]
@@ -717,21 +715,21 @@ fn an_own_pkg_use_path_resolves_intra_package() {
     let dm = root_dm();
     // the pkg-name head: the doc's own rows ARE the root — its own
     // file top (never the lagging on-disk twin)
-    let hits = def_as(&d, at(&d.src, "use app::", 1) + 4, &extra, &dm);
+    let hits = def_as(&d, at(d.src(), "use app::", 1) + 4, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/mod.rut");
     assert_eq!(hits[0].range.start.line, 0);
     assert_eq!(hits[0].range.start.character, 0);
     // the `helpers` segment: the mounting edge in the root (the
     // doc's own rows carry it)
-    let hits = def_as(&d, at(&d.src, "app::helpers", 1) + 6, &extra, &dm);
+    let hits = def_as(&d, at(d.src(), "app::helpers", 1) + 6, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/mod.rut");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "mod helpers;", 1) + 4;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 7));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "mod helpers;", 1) + 4;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 7));
     // the leaf: the child's declaring ident
-    let hits = def_as(&d, at(&d.src, "{ Slot }", 1) + 2, &extra, &dm);
+    let hits = def_as(&d, at(d.src(), "{ Slot }", 1) + 2, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
     let child = normalize("pub struct Slot {\n    n: i32;\n}\n");
@@ -765,13 +763,13 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
     let extra = [helpers, deep];
     let dm = root_dm();
     // the head: the child file's top (the mod-edge target law)
-    let hits = def_as(&d, at(&d.src, "use helpers::", 1) + 4, &extra, &dm);
+    let hits = def_as(&d, at(d.src(), "use helpers::", 1) + 4, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
     assert_eq!(hits[0].range.start.line, 0);
     assert_eq!(hits[0].range.start.character, 0);
     // the `deep` segment: the `mod deep;` edge in the helpers module
-    let hits = def_as(&d, at(&d.src, "helpers::deep", 1) + 10, &extra, &dm);
+    let hits = def_as(&d, at(d.src(), "helpers::deep", 1) + 10, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
     let helpers_src = normalize("mod deep;\npub struct Slot {\n    n: i32;\n}\n");
@@ -779,7 +777,7 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
     let want = at(&helpers_src, "mod deep;", 1) + 4;
     assert_eq!(span_of(&helpers_src, &hix, &hits[0]), (want, want + 4));
     // the leaf: the walked path's decl
-    let hits = def_as(&d, at(&d.src, "{ Gem }", 1) + 2, &extra, &dm);
+    let hits = def_as(&d, at(d.src(), "{ Gem }", 1) + 2, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/deep.rut");
     let deep_src = normalize("pub struct Gem {\n    g: i32;\n}\n");
@@ -795,10 +793,7 @@ fn the_explicit_module_name_beats_the_path_derivation() {
     // a dep index named `pouch` whose paths spell something else:
     // the explicit module is the WHOLE match
     let src = "class Widget {\n    id: i32;\n}\n";
-    let s = normalize(src);
-    let (toks, _) = lex(&s);
-    let ast = doc_ast(&s, Mode::Impl);
-    let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let mut idx = rut_lsp_wasm::hover::index(&doc_of(src, Mode::Impl));
     idx.origin = "file:///ws/gadgets/lib.rut".to_string();
     idx.src_path = Some("somewhere/else/lib.rut".to_string());
     idx.module = Some("pouch".to_string());
@@ -815,10 +810,7 @@ fn the_unnamed_fallback_stays_verbatim() {
     // module None → today's derivation, byte-for-byte: the
     // src_path segment, then the origin's file stem
     let src = "class Widget {\n    id: i32;\n}\n";
-    let s = normalize(src);
-    let (toks, _) = lex(&s);
-    let ast = doc_ast(&s, Mode::Impl);
-    let mut idx = rut_lsp_wasm::hover::index(&s, &ast, &toks);
+    let mut idx = rut_lsp_wasm::hover::index(&doc_of(src, Mode::Impl));
     idx.origin = "file:///ws/gadgets/lib.rut".to_string();
     assert!(matches_pkg(&idx, "gadgets"), "the file stem still resolves");
     idx.src_path = Some("rut/pouch/mod.rut".to_string());
@@ -856,7 +848,7 @@ fn std_use_jumps_to_the_true_source_path() {
         "rut/pouch/src/mod.rut",
         POUCH,
     )];
-    let hits = def(&d, at(&d.src, "= Vec::new();", 1) + 2, &extra);
+    let hits = def(&d, at(d.src(), "= Vec::new();", 1) + 2, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     // the TRUE rut/... path, not a label
     assert_eq!(hits[0].uri, "rut/pouch/src/mod.rut");
@@ -867,7 +859,7 @@ fn std_use_jumps_to_the_true_source_path() {
     let want = at(&real, "class Vec", 1) + 6;
     assert_eq!(span_of(&real, &ix, &hits[0]), (want, want + 3));
     // the use-statement name resolves to the same target
-    let hits = def(&d, at(&d.src, "use pouch::{ Vec }", 1) + 13, &extra);
+    let hits = def(&d, at(d.src(), "use pouch::{ Vec }", 1) + 13, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "rut/pouch/src/mod.rut");
     assert_eq!(span_of(&real, &ix, &hits[0]), (want, want + 3));
@@ -889,11 +881,11 @@ fn type_definition_from_a_binding() {
     ]
     .join("\n");
     let d = doc(&src);
-    let hits = typedef(&d, at(&d.src, "return c.r;", 1) + 7, &[]);
+    let hits = typedef(&d, at(d.src(), "return c.r;", 1) + 7, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "class Circle", 1) + 6;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 6));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "class Circle", 1) + 6;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 6));
 }
 
 #[test]
@@ -913,22 +905,22 @@ fn type_definition_from_a_nullable_field_member() {
     .join("\n");
     let d = doc(&src);
     // `s.item` — the `?Circle` field's type head is `Circle`
-    let hits = typedef(&d, at(&d.src, "s.item.r;", 1) + 2, &[]);
+    let hits = typedef(&d, at(d.src(), "s.item.r;", 1) + 2, &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "class Circle", 1) + 6;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 6));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "class Circle", 1) + 6;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 6));
 }
 
 #[test]
 fn type_definition_on_a_type_token_is_its_own_decl() {
     let src = "class Circle {\n    r: f64;\n}\nfn go() -> f64 {\n    let c = Circle::new(1.0);\n    return c.r;\n}\n";
     let d = doc(src);
-    let hits = typedef(&d, at(&d.src, "Circle::new(1.0);", 1), &[]);
+    let hits = typedef(&d, at(d.src(), "Circle::new(1.0);", 1), &[]);
     assert_eq!(hits.len(), 1, "{hits:?}");
-    let ix = LineIndex::new(&d.src);
-    let want = at(&d.src, "class Circle", 1) + 6;
-    assert_eq!(span_of(&d.src, &ix, &hits[0]), (want, want + 6));
+    let ix = LineIndex::new(d.src());
+    let want = at(d.src(), "class Circle", 1) + 6;
+    assert_eq!(span_of(d.src(), &ix, &hits[0]), (want, want + 6));
 }
 
 #[test]
@@ -940,10 +932,10 @@ fn misses_stay_misses() {
     let src2 = "entry fn main() -> nil {\n    let x = i32::max(1);\n}\n";
     let d2 = doc(src2);
     assert!(
-        def(&d2, at(&d2.src, "i32::max", 1), &[]).is_empty(),
+        def(&d2, at(d2.src(), "i32::max", 1), &[]).is_empty(),
         "i32 has no decl to jump to"
     );
     let src3 = "entry fn main() -> nil {\n    let x = mystery();\n}\n";
     let d3 = doc(src3);
-    assert!(def(&d3, at(&d3.src, "mystery", 1), &[]).is_empty());
+    assert!(def(&d3, at(d3.src(), "mystery", 1), &[]).is_empty());
 }

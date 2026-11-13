@@ -1,5 +1,5 @@
 use rut_ast::parser::Mode;
-use rut_lexer::lexer::{lex, normalize};
+use rut_lexer::lexer::normalize;
 use rut_lexer::token::Token;
 use rut_lsp_wasm::definition;
 use rut_lsp_wasm::definition::DefLocation;
@@ -7,42 +7,40 @@ use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::references::*;
 use rut_lsp_wasm::LineIndex;
 
-/// parse with doc grafting ON — the editor lane's shape (hover's index
-/// reads doc chains off the decl nodes) and the recovering entry (the
-/// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
-    rut_ast::parser::parse_with_recover(
-        src,
-        mode,
-        rut_ast::parser::ParseOpts {
-            include_comments: true,
-        },
-    )
-    .into_parts()
-    .0
+/// one doc artifact — the (normalized src, toks, ast) triple from ONE
+/// parse, read through the doc's doors (the test lane's replacement
+/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
+/// grafting ON — the editor lane's shape, the recovering entry)
+fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
+    rut_semantic::ParsedDoc::parse(mode, src)
 }
 
 const DOC: &str = "file:///t/main.rut";
 
+/// a document + its hover index — the doc is the context (src, toks,
+/// and ast read through its doors)
 struct Doc {
-    src: String,
-    toks: Vec<Token>,
-    ast: rut_ast::Ast,
+    pd: rut_semantic::ParsedDoc,
     index: DefIndex,
 }
 
-fn doc_at(uri: &str, src: &str) -> Doc {
-    let src = normalize(src);
-    let (toks, _) = lex(&src);
-    let ast = doc_ast(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
-    index.origin = uri.to_string();
-    Doc {
-        src,
-        toks,
-        ast,
-        index,
+impl Doc {
+    fn src(&self) -> &str {
+        self.pd.src()
     }
+    fn toks(&self) -> &[Token] {
+        self.pd.toks()
+    }
+    fn ast(&self) -> &rut_ast::Ast {
+        self.pd.ast()
+    }
+}
+
+fn doc_at(uri: &str, src: &str) -> Doc {
+    let pd = doc_of(src, Mode::Impl);
+    let mut index = rut_lsp_wasm::hover::index(&pd);
+    index.origin = uri.to_string();
+    Doc { pd, index }
 }
 
 fn doc(src: &str) -> Doc {
@@ -76,8 +74,8 @@ fn refs(d: &Doc, pos: u32, extra: &[DefIndex], include_decl: bool) -> Vec<DefLoc
     let dm = rut_lsp_wasm::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        toks: &d.toks,
-        ast: &d.ast,
+        toks: d.toks(),
+        ast: d.ast(),
         idxs: &idxs,
         doc_mods: &dm,
     };
@@ -88,7 +86,7 @@ fn refs(d: &Doc, pos: u32, extra: &[DefIndex], include_decl: bool) -> Vec<DefLoc
 /// (byte offsets of the reference idents, order-insensitive)
 fn assert_refs(d: &Doc, pos: u32, want: &[u32], extra: &[DefIndex]) {
     let hits = refs(d, pos, extra, false);
-    let mut got = ref_offsets(&d.src, DOC, &hits);
+    let mut got = ref_offsets(d.src(), DOC, &hits);
     got.sort();
     got.dedup();
     let mut want_sorted = want.to_vec();
@@ -117,22 +115,22 @@ fn local_binding_refs_are_the_shadow_correct_set() {
     // the inner shadow's decl and its return do NOT leak in
     assert_refs(
         &d,
-        at(&d.src, "v = 1;", 1),
-        &[at(&d.src, "v > 0", 1), at(&d.src, "return v;", 2) + 7],
+        at(d.src(), "v = 1;", 1),
+        &[at(d.src(), "v > 0", 1), at(d.src(), "return v;", 2) + 7],
         &[],
     );
     // the INNER v: exactly its own return — the outer's uses don't leak in
     assert_refs(
         &d,
-        at(&d.src, "v = 2;", 1),
-        &[at(&d.src, "return v;", 1) + 7],
+        at(d.src(), "v = 2;", 1),
+        &[at(d.src(), "return v;", 1) + 7],
         &[],
     );
     // a use site resolves to its own binding (the same set as its decl)
     assert_refs(
         &d,
-        at(&d.src, "return v;", 2) + 7,
-        &[at(&d.src, "v > 0", 1), at(&d.src, "return v;", 2) + 7],
+        at(d.src(), "return v;", 2) + 7,
+        &[at(d.src(), "v > 0", 1), at(d.src(), "return v;", 2) + 7],
         &[],
     );
 }
@@ -141,19 +139,19 @@ fn local_binding_refs_are_the_shadow_correct_set() {
 fn include_declaration_appends_the_declaring_ident() {
     let src = "fn go() -> i32 {\n    let c = 1;\n    return c;\n}\n";
     let d = doc(src);
-    let pos = at(&d.src, "let c", 1) + 4;
+    let pos = at(d.src(), "let c", 1) + 4;
     let hits = refs(&d, pos, &[], false);
     assert_eq!(
-        ref_offsets(&d.src, DOC, &hits),
-        vec![at(&d.src, "return c;", 1) + 7],
+        ref_offsets(d.src(), DOC, &hits),
+        vec![at(d.src(), "return c;", 1) + 7],
         "use only without the toggle"
     );
     let hits = refs(&d, pos, &[], true);
-    let mut offs = ref_offsets(&d.src, DOC, &hits);
+    let mut offs = ref_offsets(d.src(), DOC, &hits);
     offs.sort();
     assert_eq!(
         offs,
-        vec![at(&d.src, "let c", 1) + 4, at(&d.src, "return c;", 1) + 7],
+        vec![at(d.src(), "let c", 1) + 4, at(d.src(), "return c;", 1) + 7],
         "the decl ident joins with include_declaration"
     );
 }
@@ -173,12 +171,12 @@ fn param_refs_follow_the_landed_shadow_rule() {
     // shadowing local under the landed latest-decl rule (references
     // MUST match what definition answers there — the law of this
     // module — not the compiler's initialize-before-bind reading)
-    assert_refs(&d, at(&d.src, "k: i32", 1), &[], &[]);
+    assert_refs(&d, at(d.src(), "k: i32", 1), &[], &[]);
     // the LOCAL k: the initializer's k + the return
     assert_refs(
         &d,
-        at(&d.src, "let k", 1) + 4,
-        &[at(&d.src, "k + 1", 1), at(&d.src, "return k;", 1) + 7],
+        at(d.src(), "let k", 1) + 4,
+        &[at(d.src(), "k + 1", 1), at(d.src(), "return k;", 1) + 7],
         &[],
     );
 }
@@ -199,8 +197,8 @@ fn scope_exit_never_leaks_a_use() {
     let d = doc(&src);
     assert_refs(
         &d,
-        at(&d.src, "w = 1;", 1),
-        &[at(&d.src, "return w;", 1) + 7],
+        at(d.src(), "w = 1;", 1),
+        &[at(d.src(), "return w;", 1) + 7],
         &[],
     );
 }
@@ -222,12 +220,12 @@ fn fn_refs_cover_calls_and_the_decl_toggle() {
     ]
     .join("\n");
     let d = doc(&src);
-    let call1 = at(&d.src, "= make();", 1) + 2;
-    let call2 = at(&d.src, "= make();", 2) + 2;
+    let call1 = at(d.src(), "= make();", 1) + 2;
+    let call2 = at(d.src(), "= make();", 2) + 2;
     // from the decl: both calls (the decl itself stays out)
-    assert_refs(&d, at(&d.src, "fn make()", 1) + 3, &[call1, call2], &[]);
+    assert_refs(&d, at(d.src(), "fn make()", 1) + 3, &[call1, call2], &[]);
     // include_declaration puts the declaring ident in
-    let hits = refs(&d, at(&d.src, "fn make()", 1) + 3, &[], true);
+    let hits = refs(&d, at(d.src(), "fn make()", 1) + 3, &[], true);
     assert_eq!(hits.len(), 3, "{hits:?}");
     // from a call site: the same set (references work from any occurrence)
     assert_refs(&d, call2, &[call1, call2], &[]);
@@ -254,11 +252,11 @@ fn type_refs_cover_type_positions_and_ctor_paths() {
     // the ctor path (NOT the field read `w.r` / members)
     assert_refs(
         &d,
-        at(&d.src, "class Circle", 1) + 6,
+        at(d.src(), "class Circle", 1) + 6,
         &[
-            at(&d.src, "c: Circle", 1) + 3,
-            at(&d.src, "impl Circle", 1) + 5,
-            at(&d.src, "= Circle::new", 1) + 2,
+            at(d.src(), "c: Circle", 1) + 3,
+            at(d.src(), "impl Circle", 1) + 5,
+            at(d.src(), "= Circle::new", 1) + 2,
         ],
         &[],
     );
@@ -293,15 +291,15 @@ fn method_refs_need_the_receiver_type() {
     // method on a different receiver type)
     assert_refs(
         &d,
-        at(&d.src, "fn area(self) -> f64 { return 3.14;", 1) + 3,
-        &[at(&d.src, "c.area();", 1) + 2],
+        at(d.src(), "fn area(self) -> f64 { return 3.14;", 1) + 3,
+        &[at(d.src(), "c.area();", 1) + 2],
         &[],
     );
     // and Box2's own `area` answers with its own call
     assert_refs(
         &d,
-        at(&d.src, "fn area(self) -> f64 { return 1.0;", 1) + 3,
-        &[at(&d.src, "b.area();", 1) + 2],
+        at(d.src(), "fn area(self) -> f64 { return 1.0;", 1) + 3,
+        &[at(d.src(), "b.area();", 1) + 2],
         &[],
     );
 }
@@ -323,10 +321,10 @@ fn field_refs_ride_the_receiver_inference() {
     // the field decl's references: both dotted reads
     assert_refs(
         &d,
-        at(&d.src, "r: f64;", 1),
+        at(d.src(), "r: f64;", 1),
         &[
-            at(&d.src, "c.r = k;", 1) + 2,
-            at(&d.src, "return c.r;", 1) + 9,
+            at(d.src(), "c.r = k;", 1) + 2,
+            at(d.src(), "return c.r;", 1) + 9,
         ],
         &[],
     );
@@ -353,15 +351,15 @@ fn module_let_refs_skip_local_shadows() {
     // the local's, definition-consistent)
     assert_refs(
         &d,
-        at(&d.src, "let TOTAL = 41;", 1) + 4,
-        &[at(&d.src, "return TOTAL + 1;", 1) + 7],
+        at(d.src(), "let TOTAL = 41;", 1) + 4,
+        &[at(d.src(), "return TOTAL + 1;", 1) + 7],
         &[],
     );
     // the LOCAL TOTAL: its own return only
     assert_refs(
         &d,
-        at(&d.src, "let TOTAL = 5;", 1) + 8,
-        &[at(&d.src, "return TOTAL;", 1) + 7],
+        at(d.src(), "let TOTAL = 5;", 1) + 8,
+        &[at(d.src(), "return TOTAL;", 1) + 7],
         &[],
     );
 }
@@ -392,8 +390,8 @@ fn cross_file_refs_find_the_importing_files() {
     let dm = rut_lsp_wasm::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        toks: &main.toks,
-        ast: &main.ast,
+        toks: main.toks(),
+        ast: main.ast(),
         idxs: &idxs,
         doc_mods: &dm,
     };
@@ -421,12 +419,12 @@ fn refs_from_the_decl_side_reach_the_importing_doc() {
     let dm = rut_lsp_wasm::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: WIDGET_URI,
-        toks: &lib.toks,
-        ast: &lib.ast,
+        toks: lib.toks(),
+        ast: lib.ast(),
         idxs: &idxs,
         doc_mods: &dm,
     };
-    let hits = references(&ctx, at(&lib.src, "class Widget", 1) + 6, false);
+    let hits = references(&ctx, at(lib.src(), "class Widget", 1) + 6, false);
     assert_eq!(hits.len(), 2, "{hits:?}");
     assert!(hits.iter().all(|l| l.uri == DOC), "{hits:?}");
     let mut offs = ref_offsets(&norm, DOC, &hits);
@@ -454,8 +452,8 @@ fn an_unrelated_same_named_type_does_not_leak_in() {
     let dm = rut_lsp_wasm::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
-        toks: &main.toks,
-        ast: &main.ast,
+        toks: main.toks(),
+        ast: main.ast(),
         idxs: &idxs,
         doc_mods: &dm,
     };
@@ -474,7 +472,7 @@ fn misses_stay_empty() {
     );
     let d2 = doc("entry fn main() -> nil {\n    let x = mystery();\n}\n");
     assert!(
-        refs(&d2, at(&d2.src, "mystery", 1), &[], true).is_empty(),
+        refs(&d2, at(d2.src(), "mystery", 1), &[], true).is_empty(),
         "unknown names too"
     );
 }

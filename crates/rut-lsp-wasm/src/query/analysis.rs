@@ -14,7 +14,7 @@ use crate::hover;
 use crate::inlay;
 use crate::references;
 use crate::signature_help;
-use rut_semantic::{SymKind, Symbol, TokenType};
+use rut_semantic::{SymKind, Symbol};
 
 /// the analysis envelope — the per-document rows (diags, tokens,
 /// symbols) plus the hover index, related-info URIs + provenance
@@ -38,7 +38,7 @@ pub use rut_semantic::mode_of;
 /// degenerate twin below rides the placeholder)
 fn analysis_of(doc: &rut_semantic::ParsedDoc, uri: &Uri) -> Analysis {
     let src = doc.src();
-    let mut index = hover::index(src, doc.ast(), doc.toks());
+    let mut index = hover::index(doc);
     index.origin = uri.as_str().to_string();
     Analysis {
         diags: doc
@@ -46,7 +46,7 @@ fn analysis_of(doc: &rut_semantic::ParsedDoc, uri: &Uri) -> Analysis {
             .iter()
             .map(|d| to_diagnostic(d, src, doc.lines(), uri))
             .collect(),
-        tokens: encode(doc.spans(), src, doc.lines()),
+        tokens: encode(doc),
         symbols: to_document_symbols(doc.symbols(), src, doc.lines()),
         index,
     }
@@ -82,12 +82,17 @@ pub fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
 
 // ---- semantic tokens -> the delta encoding ----
 
-/// `spans` must be sorted and non-overlapping (the classifier's contract).
-/// Lengths and columns are UTF-16 code units — LSP's position currency.
-pub fn encode(spans: &[(Span, TokenType)], src: &str, index: &LineIndex) -> Vec<SemanticToken> {
-    let mut out = Vec::with_capacity(spans.len());
+/// `ParsedDoc`'s spans → the delta encoding. The doc is the context —
+/// spans, src, and the line index are its read doors (every span
+/// indexes `src()`). Spans must be sorted and non-overlapping (the
+/// classifier's contract). Lengths and columns are UTF-16 code units —
+/// LSP's position currency.
+pub fn encode(doc: &rut_semantic::ParsedDoc) -> Vec<SemanticToken> {
+    let src = doc.src();
+    let index = doc.lines();
+    let mut out = Vec::with_capacity(doc.spans().len());
     let (mut prev_line, mut prev_char) = (0u32, 0u32);
-    for (sp, ty) in spans {
+    for (sp, ty) in doc.spans() {
         let (line, ch) = index.position(src, sp.lo);
         let len: u32 = src[sp.lo as usize..sp.hi as usize]
             .chars()
@@ -193,7 +198,7 @@ fn doc_ctx(uri: &str, src: &str) -> (rut_semantic::ParsedDoc, hover::DefIndex) {
     // the old shape parsed the same text twice (its own parse +
     // index_at's)
     let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
-    let mut idx = hover::index(d.src(), d.ast(), d.toks());
+    let mut idx = hover::index(&d);
     idx.origin = uri.to_string();
     (d, idx)
 }
@@ -201,7 +206,7 @@ fn doc_ctx(uri: &str, src: &str) -> (rut_semantic::ParsedDoc, hover::DefIndex) {
 /// the definition index for one document (origin stamped with `uri`)
 pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
     let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
-    let mut idx = hover::index(d.src(), d.ast(), d.toks());
+    let mut idx = hover::index(&d);
     idx.origin = uri.to_string();
     idx
 }
@@ -420,23 +425,16 @@ fn to_document_symbols(raw: &[Symbol], src: &str, index: &LineIndex) -> Vec<Docu
 
 #[allow(deprecated)] // `DocumentSymbol::deprecated` — kept for older clients; tags are the modern way
 fn convert(r: Symbol, src: &str, index: &LineIndex) -> DocumentSymbol {
-    let range = range_of(index, src, r.range);
-    let mut selection = range_of(index, src, r.selection);
-    // selectionRange must stay inside range (LSP contract)
-    let inside = (selection.start.line, selection.start.character)
-        >= (range.start.line, range.start.character)
-        && (selection.end.line, selection.end.character) <= (range.end.line, range.end.character);
-    if !inside {
-        selection = range;
-    }
+    // selection ⊆ range holds by construction at every symbol site and is
+    // test-gated (semantic tests + the lsp-wasm corpus check) — no clamp here
     DocumentSymbol {
         name: r.name,
         detail: None,
         kind: symbol_kind(r.kind),
         tags: None,
         deprecated: None,
-        range,
-        selection_range: selection,
+        range: range_of(index, src, r.range),
+        selection_range: range_of(index, src, r.selection),
         children: if r.children.is_empty() {
             None
         } else {

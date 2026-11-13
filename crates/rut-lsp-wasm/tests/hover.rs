@@ -8,19 +8,12 @@ use rut_ast::parser::Mode;
 use rut_lexer::token::{Tok, Token};
 use rut_lsp_wasm::hover::*;
 
-/// parse with doc grafting ON — the editor lane's shape (hover's index
-/// reads doc chains off the decl nodes) and the recovering entry (the
-/// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
-    rut_ast::parser::parse_with_recover(
-        src,
-        mode,
-        rut_ast::parser::ParseOpts {
-            include_comments: true,
-        },
-    )
-    .into_parts()
-    .0
+/// one doc artifact — the (normalized src, toks, ast) triple from ONE
+/// parse, read through the doc's doors (the test lane's replacement
+/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
+/// grafting ON — the editor lane's shape, the recovering entry)
+fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
+    rut_semantic::ParsedDoc::parse(mode, src)
 }
 
 fn hover_at(src: &str, needle: &str) -> Option<String> {
@@ -34,16 +27,15 @@ fn hover_nth(src: &str, needle: &str, n: usize) -> Option<String> {
 }
 
 fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<HoverOut> {
-    let src2 = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&src2);
-    let ast = doc_ast(&src2, Mode::Impl);
-    let idx = index(&src2, &ast, &toks);
+    let ddoc = doc_of(src, Mode::Impl);
+    let (toks, ast) = (ddoc.toks(), ddoc.ast());
+    let idx = index(&ddoc);
     let idxs = [&idx];
-    let pos = find_ident_pos(&toks, needle, n)?;
+    let pos = find_ident_pos(toks, needle, n)?;
     hover(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )
@@ -204,16 +196,15 @@ fn main() -> nil { let x = length(3); }
 
 /// hover in DECLARATION mode — the surface lanes' shape (`.d.rut`)
 fn hover_decl_at(src: &str, needle: &str) -> Option<String> {
-    let src2 = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&src2);
-    let ast = doc_ast(&src2, Mode::Decl);
-    let idx = index(&src2, &ast, &toks);
+    let ddoc = doc_of(src, Mode::Decl);
+    let (toks, ast) = (ddoc.toks(), ddoc.ast());
+    let idx = index(&ddoc);
     let idxs = [&idx];
-    let pos = find_ident_pos(&toks, needle, 0)?;
+    let pos = find_ident_pos(toks, needle, 0)?;
     hover(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )
@@ -285,10 +276,8 @@ prelude builtin class Result<T> {
 fn is_ok(self) -> bool;
 }
 ";
-    let s = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&s);
-    let ast = doc_ast(&s, Mode::Decl);
-    let idx = index(&s, &ast, &toks);
+    let ddoc = doc_of(src, Mode::Decl);
+    let idx = index(&ddoc);
     let src_of = |n: &str| {
         idx.fns
             .iter()
@@ -305,13 +294,32 @@ fn is_ok(self) -> bool;
 }
 
 #[test]
+fn the_newtype_head_renders_without_the_terminator() {
+    // the brace-less newtype class spelling has no `{` to cut the
+    // head at — its `body_span` degenerates to the whole decl span
+    // (the parser's terminator cut) — so the head slice trims the
+    // trailing `;` (the `decl_src` chain): the render is
+    // `class Foo(Bar) {`, never `class Foo(Bar); {` nor a headless
+    // ` {` (the degenerate cut rode the span's LO and sliced nothing)
+    let src = "class Foo(Bar);\n";
+    let ddoc = doc_of(src, Mode::Decl);
+    let idx = index(&ddoc);
+    let ty = idx
+        .types
+        .iter()
+        .find(|t| t.name == "Foo")
+        .unwrap_or_else(|| panic!("no type row `Foo`: {:?}", idx.types));
+    assert_eq!(ty.head, "class Foo(Bar)");
+    let md = hover_decl_at(src, "Foo").unwrap();
+    assert!(md.contains("class Foo(Bar) {"), "{md}");
+    assert!(!md.contains(";"), "no terminator artifact: {md}");
+}
+
+#[test]
 fn ambiguity_lists_candidates() {
     // two workspace files each defining `helper`
     let mk = |origin: &str| {
-        let f = rut_lexer::lexer::normalize("fn helper() -> nil { }\n");
-        let (ftoks, _) = rut_lexer::lexer::lex(&f);
-        let fa = doc_ast(&f, Mode::Impl);
-        let mut i = index(&f, &fa, &ftoks);
+        let mut i = index(&doc_of("fn helper() -> nil { }\n", Mode::Impl));
         i.origin = origin.to_string();
         i
     };
@@ -319,17 +327,16 @@ fn ambiguity_lists_candidates() {
     let b = mk("b.rut");
 
     let src = "fn go() -> nil { let h = helper(); }\n";
-    let s = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&s);
-    let ast = doc_ast(&s, Mode::Impl);
-    let mut doc = index(&s, &ast, &toks);
+    let ddoc = doc_of(src, Mode::Impl);
+    let (toks, ast) = (ddoc.toks(), ddoc.ast());
+    let mut doc = index(&ddoc);
     doc.origin = "main.rut".to_string();
     let idxs = [&doc, &a, &b];
-    let pos = find_ident_pos(&toks, "helper", 0).unwrap();
+    let pos = find_ident_pos(toks, "helper", 0).unwrap();
     let md = hover(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )
@@ -343,24 +350,20 @@ fn ambiguity_lists_candidates() {
 fn host_fn_surface_favors_own_methods() {
     // std-style surface index ahead of the doc
     let surf_src = "pub host fn string_join(s: [str]) -> i32;\n";
-    let s2 = rut_lexer::lexer::normalize(surf_src);
-    let sast = doc_ast(&s2, Mode::Decl);
-    let (stoks, _) = rut_lexer::lexer::lex(&s2);
-    let mut surf = index(&s2, &sast, &stoks);
+    let mut surf = index(&doc_of(surf_src, Mode::Decl));
     surf.origin = "core".to_string();
 
     let doc = "fn main() -> i32 { return string_join([]); }\n";
-    let d2 = rut_lexer::lexer::normalize(doc);
-    let (toks, _) = rut_lexer::lexer::lex(&d2);
-    let ast = doc_ast(&d2, Mode::Impl);
-    let mut di = index(&d2, &ast, &toks);
+    let ddoc = doc_of(doc, Mode::Impl);
+    let (toks, ast) = (ddoc.toks(), ddoc.ast());
+    let mut di = index(&ddoc);
     di.origin = "main.rut".to_string();
     let idxs = [&di, &surf];
-    let pos = find_ident_pos(&toks, "string_join", 0).unwrap();
+    let pos = find_ident_pos(toks, "string_join", 0).unwrap();
     let h = hover(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )
@@ -437,24 +440,20 @@ fn foreign_interface_member_requires_use() {
     // members resolve only once the document `use`s it — a foreign
     // interface's members need the use
     let surf_src = "interface Greeter {\nfn greet(self) -> nil;\n}\n";
-    let s2 = rut_lexer::lexer::normalize(surf_src);
-    let sast = doc_ast(&s2, Mode::Impl);
-    let (stoks, _) = rut_lexer::lexer::lex(&s2);
-    let mut surf = index(&s2, &sast, &stoks);
+    let mut surf = index(&doc_of(surf_src, Mode::Impl));
     surf.origin = "greets.rut".to_string();
 
     let mk = |doc: &str| {
-        let d2 = rut_lexer::lexer::normalize(doc);
-        let (toks, _) = rut_lexer::lexer::lex(&d2);
-        let ast = doc_ast(&d2, Mode::Impl);
-        let mut di = index(&d2, &ast, &toks);
+        let ddoc = doc_of(doc, Mode::Impl);
+        let (toks, ast) = (ddoc.toks(), ddoc.ast());
+        let mut di = index(&ddoc);
         di.origin = "main.rut".to_string();
         let idxs = [&di, &surf];
-        let pos = find_ident_pos(&toks, "greet", 0).unwrap();
+        let pos = find_ident_pos(toks, "greet", 0).unwrap();
         hover(
             &idxs,
-            &toks,
-            &ast,
+            toks,
+            ast,
             &rut_lsp_wasm::mods::DocMods::default(),
             pos,
         )
@@ -795,12 +794,11 @@ fn binding_decl_span_is_byte_exact() {
     // the span-first law: the record's decl_ident_span equals the
     // declaring ident's token span — phase 2's definition target
     let src = "fn go() -> nil {\n    let total = 1;\n    let u = total;\n}\n";
-    let src2 = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&src2);
-    let ast = doc_ast(&src2, Mode::Impl);
-    let idx = index(&src2, &ast, &toks);
+    let ddoc = doc_of(src, Mode::Impl);
+    let (src2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
+    let idx = index(&ddoc);
     let idxs = [&idx];
-    let binds = bindings::collect(&ast, &toks, &idxs);
+    let binds = bindings::collect(ast, toks, &idxs);
     let total = bindings::resolve(&binds, src2.rfind("total").unwrap() as u32, "total").unwrap();
     let decl_span = toks
         .iter()
@@ -812,8 +810,8 @@ fn binding_decl_span_is_byte_exact() {
     let use_pos = src2.rfind("total").unwrap() as u32;
     let out = hover(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         use_pos,
     )
@@ -854,21 +852,17 @@ fn surface_primitives_keep_their_rich_hover() {
     // `str`/`bytes`/`opaque` have surface decls — those must win over
     // the static blurb (the lsp-align smoke's `primitive str {` law)
     let core_src = "prelude builtin primitive str {\nfn len(self) -> i32;\n}\n";
-    let c2 = rut_lexer::lexer::normalize(core_src);
-    let (ctoks, _) = rut_lexer::lexer::lex(&c2);
-    let cast = doc_ast(&c2, Mode::Decl);
-    let core = index(&c2, &cast, &ctoks);
+    let core = index(&doc_of(core_src, Mode::Decl));
     let doc = "fn f(s: str) -> str { return s; }\n";
-    let d2 = rut_lexer::lexer::normalize(doc);
-    let (toks, _) = rut_lexer::lexer::lex(&d2);
-    let ast = doc_ast(&d2, Mode::Impl);
-    let di = index(&d2, &ast, &toks);
+    let ddoc = doc_of(doc, Mode::Impl);
+    let (toks, ast) = (ddoc.toks(), ddoc.ast());
+    let di = index(&ddoc);
     let idxs = [&di, &core];
-    let pos = find_ident_pos(&toks, "str", 0).unwrap();
+    let pos = find_ident_pos(toks, "str", 0).unwrap();
     let md = hover(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )
@@ -918,10 +912,7 @@ return rr;
 
 /// a parsed+stamped index the way the dep faces lay them down
 fn dep_index(pkg: &str, mod_path: &str, src: &str) -> DefIndex {
-    let s = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&s);
-    let ast = doc_ast(&s, Mode::Impl);
-    let mut idx = index(&s, &ast, &toks);
+    let mut idx = index(&doc_of(src, Mode::Impl));
     idx.module = Some(pkg.to_string());
     idx.mod_path = Some(mod_path.to_string());
     idx
@@ -929,10 +920,9 @@ fn dep_index(pkg: &str, mod_path: &str, src: &str) -> DefIndex {
 
 /// hover `name` (n-th ident) in `doc` over the gadget dep chain
 fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
-    let doc2 = rut_lexer::lexer::normalize(doc);
-    let (toks, _) = rut_lexer::lexer::lex(&doc2);
-    let ast = doc_ast(&doc2, Mode::Impl);
-    let idx = index(&doc2, &ast, &toks);
+    let ddoc = doc_of(doc, Mode::Impl);
+    let (toks, ast) = (ddoc.toks(), ddoc.ast());
+    let idx = index(&ddoc);
     let dep = [
         dep_index(
             "gadgets",
@@ -953,11 +943,11 @@ fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
     ];
     let mut idxs: Vec<&DefIndex> = vec![&idx];
     idxs.extend(dep.iter());
-    let pos = find_ident_pos(&toks, name, n)?;
+    let pos = find_ident_pos(toks, name, n)?;
     hover(
         &idxs,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )
@@ -1028,10 +1018,7 @@ fn use_rows_carry_the_reexport_vis() {
     // declared vis (the completion re-export tier's gate reads it);
     // a plain `use` row stays private
     let src = "pub use util::{ helper };\nuse util::{ hidden };\n";
-    let s = rut_lexer::lexer::normalize(src);
-    let (toks, _) = rut_lexer::lexer::lex(&s);
-    let ast = doc_ast(&s, Mode::Impl);
-    let idx = index(&s, &ast, &toks);
+    let idx = index(&doc_of(src, Mode::Impl));
     let row = |n: &str| {
         idx.uses
             .iter()
@@ -1049,10 +1036,7 @@ fn host_fn_surface_signature_cuts_at_its_own_semicolon() {
     // item's OWN `;` (the ModuleLet precedent), or `pub host fn
     // abs(x: f64) -> f64;` rendered `...f64;pub` in the detail
     let surf_src = "pub host fn abs(x: f64) -> f64;\npub host fn ceil(x: f64) -> f64;\n";
-    let s = rut_lexer::lexer::normalize(surf_src);
-    let (toks, _) = rut_lexer::lexer::lex(&s);
-    let ast = doc_ast(&s, Mode::Decl);
-    let idx = index(&s, &ast, &toks);
+    let idx = index(&doc_of(surf_src, Mode::Decl));
     // the surface decl span starts at the item's FIRST token (span
     // law v3.1) — the spelled `pub` rides the slice; each row still
     // cuts at its own `;` (no `;pub` artifact)
@@ -1077,10 +1061,9 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     // root shell + the math module beside it), exactly what the
     // walk indexes
     let doc = "fn go(x: f64) -> f64 {\n    return abs(x);\n}\n";
-    let s = rut_lexer::lexer::normalize(doc);
-    let (toks, _) = rut_lexer::lexer::lex(&s);
-    let ast = doc_ast(&s, Mode::Impl);
-    let di = index(&s, &ast, &toks);
+    let ddoc = doc_of(doc, Mode::Impl);
+    let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
+    let di = index(&ddoc);
     let std = [
         rut_lsp_wasm::deps::index_dep(
             "calc",
@@ -1099,8 +1082,8 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     let pos = s.find("abs(").unwrap() as u32;
     let md = hover(
         &chain,
-        &toks,
-        &ast,
+        toks,
+        ast,
         &rut_lsp_wasm::mods::DocMods::default(),
         pos,
     )

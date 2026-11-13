@@ -1,54 +1,51 @@
 use ls_types::{Documentation, ParameterLabel, SignatureHelp};
 use rut_ast::parser::Mode;
 use rut_ast::Ast;
-use rut_lexer::lexer::{lex, normalize};
 use rut_lexer::token::Token;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::signature_help::*;
 
-/// parse with doc grafting ON — the editor lane's shape (hover's index
-/// reads doc chains off the decl nodes) and the recovering entry (the
-/// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
-    rut_ast::parser::parse_with_recover(
-        src,
-        mode,
-        rut_ast::parser::ParseOpts {
-            include_comments: true,
-        },
-    )
-    .into_parts()
-    .0
+/// one doc artifact — the (normalized src, toks, ast) triple from ONE
+/// parse, read through the doc's doors (the test lane's replacement
+/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
+/// grafting ON — the editor lane's shape, the recovering entry)
+fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
+    rut_semantic::ParsedDoc::parse(mode, src)
 }
 
 const DOC: &str = "file:///t/main.rut";
 
+/// a document + its hover index — the doc is the context (src, toks,
+/// and ast read through its doors)
 struct Doc {
-    src: String,
-    toks: Vec<Token>,
-    ast: Ast,
+    pd: rut_semantic::ParsedDoc,
     index: DefIndex,
 }
 
-fn doc(src: &str) -> Doc {
-    let src = normalize(src);
-    let (toks, _) = lex(&src);
-    let ast = doc_ast(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
-    index.origin = DOC.to_string();
-    Doc {
-        src,
-        toks,
-        ast,
-        index,
+impl Doc {
+    fn src(&self) -> &str {
+        self.pd.src()
     }
+    fn toks(&self) -> &[Token] {
+        self.pd.toks()
+    }
+    fn ast(&self) -> &Ast {
+        self.pd.ast()
+    }
+}
+
+fn doc(src: &str) -> Doc {
+    let pd = doc_of(src, Mode::Impl);
+    let mut index = rut_lsp_wasm::hover::index(&pd);
+    index.origin = DOC.to_string();
+    Doc { pd, index }
 }
 
 fn help(d: &Doc, pos: u32, extra: &[DefIndex]) -> Option<SignatureHelp> {
     let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
     let ctx = Ctx {
-        toks: &d.toks,
-        ast: &d.ast,
+        toks: d.toks(),
+        ast: d.ast(),
         idxs: &idxs,
     };
     signature_help(&ctx, pos)
@@ -102,18 +99,18 @@ fn free_call_active_param_first_and_middle() {
     .join("\n");
     let d = doc(&src);
     // on the first arg (the cursor inside the string literal)
-    let (label, slot, pieces) = slot_of(&help(&d, at(&d.src, "\"a\"", 1), &[]).expect("help"));
+    let (label, slot, pieces) = slot_of(&help(&d, at(d.src(), "\"a\"", 1), &[]).expect("help"));
     assert_eq!(label, "fn hex_val(c: str, k: i32) -> i32");
     assert_eq!(slot, Some(0));
     assert_eq!(pieces, ["c: str", "k: i32"], "params as written");
     // on the second arg
-    let (_, slot, _) = slot_of(&help(&d, at(&d.src, "2);", 1), &[]).expect("help"));
+    let (_, slot, _) = slot_of(&help(&d, at(d.src(), "2);", 1), &[]).expect("help"));
     assert_eq!(slot, Some(1));
     // mid-typing: one arg in, help shows with the next slot active
-    let (_, slot, _) = slot_of(&help(&d, at(&d.src, "\"a\", ", 1) + 5, &[]).expect("help"));
+    let (_, slot, _) = slot_of(&help(&d, at(d.src(), "\"a\", ", 1) + 5, &[]).expect("help"));
     assert_eq!(slot, Some(1));
     // on the open paren itself: the first slot
-    let (_, slot, _) = slot_of(&help(&d, at(&d.src, "hex_val(", 1) + 7, &[]).expect("help"));
+    let (_, slot, _) = slot_of(&help(&d, at(d.src(), "hex_val(", 1) + 7, &[]).expect("help"));
     assert_eq!(slot, Some(0));
 }
 
@@ -121,7 +118,7 @@ fn free_call_active_param_first_and_middle() {
 fn zero_param_call_shows_the_signature_without_an_active_slot() {
     let src = "fn mk() -> i32 {\n    return 1;\n}\nfn main() -> i32 {\n    let v = mk();\n    return v;\n}\n";
     let d = doc(src);
-    let (label, slot, pieces) = slot_of(&help(&d, at(&d.src, "mk(", 1) + 2, &[]).expect("help"));
+    let (label, slot, pieces) = slot_of(&help(&d, at(d.src(), "mk(", 1) + 2, &[]).expect("help"));
     assert_eq!(label, "fn mk() -> i32");
     assert_eq!(slot, None);
     assert!(pieces.is_empty());
@@ -144,16 +141,16 @@ fn nested_calls_answer_at_their_own_depth() {
     .join("\n");
     let d = doc(&src);
     // inside the inner call: inner's signature, first slot
-    let (label, slot, _) = slot_of(&help(&d, at(&d.src, "inner(1)", 1) + 6, &[]).expect("help"));
+    let (label, slot, _) = slot_of(&help(&d, at(d.src(), "inner(1)", 1) + 6, &[]).expect("help"));
     assert_eq!(label, "fn inner(a: i32) -> i32");
     assert_eq!(slot, Some(0));
     // after the inner call (on the outer's second arg): outer's
     // signature, second slot — the inner paren netted out
-    let (label, slot, _) = slot_of(&help(&d, at(&d.src, "2);", 1), &[]).expect("help"));
+    let (label, slot, _) = slot_of(&help(&d, at(d.src(), "2);", 1), &[]).expect("help"));
     assert_eq!(label, "fn outer(b: i32, c: i32) -> i32");
     assert_eq!(slot, Some(1));
     // on the outer's first arg (the inner call itself): outer, slot 0
-    let (label, slot, _) = slot_of(&help(&d, at(&d.src, "inner(1)", 1), &[]).expect("help"));
+    let (label, slot, _) = slot_of(&help(&d, at(d.src(), "inner(1)", 1), &[]).expect("help"));
     assert_eq!(label, "fn outer(b: i32, c: i32) -> i32");
     assert_eq!(slot, Some(0));
 }
@@ -177,13 +174,13 @@ fn method_call_through_a_binding_receiver() {
     ]
     .join("\n");
     let d = doc(&src);
-    let (label, slot, pieces) = slot_of(&help(&d, at(&d.src, "2.0)", 1), &[]).expect("help"));
+    let (label, slot, pieces) = slot_of(&help(&d, at(d.src(), "2.0)", 1), &[]).expect("help"));
     assert_eq!(label, "fn grown(self, k: f64) -> Circle");
     assert_eq!(slot, Some(0), "self never surfaces as a slot");
     assert_eq!(pieces, ["k: f64"]);
     // `new` has no recorded impl fn here (and no own-surface body to
     // read params from) — the phase-3 law: no help, never a guess
-    assert!(help(&d, at(&d.src, "1.0);", 1), &[]).is_none());
+    assert!(help(&d, at(d.src(), "1.0);", 1), &[]).is_none());
 }
 
 #[test]
@@ -208,7 +205,7 @@ fn own_surface_method_means_no_help() {
     ]
     .join("\n");
     let d = doc(&src);
-    assert!(help(&d, at(&d.src, "d.m(1)", 1) + 5, &[]).is_none());
+    assert!(help(&d, at(d.src(), "d.m(1)", 1) + 5, &[]).is_none());
 }
 
 #[test]
@@ -228,11 +225,11 @@ fn chained_receiver_is_an_honest_miss_but_the_first_call_helps() {
     .join("\n");
     let d = doc(&src);
     // the FIRST grown: a plain-ident receiver — help answers
-    assert!(help(&d, at(&d.src, "2.0)", 1), &[]).is_some());
+    assert!(help(&d, at(d.src(), "2.0)", 1), &[]).is_some());
     // the SECOND grown: its receiver is a `)` (a chained call) — the
     // AST the chained rules need is not trustworthy mid-typing, so
     // the honest answer is none, never a wrong signature
-    assert!(help(&d, at(&d.src, "3.0)", 1), &[]).is_none());
+    assert!(help(&d, at(d.src(), "3.0)", 1), &[]).is_none());
 }
 
 // ---- the never-wrong guard ----
@@ -253,9 +250,9 @@ fn too_many_arguments_means_no_help() {
     let d = doc(&src);
     // three args for two params — on the third arg there is no slot
     // left: no help, never wrong help
-    assert!(help(&d, at(&d.src, "3);", 1), &[]).is_none());
+    assert!(help(&d, at(d.src(), "3);", 1), &[]).is_none());
     // but the first two slots still answer honestly
-    assert!(help(&d, at(&d.src, "1,", 1), &[]).is_some());
+    assert!(help(&d, at(d.src(), "1,", 1), &[]).is_some());
 }
 
 #[test]
@@ -265,14 +262,14 @@ fn ambiguous_callee_stays_silent() {
     let mut foreign = doc("fn f(b: str) -> str {\n    return b;\n}\n");
     foreign.index.origin = "file:///ws/other/lib.rut".to_string();
     let extra = [foreign.index];
-    assert!(help(&d, at(&d.src, "f(1)", 1) + 2, &extra).is_none());
+    assert!(help(&d, at(d.src(), "f(1)", 1) + 2, &extra).is_none());
 }
 
 #[test]
 fn unknown_callee_stays_silent() {
     let src = "entry fn main() -> nil {\n    mystery(1, 2);\n}\n";
     let d = doc(src);
-    assert!(help(&d, at(&d.src, "1, 2", 1), &[]).is_none());
+    assert!(help(&d, at(d.src(), "1, 2", 1), &[]).is_none());
 }
 
 // ---- f-strings, struct literals, and control parens cannot miscount ----
@@ -297,11 +294,11 @@ fn f_string_commas_do_not_count() {
     // calls) and its literal — all inside ONE token. If any of them
     // counted, the cursor on `5` would read slot 5 (out of range →
     // no help) instead of slot 1
-    let (label, slot, _) = slot_of(&help(&d, at(&d.src, ", 5, 6", 1) + 2, &[]).expect("help"));
+    let (label, slot, _) = slot_of(&help(&d, at(d.src(), ", 5, 6", 1) + 2, &[]).expect("help"));
     assert_eq!(label, "fn show(c: str, a: i32, b: i32) -> i32");
     assert_eq!(slot, Some(1));
     // the third real arg
-    let (_, slot, _) = slot_of(&help(&d, at(&d.src, "5, 6", 1) + 3, &[]).expect("help"));
+    let (_, slot, _) = slot_of(&help(&d, at(d.src(), "5, 6", 1) + 3, &[]).expect("help"));
     assert_eq!(slot, Some(2));
 }
 
@@ -324,11 +321,11 @@ fn struct_literal_fields_do_not_count_as_arguments() {
     let d = doc(&src);
     // the literal's `y: 2.0` comma is inside `{}` — the cursor on
     // `3` reads slot 1, not slot 2
-    let (_, slot, _) = slot_of(&help(&d, at(&d.src, ", 3);", 1) + 2, &[]).expect("help"));
+    let (_, slot, _) = slot_of(&help(&d, at(d.src(), ", 3);", 1) + 2, &[]).expect("help"));
     assert_eq!(slot, Some(1));
     // and the cursor inside the literal itself reads slot 0 (the
     // literal is the first argument)
-    let (_, slot, _) = slot_of(&help(&d, at(&d.src, "1.0, y", 1), &[]).expect("help"));
+    let (_, slot, _) = slot_of(&help(&d, at(d.src(), "1.0, y", 1), &[]).expect("help"));
     assert_eq!(slot, Some(0));
 }
 
@@ -349,7 +346,7 @@ fn a_control_paren_does_not_hide_the_enclosing_call() {
     // the cursor on the `if` head (before its paren): the innermost
     // unclosed CALL paren is f's — its `(` is skipped as a non-call
     // and help answers with slot 1
-    let (label, slot, _) = slot_of(&help(&d, at(&d.src, "if (true)", 1), &[]).expect("help"));
+    let (label, slot, _) = slot_of(&help(&d, at(d.src(), "if (true)", 1), &[]).expect("help"));
     assert_eq!(label, "fn f(a: i32, b: i32) -> i32");
     assert_eq!(slot, Some(1));
 }
@@ -370,7 +367,7 @@ fn doc_lines_render_as_documentation() {
     ]
     .join("\n");
     let d = doc(&src);
-    let h = help(&d, at(&d.src, "\"a\"", 1), &[]).expect("help");
+    let h = help(&d, at(d.src(), "\"a\"", 1), &[]).expect("help");
     assert_eq!(h.active_parameter, Some(0));
     match &h.signatures[0].documentation {
         Some(Documentation::MarkupContent(m)) => assert_eq!(m.value, "hex digit value"),

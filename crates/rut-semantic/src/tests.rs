@@ -244,6 +244,44 @@ fn symbols_outline() {
 }
 
 #[test]
+fn symbols_selection_stays_inside_range_on_damaged_sources() {
+    // the wire contract (LSP: selectionRange ⊆ range) holds by
+    // construction at every symbol site; this is the test-time guard for
+    // the sources the corpus gate never sees — recovery's real diet.
+    // Every case below MUST produce diags (else it isn't damaged).
+    let damaged = [
+        "// c\nentry fn main( {\n  let x = ;\n",
+        "enum Color { Red,\nentry fn main() -> nil {}\n",
+        "enum Color { Red = , }\nentry fn main() -> nil {}\n",
+        "fn () -> nil {}\nentry fn main() -> nil {}\n",
+        "class C { pub : i32, }\nentry fn main() -> nil {}\n",
+        "use pkg::{,,};\nentry fn main() -> nil {}\n",
+        "impl { fn m(self) -> nil {} }\nentry fn main() -> nil {}\n",
+    ];
+    let mut walked = 0usize;
+    for src in damaged {
+        let (toks, _) = rut_lexer::lexer::lex(src);
+        let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+        assert!(!p.ast().errors().is_empty(), "not damaged: {src:?}");
+        let mut syms = symbols(&toks, p.ast());
+        while let Some(s) = syms.pop() {
+            assert!(
+                s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi,
+                "`{}` selection [{}, {}) outside range [{}, {})",
+                s.name,
+                s.selection.lo,
+                s.selection.hi,
+                s.range.lo,
+                s.range.hi
+            );
+            walked += 1;
+            syms.extend(s.children);
+        }
+    }
+    assert!(walked > 0, "damaged sources produced no symbols to check");
+}
+
+#[test]
 fn comment_is_appended_to_the_legend() {
     assert_eq!(ALL.len(), 16);
     assert_eq!(TokenType::Comment.index(), 15);

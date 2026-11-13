@@ -1,51 +1,48 @@
 use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip};
 use rut_ast::parser::Mode;
 use rut_ast::*;
-use rut_lexer::lexer::{lex, normalize};
 use rut_lexer::token::Token;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::inlay::*;
 use rut_lsp_wasm::LineIndex;
 
-/// parse with doc grafting ON — the editor lane's shape (hover's index
-/// reads doc chains off the decl nodes) and the recovering entry (the
-/// tree survives broken snippets)
-fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
-    rut_ast::parser::parse_with_recover(
-        src,
-        mode,
-        rut_ast::parser::ParseOpts {
-            include_comments: true,
-        },
-    )
-    .into_parts()
-    .0
+/// one doc artifact — the (normalized src, toks, ast) triple from ONE
+/// parse, read through the doc's doors (the test lane's replacement
+/// for the hand-spelled `normalize → lex → doc_ast` triple; doc
+/// grafting ON — the editor lane's shape, the recovering entry)
+fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
+    rut_semantic::ParsedDoc::parse(mode, src)
 }
 
 const DOC: &str = "file:///t/main.rut";
 
+/// a document + its hover index — the doc is the context (src, toks,
+/// ast, and the line index read through its doors)
 struct Doc {
-    src: String,
-    toks: Vec<Token>,
-    ast: Ast,
+    pd: rut_semantic::ParsedDoc,
     index: DefIndex,
-    lines: LineIndex,
+}
+
+impl Doc {
+    fn src(&self) -> &str {
+        self.pd.src()
+    }
+    fn toks(&self) -> &[Token] {
+        self.pd.toks()
+    }
+    fn ast(&self) -> &Ast {
+        self.pd.ast()
+    }
+    fn lines(&self) -> &LineIndex {
+        self.pd.lines()
+    }
 }
 
 fn doc(src: &str) -> Doc {
-    let src = normalize(src);
-    let (toks, _) = lex(&src);
-    let ast = doc_ast(&src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&src, &ast, &toks);
+    let pd = doc_of(src, Mode::Impl);
+    let mut index = rut_lsp_wasm::hover::index(&pd);
     index.origin = DOC.to_string();
-    let lines = LineIndex::new(&src);
-    Doc {
-        src,
-        toks,
-        ast,
-        index,
-        lines,
-    }
+    Doc { pd, index }
 }
 
 /// the query context + its chain, both held by the caller (the
@@ -65,17 +62,17 @@ fn w<'a>(d: &'a Doc, extra: &'a [DefIndex]) -> W<'a> {
 impl W<'_> {
     fn cx(&self) -> Ctx<'_> {
         Ctx {
-            ast: &self.d.ast,
-            toks: &self.d.toks,
+            ast: self.d.ast(),
+            toks: self.d.toks(),
             doc: &self.d.index,
             idxs: &self.idxs,
-            index: &self.d.lines,
-            src: &self.d.src,
+            index: self.d.lines(),
+            src: self.d.src(),
         }
     }
 
     fn all(&self) -> Vec<InlayHint> {
-        hints(&self.cx(), 0, self.d.src.len() as u32)
+        hints(&self.cx(), 0, self.d.src().len() as u32)
     }
 }
 
@@ -230,11 +227,11 @@ fn hint_and_hover_agree_on_the_type_text() {
     assert_eq!(hs.len(), 1);
     let idxs: Vec<&DefIndex> = vec![&d.index];
     let (hl, hc) = at(&src, "let c", 1);
-    let byte = d.lines.byte(&d.src, hl, hc) + 4; // the `c` ident
+    let byte = d.lines().byte(d.src(), hl, hc) + 4; // the `c` ident
     let hov = rut_lsp_wasm::hover::hover(
         &idxs,
-        &d.toks,
-        &d.ast,
+        d.toks(),
+        d.ast(),
         &rut_lsp_wasm::mods::DocMods::default(),
         byte,
     );
@@ -306,11 +303,11 @@ fn tuple_types_render_no_empty_hints() {
     // ...and the hover shows the same text (the consistency law)
     let idxs: Vec<&DefIndex> = vec![&d.index];
     let (hl, hc) = at(&src, "let v", 1);
-    let byte = d.lines.byte(&d.src, hl, hc) + 4; // the `v` ident
+    let byte = d.lines().byte(d.src(), hl, hc) + 4; // the `v` ident
     let md = rut_lsp_wasm::hover::hover(
         &idxs,
-        &d.toks,
-        &d.ast,
+        d.toks(),
+        d.ast(),
         &rut_lsp_wasm::mods::DocMods::default(),
         byte,
     )
@@ -475,8 +472,8 @@ fn range_filters_hints() {
     let w1 = w(&d, &[]);
     assert_eq!(labels(&w1.all()), [": i32", ": i32"]);
     // only the second line's hint stays inside [line 1, end]
-    let lo = d.lines.byte(&d.src, 1, 0);
-    let hi = d.src.len() as u32;
+    let lo = d.lines().byte(d.src(), 1, 0);
+    let hi = d.src().len() as u32;
     let hs = hints(&w1.cx(), lo, hi);
     assert_eq!(hs.len(), 1, "{hs:?}");
     assert_eq!(pos(&hs[0]).0, 1);
