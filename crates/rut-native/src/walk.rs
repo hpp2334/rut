@@ -239,7 +239,15 @@ pub(crate) fn read_manifest_compat(src: &dyn Source, dir: &str) -> Result<Manife
     read_manifest_lane(src, dir, true)
 }
 
-fn read_manifest_lane(src: &dyn Source, dir: &str, compat: bool) -> Result<Manifest, LoadError> {
+/// The lane core: `compat` rides true at the wire boundaries (an
+/// unpacked source zip's tree — its root and embedded groups — where
+/// the retired keys parse or retain). Crate-visible: the pack lanes
+/// thread the same flag through their group-source recursion.
+pub(crate) fn read_manifest_lane(
+    src: &dyn Source,
+    dir: &str,
+    compat: bool,
+) -> Result<Manifest, LoadError> {
     let key = src.resolve(dir, MANIFEST_NAME).map_err(LoadError::law)?;
     let text = match read_source_text(src, &key) {
         Ok(text) => text,
@@ -623,8 +631,11 @@ fn lib_pkg(
 /// manifest rides the reader's compat lane instead (a loading law).
 ///
 /// The consts are the SURFACE's own `pub let` rows (folded inside the
-/// lowering, bound bare at the pkg's root) — the manifest's retired
-/// `consts` table binds nothing.
+/// lowering, bound bare at the pkg's root). A manifest that rode the
+/// wire (an unpacked source zip's tree — compat-parsed) also carries
+/// its RETAINED `consts` rows, stamped BESIDE the surface rows below;
+/// a directory's strict-parsed manifest cannot (the grammar refuses
+/// the key), so the fold is its own no-op there.
 fn load_entry_module(
     src: &dyn Source,
     dir: &str,
@@ -672,9 +683,13 @@ fn load_entry_module(
             let mut m =
                 rut_driver::lower_decl_module(&src_text, &mods, &key).map_err(LoadError::law)?;
             m.entry = manifest.entry.clone();
-            // the surface `pub let` rows fold into the const rows
-            // inside the lowering (bound bare at the pkg's root) —
-            // the manifest's retired `consts` table binds nothing
+            // the RETAINED manifest `consts` rows (compat-parsed wire
+            // bytes only — a strict directory parse answers empty, so
+            // the fold no-ops there) ride the host body BESIDE the
+            // surface `let` rows (the merge law — a name spelled both
+            // ways is the loud refusal)
+            rut_driver::decl::fold_manifest_consts(&mut m.body, &manifest.consts, &key)
+                .map_err(LoadError::law)?;
             m.manifest = manifest.clone();
             Ok(m)
         }
@@ -1126,7 +1141,8 @@ fn mount_zip_dep(
     // rewritten rows resolve inside; the first-mount edge records the
     // declaring pkg's spec). The manifest reads ride the COMPAT lane
     // here and through the tree: these bytes rode the wire, where the
-    // retired keys still parse (the wire pair) or discard (`consts`)
+    // retired keys still parse (the wire pair) or retain (`consts`
+    // stamps at the entry mount)
     let dir_key = dir.to_string_lossy().into_owned();
     let src = FsSource::at(&dir);
     let manifest = read_manifest_compat(&src, &dir_key)?;

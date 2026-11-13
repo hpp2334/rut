@@ -217,7 +217,10 @@ fn walk_manifest(
         if let Some(bytes) = ctx.io.read(&path) {
             ctx.files -= 1;
             let src = String::from_utf8_lossy(&bytes).into_owned();
-            state.index_named_at(&path, &module, &src);
+            // the manifest's RETAINED consts (a compat-parsed wire
+            // manifest only) ride the pkg's own rows — the check lane
+            // threads them into the engine's Manifest
+            state.index_named_at(&path, &module, &src, &table.consts);
         } // a manifest naming a missing entry — index what exists
     }
     // the mod tree (the pkg's own modules): the root module stamps at
@@ -234,7 +237,7 @@ fn walk_manifest(
         .iter()
         .map(|e| (e.path.as_str(), e.mode))
         .collect();
-    mount_mod_tree(ctx, state, dir, &module, &entry_rows, depth);
+    mount_mod_tree(ctx, state, dir, &module, &entry_rows, &table.consts, depth);
     for row in &table.deps {
         mount_row(ctx, state, dir, row, depth, compat);
     }
@@ -296,6 +299,7 @@ fn mount_mod_tree(
     pkg_dir: &str,
     module: &str,
     entries: &[(&str, rut_semantic::Mode)],
+    consts: &[(String, f64)],
     depth: usize,
 ) {
     if depth > MAX_DEP_DEPTH || ctx.files == 0 {
@@ -327,9 +331,10 @@ fn mount_mod_tree(
         ctx.files -= 1;
     }
     let text = String::from_utf8_lossy(&bytes).into_owned();
-    // the root re-stamp at mod path "" (it REPLACES the entries loop's
-    // row — same origin)
-    let decls = state.index_mod_at(&root_path, module, "", &text);
+    // the root re-stamp carries the manifest's RETAINED consts (it
+    // REPLACES the entries loop's row — same origin — so the rows ride
+    // again)
+    let decls = state.index_mod_at(&root_path, module, "", &text, consts);
     // the children mount BESIDE THE ROOT FILE — inside the package's
     // `src/` shell
     let root_dir = dirname(&root_path);
@@ -412,7 +417,8 @@ fn mount_child_mod(
     } else {
         format!("{parent_path}/{name}")
     };
-    let decls = state.index_mod_at(&child_path, module, &mod_path, &text);
+    // the consts mint on the pkg-ROOT row only — a child carries none
+    let decls = state.index_mod_at(&child_path, module, &mod_path, &text, &[]);
     // a file-form child's children mount BESIDE it, not under `NAME/`
     let child_dir = if child_path == dir_form {
         format!("{declaring_dir}/{name}")

@@ -366,9 +366,10 @@ fn srczip_pkg(
 ) -> Result<(), String> {
     let manifest_text = zip_text(entries, &format!("{prefix}rut.jsonc"))
         .ok_or_else(|| format!("{prefix}: the archive carries no rut.jsonc"))?;
-    // the zip boundary rides the compat lane: the manifest rides the
+    // the zip boundary rides the compat lane: the manifest rode the
     // wire, where today's published bytes may still carry the retired
-    // keys (the compat lane discards what no longer binds)
+    // keys (the wire pair parses; the `consts` rows retain, stamping
+    // at the mount below)
     let manifest = crate::bundle::parse_manifest_compat(&manifest_text)
         .map_err(|e| format!("{prefix}rut.jsonc: {e}"))?;
     let name = manifest
@@ -379,8 +380,10 @@ fn srczip_pkg(
     // HOST pkg's surface is a `.d.rut` (a spelled `entry.type` wins,
     // `src/mod.d.rut` the default root), LOWERED to host rows — the
     // surface `pub let` rows fold into the const rows inside the
-    // lowering; a LIB pkg's body is `src/mod.rut` (a spelled decl
-    // surface on a lib is the dir lane's law — refused here, named)
+    // lowering, with the manifest's RETAINED `consts` rows (the compat
+    // lane parsed this wire-carried manifest) stamping beside them; a
+    // LIB pkg's body is `src/mod.rut` (a spelled decl surface on a lib
+    // is the dir lane's law — refused here, named)
     let mut pkg = match manifest.pkg_type {
         crate::bundle::PkgType::Host => {
             let rel = match &manifest.entry.type_path {
@@ -402,6 +405,14 @@ fn srczip_pkg(
             let mut m = crate::lower_decl_module(&root_text, &mods, &format!("{prefix}{root_rel}"))
                 .map_err(|e| format!("{prefix}{root_rel}: {e}"))?;
             m.entry = manifest.entry.clone();
+            // the retained manifest rows ride BESIDE the surface `let`
+            // rows (the merge law — a name spelled both ways refuses);
+            // f64 rows → TY_F64 bits, exactly the compat walk's shape
+            crate::decl::fold_manifest_consts(
+                &mut m.body,
+                &manifest.consts,
+                &format!("{prefix}{root_rel}"),
+            )?;
             m
         }
         crate::bundle::PkgType::Lib => {

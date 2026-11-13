@@ -12,19 +12,27 @@ use std::collections::BTreeMap;
 
 /// A group's parsed manifest, read from wherever its files live. A
 /// DIRECTORY group parses strict (the post-repeal grammar — the body
-/// keys refuse); an ARCHIVE group parses compat (a published bundle's
-/// manifest is forever old — the reader-compat law).
+/// keys refuse); an UNPACKED group (a url source-zip dep's tree — its
+/// bytes rode the wire, where the retired keys parse or retain) and
+/// an ARCHIVE group (a published bundle's manifest is forever old)
+/// parse compat — the reader-compat law at every wire boundary.
 pub(super) fn group_manifest(
     source: &PkgSource,
     archives: &[Archive],
     read: &PackRead,
 ) -> Result<crate::bundle::Manifest, String> {
     match source {
-        PkgSource::Dir(gdir) | PkgSource::Unpacked(gdir) => {
+        PkgSource::Dir(gdir) => {
             let bytes = read(gdir, crate::bundle::files::MANIFEST_NAME)?;
             let text = String::from_utf8(bytes)
                 .map_err(|_| format!("{}: not UTF-8", crate::bundle::files::MANIFEST_NAME))?;
             parse_manifest(&text).map_err(|e| e.to_string())
+        }
+        PkgSource::Unpacked(gdir) => {
+            let bytes = read(gdir, crate::bundle::files::MANIFEST_NAME)?;
+            let text = String::from_utf8(bytes)
+                .map_err(|_| format!("{}: not UTF-8", crate::bundle::files::MANIFEST_NAME))?;
+            parse_manifest_compat(&text).map_err(|e| e.to_string())
         }
         PkgSource::Archive { slot, prefix } => {
             let archive = &archives[*slot];

@@ -41,6 +41,13 @@ pub struct PkgFiles {
     /// the bare pkg name — the `use` head and the diag stamp's prefix
     pub module: String,
     pub files: BTreeMap<String, FileSrc>,
+    /// the RETAINED manifest `consts` rows (an OLD pinned zip's
+    /// wire-carried constants — `calc_host`'s `PI` family), folded off
+    /// the group's indexes; the engine binds them bare at the pkg's
+    /// root, so a `pub use` re-export (calc's `math.rut`) resolves
+    /// against them. Empty for every current tree (the surface `pub
+    /// let` rows fold inside the lowering instead).
+    pub consts: Vec<(String, f64)>,
 }
 
 /// One file of an assembled package.
@@ -83,10 +90,17 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
                 PkgFiles {
                     module,
                     files: BTreeMap::new(),
+                    consts: d.consts.clone(),
                 },
             );
         }
         let g = groups.get_mut(&name).expect("just inserted");
+        // the consts fold first-non-empty-wins across the group's rows
+        // (a re-walk re-stamps them identically; an unstamped twin of
+        // the same pkg carries none and never erases them)
+        if g.consts.is_empty() && !d.consts.is_empty() {
+            g.consts = d.consts.clone();
+        }
         if g.files.contains_key(&path) {
             continue;
         }
@@ -167,6 +181,7 @@ pub fn check_doc(
             groups.push(PkgFiles {
                 module: doc_pkg.to_string(),
                 files: BTreeMap::new(),
+                consts: Vec::new(),
             });
             groups.last_mut().expect("just pushed")
         }
@@ -313,13 +328,34 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
                     // rows folded into the host body's const rows
                     // INSIDE the lowering (bound bare at the pkg's
                     // root) — a `pub use calc_host::{ PI }` re-export
-                    // resolves against them
+                    // resolves against them; an OLD pinned zip's
+                    // RETAINED manifest rows fold in beside them
+                    // (the loader's own `fold` law — its v16 surface
+                    // carries no lets; one name spelled both ways
+                    // refuses)
+                    let retained: std::collections::BTreeMap<String, f64> =
+                        g.consts.iter().cloned().collect();
+                    if let Err(_collision) =
+                        rut_driver::fold_manifest_consts(&mut p.body, &retained, &g.module)
+                    {
+                        continue; // a colliding group is inert — consumers' misses skip
+                    }
                     p
                 }
                 Err(_) => continue,
             }
         };
-        pkg = pkg.manifest(Manifest::lib(&g.module, &deps));
+        pkg = pkg.manifest({
+            let mut m = Manifest::lib(&g.module, &deps);
+            // the retained consts thread through: the engine binds
+            // them bare at the pkg's root (the compiler-materialized
+            // constants a `pub use` re-export resolves against —
+            // without them an old calc's `math.rut` errors and the
+            // entrypoint compile dies before the doc's own diags
+            // surface)
+            m.consts = g.consts.iter().cloned().collect();
+            m
+        });
         out.push(pkg);
     }
     out

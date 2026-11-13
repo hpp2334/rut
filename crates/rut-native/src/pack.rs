@@ -18,8 +18,8 @@ use rut_driver::pack::{PackError, PackOpts, PackWorld, PkgSource};
 
 use crate::source::{FsSource, Source};
 use crate::walk::{
-    mount_dev_table, read_manifest, read_manifest_compat, walk_dir, Archive, World,
-    MANIFEST_RETIRED,
+    mount_dev_table, read_manifest, read_manifest_compat, read_manifest_lane, walk_dir, Archive,
+    World, MANIFEST_RETIRED,
 };
 
 /// What the root becomes. `Source` (the default) is the source zip —
@@ -609,23 +609,24 @@ fn pack_dir_opts_locked(
     // dirs it needs is the v1 refusal.
     for (spec, source) in &sources {
         match source {
-            PkgSource::Dir(gdir) | PkgSource::Unpacked(gdir) => {
-                // a source-zip dep's dev tables never travel — its tree
-                // is sealed, the same law an archive-backed group keeps
-                if world.unpacked_of(spec).is_some() {
-                    let dm = read_manifest_compat(&src, gdir)
-                        .map_err(rut_driver::pack::PackError::from)?;
-                    if !dm.dev_deps.is_empty() {
-                        return Err(PackError::law(format!(
-                            "packed dep `{spec}` needs its own [dev-deps] directories, which do \
-                             not travel in a source zip — vendor this dep instead"
-                        )));
-                    }
-                    continue;
-                }
+            PkgSource::Dir(gdir) => {
                 let dm = read_manifest(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
                 mount_dev_table(&mut world, &src, gdir, spec, &dm, map, lock)
                     .map_err(rut_driver::pack::PackError::from)?;
+            }
+            PkgSource::Unpacked(gdir) => {
+                // a source-zip dep's tree is sealed wire bytes (its
+                // root AND its embedded groups — read compat, the
+                // zip-boundary law) and its dev tables never travel:
+                // one that still declares dirs it needs is the refusal
+                let dm =
+                    read_manifest_compat(&src, gdir).map_err(rut_driver::pack::PackError::from)?;
+                if !dm.dev_deps.is_empty() {
+                    return Err(PackError::law(format!(
+                        "packed dep `{spec}` needs its own [dev-deps] directories, which do \
+                         not travel in a source zip — vendor this dep instead"
+                    )));
+                }
             }
             PkgSource::Archive { .. } => {
                 let dm = group_manifest(source, &world.archives);
@@ -855,9 +856,12 @@ fn collect_group_sources_walk(
             .ok_or_else(|| PackError::law(format!("dep `{spec}` has no `path`")))?;
         let dep_dir = src.resolve(dir_key, rel).map_err(PackError::law)?;
         // the mount key the walk used: identity dirs mount under their
-        // identities — the group sources answer under the same key
+        // identities — the group sources answer under the same key.
+        // Inside an unpacked tree (`from_zip`) the dep dirs are the
+        // zip's EMBEDDED groups — wire bytes, read compat
         let mount_key = crate::walk::mount_key_for(&dep_dir, spec);
-        let dm = read_manifest(src, &dep_dir).map_err(rut_driver::pack::PackError::from)?;
+        let dm = read_manifest_lane(src, &dep_dir, from_zip)
+            .map_err(rut_driver::pack::PackError::from)?;
         if dm.name.as_deref() != Some(rut_driver::bundle::mount_name(&mount_key)) {
             return Err(PackError::law(format!(
                 "dep `{spec}` points at `{dep_dir}` — the manifest there names it `{}`",

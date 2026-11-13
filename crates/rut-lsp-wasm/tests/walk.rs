@@ -1162,24 +1162,20 @@ const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/st
 /// self-consistent only — readers never re-hash (meta vouches the pin)
 const POUCH_PIN: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
 
-/// THE FULL STD WORLD (the playground's own shape): the store's std
-/// set declared + pinned + mounted at once. The pinning law this gate
-/// owns: the check lane must keep answering through a world that
-/// carries `calc` — `math.rut`'s `pub use calc_host::{ PI, .. }`
-/// resolves against calc_host's SURFACE LETS (the `pub let PI: f64 =
-/// ..;` rows fold into the host body's consts inside the lowering;
-/// the manifest's `consts` table is retired), and without them those
+/// THE FULL STD WORLD (the playground's own shape): all nine source
+/// zips — the COMMITTED frozen envelope — declared + pinned +
+/// store-mounted at once. The pinning law this gate owns: the check
+/// lane must keep answering through a world that carries `calc` over
+/// the v16 bytes — the zip's calc_host group carries its constants as
+/// manifest `consts` rows, and the compat store lane RETAINS them
+/// (minted onto the index, folded into the engine's mount — D7), so
+/// `math.rut`'s `pub use calc_host::{ PI, .. }` resolves exactly as it
+/// does on a current tree's surface lets. Without the retention those
 /// fourteen unknown-import errors stamp `calc/math` and eat every one
 /// of the doc's own diags (foreign squiggles skip by law, and the
 /// graph stops at the failing pkg).
-///
-/// calc rides the SURFACE-LET world the repo tree now spells (the
-/// next envelope's shape): its store entry is hand-laid from the
-/// tree's own files — the v17 zip's exact layout, a rewritten
-/// manifest pointing at the embedded `deps/calc_host@<fp16>/` group.
-/// The other eight ride the committed frozen zips (no consts of
-/// their own — the strict store lane reads them clean).
-const STD_ZIPS: &[(&str, &[u8])] = &[
+const NINE_STD: &[(&str, &[u8])] = &[
+    ("calc", include_bytes!("../../../dist/std/calc.zip")),
     ("flow", include_bytes!("../../../dist/std/flow.zip")),
     ("futures", include_bytes!("../../../dist/std/futures.zip")),
     ("http", include_bytes!("../../../dist/std/http.zip")),
@@ -1198,46 +1194,6 @@ fn nine_pin(name: &str) -> String {
         .collect()
 }
 
-/// the calc store entry, hand-laid in the next envelope's shape: the
-/// rewritten manifest (its dep row pointing INSIDE at the embedded
-/// group), the tree's own sources, and the calc_host group's surface
-/// carrying the `pub let` PI family
-fn calc_store_entry(home: &Path, pin: &str, url: &str) {
-    let dir = store_dep(home, "calc", pin, url);
-    let unpack = dir.join(rut_driver::UNPACK_DIR);
-    // the rewritten manifest — no wire pair, the row points inside
-    put(
-        &unpack,
-        "rut.jsonc",
-        "{\n  \"name\": \"calc\",\n  \"deps\": {\n    \"calc_host\": { \"path\": \
-         \"deps/calc_host@0123456789abcdef\" }\n  }\n}\n",
-    );
-    put(
-        &unpack,
-        "src/mod.rut",
-        include_str!("../../../rut/calc/src/mod.rut"),
-    );
-    put(
-        &unpack,
-        "src/math.rut",
-        include_str!("../../../rut/calc/src/math.rut"),
-    );
-    // the embedded host group: the directory manifest grammar + the
-    // surface whose `pub let` rows carry the PI family
-    let group = unpack.join("deps/calc_host@0123456789abcdef");
-    put(
-        &group,
-        "rut.jsonc",
-        "{\n  \"name\": \"calc_host\",\n  \"type\": \"host\",\n  \"entry\": { \"type\": \
-         \"./calc.d.rut\" }\n}\n",
-    );
-    put(
-        &group,
-        "src/calc.d.rut",
-        include_str!("../../../rut/calc_host/src/calc.d.rut"),
-    );
-}
-
 #[test]
 fn the_full_std_world_keeps_the_check_lane_alive() {
     let ws = scratch("nine");
@@ -1245,27 +1201,21 @@ fn the_full_std_world_keeps_the_check_lane_alive() {
     let proj = ws.join("proj");
     let url = |n: &str| format!("https://cdn.example/rut/dist/std/{n}.zip");
     let lock = rut_driver::render_lock(&rut_driver::LockFile::from_rows(
-        STD_ZIPS
+        NINE_STD
             .iter()
             .map(|(n, _)| rut_driver::LockRow {
                 pkg: (*n).to_string(),
                 url: url(n),
                 sha256: nine_pin(n),
             })
-            .chain([rut_driver::LockRow {
-                pkg: "calc".to_string(),
-                url: url("calc"),
-                sha256: nine_pin("calc"),
-            }])
             .collect(),
     ))
     .to_string();
     let deps = format!(
         "{{{}}}",
-        STD_ZIPS
+        NINE_STD
             .iter()
             .map(|(n, _)| format!("\"{n}\": {{\"url\": \"{}\"}}", url(n)))
-            .chain([format!("\"calc\": {{\"url\": \"{}\"}}", url("calc"))])
             .collect::<Vec<_>>()
             .join(",")
     );
@@ -1276,7 +1226,7 @@ fn the_full_std_world_keeps_the_check_lane_alive() {
         &deps,
         "entry fn main() {\n}\n",
     );
-    for (n, zip) in STD_ZIPS {
+    for (n, zip) in NINE_STD {
         let dir = store_dep(&home, n, &nine_pin(n), &url(n));
         for (rel, bytes) in rut_driver::bundle::read_srczip(zip).expect("the std zip unpacks") {
             let p = dir.join(rut_driver::UNPACK_DIR).join(&rel);
@@ -1284,7 +1234,6 @@ fn the_full_std_world_keeps_the_check_lane_alive() {
             std::fs::write(p, bytes).expect("the file writes");
         }
     }
-    calc_store_entry(&home, &nine_pin("calc"), &url("calc"));
 
     let (lsp, mut pool, io) = boot(&home);
     let out = resolve(&lsp, &mut pool, &[proj.to_str().unwrap()]);
@@ -1294,8 +1243,8 @@ fn the_full_std_world_keeps_the_check_lane_alive() {
     // the doc IS the project's entry (the uri the walk's origin stamps)
     // — the check lane compiles it against the whole mounted world
     let uri = proj.join("src/mod.rut").to_str().unwrap().to_string();
-    // (a) the doc's own type error surfaces — the surface-let consts
-    // keep calc's re-exports from eating it
+    // (a) the doc's own type error surfaces — the retained consts keep
+    // calc's re-exports from eating it
     let bad = "entry fn main() {\n    let x = 1 + \"nope\";\n}\n";
     let a = take(pool.run_until(lsp.analyze(uri.clone(), bad.to_string())));
     assert!(

@@ -313,31 +313,17 @@ impl BundleServer {
 
 #[test]
 fn scaffolded_project_runs_against_a_local_server() {
-    // the wire: the NINE the manifest names, packed FRESH from the
-    // repo tree — the next envelope's shape (the PI family as
-    // calc_host's SURFACE LETS; the frozen v16 zips carry the retired
-    // manifest `consts` table, which binds nothing on this toolchain,
-    // so serving them would fail calc's `pub use` re-exports). The
-    // pins move with the bytes: the lock's rows are re-pinned over the
-    // packed zips, exactly what `rut install` would write after the
-    // cut.
-    let tree = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rut");
-    let mut payloads = BTreeMap::new();
-    let mut pins: BTreeMap<String, String> = BTreeMap::new();
-    for pkg in STD_PKGS {
-        let bytes = rut_native::pack_dir_zip(&tree.join(pkg))
-            .unwrap_or_else(|e| panic!("pack rut/{pkg}: {e}"));
-        pins.insert(pkg.to_string(), rut_driver::sha256_hex(&bytes));
-        payloads.insert(format!("{pkg}.zip"), bytes);
-    }
-    let server = BundleServer::serve(payloads);
-
-    // the scaffold with ONLY the dep urls rewritten to the local
-    // server — manifest AND lock (the tag is DERIVED from the
-    // scaffold's own lock, the cut advances it; the pins are the
-    // packed bytes' own shas)
-    let (root, dir) = scaffold("e2e", "hello");
-    let tag = rut_driver::parse_lock(&std::fs::read_to_string(dir.join("rut.lock")).unwrap())
+    // the wire: the whole FROZEN snapshot — the nine the manifest
+    // names, plus the host surfaces they can pull (bundles are closed,
+    // but the server answers whatever the graph asks). The tag is
+    // DERIVED from the scaffold's own lock (the cut advances it).
+    // This gate PROVES the pinned-v16 world keeps working: the
+    // envelope's calc.zip carries calc_host's constants as manifest
+    // `consts` rows, and the compat-fed mounts stamp them (D7) —
+    // calc's `pub use` re-exports resolve, old pins intact
+    let (_probe_root, probe_dir) = scaffold("e2e-tag", "hello");
+    let probe_lock = std::fs::read_to_string(probe_dir.join("rut.lock")).unwrap();
+    let tag = rut_driver::parse_lock(&probe_lock)
         .expect("the scaffolded rut.lock parses")
         .deps()
         .iter()
@@ -348,6 +334,26 @@ fn scaffolded_project_runs_against_a_local_server() {
         })
         .next()
         .expect("the lock's urls spell the std tag");
+    let frozen = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../dist")
+        .join(&tag);
+    let mut payloads = BTreeMap::new();
+    for e in std::fs::read_dir(&frozen).unwrap() {
+        let e = e.unwrap();
+        let n = e.file_name().to_string_lossy().into_owned();
+        if n.ends_with(".rutbundle") || n.ends_with(".zip") {
+            payloads.insert(
+                e.file_name().to_string_lossy().into_owned(),
+                std::fs::read(e.path()).unwrap(),
+            );
+        }
+    }
+    let server = BundleServer::serve(payloads);
+
+    // the scaffold with ONLY the dep urls rewritten to the local
+    // server — manifest AND lock (the lock's rows carry the same urls;
+    // the pins are the same bytes either way)
+    let (root, dir) = scaffold("e2e", "hello");
     for file in ["rut.jsonc", "rut.lock"] {
         let path = dir.join(file);
         let text = std::fs::read_to_string(&path).unwrap();
@@ -360,27 +366,6 @@ fn scaffolded_project_runs_against_a_local_server() {
         )
         .unwrap();
     }
-    // re-pin over the packed bytes (the url rewrite kept the tag tail —
-    // `/dist/std/<pkg>.zip` — so only the pins move)
-    let lock_text = std::fs::read_to_string(dir.join("rut.lock")).unwrap();
-    let lock = rut_driver::parse_lock(&lock_text).expect("the scaffolded rut.lock parses");
-    let rows: Vec<rut_driver::LockRow> = lock
-        .deps()
-        .iter()
-        .map(|row| rut_driver::LockRow {
-            pkg: row.pkg.clone(),
-            url: row.url.clone(),
-            sha256: pins
-                .get(&row.pkg)
-                .unwrap_or_else(|| panic!("a pin for `{}`", row.pkg))
-                .clone(),
-        })
-        .collect();
-    std::fs::write(
-        dir.join("rut.lock"),
-        rut_driver::render_lock(&rut_driver::LockFile::from_rows(rows)),
-    )
-    .unwrap();
 
     // the install-first law: run never downloads — install warms the
     // cache from the local server (and confirms the lock is fresh)
@@ -407,5 +392,33 @@ fn scaffolded_project_runs_against_a_local_server() {
         String::from_utf8_lossy(&out.stdout).contains("hello, rut!"),
         "stdout: {}",
         String::from_utf8_lossy(&out.stdout)
+    );
+
+    // the reviewer's probe, STANDING: a consumer that USES calc over
+    // the frozen pins. The envelope's calc_host carries its constants
+    // as manifest `consts` rows (its v16 surface has no `pub let`s),
+    // so `math.rut`'s `pub use calc_host::{ PI, .. }` re-export dies
+    // with the fourteen `calc_host has no PI` unknown-imports —
+    // killing math::PI AND the const-free math::sqrt with it — unless
+    // the compat-fed mounts stamp the retained rows (D7)
+    let probe = "use calc::{ math };\nuse ink::{ Logger };\n\nentry fn main() {\n    let log = \
+                 Logger(\"probe\");\n    log.info(f\"sqrt={math::sqrt(4.0)} \
+                 pi={math::PI}\");\n}\n";
+    std::fs::write(dir.join("src/mod.rut"), probe).unwrap();
+    let out = rut_cmd(&root.join("home"), &["run", dir.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "the frozen-pins math probe must run (the retained consts stamp): {}\nstdout: {}",
+        String::from_utf8_lossy(&out.stderr),
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("pi=3.141592653589793"),
+        "the probe prints the retained PI: {stdout}"
+    );
+    assert!(
+        stdout.contains("sqrt="),
+        "the const-free sqrt rides the same pkg: {stdout}"
     );
 }

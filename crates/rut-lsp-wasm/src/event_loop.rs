@@ -587,7 +587,8 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             src,
             tx,
         } => {
-            let decls = l.state.index_mod_at(&uri, &pkg, &mod_path, &src);
+            // the host's scan-index lane carries no manifest — no consts
+            let decls = l.state.index_mod_at(&uri, &pkg, &mod_path, &src, &[]);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
         }
     }

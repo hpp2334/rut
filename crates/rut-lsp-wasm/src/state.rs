@@ -88,11 +88,18 @@ impl SessionState {
     }
 
     /// the walk's named-dep index lane: index one dep source
-    /// file under its module NAME (replace-by-origin). Nothing is
-    /// minted on top — the surface's own `pub let` rows ride the
-    /// ordinary ModuleLet path.
-    pub(crate) fn index_named_at(&mut self, uri: &str, name: &str, src: &str) {
-        let idx = crate::deps::index_dep(name, uri, src);
+    /// file under its module NAME (replace-by-origin), the manifest's
+    /// RETAINED `consts` riding the row (the compat-parsed store lane
+    /// hands them; `&[]` for host-indexed files, which carry no
+    /// manifest).
+    pub(crate) fn index_named_at(
+        &mut self,
+        uri: &str,
+        name: &str,
+        src: &str,
+        consts: &[(String, f64)],
+    ) {
+        let idx = crate::deps::index_dep(name, uri, src, consts);
         self.replace_by_origin(uri, idx);
     }
 
@@ -100,15 +107,16 @@ impl SessionState {
     /// file at a MOD PATH (the pkg root `""`, a mounted child its
     /// `<path>`), answering the parsed file's own `mod` declarations —
     /// the walk's next hop (structure lives in the parse, never in
-    /// path munging).
+    /// path munging). The consts ride the pkg-ROOT stamp only.
     pub(crate) fn index_mod_at(
         &mut self,
         uri: &str,
         pkg: &str,
         mod_path: &str,
         src: &str,
+        consts: &[(String, f64)],
     ) -> Vec<wire::ModDecl> {
-        let idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src);
+        let idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src, consts);
         let decls: Vec<wire::ModDecl> = idx
             .mods
             .iter()

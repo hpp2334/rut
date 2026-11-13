@@ -958,12 +958,14 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
             "calc",
             "rut/calc/src/mod.rut",
             include_str!("../../../rut/calc/src/mod.rut"),
+            &[],
         ),
         rut_lsp_wasm::deps::index_dep_mod(
             "calc",
             "rut/calc/src/math.rut",
             "math",
             include_str!("../../../rut/calc/src/math.rut"),
+            &[],
         ),
     ];
     let mut chain: Vec<&DefIndex> = vec![&di];

@@ -258,6 +258,7 @@ fn tag_dep() -> DefIndex {
         "gadgets",
         "file:///deps/gadgets/lib.rut",
         "pub struct Widget {\nid: i32;\n}\npub fn tag() -> i32 { return 1; }\n",
+        &[],
     )
 }
 
@@ -470,7 +471,8 @@ fn std_direct_deps() -> HashSet<String> {
 /// (`std_direct_deps`) mirrors the walk's root-manifest rows, the
 /// auto-import tier's live gate.
 fn std_dep_fixtures() -> Vec<DefIndex> {
-    let mount = |name: &str, uri: &str, src: &str| rut_lsp_wasm::deps::index_dep(name, uri, src);
+    let mount =
+        |name: &str, uri: &str, src: &str| rut_lsp_wasm::deps::index_dep(name, uri, src, &[]);
     vec![
         rut_lsp_wasm::prelude::index(),
         mount(
@@ -550,7 +552,8 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
     // row is the one const spelling (the manifest's `consts` table is
     // retired), and the module tree IS the qualified surface
     let src = "pub host fn sqrt(x: f64) -> f64;\npub let PI: f64 = 3.141592653589793;\n";
-    let calc_host = rut_lsp_wasm::deps::index_dep("calc_host", "file:///deps/calc_host.d.rut", src);
+    let calc_host =
+        rut_lsp_wasm::deps::index_dep("calc_host", "file:///deps/calc_host.d.rut", src, &[]);
     let mk_mod = |mod_path: &str, text: &str| {
         let s = rut_lexer::lexer::normalize(text);
         let (toks, _) = rut_lexer::lexer::lex(&s);

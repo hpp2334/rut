@@ -349,12 +349,14 @@ fn a_both_files_dep_answers_from_the_body() {
         "pkg",
         "file:///deps/pkg/pkg.d.rut",
         "pub host fn make() -> i32;\n",
+        &[],
     );
     let body = rut_lsp_wasm::deps::index_dep_mod(
         "pkg",
         "file:///deps/pkg/mod.rut",
         "",
         "pub fn make() -> i32 { return 1; }\n",
+        &[],
     );
     let extra = [surface, body];
     let body_src = normalize("pub fn make() -> i32 { return 1; }\n");
@@ -387,6 +389,7 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
         "calc",
         "file:///deps/calc/calc.d.rut",
         "pub host fn sqrt(x: f64) -> f64;\n",
+        &[],
     );
     let extra = [surface];
     let surface_src = normalize("pub host fn sqrt(x: f64) -> f64;\n");
@@ -417,11 +420,13 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
         "ink_host",
         "rut/ink_host/src/ink_host.d.rut",
         "pub host fn create_logger(name: str) -> opaque;\n",
+        &[],
     );
     let mounted = rut_lsp_wasm::deps::index_dep(
         "ink_host",
         "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut",
         "pub host fn create_logger(name: str) -> opaque;\n",
+        &[],
     );
     // the chain order puts the ambient surface first (registered at
     // init, before any mount)
@@ -573,12 +578,14 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
         "file:///deps/gadgets/mod.rut",
         "",
         "pub mod layout;\npub fn tag() -> i32 { return 1; }\n",
+        &[],
     );
     let layout = rut_lsp_wasm::deps::index_dep_mod(
         "gadgets",
         "file:///deps/gadgets/layout/mod.rut",
         "layout",
         "pub struct Column {\n    w: i32;\n}\n",
+        &[],
     );
     let extra = [root, layout];
     let root_src = normalize("pub mod layout;\npub fn tag() -> i32 { return 1; }\n");
@@ -619,6 +626,7 @@ fn app_helpers() -> DefIndex {
         "file:///ws/app/helpers/mod.rut",
         "helpers",
         "pub struct Slot {\n    n: i32;\n}\n",
+        &[],
     )
 }
 
@@ -670,6 +678,7 @@ fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
         "file:///ws/app/helpers/deep.rut",
         "helpers/deep",
         "pub fn dig() -> i32 { return 1; }\n",
+        &[],
     );
     let dm = DocMods {
         mod_path: Some("helpers".into()),
@@ -693,6 +702,7 @@ fn an_edge_click_never_leaks_across_packages() {
         "file:///ws/other/helpers/mod.rut",
         "helpers",
         "pub struct Slot {\n    n: i32;\n}\n",
+        &[],
     );
     let extra = [other];
     assert!(def_as(&d, at(&d.src, "mod helpers;", 1) + 4, &extra, &root_dm()).is_empty());
@@ -712,6 +722,7 @@ fn an_own_pkg_use_path_resolves_intra_package() {
         "file:///ws/app/on-disk/mod.rut",
         "",
         "mod helpers;\n",
+        &[],
     );
     let extra = [root_twin, app_helpers()];
     let dm = root_dm();
@@ -755,12 +766,14 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
         "file:///ws/app/helpers/mod.rut",
         "helpers",
         "mod deep;\npub struct Slot {\n    n: i32;\n}\n",
+        &[],
     );
     let deep = rut_lsp_wasm::deps::index_dep_mod(
         "app",
         "file:///ws/app/helpers/deep.rut",
         "helpers/deep",
         "pub struct Gem {\n    g: i32;\n}\n",
+        &[],
     );
     let extra = [helpers, deep];
     let dm = root_dm();
@@ -855,6 +868,7 @@ fn std_use_jumps_to_the_true_source_path() {
         "pouch",
         "rut/pouch/src/mod.rut",
         POUCH,
+        &[],
     )];
     let hits = def(&d, at(&d.src, "= Vec::new();", 1) + 2, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");

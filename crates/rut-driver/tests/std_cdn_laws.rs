@@ -260,6 +260,107 @@ fn sha256_hex(bytes: &[u8]) -> String {
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// The numeral-sensitive trio's freshness signal (flow/json/http):
+/// their envelopes are frozen history the current pack cannot
+/// reproduce BYTE-for-byte by design — the pre-v17 manifest grammar's
+/// retirement ripples into the bytes two ways (the pack door now
+/// stamps the wire pair into `rut.jsonc`, and every embedded group's
+/// `@<fp16>` IDENTITY dir re-fingers, renaming the entry and the
+/// `rut.scopes` rows that name it) — so the gate normalizes the
+/// ripple away and demands the rest STRUCTURALLY echo the frozen
+/// program: the same entry set (identity suffixes stripped), every
+/// text entry byte-for-byte beyond `rut.jsonc`/`rut.scopes`, and
+/// every compiled body's decoded shape (the function/type/export/
+/// template tables and the trait/vtable geometry — codes and
+/// signatures included).
+#[test]
+fn the_numeral_sensitive_trio_structurally_echoes_the_frozen_envelope() {
+    for (dir, name) in PKGS {
+        if !matches!(*name, "flow" | "json" | "http") {
+            continue;
+        }
+        let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(dir);
+        let fresh = rut_native::pack_dir(&tree).unwrap_or_else(|e| panic!("pack rut/{dir}: {e}"));
+        let committed = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
+        assert!(
+            structurally_echoes(&fresh, &committed),
+            "rut/{dir} no longer structurally echoes dist/std/{name}.rutbundle \
+             (entry set, text entries beyond rut.jsonc/rut.scopes, or compiled shape drifted)"
+        );
+    }
+}
+
+/// The structural echo: the current pack and the frozen envelope agree
+/// on the entry set (group identity suffixes `@<fp16>` stripped — the
+/// fingerprints ride the manifest-grammar ripple), every text entry
+/// byte-for-byte (the exemptions: `rut.jsonc`, whose bytes the
+/// wire-pair stamp moved by design, and `rut.scopes`, which names the
+/// re-fingered identity dirs), and every compiled body's decoded
+/// shape (function/type/export/template tables, the trait/vtable
+/// geometry, and each function's code and signature).
+fn structurally_echoes(fresh: &[u8], committed: &[u8]) -> bool {
+    let Ok(fz) = rut_driver::bundle::parse_bundle(fresh) else {
+        return false;
+    };
+    let Ok(cz) = rut_driver::bundle::parse_bundle(committed) else {
+        return false;
+    };
+    let deidentify = |n: &str| -> String {
+        n.split('/')
+            .map(|seg| match seg.split_once('@') {
+                Some((head, tail))
+                    if tail.len() == 16 && tail.chars().all(|c| c.is_ascii_hexdigit()) =>
+                {
+                    head.to_string()
+                }
+                _ => seg.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let mut fnames: Vec<String> = fz.iter().map(|(n, _)| deidentify(n)).collect();
+    let mut cnames: Vec<String> = cz.iter().map(|(n, _)| deidentify(n)).collect();
+    fnames.sort();
+    cnames.sort();
+    if fnames != cnames {
+        return false;
+    }
+    fz.iter().all(|(n, fb)| {
+        let key = deidentify(n);
+        let Some((_, cb)) = cz.iter().find(|(cn, _)| deidentify(cn) == key) else {
+            return false;
+        };
+        if key.ends_with("mod.rutc") {
+            let Ok(fp) = rut_core::binary::decode(fb) else {
+                return false;
+            };
+            let Ok(cp) = rut_core::binary::decode(cb) else {
+                return false;
+            };
+            fp.funcs.len() == cp.funcs.len()
+                && fp.types.types.len() == cp.types.types.len()
+                && fp.exports.len() == cp.exports.len()
+                && fp.iface_slots == cp.iface_slots
+                && fp.vtables == cp.vtables
+                && fp.templates.len() == cp.templates.len()
+                && (fp.template_first_fid, fp.template_end_fid)
+                    == (cp.template_first_fid, cp.template_end_fid)
+                && fp
+                    .funcs
+                    .iter()
+                    .zip(cp.funcs.iter())
+                    .all(|(a, b)| a.code == b.code && a.params == b.params && a.ret == b.ret)
+        } else {
+            // the manifest bytes are the wire-pair stamp's to move —
+            // the ROOT's and every group's alike — and the scopes rows
+            // name the re-fingered identity dirs; both ride the
+            // manifest-grammar ripple by design
+            let manifest = key == "rut.jsonc" || key.ends_with("/rut.jsonc");
+            manifest || key == "rut.scopes" || fb == cb
+        }
+    })
+}
+
 #[test]
 fn the_artifact_set_spells_the_one_wire_number() {
     // every manifest packs format_version 12 — the current wire; the
