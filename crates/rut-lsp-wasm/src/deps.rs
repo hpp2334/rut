@@ -15,13 +15,13 @@
 //!   source files — the zip's own `rut.jsonc` names the module; the
 //!   rode-along dep groups are the loader's business, not the
 //!   editor's.
-//! - [`index_dep`] indexes one dep source file: [`analysis::index_at`]
-//!   plus `module = Some(name)`; a compat-parsed wire manifest's
-//!   `consts` rows DISCARD whole (no backward compat — old bytes
-//!   mount, their constants bind nothing; the surface `pub let` is
-//!   the one spelling). The surface `pub let` rows of a current tree
-//!   ride the ordinary ModuleLet path; the qualified forms ride the
-//!   dep's own `mod` tree: `use calc::{ math }` + `math::PI`).
+//! - [`index_dep`] indexes one dep source file under its mount (the
+//!   module NAMED, the mod path spelled); a compat-parsed wire
+//!   manifest's `consts` rows DISCARD whole (no backward compat — old
+//!   bytes mount, their constants bind nothing; the surface `pub let`
+//!   is the one spelling). The surface `pub let` rows of a current
+//!   tree ride the ordinary ModuleLet path; the qualified forms ride
+//!   the dep's own `mod` tree: `use calc::{ math }` + `math::PI`).
 
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
 use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
@@ -837,35 +837,23 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
     None
 }
 
-/// Index one dep source file: the ordinary [`analysis::index_at`] pass
-/// over `src` (origin stamped with `uri`, mode per the manifest), the
-/// module NAMED. The surface `pub let` rows ride the ordinary
-/// ModuleLet path; a compat-parsed wire manifest's `consts` rows
-/// DISCARD whole (no backward compat — old bytes mount, their
+/// Index one mounted dep source file — the flat shape (`mod_path`
+/// `None`, today's single-file packages) or one file module of a
+/// mod-carrying pkg (`Some(path)`, `""` = the pkg root's `mod.rut`):
+/// the ordinary [`analysis::index_at`] pass over `src`, the mount —
+/// origin, module name, mod path, parse mode — riding ONE [`Mount`]
+/// handed to the builder up front. The surface `pub let` rows ride the
+/// ordinary ModuleLet path; a compat-parsed wire manifest's `consts`
+/// rows DISCARD whole (no backward compat — old bytes mount, their
 /// constants bind nothing); the module-qualified forms ride the dep's
 /// own `mod` tree.
-pub fn index_dep(name: &str, uri: &str, src: String) -> DefIndex {
+pub fn index_dep(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> DefIndex {
     // the ordinary index pass — `mode_of(uri)` spells the filename
     // convention (every caller already derived it that way). `src` BY
     // VALUE: it moves into the doc (a fresh walk read moves for free,
     // a borrowed text clones to move)
     let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
-    let mut idx = crate::hover::index(&doc);
-    idx.origin = uri.to_string();
-    idx.module = Some(name.to_string());
-    // the parse mode rides the index — the definition layer's
-    // body-over-decl preference reads it
-    idx.mode = Some(rut_semantic::mode_of(uri));
-    idx
-}
-
-/// [`index_dep`] with the file's mod path stamped — one mounted
-/// module of a mod-carrying dep (the dep walk / bundle loader call
-/// this per file; `mod_path` `""` is the pkg root's `mod.rut`).
-pub fn index_dep_mod(name: &str, uri: &str, mod_path: &str, src: String) -> DefIndex {
-    let mut idx = index_dep(name, uri, src);
-    idx.mod_path = Some(mod_path.to_string());
-    idx
+    crate::hover::index(&doc, crate::hover::Mount::dep(name, uri, mod_path))
 }
 
 /// One declaration entry's module indexes — the wire-v12 consumption
@@ -893,22 +881,28 @@ pub fn index_dep_decl_group(
     modules
         .into_iter()
         .map(|(path, items)| {
-            let mut idx = crate::hover::index_items(src, ast, toks, &items);
-            // the entry uri for the file's own module; a `#<mod path>`
-            // suffix for the nested ones — one index per module, one
-            // origin each (the faces' defs store dedups by origin), the
-            // (module, mod_path) pair remaining the real key
-            idx.origin = if path == mod_path {
-                uri.to_string()
-            } else {
-                format!("{uri}#{path}")
+            // the slice's mount — ONE record: the entry uri for the
+            // file's own module, a `#<mod path>` suffix for the nested
+            // ones (one index per module, one origin each — the faces'
+            // defs store dedups by origin), the (module, mod_path)
+            // pair remaining the real key
+            let mount = crate::hover::Mount {
+                origin: if path == mod_path {
+                    uri.to_string()
+                } else {
+                    format!("{uri}#{path}")
+                },
+                module: Some(name.to_string()),
+                mod_path: Some(path.clone()),
+                // the parse mode rides the mount — the definition
+                // layer's body-over-decl preference reads it
+                mode: Some(rut_semantic::mode_of(uri)),
+                ..crate::hover::Mount::default()
             };
-            idx.module = Some(name.to_string());
-            // the parse mode rides the index — the definition layer's
-            // body-over-decl preference reads it
-            idx.mode = Some(rut_semantic::mode_of(uri));
-            idx.mod_path = Some(path.clone());
-            (path, idx)
+            (
+                path,
+                crate::hover::index_items(src, ast, toks, &items, mount),
+            )
         })
         .collect()
 }

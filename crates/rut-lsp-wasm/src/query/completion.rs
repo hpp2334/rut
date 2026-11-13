@@ -543,12 +543,12 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     let Some(pkg) = segs.first() else {
         let mut out: Vec<CompletionOut> = Vec::new();
         for i in idxs {
-            let Some(m) = &i.module else { continue };
+            let Some(m) = &i.mount.module else { continue };
             push_item(
                 &mut out,
                 CompletionOut::plain(
                     m.clone(),
-                    i.origin.clone(),
+                    i.mount.origin.clone(),
                     Vec::new(),
                     CompletionKind::Module,
                 ),
@@ -574,7 +574,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     // chain; deeper segments walk the pub edges (`use_path_before`
     // stripped the trailing PARTIAL ident already — `use pkg::V⏐`
     // offers the root; `use pkg::layout::Co⏐` walks `layout` only)
-    let carrying = chain.iter().any(|i| i.mod_path.is_some());
+    let carrying = chain.iter().any(|i| i.mount.mod_path.is_some());
     // the walked interior: the segments minus the pkg head —
     // `use_path_before` already stripped the trailing PARTIAL ident
     // (`use pkg::layout::Co⏐` walks `layout` only; the brace form's
@@ -961,7 +961,7 @@ fn use_bound_dep_module(
         // the dep must be mounted and named (a named index answers for it)
         if !idxs
             .iter()
-            .any(|i| i.module.as_deref() == Some(u.pkg.as_str()))
+            .any(|i| i.mount.module.as_deref() == Some(u.pkg.as_str()))
         {
             continue;
         }
@@ -1138,7 +1138,11 @@ fn auto_import_completions(
     // dep's origin is always a uri, never the bare label, so no
     // collision) or a module the document's own manifest names
     let direct = |i: &DefIndex| {
-        i.origin == "core" || i.module.as_deref().is_some_and(|m| direct_deps.contains(m))
+        i.mount.origin == "core"
+            || i.mount
+                .module
+                .as_deref()
+                .is_some_and(|m| direct_deps.contains(m))
     };
     let prefix = bare_prefix(toks, pos);
     let imported: HashSet<(&str, &str)> = idxs[0]
@@ -1153,7 +1157,7 @@ fn auto_import_completions(
     let insert = import_insert(src, ast);
     let mut out: Vec<CompletionOut> = Vec::new();
     for i in idxs.iter().skip(1) {
-        let Some(m) = &i.module else { continue };
+        let Some(m) = &i.mount.module else { continue };
         if !direct(i) {
             continue; // a transitive-only dep — `use` of it is the D5 error
         }

@@ -291,7 +291,7 @@ fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
     let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", f.src.clone());
     assert_eq!(idxs.len(), 1, "a flat entry: one module");
     let idx = &idxs[0].1;
-    assert_eq!(idx.mode, Some(Mode::Decl));
+    assert_eq!(idx.mount.mode, Some(Mode::Decl));
     // the hover facts: the class row with its fields …
     let vec = idx.ty("Vec").expect("the class indexes");
     assert_eq!(vec.form, TyForm::Class);
@@ -347,12 +347,12 @@ pub host fn legacy_ping() -> bool;
     assert_eq!(root.mods.len(), 1);
     assert_eq!(root.mods[0].name, "net");
     // the child's rows, stamped at their mod path
-    assert_eq!(net.mod_path.as_deref(), Some("net"));
+    assert_eq!(net.mount.mod_path.as_deref(), Some("net"));
     assert!(net.fns.iter().any(|f| f.name == "connect"));
     // one parse, two modules: the origins stay distinct (one per
     // index — the defs store's key)
-    assert_eq!(idxs[0].1.origin, "bundle:myhost/mod.d.rut");
-    assert_eq!(idxs[1].1.origin, "bundle:myhost/mod.d.rut#net");
+    assert_eq!(idxs[0].1.mount.origin, "bundle:myhost/mod.d.rut");
+    assert_eq!(idxs[1].1.mount.origin, "bundle:myhost/mod.d.rut#net");
 }
 
 #[test]
@@ -421,13 +421,13 @@ pub host fn sqrt(x: f64) -> f64;
 pub let PI: f64 = 3.141592653589793;
 pub let INFINITY: f64 = inf;
 ";
-    let idx = index_dep("calc", "file:///deps/calc.d.rut", src.to_string());
+    let idx = index_dep("calc", "file:///deps/calc.d.rut", None, src.to_string());
     // the explicit name rides the index …
-    assert_eq!(idx.module.as_deref(), Some("calc"));
-    assert_eq!(idx.origin, "file:///deps/calc.d.rut");
+    assert_eq!(idx.mount.module.as_deref(), Some("calc"));
+    assert_eq!(idx.mount.origin, "file:///deps/calc.d.rut");
     // … the parse mode rides too (the definition layer's
     // body-over-decl preference reads it) …
-    assert_eq!(idx.mode, Some(Mode::Decl));
+    assert_eq!(idx.mount.mode, Some(Mode::Decl));
     // … the surface indexes …
     assert!(idx
         .fns
@@ -462,30 +462,31 @@ fn index_dep_without_lets_indexes_none() {
     let idx = index_dep(
         "pouch",
         "file:///deps/pouch.rut",
+        None,
         "class Vec<T> {\n}\n".to_string(),
     );
-    assert_eq!(idx.module.as_deref(), Some("pouch"));
+    assert_eq!(idx.mount.module.as_deref(), Some("pouch"));
     assert!(idx.lets.is_empty());
 }
 
 #[test]
 fn index_dep_mod_stamps_the_mod_path() {
-    let idx = index_dep_mod(
+    let idx = index_dep(
         "gadgets",
         "file:///deps/gadgets/layout/mod.rut",
-        "layout",
+        Some("layout"),
         "pub struct Column {\n    w: i32;\n}\n".to_string(),
     );
-    assert_eq!(idx.module.as_deref(), Some("gadgets"));
-    assert_eq!(idx.mod_path.as_deref(), Some("layout"));
+    assert_eq!(idx.mount.module.as_deref(), Some("gadgets"));
+    assert_eq!(idx.mount.mod_path.as_deref(), Some("layout"));
     // the recorded mod edges ride the parsed rows too
-    let root = index_dep_mod(
+    let root = index_dep(
         "gadgets",
         "file:///deps/gadgets/mod.rut",
-        "",
+        Some(""),
         "pub mod layout;\n".to_string(),
     );
-    assert_eq!(root.mod_path.as_deref(), Some(""));
+    assert_eq!(root.mount.mod_path.as_deref(), Some(""));
     assert_eq!(root.mods.len(), 1);
     assert_eq!(root.mods[0].name, "layout");
 }
@@ -507,7 +508,12 @@ fn dep_impl_methods_ride_the_dep_index() {
         "    pub fn info(self, msg: str) -> nil { logger_log(self.internal, 1, msg); }\n",
         "}\n",
     );
-    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK.to_string());
+    let idx = index_dep(
+        "ink",
+        "file:///deps/ink/src/mod.rut",
+        Some(""),
+        INK.to_string(),
+    );
     let info = idx.fns.iter().find(|f| f.name == "info");
     assert_eq!(
         info.map(|f| f.owner.as_deref()),

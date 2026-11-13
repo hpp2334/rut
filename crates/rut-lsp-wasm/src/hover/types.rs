@@ -192,6 +192,67 @@ pub struct ModDef {
     pub line: u32,
 }
 
+/// Where one index sits in the session's world — the lanes' identity
+/// stamps, ONE record built in ONE expression at the mount site and
+/// handed to the builder up front (identity is never patched on after
+/// the fact). A plain record: many construction sites, no invariant.
+#[derive(Debug, Default, Clone)]
+pub struct Mount {
+    /// label for provenance lines — the file's path, or `core`; the
+    /// defs store's replace-by-origin key
+    pub origin: String,
+    /// the true repo-relative path of an EMBEDDED source (the
+    /// prelude's `include_str!` origin: `rut/core/src/core.d.rut`) — the
+    /// definition layer jumps there instead of the provenance label,
+    /// so a workspace that is the rut repo lands in the real file
+    pub src_path: Option<String>,
+    /// the module's explicit manifest name (`pouch` — what a `use`
+    /// path spells). Named indexes answer the use graph FIRST: a
+    /// `Some` here is the whole match; `None` (open documents) falls
+    /// back to the origin path-segment / file-stem derivation,
+    /// byte-for-byte the old behavior
+    pub module: Option<String>,
+    /// which of the package's file modules THIS index is — the full
+    /// mod path (`""` = the pkg root's `mod.rut`, `"layout/grid"` =
+    /// that child). The (module, mod_path) pair is the whole key the
+    /// mod-aware queries walk; `None` is the flat single-file shape.
+    /// Stamped by the faces that mount a package's mod tree (the dep
+    /// walk, the bundle loader); never derived from text.
+    pub mod_path: Option<String>,
+    /// which parse mode this index was BUILT in — `Some(Decl)` marks a
+    /// `.d.rut` surface (a dep's `entry.type`, a host pkg's whole
+    /// file), `Some(Impl)` the body (`mod.rut`); `None` = unknown
+    /// (open documents, any builder that does not stamp). The
+    /// definition layer prefers body hits over decl-surface hits when
+    /// a package indexes both — never derived from text.
+    pub mode: Option<Mode>,
+}
+
+impl Mount {
+    /// an open document — origin only; mode stays `None` (the doc
+    /// lanes' exact shape)
+    pub fn doc(uri: &str) -> Mount {
+        Mount {
+            origin: uri.to_string(),
+            ..Mount::default()
+        }
+    }
+
+    /// a mounted dep file — the flat shape (`mod_path` `None`) or one
+    /// file module of a mod-carrying pkg (`Some(path)`, `""` = the
+    /// pkg root); the parse mode derives from the uri's filename
+    /// convention
+    pub fn dep(name: &str, uri: &str, mod_path: Option<&str>) -> Mount {
+        Mount {
+            origin: uri.to_string(),
+            module: Some(name.to_string()),
+            mod_path: mod_path.map(str::to_string),
+            mode: Some(rut_semantic::mode_of(uri)),
+            ..Mount::default()
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct DefIndex {
     pub types: Vec<TyDef>,
@@ -204,47 +265,20 @@ pub struct DefIndex {
     /// `pub? mod NAME;` declarations — the file-module namespace edges
     /// this file declares (the mounted child lives in its own index)
     pub mods: Vec<ModDef>,
-    /// label for provenance lines — the file's path, or `core`
-    pub origin: String,
+    /// where this index sits in the session's world — the lanes'
+    /// stamps, set once at the mount site
+    pub mount: Mount,
     /// the normalized source this index was built over — cross-file
     /// definition targets convert their byte spans to LSP ranges
     /// against THIS text (the editor face cannot re-read files)
     pub src: String,
     /// byte offsets ⇄ (line, UTF-16 col) over `src`
     pub lines: LineIndex,
-    /// the true repo-relative path of an EMBEDDED source (the
-    /// prelude's `include_str!` origin: `rut/core/src/core.d.rut`) — the
-    /// definition layer jumps there instead of the provenance label,
-    /// so a workspace that is the rut repo lands in the real file
-    pub src_path: Option<String>,
     /// names whose decl spelled the import-gated builtin linkage
     /// (`pub builtin` — the core disposal pair): completion offers them
     /// only when the document's `use` names them, the same ambient
     /// split the compiler binds by
     pub pub_gated: Vec<String>,
-    /// the module's explicit manifest name (`pouch` — what a `use`
-    /// path spells). Named indexes answer the use graph FIRST: a
-    /// `Some` here is the whole match; `None` (today's workspace
-    /// files) falls back to the origin path-segment / file-stem
-    /// derivation, byte-for-byte the old behavior
-    pub module: Option<String>,
-    /// which of the package's file modules THIS index is — the full
-    /// mod path (`""` = the pkg root's `mod.rut`, `"layout/grid"` =
-    /// that child). The (module, mod_path) pair is the whole key the
-    /// mod-aware queries walk: `module` alone stays the bare pkg name
-    /// (the `matches_pkg` fallback laws ride unchanged), `None` here
-    /// answers the root — today's single-file shapes — so flat
-    /// packages resolve exactly as before. Stamped by the faces that
-    /// mount a package's mod tree (the dep walk, the bundle loader);
-    /// never derived from text.
-    pub mod_path: Option<String>,
-    /// which parse mode this index was BUILT in — `Some(Decl)` marks a
-    /// `.d.rut` surface (a dep's `entry.type`, a host pkg's whole
-    /// file), `Some(Impl)` the body (`mod.rut`); `None` = unknown
-    /// (open documents, any builder that does not stamp). The
-    /// definition layer prefers body hits over decl-surface hits when
-    /// a package indexes both — never derived from text.
-    pub mode: Option<Mode>,
 }
 
 impl DefIndex {

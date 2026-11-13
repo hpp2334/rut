@@ -81,10 +81,13 @@ impl Ctx<'_> {
 
 /// byte span -> LSP range over the TARGET index's own text
 pub(crate) fn loc_at(doc_uri: &str, i: &DefIndex, span: Span) -> DefLocation {
-    let uri = if i.origin == doc_uri {
+    let uri = if i.mount.origin == doc_uri {
         doc_uri.to_string()
     } else {
-        i.src_path.clone().unwrap_or_else(|| origin_uri(&i.origin))
+        i.mount
+            .src_path
+            .clone()
+            .unwrap_or_else(|| origin_uri(&i.mount.origin))
     };
     DefLocation {
         uri,
@@ -128,10 +131,10 @@ fn origin_uri(origin: &str) -> String {
 /// named `pkg` (…/pouch/pouch.rut), or the file
 /// stem (…/gadgets/lib.rut for pkg `gadgets`)
 pub fn matches_pkg(i: &DefIndex, pkg: &str) -> bool {
-    if let Some(m) = &i.module {
+    if let Some(m) = &i.mount.module {
         return m == pkg;
     }
-    let hay = i.src_path.as_deref().unwrap_or(&i.origin);
+    let hay = i.mount.src_path.as_deref().unwrap_or(&i.mount.origin);
     if hay == pkg {
         return true;
     }
@@ -194,13 +197,13 @@ fn prefer_bodies<'a, T: Copy>(hits: &[(&'a DefIndex, T)]) -> Vec<(&'a DefIndex, 
     let mounted: Vec<(&DefIndex, T)> = hits
         .iter()
         .copied()
-        .filter(|(i, _)| i.src_path.is_none())
+        .filter(|(i, _)| i.mount.src_path.is_none())
         .collect();
     let pool: &[(&DefIndex, T)] = if mounted.is_empty() { hits } else { &mounted };
     let bodies: Vec<(&DefIndex, T)> = pool
         .iter()
         .copied()
-        .filter(|(i, _)| i.mode != Some(Mode::Decl))
+        .filter(|(i, _)| i.mount.mode != Some(Mode::Decl))
         .collect();
     if bodies.is_empty() {
         pool.to_vec()
@@ -543,9 +546,9 @@ fn pkg_root_index<'a>(idxs: &[&'a DefIndex], pkg: &str) -> Option<&'a DefIndex> 
         .collect();
     roots.sort_by_key(|i| {
         (
-            i.mod_path.is_none(),
-            i.mode == Some(Mode::Decl),
-            !i.origin.contains("://"),
+            i.mount.mod_path.is_none(),
+            i.mount.mode == Some(Mode::Decl),
+            !i.mount.origin.contains("://"),
         )
     });
     roots.into_iter().next()

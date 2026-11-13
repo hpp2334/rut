@@ -213,9 +213,9 @@ pub(crate) fn walk_decoded(
                 .name
                 .clone()
                 .ok_or_else(|| err("rut.jsonc has no `name`".into()))?;
-            let mut pkg = bundle_entry_pkg(entries, "", &manifest)
-                .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-            pkg.spec = root_spec.clone();
+            let pkg = bundle_entry_pkg(entries, "", &manifest)
+                .map_err(|e| RunError::law(format!("{origin}: {e}")))?
+                .named(&root_spec);
             pkgs.insert(root_spec.clone(), pkg);
             return Ok(Walk {
                 pkgs: pkgs.into_values().collect(),
@@ -368,12 +368,15 @@ pub(crate) fn walk_decoded(
                 }
             }
             GroupKind::Source => {
-                let mut pkg = bundle_entry_pkg(entries, &format!("{prefix}/"), &dm)
+                let p = bundle_entry_pkg(entries, &format!("{prefix}/"), &dm)
                     .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-                pkg.spec = key.clone();
-                // the first-mount edge: the archive root pulled its groups
-                pkg.mounted_by = Some(root_spec.clone());
-                pkg
+                // the first-mount edge: the archive root pulled its
+                // groups (the `named` door re-keys, the struct-update
+                // stamps the edge — one expression, no mutation)
+                Mounted {
+                    mounted_by: Some(root_spec.clone()),
+                    ..p.named(&key)
+                }
             }
         };
         pkgs.insert(key.clone(), pkg);

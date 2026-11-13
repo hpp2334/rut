@@ -1,6 +1,7 @@
 use rut_ast::parser::Mode;
 use rut_lsp_wasm::completion::*;
 use rut_lsp_wasm::hover::DefIndex;
+use rut_lsp_wasm::hover::Mount;
 use rut_lsp_wasm::mods::DocMods;
 use std::collections::HashSet;
 
@@ -15,7 +16,7 @@ fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
 fn complete_after(src: &str, needle: &str) -> Vec<CompletionOut> {
     let doc = doc_of(src, Mode::Impl);
     let (s, toks, ast) = (doc.src(), doc.toks(), doc.ast());
-    let idx = rut_lsp_wasm::hover::index(&doc);
+    let idx = rut_lsp_wasm::hover::index(&doc, Mount::default());
     let idxs = [&idx];
     let pos = s.rfind(needle).unwrap() as u32 + needle.len() as u32;
     complete(
@@ -59,12 +60,12 @@ fn member_completion_gates_foreign_interface_members() {
     // the foreign interface's members complete only once the doc
     // uses it; the document's own interface needs no gate
     let surf_src = "interface Greeter {\nfn greet(self) -> nil;\n}\n";
-    let surf = rut_lsp_wasm::hover::index(&doc_of(surf_src, Mode::Impl));
+    let surf = rut_lsp_wasm::hover::index(&doc_of(surf_src, Mode::Impl), Mount::default());
 
     let mk = |doc: &str| {
         let ddoc = doc_of(doc, Mode::Impl);
         let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-        let di = rut_lsp_wasm::hover::index(&ddoc);
+        let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
         let idxs = [&di, &surf];
         let pos = d2.rfind("g.").unwrap() as u32 + 2;
         complete(
@@ -94,7 +95,7 @@ fn member_completion_gates_foreign_interface_members() {
     let own = "interface Local {\nfn hi(self) -> nil;\n}\nfn go(l: Local) -> nil { l. }\n";
     let odoc = doc_of(own, Mode::Impl);
     let (d2, toks, ast) = (odoc.src(), odoc.toks(), odoc.ast());
-    let di = rut_lsp_wasm::hover::index(&odoc);
+    let di = rut_lsp_wasm::hover::index(&odoc, Mount::default());
     let idxs = [&di];
     let pos = d2.rfind("l.").unwrap() as u32 + 2;
     assert!(
@@ -158,16 +159,18 @@ fn bare_completion_gates_pub_builtin_core_names() {
                         pub builtin class Weak { }\n\
                         prelude builtin class StackTrace { }\n";
     let cdoc = doc_of(core_src, Mode::Decl);
-    let mut core = rut_lsp_wasm::hover::index(&cdoc);
-    // the manifest module name — the stamp every face lays down
-    // (deps::index_dep, the prelude), and what the bare tier's
-    // `(name, pkg)` imported gate matches against
-    core.module = Some("core".to_string());
+    let core = rut_lsp_wasm::hover::index(
+        &cdoc,
+        Mount {
+            module: Some("core".to_string()),
+            ..Mount::default()
+        },
+    );
 
     let mk = |doc: &str| {
         let ddoc = doc_of(doc, Mode::Impl);
         let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-        let di = rut_lsp_wasm::hover::index(&ddoc);
+        let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
         let idxs = [&di, &core];
         let pos = d2.len() as u32;
         complete(
@@ -240,6 +243,7 @@ fn tag_dep() -> DefIndex {
     rut_lsp_wasm::deps::index_dep(
         "gadgets",
         "file:///deps/gadgets/lib.rut",
+        None,
         "pub struct Widget {\nid: i32;\n}\npub fn tag() -> i32 { return 1; }\n".to_string(),
     )
 }
@@ -254,7 +258,7 @@ fn complete_with_dep(
 ) -> Vec<CompletionOut> {
     let ddoc = doc_of(doc, Mode::Impl);
     let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let idxs = [&di, dep];
     complete(
         &idxs,
@@ -392,12 +396,12 @@ fn string_receiver_completes_str_surface() {
     // std index ahead of the doc: `str`'s builtin contract supplies
     // the member list
     let core_src = "prelude builtin primitive str {\nfn len(self) -> i32;\n}\n";
-    let core = rut_lsp_wasm::hover::index(&doc_of(core_src, Mode::Decl));
+    let core = rut_lsp_wasm::hover::index(&doc_of(core_src, Mode::Decl), Mount::default());
 
     let doc = "fn f(s: str) -> i32 { return s. }\n";
     let ddoc = doc_of(doc, Mode::Impl);
     let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let idxs = [&di, &core];
     let pos = d2.rfind("s.").unwrap() as u32 + 2;
     let items = complete(
@@ -419,7 +423,7 @@ fn string_receiver_completes_str_surface() {
 fn complete_over_std(doc: &str, needle: &str) -> Vec<CompletionOut> {
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -448,7 +452,7 @@ fn std_direct_deps() -> HashSet<String> {
 /// auto-import tier's live gate.
 fn std_dep_fixtures() -> Vec<DefIndex> {
     let mount = |name: &str, uri: &str, src: &str| {
-        rut_lsp_wasm::deps::index_dep(name, uri, src.to_string())
+        rut_lsp_wasm::deps::index_dep(name, uri, None, src.to_string())
     };
     vec![
         rut_lsp_wasm::prelude::index(),
@@ -529,13 +533,21 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
     // row is the one const spelling (the manifest's `consts` table is
     // retired), and the module tree IS the qualified surface
     let src = "pub host fn sqrt(x: f64) -> f64;\npub let PI: f64 = 3.141592653589793;\n";
-    let calc_host =
-        rut_lsp_wasm::deps::index_dep("calc_host", "file:///deps/calc_host.d.rut", src.to_string());
+    let calc_host = rut_lsp_wasm::deps::index_dep(
+        "calc_host",
+        "file:///deps/calc_host.d.rut",
+        None,
+        src.to_string(),
+    );
     let mk_mod = |mod_path: &str, text: &str| {
-        let mut idx = rut_lsp_wasm::hover::index(&doc_of(text, Mode::Impl));
-        idx.module = Some("calc".to_string());
-        idx.mod_path = Some(mod_path.to_string());
-        idx
+        rut_lsp_wasm::hover::index(
+            &doc_of(text, Mode::Impl),
+            Mount {
+                module: Some("calc".to_string()),
+                mod_path: Some(mod_path.to_string()),
+                ..Mount::default()
+            },
+        )
     };
     let calc_root = mk_mod("", "pub mod math;\n");
     let calc_math = mk_mod(
@@ -545,7 +557,7 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
     let doc = "use calc_host::";
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let idxs = [&di, &calc_host];
     let direct = HashSet::from(["calc_host".to_string()]);
     let items = complete(
@@ -566,7 +578,7 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
     let doc = "use calc::";
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let idxs = [&di, &calc_root, &calc_math];
     let direct = HashSet::from(["calc".to_string()]);
     let items = complete(
@@ -591,10 +603,14 @@ fn use_path_completion_lists_the_dep_lets_and_mods() {
 /// `secret` leaves
 fn gadget_dep() -> Vec<DefIndex> {
     let mk = |mod_path: &str, src: &str| {
-        let mut idx = rut_lsp_wasm::hover::index(&doc_of(src, Mode::Impl));
-        idx.module = Some("gadgets".to_string());
-        idx.mod_path = Some(mod_path.to_string());
-        idx
+        rut_lsp_wasm::hover::index(
+            &doc_of(src, Mode::Impl),
+            Mount {
+                module: Some("gadgets".to_string()),
+                mod_path: Some(mod_path.to_string()),
+                ..Mount::default()
+            },
+        )
     };
     vec![
         mk("", "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n"),
@@ -612,7 +628,7 @@ fn gadget_dep() -> Vec<DefIndex> {
 fn complete_over_gadgets(doc: &str, needle: &str, doc_mods: DocMods) -> Vec<CompletionOut> {
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let dep = gadget_dep();
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(dep.iter());
@@ -856,10 +872,14 @@ fn the_use_path_tier_answers_an_own_package_head() {
 /// control)
 fn mid_dep() -> Vec<DefIndex> {
     let mk = |mod_path: &str, src: &str| {
-        let mut idx = rut_lsp_wasm::hover::index(&doc_of(src, Mode::Impl));
-        idx.module = Some("mid".to_string());
-        idx.mod_path = Some(mod_path.to_string());
-        idx
+        rut_lsp_wasm::hover::index(
+            &doc_of(src, Mode::Impl),
+            Mount {
+                module: Some("mid".to_string()),
+                mod_path: Some(mod_path.to_string()),
+                ..Mount::default()
+            },
+        )
     };
     vec![
         mk(
@@ -873,7 +893,7 @@ fn mid_dep() -> Vec<DefIndex> {
 fn complete_over_mid(doc: &str, needle: &str) -> Vec<CompletionOut> {
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let dep = mid_dep();
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(dep.iter());
@@ -961,10 +981,14 @@ fn colon2_completion_lists_the_dep_module_statics() {
     // module's pub fns and its re-exported consts (the dep-module
     // lane the engine resolves)
     let stamp = |text: &str, mod_path: &str| {
-        let mut idx = rut_lsp_wasm::hover::index(&doc_of(text, Mode::Impl));
-        idx.module = Some("calc".to_string());
-        idx.mod_path = Some(mod_path.to_string());
-        idx
+        rut_lsp_wasm::hover::index(
+            &doc_of(text, Mode::Impl),
+            Mount {
+                module: Some("calc".to_string()),
+                mod_path: Some(mod_path.to_string()),
+                ..Mount::default()
+            },
+        )
     };
     let root = stamp("pub mod math;\n", "");
     let math = stamp(
@@ -974,7 +998,7 @@ fn colon2_completion_lists_the_dep_module_statics() {
     let doc = "use calc::{ math };\nentry fn main() -> nil {\n    let x = math::\n}\n";
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let idxs = [&di, &root, &math];
     let pos = s.rfind("math::").unwrap() as u32 + "math::".len() as u32;
     let direct = HashSet::from(["calc".to_string()]);
@@ -1212,13 +1236,18 @@ fn the_type_tier_offers_the_ambient_and_imported_foreign_types() {
     // complete; the `pub builtin` gated row completes only once the
     // document's `use` names it
     let core_src = "pub builtin class Weak { }\nprelude builtin class StackTrace { }\n";
-    let mut core = rut_lsp_wasm::hover::index(&doc_of(core_src, Mode::Decl));
-    core.module = Some("core".to_string());
+    let core = rut_lsp_wasm::hover::index(
+        &doc_of(core_src, Mode::Decl),
+        Mount {
+            module: Some("core".to_string()),
+            ..Mount::default()
+        },
+    );
 
     let mk = |doc: &str| {
         let ddoc = doc_of(doc, Mode::Impl);
         let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-        let di = rut_lsp_wasm::hover::index(&ddoc);
+        let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
         let idxs = [&di, &core];
         let pos = d2.rfind("let e:").unwrap() as u32 + "let e:".len() as u32;
         complete(
@@ -1266,7 +1295,7 @@ fn auto_import_offers_foreign_names_with_the_insert_edit() {
     let doc = "entry fn main() -> nil {\n    let v = Ve\n}\n";
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -1301,7 +1330,7 @@ fn auto_import_lands_after_the_last_leading_use() {
     let doc = "use core::{ NAN };\n\nentry fn main() -> nil {\n    let v = Ve\n}\n";
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -1328,7 +1357,7 @@ fn auto_import_skips_leading_comments() {
     let doc = "// the header prose\n\nentry fn main() -> nil {\n    let v = Ve\n}\n";
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());
@@ -1354,7 +1383,7 @@ fn already_imported_names_are_not_re_offered() {
     let doc = "use pouch::{ Vec };\nentry fn main() -> nil {\n    let v = Ve\n}\n";
     let ddoc = doc_of(doc, Mode::Impl);
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, Mount::default());
     let std = std_dep_fixtures();
     let mut chain: Vec<&rut_lsp_wasm::hover::DefIndex> = vec![&di];
     chain.extend(std.iter());

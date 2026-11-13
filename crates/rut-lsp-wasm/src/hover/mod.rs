@@ -33,4 +33,6 @@ pub use bindings::{BindKind, Binding};
 pub use build::{index, index_items};
 pub use lookup::{hover, HoverOut};
 pub(crate) use render::{binding_markdown, render_let};
-pub use types::{DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef};
+pub use types::{
+    DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, Mount, TyDef, TyForm, UseDef,
+};

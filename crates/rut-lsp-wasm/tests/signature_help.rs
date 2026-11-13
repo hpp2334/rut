@@ -3,6 +3,7 @@ use rut_ast::parser::Mode;
 use rut_ast::Ast;
 use rut_lexer::token::Token;
 use rut_lsp_wasm::hover::DefIndex;
+use rut_lsp_wasm::hover::Mount;
 use rut_lsp_wasm::signature_help::*;
 
 /// one doc artifact — the (normalized src, toks, ast) triple from ONE
@@ -36,8 +37,7 @@ impl Doc {
 
 fn doc(src: &str) -> Doc {
     let pd = doc_of(src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&pd);
-    index.origin = DOC.to_string();
+    let index = rut_lsp_wasm::hover::index(&pd, Mount::doc(DOC));
     Doc { pd, index }
 }
 
@@ -260,7 +260,7 @@ fn ambiguous_callee_stays_silent() {
     let src = "fn f(a: i32) -> i32 {\n    return a;\n}\nfn main() -> i32 {\n    let x = f(1);\n    return x;\n}\n";
     let d = doc(src);
     let mut foreign = doc("fn f(b: str) -> str {\n    return b;\n}\n");
-    foreign.index.origin = "file:///ws/other/lib.rut".to_string();
+    foreign.index.mount.origin = "file:///ws/other/lib.rut".to_string();
     let extra = [foreign.index];
     assert!(help(&d, at(d.src(), "f(1)", 1) + 2, &extra).is_none());
 }

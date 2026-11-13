@@ -88,9 +88,10 @@ impl SessionState {
     }
 
     /// the walk's named-dep index lane: index one dep source
-    /// file under its module NAME (replace-by-origin).
+    /// file under its module NAME (replace-by-origin) — the FLAT
+    /// mount (`mod_path` `None`).
     pub(crate) fn index_named_at(&mut self, uri: &str, name: &str, src: String) {
-        let idx = crate::deps::index_dep(name, uri, src);
+        let idx = crate::deps::index_dep(name, uri, None, src);
         self.replace_by_origin(uri, idx);
     }
 
@@ -106,7 +107,7 @@ impl SessionState {
         mod_path: &str,
         src: String,
     ) -> Vec<wire::ModDecl> {
-        let idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src);
+        let idx = crate::deps::index_dep(pkg, uri, Some(mod_path), src);
         let decls: Vec<wire::ModDecl> = idx
             .mods
             .iter()
@@ -127,7 +128,7 @@ impl SessionState {
     /// uri, re-indexing replaces (the world stays idempotent under
     /// re-walks).
     fn replace_by_origin(&mut self, uri: &str, idx: crate::hover::DefIndex) {
-        match self.defs.iter().position(|d| d.origin == uri) {
+        match self.defs.iter().position(|d| d.mount.origin == uri) {
             Some(slot) => self.defs[slot] = idx,
             None => self.defs.push(idx),
         }
@@ -150,10 +151,10 @@ impl SessionState {
     /// nothing else reads this).
     pub(crate) fn doc_mods_of(&self, uri: &str) -> crate::mods::DocMods {
         for d in &self.defs {
-            if d.origin == uri {
+            if d.mount.origin == uri {
                 return crate::mods::DocMods {
-                    mod_path: d.mod_path.clone(),
-                    pkg: d.module.clone(),
+                    mod_path: d.mount.mod_path.clone(),
+                    pkg: d.mount.module.clone(),
                 };
             }
         }

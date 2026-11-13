@@ -384,7 +384,7 @@ fn srczip_pkg(
     // lane parsed this wire-carried manifest) stamping beside them; a
     // LIB pkg's body is `src/mod.rut` (a spelled decl surface on a lib
     // is the dir lane's law — refused here, named)
-    let mut pkg = match manifest.pkg_type {
+    let pkg = match manifest.pkg_type {
         crate::bundle::PkgType::Host => {
             let rel = match &manifest.entry.type_path {
                 Some(tp) => tp.trim_start_matches("./").to_string(),
@@ -452,9 +452,11 @@ fn srczip_pkg(
         })
         .collect();
     let my_spec = spec.clone().unwrap_or_else(|| name.clone());
-    pkg.spec = my_spec.clone();
-    pkg.manifest = manifest;
-    pkg.mounted_by = mounted_by;
+    let pkg = Mounted {
+        manifest,
+        mounted_by,
+        ..pkg.named(&my_spec)
+    };
     pkgs.push(pkg);
     for (key, path) in groups {
         // identity is the directory's own spelling — read, never

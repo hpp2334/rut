@@ -16,27 +16,34 @@
 //! engine binds them, while the import-gated `pub builtin` names ride
 //! `DefIndex::pub_gated` (the compiler's ambient split, mirrored).
 
-use crate::hover::{self, DefIndex};
+use crate::hover::{self, DefIndex, Mount};
 
 /// the prelude's single embedded source — the engine's own decl file
 pub const CORE: &str = include_str!("../../../rut/core/src/core.d.rut");
 
+/// the engine decl file's repo-relative path — the `src_path` stamp
+/// (the definition layer jumps there, so a workspace that is the rut
+/// repo lands in the real file)
+const CORE_PATH: &str = "rut/core/src/core.d.rut";
+
 /// the prelude's definition index — `SessionState::boot`'s one ambient row
 /// (every other index in the chain arrives through a lane: the dep
-/// walk, the workspace scan, the open document).
+/// walk, the workspace scan, the open document). The mount — origin,
+/// true source path, module name, mode — is ONE record built here and
+/// handed to the builder (never patched on after the fact).
 pub fn index() -> DefIndex {
-    let path = "rut/core/src/core.d.rut";
     // the mode derives from the path (`mode_of` — the `.d.rut` suffix
     // IS the declaration surface's mode, the filename convention every
     // lane reads)
-    let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(path), CORE.to_string());
-    let mut idx = hover::index(&doc);
-    idx.origin = "core".to_string();
-    idx.src_path = Some(path.to_string());
-    // the module name rides the index — the use-path completion reads
-    // the same named set as any dep
-    idx.module = Some("core".to_string());
-    // the mode rides too — `Decl`, the `.d.rut` surface's own split
-    idx.mode = Some(rut_semantic::mode_of(path));
-    idx
+    let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(CORE_PATH), CORE.to_string());
+    hover::index(
+        &doc,
+        Mount {
+            origin: "core".to_string(),
+            src_path: Some(CORE_PATH.to_string()),
+            module: Some("core".to_string()),
+            mode: Some(rut_semantic::mode_of(CORE_PATH)),
+            ..Mount::default()
+        },
+    )
 }

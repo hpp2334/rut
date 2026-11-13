@@ -38,8 +38,7 @@ pub use rut_semantic::mode_of;
 /// degenerate twin below rides the placeholder)
 fn analysis_of(doc: &rut_semantic::ParsedDoc, uri: &Uri) -> Analysis {
     let src = doc.src();
-    let mut index = hover::index(doc);
-    index.origin = uri.as_str().to_string();
+    let index = hover::index(doc, hover::Mount::doc(uri.as_str()));
     Analysis {
         diags: doc
             .diags()
@@ -201,17 +200,15 @@ fn doc_ctx(uri: &str, src: String) -> (rut_semantic::ParsedDoc, hover::DefIndex)
     // the old shape parsed the same text twice (its own parse +
     // index_at's)
     let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
-    let mut idx = hover::index(&d);
-    idx.origin = uri.to_string();
+    let idx = hover::index(&d, hover::Mount::doc(uri));
     (d, idx)
 }
 
-/// the definition index for one document (origin stamped with `uri`)
+/// the definition index for one document (the open document's mount —
+/// origin only — riding the builder)
 pub fn index_at(uri: &str, src: String) -> hover::DefIndex {
     let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
-    let mut idx = hover::index(&d);
-    idx.origin = uri.to_string();
-    idx
+    hover::index(&d, hover::Mount::doc(uri))
 }
 
 /// the lookup chain — the open document first, then `extra` (the

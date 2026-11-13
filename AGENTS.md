@@ -4,10 +4,11 @@
 
 The workspace denies every warn-level rustc/clippy lint
 (`[workspace.lints] warnings = "deny"` in the root `Cargo.toml`,
-reaching all members through `[lints] workspace = true`), and CI
-(`.github/workflows/ci.yml`) gates on `cargo fmt --all --check`,
-`cargo clippy --workspace --all-targets`, clippy on the wasm32 target,
-and `cargo nextest run`. Practical consequences:
+reaching all members through `[lints] workspace = true`) — the local
+gates are `cargo fmt --all --check`, `cargo clippy --workspace
+--all-targets`, clippy on the wasm32 target, and `cargo nextest run`
+(there is no CI; the deny-by-default workspace lints make any of
+these fail loudly on drift). Practical consequences:
 
 - A new warning anywhere in a member crate fails the build — fix the
   cause; if a lint is genuinely wrong for a site, a scoped

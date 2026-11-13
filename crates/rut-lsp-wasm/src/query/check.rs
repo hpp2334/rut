@@ -67,14 +67,17 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
     let mut order: Vec<String> = Vec::new();
     let mut groups: BTreeMap<String, PkgFiles> = BTreeMap::new();
     for d in defs {
-        let Some(module) = d.module.clone() else {
+        let Some(module) = d.mount.module.clone() else {
             continue;
         };
         if module == "core" {
             continue;
         }
-        let path = d.mod_path.clone().unwrap_or_default();
-        let mode = d.mode.unwrap_or_else(|| rut_semantic::mode_of(&d.origin));
+        let path = d.mount.mod_path.clone().unwrap_or_default();
+        let mode = d
+            .mount
+            .mode
+            .unwrap_or_else(|| rut_semantic::mode_of(&d.mount.origin));
         let name = module.clone();
         if !groups.contains_key(&name) {
             order.push(name.clone());
@@ -94,7 +97,7 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
         g.files.insert(
             path,
             FileSrc {
-                uri: d.origin.clone(),
+                uri: d.mount.origin.clone(),
                 text: d.src.clone(),
                 mode,
                 vis,
@@ -117,7 +120,7 @@ fn edge_vis(defs: &[DefIndex], module: &str, path: &str) -> Vis {
         None => ("", path),
     };
     for d in defs {
-        if d.module.as_deref() == Some(module) && crate::mods::mod_path_of(d) == parent {
+        if d.mount.module.as_deref() == Some(module) && crate::mods::mod_path_of(d) == parent {
             if let Some(e) = d.mods.iter().find(|m| m.name == name) {
                 return e.vis;
             }
@@ -310,17 +313,16 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
                 );
             }
             match lower_decl_module(&root.text, &children, &g.module) {
-                Ok(mut p) => {
-                    p.spec = g.module.clone();
-                    // the surface's own `pub let NAME: f64 = <literal>;`
-                    // rows folded into the host body's const rows
-                    // INSIDE the lowering (bound bare at the pkg's
-                    // root) — a `pub use calc_host::{ PI }` re-export
-                    // resolves against them. An OLD pinned zip's
-                    // manifest rows bind nothing (the table discards
-                    // at the compat parse — no backward compat)
-                    p
-                }
+                // the registration scope rides [`Mounted::named`] — the
+                // door's own case (the lowering's surface, named at the
+                // offer). The surface's own `pub let NAME: f64 =
+                // <literal>;` rows folded into the host body's const
+                // rows INSIDE the lowering (bound bare at the pkg's
+                // root) — a `pub use calc_host::{ PI }` re-export
+                // resolves against them. An OLD pinned zip's manifest
+                // rows bind nothing (the table discards at the compat
+                // parse — no backward compat)
+                Ok(p) => p.named(&g.module),
                 Err(_) => continue,
             }
         };

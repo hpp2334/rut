@@ -1,13 +1,13 @@
 //! The prelude's tests — `core`, the ONE ambient index. The library
 //! embeds nothing but the engine's own prelude; every other std pkg
 //! reaches a test as an ordinary FIXTURE through the public dep lane
-//! (`deps::index_dep` / `index_dep_mod` over the repo's own sources —
+//! (`deps::index_dep` (the mod-path `Some` lane) over the repo's own sources —
 //! tests embedding fixture sources is the normal shape, the LIBRARY
 //! embedding them was the repealed second channel). The myhost tree
 //! below ports the old surface's mod-tree assertions onto the same
 //! lane the walk mounts through.
 
-use rut_lsp_wasm::deps::{index_dep, index_dep_mod};
+use rut_lsp_wasm::deps::index_dep;
 use rut_lsp_wasm::hover::DefIndex;
 use rut_lsp_wasm::prelude;
 use std::collections::HashSet;
@@ -21,22 +21,22 @@ const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/src/net/tls/mod.d
 
 fn myhost_chain() -> Vec<DefIndex> {
     vec![
-        index_dep_mod(
+        index_dep(
             "myhost",
             "rut/myhost/src/myhost.d.rut",
-            "",
+            Some(""),
             MYHOST.to_string(),
         ),
-        index_dep_mod(
+        index_dep(
             "myhost",
             "rut/myhost/src/net/mod.d.rut",
-            "net",
+            Some("net"),
             MYHOST_NET.to_string(),
         ),
-        index_dep_mod(
+        index_dep(
             "myhost",
             "rut/myhost/src/net/tls/mod.d.rut",
-            "net/tls",
+            Some("net/tls"),
             MYHOST_NET_TLS.to_string(),
         ),
     ]
@@ -58,10 +58,13 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     // and the Decl mode. Namespace-free — the head mechanism is the
     // manifest's, and no manifest ever delivers core.
     let idx = prelude::index();
-    assert_eq!(idx.origin, "core");
-    assert_eq!(idx.src_path.as_deref(), Some("rut/core/src/core.d.rut"));
-    assert_eq!(idx.module.as_deref(), Some("core"));
-    assert_eq!(idx.mode, Some(rut_ast::parser::Mode::Decl));
+    assert_eq!(idx.mount.origin, "core");
+    assert_eq!(
+        idx.mount.src_path.as_deref(),
+        Some("rut/core/src/core.d.rut")
+    );
+    assert_eq!(idx.mount.module.as_deref(), Some("core"));
+    assert_eq!(idx.mount.mode, Some(rut_ast::parser::Mode::Decl));
     assert!(
         !idx.fns.is_empty() && !idx.types.is_empty(),
         "the prelude carries rows"
@@ -80,10 +83,11 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     let doc = "entry fn main() -> nil { }\n";
     let ddoc = doc_of(doc, rut_ast::parser::Mode::Impl);
     let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc);
+    let di = rut_lsp_wasm::hover::index(&ddoc, rut_lsp_wasm::hover::Mount::default());
     let core = index_dep(
         "core",
         "core",
+        None,
         "pub fn ambient_offered() -> i32 { return 1; }\n".to_string(),
     );
     let idxs = [&di, &core];
@@ -144,12 +148,12 @@ fn the_host_tree_mounts_root_and_children_through_the_dep_lane() {
     let idxs = myhost_chain();
     let paths: Vec<&str> = idxs
         .iter()
-        .map(|i| i.mod_path.as_deref().unwrap_or("??"))
+        .map(|i| i.mount.mod_path.as_deref().unwrap_or("??"))
         .collect();
     assert_eq!(paths, vec!["", "net", "net/tls"], "{paths:?}");
-    assert_eq!(idxs[0].origin, "rut/myhost/src/myhost.d.rut");
-    assert_eq!(idxs[1].origin, "rut/myhost/src/net/mod.d.rut");
-    assert_eq!(idxs[2].origin, "rut/myhost/src/net/tls/mod.d.rut");
+    assert_eq!(idxs[0].mount.origin, "rut/myhost/src/myhost.d.rut");
+    assert_eq!(idxs[1].mount.origin, "rut/myhost/src/net/mod.d.rut");
+    assert_eq!(idxs[2].mount.origin, "rut/myhost/src/net/tls/mod.d.rut");
     // the root carries the edge and its flat row; the children their own
     assert!(idxs[0].mods.iter().any(|m| m.name == "net"));
     assert!(idxs[0].fns.iter().any(|f| f.name == "legacy_ping"));
@@ -158,8 +162,8 @@ fn the_host_tree_mounts_root_and_children_through_the_dep_lane() {
     assert!(idxs[2].fns.iter().any(|f| f.name == "handshake"));
     // every row of the pkg carries the manifest-shape stamps
     for i in &idxs {
-        assert_eq!(i.module.as_deref(), Some("myhost"));
-        assert_eq!(i.mode, Some(rut_ast::parser::Mode::Decl));
+        assert_eq!(i.mount.module.as_deref(), Some("myhost"));
+        assert_eq!(i.mount.mode, Some(rut_ast::parser::Mode::Decl));
     }
 }
 
@@ -171,9 +175,8 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let src = "use myhost::net::{ connect };\n\nentry fn main() -> nil {\n    let _ = connect(\"x\");\n}\n";
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
     let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let mut doc_idx = rut_lsp_wasm::hover::index(&ddoc);
     let doc_uri = "file:///t/main.rut";
-    doc_idx.origin = doc_uri.to_string();
+    let doc_idx = rut_lsp_wasm::hover::index(&ddoc, rut_lsp_wasm::hover::Mount::doc(doc_uri));
     let idxs = myhost_chain();
     let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
     let dm = rut_lsp_wasm::mods::DocMods::default();
@@ -209,9 +212,8 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     let src = "use myhost::net::{ connect };\n";
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
     let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let mut doc_idx = rut_lsp_wasm::hover::index(&ddoc);
     let doc_uri = "file:///t/main.rut";
-    doc_idx.origin = doc_uri.to_string();
+    let doc_idx = rut_lsp_wasm::hover::index(&ddoc, rut_lsp_wasm::hover::Mount::doc(doc_uri));
     let idxs = myhost_chain();
     let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
     let leaf = normalized.find("connect").expect("the leaf") as u32;
@@ -242,11 +244,12 @@ fn a_std_source_mounts_as_an_ordinary_dep() {
     let idx = index_dep(
         "pouch",
         "rut/pouch/src/mod.rut",
+        None,
         include_str!("../../../rut/pouch/src/mod.rut").to_string(),
     );
-    assert_eq!(idx.module.as_deref(), Some("pouch"));
-    assert_eq!(idx.mode, Some(rut_ast::parser::Mode::Impl));
-    assert_eq!(idx.origin, "rut/pouch/src/mod.rut");
+    assert_eq!(idx.mount.module.as_deref(), Some("pouch"));
+    assert_eq!(idx.mount.mode, Some(rut_ast::parser::Mode::Impl));
+    assert_eq!(idx.mount.origin, "rut/pouch/src/mod.rut");
     assert!(idx.ty("Vec").is_some(), "Vec indexes through the dep lane");
     // directness is NOT an index fact — nothing to assert here: the
     // auto-import tier derives it at read from the doc's dep set

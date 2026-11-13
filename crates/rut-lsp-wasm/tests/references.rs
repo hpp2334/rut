@@ -4,6 +4,7 @@ use rut_lexer::token::Token;
 use rut_lsp_wasm::definition;
 use rut_lsp_wasm::definition::DefLocation;
 use rut_lsp_wasm::hover::DefIndex;
+use rut_lsp_wasm::hover::Mount;
 use rut_lsp_wasm::references::*;
 use rut_lsp_wasm::LineIndex;
 
@@ -38,8 +39,7 @@ impl Doc {
 
 fn doc_at(uri: &str, src: &str) -> Doc {
     let pd = doc_of(src, Mode::Impl);
-    let mut index = rut_lsp_wasm::hover::index(&pd);
-    index.origin = uri.to_string();
+    let index = rut_lsp_wasm::hover::index(&pd, Mount::doc(uri));
     Doc { pd, index }
 }
 

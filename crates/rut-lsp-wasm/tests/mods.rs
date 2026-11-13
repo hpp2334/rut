@@ -1,18 +1,20 @@
 use rut_ast::Vis;
 use rut_lexer::span::Span;
 use rut_lsp_wasm::hover::DefIndex;
+use rut_lsp_wasm::hover::Mount;
 use rut_lsp_wasm::hover::{ModDef, TyDef, TyForm};
 use rut_lsp_wasm::mods::*;
 
 /// a named index standing at `mod_path` with the given mod edges
 fn mod_index(pkg: &str, mod_path: &str, edges: &[(&str, Vis)]) -> DefIndex {
     let mut i = DefIndex {
-        module: Some(pkg.to_string()),
+        mount: Mount {
+            module: Some(pkg.to_string()),
+            mod_path: (!mod_path.is_empty() || !edges.is_empty()).then(|| mod_path.to_string()),
+            ..Mount::default()
+        },
         ..DefIndex::default()
     };
-    if !mod_path.is_empty() || !edges.is_empty() {
-        i.mod_path = Some(mod_path.to_string());
-    }
     for (name, vis) in edges {
         i.mods.push(ModDef {
             name: name.to_string(),
@@ -153,7 +155,7 @@ fn matches_mod_keys_on_the_pair() {
     let mut stray = DefIndex::default();
     assert!(!matches_mod(&stray, None, ""));
     assert!(!matches_mod(&stray, None, "layout"));
-    stray.mod_path = Some("layout".into());
+    stray.mount.mod_path = Some("layout".into());
     assert!(matches_mod(&stray, None, "layout"));
     assert!(
         !matches_mod(&stray, Some("gadgets"), "layout"),
@@ -175,9 +177,9 @@ fn display_of_spells_a_single_file_child() {
     // a single-file module's REAL name rides its index's origin
     // basename; the dir-form guess stays the fallback
     let mut file_child = mod_index("gadgets", "imp", &[]);
-    file_child.origin = "file:///ws/imp.rut".to_string();
+    file_child.mount.origin = "file:///ws/imp.rut".to_string();
     let mut dir_child = mod_index("gadgets", "layout", &[]);
-    dir_child.origin = "file:///ws/layout/mod.rut".to_string();
+    dir_child.mount.origin = "file:///ws/layout/mod.rut".to_string();
     let idxs = [&file_child, &dir_child];
     assert_eq!(display_of(&idxs, Some("gadgets"), "imp"), "imp.rut");
     // the dir-form child keeps the loader's spelling (its origin
@@ -189,7 +191,7 @@ fn display_of_spells_a_single_file_child() {
     // an unindexed child (or a non-file origin — `core`) falls back
     assert_eq!(display_of(&idxs, Some("gadgets"), "ghost"), "ghost/mod.rut");
     let mut core = mod_index("core", "prim", &[]);
-    core.origin = "core".to_string();
+    core.mount.origin = "core".to_string();
     let single = [&core];
     assert_eq!(display_of(&single, None, "prim"), "prim/mod.rut");
 }

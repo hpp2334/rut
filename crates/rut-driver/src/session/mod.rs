@@ -92,9 +92,7 @@ impl Session {
         spec: &str,
         pkg: Mounted,
     ) -> Result<(), ManifestError> {
-        let mut pkg = pkg;
-        pkg.spec = spec.to_string();
-        self.mount(pkg)
+        self.mount(pkg.named(spec))
     }
 
     /// Exact resolution: the mount key must be mounted as-is — a miss

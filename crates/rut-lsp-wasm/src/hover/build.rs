@@ -25,7 +25,8 @@ use rut_semantic::Token;
 
 use super::infer;
 use super::types::{
-    ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, TyDef, TyForm, UseDef,
+    ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, Mount, TyDef, TyForm,
+    UseDef,
 };
 
 /// A `let` awaiting its type resolution: the node + its span (the
@@ -101,8 +102,9 @@ fn member(
         name: name.to_string(),
         src: sig,
         ty,
-        // only a field can be a declared static — the flag's truth rides
-        // the row (the field lane overwrites it from the node)
+        // only a field can be a declared static — the field lane sets
+        // the node's verdict through ONE struct-update; every other
+        // member takes the default
         is_static: false,
         name_span: Some(name_span),
         doc,
@@ -161,17 +163,21 @@ fn field_members(src: &str, ast: &Ast, fields: &[FieldRef]) -> Vec<MemberSrc> {
                 .trim_end()
                 .to_string();
             let name = ast.name(d.name);
-            let mut row = member(
-                src,
-                name,
-                decl,
-                Some(ty_src(ast, d.ty)),
-                sp,
-                d.name_span,
-                doc_of(&d.doc, src),
-            );
-            row.is_static = d.is_static();
-            Some(row)
+            // the `static` modifier is the node's own verdict — the
+            // row's flag rides ONE struct-update over the constructor
+            // default (only a field can be a declared static)
+            Some(MemberSrc {
+                is_static: d.is_static(),
+                ..member(
+                    src,
+                    name,
+                    decl,
+                    Some(ty_src(ast, d.ty)),
+                    sp,
+                    d.name_span,
+                    doc_of(&d.doc, src),
+                )
+            })
         })
         .collect()
 }
@@ -223,7 +229,7 @@ fn ty_def(
         vis,
         is_pub: vis == Vis::Pub,
         // plain decls are not ambient — the `prelude builtin` rows set
-        // the flag after this constructor builds them
+        // the flag through ONE struct-update at their arms
         ambient: false,
         generics,
         fields,
@@ -255,12 +261,13 @@ fn param_names(ast: &Ast, params: &[ParamRef]) -> Vec<String> {
 /// and toks are its read doors (`toks` is the same lex the parser
 /// consumed — the use-path interior segments' name-span recovery rides
 /// it; the only span the nodes do not record).
-pub fn index(doc: &rut_semantic::ParsedDoc) -> DefIndex {
+pub fn index(doc: &rut_semantic::ParsedDoc, mount: Mount) -> DefIndex {
     index_items(
         doc.src(),
         doc.ast(),
         doc.toks(),
         doc.ast().root().items(doc.ast()),
+        mount,
     )
 }
 
@@ -269,8 +276,17 @@ pub fn index(doc: &rut_semantic::ParsedDoc) -> DefIndex {
 /// inline module of a consolidated `.d.rut` (one parse, per-module
 /// indexes, each stamped with its mod path), so a bundle group's whole
 /// surface indexes from ONE Decl parse of ONE file.
-pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> DefIndex {
-    let mut idx = DefIndex::default();
+pub fn index_items(
+    src: &str,
+    ast: &Ast,
+    toks: &[Token],
+    items: &[ItemRef],
+    mount: Mount,
+) -> DefIndex {
+    let mut idx = DefIndex {
+        mount,
+        ..DefIndex::default()
+    };
     let mut pending_lets: Vec<PendingLet> = Vec::new();
     for item in items {
         let span = item.span(ast);
@@ -425,22 +441,25 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     idx.pub_gated.push(ast.name(d.name).to_string());
                 }
                 let ms = members_of(src, ast, &d.members);
-                let mut def = ty_def(
-                    src,
-                    ast.name(d.name),
-                    d.name_span,
-                    TyForm::Builtin,
-                    head_src(src, span, d.body_span),
-                    Vis::Pub,
-                    generics_of(ast, &d.generics),
-                    Vec::new(),
-                    ms,
-                    span,
-                    doc_of(&d.doc, src),
-                );
-                // `prelude builtin` — ambient, offered bare
-                def.ambient = d.ambient();
-                idx.types.push(def);
+                // `prelude builtin` — ambient, offered bare; the node's
+                // own verdict rides ONE struct-update over the
+                // constructor's plain-decl default
+                idx.types.push(TyDef {
+                    ambient: d.ambient(),
+                    ..ty_def(
+                        src,
+                        ast.name(d.name),
+                        d.name_span,
+                        TyForm::Builtin,
+                        head_src(src, span, d.body_span),
+                        Vis::Pub,
+                        generics_of(ast, &d.generics),
+                        Vec::new(),
+                        ms,
+                        span,
+                        doc_of(&d.doc, src),
+                    )
+                });
             }
             ItemRef::BuiltinPrimitive(h) => {
                 let d = h.get(ast);
@@ -448,21 +467,22 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                     idx.pub_gated.push(ast.name(d.name).to_string());
                 }
                 let ms = members_of(src, ast, &d.members);
-                let mut def = ty_def(
-                    src,
-                    ast.name(d.name),
-                    d.name_span,
-                    TyForm::Primitive,
-                    head_src(src, span, d.body_span),
-                    Vis::Pub,
-                    Vec::new(),
-                    Vec::new(),
-                    ms,
-                    span,
-                    doc_of(&d.doc, src),
-                );
-                def.ambient = d.ambient();
-                idx.types.push(def);
+                idx.types.push(TyDef {
+                    ambient: d.ambient(),
+                    ..ty_def(
+                        src,
+                        ast.name(d.name),
+                        d.name_span,
+                        TyForm::Primitive,
+                        head_src(src, span, d.body_span),
+                        Vis::Pub,
+                        Vec::new(),
+                        Vec::new(),
+                        ms,
+                        span,
+                        doc_of(&d.doc, src),
+                    )
+                });
             }
             ItemRef::SurfaceStruct(h) => {
                 let d = h.get(ast);

@@ -110,10 +110,10 @@ pub fn references(ctx: &definition::Ctx, pos: u32, include_decl: bool) -> Vec<De
     let mut seen: HashSet<&str> = HashSet::new();
     let mut files: Vec<&DefIndex> = Vec::new();
     for f in cand {
-        if f.origin == ctx.doc_uri && !std::ptr::eq(f, ctx.doc()) {
+        if f.mount.origin == ctx.doc_uri && !std::ptr::eq(f, ctx.doc()) {
             continue; // the doc's stale workspace twin
         }
-        if seen.insert(f.origin.as_str()) {
+        if seen.insert(f.mount.origin.as_str()) {
             files.push(f);
         }
     }
@@ -365,7 +365,7 @@ fn scan_files(
         // it) — clone to move: this IS the parse's one copy now
         parsed.push((
             f,
-            crate::analysis::parse_at(f.origin.as_str(), f.src.clone()),
+            crate::analysis::parse_at(f.mount.origin.as_str(), f.src.clone()),
         ));
     }
 
@@ -374,7 +374,12 @@ fn scan_files(
         // the file's own lookup chain: itself first, then the rest — no
         // origin speaks twice in one chain
         let mut chain: Vec<&DefIndex> = vec![*f];
-        chain.extend(ctx.idxs.iter().copied().filter(|x| x.origin != f.origin));
+        chain.extend(
+            ctx.idxs
+                .iter()
+                .copied()
+                .filter(|x| x.mount.origin != f.mount.origin),
+        );
         // the doc reuses the query pipeline's tokens/AST; the other
         // files ride their per-file parse
         let (toks, ast): (&[Token], &rut_ast::Ast) =
@@ -389,7 +394,7 @@ fn scan_files(
         // keeps the own lanes off in its scan
         let orphan = crate::mods::DocMods::default();
         let f_ctx = definition::Ctx {
-            doc_uri: f.origin.as_str(),
+            doc_uri: f.mount.origin.as_str(),
             toks,
             ast,
             idxs: &chain,
@@ -410,9 +415,9 @@ fn scan_files(
                 continue;
             }
             for tg in targets {
-                let expected = definition::loc_at(f.origin.as_str(), tg.idx, tg.span);
+                let expected = definition::loc_at(f.mount.origin.as_str(), tg.idx, tg.span);
                 if ans.iter().any(|l| l == &expected) {
-                    let loc = definition::loc_at(f.origin.as_str(), f, t.span);
+                    let loc = definition::loc_at(f.mount.origin.as_str(), f, t.span);
                     if seen.insert(loc_key(&loc)) {
                         out.push(loc);
                     }

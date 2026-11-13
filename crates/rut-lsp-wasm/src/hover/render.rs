@@ -62,8 +62,8 @@ pub(crate) fn render_ty(i: &DefIndex, ty: &TyDef) -> String {
             }
         }
     }
-    if !i.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.origin, ty.line)));
+    if !i.mount.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.mount.origin, ty.line)));
     }
     for d in &ty.doc {
         out.push_str(&format!("\n\n{}", d));
@@ -85,8 +85,8 @@ pub(crate) fn render_member(
         }
         None => out.push_str(&format!("\nin `{}`", ty.name)),
     }
-    if !i.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.origin, m.line)));
+    if !i.mount.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.mount.origin, m.line)));
     }
     for d in &m.doc {
         out.push_str(&format!("\n\n{}", d));
@@ -104,8 +104,8 @@ pub(crate) fn render_fn_hits(hits: &[(&DefIndex, &FnDef)], one: &FnDef) -> Strin
         out.push_str(&format!("\nin `{o}`"));
     }
     if let Some(i) = i {
-        if !i.origin.is_empty() {
-            out.push_str(&format!("\n{}", provenance(&i.origin, one.line)));
+        if !i.mount.origin.is_empty() {
+            out.push_str(&format!("\n{}", provenance(&i.mount.origin, one.line)));
         }
     }
     for d in &one.doc {
@@ -125,7 +125,7 @@ pub(crate) fn render_candidates(many: &[(&DefIndex, &FnDef)]) -> String {
             "\n- `{}`{} — {}:{}",
             f.src.replace('\n', " "),
             where_,
-            i.origin,
+            i.mount.origin,
             f.line
         ));
     }
@@ -212,8 +212,8 @@ pub(crate) fn render_let(i: &DefIndex, l: &LetDef) -> String {
     if let Some(ty) = &l.ty {
         out.push_str(&format!(" — `{ty}`"));
     }
-    if !i.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.origin, l.line)));
+    if !i.mount.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.mount.origin, l.line)));
     }
     for d in &l.doc {
         out.push_str(&format!("\n\n{}", d));
@@ -226,7 +226,7 @@ pub(crate) fn render_let(i: &DefIndex, l: &LetDef) -> String {
 /// name for a single-file module — the origin's basename), the child
 /// count, provenance
 pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
-    let file = crate::mods::display_of(&[i], i.module.as_deref(), path);
+    let file = crate::mods::display_of(&[i], i.mount.module.as_deref(), path);
     let mut out = code_block(&file);
     out.push_str("\nfile module");
     match i.mods.len() {
@@ -234,8 +234,8 @@ pub(crate) fn render_module_target(i: &DefIndex, path: &str) -> String {
         1 => out.push_str("\n1 child module"),
         n => out.push_str(&format!("\n{n} child modules")),
     }
-    if !i.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.origin, 1)));
+    if !i.mount.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.mount.origin, 1)));
     }
     out
 }
@@ -261,8 +261,8 @@ pub(crate) fn render_mod(
             n => format!("\n{n} child modules"),
         });
     }
-    if !i.origin.is_empty() {
-        out.push_str(&format!("\n{}", provenance(&i.origin, m.line)));
+    if !i.mount.origin.is_empty() {
+        out.push_str(&format!("\n{}", provenance(&i.mount.origin, m.line)));
     }
     for d in &m.doc {
         out.push_str(&format!("\n\n{}", d));

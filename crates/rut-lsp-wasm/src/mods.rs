@@ -42,7 +42,7 @@ pub struct DocMods {
 /// single-file shapes: the prelude, unnamed workspace files,
 /// flat deps)
 pub(crate) fn mod_path_of(i: &DefIndex) -> &str {
-    i.mod_path.as_deref().unwrap_or("")
+    i.mount.mod_path.as_deref().unwrap_or("")
 }
 
 /// a child's full mod path (`""` + `layout` → `"layout"`,
@@ -94,7 +94,7 @@ pub fn vis_allows(from: &str, def_mod: &str, vis: Vis) -> bool {
 pub fn matches_mod(i: &DefIndex, pkg: Option<&str>, path: &str) -> bool {
     match pkg {
         Some(p) => crate::definition::matches_pkg(i, p) && mod_path_of(i) == path,
-        None => i.module.is_none() && i.mod_path.as_deref() == Some(path),
+        None => i.mount.module.is_none() && i.mount.mod_path.as_deref() == Some(path),
     }
 }
 
@@ -214,7 +214,7 @@ pub fn display_of(idxs: &[&DefIndex], pkg: Option<&str>, child: &str) -> String 
     let mounted = idxs.iter().copied().find(|i| {
         mod_path_of(i) == child && pkg.is_none_or(|p| crate::definition::matches_pkg(i, p))
     });
-    match mounted.and_then(|i| origin_file_name(&i.origin)) {
+    match mounted.and_then(|i| origin_file_name(&i.mount.origin)) {
         Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,
         _ => display(child),
     }

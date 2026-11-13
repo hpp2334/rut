@@ -223,7 +223,7 @@ fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String>
                 return Some(render_mod(
                     i,
                     m,
-                    &crate::mods::display_of(idxs, i.module.as_deref(), &child),
+                    &crate::mods::display_of(idxs, i.mount.module.as_deref(), &child),
                     mounted.map(|c| c.mods.len()),
                 ));
             }
@@ -237,9 +237,9 @@ fn decl_site_hover(idxs: &[&DefIndex], span: Span, name: &str) -> Option<String>
 /// workspace file) answers any index stamped at the child's mod path
 /// (the dep walk's twins — display only: the child count)
 fn mounted_child<'a>(idxs: &[&'a DefIndex], owner: &DefIndex, child: &str) -> Option<&'a DefIndex> {
-    match crate::mods::find_mod(idxs, owner.module.as_deref(), child) {
+    match crate::mods::find_mod(idxs, owner.mount.module.as_deref(), child) {
         Some(c) => Some(c),
-        None if owner.module.is_none() => idxs
+        None if owner.mount.module.is_none() => idxs
             .iter()
             .copied()
             .find(|i| crate::mods::mod_path_of(i) == child),
@@ -385,7 +385,7 @@ pub(crate) fn find_ty<'a>(idxs: &'a [&DefIndex], name: &str) -> Option<(&'a DefI
     let mut fallback = None;
     for i in idxs.iter().copied() {
         if let Some(t) = i.ty(name) {
-            if i.src_path.is_none() {
+            if i.mount.src_path.is_none() {
                 return Some((i, t));
             }
             if fallback.is_none() {
@@ -480,7 +480,7 @@ pub(crate) fn member_target<'a>(
             .iter()
             .find(|f| f.name == member && f.owner.as_deref() == Some(ty_name.as_str()))
         {
-            if i.src_path.is_none() {
+            if i.mount.src_path.is_none() {
                 return MemberHit::Found(MemberTarget::ImplFn(i, f));
             }
             if fallback.is_none() {

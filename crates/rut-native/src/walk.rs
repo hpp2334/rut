@@ -124,9 +124,7 @@ impl World {
                 "`{spec}` is not a package name — expected `[a-zA-Z0-9_]+` or `name@<16 hex>`"
             )));
         }
-        let mut pkg = pkg;
-        pkg.spec = spec.to_string();
-        self.pkgs.insert(spec.to_string(), pkg);
+        self.pkgs.insert(spec.to_string(), pkg.named(spec));
         Ok(())
     }
 

@@ -534,7 +534,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             // the wire's String moves into the parse — a fresh read,
             // zero copies end to end
             let idx = crate::analysis::index_at(&uri, src);
-            match l.state.defs.iter().position(|d| d.origin == uri) {
+            match l.state.defs.iter().position(|d| d.mount.origin == uri) {
                 Some(slot) => l.state.defs[slot] = idx,
                 None => l.state.defs.push(idx),
             }
