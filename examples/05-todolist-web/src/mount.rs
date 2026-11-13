@@ -5,7 +5,7 @@
 //! root — the TWO-PACKAGE law's biz side — and every package it names
 //! (ui, and through ui pouch/nmapset/nmap_host) is walked by
 //! [`walk_dir`] with the primed OFFLINE REMOTE ([`std_remote`];
-//! dist/std-v16 plays the wire — the PINNED source zips, so no gate
+//! dist/std-v17 plays the wire — the PINNED source zips, so no gate
 //! networks). The four passes run FOR
 //! REAL. The manifest, not a Rust fn, is the pkg list. [`probe_dir`]
 //! walks a test probe the same way.
@@ -57,7 +57,7 @@ use std::collections::BTreeMap;
 /// The `web` pkg's surface, verbatim — the contract the bodies bind.
 pub const WEB_D_RUT: &str = include_str!("../web/src/web.d.rut");
 
-// the url-dep mounts, from the COMMITTED CDN artifacts — the std-v16
+// the url-dep mounts, from the COMMITTED CDN artifacts — the std-v17
 // SOURCE ZIPS the locks pin (the sha256 is law at the mount door).
 // THE OFFER LAW: the mirror mounts `Mounted::from_srczip` per
 // artifact — the in-memory twin of the walk's cache lane over the
@@ -71,12 +71,12 @@ pub const WEB_D_RUT: &str = include_str!("../web/src/web.d.rut");
 // against the group's bytes at the mount; its BODIES still cross as
 // the embedder's registration (`rut_std::nmap::pkg()`, the offer
 // lane's install below).
-// the PINNED envelope (`dist/std-v16`) — the same bytes the offline
+// the PINNED envelope (`dist/std-v17`) — the same bytes the offline
 // cache primes below, so the mirror's offers and the manifest lane's
-// walk ride ONE wire; the committed pins name the std-v16 bytes
+// walk ride ONE wire; the committed pins name the std-v17 bytes
 // (pack-std --check's mirror == envelope is the byte law).
-const POUCH_ZIP: &[u8] = include_bytes!("../../../dist/std-v16/pouch.zip");
-const NMAPSET_ZIP: &[u8] = include_bytes!("../../../dist/std-v16/nmapset.zip");
+const POUCH_ZIP: &[u8] = include_bytes!("../../../dist/std-v17/pouch.zip");
+const NMAPSET_ZIP: &[u8] = include_bytes!("../../../dist/std-v17/nmapset.zip");
 
 // the module trees, verbatim: root + every mounted child — the
 // mirror's whole job is an independent embedder spelling what the
@@ -265,7 +265,7 @@ pub fn mirror_run() -> Result<RutRun, String> {
     Ok(run.pkg(rut_std::nmap::pkg()))
 }
 
-/// dist/std-v16 plays the wire: the pinned source zips prime ONE
+/// dist/std-v17 plays the wire: the pinned source zips prime ONE
 /// cache-only cache per process (`DepRemote::write` is the stand-in
 /// for the GET — the ONCE-gated priming is the 03-plugin precedent),
 /// and every manifest-lane walk rides an `HttpRemote::at` over it — a
@@ -286,7 +286,7 @@ fn std_remote() -> rut_native::HttpRemote {
         // (harness/softfail are dep-free) — walked for url rows exactly
         // like the loader's own prefetch walks
         let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dist = base.join("../../dist/std-v16");
+        let dist = base.join("../../dist/std-v17");
         let mut urls = std::collections::BTreeSet::new();
         for rel in [
             "rut/biz/rut.jsonc",

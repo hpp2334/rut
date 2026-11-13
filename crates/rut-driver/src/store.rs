@@ -308,7 +308,7 @@ mod tests {
     fn meta() -> StoreMeta {
         StoreMeta {
             name: "ink".into(),
-            url: "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip".into(),
+            url: "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/ink.zip".into(),
             sha256: PIN.into(),
             format: "zip".into(),
             format_version: STORE_META_FORMAT_VERSION,
@@ -319,7 +319,7 @@ mod tests {
     fn the_meta_renders_canonically() {
         // fixed field order, 2-space indent, trailing newline
         let want = format!(
-            "{{\n  \"name\": \"ink\",\n  \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/ink.zip\",\n  \"sha256\": \"{PIN}\",\n  \"format\": \"zip\",\n  \"format_version\": 1\n}}\n"
+            "{{\n  \"name\": \"ink\",\n  \"url\": \"https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/ink.zip\",\n  \"sha256\": \"{PIN}\",\n  \"format\": \"zip\",\n  \"format_version\": 1\n}}\n"
         );
         assert_eq!(store_meta_json(&meta()), want);
     }

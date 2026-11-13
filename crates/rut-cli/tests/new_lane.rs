@@ -1,7 +1,7 @@
 //! The `rut new` lane through the binary: the scaffold's three files
 //! (manifest + lock + root module), the refusals (clobber, illegal
 //! name), the born-formatted template, the pins against the committed
-//! `dist/std-v15` snapshot, and the offline end-to-end — the
+//! `dist/std-v17` snapshot, and the offline end-to-end — the
 //! full-deps manifest mounts clean and the ink-only hello runs.
 //!
 //! The templates are real files (`../template/`), so every byte law

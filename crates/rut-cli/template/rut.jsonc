@@ -4,7 +4,7 @@
   // module the loader mounts.
   //
   // THE STD SET: all nine swappable std libs, each a COMMITTED
-  // source zip (dist/std, jsDelivr-served at the std-v14 tag) —
+  // source zip (dist/std, jsDelivr-served at the std-v17 tag) —
   // source compiles with YOUR toolchain, so a zip never goes stale
   // the way compiled IR does.
   // The pins live in `rut.lock` beside this file (machine-generated:

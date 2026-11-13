@@ -333,7 +333,7 @@ fn a_generic_url_dep_runs_identically_on_the_miss_and_the_hit() {
 }"#,
     );
     let home = root.join("home");
-    // the dep rides the url lane as a SOURCE ZIP — the std-v14 shape,
+    // the dep rides the url lane as a SOURCE ZIP (std's lane since v14),
     // whose group mounts as source at load
     let zip = rut_native::pack_dir_zip(&root.join("gen")).expect("pack gen source zip");
     let port = serve(zip.clone());

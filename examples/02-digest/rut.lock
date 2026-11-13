@@ -4,8 +4,8 @@
   "format": "rutlock",
   "format_version": 1,
   "deps": [
-    { "pkg": "json",    "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/json.rutbundle",    "sha256": "ede048a81b8319f0f064bc87dcd2c9c5ded74abb928a91c0dd10e6de0f80ea82" },
-    { "pkg": "nmapset", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/nmapset.rutbundle", "sha256": "10b8cbbca24f301495eef7dddda208a997f1698d1172bd5cc41891cd0ead3b21" },
-    { "pkg": "pouch",   "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle",   "sha256": "63ddd765287243ef45f23105471ff3eae5c5a0ac1d521a3d22636745fd5e72d8" }
+    { "pkg": "json",    "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/json.zip",    "sha256": "653867a4451d8eb991cfdd59c9196d95c92ecc7b3da530519cba15e68951b18a" },
+    { "pkg": "nmapset", "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/nmapset.zip", "sha256": "1a59e0e4cab803dcd176ac919160cb9dbbc305011fb563dcc1d8bcd82307f5dd" },
+    { "pkg": "pouch",   "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip",   "sha256": "5740cb0b874a2c9a81f1e0d9534520fe4067e5ec48320b82cf7147e2d6b34d36" }
   ]
 }
