@@ -7,7 +7,7 @@ use rut_ast::{Ast, BlockNode, ExprRef, Handle, ItemRef, StmtRef};
 use rut_lexer::diag::Diag;
 
 pub fn parse(src: &str, mode: Mode) -> (Ast, Vec<Diag>) {
-    let p = parse_with_recover(src, mode, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), mode, ParseOpts::default());
     let diags = p.ast().errors().to_vec();
     let (ast, _) = p.into_parts();
     (ast, diags)

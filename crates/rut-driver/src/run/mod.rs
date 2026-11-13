@@ -512,8 +512,10 @@ impl RutRun {
                 let mode = if *is_decl { Mode::Decl } else { Mode::Impl };
                 // the recovering entry: the closure check wants the
                 // whole file's `use` heads even beside syntax diags
+                // the body stays mounted (the match borrows) — clone to
+                // move into the closure check's parse
                 let p = rut_ast::parser::parse_with_recover(
-                    text,
+                    text.to_string(),
                     mode,
                     rut_ast::parser::ParseOpts::default(),
                 );
@@ -534,7 +536,7 @@ impl RutRun {
                 // recovering: a file beside its syntax diags still
                 // joins the closure check
                 let p = rut_ast::parser::parse_with_recover(
-                    &m.text,
+                    m.text.clone(),
                     Mode::Impl,
                     rut_ast::parser::ParseOpts::default(),
                 );

@@ -21,13 +21,23 @@ const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/src/net/tls/mod.d
 
 fn myhost_chain() -> Vec<DefIndex> {
     vec![
-        index_dep_mod("myhost", "rut/myhost/src/myhost.d.rut", "", MYHOST),
-        index_dep_mod("myhost", "rut/myhost/src/net/mod.d.rut", "net", MYHOST_NET),
+        index_dep_mod(
+            "myhost",
+            "rut/myhost/src/myhost.d.rut",
+            "",
+            MYHOST.to_string(),
+        ),
+        index_dep_mod(
+            "myhost",
+            "rut/myhost/src/net/mod.d.rut",
+            "net",
+            MYHOST_NET.to_string(),
+        ),
         index_dep_mod(
             "myhost",
             "rut/myhost/src/net/tls/mod.d.rut",
             "net/tls",
-            MYHOST_NET_TLS,
+            MYHOST_NET_TLS.to_string(),
         ),
     ]
 }
@@ -37,7 +47,7 @@ fn myhost_chain() -> Vec<DefIndex> {
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape)
 fn doc_of(src: &str, mode: rut_ast::parser::Mode) -> rut_semantic::ParsedDoc {
-    rut_semantic::ParsedDoc::parse(mode, src)
+    rut_semantic::ParsedDoc::parse(mode, src.to_string())
 }
 
 #[test]
@@ -74,7 +84,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     let core = index_dep(
         "core",
         "core",
-        "pub fn ambient_offered() -> i32 { return 1; }\n",
+        "pub fn ambient_offered() -> i32 { return 1; }\n".to_string(),
     );
     let idxs = [&di, &core];
     let items = rut_lsp_wasm::completion::complete(
@@ -232,7 +242,7 @@ fn a_std_source_mounts_as_an_ordinary_dep() {
     let idx = index_dep(
         "pouch",
         "rut/pouch/src/mod.rut",
-        include_str!("../../../rut/pouch/src/mod.rut"),
+        include_str!("../../../rut/pouch/src/mod.rut").to_string(),
     );
     assert_eq!(idx.module.as_deref(), Some("pouch"));
     assert_eq!(idx.mode, Some(rut_ast::parser::Mode::Impl));

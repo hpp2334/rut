@@ -1,5 +1,5 @@
 use ls_types::*;
-use rut_lexer::lexer::normalize;
+use rut_lexer::lexer::canonical;
 use rut_lexer::span::Span;
 use rut_lsp_wasm::analysis::analyze_unstamped;
 use rut_lsp_wasm::analysis::*;
@@ -16,12 +16,15 @@ use std::collections::BTreeMap;
 
 #[test]
 fn analyze_end_to_end() {
-    let a = analyze_unstamped(IMPL_URI, "entry fn main() -> nil {\n    let x = ;\n}\n");
+    let a = analyze_unstamped(
+        IMPL_URI,
+        "entry fn main() -> nil {\n    let x = ;\n}\n".to_string(),
+    );
     assert!(!a.diags.is_empty(), "parse error must surface");
     assert!(a.diags[0].severity == Some(DiagnosticSeverity::ERROR));
     assert_eq!(a.diags[0].source.as_deref(), Some("rut"));
 
-    let clean = analyze_unstamped(IMPL_URI, "enum Color { Red }\n");
+    let clean = analyze_unstamped(IMPL_URI, "enum Color { Red }\n".to_string());
     assert!(clean.diags.is_empty());
     assert_eq!(clean.symbols.len(), 1);
     assert_eq!(clean.symbols[0].name, "Color");
@@ -30,7 +33,7 @@ fn analyze_end_to_end() {
 #[test]
 fn encode_is_delta_correct() {
     let src = "enum Color { Red }\nfn f(x: i32) -> nil {}\n";
-    let a = analyze_unstamped(IMPL_URI, src);
+    let a = analyze_unstamped(IMPL_URI, src.to_string());
     // decode back: every token's absolute (line, char, len) must land
     // on the exact text it classified
     let mut line = 0u32;
@@ -43,10 +46,10 @@ fn encode_is_delta_correct() {
             t.delta_start
         };
         let byte_lo = {
-            let ix = LineIndex::new(&normalize(src));
-            ix.byte(&normalize(src), line, ch)
+            let ix = LineIndex::new(&canonical(src));
+            ix.byte(&canonical(src), line, ch)
         };
-        let text = &normalize(src)[byte_lo as usize..(byte_lo + t.length) as usize];
+        let text = &canonical(src)[byte_lo as usize..(byte_lo + t.length) as usize];
         assert!(!text.is_empty());
         assert!(
             text.chars().all(|c| !c.is_whitespace()),
@@ -62,8 +65,8 @@ fn pub_on_a_use_classifies_as_the_keyword() {
     // carries on every item), and the use's own names keep the cap-law
     // classes (`util` a namespace head, `helper` a function leaf)
     let src = "pub use util::{ helper };\n";
-    let a = analyze_unstamped(IMPL_URI, src);
-    let s = normalize(src);
+    let a = analyze_unstamped(IMPL_URI, src.to_string());
+    let s = canonical(src).into_owned();
     let mut line = 0u32;
     let mut ch = 0u32;
     let mut seen: Vec<(String, u32)> = Vec::new();
@@ -114,7 +117,7 @@ fn decl_mode_for_dot_d_rut() {
 fn file(uri: &str, text: &str) -> FileSrc {
     FileSrc {
         uri: uri.to_string(),
-        text: rut_lexer::lexer::normalize(text),
+        text: rut_lexer::lexer::canonical(text).into_owned(),
         mode: Mode::Impl,
         vis: rut_ast::Vis::Pub,
     }
@@ -156,7 +159,7 @@ fn merge_dedupes_true_duplicates_only() {
 #[test]
 fn no_package_context_is_parse_only() {
     let src = "entry fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze_unstamped(IMPL_URI, src).diags;
+    let parse = analyze_unstamped(IMPL_URI, src.to_string()).diags;
     assert!(!parse.is_empty());
     let merged = check::merged_doc_diags(
         "file:///ws/p.rut",
@@ -175,7 +178,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // surfaces through the checker with the range the editor highlights
     let src = "use kit::{ Task };\nfn main() -> nil {\n    let mut checked: str = \" \";\n    checked = true;\n}\n";
     let uri = "file:///ws/app/mod.rut";
-    let parse = analyze_unstamped(IMPL_URI, src).diags;
+    let parse = analyze_unstamped(IMPL_URI, src.to_string()).diags;
     assert!(parse.is_empty(), "the doc parses clean: {parse:?}");
     let dep = group(
         "kit",
@@ -203,7 +206,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // the range covers the offending assignment (line 3) — the v2
     // exact-span law: an assignment node ends at its VALUE (the
     // statement's own `;` is the terminator, never the expression's)
-    let norm = rut_lexer::lexer::normalize(src);
+    let norm = rut_lexer::lexer::canonical(src).into_owned();
     let lo = norm.find("checked = true").expect("the assignment") as u32;
     let want = range_of(
         &LineIndex::new(&norm),
@@ -244,7 +247,7 @@ fn check_enabled_doc_maps_lir_diags_to_ranges() {
     // and the missing `;` — so the law is pinned as "the check lane
     // adds nothing", not as a v1 row count.)
     let bad = "fn main() -> nil {\n    let x = ;\n}\n";
-    let parse = analyze_unstamped(IMPL_URI, bad).diags;
+    let parse = analyze_unstamped(IMPL_URI, bad.to_string()).diags;
     assert!(!parse.is_empty());
     let n_parse = parse.len();
     let app = group("app", file(uri, bad));
@@ -286,7 +289,7 @@ fn unattributable_spans_skip() {
         ),
     );
     let app = group("app3", file(uri, doc));
-    let parse = analyze_unstamped(IMPL_URI, doc).diags;
+    let parse = analyze_unstamped(IMPL_URI, doc.to_string()).diags;
     assert!(parse.is_empty(), "{parse:?}");
     let merged = check::merged_doc_diags(
         uri,

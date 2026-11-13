@@ -400,7 +400,7 @@ fn compile_playground(
     // every envelope, diags or not — the recovering ENTRY is the
     // recover choice; always a tree
     let p = rut_ast::parser::parse_with_recover(
-        src,
+        src.to_string(),
         rut_ast::parser::Mode::Impl,
         rut_ast::parser::ParseOpts::default(),
     );

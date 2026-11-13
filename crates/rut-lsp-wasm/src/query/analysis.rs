@@ -55,8 +55,8 @@ fn analysis_of(doc: &rut_semantic::ParsedDoc, uri: &Uri) -> Analysis {
 /// the degenerate-URI fallback (a uri that fails to parse as `Uri`
 /// still analyzes — the MODE derives from the raw string, `mode_of`
 /// keeping the filename convention; related info + provenance ride the
-/// placeholder)
-pub fn analyze_unstamped(uri: &str, src: &str) -> Analysis {
+/// placeholder). `src` BY VALUE — it moves into the doc artifact.
+pub fn analyze_unstamped(uri: &str, src: String) -> Analysis {
     analysis_of(
         &rut_semantic::ParsedDoc::parse(mode_of(uri), src),
         &placeholder_uri(),
@@ -175,8 +175,9 @@ pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnos
 }
 
 /// The server's entry point: the analysis stamped with the document's
-/// URI (related info + hover provenance).
-pub fn analyze_at(uri: &Uri, src: &str) -> Analysis {
+/// URI (related info + hover provenance). `src` BY VALUE — it moves
+/// into the doc artifact.
+pub fn analyze_at(uri: &Uri, src: String) -> Analysis {
     analysis_of(
         &rut_semantic::ParsedDoc::parse(mode_of(uri.as_str()), src),
         uri,
@@ -189,10 +190,12 @@ pub fn analyze_at(uri: &Uri, src: &str) -> Analysis {
 // hover / completion queries over the same indexes — defined here
 // once, so no host can grow its own dialect.
 
-/// per-query pipeline: normalize → lex → parse → the document's index
-/// (origin stamped). The queries below only add position + lookup —
-/// they hold the doc and borrow its parts (the capsule's read doors).
-fn doc_ctx(uri: &str, src: &str) -> (rut_semantic::ParsedDoc, hover::DefIndex) {
+/// per-query pipeline: lex → parse → the document's index (origin
+/// stamped). The queries below only add position + lookup — they hold
+/// the doc and borrow its parts (the capsule's read doors). `src` BY
+/// VALUE: it moves into the doc (the caller's store-clone IS the
+/// normalize copy the old shape paid on top).
+fn doc_ctx(uri: &str, src: String) -> (rut_semantic::ParsedDoc, hover::DefIndex) {
     // ONE derivation per query: the facade parses (mode from the
     // filename convention) and the hover index builds over its parts —
     // the old shape parsed the same text twice (its own parse +
@@ -204,7 +207,7 @@ fn doc_ctx(uri: &str, src: &str) -> (rut_semantic::ParsedDoc, hover::DefIndex) {
 }
 
 /// the definition index for one document (origin stamped with `uri`)
-pub fn index_at(uri: &str, src: &str) -> hover::DefIndex {
+pub fn index_at(uri: &str, src: String) -> hover::DefIndex {
     let d = rut_semantic::ParsedDoc::parse(mode_of(uri), src);
     let mut idx = hover::index(&d);
     idx.origin = uri.to_string();
@@ -232,7 +235,7 @@ fn byte_at(normalized: &str, line: u32, ch: u32) -> u32 {
 /// it; the default keeps the cross-package lanes only.
 pub fn hover_at(
     uri: &str,
-    src: &str,
+    src: String,
     extra: &[hover::DefIndex],
     dm: &crate::mods::DocMods,
     line: u32,
@@ -260,7 +263,7 @@ pub fn hover_at(
 /// live.
 pub fn complete_at(
     uri: &str,
-    src: &str,
+    src: String,
     extra: &[hover::DefIndex],
     line: u32,
     ch: u32,
@@ -294,7 +297,7 @@ pub fn complete_at(
 /// it; the default keeps them off.
 pub fn definition_at(
     uri: &str,
-    src: &str,
+    src: String,
     extra: &[hover::DefIndex],
     dm: &crate::mods::DocMods,
     line: u32,
@@ -316,7 +319,7 @@ pub fn definition_at(
 /// that type's declaration (the cheap shape the survey priced)
 pub fn type_definition_at(
     uri: &str,
-    src: &str,
+    src: String,
     extra: &[hover::DefIndex],
     dm: &crate::mods::DocMods,
     line: u32,
@@ -336,8 +339,8 @@ pub fn type_definition_at(
 
 /// the doc itself — `references` re-parses candidate files over their
 /// indexed source (doc-sized files; the per-query re-parse is the
-/// house style — hover already rides it)
-pub(crate) fn parse_at(uri: &str, src: &str) -> rut_semantic::ParsedDoc {
+/// house style — hover already rides it). `src` BY VALUE.
+pub(crate) fn parse_at(uri: &str, src: String) -> rut_semantic::ParsedDoc {
     rut_semantic::ParsedDoc::parse(mode_of(uri), src)
 }
 
@@ -348,7 +351,7 @@ pub(crate) fn parse_at(uri: &str, src: &str) -> rut_semantic::ParsedDoc {
 /// client as-is.
 pub fn inlay_hints_at(
     uri: &str,
-    src: &str,
+    src: String,
     extra: &[hover::DefIndex],
     range: Range,
 ) -> Vec<InlayHint> {
@@ -375,7 +378,7 @@ pub fn inlay_hints_at(
 /// reverse edges. `include_declaration` per the LSP spec.
 pub fn references_at(
     uri: &str,
-    src: &str,
+    src: String,
     extra: &[hover::DefIndex],
     dm: &crate::mods::DocMods,
     line: u32,
@@ -402,7 +405,7 @@ pub fn references_at(
 /// help, never wrong help.
 pub fn signature_help_at(
     uri: &str,
-    src: &str,
+    src: String,
     extra: &[hover::DefIndex],
     line: u32,
     ch: u32,

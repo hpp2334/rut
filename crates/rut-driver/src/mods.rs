@@ -134,7 +134,7 @@ pub fn mount_mod_children(
     child_file: &str,
     read: &mut dyn FnMut(&str, &str) -> Result<ChildLookup, String>,
 ) -> Result<BTreeMap<String, ModSource>, String> {
-    let p = parse_with_recover(root_text, mode, ParseOpts::default());
+    let p = parse_with_recover(root_text.to_string(), mode, ParseOpts::default());
     if !p.ast().is_clean() {
         return Ok(BTreeMap::new()); // the compile reports the syntax, loudly
     }
@@ -201,7 +201,9 @@ fn mount_rec(
                 visiting.push(canon);
                 // the child parses to its OWN module root — recurse
                 // into its declarations, never splice it here
-                let cp = parse_with_recover(&text, mode, ParseOpts::default());
+                // the child's text rides the mounted row below — clone
+                // to move into THIS parse (the row keeps the original)
+                let cp = parse_with_recover(text.clone(), mode, ParseOpts::default());
                 if cp.ast().is_clean() {
                     mount_rec(
                         &child_path,
@@ -348,7 +350,8 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     let root_declares: BTreeMap<String, Vis> = match &pkg.body {
         MountedBody::Source { text, is_decl } => {
             let m = if *is_decl { Mode::Decl } else { Mode::Impl };
-            let p = parse_with_recover(text, m, ParseOpts::default());
+            // the body stays mounted (the match borrows) — clone to move
+            let p = parse_with_recover(text.to_string(), m, ParseOpts::default());
             if !p.ast().is_clean() {
                 problems.extend(
                     p.ast()
@@ -376,7 +379,8 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
             root_surface: Some(text),
             ..
         } => {
-            let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
+            // the surface stays mounted (the match borrows) — clone to move
+            let p = parse_with_recover(text.to_string(), Mode::Decl, ParseOpts::default());
             if !p.ast().is_clean() {
                 problems.extend(
                     p.ast()
@@ -422,7 +426,9 @@ pub fn collect_module_set(spec: &str, pkg: &Mounted) -> (ModuleSet, Vec<String>)
     // the children, mod-path order — each its own module root
     let mut child_decls: BTreeMap<String, BTreeMap<String, Vis>> = BTreeMap::new();
     for (path, m) in &pkg.mods {
-        let p = parse_with_recover(&m.text, mode, ParseOpts::default());
+        // the child file's text stays mounted (the map borrows) — clone
+        // to move into the child parse
+        let p = parse_with_recover(m.text.clone(), mode, ParseOpts::default());
         if !p.ast().is_clean() {
             problems.extend(
                 p.ast()

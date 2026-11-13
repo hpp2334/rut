@@ -288,7 +288,7 @@ fn a_packed_v12_bundle_indexes_hover_and_completion_from_the_entry() {
     let f = &b.files[0];
     assert_eq!(f.path, "mod.d.rut");
     assert_eq!(f.mode, Mode::Decl);
-    let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", &f.src);
+    let idxs = index_dep_decl_group(&b.module, "bundle:pouch/mod.d.rut", "", f.src.clone());
     assert_eq!(idxs.len(), 1, "a flat entry: one module");
     let idx = &idxs[0].1;
     assert_eq!(idx.mode, Some(Mode::Decl));
@@ -338,7 +338,7 @@ pub mod net {
 }
 pub host fn legacy_ping() -> bool;
 ";
-    let idxs = index_dep_decl_group("myhost", "bundle:myhost/mod.d.rut", "", src);
+    let idxs = index_dep_decl_group("myhost", "bundle:myhost/mod.d.rut", "", src.to_string());
     let paths: Vec<&str> = idxs.iter().map(|(p, _)| p.as_str()).collect();
     assert_eq!(paths, vec!["", "net"], "{paths:?}");
     let (root, net) = (&idxs[0].1, &idxs[1].1);
@@ -421,7 +421,7 @@ pub host fn sqrt(x: f64) -> f64;
 pub let PI: f64 = 3.141592653589793;
 pub let INFINITY: f64 = inf;
 ";
-    let idx = index_dep("calc", "file:///deps/calc.d.rut", src);
+    let idx = index_dep("calc", "file:///deps/calc.d.rut", src.to_string());
     // the explicit name rides the index …
     assert_eq!(idx.module.as_deref(), Some("calc"));
     assert_eq!(idx.origin, "file:///deps/calc.d.rut");
@@ -459,7 +459,11 @@ pub let INFINITY: f64 = inf;
 
 #[test]
 fn index_dep_without_lets_indexes_none() {
-    let idx = index_dep("pouch", "file:///deps/pouch.rut", "class Vec<T> {\n}\n");
+    let idx = index_dep(
+        "pouch",
+        "file:///deps/pouch.rut",
+        "class Vec<T> {\n}\n".to_string(),
+    );
     assert_eq!(idx.module.as_deref(), Some("pouch"));
     assert!(idx.lets.is_empty());
 }
@@ -470,7 +474,7 @@ fn index_dep_mod_stamps_the_mod_path() {
         "gadgets",
         "file:///deps/gadgets/layout/mod.rut",
         "layout",
-        "pub struct Column {\n    w: i32;\n}\n",
+        "pub struct Column {\n    w: i32;\n}\n".to_string(),
     );
     assert_eq!(idx.module.as_deref(), Some("gadgets"));
     assert_eq!(idx.mod_path.as_deref(), Some("layout"));
@@ -479,7 +483,7 @@ fn index_dep_mod_stamps_the_mod_path() {
         "gadgets",
         "file:///deps/gadgets/mod.rut",
         "",
-        "pub mod layout;\n",
+        "pub mod layout;\n".to_string(),
     );
     assert_eq!(root.mod_path.as_deref(), Some(""));
     assert_eq!(root.mods.len(), 1);
@@ -503,7 +507,7 @@ fn dep_impl_methods_ride_the_dep_index() {
         "    pub fn info(self, msg: str) -> nil { logger_log(self.internal, 1, msg); }\n",
         "}\n",
     );
-    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK);
+    let idx = index_dep_mod("ink", "file:///deps/ink/src/mod.rut", "", INK.to_string());
     let info = idx.fns.iter().find(|f| f.name == "info");
     assert_eq!(
         info.map(|f| f.owner.as_deref()),
@@ -529,7 +533,7 @@ fn dep_impl_methods_ride_the_dep_index() {
     let ch = lines[line as usize].find(".info").unwrap() as u32 + 1;
     let hits = rut_lsp_wasm::analysis::definition_at(
         "file:///ws/main.rut",
-        consumer,
+        consumer.to_string(),
         &[idx],
         &rut_lsp_wasm::mods::DocMods::default(),
         line,

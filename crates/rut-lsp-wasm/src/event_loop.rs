@@ -373,10 +373,12 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             l.state.docs.insert(uri.clone(), src.clone());
             // analyze_at stamps related-info URIs + hover provenance at
             // construction; a degenerate URI still analyzes (unstamped
-            // twin below)
+            // twin below). The store holds one clone (the doc-sync law);
+            // the analyze clone MOVES into the parse — the old
+            // normalize copy is gone; the check lane still borrows.
             let a = match Uri::from_str(&uri) {
-                Ok(u) => crate::analysis::analyze_at(&u, &src),
-                Err(_) => crate::analysis::analyze_unstamped(&uri, &src),
+                Ok(u) => crate::analysis::analyze_at(&u, src.clone()),
+                Err(_) => crate::analysis::analyze_unstamped(&uri, src.clone()),
             };
             // the envelope's rows move to the wire field by field (a
             // plain record — no consuming ceremony)
@@ -410,7 +412,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 None => "null".to_string(),
                 Some(src) => {
                     let doc = l.state.doc_mods_of(&uri);
-                    let out = crate::analysis::hover_at(&uri, &src, &l.state.defs, &doc, line, ch);
+                    let out = crate::analysis::hover_at(&uri, src, &l.state.defs, &doc, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -437,7 +439,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 Some(src) => {
                     let doc = l.state.doc_mods_of(&uri);
                     let locs =
-                        crate::analysis::definition_at(&uri, &src, &l.state.defs, &doc, line, ch);
+                        crate::analysis::definition_at(&uri, src, &l.state.defs, &doc, line, ch);
                     locations_envelope(&locs)
                 }
             };
@@ -450,7 +452,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                     let doc = l.state.doc_mods_of(&uri);
                     let locs = crate::analysis::type_definition_at(
                         &uri,
-                        &src,
+                        src,
                         &l.state.defs,
                         &doc,
                         line,
@@ -474,7 +476,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 Some(src) => {
                     let hints = crate::analysis::inlay_hints_at(
                         &uri,
-                        &src,
+                        src,
                         &l.state.defs,
                         ls_types::Range {
                             start: ls_types::Position {
@@ -505,7 +507,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                     let doc = l.state.doc_mods_of(&uri);
                     let locs = crate::analysis::references_at(
                         &uri,
-                        &src,
+                        src,
                         &l.state.defs,
                         &doc,
                         line,
@@ -522,14 +524,16 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 None => "null".to_string(),
                 Some(src) => {
                     let out =
-                        crate::analysis::signature_help_at(&uri, &src, &l.state.defs, line, ch);
+                        crate::analysis::signature_help_at(&uri, src, &l.state.defs, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };
             let _ = tx.send(Reply::Text(answer));
         }
         Cmd::IndexFile { uri, src, tx } => {
-            let idx = crate::analysis::index_at(&uri, &src);
+            // the wire's String moves into the parse — a fresh read,
+            // zero copies end to end
+            let idx = crate::analysis::index_at(&uri, src);
             match l.state.defs.iter().position(|d| d.origin == uri) {
                 Some(slot) => l.state.defs[slot] = idx,
                 None => l.state.defs.push(idx),
@@ -587,8 +591,9 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             src,
             tx,
         } => {
-            // the host's scan-index lane
-            let decls = l.state.index_mod_at(&uri, &pkg, &mod_path, &src);
+            // the host's scan-index lane — the wire's String moves into
+            // the parse (the returned decls are the walk's next hop)
+            let decls = l.state.index_mod_at(&uri, &pkg, &mod_path, src);
             let _ = tx.send(Reply::Text(json_envelope(wire::ModDecls { decls })));
         }
     }

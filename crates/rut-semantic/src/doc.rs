@@ -58,8 +58,11 @@ pub struct ParsedDoc {
 impl ParsedDoc {
     /// the editor entry: mode supplied by the caller (`mode_of` spells
     /// the filename convention), editor opts baked — recovering always,
-    /// docs always (they graft onto the decl nodes).
-    pub fn parse(mode: Mode, src: &str) -> ParsedDoc {
+    /// docs always (they graft onto the decl nodes). Takes the source
+    /// BY VALUE — it moves into the artifact; a caller holding an
+    /// owned String clones to move (the store-clone replaces the old
+    /// normalize copy), a fresh read moves for free.
+    pub fn parse(mode: Mode, src: String) -> ParsedDoc {
         let p = parse_with_recover(
             src,
             mode,

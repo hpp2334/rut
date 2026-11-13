@@ -17,7 +17,7 @@ fn crlf_normalization_keeps_positions() {
     // CR removal shifts byte offsets but never line/UTF-16 positions —
     // ranges reported against the editor's original text stay correct.
     let original = "let a = 1;\r\nlet b = 2;\r\n";
-    let normalized = rut_lexer::lexer::normalize(original);
+    let normalized = rut_lexer::lexer::canonical(original).into_owned();
     assert_eq!(normalized, "let a = 1;\nlet b = 2;\n");
     let ix = LineIndex::new(&normalized);
     assert_eq!(ix.position(&normalized, 11), (1, 0)); // `let b` line start

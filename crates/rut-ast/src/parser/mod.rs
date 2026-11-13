@@ -81,8 +81,10 @@ impl Parsed {
 }
 
 /// The fail-fast entry: `Err` carries the FIRST diag and no tree was
-/// built; `Ok` implies a clean tree (`ast.is_clean()`).
-pub fn parse(src: &str, mode: Mode, opts: ParseOpts) -> Result<Parsed, Diag> {
+/// built; `Ok` implies a clean tree (`ast.is_clean()`). Takes the
+/// source BY VALUE — it moves into the artifact (the pair law:
+/// `Parsed::src` is the normalized text every span indexes).
+pub fn parse(src: String, mode: Mode, opts: ParseOpts) -> Result<Parsed, Diag> {
     let p = parse_with_recover(src, mode, opts);
     match p.ast.errors().first().cloned() {
         Some(first) => Err(first),
@@ -93,10 +95,13 @@ pub fn parse(src: &str, mode: Mode, opts: ParseOpts) -> Result<Parsed, Diag> {
 /// The recovering entry: ALWAYS a tree. Unparseable regions are
 /// `ErrorNode`s in the lists they belong to; every diag rides
 /// `ast.errors()` (the flat view) and the in-stream slots (the
-/// positional view).
-pub fn parse_with_recover(src: &str, mode: Mode, opts: ParseOpts) -> Parsed {
-    let normalized = rut_lexer::lexer::normalize(src);
-    let (toks, diags, comments) = rut_lexer::lexer::lex_normalized(&normalized, true);
+/// positional view). Takes the source BY VALUE and rides
+/// [`rut_lexer::lexer::lex_canonical`]: a clean (LF-only) input moves
+/// through with ZERO copies, a dirty one pays the one normalize pass —
+/// and `Parsed::src` is exactly the text the tokens (and every span)
+/// index.
+pub fn parse_with_recover(src: String, mode: Mode, opts: ParseOpts) -> Parsed {
+    let (normalized, toks, diags, comments) = rut_lexer::lexer::lex_canonical(src, true);
     let comments = if opts.include_comments {
         Some(comments)
     } else {

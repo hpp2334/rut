@@ -1,5 +1,5 @@
 use rut_ast::parser::Mode;
-use rut_lexer::lexer::normalize;
+use rut_lexer::lexer::canonical;
 use rut_lexer::token::Token;
 use rut_lsp_wasm::definition;
 use rut_lsp_wasm::definition::DefLocation;
@@ -12,7 +12,7 @@ use rut_lsp_wasm::LineIndex;
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
 fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
-    rut_semantic::ParsedDoc::parse(mode, src)
+    rut_semantic::ParsedDoc::parse(mode, src.to_string())
 }
 
 const DOC: &str = "file:///t/main.rut";
@@ -374,7 +374,7 @@ fn widget_lib() -> Doc {
 
 fn widget_user() -> (Doc, String) {
     let src = "use gadgets::{ Widget };\nfn main() -> nil {\n    let w = Widget::new();\n}\n";
-    (doc(src), normalize(src))
+    (doc(src), canonical(src).into_owned())
 }
 
 #[test]

@@ -361,7 +361,12 @@ fn scan_files(
         if std::ptr::eq(*f, ctx.doc()) {
             continue;
         }
-        parsed.push((f, crate::analysis::parse_at(f.origin.as_str(), &f.src)));
+        // the candidate's indexed text is borrowed (the defs store owns
+        // it) — clone to move: this IS the parse's one copy now
+        parsed.push((
+            f,
+            crate::analysis::parse_at(f.origin.as_str(), f.src.clone()),
+        ));
     }
 
     for f in files {

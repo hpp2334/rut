@@ -89,7 +89,7 @@ impl SessionState {
 
     /// the walk's named-dep index lane: index one dep source
     /// file under its module NAME (replace-by-origin).
-    pub(crate) fn index_named_at(&mut self, uri: &str, name: &str, src: &str) {
+    pub(crate) fn index_named_at(&mut self, uri: &str, name: &str, src: String) {
         let idx = crate::deps::index_dep(name, uri, src);
         self.replace_by_origin(uri, idx);
     }
@@ -104,7 +104,7 @@ impl SessionState {
         uri: &str,
         pkg: &str,
         mod_path: &str,
-        src: &str,
+        src: String,
     ) -> Vec<wire::ModDecl> {
         let idx = crate::deps::index_dep_mod(pkg, uri, mod_path, src);
         let decls: Vec<wire::ModDecl> = idx
@@ -170,10 +170,12 @@ impl SessionState {
         line: u32,
         ch: u32,
     ) -> Vec<ls_types::CompletionItem> {
+        // the store-clone moves into the parse (the doc-sync law's one
+        // copy per keystroke query — the old normalize copy is gone)
         let Some(src) = self.docs.get(uri).cloned() else {
             return Vec::new();
         };
         let doc = self.doc_mods_of(uri);
-        crate::analysis::complete_at(uri, &src, &self.defs, line, ch, &doc, &self.direct_deps)
+        crate::analysis::complete_at(uri, src, &self.defs, line, ch, &doc, &self.direct_deps)
     }
 }

@@ -55,7 +55,7 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
         let src = std::fs::read_to_string(f).unwrap();
         let mode = mode_of(f);
         // the parser's own gate first — the formatter's input law
-        let base = parse_with_recover(&src, mode, ParseOpts::default());
+        let base = parse_with_recover(src.clone(), mode, ParseOpts::default());
         if !base.ast().is_clean() {
             failures.push(format!(
                 "{}: does not parse at base ({} diags)",
@@ -75,7 +75,7 @@ fn corpus_formats_reparse_clean_and_are_idempotent() {
                 continue;
             }
         };
-        let reparsed = parse_with_recover(&out, mode, ParseOpts::default());
+        let reparsed = parse_with_recover(out.clone(), mode, ParseOpts::default());
         if !reparsed.ast().is_clean() {
             failures.push(format!(
                 "{}: FORMATTED text does not reparse: {}",
@@ -243,7 +243,7 @@ fn corpus_dump_trees_match_through_format() {
     for f in &files {
         let src = std::fs::read_to_string(f).unwrap();
         let mode = mode_of(f);
-        let p1 = parse_with_recover(&src, mode, ParseOpts::default());
+        let p1 = parse_with_recover(src.clone(), mode, ParseOpts::default());
         let want = norm_lits(&span_free(&rut_ast::render_text(
             &rut_ast::to_dump_tree(p1.ast()),
             p1.src(),
@@ -251,7 +251,7 @@ fn corpus_dump_trees_match_through_format() {
         let Ok(out) = rut_fmt::format(&src, mode, &rut_fmt::Style::default()) else {
             continue; // covered by the other test's message
         };
-        let p2 = parse_with_recover(&out, mode, ParseOpts::default());
+        let p2 = parse_with_recover(out.clone(), mode, ParseOpts::default());
         let got = norm_lits(&span_free(&rut_ast::render_text(
             &rut_ast::to_dump_tree(p2.ast()),
             p2.src(),
@@ -303,7 +303,7 @@ impl Circle {
     pub fn area(self) -> f64 { return self.r * 3.0; }
 }
 ";
-    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
     assert!(
         p.ast().is_clean(),
         "the fixture must parse clean: {:?}",
@@ -323,7 +323,7 @@ impl Circle {
         !out.contains(" for "),
         "no impl-for spelling anywhere: {out}"
     );
-    let q = parse_with_recover(&out, Mode::Impl, ParseOpts::default());
+    let q = parse_with_recover(out.clone(), Mode::Impl, ParseOpts::default());
     assert!(
         q.ast().is_clean(),
         "the formatted text must reparse clean: {:?}",
@@ -344,7 +344,7 @@ pub use util::{ helper, Widget };
 pub(pkg) use util::{ scoped };
 use util::{ hidden };
 ";
-    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
     assert!(
         p.ast().is_clean(),
         "the fixture must parse clean: {:?}",
@@ -364,7 +364,7 @@ use util::{ hidden };
         .find(|l| l.starts_with("use "))
         .unwrap_or_else(|| panic!("the private use prints bare: {out}"));
     assert_eq!(bare, "use util::{ hidden };", "{out}");
-    let q = parse_with_recover(&out, Mode::Impl, ParseOpts::default());
+    let q = parse_with_recover(out.clone(), Mode::Impl, ParseOpts::default());
     assert!(
         q.ast().is_clean(),
         "the formatted text must reparse clean: {:?}",

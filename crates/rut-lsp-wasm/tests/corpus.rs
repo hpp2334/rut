@@ -13,7 +13,7 @@ use rut_lsp_wasm::LineIndex;
 /// tree survives broken snippets)
 fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
     rut_ast::parser::parse_with_recover(
-        src,
+        src.to_string(),
         mode,
         rut_ast::parser::ParseOpts {
             include_comments: true,
@@ -70,7 +70,7 @@ fn corpus_classifies() {
     assert!(files.len() >= 50, "corpus shrank: {}", files.len());
     for path in &files {
         let raw = std::fs::read_to_string(path).unwrap();
-        let src = rut_lexer::lexer::normalize(&raw);
+        let src = rut_lexer::lexer::canonical(&raw).into_owned();
         let mode = if path.to_string_lossy().ends_with(".d.rut") {
             Mode::Decl
         } else {
@@ -132,7 +132,7 @@ fn corpus_parses_clean_lsp() {
     let mut failures = Vec::new();
     for path in &files {
         let raw = std::fs::read_to_string(path).unwrap();
-        let src = rut_lexer::lexer::normalize(&raw);
+        let src = rut_lexer::lexer::canonical(&raw).into_owned();
         let mode = if path.to_string_lossy().ends_with(".d.rut") {
             Mode::Decl
         } else {
@@ -160,7 +160,7 @@ fn corpus_parses_clean_lsp() {
 fn corpus_reserved_words_are_keywords() {
     for path in &corpus() {
         let raw = std::fs::read_to_string(path).unwrap();
-        let src = rut_lexer::lexer::normalize(&raw);
+        let src = rut_lexer::lexer::canonical(&raw).into_owned();
         let mode = if path.to_string_lossy().ends_with(".d.rut") {
             Mode::Decl
         } else {

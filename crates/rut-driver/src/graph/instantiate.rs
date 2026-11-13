@@ -162,7 +162,9 @@ impl<'a> GraphCompiler<'a> {
         let groups = build_seed_groups(&self.programs, &self.done, owner, seeds);
         let mode = if is_decl { Mode::Decl } else { Mode::Impl };
         let out = crate::compile::compile_program_pre(
-            parse_with_recover(&text, mode, ParseOpts::default()),
+            // the owned clone moves into the parse — the old shape paid
+            // the clone AND the normalize copy; this pays the clone only
+            parse_with_recover(text, mode, ParseOpts::default()),
             owner,
             scope,
             &bound,

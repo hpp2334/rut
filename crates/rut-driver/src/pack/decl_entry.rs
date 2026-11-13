@@ -439,7 +439,8 @@ fn ty_ast_text(ast: &Ast, t: TyRef) -> String {
 /// the renderer spells types with the same grammar, so equal facts
 /// mean equal surfaces.
 pub fn facts_of_text(text: &str) -> Result<std::collections::BTreeSet<String>, String> {
-    let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
+    // the caller's text is borrowed — clone to move into the parse
+    let p = parse_with_recover(text.to_string(), Mode::Decl, ParseOpts::default());
     if !p.ast().is_clean() {
         let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(
@@ -627,7 +628,7 @@ fn splice_tree(
     path: &str,
     mods: &std::collections::BTreeMap<String, crate::mods::ModSource>,
 ) -> Result<String, String> {
-    let p = parse_with_recover(text, Mode::Decl, ParseOpts::default());
+    let p = parse_with_recover(text.to_string(), Mode::Decl, ParseOpts::default());
     if !p.ast().is_clean() {
         let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!("the surface does not parse: {}", msgs.join("; ")));

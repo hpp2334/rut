@@ -126,7 +126,7 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
     // the recovering ENTRY is the recover choice — always a tree; the
     // dumps ride the pair (text slices the NORMALIZED `p.src`)
     let p = rut_ast::parser::parse_with_recover(
-        &combined,
+        combined,
         rut_ast::parser::Mode::Impl,
         rut_ast::parser::ParseOpts::default(),
     );

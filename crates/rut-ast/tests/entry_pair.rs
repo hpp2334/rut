@@ -3,7 +3,7 @@
 //! the flat/positional error views, fail-fast, docs-at-allocation,
 //! and the span×src join.
 
-use rut_ast::parser::{parse, parse_with_recover, Mode, ParseOpts};
+use rut_ast::parser::{parse, parse_with_recover, Mode, ParseOpts, Parsed};
 use rut_ast::{ExprRef, FieldRef, ItemRef, MemberRef, ParamRef, StmtRef};
 
 const IMPL: Mode = Mode::Impl;
@@ -11,12 +11,17 @@ const IMPL: Mode = Mode::Impl;
 #[test]
 fn fail_fast_is_err_first_diag_no_tree() {
     // clean source: Ok, and Ok implies clean
-    let p = parse("fn main() -> nil {\n}\n", IMPL, ParseOpts::default()).unwrap();
+    let p = parse(
+        "fn main() -> nil {\n}\n".to_string(),
+        IMPL,
+        ParseOpts::default(),
+    )
+    .unwrap();
     assert!(p.ast().is_clean());
 
     // broken source: Err IS the first diag
     let err = match parse(
-        "fn main( -> nil {\n    let = ;\n}\n",
+        "fn main( -> nil {\n    let = ;\n}\n".to_string(),
         IMPL,
         ParseOpts::default(),
     ) {
@@ -45,7 +50,7 @@ fn fenced_fixture_three_homes() {
         "\n",
         "/* never closed\n", // E3: LEX — unterminated comment
     );
-    let p = parse_with_recover(src, IMPL, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), IMPL, ParseOpts::default());
     let ast = p.ast();
 
     assert!(!ast.is_clean());
@@ -130,7 +135,7 @@ fn recovered_fixture_member_slots() {
         "    y: i64;\n",
         "}\n",
     );
-    let p = parse_with_recover(src, IMPL, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), IMPL, ParseOpts::default());
     let ast = p.ast();
     assert!(!ast.is_clean());
 
@@ -174,7 +179,7 @@ fn recovered_fixture_member_slots() {
 #[test]
 fn enum_members_fence_in_the_list() {
     let src = "enum Color {\n    Red,\n    3,\n    Green,\n}\n";
-    let p = parse_with_recover(src, IMPL, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), IMPL, ParseOpts::default());
     let ast = p.ast();
     let items = ast.root().items(ast);
     let ItemRef::Enum(eh) = items[0] else {
@@ -199,7 +204,7 @@ fn enum_members_fence_in_the_list() {
 fn docs_ride_the_tree_and_views_borrow() {
     let src = "// adds one\nfn inc(x: i64) -> i64 { x + 1 }\n";
     let p = parse_with_recover(
-        src,
+        src.to_string(),
         IMPL,
         ParseOpts {
             include_comments: true,
@@ -224,7 +229,7 @@ fn docs_ride_the_tree_and_views_borrow() {
     );
 
     // and WITHOUT the opt the tree carries no docs
-    let p2 = parse_with_recover(src, IMPL, ParseOpts::default());
+    let p2 = parse_with_recover(src.to_string(), IMPL, ParseOpts::default());
     let ItemRef::Fn(h2) = p2.ast().root().items(p2.ast())[0] else {
         panic!()
     };
@@ -236,7 +241,11 @@ fn docs_ride_the_tree_and_views_borrow() {
 #[test]
 fn the_pair_artifact_is_the_normalized_text() {
     // CRLF input: spans index the NORMALIZED text the pair carries
-    let p = parse_with_recover("fn main() -> nil {\r}\r\n", IMPL, ParseOpts::default());
+    let p = parse_with_recover(
+        "fn main() -> nil {\r}\r\n".to_string(),
+        IMPL,
+        ParseOpts::default(),
+    );
     assert_eq!(p.src(), "fn main() -> nil {\n}\n");
     let items = p.ast().root().items(p.ast());
     let ItemRef::Fn(h) = items[0] else { panic!() };
@@ -247,7 +256,7 @@ fn the_pair_artifact_is_the_normalized_text() {
 fn broken_init_is_a_slot_not_a_lost_let() {
     // `let a = 2 + ;` — the LET survives; only the missing RHS is the hole
     let p = parse_with_recover(
-        "fn f() -> nil {\n    let a = 2 + ;\n    let b = 1;\n}\n",
+        "fn f() -> nil {\n    let a = 2 + ;\n    let b = 1;\n}\n".to_string(),
         IMPL,
         ParseOpts::default(),
     );
@@ -272,4 +281,63 @@ fn broken_init_is_a_slot_not_a_lost_let() {
         ref e => panic!("the let survived with its binary: {e:?}"),
     }
     assert!(matches!(stmts[1], StmtRef::Let(_)));
+}
+
+// ---- the canonical-text law: the CRLF twin is the SAME artifact ----
+
+/// A runnable fixture — a comment, a module let, a string literal, a
+/// call: the equivalence must cover docs, token text, and spans.
+const EQUIV_SRC: &str = concat!(
+    "// the answer\n",
+    "let ANSWER = 42;\n",
+    "\n",
+    "entry fn main() -> nil {\n",
+    "    let s = \"hi\";\n",
+    "    print(s);\n",
+    "}\n",
+);
+
+/// the tree AND every node span, as data — `render_json` carries the
+/// span pair per node, so equal renders mean equal trees AND spans
+fn tree_spans(p: &Parsed) -> String {
+    rut_ast::render_json(&rut_ast::to_dump_tree(p.ast()))
+}
+
+#[test]
+fn the_crlf_twin_parses_to_the_identical_tree_and_spans() {
+    let crlf = EQUIV_SRC.replace('\n', "\r\n");
+    assert!(crlf.contains("\r\n"), "the twin is really CRLF");
+    let lf = parse_with_recover(EQUIV_SRC.to_string(), IMPL, ParseOpts::default());
+    let twin = parse_with_recover(crlf, IMPL, ParseOpts::default());
+    // the pair artifact is the NORMALIZED text: the twin's src IS the
+    // LF original, and every span indexes that (never the raw CRLF)
+    assert_eq!(twin.src(), EQUIV_SRC);
+    assert_eq!(twin.src(), lf.src());
+    // the tree and its spans identical
+    assert_eq!(tree_spans(&twin), tree_spans(&lf));
+    // and the span×src join over the twin's own src reads the fixture
+    let items = twin.ast().root().items(twin.ast());
+    let ItemRef::ModuleLet(h) = items[0] else {
+        panic!()
+    };
+    // exact spans: the let ends at its own `;` (prev_end law)
+    assert_eq!(h.get(twin.ast()).span.text(twin.src()), "let ANSWER = 42;");
+}
+
+#[test]
+fn a_lone_cr_normalizes_like_crlf() {
+    // the mapping pinned: a lone `\r` (no following `\n`) becomes `\n`
+    // exactly like the paired form — no `\r` survives anywhere, so no
+    // span can ever index one
+    let lone = "fn f() -> nil {\r    return 1;\r}\r";
+    let p = parse_with_recover(lone.to_string(), IMPL, ParseOpts::default());
+    assert_eq!(p.src(), "fn f() -> nil {\n    return 1;\n}\n");
+    assert!(!p.src().contains('\r'), "no \\r survives: {:?}", p.src());
+    // the lone-\r twin spans exactly like its LF spelling
+    let lf = parse_with_recover(
+        "fn f() -> nil {\n    return 1;\n}\n".to_string(),
+        IMPL,
+        ParseOpts::default(),
+    );
+    assert_eq!(tree_spans(&p), tree_spans(&lf));
 }

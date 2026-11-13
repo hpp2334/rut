@@ -36,7 +36,7 @@ pub use self::line_index::LineIndex;
 // direct frontend Cargo dep to spell what ParsedDoc/classify return
 pub use rut_ast::parser::{is_reserved_kw, Mode, ParseOpts, PRIMITIVE_TYS, RESERVED_KW};
 pub use rut_lexer::diag::Diag;
-pub use rut_lexer::lexer::normalize;
+pub use rut_lexer::lexer::canonical;
 pub use rut_lexer::span::Span;
 pub use rut_lexer::token::{Comment, FloatSuffix, IntSuffix, Tok, Token};
 

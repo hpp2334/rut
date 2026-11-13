@@ -551,7 +551,7 @@ impl<'a> GraphCompiler<'a> {
         // arithmetic, text aside)
         let layout = mod_inputs_of(module, files);
         let mode = if is_decl { Mode::Decl } else { Mode::Impl };
-        let parsed = parse_with_recover(&combined, mode, ParseOpts::default());
+        let parsed = parse_with_recover(combined.clone(), mode, ParseOpts::default());
         if !parsed.ast().is_clean() {
             self.diags.extend(attribute_diags(
                 parsed.ast().errors().to_vec(),

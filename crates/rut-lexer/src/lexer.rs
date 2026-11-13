@@ -1,26 +1,65 @@
-//! Lexer — mode-stack tokenizer. Pure function `&str ->
-//! (Vec<Token>, Vec<Diag>)`. Handles `f"..."` interpolation holes (fully
-//! lexed token streams, brace-balanced), `r"..."` raw strings,
-//! hash-leveled multi-line raw and format strings (`r#"..."#`,
-//! `f#"..."#` — the hash count is the multi-line opt-in AND the
-//! quote-embedding level; level 0 stays newline-terminated),
-//! maximal munch with a longest-match table, reserved-word rejection with
-//! rut-specific messages, and the bracket depth budget
+//! Lexer — mode-stack tokenizer. Two door shapes: [`lex_canonical`]
+//! takes the source BY VALUE and returns it (or its normalized twin)
+//! alongside the tokens — the caller cannot obtain spans indexing a
+//! text it does not hold — and the `&str` doors (`lex`/`lex_mode`/
+//! `lex_collect`) for tests and ad-hoc token streams. Handles `f"..."`
+//! interpolation holes (fully lexed token streams, brace-balanced),
+//! `r"..."` raw strings, hash-leveled multi-line raw and format strings
+//! (`r#"..."#`, `f#"..."#` — the hash count is the multi-line opt-in
+//! AND the quote-embedding level; level 0 stays newline-terminated),
+//! maximal munch with a longest-match table, reserved-word rejection
+//! with rut-specific messages, and the bracket depth budget
 //! (C3 — exceeding it is a Diag, never a host crash).
+
+use std::borrow::Cow;
 
 use crate::diag::Diag;
 use crate::span::{Span, NEST_MAX};
 use crate::token::{Comment, FPart, FStrTok, FloatSuffix, IntSuffix, Tok, Token};
 
-/// CRLF -> LF normalization. Spans index the normalized text,
-/// so every consumer that maps spans back to positions (the LSP's line
-/// index, diag renderers) must run the source through THIS function —
-/// parity with `lex` by construction.
-pub fn normalize(src: &str) -> String {
+/// CRLF -> LF normalization: every `\r\n` pair and every lone `\r`
+/// becomes `\n`. The DIRTY-PATH logic — `pub(crate)` now: nobody
+/// outside rut-lexer can normalize-then-lex by hand, so spans always
+/// index text their holder owns (the doors enforce it by signature:
+/// [`lex_canonical`] returns the text, [`canonical`] never hands out
+/// tokens). Spans index the normalized text, so every consumer that
+/// maps spans back to positions (the LSP's line index, diag
+/// renderers) rides text that went through THIS mapping.
+pub(crate) fn normalize(src: &str) -> String {
+    canonical(src).into_owned()
+}
+
+/// The canonical text for `src` WITHOUT owning it: borrowed when the
+/// source is already LF-clean (zero copies), one [`normalize`]-shaped
+/// pass when dirty. The read-only door — the LSP check lane builds its
+/// text rows from this; no tokens ever come out, so nothing can pair
+/// spans with a foreign text.
+pub fn canonical(src: &str) -> Cow<'_, str> {
     if src.contains('\r') {
-        src.replace("\r\n", "\n").replace('\r', "\n")
+        Cow::Owned(src.replace("\r\n", "\n").replace('\r', "\n"))
     } else {
-        src.to_string()
+        Cow::Borrowed(src)
+    }
+}
+
+/// The canonical ENTRY: takes OWNERSHIP of the source. A clean
+/// (LF-only) input MOVES through unchanged — zero copies — a dirty one
+/// rides the normalize pass (`\r\n` and lone `\r` to `\n`). Either way
+/// the tokens are lexed over the text this returns, so the caller
+/// CANNOT obtain tokens whose spans index a text it does not hold
+/// (the pair law at the leaf layer).
+pub fn lex_canonical(src: String, collect: bool) -> (String, Vec<Token>, Vec<Diag>, Vec<Comment>) {
+    match canonical(&src) {
+        Cow::Borrowed(_) => {
+            // already canonical: the input IS the normalized text —
+            // lex over it and move it out untouched
+            let (toks, diags, comments) = lex_normalized(&src, collect);
+            (src, toks, diags, comments)
+        }
+        Cow::Owned(normalized) => {
+            let (toks, diags, comments) = lex_normalized(&normalized, collect);
+            (normalized, toks, diags, comments)
+        }
     }
 }
 
@@ -46,11 +85,12 @@ pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comm
 }
 
 /// Lex ALREADY-normalized text — the path that normalizes once and
-/// shares: the parser's entry pair (`rut_ast::parser::parse` /
-/// `parse_with_recover`) and every consumer re-deriving the leaf
-/// layer over a `Parsed` artifact ride `p.src` (the normalized text
-/// every span indexes). `lex`/`lex_collect`/`lex_mode` normalize
-/// internally; passing their output here would only re-copy it.
+/// shares: [`lex_canonical`] (and through it the parser's entry pair,
+/// `rut_ast::parser::parse` / `parse_with_recover`) and every consumer
+/// re-deriving the leaf layer over a `Parsed` artifact ride `p.src`
+/// (the normalized text every span indexes). `lex`/`lex_collect`/
+/// `lex_mode` normalize internally; passing their output here would
+/// only re-copy it.
 pub fn lex_normalized(normalized: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
     let mut lx = Lexer::new(normalized, collect);
     lx.run();

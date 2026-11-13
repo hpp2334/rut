@@ -72,7 +72,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 /// `pub builtin`) so the lockstep can check VISIBILITY AGREEMENT
 /// against `Surface::core`'s rows.
 fn declared_names() -> DeclSurfaces {
-    let p = parse_with_recover(CORE_DECL, Mode::Decl, ParseOpts::default());
+    let p = parse_with_recover(CORE_DECL.to_string(), Mode::Decl, ParseOpts::default());
     assert!(
         p.ast().is_clean(),
         "core.d.rut must parse cleanly: {:?}",

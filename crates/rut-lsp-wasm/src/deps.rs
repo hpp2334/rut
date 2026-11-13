@@ -844,9 +844,11 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
 /// DISCARD whole (no backward compat — old bytes mount, their
 /// constants bind nothing); the module-qualified forms ride the dep's
 /// own `mod` tree.
-pub fn index_dep(name: &str, uri: &str, src: &str) -> DefIndex {
+pub fn index_dep(name: &str, uri: &str, src: String) -> DefIndex {
     // the ordinary index pass — `mode_of(uri)` spells the filename
-    // convention (every caller already derived it that way)
+    // convention (every caller already derived it that way). `src` BY
+    // VALUE: it moves into the doc (a fresh walk read moves for free,
+    // a borrowed text clones to move)
     let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
     let mut idx = crate::hover::index(&doc);
     idx.origin = uri.to_string();
@@ -860,7 +862,7 @@ pub fn index_dep(name: &str, uri: &str, src: &str) -> DefIndex {
 /// [`index_dep`] with the file's mod path stamped — one mounted
 /// module of a mod-carrying dep (the dep walk / bundle loader call
 /// this per file; `mod_path` `""` is the pkg root's `mod.rut`).
-pub fn index_dep_mod(name: &str, uri: &str, mod_path: &str, src: &str) -> DefIndex {
+pub fn index_dep_mod(name: &str, uri: &str, mod_path: &str, src: String) -> DefIndex {
     let mut idx = index_dep(name, uri, src);
     idx.mod_path = Some(mod_path.to_string());
     idx
@@ -877,7 +879,7 @@ pub fn index_dep_decl_group(
     name: &str,
     uri: &str,
     mod_path: &str,
-    src: &str,
+    src: String,
 ) -> Vec<(String, DefIndex)> {
     // the ordinary parse once — `mode_of(uri)`: the `.d.rut` suffix IS
     // the declaration entry lane's mode (the filename convention)

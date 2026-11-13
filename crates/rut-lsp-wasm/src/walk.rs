@@ -217,7 +217,7 @@ fn walk_manifest(
         if let Some(bytes) = ctx.io.read(&path) {
             ctx.files -= 1;
             let src = String::from_utf8_lossy(&bytes).into_owned();
-            state.index_named_at(&path, &module, &src);
+            state.index_named_at(&path, &module, src);
         } // a manifest naming a missing entry — index what exists
     }
     // the mod tree (the pkg's own modules): the root module stamps at
@@ -327,8 +327,9 @@ fn mount_mod_tree(
         ctx.files -= 1;
     }
     let text = String::from_utf8_lossy(&bytes).into_owned();
-    // the root re-stamp REPLACES the entries loop's row (same origin)
-    let decls = state.index_mod_at(&root_path, module, "", &text);
+    // the root re-stamp REPLACES the entries loop's row (same origin) —
+    // the fresh read moves into the parse
+    let decls = state.index_mod_at(&root_path, module, "", text);
     // the children mount BESIDE THE ROOT FILE — inside the package's
     // `src/` shell
     let root_dir = dirname(&root_path);
@@ -411,7 +412,7 @@ fn mount_child_mod(
     } else {
         format!("{parent_path}/{name}")
     };
-    let decls = state.index_mod_at(&child_path, module, &mod_path, &text);
+    let decls = state.index_mod_at(&child_path, module, &mod_path, text);
     // a file-form child's children mount BESIDE it, not under `NAME/`
     let child_dir = if child_path == dir_form {
         format!("{declaring_dir}/{name}")

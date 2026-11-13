@@ -196,7 +196,7 @@ pub fn compile_program_resolved(
     // opt-in and the parse can arrive pre-done (the graph walk already
     // parsed the unit once for use validation)
     compile_program_inner(
-        parse_with_recover(src, mode, ParseOpts::default()),
+        parse_with_recover(src.to_string(), mode, ParseOpts::default()),
         module_name,
         scope,
         uses,

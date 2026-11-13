@@ -15,7 +15,7 @@ use rut_lexer::token::Tok;
 #[test]
 fn the_leaf_layer_is_one_call_away_and_deterministic() {
     let src = "fn main() -> nil {\n    let x = 1;\n}\n";
-    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
     let (toks_a, diags, comments) = lex_normalized(p.src(), true);
     let (toks_b, _, _) = lex_normalized(p.src(), false);
     assert!(diags.is_empty());
@@ -49,7 +49,7 @@ fn comments_collect_with_the_rustc_doc_convention() {
         "/* plain block */\n",                                     // plain
         "fn main() -> nil {\n}\n",
     );
-    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
     let (_, diags, comments) = lex_normalized(p.src(), true);
     assert!(diags.is_empty(), "{diags:?}");
     assert_eq!(comments.len(), 9, "{comments:#?}");
@@ -78,7 +78,7 @@ fn comments_collect_with_the_rustc_doc_convention() {
 #[test]
 fn trailing_spaces_trim_off_line_comment_spans_only() {
     let p = parse_with_recover(
-        "// trailing spaces   \nfn main() -> nil {\n}\n/* keep  */\n",
+        "// trailing spaces   \nfn main() -> nil {\n}\n/* keep  */\n".to_string(),
         Mode::Impl,
         ParseOpts::default(),
     );
@@ -101,7 +101,7 @@ fn fstring_hole_interiors_are_not_document_trivia() {
     // a comment inside an f-string hole is FStr TOKEN interior — the
     // bytes belong to the token, not to the document trivia table
     let src = "fn main() -> nil {\n    let s = f\"{ x /* hole */ }\";\n}\n";
-    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
     let (_, _, comments) = lex_normalized(p.src(), true);
     assert!(
         comments.is_empty(),
@@ -112,7 +112,7 @@ fn fstring_hole_interiors_are_not_document_trivia() {
 #[test]
 fn an_unterminated_block_comment_collects_and_diagnoses() {
     let src = "fn main() -> nil {\n}\n/* never closed";
-    let p = parse_with_recover(src, Mode::Impl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
     let (_, diags, comments) = lex_normalized(p.src(), true);
     assert!(
         diags

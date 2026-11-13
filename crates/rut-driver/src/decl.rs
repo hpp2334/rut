@@ -135,7 +135,7 @@ pub fn lower_decl_module(
     children: &BTreeMap<String, ModSource>,
     origin: &str,
 ) -> Result<Mounted, String> {
-    let p = parse_with_recover(src, Mode::Decl, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), Mode::Decl, ParseOpts::default());
     if !p.ast().is_clean() {
         let msgs: Vec<String> = p.ast().errors().iter().map(|d| d.msg.clone()).collect();
         return Err(format!(
@@ -359,7 +359,9 @@ fn lower_module(
                 if !lowered.insert(child_path.clone()) {
                     continue; // first mount wins — one lowering per child
                 }
-                let cp = parse_with_recover(&child.text, Mode::Decl, ParseOpts::default());
+                // the child's text stays mounted (the map borrows) —
+                // clone to move into the child lowering's parse
+                let cp = parse_with_recover(child.text.clone(), Mode::Decl, ParseOpts::default());
                 if !cp.ast().is_clean() {
                     let msgs: Vec<String> =
                         cp.ast().errors().iter().map(|d| d.msg.clone()).collect();
@@ -456,7 +458,8 @@ fn join_path(path: &str, name: &str) -> String {
 /// at parse — so `host fn` rows under a mounted tree can only ever
 /// come from the host lane's own lowering.
 pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
-    let p = parse_with_recover(src, Mode::Decl, ParseOpts::default());
+    // the probe borrows — clone to move into the parse
+    let p = parse_with_recover(src.to_string(), Mode::Decl, ParseOpts::default());
     if !p.ast().is_clean() {
         return Ok(()); // non-parsing surfaces stay inert (doc-only)
     }

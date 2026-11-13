@@ -1,6 +1,6 @@
 use rut_ast::parser::Mode;
 use rut_ast::Ast;
-use rut_lexer::lexer::normalize;
+use rut_lexer::lexer::canonical;
 use rut_lexer::token::Token;
 use rut_lsp_wasm::definition::*;
 use rut_lsp_wasm::hover::DefIndex;
@@ -12,7 +12,7 @@ use rut_lsp_wasm::LineIndex;
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
 fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
-    rut_semantic::ParsedDoc::parse(mode, src)
+    rut_semantic::ParsedDoc::parse(mode, src.to_string())
 }
 
 const DOC: &str = "file:///t/main.rut";
@@ -295,10 +295,10 @@ fn use_name_jumps_to_the_exporting_module() {
     let hits = def(&d, at(d.src(), "use gadgets::{ Widget }", 1) + 15, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, WIDGET_URI);
-    let ix = LineIndex::new(&normalize(WIDGET_DOC));
-    let want = at(&normalize(WIDGET_DOC), "class Widget", 1) + 6;
+    let ix = LineIndex::new(&canonical(WIDGET_DOC));
+    let want = at(&canonical(WIDGET_DOC), "class Widget", 1) + 6;
     assert_eq!(
-        span_of(&normalize(WIDGET_DOC), &ix, &hits[0]),
+        span_of(&canonical(WIDGET_DOC), &ix, &hits[0]),
         (want, want + 6)
     );
     // and a usage site resolves through the same edge
@@ -346,16 +346,16 @@ fn a_both_files_dep_answers_from_the_body() {
     let surface = rut_lsp_wasm::deps::index_dep(
         "pkg",
         "file:///deps/pkg/pkg.d.rut",
-        "pub host fn make() -> i32;\n",
+        "pub host fn make() -> i32;\n".to_string(),
     );
     let body = rut_lsp_wasm::deps::index_dep_mod(
         "pkg",
         "file:///deps/pkg/mod.rut",
         "",
-        "pub fn make() -> i32 { return 1; }\n",
+        "pub fn make() -> i32 { return 1; }\n".to_string(),
     );
     let extra = [surface, body];
-    let body_src = normalize("pub fn make() -> i32 { return 1; }\n");
+    let body_src = canonical("pub fn make() -> i32 { return 1; }\n").into_owned();
     let ix = LineIndex::new(&body_src);
     // the use leaf: the body's `make`, not the surface's
     let hits = def(&d, at(d.src(), "use pkg::{ make }", 1) + 11, &extra);
@@ -384,10 +384,10 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
     let surface = rut_lsp_wasm::deps::index_dep(
         "calc",
         "file:///deps/calc/calc.d.rut",
-        "pub host fn sqrt(x: f64) -> f64;\n",
+        "pub host fn sqrt(x: f64) -> f64;\n".to_string(),
     );
     let extra = [surface];
-    let surface_src = normalize("pub host fn sqrt(x: f64) -> f64;\n");
+    let surface_src = canonical("pub host fn sqrt(x: f64) -> f64;\n").into_owned();
     let ix = LineIndex::new(&surface_src);
     let want = at(&surface_src, "fn sqrt", 1) + 3;
     // the leaf
@@ -414,12 +414,12 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
     let ambient = rut_lsp_wasm::deps::index_dep(
         "ink_host",
         "rut/ink_host/src/ink_host.d.rut",
-        "pub host fn create_logger(name: str) -> opaque;\n",
+        "pub host fn create_logger(name: str) -> opaque;\n".to_string(),
     );
     let mounted = rut_lsp_wasm::deps::index_dep(
         "ink_host",
         "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut",
-        "pub host fn create_logger(name: str) -> opaque;\n",
+        "pub host fn create_logger(name: str) -> opaque;\n".to_string(),
     );
     // the chain order puts the ambient surface first (registered at
     // init, before any mount)
@@ -539,7 +539,7 @@ fn a_mounted_member_beats_the_ambient_twin() {
     ambient.src_path = Some("rut/ink/src/mod.rut".into());
     let mounted = doc_at("file:///ws/.rut/deps/ink-eb2b568316ef/src/mod.rut", surface).index;
     let extra = [ambient, mounted];
-    let surface_src = normalize(surface);
+    let surface_src = canonical(surface).into_owned();
     let six = LineIndex::new(&surface_src);
     // the impl method: `info` in `log.info("x")`
     let hits = def(&d, at(d.src(), "log.info", 1) + 4, &extra);
@@ -570,16 +570,16 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
         "gadgets",
         "file:///deps/gadgets/mod.rut",
         "",
-        "pub mod layout;\npub fn tag() -> i32 { return 1; }\n",
+        "pub mod layout;\npub fn tag() -> i32 { return 1; }\n".to_string(),
     );
     let layout = rut_lsp_wasm::deps::index_dep_mod(
         "gadgets",
         "file:///deps/gadgets/layout/mod.rut",
         "layout",
-        "pub struct Column {\n    w: i32;\n}\n",
+        "pub struct Column {\n    w: i32;\n}\n".to_string(),
     );
     let extra = [root, layout];
-    let root_src = normalize("pub mod layout;\npub fn tag() -> i32 { return 1; }\n");
+    let root_src = canonical("pub mod layout;\npub fn tag() -> i32 { return 1; }\n").into_owned();
     let ix = LineIndex::new(&root_src);
     // the `layout` segment (not the pkg head, not the leaf)
     let hits = def(&d, at(d.src(), "gadgets::layout", 1) + 9, &extra);
@@ -616,7 +616,7 @@ fn app_helpers() -> DefIndex {
         "app",
         "file:///ws/app/helpers/mod.rut",
         "helpers",
-        "pub struct Slot {\n    n: i32;\n}\n",
+        "pub struct Slot {\n    n: i32;\n}\n".to_string(),
     )
 }
 
@@ -667,7 +667,7 @@ fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
         "app",
         "file:///ws/app/helpers/deep.rut",
         "helpers/deep",
-        "pub fn dig() -> i32 { return 1; }\n",
+        "pub fn dig() -> i32 { return 1; }\n".to_string(),
     );
     let dm = DocMods {
         mod_path: Some("helpers".into()),
@@ -690,7 +690,7 @@ fn an_edge_click_never_leaks_across_packages() {
         "other",
         "file:///ws/other/helpers/mod.rut",
         "helpers",
-        "pub struct Slot {\n    n: i32;\n}\n",
+        "pub struct Slot {\n    n: i32;\n}\n".to_string(),
     );
     let extra = [other];
     assert!(def_as(&d, at(d.src(), "mod helpers;", 1) + 4, &extra, &root_dm()).is_empty());
@@ -709,7 +709,7 @@ fn an_own_pkg_use_path_resolves_intra_package() {
         "app",
         "file:///ws/app/on-disk/mod.rut",
         "",
-        "mod helpers;\n",
+        "mod helpers;\n".to_string(),
     );
     let extra = [root_twin, app_helpers()];
     let dm = root_dm();
@@ -732,7 +732,7 @@ fn an_own_pkg_use_path_resolves_intra_package() {
     let hits = def_as(&d, at(d.src(), "{ Slot }", 1) + 2, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
-    let child = normalize("pub struct Slot {\n    n: i32;\n}\n");
+    let child = canonical("pub struct Slot {\n    n: i32;\n}\n").into_owned();
     let cix = LineIndex::new(&child);
     let want = at(&child, "struct Slot", 1) + 7;
     assert_eq!(span_of(&child, &cix, &hits[0]), (want, want + 4));
@@ -752,13 +752,13 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
         "app",
         "file:///ws/app/helpers/mod.rut",
         "helpers",
-        "mod deep;\npub struct Slot {\n    n: i32;\n}\n",
+        "mod deep;\npub struct Slot {\n    n: i32;\n}\n".to_string(),
     );
     let deep = rut_lsp_wasm::deps::index_dep_mod(
         "app",
         "file:///ws/app/helpers/deep.rut",
         "helpers/deep",
-        "pub struct Gem {\n    g: i32;\n}\n",
+        "pub struct Gem {\n    g: i32;\n}\n".to_string(),
     );
     let extra = [helpers, deep];
     let dm = root_dm();
@@ -772,7 +772,7 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
     let hits = def_as(&d, at(d.src(), "helpers::deep", 1) + 10, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/mod.rut");
-    let helpers_src = normalize("mod deep;\npub struct Slot {\n    n: i32;\n}\n");
+    let helpers_src = canonical("mod deep;\npub struct Slot {\n    n: i32;\n}\n").into_owned();
     let hix = LineIndex::new(&helpers_src);
     let want = at(&helpers_src, "mod deep;", 1) + 4;
     assert_eq!(span_of(&helpers_src, &hix, &hits[0]), (want, want + 4));
@@ -780,7 +780,7 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
     let hits = def_as(&d, at(d.src(), "{ Gem }", 1) + 2, &extra, &dm);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(hits[0].uri, "file:///ws/app/helpers/deep.rut");
-    let deep_src = normalize("pub struct Gem {\n    g: i32;\n}\n");
+    let deep_src = canonical("pub struct Gem {\n    g: i32;\n}\n").into_owned();
     let dix = LineIndex::new(&deep_src);
     let want = at(&deep_src, "struct Gem", 1) + 7;
     assert_eq!(span_of(&deep_src, &dix, &hits[0]), (want, want + 3));
@@ -846,7 +846,7 @@ fn std_use_jumps_to_the_true_source_path() {
     let extra = [rut_lsp_wasm::deps::index_dep(
         "pouch",
         "rut/pouch/src/mod.rut",
-        POUCH,
+        POUCH.to_string(),
     )];
     let hits = def(&d, at(d.src(), "= Vec::new();", 1) + 2, &extra);
     assert_eq!(hits.len(), 1, "{hits:?}");
@@ -854,7 +854,7 @@ fn std_use_jumps_to_the_true_source_path() {
     assert_eq!(hits[0].uri, "rut/pouch/src/mod.rut");
     // the reported range is the declaring `Vec` ident in the REAL
     // source file (normalize the fixture const like the index did)
-    let real = normalize(POUCH);
+    let real = canonical(POUCH).into_owned();
     let ix = LineIndex::new(&real);
     let want = at(&real, "class Vec", 1) + 6;
     assert_eq!(span_of(&real, &ix, &hits[0]), (want, want + 3));

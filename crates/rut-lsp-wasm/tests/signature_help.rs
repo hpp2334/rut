@@ -10,7 +10,7 @@ use rut_lsp_wasm::signature_help::*;
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
 fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
-    rut_semantic::ParsedDoc::parse(mode, src)
+    rut_semantic::ParsedDoc::parse(mode, src.to_string())
 }
 
 const DOC: &str = "file:///t/main.rut";

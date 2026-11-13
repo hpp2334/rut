@@ -154,7 +154,10 @@ pub fn check_doc(
     mut groups: Vec<PkgFiles>,
 ) -> Vec<Diagnostic> {
     let path = doc_mod_path.unwrap_or("").to_string();
-    let doc_text = rut_semantic::normalize(doc_src);
+    // the LIVE text, canonicalized through the Cow door — borrowed when
+    // LF-clean, one pass when dirty (the check lane never hands out
+    // tokens; it only builds text rows for the world's own parse)
+    let doc_text = rut_semantic::canonical(doc_src).into_owned();
     // the doc's package rides its LIVE text: find (or synthesize) the
     // group and upsert the doc's file — an unsaved buffer is the truth
     // for its own mod path, the stamps only name the place

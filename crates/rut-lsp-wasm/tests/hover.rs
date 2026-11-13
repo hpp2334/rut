@@ -13,7 +13,7 @@ use rut_lsp_wasm::hover::*;
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
 fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
-    rut_semantic::ParsedDoc::parse(mode, src)
+    rut_semantic::ParsedDoc::parse(mode, src.to_string())
 }
 
 fn hover_at(src: &str, needle: &str) -> Option<String> {
@@ -1068,13 +1068,13 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
         rut_lsp_wasm::deps::index_dep(
             "calc",
             "rut/calc/src/mod.rut",
-            include_str!("../../../rut/calc/src/mod.rut"),
+            include_str!("../../../rut/calc/src/mod.rut").to_string(),
         ),
         rut_lsp_wasm::deps::index_dep_mod(
             "calc",
             "rut/calc/src/math.rut",
             "math",
-            include_str!("../../../rut/calc/src/math.rut"),
+            include_str!("../../../rut/calc/src/math.rut").to_string(),
         ),
     ];
     let mut chain: Vec<&DefIndex> = vec![&di];

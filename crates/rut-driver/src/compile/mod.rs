@@ -44,7 +44,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
     // the recovering entry: ALWAYS a tree, and `p.src` is the
     // NORMALIZED text every span indexes — the renders slice it, never
     // the caller's raw input (the pair-artifact law, v2)
-    let p = parse_with_recover(src, mode, ParseOpts::default());
+    let p = parse_with_recover(src.to_string(), mode, ParseOpts::default());
     let tree = to_dump_tree(p.ast());
     let ast_dump = ast_render_text(&tree, p.src());
     let ast_json = ast_render_json(&tree);
