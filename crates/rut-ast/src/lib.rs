@@ -39,8 +39,9 @@ pub use rut_lexer::span::Span;
 pub use item::{
     AliasNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, EnumMemberNode,
     EnumNode, FieldDeclNode, FieldRef, FnNode, ImplNode, InterfaceNode, ItemRef, Linkage,
-    MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModuleLetNode, ModuleNode,
-    ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode, UseNode, Vis,
+    MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModKind, ModifierNode,
+    ModuleLetNode, ModuleNode, ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode,
+    SurfaceStructNode, UseNode, Vis,
 };
 // statements
 pub use stmt::{

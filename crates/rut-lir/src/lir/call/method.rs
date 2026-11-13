@@ -675,7 +675,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // the member-visibility law: a plain method is
                 // module-private — the call site's module must see the
                 // declaring module through the dial
-                let mvis = mnode.get(self.ctx.ast).vis;
+                let mvis = mnode.get(self.ctx.ast).vis();
                 if let Some(msg) =
                     self.ctx
                         .member_vis_err(dname, mnode.span(self.ctx.ast), name, mvis)
@@ -833,7 +833,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 if let Some((_, mnode)) = e.methods.iter().find(|(mn, _)| *mn == name).cloned() {
                     // the member-visibility law: enum members take the
                     // `pub` dial like a class's
-                    let mvis = mnode.get(self.ctx.ast).vis;
+                    let mvis = mnode.get(self.ctx.ast).vis();
                     if let Some(msg) =
                         self.ctx
                             .member_vis_err(ename, mnode.span(self.ctx.ast), name, mvis)
@@ -890,7 +890,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                                         // the single-origin static bind IS
                                         // a member call — the visibility
                                         // law rides it
-                                        let mvis = node.get(self.ctx.ast).vis;
+                                        let mvis = node.get(self.ctx.ast).vis();
                                         if let Some(msg) = self.ctx.member_vis_err(
                                             data,
                                             node.span(self.ctx.ast),

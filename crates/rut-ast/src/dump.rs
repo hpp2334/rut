@@ -477,10 +477,10 @@ fn field_dump(a: &Ast, r: FieldRef, next: &mut u32) -> DumpNode {
 fn field_decl_dump(a: &Ast, h: Handle<FieldDeclNode>, next: &mut u32) -> DumpNode {
     let d = h.get(a);
     let mut fields = Vec::new();
-    if let Some(v) = d.vis {
+    if let Some(v) = d.vis() {
         fields.push(field("vis", DumpVal::OptVis(Some(v))));
     }
-    if d.is_static {
+    if d.is_static() {
         fields.push(field("static", DumpVal::Flag(true)));
     }
     fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
@@ -509,13 +509,13 @@ fn method_dump(a: &Ast, r: MethodRef, next: &mut u32) -> DumpNode {
 fn method_decl_dump(a: &Ast, h: Handle<MethodDeclNode>, next: &mut u32) -> DumpNode {
     let d = h.get(a);
     let mut fields = Vec::new();
-    if let Some(v) = d.vis {
+    if let Some(v) = d.vis() {
         fields.push(field("vis", DumpVal::OptVis(Some(v))));
     }
-    if d.is_async {
+    if d.is_async() {
         fields.push(field("async", DumpVal::Flag(true)));
     }
-    if let Some(m) = d.marker {
+    if let Some(m) = d.marker() {
         fields.push(field("marker", DumpVal::Str(a.name(m).to_string())));
     }
     fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));

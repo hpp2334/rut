@@ -1339,7 +1339,7 @@ impl<'a> Ctx<'a> {
                     return None;
                 };
                 let fd = fh.get(self.ast);
-                (fd.name == name).then_some(fd.vis)
+                (fd.name == name).then_some(fd.vis())
             })
             .flatten();
         self.member_vis_err(dname, d.node.span(self.ast), name, fvis)

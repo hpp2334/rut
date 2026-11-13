@@ -270,7 +270,7 @@ impl<'a> Ctx<'a> {
             let disposal = sym::DISPOSAL_MARKER;
             let marked: Vec<IdentId> = mths
                 .iter()
-                .filter(|(_, m)| m.get(self.ast).marker == Some(disposal))
+                .filter(|(_, m)| m.get(self.ast).marker() == Some(disposal))
                 .map(|(n, _)| *n)
                 .collect();
             if std::env::var("RUT_DEBUG_SATISFY").is_ok() {
@@ -289,7 +289,7 @@ impl<'a> Ctx<'a> {
             let constructor = sym::CONSTRUCTOR_MARKER;
             if let Some((cn, _)) = mths
                 .iter()
-                .find(|(_, m)| m.get(self.ast).marker == Some(constructor))
+                .find(|(_, m)| m.get(self.ast).marker() == Some(constructor))
             {
                 self.class_ctors.insert(tname, *cn);
             }
@@ -316,7 +316,7 @@ impl<'a> Ctx<'a> {
             // unknown word dies here too (the closed set's other gate)
             for (_n, mnode) in &mths {
                 let md = mnode.get(self.ast);
-                let Some(word) = md.marker else { continue };
+                let Some(word) = md.marker() else { continue };
                 if word == sym::DISPOSAL_MARKER {
                     self.err(mnode.span(self.ast), format!(
                         "`{}` cannot carry `[disposal]` — only a struct or class can (the engine disposes a record's cell; an enum's members are immortal singletons)",
@@ -401,7 +401,7 @@ impl<'a> Ctx<'a> {
         };
         for (n, mnode) in mths {
             let md = mnode.get(self.ast);
-            let Some(word) = md.marker else { continue };
+            let Some(word) = md.marker() else { continue };
             if word != disposal && word != iterable && word != constructor {
                 self.err(
                     mnode.span(self.ast),
@@ -412,7 +412,7 @@ impl<'a> Ctx<'a> {
                 );
                 continue;
             }
-            if md.is_async {
+            if md.is_async() {
                 self.err(
                     mnode.span(self.ast),
                     format!(
@@ -428,12 +428,12 @@ impl<'a> Ctx<'a> {
                 .map(|d| {
                     d.methods
                         .iter()
-                        .any(|(pn, pm)| *pn != *n && pm.get(self.ast).marker == Some(word))
+                        .any(|(pn, pm)| *pn != *n && pm.get(self.ast).marker() == Some(word))
                 })
                 .unwrap_or(false)
                 || mths
                     .iter()
-                    .any(|(pn, pm)| pn != n && pm.get(self.ast).marker == Some(word));
+                    .any(|(pn, pm)| pn != n && pm.get(self.ast).marker() == Some(word));
             if already {
                 if word == constructor {
                     // the duplicate names BOTH member spellings — the
@@ -443,12 +443,14 @@ impl<'a> Ctx<'a> {
                         .and_then(|d| {
                             d.methods
                                 .iter()
-                                .find(|(pn, pm)| *pn != *n && pm.get(self.ast).marker == Some(word))
+                                .find(|(pn, pm)| {
+                                    *pn != *n && pm.get(self.ast).marker() == Some(word)
+                                })
                                 .map(|(pn, _)| *pn)
                         })
                         .or_else(|| {
                             mths.iter()
-                                .find(|(pn, pm)| pn != n && pm.get(self.ast).marker == Some(word))
+                                .find(|(pn, pm)| pn != n && pm.get(self.ast).marker() == Some(word))
                                 .map(|(pn, _)| *pn)
                         });
                     match other {

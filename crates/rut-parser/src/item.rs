@@ -8,9 +8,9 @@
 use rut_ast::{
     AliasNode, BlockNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, DocData,
     EnumNode, FieldDeclNode, FieldRef, FnNode, Handle, IdentId, ImplNode, InterfaceNode, ItemRef,
-    Linkage, MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModuleLetNode,
-    ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode, TyRef,
-    UseNode, Vis,
+    Linkage, MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModKind,
+    ModifierNode, ModuleLetNode, ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode,
+    SurfaceStructNode, TyRef, UseNode, Vis,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
@@ -854,8 +854,7 @@ impl TyDeclFrame {
                 // own chain above)
                 let field = FieldDeclNode {
                     span: ty_span,
-                    vis: None,
-                    is_static: false,
+                    modifiers: Vec::new(),
                     name: inner,
                     name_span: ty_span,
                     ty: t,
@@ -1088,8 +1087,8 @@ pub(crate) struct TypeBodyFrame {
     stage: TbStage,
     /// the member under construction
     f_lo: Span,
-    f_vis: Option<Vis>,
-    f_static: bool,
+    /// the member's spelled modifiers, in source order
+    f_mods: Vec<ModifierNode>,
     f_name: Name,
     f_ty: Option<TyRef>,
     /// member start + diag watermark (the fence's extent)
@@ -1114,8 +1113,7 @@ impl TypeBodyFrame {
             methods: Vec::new(),
             stage: TbStage::Open,
             f_lo: Span::new(0, 0),
-            f_vis: None,
-            f_static: false,
+            f_mods: Vec::new(),
             f_name: Name {
                 id: IdentId(0),
                 span: Span::new(0, 0),
@@ -1153,12 +1151,14 @@ impl TypeBodyFrame {
 
     /// The bracket marker's PARSE half: `[word]` before a member's
     /// modifiers — any contextual ident; the CHECKER validates the
-    /// closed marker set.
-    fn parse_member_marker(p: &mut Parser) -> Option<IdentId> {
+    /// closed marker set. The modifier's SPAN (brackets included)
+    /// rides along — it is a ModifierNode's own span.
+    fn parse_member_marker(p: &mut Parser) -> Option<(IdentId, Span)> {
         if !matches!(p.tok(), Tok::LBracket) {
             return None;
         }
-        let lo = p.span();
+        let br = p.span(); // the `[` token — the diag anchor
+        let lo = br.lo;
         p.bump(); // [
         let word = p
             .expect_ident("a marker name after `[`")
@@ -1166,11 +1166,11 @@ impl TypeBodyFrame {
             .unwrap_or(IdentId(0));
         if p.expect(Tok::RBracket).is_none() {
             p.err(
-                lo,
+                br,
                 "unterminated marker — `[disposal]` / `[iterable]` / `[constructor]`",
             );
         }
-        Some(word)
+        Some((word, Span::new(lo, p.prev_end.max(lo))))
     }
 
     fn members_top(&mut self, p: &mut Parser) -> Step {
@@ -1209,7 +1209,10 @@ impl TypeBodyFrame {
                             p.err(lo, "host structs declare fields only —methods live in rut wrapper classes");
                             self.stage = TbStage::Method;
                             return Step::Push(Frame::Method(MethodFrame::new(
-                                None, false, false, false,
+                                Vec::new(),
+                                lo.lo,
+                                false,
+                                false,
                             )));
                         }
                         Tok::Ident(_) => {
@@ -1220,8 +1223,7 @@ impl TypeBodyFrame {
                             p.expect(Tok::Colon);
                             self.stage = TbStage::FieldTy;
                             self.f_lo = lo;
-                            self.f_vis = None;
-                            self.f_static = false;
+                            self.f_mods = Vec::new();
                             self.f_name = name;
                             return Step::Push(Frame::Type(TypeFrame::new(p)));
                         }
@@ -1239,13 +1241,17 @@ impl TypeBodyFrame {
                     is_struct,
                 } => {
                     let lo = p.span();
-                    let mut vis: Option<Vis> = None;
-                    let mut is_static = false;
+                    let mut mods: Vec<ModifierNode> = Vec::new();
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
                             "pub" => {
+                                let m_lo = p.span().lo;
                                 p.bump();
-                                vis = Some(pub_scope(p));
+                                let v = pub_scope(p);
+                                mods.push(ModifierNode {
+                                    span: Span::new(m_lo, p.prev_end.max(m_lo)),
+                                    kind: ModKind::Pub(v),
+                                });
                                 if !allow_pub {
                                     p.err(
                                         lo,
@@ -1254,8 +1260,12 @@ impl TypeBodyFrame {
                                 }
                             }
                             "static" => {
-                                is_static = true;
+                                let sp = p.span();
                                 p.bump();
+                                mods.push(ModifierNode {
+                                    span: sp,
+                                    kind: ModKind::Static,
+                                });
                                 if is_struct {
                                     p.err(lo, "structs have no `static` members");
                                 }
@@ -1275,7 +1285,7 @@ impl TypeBodyFrame {
                                     "methods live in `impl` blocks —type bodies declare fields only",
                                 );
                             }
-                            if is_static {
+                            if mods.iter().any(|m| matches!(m.kind, ModKind::Static)) {
                                 p.err(
                                     lo,
                                     "there is no `static fn` —a method without `self` IS a class method",
@@ -1283,7 +1293,7 @@ impl TypeBodyFrame {
                             }
                             self.stage = TbStage::Method;
                             return Step::Push(Frame::Method(MethodFrame::new(
-                                vis, false, true, true,
+                                mods, lo.lo, true, true,
                             )));
                         }
                         Tok::Ident(_) => {
@@ -1294,8 +1304,7 @@ impl TypeBodyFrame {
                             p.expect(Tok::Colon);
                             self.stage = TbStage::FieldTy;
                             self.f_lo = lo;
-                            self.f_vis = vis;
-                            self.f_static = is_static;
+                            self.f_mods = mods;
                             self.f_name = name;
                             return Step::Push(Frame::Type(TypeFrame::new(p)));
                         }
@@ -1310,7 +1319,7 @@ impl TypeBodyFrame {
                 }
                 BodyMode::Interface => {
                     let lo = p.span();
-                    let mut is_async = false;
+                    let mut mods: Vec<ModifierNode> = Vec::new();
                     let marker = Self::parse_member_marker(p);
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
@@ -1320,13 +1329,17 @@ impl TypeBodyFrame {
                                 p.err(lo, "interface members carry no `pub` —the interface's visibility rules");
                             }
                             "async" => {
-                                is_async = true;
+                                let sp = p.span();
                                 p.bump();
+                                mods.push(ModifierNode {
+                                    span: sp,
+                                    kind: ModKind::Async,
+                                });
                             }
                             _ => break,
                         }
                     }
-                    if let Some(word) = marker {
+                    if let Some((word, _)) = marker {
                         p.err(lo, format!(
                             "`[{}]` marks an inherent impl member — engine contracts are declared on `impl Type {{ .. }}` blocks, never an interface",
                             p.ast.name(word)
@@ -1335,10 +1348,10 @@ impl TypeBodyFrame {
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
                         return Step::Push(Frame::Method(MethodFrame::new(
-                            None, is_async, false, true,
+                            mods, lo.lo, false, true,
                         )));
                     }
-                    if is_async {
+                    if mods.iter().any(|m| matches!(m.kind, ModKind::Async)) {
                         p.err(lo, "expected `fn` after `async`");
                     }
                     let (what, found) = (self.mode_noun(), p.peek(0).describe());
@@ -1349,18 +1362,31 @@ impl TypeBodyFrame {
                     // `impl T { .. }` — inherent methods: the bracket
                     // marker FIRST, then `pub`/`async`
                     let lo = p.span();
-                    let marker = Self::parse_member_marker(p);
-                    let mut vis: Option<Vis> = None;
-                    let mut is_async = false;
+                    let mut mods: Vec<ModifierNode> = Vec::new();
+                    if let Some((word, sp)) = Self::parse_member_marker(p) {
+                        mods.push(ModifierNode {
+                            span: sp,
+                            kind: ModKind::Marker(word),
+                        });
+                    }
                     while let Tok::Ident(m) = p.tok().clone() {
                         match m.as_str() {
                             "pub" => {
+                                let m_lo = p.span().lo;
                                 p.bump();
-                                vis = Some(pub_scope(p));
+                                let v = pub_scope(p);
+                                mods.push(ModifierNode {
+                                    span: Span::new(m_lo, p.prev_end.max(m_lo)),
+                                    kind: ModKind::Pub(v),
+                                });
                             }
                             "async" => {
-                                is_async = true;
+                                let sp = p.span();
                                 p.bump();
+                                mods.push(ModifierNode {
+                                    span: sp,
+                                    kind: ModKind::Async,
+                                });
                             }
                             _ => break,
                         }
@@ -1370,11 +1396,11 @@ impl TypeBodyFrame {
                     }
                     if p.at_kw("fn") {
                         self.stage = TbStage::Method;
-                        let mut mf = MethodFrame::new(vis, is_async, true, true);
-                        mf.marker = marker;
-                        return Step::Push(Frame::Method(mf));
+                        return Step::Push(Frame::Method(MethodFrame::new(
+                            mods, lo.lo, true, true,
+                        )));
                     }
-                    if is_async {
+                    if mods.iter().any(|m| matches!(m.kind, ModKind::Async)) {
                         p.err(lo, "expected `fn` after `async`");
                     }
                     let (what, found) = (self.mode_noun(), p.peek(0).describe());
@@ -1442,8 +1468,7 @@ impl TypeBodyFrame {
             p,
             FieldDeclNode {
                 span: Span::new(self.f_lo.lo, p.prev_end.max(self.f_lo.lo)),
-                vis: self.f_vis,
-                is_static: self.f_static,
+                modifiers: std::mem::take(&mut self.f_mods),
                 name: self.f_name.id,
                 name_span: self.f_name.span,
                 ty: self.f_ty.take().expect("field without a type"),
@@ -1467,10 +1492,11 @@ impl TypeBodyFrame {
 // ---- methods ----
 
 pub(crate) struct MethodFrame {
+    /// the member's first-token lo — the span law starts the decl there
+    /// (the leading modifier when one is spelled, `fn` otherwise)
     lo: u32,
-    vis: Option<Vis>,
-    is_async: bool,
-    marker: Option<IdentId>,
+    /// the spelled modifiers, in source order
+    modifiers: Vec<ModifierNode>,
     with_body: bool,
     allow_bounds: bool,
     stage: MeStage,
@@ -1492,16 +1518,14 @@ enum MeStage {
 
 impl MethodFrame {
     pub(crate) fn new(
-        vis: Option<Vis>,
-        is_async: bool,
+        modifiers: Vec<ModifierNode>,
+        member_lo: u32,
         with_body: bool,
         allow_bounds: bool,
     ) -> Self {
         MethodFrame {
-            lo: 0,
-            vis,
-            is_async,
-            marker: None,
+            lo: member_lo,
+            modifiers,
             with_body,
             allow_bounds,
             stage: MeStage::Params,
@@ -1518,7 +1542,7 @@ impl MethodFrame {
     }
 
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        self.lo = p.bump().span.lo; // fn
+        p.bump(); // fn — the span already starts at the member's first token
         let Some(name) = p.expect_ident("a method name") else {
             return Step::Pop(Done::Failed);
         };
@@ -1572,9 +1596,7 @@ impl MethodFrame {
             p,
             MethodDeclNode {
                 span: p.span_from(self.lo),
-                vis: self.vis,
-                is_async: self.is_async,
-                marker: self.marker.take(),
+                modifiers: std::mem::take(&mut self.modifiers),
                 name: self.name.id,
                 name_span: self.name.span,
                 generics: std::mem::take(&mut self.generics),
@@ -2054,16 +2076,20 @@ impl SurfaceFrame {
                 };
                 return Step::Pop(Done::Item(item));
             }
-            let is_async = if p.at_kw("async") {
+            let member_lo = p.span().lo;
+            let mut mods: Vec<ModifierNode> = Vec::new();
+            if p.at_kw("async") {
+                let sp = p.span();
                 p.bump();
-                true
-            } else {
-                false
-            };
+                mods.push(ModifierNode {
+                    span: sp,
+                    kind: ModKind::Async,
+                });
+            }
             if p.at_kw("fn") {
                 self.stage = SuStage::Members;
                 return Step::Push(Frame::Method(MethodFrame::new(
-                    None, is_async, false, false,
+                    mods, member_lo, false, false,
                 )));
             }
             let found = p.peek(0).describe();

@@ -30,8 +30,8 @@ fn positional_decl_desugars_to_one_inner_field() {
     };
     let fd = fh.get(&ast);
     assert_eq!(ast.name(fd.name), "inner");
-    assert_eq!(fd.vis, None, "the field rides the module-private default");
-    assert!(!fd.is_static && fd.init.is_none());
+    assert_eq!(fd.vis(), None, "the field rides the module-private default");
+    assert!(!fd.is_static() && fd.init.is_none());
     // the wrapped type is the field's type node — the same span as the
     // spelled `(i64)` parens' interior
     let TyRef::Path(t) = fd.ty else {

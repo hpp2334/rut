@@ -46,12 +46,17 @@ use rut_semantic::LineIndex;
 #[derive(Debug, Clone)]
 pub struct MemberSrc {
     pub name: String,
-    /// verbatim source of the declaration (signature for methods)
+    /// verbatim source of the declaration (signature for methods) —
+    /// modifiers included: the decl span starts at the member's first
+    /// token
     pub src: String,
     /// the declared type as written — fields: the type; methods: the
     /// return (`None` = unwritten, i.e. `nil`-returning). Inferred-type
     /// hovers key on this instead of re-parsing `src`
     pub ty: Option<String>,
+    /// the `static` verdict, derived from the field's modifier nodes —
+    /// the `::` completion tier's gate (methods are never static)
+    pub is_static: bool,
     /// byte span of the name identifier — token recovery (names are
     /// `IdentId`s: the AST carries no name spans, no parser changes).
     /// The field / enum-member decl-site hover and phase 2's

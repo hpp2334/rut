@@ -58,12 +58,36 @@ pub struct InterfaceNode {
     pub doc: DocData,
 }
 
+/// one member modifier — a SPANNED child node riding the decl in
+/// source order; the decl's flags are the DERIVED view (the node's
+/// accessors), never the storage
+#[derive(Clone, Debug)]
+pub struct ModifierNode {
+    pub span: Span,
+    pub kind: ModKind,
+}
+
+/// the member modifier set. Item-level kinds (`entry`/`host`/
+/// `builtin`) belong to the item decls and land with them.
+#[derive(Clone, Debug)]
+pub enum ModKind {
+    /// `pub`, `pub(super)`, `pub(pkg)` — the span covers the parens
+    Pub(Vis),
+    /// `async`
+    Async,
+    /// `static`
+    Static,
+    /// `[disposal]` etc. — the span covers the brackets
+    Marker(IdentId),
+}
+
 /// struct/class field: `pub(..)`? `static`? name: ty (= init)?
 #[derive(Clone, Debug)]
 pub struct FieldDeclNode {
     pub span: Span,
-    pub vis: Option<Vis>,
-    pub is_static: bool,
+    /// the modifier chain in source order — `vis()`/`is_static()`
+    /// derive from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub ty: TyRef,
@@ -71,15 +95,31 @@ pub struct FieldDeclNode {
     pub doc: DocData,
 }
 
+impl FieldDeclNode {
+    /// the spelled member visibility, if any
+    pub fn vis(&self) -> Option<Vis> {
+        self.modifiers.iter().find_map(|m| match m.kind {
+            ModKind::Pub(v) => Some(v),
+            _ => None,
+        })
+    }
+    /// spelled `static`?
+    pub fn is_static(&self) -> bool {
+        self.modifiers
+            .iter()
+            .any(|m| matches!(m.kind, ModKind::Static))
+    }
+}
+
 /// `pub(..)`? `[marker]`? `async`? fn name<..>(self, ..) -> T { .. }`
 #[derive(Clone, Debug)]
 pub struct MethodDeclNode {
+    /// starts at the member's FIRST token — the leading modifier when
+    /// one is spelled, `fn` otherwise
     pub span: Span,
-    pub vis: Option<Vis>,
-    pub is_async: bool,
-    /// the designated surface the member fills (`[disposal]` /
-    /// `[iterable]` / `[constructor]`) — validated by the checker
-    pub marker: Option<IdentId>,
+    /// the modifier chain in source order — `vis()`/`is_async()`/
+    /// `marker()` derive from it
+    pub modifiers: Vec<ModifierNode>,
     pub name: IdentId,
     pub name_span: Span,
     pub generics: Vec<IdentId>,
@@ -90,6 +130,30 @@ pub struct MethodDeclNode {
     /// `None` in interfaces / surface classes / diagnosed bodiless forms
     pub body: Option<Handle<BlockNode>>,
     pub doc: DocData,
+}
+
+impl MethodDeclNode {
+    /// the spelled member visibility, if any
+    pub fn vis(&self) -> Option<Vis> {
+        self.modifiers.iter().find_map(|m| match m.kind {
+            ModKind::Pub(v) => Some(v),
+            _ => None,
+        })
+    }
+    /// spelled `async`?
+    pub fn is_async(&self) -> bool {
+        self.modifiers
+            .iter()
+            .any(|m| matches!(m.kind, ModKind::Async))
+    }
+    /// the designated surface the member fills (`[disposal]` /
+    /// `[iterable]` / `[constructor]`) — validated by the checker
+    pub fn marker(&self) -> Option<IdentId> {
+        self.modifiers.iter().find_map(|m| match m.kind {
+            ModKind::Marker(w) => Some(w),
+            _ => None,
+        })
+    }
 }
 
 /// the field slot — a field or an ErrorNode in its place

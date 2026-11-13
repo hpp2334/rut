@@ -360,7 +360,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // dial like any member — the `[constructor]` sugar
                 // (`Type(..)`) lowers through this very arm, so the
                 // construction seal rides the member's `pub` too
-                let mvis = fmnode.get(self.ctx.ast).vis;
+                let mvis = fmnode.get(self.ctx.ast).vis();
                 if let Some(msg) =
                     self.ctx
                         .member_vis_err(dname, fmnode.span(self.ctx.ast), member, mvis)
@@ -543,7 +543,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             if let Some((_, mnode)) = e.methods.iter().find(|(m, _)| *m == member).cloned() {
                 // the member-visibility law: enum members take the
                 // `pub` dial like a class's
-                let mvis = mnode.get(self.ctx.ast).vis;
+                let mvis = mnode.get(self.ctx.ast).vis();
                 if let Some(msg) =
                     self.ctx
                         .member_vis_err(base, mnode.span(self.ctx.ast), member, mvis)

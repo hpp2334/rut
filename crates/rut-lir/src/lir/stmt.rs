@@ -1379,7 +1379,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         for (n, methods, generics) in locals {
             for (mname, mnode) in &methods {
                 let md = mnode.get(self.ctx.ast);
-                if md.marker != Some(iterable_marker) {
+                if md.marker() != Some(iterable_marker) {
                     continue;
                 }
                 // designated members take the `pub` dial: the weave's
@@ -1387,7 +1387,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 // the site's module must see the declaring module
                 if let Some(msg) =
                     self.ctx
-                        .member_vis_err(n, mnode.span(self.ctx.ast), *mname, md.vis)
+                        .member_vis_err(n, mnode.span(self.ctx.ast), *mname, md.vis())
                 {
                     self.ctx.err(sp, msg);
                     return Some(Err(()));

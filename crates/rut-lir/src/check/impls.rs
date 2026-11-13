@@ -234,7 +234,7 @@ impl<'a> Ctx<'a> {
                 out.push(MemberReq {
                     name: md.name,
                     self_form: md.params.first().and_then(|p| self.self_param_mut(*p)),
-                    is_async: Some(md.is_async),
+                    is_async: Some(md.is_async()),
                     ptys,
                     ret,
                 });
@@ -394,7 +394,7 @@ impl<'a> Ctx<'a> {
                     .map(|r| self.resolve_sig_ty(r, env, Some(concrete)))
                     .unwrap_or(TY_NIL);
                 let sf = md.params.first().and_then(|p| self.self_param_mut(*p));
-                (sf, Some(md.is_async), ptys, ret)
+                (sf, Some(md.is_async()), ptys, ret)
             }
             MemberSrc::Extern { row, subst, .. } => {
                 // placeholder-spelled rows substitute per instantiation;

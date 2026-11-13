@@ -13,7 +13,8 @@ mod surface;
 mod type_alias;
 
 pub use class::{
-    ClassNode, FieldDeclNode, FieldRef, InterfaceNode, MethodDeclNode, MethodRef, StructNode,
+    ClassNode, FieldDeclNode, FieldRef, InterfaceNode, MethodDeclNode, MethodRef, ModKind,
+    ModifierNode, StructNode,
 };
 pub use enum_decl::{EnumMemberNode, EnumNode, MemberRef};
 pub use func::{FnNode, ParamNode, ParamRef, SelfParamNode};

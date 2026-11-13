@@ -319,7 +319,7 @@ impl<'a> Ctx<'a> {
         let datas = self.datas.clone();
         for (dname, d) in datas {
             for (n, mnode) in &d.methods {
-                if mnode.get(self.ast).marker != Some(disposal) {
+                if mnode.get(self.ast).marker() != Some(disposal) {
                     continue;
                 }
                 let key = Inst {
@@ -350,7 +350,7 @@ impl<'a> Ctx<'a> {
         for (_, d) in &self.datas {
             if d.methods
                 .iter()
-                .any(|(_, m)| m.get(self.ast).marker == Some(disposal))
+                .any(|(_, m)| m.get(self.ast).marker() == Some(disposal))
             {
                 set.insert(d.ty);
             }

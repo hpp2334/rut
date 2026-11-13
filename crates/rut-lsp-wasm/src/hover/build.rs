@@ -73,6 +73,9 @@ fn member(
         name: name.to_string(),
         src: sig,
         ty,
+        // only a field can be a declared static — the flag's truth rides
+        // the row (the field lane overwrites it from the node)
+        is_static: false,
         name_span: Some(name_span),
         doc,
         line: line_of(src, span.lo),
@@ -91,20 +94,14 @@ fn members_of(src: &str, ast: &Ast, methods: &[MethodRef]) -> Vec<MemberSrc> {
         .collect()
 }
 
-/// one method's member row — `pub(..)`/`async` sit before `fn`, outside
-/// the node's span; restore them from the flags (truthful to intent)
+/// one method's member row — the decl span starts at the member's
+/// FIRST token (the leading modifier when one is spelled), so the
+/// verbatim slice IS the whole signature: `pub async fn f(..)`.
+/// Truthful to source, no flag re-rendering
 fn method_of(src: &str, ast: &Ast, h: Handle<MethodDeclNode>) -> MemberSrc {
     let d = h.get(ast);
     let sp = d.span;
-    let mut pre = String::new();
-    if let Some(v) = d.vis {
-        pre.push_str(&member_vis_str(v));
-        pre.push(' ');
-    }
-    if d.is_async {
-        pre.push_str("async ");
-    }
-    let sig = format!("{pre}{}", sig_src(src, ast, sp, d.body));
+    let sig = sig_src(src, ast, sp, d.body);
     let name = ast.name(d.name);
     member(
         src,
@@ -117,44 +114,10 @@ fn method_of(src: &str, ast: &Ast, h: Handle<MethodDeclNode>) -> MemberSrc {
     )
 }
 
-/// the `pub`-form spelling of a member visibility
-fn member_vis_str(v: Vis) -> String {
-    match v {
-        Vis::Pub => "pub".to_string(),
-        Vis::Super => "pub(super)".to_string(),
-        Vis::Pkg => "pub(pkg)".to_string(),
-        // unreachable from the parser today (the `pub(self)` spelling
-        // is gone) — the default renders bare
-        Vis::Self_ => "private".to_string(),
-    }
-}
-
-/// strip leading member modifiers (`pub`, `pub(..)`, `static`) from a
-/// source slice — they are re-rendered from the decl's flags
-fn strip_member_mods(mut s: &str) -> &str {
-    loop {
-        let t = s.trim_start();
-        let word_end = t.find(char::is_whitespace).unwrap_or(t.len());
-        let rest = &t[word_end..];
-        match &t[..word_end] {
-            "pub" => {
-                let r = rest.trim_start();
-                if let Some(inner) = r.strip_prefix('(') {
-                    if let Some(i) = inner.find(')') {
-                        s = &inner[i + 1..];
-                        continue;
-                    }
-                }
-                s = rest;
-            }
-            "static" => s = rest,
-            _ => return t,
-        }
-    }
-}
-
 /// field member list: the decl slice carries the modifiers (the field
-/// span starts before them) —strip, then re-render from the flags
+/// span starts at the member's first token) — sliced verbatim; the
+/// `static` gate rides the row's own flag (derived from the modifier
+/// nodes), never a string match on the render
 fn field_members(src: &str, ast: &Ast, fields: &[FieldRef]) -> Vec<MemberSrc> {
     fields
         .iter()
@@ -164,23 +127,13 @@ fn field_members(src: &str, ast: &Ast, fields: &[FieldRef]) -> Vec<MemberSrc> {
             };
             let d: &FieldDeclNode = h.get(ast);
             let sp = d.span;
-            let mut vis = String::new();
-            if let Some(v) = d.vis {
-                vis.push_str(&member_vis_str(v));
-                vis.push(' ');
-            }
-            if d.is_static {
-                vis.push_str("static ");
-            }
-            let body = strip_member_mods(
-                src[sp.lo as usize..sp.hi as usize]
-                    .trim_end()
-                    .trim_end_matches(';'),
-            )
-            .to_string();
-            let decl = format!("{vis}{body}");
+            let decl = src[sp.lo as usize..sp.hi as usize]
+                .trim_end()
+                .trim_end_matches(';')
+                .trim_end()
+                .to_string();
             let name = ast.name(d.name);
-            Some(member(
+            let mut row = member(
                 src,
                 name,
                 decl,
@@ -188,7 +141,9 @@ fn field_members(src: &str, ast: &Ast, fields: &[FieldRef]) -> Vec<MemberSrc> {
                 sp,
                 d.name_span,
                 doc_of(&d.doc, src),
-            ))
+            );
+            row.is_static = d.is_static();
+            Some(row)
         })
         .collect()
 }
@@ -374,7 +329,7 @@ pub fn index_items(src: &str, ast: &Ast, toks: &[Token], items: &[ItemRef]) -> D
                         ret: md.ret.map(|r| ty_src(ast, r)),
                         params: param_names(ast, &md.params),
                         doc: doc_of(&md.doc, src),
-                        vis: md.vis.unwrap_or(Vis::Pub),
+                        vis: md.vis().unwrap_or(Vis::Pub),
                         ambient: false,
                         owner: Some(target_head.clone()),
                         span: sp,

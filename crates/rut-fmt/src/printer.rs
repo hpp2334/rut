@@ -1091,11 +1091,11 @@ impl<'a> P<'a> {
         self.begin_el(span, Begin::Stmt);
         if let FieldRef::Field(h) = m {
             let d = h.get(self.a);
-            if let Some(v) = d.vis.and_then(vis_opt) {
+            if let Some(v) = d.vis().and_then(vis_opt) {
                 self.text(v);
                 self.sp();
             }
-            if d.is_static {
+            if d.is_static() {
                 self.text("static ");
             }
             self.text(self.a.name(d.name));
@@ -1291,17 +1291,17 @@ impl<'a> P<'a> {
     fn method_decl(&mut self, h: Handle<MethodDeclNode>) {
         let d = h.get(self.a);
         // the bracket marker comes FIRST (marker-before-visibility)
-        if let Some(mk) = d.marker {
+        if let Some(mk) = d.marker() {
             self.text("[");
             self.text(self.a.name(mk));
             self.text("]");
             self.sp();
         }
-        if let Some(v) = d.vis.and_then(vis_opt) {
+        if let Some(v) = d.vis().and_then(vis_opt) {
             self.text(v);
             self.sp();
         }
-        if d.is_async {
+        if d.is_async() {
             self.text("async ");
         }
         self.text("fn ");

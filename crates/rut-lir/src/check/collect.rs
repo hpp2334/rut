@@ -377,7 +377,7 @@ impl<'a> Ctx<'a> {
                 continue;
             };
             let fd = fh.get(self.ast);
-            if fd.is_static {
+            if fd.is_static() {
                 self.err(
                     fh.span(self.ast),
                     "`static` fields do not exist — there is no mutable module state; thread state explicitly or hold it in an `opaque` container the host passes back",
@@ -408,7 +408,7 @@ impl<'a> Ctx<'a> {
                 .find(|x| x.name == fd.name)
                 .map(|x| x.ty)
                 .unwrap_or(TY_I32);
-            flds.push((fd.name, fty, fd.init, fd.vis));
+            flds.push((fd.name, fty, fd.init, fd.vis()));
         }
         self.datas[idx].1.fields = flds;
     }
@@ -729,7 +729,7 @@ impl<'a> Ctx<'a> {
                 continue;
             };
             let fd = fh.get(self.ast);
-            if fd.is_static {
+            if fd.is_static() {
                 self.err(
                     fh.span(self.ast),
                     "`static` fields do not exist — there is no mutable module state; thread state explicitly or hold it in an `opaque` container the host passes back",

@@ -1547,16 +1547,10 @@ async function main() {
         const pouchUrl = manifest.match(/"pouch"\s*:\s*\{\s*"url"\s*:\s*"([^"]+)"/)[1];
         assert.ok(pouchUrl, 'the fixture manifest carries a pouch url dep');
         assert.strictEqual(pouchRow.source.url, pouchUrl);
-        // the manifest row mirrors the fixture bytes — and since the
-        // rut.lock migration (66c8e6a8) a manifest url row is
-        // { "url": ... } only, so the parsed sha256 rides as null
-        assert.strictEqual(pouchRow.source.sha256, null);
-        // the pin itself lives in the companion rut.lock (the pin is law
-        // at the mount door): hex64, riding the SAME url, and equal to the
-        // sha256 of the COMMITTED bundle bytes the url names (the tag
-        // segment of the url IS the dist dir) — all derived from fixture
-        // bytes, so a std-tag sweep edits the fixtures and this gate
-        // follows; no constant here can drift
+        // the manifest grammar retires `sha256` ({ "url": ... } only) —
+        // the parsed row's pin is LOCK-SOURCED (the pin is law at the
+        // mount door): the walk remembered the pins, and every url row
+        // they cover answers the pin
         const lock = fs.readFileSync(path.join(path.dirname(manifestPath), 'rut.lock'), 'utf8');
         const lockPouch = lock.match(/\{[^{}]*"pkg"\s*:\s*"pouch"[^{}]*\}/)[0];
         assert.strictEqual(
@@ -1565,22 +1559,32 @@ async function main() {
             'the lock row rides the manifest url',
         );
         const pin = lockPouch.match(/"sha256"\s*:\s*"([0-9a-f]{64})"/)[1];
-        assert.ok(pin, 'the lock pins the pouch bundle (hex64)');
-        const pouchBundle = fs.readFileSync(
-            path.join(REPO, 'dist', pouchUrl.match(/rut@([^/]+)\//)[1], 'pouch.rutbundle'),
-        );
+        assert.ok(pin, 'the lock pins the pouch source zip (hex64)');
         assert.strictEqual(
-            crypto.createHash('sha256').update(pouchBundle).digest('hex'),
+            pouchRow.source.sha256,
             pin,
-            'the lock pin matches the committed bundle bytes',
+            'the parsed row answers the lock-sourced pin',
+        );
+        // the pin names the COMMITTED SOURCE ZIP the url serves (the
+        // url's path IS the dist mirror file — the std publishing law:
+        // source zips at immutable std-vNN tags) — all derived from
+        // fixture bytes, so a std-tag sweep edits the fixtures and this
+        // gate follows; no constant here can drift
+        const pouchZip = fs.readFileSync(path.join(REPO, pouchUrl.match(/rut@[^/]+\/(.+)$/)[1]));
+        assert.strictEqual(
+            crypto.createHash('sha256').update(pouchZip).digest('hex'),
+            pin,
+            'the lock pin matches the committed zip bytes',
         );
         // the cache path is computed RUST-side — sha256 of the URL string
-        // (crates/rut-lsp-wasm/src/deps.rs cache_path); the binding never
-        // hashes, so the gate recomputes the SAME digest over the fixture
-        // URL and the row must equal it — derived, never a pinned constant
+        // plus the url's own artifact ext (crates/rut-lsp-wasm/src/deps.rs
+        // cache_path); the binding never hashes, so the gate recomputes
+        // the SAME digest over the fixture URL and the row must equal it
+        // — derived, never a pinned constant
+        const pouchExt = path.posix.extname(pouchUrl);
         assert.strictEqual(
             pouchRow.source.cache_path,
-            `.rut/cache/${crypto.createHash('sha256').update(pouchUrl).digest('hex')}.rutbundle`,
+            `.rut/cache/${crypto.createHash('sha256').update(pouchUrl).digest('hex')}${pouchExt}`,
         );
         assert.deepStrictEqual(table.dev_deps, []);
         // the peer row set is gone from the wire (the retired `[peer-deps]`

@@ -1077,6 +1077,32 @@ entry fn main() -> nil {
 }
 
 #[test]
+fn colon2_static_gate_rides_the_modifier_flag_not_the_render() {
+    // the static gate reads the field's own modifier flags (the
+    // `MemberSrc.is_static` row), never a prefix string-match on the
+    // rendered slice — an odd spelling can no longer hide a static
+    let src = "\
+class Counter {
+pub  static COUNT: i32;
+static OTHER: i32;
+}
+entry fn main() -> nil {
+    let c = Counter::
+}
+";
+    let items = complete_after(src, "Counter::");
+    let ls = labels(&items);
+    assert!(
+        ls.contains(&"COUNT"),
+        "the oddly-spelled static rides the flag: {ls:?}"
+    );
+    assert!(
+        ls.contains(&"OTHER"),
+        "the bare static rides the flag: {ls:?}"
+    );
+}
+
+#[test]
 fn colon2_interface_head_and_deeper_walks_offer_nothing() {
     // an interface head: its signatures ride receivers, never `::`
     // — the known head is FINAL (empty), never the bare tier

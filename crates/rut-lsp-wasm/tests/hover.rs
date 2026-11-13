@@ -141,6 +141,31 @@ d.draw();
 }
 
 #[test]
+fn impl_member_hover_shows_the_modifier_prefix_verbatim() {
+    // the decl span starts at the member's FIRST token, so the verbatim
+    // signature IS the whole prefix — `[marker]`, `pub`, `async` ride
+    // the slice (the accepted delta: the marker renders now, truthful
+    // to source — the old row re-rendered `pub`/`async` from flags and
+    // dropped the marker, whose span the parser never recorded)
+    let src = "\
+class Ctx {
+internal: opaque;
+}
+impl Ctx {
+[constructor] pub async fn open(cap: i32) -> Self { return Self { internal: cap }; }
+}
+entry fn main() -> nil {
+    let c = Ctx::open(1);
+}
+";
+    let md = hover_at(src, "open").unwrap();
+    assert!(
+        md.contains("[constructor] pub async fn open(cap: i32) -> Self"),
+        "{md}"
+    );
+}
+
+#[test]
 fn satisfied_member_resolves_to_the_inherent_impl() {
     // the satisfaction shape: an interface + the inherent impl that
     // carries the members — a CONCRETE receiver resolves to the impl

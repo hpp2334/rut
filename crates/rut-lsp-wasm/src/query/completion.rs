@@ -889,15 +889,10 @@ fn type_head_completions(
             // `Counter::⏐` — statics first, then the associated fns
             _ => {
                 for f in &ty.fields {
-                    // a declared static — the rendered slice leads with
-                    // its modifiers (`static N: i32`, `pub static N: i32`)
-                    let bare = f
-                        .src
-                        .strip_prefix("pub ")
-                        .or_else(|| f.src.strip_prefix("pub(super) "))
-                        .or_else(|| f.src.strip_prefix("pub(pkg) "))
-                        .unwrap_or(&f.src);
-                    if bare.starts_with("static ") {
+                    // a declared static — the verdict rides the row (the
+                    // node's own modifier flags), never a string match
+                    // on the rendered slice
+                    if f.is_static {
                         push_item(
                             &mut out,
                             CompletionOut::plain(

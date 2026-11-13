@@ -1111,8 +1111,8 @@ fn compile_program_inner(
         }
         for (mname, mnode) in &d.methods {
             let md = mnode.get(ctx.ast);
-            let exported = md.vis == Some(rut_ast::Vis::Pub);
-            if !exported || md.is_async || !md.generics.is_empty() {
+            let exported = md.vis() == Some(rut_ast::Vis::Pub);
+            if !exported || md.is_async() || !md.generics.is_empty() {
                 continue;
             }
             roots.push(Inst {
@@ -1131,7 +1131,7 @@ fn compile_program_inner(
     for (ename, e) in ctx.enums.clone() {
         for (mname, mnode) in &e.methods {
             let md = mnode.get(ctx.ast);
-            if md.vis != Some(rut_ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
+            if md.vis() != Some(rut_ast::Vis::Pub) || md.is_async() || !md.generics.is_empty() {
                 continue;
             }
             roots.push(Inst {
@@ -1315,11 +1315,11 @@ fn compile_program_inner(
         let mut methods = Vec::new();
         for (mname, mnode) in &d.methods {
             let md = mnode.get(ctx.ast);
-            let exported = md.vis == Some(rut_ast::Vis::Pub);
+            let exported = md.vis() == Some(rut_ast::Vis::Pub);
             // GENERIC methods cross too: the row carries the method's
             // own generic parameters, the call site substitutes, and
             // the bodies ride the request machinery
-            if !exported || md.is_async {
+            if !exported || md.is_async() {
                 continue;
             }
             let method_generic = !md.generics.is_empty();
@@ -1373,7 +1373,7 @@ fn compile_program_inner(
                 // the designated-slot marker crosses the surface (the
                 // consumer's for-of reads it): the checker validated the
                 // closed set at collect
-                marker: marker_code(md.marker),
+                marker: marker_code(md.marker()),
                 generics: if method_generic {
                     md.generics.clone()
                 } else {
@@ -1404,7 +1404,7 @@ fn compile_program_inner(
         let mut methods = Vec::new();
         for (mname, mnode) in &e.methods {
             let md = mnode.get(ctx.ast);
-            if md.vis != Some(rut_ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
+            if md.vis() != Some(rut_ast::Vis::Pub) || md.is_async() || !md.generics.is_empty() {
                 continue;
             }
             let has_self = matches!(md.params.first(), Some(rut_ast::ParamRef::SelfParam(_)));
@@ -1442,7 +1442,7 @@ fn compile_program_inner(
                 ret,
                 local,
                 has_self,
-                marker: marker_code(md.marker),
+                marker: marker_code(md.marker()),
                 generics: vec![],
             });
         }
@@ -2117,8 +2117,8 @@ fn compile_program_inner(
             }
             for (mname, mnode) in &d.methods {
                 let md = mnode.get(ctx.ast);
-                let exported = md.vis == Some(rut_ast::Vis::Pub);
-                if exported || md.is_async || !md.generics.is_empty() {
+                let exported = md.vis() == Some(rut_ast::Vis::Pub);
+                if exported || md.is_async() || !md.generics.is_empty() {
                     continue;
                 }
                 late_roots.push(Inst {
@@ -2134,7 +2134,7 @@ fn compile_program_inner(
         for (ename, e) in ctx.enums.clone() {
             for (mname, mnode) in &e.methods {
                 let md = mnode.get(ctx.ast);
-                if md.vis == Some(rut_ast::Vis::Pub) || md.is_async || !md.generics.is_empty() {
+                if md.vis() == Some(rut_ast::Vis::Pub) || md.is_async() || !md.generics.is_empty() {
                     continue;
                 }
                 late_roots.push(Inst {
@@ -2347,7 +2347,7 @@ fn compile_program_inner(
         for (dname, d) in ctx.datas.clone() {
             for (mname, mnode) in &d.methods {
                 let md = mnode.get(ctx.ast);
-                if md.vis != Some(rut_ast::Vis::Pub) || md.is_async {
+                if md.vis() != Some(rut_ast::Vis::Pub) || md.is_async() {
                     continue;
                 }
                 if d.generics.is_empty() && md.generics.is_empty() {

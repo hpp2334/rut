@@ -136,7 +136,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         };
         let is_async = match found {
             FoundDecl::Fn(fh) => fh.get(ctx.ast).is_async,
-            FoundDecl::Method(mh) => mh.get(ctx.ast).is_async,
+            FoundDecl::Method(mh) => mh.get(ctx.ast).is_async(),
         };
         if is_async {
             // the landing: free async fns weave into the

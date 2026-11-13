@@ -44,7 +44,7 @@ impl Widget {
         let FieldRef::Field(fh) = r else {
             panic!("a field, got {r:?}");
         };
-        assert_eq!(fh.get(&ast).vis, want);
+        assert_eq!(fh.get(&ast).vis(), want);
     };
     field_vis(fields[0], Some(Vis::Pub));
     field_vis(fields[1], Some(Vis::Pkg));
@@ -54,7 +54,7 @@ impl Widget {
         let MethodRef::Method(mh) = methods[i] else {
             panic!("a method, got {:?}", methods[i]);
         };
-        mh.get(&ast).vis
+        mh.get(&ast).vis()
     };
     assert_eq!(method_vis(0), Some(Vis::Pub));
     assert_eq!(method_vis(1), Some(Vis::Pub));
@@ -100,8 +100,8 @@ impl Sink {
         panic!("a field");
     };
     let fd = fh.get(&ast);
-    assert_eq!(fd.vis, Some(Vis::Pub));
-    assert!(fd.is_static);
+    assert_eq!(fd.vis(), Some(Vis::Pub));
+    assert!(fd.is_static());
     let ItemRef::Impl(ih) = items[1] else {
         panic!("expected an impl block, got {:?}", items[1]);
     };
@@ -109,8 +109,79 @@ impl Sink {
         panic!("a method");
     };
     let md = mh.get(&ast);
-    assert_eq!(md.vis, Some(Vis::Pub));
-    assert!(md.is_async);
+    assert_eq!(md.vis(), Some(Vis::Pub));
+    assert!(md.is_async());
+}
+
+#[test]
+fn member_modifiers_are_spanned_nodes_and_the_span_starts_at_the_first() {
+    // span law v3.1: a decl's span starts at its FIRST source token —
+    // the leading modifier when one is spelled, `fn` otherwise — and
+    // every modifier rides the node as a spanned child in source
+    // order (the marker's span covers its brackets; the flags a
+    // checker asks for are the node's own derived accessors)
+    let src = "class C { pub static ready: bool; }\n\
+               impl C {\n    [disposal] pub async fn drop_it(mut self) { }\n}\n";
+    let (ast, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
+    let items = ast.root().items(&ast);
+    let ItemRef::Class(ch) = items[0] else {
+        panic!("expected a class, got {:?}", items[0]);
+    };
+    let FieldRef::Field(fh) = ch.get(&ast).fields[0] else {
+        panic!("a field");
+    };
+    let fd = fh.get(&ast);
+    let field_lo = src.find("pub static").unwrap() as u32;
+    assert_eq!(
+        fd.span.lo, field_lo,
+        "the field span starts at its first modifier"
+    );
+    assert_eq!(fd.modifiers.len(), 2, "pub + static, in source order");
+    let rut_ast::ModKind::Pub(v) = fd.modifiers[0].kind else {
+        panic!("a pub modifier, got {:?}", fd.modifiers[0].kind);
+    };
+    assert_eq!(v, Vis::Pub);
+    assert_eq!(fd.modifiers[0].span.text(src), "pub");
+    assert!(matches!(fd.modifiers[1].kind, rut_ast::ModKind::Static));
+    assert_eq!(fd.modifiers[1].span.text(src), "static");
+    assert!(fd.is_static() && fd.vis() == Some(Vis::Pub));
+
+    let ItemRef::Impl(ih) = items[1] else {
+        panic!("expected an impl block, got {:?}", items[1]);
+    };
+    let MethodRef::Method(mh) = ih.get(&ast).methods[0] else {
+        panic!("a method");
+    };
+    let md = mh.get(&ast);
+    let m_lo = src.find("[disposal]").unwrap() as u32;
+    assert_eq!(
+        md.span.lo, m_lo,
+        "the method span starts at the bracket marker, never at `fn`"
+    );
+    assert!(
+        md.span.text(src).starts_with("[disposal] pub async fn"),
+        "the span covers the whole member prefix: {}",
+        md.span.text(src)
+    );
+    assert_eq!(md.modifiers.len(), 3, "marker, pub, async — source order");
+    let rut_ast::ModKind::Marker(word) = md.modifiers[0].kind else {
+        panic!("a marker modifier, got {:?}", md.modifiers[0].kind);
+    };
+    assert_eq!(ast.name(word), "disposal");
+    assert_eq!(
+        md.modifiers[0].span.text(src),
+        "[disposal]",
+        "the marker's span covers the brackets"
+    );
+    assert_eq!(md.modifiers[1].span.text(src), "pub");
+    assert_eq!(md.modifiers[2].span.text(src), "async");
+    assert_eq!(
+        md.marker(),
+        Some(word),
+        "the marker accessor derives from the nodes"
+    );
+    assert!(md.vis() == Some(Vis::Pub) && md.is_async());
 }
 
 #[test]
@@ -194,11 +265,11 @@ fn interface_bodies_accept_async_and_no_self_sigs() {
     let MethodRef::Method(a) = methods[1] else {
         panic!("a method, got {:?}", methods[1]);
     };
-    assert!(a.get(&ast).is_async);
+    assert!(a.get(&ast).is_async());
     let MethodRef::Method(b) = methods[2] else {
         panic!("a method, got {:?}", methods[2]);
     };
-    assert!(!b.get(&ast).is_async);
+    assert!(!b.get(&ast).is_async());
 }
 
 #[test]
