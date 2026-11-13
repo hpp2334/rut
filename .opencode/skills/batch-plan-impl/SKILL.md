@@ -1,6 +1,6 @@
 ---
 name: Batch Plan Implementation
-description: EXPLICIT USER REQUEST ONLY — run this skill solely when the user asks for it BY NAME (e.g. "use batch-plan-impl"); a bare "go"/"execute the plan", or the existence of an approved batch-format plan, does NOT authorize it (implement directly in the current session instead). Once explicitly invoked: execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to main.complex from models.jsonc, then creates one headless OpenCode session per task, each pinned to main.complex (a phase has one task, or several PARALLEL tasks when the plan splits it so), and dispatches their prompts, while a small watch-only subagent on main.balance polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; after each phase a plan-alignment review subagent — pinned to main.complex, the SAME model the orchestrator itself runs on — reviews the landed diff against the plan, and any misalignment or high-priority issue is dispatched back to the phase session as a fix round, the review→fix loop repeating until the review reports ALIGNED with no high-priority issues; continue phase by phase until the plan is done. No user interaction once legitimately invoked: decide autonomously, retry once, never delete sessions.
+description: EXPLICIT USER REQUEST ONLY — run this skill solely when the user asks for it BY NAME (e.g. "use batch-plan-impl"); a bare "go"/"execute the plan", or the existence of an approved batch-format plan, does NOT authorize it (implement directly in the current session instead). Once explicitly invoked: execute a multi-phase/step plan unattended — the orchestrator first switches its own session's model (keeping build mode) to main.complex from models.jsonc, then creates one headless OpenCode session per task, each pinned to main.balance (a phase has one task, or several PARALLEL tasks when the plan splits it so), and dispatches their prompts, while a small watch-only subagent on main.balance polls every 60s (all sessions of the phase), relays prepared context notes between tasks when triggered, verifies the commits+push, and reports; after each phase a plan-alignment review subagent — pinned to main.balance, like every dispatched session — reviews the landed diff against the plan, and any misalignment or high-priority issue is dispatched back to the phase session as a fix round, the review→fix loop repeating until the review reports ALIGNED with no high-priority issues; continue phase by phase until the plan is done. No user interaction once legitimately invoked: decide autonomously, retry once, never delete sessions.
 ---
 
 # Batch Plan Implementation
@@ -40,8 +40,8 @@ splits it that way (encouraged — see "Writing parallel-friendly plans"
 below). A **watch-only subagent** monitors every session of the phase
 (60s polling each), relays context between tasks when triggered (4p),
 and verifies the results. When a phase's sessions are done and pushed, a
-**plan-alignment review subagent** — pinned to `main.complex`, the SAME
-model this session runs on — reviews the landed code against the
+**plan-alignment review subagent** — pinned to `main.balance`, like every
+dispatched session — reviews the landed code against the
 plan; misalignment or high-priority issues go back to the working session
 as a fix round, and the review→fix loop repeats until the review reports
 aligned with no high-priority issues (4d). Phases run strictly sequentially
@@ -82,11 +82,10 @@ aligned with no high-priority issues (4d). Phases run strictly sequentially
   There is ONE pair, no window: `main.complex` and `main.balance`. Re-resolve
   before EVERY session create or dispatch — `models.jsonc` can change
   mid-batch (see step 0 / step 3).
-- Pin models explicitly on every dispatch: **worker sessions get
-  `main.complex`** — the same model this session runs on, so implementation
-  reasons at orchestration strength — and **watch subagents get
-  `main.balance`** (cheap 60s polling). The plan-alignment review subagent
-  (4d) is pinned to `main.complex`, same as you.
+- Pin models explicitly on every dispatch: **the orchestrator (this
+  session) runs `main.complex`; every DISPATCHED session — workers,
+  plan-alignment reviewers, and watch subagents — pins `main.balance`**.
+  Re-resolve both refs before every dispatch.
 - **Every phase is gated by the plan-alignment review loop (4d)**: after the
   phase's sessions land and push, the review subagent compares the diff to
   the phase's plan text. Misalignment or ANY high-priority issue loops back
@@ -120,8 +119,9 @@ aligned with no high-priority issues (4d). Phases run strictly sequentially
 ### 0. Resolve the model refs and switch this session's MODEL (keep build mode)
 
 Models live in **`models.jsonc`** at the repo root — never `opencode.jsonc`.
-There is one pair, no window: `main.complex` (you, every worker, every
-review) and `main.balance` (watch subagents). Before any batch work,
+There is one pair, no window: `main.complex` (the orchestrator — you) and
+`main.balance` (every dispatched session: workers, reviewers, watchers).
+Before any batch work,
 switch **your own session's model** to `main.complex` so all orchestration
 reasoning runs on it.
 
@@ -141,8 +141,8 @@ opencode api get /api/session \
 
 # The model refs from models.jsonc (strip // comments, then parse):
 MODELS=$(sed 's://.*$::' models.jsonc)
-COMPLEX_REF=$(printf '%s' "$MODELS" | jq -r '.main.complex')    # you + workers + reviews
-BALANCE_REF=$(printf '%s' "$MODELS" | jq -r '.main.balance')    # watch subagents
+COMPLEX_REF=$(printf '%s' "$MODELS" | jq -r '.main.complex')    # the orchestrator (you)
+BALANCE_REF=$(printf '%s' "$MODELS" | jq -r '.main.balance')    # workers + reviews + watchers
 
 opencode api post /api/session/$SELF/model \
   --data "$(jq -n --arg ref "$COMPLEX_REF" \
@@ -189,14 +189,15 @@ mkdir -p /tmp/opencode/rut-batch-plan-impl   # scratch for payload files + run l
 ```
 
 Resolve the model refs from `models.jsonc` — re-run the resolution from
-step 0 (`models.jsonc` can change mid-batch). Workers pin `$COMPLEX_REF`;
-watch subagents pin `$BALANCE_REF`:
+step 0 (`models.jsonc` can change mid-batch). Every dispatched session —
+workers, reviewers, watchers — pins `$BALANCE_REF`; only this orchestrator
+session runs `$COMPLEX_REF`:
 
 ```sh
-# $COMPLEX_REF from the step-0 resolution (re-checked NOW) — WORKER dispatches:
-#   $MODEL_JSON = {"providerID":"${COMPLEX_REF%%/*}","id":"${COMPLEX_REF##*/}"}
-#   $MODEL_REF  = $COMPLEX_REF
-# watch subagents: model: "$BALANCE_REF" in the subagent tool call
+# $BALANCE_REF from the step-0 resolution (re-checked NOW) — EVERY dispatch:
+#   $MODEL_JSON = {"providerID":"${BALANCE_REF%%/*}","id":"${BALANCE_REF##*/}"}
+#   $MODEL_REF  = $BALANCE_REF
+# (the orchestrator's own session already runs $COMPLEX_REF — step 0)
 ```
 
 ### 4. Per phase (loop n = 1..N)
@@ -211,7 +212,7 @@ opencode api post /api/session \
 ```
 
 Extract `$SID` via `jq '.data.id'`. `location.directory` is REQUIRED — without
-it the session lands in the wrong directory. `model` pins `main.complex`
+it the session lands in the wrong directory. `model` pins `main.balance`
 explicitly (re-resolved per dispatch); do not rely on inheritance.
 
 #### b. Dispatch the phase prompt (you)
@@ -299,8 +300,8 @@ SUMMARY: <final assistant text, max ~30 lines>
 
 Once the watcher reports DONE and the mechanical gates hold (commit, pushed,
 clean tree), dispatch a **review subagent** (subagent tool, `general` agent,
-foreground) pinned to `$COMPLEX_REF` — the **SAME model this session runs
-on**, NOT the balance model. The reviewer is read-only over git state and
+foreground) pinned to `$BALANCE_REF` — `main.balance`, like every dispatched
+session. The reviewer is read-only over git state and
 the sessions: it may read files, run `git diff/log/show`, and run
 builds/tests, but never edits, commits, pushes, or messages any session.
 
@@ -402,7 +403,7 @@ When the plan splits a phase into tasks T1..Tn:
    X's facts, the watcher says so in its report and the orchestrator
    authors the follow-up.
 4. **Completion**: all tasks green → the whole-phase review loop of 4d (one
-   reviewer on `$COMPLEX_REF`, fix rounds routed per scope) → next phase. A
+   reviewer on `$BALANCE_REF`, fix rounds routed per scope) → next phase. A
    failed task retries alone (policy table). Sibling pushes may land
    mid-flight — expected.
 
@@ -444,7 +445,7 @@ All sessions were kept (never deleted) — resume any of them from the session l
 | Resolve model refs (step 0/3) | you | `sed 's://.*$::' models.jsonc \| jq -r '.main.complex, .main.balance'` |
 | Create session (pinned model) | you | `opencode api post /api/session --data "$(jq -n --arg t "..." --arg d "$PROJECT_DIR" --arg m "$MODEL_JSON" '{title:$t,location:{directory:$d},model:($m\|fromjson)}')"` |
 | Dispatch prompt (phase OR fix round) | you | `opencode api post /api/session/$SID/prompt --data "$(cat payload.json)"` |
-| Review subagent model | you | pin `model: "$COMPLEX_REF"` in the subagent tool call — the SAME model as this session, NOT balance |
+| Review subagent model | you | pin `model: "$BALANCE_REF"` in the subagent tool call — `main.balance`, like every dispatched session |
 | Poll newest message | subagent | `opencode api session.message.list --param sessionID=$SID --param order=desc --param limit=1` |
 | Done when | subagent | newest msg `type=="idle"` and `time.created > $SINCE` |
 | Verify | subagent | `git log --oneline $BASE..HEAD` + `status -sb` (no `[ahead`) + `status --porcelain` + idle `outcome` |
@@ -457,11 +458,10 @@ All sessions were kept (never deleted) — resume any of them from the session l
   (`"action": "*"` / `"effect": "allow"`), so phase sessions never pause on
   permission asks — no permission handling is needed anywhere in the batch.
 - Models come from `models.jsonc` at the repo root — one pair, no window:
-  you, every worker session, and the plan-alignment review subagent (4d) run
-  on `main.complex` (the SAME model, so implementation and review reason at
-  orchestration strength); watch subagents run on `main.balance` (cheap 60s
-  polling). Re-resolve before every dispatch (`models.jsonc` can change
-  mid-batch).
+  the orchestrator (this session) runs `main.complex` (orchestration
+  reasoning); every dispatched session — workers, plan-alignment review
+  subagents (4d), and watch subagents — runs `main.balance`. Re-resolve
+  before every dispatch (`models.jsonc` can change mid-batch).
 - Payload JSON must be built with `jq -n --rawfile` / `jq -n --arg` — never
   string-interpolated (phase text contains quotes and newlines).
 
