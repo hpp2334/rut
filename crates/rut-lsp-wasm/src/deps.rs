@@ -6,31 +6,26 @@
 //! Three entries:
 //! - [`dep_table`] parses one manifest into a [`DepTable`]: the
 //!   module's own identity (`name`, entry sources with the mode each
-//!   indexes in, `consts` — the RETAINED manifest rows a compat-parsed
-//!   wire manifest carries; a strict directory parse answers them
-//!   empty, the surface `pub let` is the one FORWARD spelling) plus
-//!   its dep rows (`deps`, `dev-deps`), each a `path` directory or a
-//!   `url` bundle with the `.rut/cache/` cache path computed here. The
-//!   pin is NOT the manifest's business — [`lock_pins`] reads
-//!   `rut.lock` (the walk root's ledger) and [`dep_table_pinned`]
-//!   stamps its rows onto the url rows.
+//!   indexes in) plus its dep rows (`deps`, `dev-deps`), each a `path`
+//!   directory or a `url` bundle with the `.rut/cache/` cache path
+//!   computed here. The pin is NOT the manifest's business —
+//!   [`lock_pins`] reads `rut.lock` (the walk root's ledger) and
+//!   [`dep_table_pinned`] stamps its rows onto the url rows.
 //! - [`bundle_sources`] unpacks a `.rutbundle` into the module's OWN
 //!   source files — the zip's own `rut.jsonc` names the module; the
 //!   rode-along dep groups are the loader's business, not the
 //!   editor's.
 //! - [`index_dep`] indexes one dep source file: [`analysis::index_at`]
-//!   plus `module = Some(name)`, with the RETAINED manifest `consts`
-//!   minted onto the index as module-scope lets — the bare
-//!   `use calc_host::{ PI }` form an OLD pinned zip still serves (the
-//!   surface `pub let` rows of a current tree ride the ordinary
-//!   ModuleLet path; the qualified forms ride the dep's own `mod`
-//!   tree: `use calc::{ math }` + `math::PI`).
+//!   plus `module = Some(name)`; a compat-parsed wire manifest's
+//!   `consts` rows DISCARD whole (no backward compat — old bytes
+//!   mount, their constants bind nothing; the surface `pub let` is
+//!   the one spelling). The surface `pub let` rows of a current tree
+//!   ride the ordinary ModuleLet path; the qualified forms ride the
+//!   dep's own `mod` tree: `use calc::{ math }` + `math::PI`).
 
-use rut_ast::Vis;
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
 use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
 use rut_driver::bundle::{parse_bundle, Manifest};
-use rut_semantic::Span;
 
 /// A bundle's rows head: the owning spec plus its mounted sources.
 type ModHead = (
@@ -91,14 +86,6 @@ pub struct DepTable {
     /// [`dep_table_compat`]) carries the repealed keys instead, mapped
     /// exactly as the loader's reader-compat law does.
     pub entries: Vec<EntrySource>,
-    /// the RETAINED manifest constants — a compat-parsed wire manifest
-    /// (the store lane, a cache zip, a bundle) carries its era's
-    /// `consts` rows; a strict directory parse answers EMPTY always
-    /// (the grammar refuses the key — the surface `pub let` row is the
-    /// one FORWARD spelling). The walk mints these onto the pkg's root
-    /// index and the check lane folds them into the engine's mount, so
-    /// an old pinned zip's `math::PI` keeps resolving.
-    pub consts: Vec<(String, f64)>,
     /// `type = "host"` — the entry surface is a pure `.d.rut` and its
     /// `mod` tree mounts the Decl flavor (`NAME/mod.d.rut` children,
     /// Decl mode) instead of a lib body's `mod.rut` tree
@@ -188,9 +175,9 @@ pub fn dep_table_pinned(
 
 /// [`dep_table_pinned`] on the compat lane — the STORE's mount door:
 /// an unpacked url dep's manifest rode the wire, where the retired
-/// keys parse (the wire pair) or RETAIN (`consts` — old bytes'
-/// constants keep binding through the check lane's fold) instead of
-/// refusing, exactly as the loader's zip boundary reads them.
+/// keys parse (the wire pair) or discard (`consts` — whole, inert)
+/// instead of refusing, exactly as the loader's zip boundary reads
+/// them.
 pub(crate) fn dep_table_pinned_compat(
     manifest_text: &str,
     pins: &std::collections::BTreeMap<String, String>,
@@ -281,7 +268,6 @@ fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     Ok(DepTable {
         name: m.name,
         entries,
-        consts: m.consts.into_iter().collect(),
         host: m.pkg_type == rut_driver::bundle::PkgType::Host,
         deps: rows(&m.deps),
         dev_deps: rows(&m.dev_deps),
@@ -311,10 +297,6 @@ pub struct BundleFile {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BundleIndex {
     pub module: String,
-    /// the RETAINED manifest constants (compat-parsed wire bytes — a
-    /// cache zip's or a bundle's own era's `consts` rows); empty for
-    /// everything a current tree packs
-    pub consts: Vec<(String, f64)>,
     pub files: Vec<BundleFile>,
     /// the archive's own `rut.jsonc` text
     pub manifest: String,
@@ -423,8 +405,8 @@ pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
             format!("no `{MANIFEST_NAME}` at the archive root — not a rut source zip")
         })?;
     // the wire boundary rides the compat lane: the zip's manifest rode
-    // the wire, where the retired keys parse (the wire pair) or retain
-    // (`consts` — old bytes' rows ride home on the table)
+    // the wire, where the retired keys parse (the wire pair) or
+    // discard (`consts` — whole, inert) instead of refusing
     let table = dep_table_compat(&manifest_text)?;
     let module = table
         .name
@@ -456,7 +438,6 @@ pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     }
     Ok(BundleIndex {
         module,
-        consts: table.consts,
         files,
         manifest: manifest_text,
         embedded,
@@ -661,7 +642,6 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     }
     Ok(BundleIndex {
         module,
-        consts: table.consts,
         files,
         // a compiled bundle's ride-alongs are compiled groups — never
         // text — so the unpack ingredients stay empty here (the
@@ -678,9 +658,8 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
 /// lane's business, never source), and the exported free fns. The
 /// interfaces ride as comments (the surface carries a generic COUNT,
 /// not parameter names, so a faithful trait re-spelling is impossible
-/// here); the consts ride [`BundleIndex::consts`] separately. This is
-/// the indexed answer for a compiled-only url dep — a consumer's
-/// `use pouch::{ Vec }` resolves against the bundle's own bytes.
+/// here). This is the indexed answer for a compiled-only url dep — a
+/// consumer's `use pouch::{ Vec }` resolves against the bundle's own bytes.
 fn decl_face(prog: &rut_core::binary::Program) -> String {
     use rut_core::types::TyKind;
     use rut_core::types::{TypeId, TY_NIL};
@@ -860,13 +839,12 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
 
 /// Index one dep source file: the ordinary [`analysis::index_at`] pass
 /// over `src` (origin stamped with `uri`, mode per the manifest), the
-/// module NAMED, and the RETAINED manifest `consts` minted on as
-/// module-scope lets — the bare `use calc_host::{ PI }` form an OLD
-/// pinned zip still serves (its manifest rode the wire; the compat
-/// lane parsed it). A current tree's surface `pub let` rows ride the
-/// ordinary ModuleLet path and need no minting — pass `&[]` (the
-/// module-qualified forms ride the dep's own `mod` tree).
-pub fn index_dep(name: &str, uri: &str, src: &str, consts: &[(String, f64)]) -> DefIndex {
+/// module NAMED. The surface `pub let` rows ride the ordinary
+/// ModuleLet path; a compat-parsed wire manifest's `consts` rows
+/// DISCARD whole (no backward compat — old bytes mount, their
+/// constants bind nothing); the module-qualified forms ride the dep's
+/// own `mod` tree.
+pub fn index_dep(name: &str, uri: &str, src: &str) -> DefIndex {
     // the ordinary index pass — `mode_of(uri)` spells the filename
     // convention (every caller already derived it that way)
     let doc = rut_semantic::ParsedDoc::parse(rut_semantic::mode_of(uri), src);
@@ -876,25 +854,14 @@ pub fn index_dep(name: &str, uri: &str, src: &str, consts: &[(String, f64)]) -> 
     // the parse mode rides the index — the definition layer's
     // body-over-decl preference reads it
     idx.mode = Some(rut_semantic::mode_of(uri));
-    // the raw rows ride the index (the check lane's Manifest threading);
-    // the minted completion rows ride `lets`
-    idx.consts = consts.to_vec();
-    mint_pkg_rows(&mut idx, consts);
     idx
 }
 
 /// [`index_dep`] with the file's mod path stamped — one mounted
 /// module of a mod-carrying dep (the dep walk / bundle loader call
-/// this per file; `mod_path` `""` is the pkg root's `mod.rut`). The
-/// consts ride the pkg-ROOT stamp only.
-pub fn index_dep_mod(
-    name: &str,
-    uri: &str,
-    mod_path: &str,
-    src: &str,
-    consts: &[(String, f64)],
-) -> DefIndex {
-    let mut idx = index_dep(name, uri, src, consts);
+/// this per file; `mod_path` `""` is the pkg root's `mod.rut`).
+pub fn index_dep_mod(name: &str, uri: &str, mod_path: &str, src: &str) -> DefIndex {
+    let mut idx = index_dep(name, uri, src);
     idx.mod_path = Some(mod_path.to_string());
     idx
 }
@@ -905,14 +872,12 @@ pub fn index_dep_mod(
 /// the mod path its nesting spells. Structure lives in the grammar,
 /// never in paths: the file is one, the modules many, the parse one.
 /// `mod_path` prefixes every stamp (the file's own position — `""` for
-/// a group root). The consts mint on the pkg-root module only (they
-/// are the MANIFEST's rows, the pkg's own).
+/// a group root).
 pub fn index_dep_decl_group(
     name: &str,
     uri: &str,
     mod_path: &str,
     src: &str,
-    consts: &[(String, f64)],
 ) -> Vec<(String, DefIndex)> {
     // the ordinary parse once — `mode_of(uri)`: the `.d.rut` suffix IS
     // the declaration entry lane's mode (the filename convention)
@@ -941,10 +906,6 @@ pub fn index_dep_decl_group(
             // body-over-decl preference reads it
             idx.mode = Some(rut_semantic::mode_of(uri));
             idx.mod_path = Some(path.clone());
-            // the manifest's const rows mint on the pkg root only
-            if path == mod_path {
-                mint_pkg_rows(&mut idx, consts);
-            }
             (path, idx)
         })
         .collect()
@@ -979,23 +940,6 @@ fn collect_inline_modules(
     }
 }
 
-/// The RETAINED manifest consts, minted onto one dep index as
-/// module-scope lets — the bare `use calc_host::{ PI }` form an OLD
-/// pinned zip still serves ([`index_dep`]'s tail, shared with the
-/// declaration-entry splitter; the qualified forms ride the dep's own
-/// `mod` tree). A current tree's surface `pub let` rows ride the
-/// ordinary ModuleLet path and never pass through here.
-fn mint_pkg_rows(idx: &mut DefIndex, consts: &[(String, f64)]) {
-    for (n, v) in consts {
-        idx.lets.push(crate::hover::LetDef {
-            name: n.clone(),
-            name_span: None,
-            ty: Some("f64".to_string()),
-            src: format!("let {n} = {v:?}"),
-            doc: vec!["manifest const — compiler-materialized".to_string()],
-            vis: Vis::Pub,
-            span: Span::new(0, 0),
-            line: 1,
-        });
-    }
-}
+// (the minted manifest-const rows died with the compat fold — old
+// bytes' consts discard whole; the surface `pub let` is the one
+// spelling)

@@ -30,13 +30,12 @@
 //! loudly at the lowering; one const, one name — a `let` spelling a
 //! name another module of the same pkg already folded is the loud
 //! refusal (the rows bind BARE at the pkg's root). The manifest's
-//! `consts` table is RETIRED from the directory grammar (the strict
-//! lane refuses the key); the compat lane — the manifest read at the
-//! zip/bundle/store boundary, where published bytes are forever old —
-//! still parses its rows, and the compat-fed mounts stamp them BESIDE
-//! the surface rows through [`fold_manifest_consts`] (one name spelled
-//! both ways is the loud refusal — the two are alternative spellings
-//! of one const, never a layering).
+//! `consts` table is RETIRED: the strict lane refuses the key, and
+//! the compat lane — the manifest read at the zip/bundle/store
+//! boundary, where published bytes are forever old — DISCARDS it
+//! whole (old bytes mount; their const rows bind nothing — the
+//! surface `pub let` is the one spelling, and old tags are not kept
+//! working by owner decree).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -472,38 +471,6 @@ pub fn refuse_host_rows(src: &str, origin: &str) -> Result<(), String> {
              and depend on it",
             row.name
         ));
-    }
-    Ok(())
-}
-
-/// Stamp a host pkg's manifest `consts` rows onto its lowered body —
-/// the merge the COMPAT-FED mounts (the bundle loader's host groups,
-/// the unpacked source-zip trees, the in-memory srczip lane) fold
-/// through. Only a compat parse ever fills the map (the directory
-/// grammar refuses the key — the surface `pub let` is the one FORWARD
-/// spelling), so a directory mount hands this an empty table and the
-/// fold is its own no-op. The surface `let` rows are the primary form
-/// and the retained rows ride BESIDE them; one name spelled BOTH ways
-/// is the loud refusal — the two are alternative spellings of one
-/// const, never a layering. f64 rows only, exactly as the compat walk
-/// shaped them.
-pub fn fold_manifest_consts(
-    body: &mut MountedBody,
-    consts: &BTreeMap<String, f64>,
-    origin: &str,
-) -> Result<(), String> {
-    let MountedBody::Host { consts: rows, .. } = body else {
-        return Ok(()); // a non-host body carries no const rows
-    };
-    for (name, v) in consts {
-        if rows.iter().any(|(n, _, _)| n == name) {
-            return Err(format!(
-                "{origin}: the const `{name}` is spelled twice — on the surface \
-                 (`pub let {name}: f64 = ..`) and in the manifest's `consts`; \
-                 one const, one spelling"
-            ));
-        }
-        rows.push((name.clone(), TY_F64, v.to_bits()));
     }
     Ok(())
 }

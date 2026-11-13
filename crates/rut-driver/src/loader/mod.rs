@@ -591,12 +591,9 @@ fn host_entry_pkg(
     prefix: &str,
     manifest: &Manifest,
 ) -> Result<Mounted, String> {
-    let stamp = |mut m: Mounted, origin: &str| -> Result<Mounted, String> {
+    let stamp = |mut m: Mounted| -> Result<Mounted, String> {
         m.entry = manifest.entry.clone();
         m.manifest = manifest.clone();
-        // the retained manifest rows ride beside the surface `let`
-        // rows (one name spelled both ways refuses)
-        crate::decl::fold_manifest_consts(&mut m.body, &manifest.consts, origin)?;
         Ok(m)
     };
     if let Some((root, children)) = decl_rows_body(entries, prefix)? {
@@ -607,7 +604,7 @@ fn host_entry_pkg(
             .unwrap_or(DECL_CHILD_FILE);
         let origin = format!("{prefix}{}", rel.strip_prefix("./").unwrap_or(rel));
         let m = crate::decl::lower_decl_module(&root, &children, &origin)?;
-        return stamp(m, &origin);
+        return stamp(m);
     }
     // the flat lane's root file is `mod.d.rut` beside the manifest —
     // the ONE canonical name (wire v11 canonicalizes the directory
@@ -624,7 +621,7 @@ fn host_entry_pkg(
     })?;
     let origin = format!("{prefix}{DECL_CHILD_FILE}");
     let m = crate::decl::lower_decl_module(&src, &Default::default(), &origin)?;
-    stamp(m, &origin)
+    stamp(m)
 }
 
 /// The plain (non-decl) entry pkg. The root module is the `mod.rut`

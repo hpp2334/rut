@@ -126,7 +126,6 @@ fn group(module: &str, root: FileSrc) -> PkgFiles {
     PkgFiles {
         module: module.to_string(),
         files,
-        consts: Vec::new(),
     }
 }
 

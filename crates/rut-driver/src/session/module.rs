@@ -405,14 +405,6 @@ fn srczip_pkg(
             let mut m = crate::lower_decl_module(&root_text, &mods, &format!("{prefix}{root_rel}"))
                 .map_err(|e| format!("{prefix}{root_rel}: {e}"))?;
             m.entry = manifest.entry.clone();
-            // the retained manifest rows ride BESIDE the surface `let`
-            // rows (the merge law — a name spelled both ways refuses);
-            // f64 rows → TY_F64 bits, exactly the compat walk's shape
-            crate::decl::fold_manifest_consts(
-                &mut m.body,
-                &manifest.consts,
-                &format!("{prefix}{root_rel}"),
-            )?;
             m
         }
         crate::bundle::PkgType::Lib => {

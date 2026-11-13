@@ -217,11 +217,10 @@ directory is not a bundle, and the version lives in the bundle
 container; each refusal names the fix. A manifest riding INSIDE a
 published artifact (this one, a group's, a source zip's) parses
 through the reader's **compat lane**, where the pair still parses (the
-version gate reads it) and the retired `consts` table still binds: its
-rows retain — value-lawed, exactly the surface spelling's value laws —
-and stamp beside the pkg's `pub let` rows at the mount. Published
-bytes are frozen history; the loader keeps their constants binding
-while the surface `pub let` stays the one forward spelling.
+version gate reads it) and the retired `consts` table DISCARDS whole
+(the `entry.lib` precedent): an old artifact still mounts, its
+constants binding nothing — no backward compat; the surface `pub let`
+is the one spelling.
 
 The rest of the manifest grammar — the dep tables, `dev-deps`,
 `style`, and the strict-keys law — is defined in [Project structure

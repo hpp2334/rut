@@ -21,20 +21,13 @@ const MYHOST_NET_TLS: &str = include_str!("../../../rut/myhost/src/net/tls/mod.d
 
 fn myhost_chain() -> Vec<DefIndex> {
     vec![
-        index_dep_mod("myhost", "rut/myhost/src/myhost.d.rut", "", MYHOST, &[]),
-        index_dep_mod(
-            "myhost",
-            "rut/myhost/src/net/mod.d.rut",
-            "net",
-            MYHOST_NET,
-            &[],
-        ),
+        index_dep_mod("myhost", "rut/myhost/src/myhost.d.rut", "", MYHOST),
+        index_dep_mod("myhost", "rut/myhost/src/net/mod.d.rut", "net", MYHOST_NET),
         index_dep_mod(
             "myhost",
             "rut/myhost/src/net/tls/mod.d.rut",
             "net/tls",
             MYHOST_NET_TLS,
-            &[],
         ),
     ]
 }
@@ -89,7 +82,6 @@ fn the_prelude_index_stamps_the_manifest_shape() {
         "core",
         "core",
         "pub fn ambient_offered() -> i32 { return 1; }\n",
-        &[],
     );
     let idxs = [&di, &core];
     let items = rut_lsp_wasm::completion::complete(
@@ -250,7 +242,6 @@ fn a_std_source_mounts_as_an_ordinary_dep() {
         "pouch",
         "rut/pouch/src/mod.rut",
         include_str!("../../../rut/pouch/src/mod.rut"),
-        &[],
     );
     assert_eq!(idx.module.as_deref(), Some("pouch"));
     assert_eq!(idx.mode, Some(rut_parser::Mode::Impl));

@@ -87,12 +87,11 @@ Rules:
   MIN: f64 = -1.7976931348623157e308;`). Anything else — a call,
   arithmetic, an `f32` literal, another type — refuses loudly at the
   lowering. One const, one name across the pkg: the rows bind bare at
-  the root, so a name folded twice (here or in a sibling module, or in
-  a wire-carried manifest's retained `consts` table) refuses. This is
-  the one forward spelling — the manifest's old `consts` table is
-  retired from the directory grammar (the key refuses loudly); a
-  published artifact's rows retain on the reader's compat lane and
-  fold in beside these at the mount.
+  the root, so a name folded twice (here or in a sibling module) refuses.
+  This is the one spelling — the manifest's old `consts` table is retired
+  from the directory grammar (the key refuses loudly); on the reader's
+  compat lane it DISCARDS whole (an old artifact still mounts, its
+  constants binding nothing — no backward compat).
 - **`any` is not in the language.** An `any` spelling fails at
   resolution as an unknown type — there is no `any` type to write.
   Seal polymorphic values with `opaque(v)` / `opaque::downcast<T>(v)`

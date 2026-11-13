@@ -683,13 +683,6 @@ fn load_entry_module(
             let mut m =
                 rut_driver::lower_decl_module(&src_text, &mods, &key).map_err(LoadError::law)?;
             m.entry = manifest.entry.clone();
-            // the RETAINED manifest `consts` rows (compat-parsed wire
-            // bytes only — a strict directory parse answers empty, so
-            // the fold no-ops there) ride the host body BESIDE the
-            // surface `let` rows (the merge law — a name spelled both
-            // ways is the loud refusal)
-            rut_driver::decl::fold_manifest_consts(&mut m.body, &manifest.consts, &key)
-                .map_err(LoadError::law)?;
             m.manifest = manifest.clone();
             Ok(m)
         }

@@ -180,15 +180,6 @@ pub struct Manifest {
     /// ignored (the forward-compat rule); unknown VALUES trip the
     /// formatter tool, never the loader.
     pub style: BTreeMap<String, String>,
-    /// `consts` — READER COMPAT ONLY: the host body's compiler-
-    /// materialized constants (`calc_host`'s `PI` family), bound bare
-    /// at the pkg's root by [`crate::decl::fold_manifest_consts`] at
-    /// the compat-fed mounts. The directory grammar refuses the key —
-    /// the surface `pub let NAME: f64 = <literal>;` row is the one
-    /// FORWARD spelling — so ONLY a compat parse (a manifest riding
-    /// inside a published artifact, forever old) ever fills this; a
-    /// strict parse answers it empty, always.
-    pub consts: BTreeMap<String, f64>,
 }
 
 impl Manifest {
@@ -449,28 +440,17 @@ mod tests {
         );
         let err = parse_manifest(r#"{"consts": "nope"}"#).unwrap_err();
         assert!(err.to_string().starts_with("consts: retired"), "{err}");
-        // … and RETAINS on the compat lane, value-lawed: the rows ride
-        // onto Manifest::consts for the compat-fed mounts to stamp
-        // (D7 — old published bytes keep their constants binding)
+        // … and DISCARDS on the compat lane, whole and shape-blind
+        // (the `entry.ir` precedent): an old manifest still parses
+        // and mounts, its constants binding nothing — no backward
+        // compat, the surface `pub let` is the one spelling
         let m = parse_manifest_compat(
             r#"{"name": "calc_host", "consts": {"PI": 3.141592653589793, "INFINITY": "inf"}}"#,
         )
         .unwrap();
         assert_eq!(m.name.as_deref(), Some("calc_host"));
-        assert_eq!(m.consts.get("PI"), Some(&std::f64::consts::PI));
-        assert!(m.consts["INFINITY"].is_infinite() && m.consts["INFINITY"].is_sign_positive());
-        // the value laws hold there: a non-object table refuses, and a
-        // bad string names the legal spellings
-        let err = parse_manifest_compat(r#"{"name": "x", "consts": "nope"}"#).unwrap_err();
-        assert!(
-            err.to_string().starts_with("consts: expected an object"),
-            "{err}"
-        );
-        let err = parse_manifest_compat(r#"{"consts": {"PI": "pi"}}"#).unwrap_err();
-        assert!(
-            err.to_string().contains("the non-finite spellings"),
-            "{err}"
-        );
+        parse_manifest_compat(r#"{"name": "x", "consts": "nope"}"#)
+            .expect("a shape-blind discard never inspects the value");
     }
 
     #[test]

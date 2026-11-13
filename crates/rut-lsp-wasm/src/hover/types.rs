@@ -246,14 +246,6 @@ pub struct DefIndex {
     /// definition layer prefers body hits over decl-surface hits when
     /// a package indexes both — never derived from text.
     pub mode: Option<Mode>,
-    /// the RETAINED manifest `consts` rows (name → value; `calc_host`'s
-    /// `PI` family as an OLD pinned zip's manifest carries them) — the
-    /// constants the check lane must hand the engine (a
-    /// `pub use calc_host::{ PI }` re-export resolves against them).
-    /// Stamped by the store lane at the pkg's root row, empty for every
-    /// current tree (the surface `pub let` rows ride the ordinary
-    /// ModuleLet path); the minted completion rows ride `lets`.
-    pub consts: Vec<(String, f64)>,
 }
 
 impl DefIndex {

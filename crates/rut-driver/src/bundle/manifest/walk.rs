@@ -155,11 +155,12 @@ pub(super) fn walk_top_lane(
         // FORWARD spelling (`pub let PI: f64 = 3.141592653589793;`,
         // `inf`/`-inf` for the non-finite pair). The compat lane — the
         // manifest read at the zip/bundle/store boundary, where today's
-        // published bytes still carry the rows — RETAINS the table,
-        // value-lawed, onto [`Manifest::consts`]: the compat-fed mounts
-        // stamp it beside the surface rows, so an old pinned zip's
-        // constants keep binding (D7 — published bytes are forever old)
-        "consts" if compat => walk_consts(value, m)?,
+        // published bytes still carry the rows — DISCARDS the table
+        // whole (the `entry.ir` precedent): an old pinned zip keeps
+        // mounting, its const rows bind nothing. The surface `pub let`
+        // row is the one spelling; old tags are not kept working
+        // (owner decree — no backward compat)
+        "consts" if compat => {}
         "consts" => {
             return Err(ManifestError(
                 "consts: retired — declare `pub let NAME: f64 = <literal>;` in the surface; \
@@ -282,49 +283,6 @@ pub(super) fn walk_style(value: &Value, m: &mut Manifest) -> Result<(), Manifest
         }
         m.style
             .insert(key.clone(), expect_field_string("style", key, v)?);
-    }
-    Ok(())
-}
-
-/// The `consts` object — READER COMPAT ONLY (a manifest riding inside
-/// a published artifact is forever old): name → f64 — the host body's
-/// compiler-materialized constants (`Math.PI`), folded into the mount
-/// by [`crate::decl::fold_manifest_consts`] at the compat-fed mounts,
-/// bound bare at the pkg's root. Each value is a JSON number; the
-/// non-finite pair has no JSON spelling, so the strings `"inf"` /
-/// `"-inf"` (and `"nan"`) name it. f64 is the only width the manifest
-/// carries. The directory grammar refuses the key loudly — the
-/// surface `pub let NAME: f64 = <literal>;` row is the one FORWARD
-/// spelling.
-fn walk_consts(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
-    let table = expect_object("consts", value)?;
-    for (key, v) in table {
-        if key.starts_with('_') {
-            return Err(underscore_refused("consts", key));
-        }
-        let n = match v {
-            Value::Number(_) => v.as_f64().ok_or_else(|| {
-                ManifestError(format!("consts.{key}: expected a number, found {}", raw(v)))
-            })?,
-            Value::String(s) => match s.as_str() {
-                "inf" | "+inf" => f64::INFINITY,
-                "-inf" => f64::NEG_INFINITY,
-                "nan" => f64::NAN,
-                other => {
-                    return Err(ManifestError(format!(
-                        "consts.{key}: `{other}` is not a number — spell a JSON number (the \
-                         non-finite spellings are \"inf\", \"-inf\", \"nan\")"
-                    )));
-                }
-            },
-            other => {
-                return Err(ManifestError(format!(
-                    "consts.{key}: expected a number, found {}",
-                    raw(other)
-                )));
-            }
-        };
-        m.consts.insert(key.clone(), n);
     }
     Ok(())
 }
