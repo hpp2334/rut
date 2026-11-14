@@ -1,51 +1,9 @@
-//! Name recovery + helpers — matching AST names back to `Ident` tokens
-//! inside a construct's span, and the finalize pass that orders the
-//! classifier's output.
+//! The finalize pass — orders the classifier's output into the LSP
+//! semantic-token contract.
 
 use rut_lexer::span::Span;
-use rut_lexer::token::{Tok, Token};
 
-use super::legend::{owned_by_tokens, TokenType};
-
-/// Tokens fully inside `span`, in source order.
-pub(crate) fn toks_in(toks: &[Token], span: Span) -> impl Iterator<Item = &Token> {
-    toks.iter()
-        .skip_while(move |t| t.span.lo < span.lo)
-        .take_while(move |t| t.span.hi <= span.hi)
-}
-
-/// Find the span of the `Ident` token whose text is `name` inside `span` —
-/// `last` for trailing positions (method/field access), else the first.
-pub(crate) fn find_name(toks: &[Token], span: Span, name: &str, last: bool) -> Option<Span> {
-    let mut found = None;
-    for t in toks_in(toks, span) {
-        if let Tok::Ident(s) = &t.tok {
-            if s == name {
-                found = Some(t.span);
-                if !last {
-                    break;
-                }
-            }
-        }
-    }
-    found
-}
-
-pub(crate) fn push_name(
-    toks: &[Token],
-    span: Span,
-    name: &str,
-    ty: TokenType,
-    out: &mut Vec<(Span, TokenType)>,
-    last: bool,
-) {
-    if owned_by_tokens(name) {
-        return; // not a name position
-    }
-    if let Some(s) = find_name(toks, span, name, last) {
-        out.push((s, ty));
-    }
-}
+use super::legend::TokenType;
 
 /// Sort by start; drop empty and overlapping spans. At equal starts the
 /// entry pushed LAST wins (the AST pass runs after the token pass, so

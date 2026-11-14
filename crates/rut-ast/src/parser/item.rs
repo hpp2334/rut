@@ -903,12 +903,14 @@ impl TyDeclFrame {
                 let inner = p.ast.intern("inner");
                 let ty_span = t.span(&p.ast);
                 // SYNTHESIZED — no doc graft (it would steal the class's
-                // own chain above)
+                // own chain above) and no name token exists either: the
+                // recorded name span degenerates empty (consumers fall
+                // back to the field's own extent)
                 let field = FieldDeclNode {
                     span: ty_span,
                     modifiers: Vec::new(),
                     name: inner,
-                    name_span: ty_span,
+                    name_span: Span::new(ty_span.lo, ty_span.lo),
                     ty: t,
                     init: None,
                     doc: DocData::default(),

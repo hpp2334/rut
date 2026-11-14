@@ -622,7 +622,7 @@ impl AtomFrame {
                     // `Self { .. }` — the class-private literal
                     if matches!(p.tok(), Tok::LBrace) {
                         let ty_name = sym::SELF_TY;
-                        return self.struct_enter(p, ty_name, true);
+                        return self.struct_enter(p, ty_name, sp);
                     }
                     let e = PathNode {
                         span: sp,
@@ -638,7 +638,8 @@ impl AtomFrame {
                 // struct literal: `Ident {` (struct only)
                 if matches!(p.peek(1).tok, Tok::LBrace) && !is_reserved_kw(&name) {
                     let ty_name = p.ast.intern(&name);
-                    return self.struct_enter(p, ty_name, false);
+                    p.bump(); // the type ident
+                    return self.struct_enter(p, ty_name, sp);
                 }
                 // `async { .. }` — the async block primitive
                 if name == "async" && matches!(p.peek(1).tok, Tok::LBrace) {
@@ -848,13 +849,8 @@ impl AtomFrame {
 
     // -- struct literal: `Name { field: expr, .. }` / `Name<Ty> { .. }` --
 
-    fn struct_enter(
-        &mut self,
-        p: &mut Parser,
-        ty_name: crate::IdentId,
-        ident_consumed: bool,
-    ) -> Step {
-        self.struct_enter_gen(p, ty_name, Vec::new(), ident_consumed)
+    fn struct_enter(&mut self, p: &mut Parser, ty_name: crate::IdentId, name_span: Span) -> Step {
+        self.struct_enter_gen(p, ty_name, Vec::new(), name_span)
     }
 
     fn struct_enter_gen(
@@ -862,19 +858,18 @@ impl AtomFrame {
         p: &mut Parser,
         ty_name: crate::IdentId,
         generics: Vec<crate::TyRef>,
-        ident_consumed: bool,
+        name_span: Span,
     ) -> Step {
-        if !ident_consumed {
-            p.bump(); // the type ident
-        }
-        // self.lo opens at the atom's FIRST token — the type ident
-        // (generics or not), so it IS the recorded name span
+        // the type ident is consumed at every call site; its OWN token
+        // span rides in as `name_span` — the frame's `self.lo` is the
+        // EXPRESSION's first token, not the ident (an infix operand
+        // `q == Point { .. }` enters with lo at `q`)
         p.bump(); // {
         let ty = crate::TyPathNode {
             span: self.lo,
             segs: vec![PathSeg {
                 name: ty_name,
-                name_span: self.lo,
+                name_span,
                 generics,
             }],
         }
@@ -1018,8 +1013,9 @@ impl AtomFrame {
                 // `Name<Ty> { .. }` — the generic record literal
                 if segs.len() == 1 && matches!(p.tok(), Tok::LBrace) {
                     let name = segs[0].name;
+                    let name_span = segs[0].name_span;
                     let generics = std::mem::take(&mut segs[0].generics);
-                    return self.struct_enter_gen(p, name, generics, true);
+                    return self.struct_enter_gen(p, name, generics, name_span);
                 }
                 self.stage = AtomStage::PathColons { segs };
                 self.pathcolons_top(p)

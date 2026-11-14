@@ -104,8 +104,8 @@ fn corpus_classifies() {
         }
         // symbols exist for every Impl file
         if mode == Mode::Impl {
-            let (toks, ast, _) = analyzed(&src, mode);
-            let syms = symbols(&toks, &ast);
+            let (_, ast, _) = analyzed(&src, mode);
+            let syms = symbols(&ast);
             assert!(!syms.is_empty(), "{}: no document symbols", path.display());
             for s in &syms {
                 assert!(

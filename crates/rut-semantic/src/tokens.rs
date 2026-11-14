@@ -42,31 +42,6 @@ pub fn token_type(tok: &Tok) -> Option<TokenType> {
     }
 }
 
-/// Splice f-string holes into the stream (recursively — an f-string may
-/// appear inside a hole). Literal chunks produce no tokens, so string
-/// text is never mistaken for a name.
-pub(crate) fn flatten_holes(toks: &[Token]) -> Vec<Token> {
-    let mut flat = Vec::with_capacity(toks.len());
-    for t in toks {
-        flatten_into(&mut flat, t);
-    }
-    flat
-}
-
-fn flatten_into(flat: &mut Vec<Token>, t: &Token) {
-    if let Tok::FStr(f) = &t.tok {
-        for part in &f.parts {
-            if let FPart::Hole(hole) = part {
-                for ht in hole {
-                    flatten_into(flat, ht);
-                }
-            }
-        }
-    } else {
-        flat.push(t.clone());
-    }
-}
-
 /// One token; f-strings tile exactly — string for the literal gaps, then
 /// recursion into each hole's fully-lexed token stream (real spans inside
 /// the literal's span).

@@ -5,9 +5,6 @@ use rut_ast::{
     Ast, EnumMemberNode, FieldDeclNode, FieldRef, ItemRef, MethodDeclNode, MethodRef, TyRef,
 };
 use rut_lexer::span::Span;
-use rut_lexer::token::Token;
-
-use super::recover::find_name;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SymKind {
@@ -29,8 +26,7 @@ pub struct Symbol {
     pub name: String,
     pub kind: SymKind,
     pub range: Span,
-    /// the name's own span (the node's recorded `name_span`); falls
-    /// back to `range`
+    /// the name's own span (the node's recorded `name_span`)
     pub selection: Span,
     pub children: Vec<Symbol>,
 }
@@ -66,15 +62,15 @@ impl Symbol {
     }
 }
 
-pub fn symbols(toks: &[Token], ast: &Ast) -> Vec<Symbol> {
+pub fn symbols(ast: &Ast) -> Vec<Symbol> {
     ast.root()
         .items(ast)
         .iter()
-        .filter_map(|h| item_symbol(toks, ast, *h))
+        .filter_map(|h| item_symbol(ast, *h))
         .collect()
 }
 
-fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<Symbol> {
+fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
     // the walk surface's own span read (modifiers excluded where the
     // node's own span excludes them — fn/method spans start at `fn`)
     let span = item.span(ast);
@@ -131,7 +127,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<Symbol> {
             let children = h
                 .items(ast)
                 .iter()
-                .filter_map(|&i| item_symbol(toks, ast, i))
+                .filter_map(|&i| item_symbol(ast, i))
                 .collect();
             Some(sym(
                 ast.name(d.name),
@@ -174,7 +170,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<Symbol> {
         }
         ItemRef::Struct(h) => {
             let d = h.get(ast);
-            let children = member_symbols(toks, ast, &d.fields, &d.methods);
+            let children = member_symbols(ast, &d.fields, &d.methods);
             Some(sym(
                 ast.name(d.name),
                 SymKind::Class,
@@ -184,7 +180,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<Symbol> {
         }
         ItemRef::Class(h) => {
             let d = h.get(ast);
-            let children = member_symbols(toks, ast, &d.fields, &d.methods);
+            let children = member_symbols(ast, &d.fields, &d.methods);
             Some(sym(
                 ast.name(d.name),
                 SymKind::Class,
@@ -262,7 +258,7 @@ fn item_symbol(toks: &[Token], ast: &Ast, item: ItemRef) -> Option<Symbol> {
         }
         ItemRef::SurfaceStruct(h) => {
             let d = h.get(ast);
-            let children = field_symbols(toks, ast, &d.fields);
+            let children = field_symbols(ast, &d.fields);
             Some(sym(
                 ast.name(d.name),
                 SymKind::Class,
@@ -295,31 +291,33 @@ fn member_symbol(ast: &Ast, enum_span: Span, m: &rut_ast::MemberRef) -> Option<S
     ))
 }
 
-fn member_symbols(
-    toks: &[Token],
-    ast: &Ast,
-    fields: &[FieldRef],
-    methods: &[MethodRef],
-) -> Vec<Symbol> {
-    let mut out = field_symbols(toks, ast, fields);
+fn member_symbols(ast: &Ast, fields: &[FieldRef], methods: &[MethodRef]) -> Vec<Symbol> {
+    let mut out = field_symbols(ast, fields);
     out.extend(method_symbols(ast, methods));
     out
 }
 
-fn field_symbols(toks: &[Token], ast: &Ast, fields: &[FieldRef]) -> Vec<Symbol> {
+fn field_symbols(ast: &Ast, fields: &[FieldRef]) -> Vec<Symbol> {
     let mut out = Vec::new();
     for f in fields {
         let FieldRef::Field(h) = f else {
             continue; // the recovery slot renders no entry
         };
         let d: &FieldDeclNode = h.get(ast);
+        // the field's span covers its modifiers (`pub static ..`);
+        // the recorded name ident is the honest selection — the
+        // synthesized newtype's `inner` has no token (its recorded
+        // span degenerates empty), the field's own extent stands in
+        let selection = if d.name_span.hi > d.name_span.lo {
+            d.name_span
+        } else {
+            d.span
+        };
         out.push(Symbol::new(
             ast.name(d.name).to_string(),
             SymKind::Field,
             d.span,
-            // the field's span covers its modifiers (`pub static ..`);
-            // the recorded name ident is the honest selection
-            find_name(toks, d.span, ast.name(d.name), false).unwrap_or(d.span),
+            selection,
             vec![],
         ));
     }

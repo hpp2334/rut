@@ -2,9 +2,7 @@
 
 use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
 use rut_lexer::span::Span;
-use rut_lexer::token::Token;
 
-use super::recover::push_name;
 use super::*;
 
 fn classify_in(src: &str, mode: Mode) -> Vec<(Span, TokenType)> {
@@ -160,21 +158,6 @@ fn types_struct_literals_and_patterns() {
 }
 
 #[test]
-fn recovery_miss_skips_instead_of_guessing() {
-    let toks: Vec<Token> = Vec::new();
-    let mut out = Vec::new();
-    push_name(
-        &toks,
-        Span::new(0, 10),
-        "missing",
-        TokenType::Function,
-        &mut out,
-        false,
-    );
-    assert!(out.is_empty());
-}
-
-#[test]
 fn ast_wins_over_token_layer_at_equal_start() {
     // a field named `str` would be token-classified `type`; the AST
     // pass must replace it with `property`. (`nil` cannot be used — it
@@ -222,9 +205,8 @@ fn bare_calls_color_their_callee_as_function() {
 #[test]
 fn symbols_outline() {
     let src = "interface Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\nentry fn main() -> nil {}\n";
-    let (toks, _) = rut_lexer::lexer::lex(src);
     let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
-    let syms = symbols(&toks, p.ast());
+    let syms = symbols(p.ast());
     let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, vec!["Drawable", "impl Circle", "Color", "main"]);
     assert_eq!(syms[0].kind, SymKind::Interface);
@@ -260,10 +242,9 @@ fn symbols_selection_stays_inside_range_on_damaged_sources() {
     ];
     let mut walked = 0usize;
     for src in damaged {
-        let (toks, _) = rut_lexer::lexer::lex(src);
         let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
         assert!(!p.ast().errors().is_empty(), "not damaged: {src:?}");
-        let mut syms = symbols(&toks, p.ast());
+        let mut syms = symbols(p.ast());
         while let Some(s) = syms.pop() {
             assert!(
                 s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi,

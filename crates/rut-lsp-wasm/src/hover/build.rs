@@ -165,7 +165,15 @@ fn field_members(src: &str, ast: &Ast, fields: &[FieldRef]) -> Vec<MemberSrc> {
             let name = ast.name(d.name);
             // the `static` modifier is the node's own verdict — the
             // row's flag rides ONE struct-update over the constructor
-            // default (only a field can be a declared static)
+            // default (only a field can be a declared static). The
+            // synthesized newtype's `inner` records no name token (the
+            // span degenerates empty) — the field's own extent stands
+            // in, exactly as the pre-record scan fallback did
+            let name_span = if d.name_span.hi > d.name_span.lo {
+                d.name_span
+            } else {
+                d.span
+            };
             Some(MemberSrc {
                 is_static: d.is_static(),
                 ..member(
@@ -174,7 +182,7 @@ fn field_members(src: &str, ast: &Ast, fields: &[FieldRef]) -> Vec<MemberSrc> {
                     decl,
                     Some(ty_src(ast, d.ty)),
                     sp,
-                    d.name_span,
+                    name_span,
                     doc_of(&d.doc, src),
                 )
             })

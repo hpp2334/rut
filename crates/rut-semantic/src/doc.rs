@@ -72,7 +72,7 @@ impl ParsedDoc {
         );
         let (toks, _, _) = lex_normalized(p.src(), false);
         let spans = classify(&toks, p.ast());
-        let syms = symbols(&toks, p.ast());
+        let syms = symbols(p.ast());
         let lines = LineIndex::new(p.src());
         let (ast, src) = p.into_parts();
         ParsedDoc {
