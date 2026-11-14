@@ -1,16 +1,11 @@
-//! Classifier + symbol tests.
+//! Classifier + symbol tests — driven through the public artifact
+//! (`Document::parse` + `spans()`/`symbols()`), never private items.
 
-use rut_ast::parser::{parse_with_recover, Mode, ParseOpts};
-use rut_lexer::span::Span;
 use rut_lexer::token::Comment;
-
-use super::*;
-use crate::legend::ALL;
+use rut_semantic::{mode_of, Document, Mode, Span, SymKind, TokenType};
 
 fn classify_in(src: &str, mode: Mode) -> Vec<(Span, TokenType)> {
-    let (toks, _) = rut_lexer::lexer::lex(src);
-    let p = parse_with_recover(src.to_string(), mode, ParseOpts::default());
-    classify(&toks, p.ast())
+    Document::parse(mode, src.to_string()).spans().to_vec()
 }
 
 fn classify_src(src: &str) -> Vec<(Span, TokenType)> {
@@ -207,8 +202,8 @@ fn bare_calls_color_their_callee_as_function() {
 #[test]
 fn symbols_outline() {
     let src = "interface Drawable { fn draw(self, g: Canvas) -> nil; }\nimpl Circle { fn draw(self, g: Canvas) -> nil {} }\nenum Color { Red }\nentry fn main() -> nil {}\n";
-    let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
-    let syms = symbols(p.ast());
+    let doc = Document::parse(Mode::Impl, src.to_string());
+    let syms = doc.symbols();
     let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, vec!["Drawable", "impl Circle", "Color", "main"]);
     assert_eq!(syms[0].kind, SymKind::Interface);
@@ -218,7 +213,7 @@ fn symbols_outline() {
     assert_eq!(syms[2].children.len(), 1);
     assert_eq!(syms[3].kind, SymKind::Function);
     // selectionRange stays inside range
-    for s in &syms {
+    for s in syms {
         assert!(
             s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi,
             "{}",
@@ -244,9 +239,9 @@ fn symbols_selection_stays_inside_range_on_damaged_sources() {
     ];
     let mut walked = 0usize;
     for src in damaged {
-        let p = parse_with_recover(src.to_string(), Mode::Impl, ParseOpts::default());
-        assert!(!p.ast().errors().is_empty(), "not damaged: {src:?}");
-        let mut syms = symbols(p.ast());
+        let doc = Document::parse(Mode::Impl, src.to_string());
+        assert!(!doc.diags().is_empty(), "not damaged: {src:?}");
+        let mut syms = doc.symbols().to_vec();
         while let Some(s) = syms.pop() {
             assert!(
                 s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi,
@@ -266,12 +261,13 @@ fn symbols_selection_stays_inside_range_on_damaged_sources() {
 
 #[test]
 fn comment_is_appended_to_the_legend() {
-    assert_eq!(ALL.len(), 16);
+    let legend = TokenType::legend();
+    assert_eq!(legend.len(), 16);
     assert_eq!(TokenType::Comment.index(), 15);
     // the trailing append moved nothing
     assert_eq!(TokenType::Operator.index(), 14);
     assert_eq!(TokenType::Namespace.index(), 13);
-    assert_eq!(TokenType::legend().last().copied(), Some("comment"));
+    assert_eq!(legend.last().copied(), Some("comment"));
 }
 
 #[test]

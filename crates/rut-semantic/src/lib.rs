@@ -53,6 +53,3 @@ pub(crate) fn classify(toks: &[Token], ast: &Ast) -> Vec<(Span, TokenType)> {
     classify_ast(ast, &mut out);
     finalize(out)
 }
-
-#[cfg(test)]
-mod tests;
