@@ -11,7 +11,7 @@ use rut_lexer::token::Tok;
 
 use crate::parser::expr::{ExprFrame, ExprMode};
 use crate::parser::frame::{Done, Frame, Step};
-use crate::parser::Parser;
+use crate::parser::{Name, Parser};
 use rut_core::sym;
 
 pub(crate) struct TypeFrame {
@@ -50,7 +50,7 @@ enum TyStage {
     /// inside a `<..>` after a segment name
     GenArgs {
         segs: Vec<PathSeg>,
-        seg_name: crate::IdentId,
+        seg_name: Name,
         args: Vec<TyRef>,
     },
     /// `A | B` — a union bound
@@ -133,7 +133,7 @@ impl TypeFrame {
                 };
                 self.stage = TyStage::GenArgs {
                     segs,
-                    seg_name: name.id,
+                    seg_name: name,
                     args: Vec::new(),
                 };
                 return self.genargs_top(p);
@@ -141,6 +141,7 @@ impl TypeFrame {
             if let TyStage::Path { segs, .. } = &mut self.stage {
                 segs.push(PathSeg {
                     name: name.id,
+                    name_span: name.span,
                     generics: Vec::new(),
                 });
             }
@@ -230,7 +231,8 @@ impl TypeFrame {
         self.stage = TyStage::Path { segs };
         if let TyStage::Path { segs, .. } = &mut self.stage {
             segs.push(PathSeg {
-                name: seg_name,
+                name: seg_name.id,
+                name_span: seg_name.span,
                 generics: args,
             });
         }
@@ -255,10 +257,15 @@ impl TypeFrame {
 
     fn nil_ty(&mut self, p: &mut Parser) -> TyRef {
         let nil = sym::NIL;
+        // SYNTHESIZED — no nil token exists (the empty value is spelled
+        // `nil`, the omitted fn ret is implicit); the seg's recorded
+        // span degenerates to the node's own extent
+        let span = Span::new(self.lo.lo, p.prev_end.max(self.lo.lo));
         TyPathNode {
-            span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+            span,
             segs: vec![PathSeg {
                 name: nil,
+                name_span: span,
                 generics: Vec::new(),
             }],
         }

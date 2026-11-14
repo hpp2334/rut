@@ -25,6 +25,9 @@ use rut_lexer::span::Span;
 #[derive(Clone, Debug)]
 pub struct PathSeg {
     pub name: rut_core::IdentId,
+    /// the segment ident token's own span (recorded at the match site —
+    /// the classifier's position recovery used to token-walk for it)
+    pub name_span: Span,
     /// generic arguments — type slots (incl. const-generic `TyConst`)
     pub generics: Vec<crate::ast::ty::TyRef>,
 }
@@ -153,12 +156,21 @@ pub struct TupleNode {
     pub elems: Vec<ExprRef>,
 }
 
+/// one `name: value` field of a struct literal — the name token's
+/// span rides along (a shorthand's value path spells exactly it)
+#[derive(Clone, Debug)]
+pub struct FieldInit {
+    pub name: rut_core::IdentId,
+    pub name_span: Span,
+    pub value: ExprRef,
+}
+
 /// struct / `Self { .. }` literal — classes have no instance literal
 #[derive(Clone, Debug)]
 pub struct StructLitNode {
     pub span: Span,
     pub ty: crate::ast::ty::TyRef,
-    pub fields: Vec<(rut_core::IdentId, ExprRef)>,
+    pub fields: Vec<FieldInit>,
 }
 
 /// `[e1, .., en] : [T]`

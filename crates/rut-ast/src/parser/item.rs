@@ -283,13 +283,16 @@ impl UseFrame {
             }
         }
         p.expect(Tok::Semi);
+        // the head's span BEFORE the take — name_span keys on it
+        let name_span = self.path_spans.first().copied().unwrap_or(Span::new(0, 0));
         let node = with_doc!(
             p,
             UseNode {
                 span: p.span_from(self.lo),
                 modifiers: std::mem::take(&mut self.modifiers),
                 path: std::mem::take(&mut self.path),
-                name_span: self.path_spans.first().copied().unwrap_or(Span::new(0, 0)),
+                path_spans: std::mem::take(&mut self.path_spans),
+                name_span,
                 names: std::mem::take(&mut self.names),
                 name_spans: std::mem::take(&mut self.name_spans),
                 doc: DocData::default(),

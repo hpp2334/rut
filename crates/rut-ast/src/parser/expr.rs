@@ -10,9 +10,9 @@
 
 use crate::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
-    CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode, IsNode,
-    LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode, PathSeg, StructLitNode,
-    TryNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
+    CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode, IndexNode,
+    IsNode, LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode, PathSeg,
+    StructLitNode, TryNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::{FPart, FStrTok, FloatSuffix, Tok, Token};
@@ -21,7 +21,7 @@ use crate::parser::frame::{Done, Frame, Step};
 use crate::parser::item::ParamsFrame;
 use crate::parser::stmt::{BlockFrame, IfFrame, WhenFrame};
 use crate::parser::ty::TypeFrame;
-use crate::parser::{is_reserved_kw, Parser, EXPR_MAX};
+use crate::parser::{is_reserved_kw, Name, Parser, EXPR_MAX};
 use rut_core::sym;
 
 /// The ten numeric primitive names — the only spellings an `as` cast
@@ -425,7 +425,8 @@ pub(crate) struct AtomFrame {
     lo: Span,
     mode: AtomMode,
     stage: AtomStage,
-    cur_field: Option<crate::IdentId>,
+    /// the struct-literal field under construction (name + span)
+    cur_field: Option<Name>,
 }
 
 enum AtomStage {
@@ -444,7 +445,7 @@ enum AtomStage {
     },
     Struct {
         ty: crate::TyRef,
-        fields: Vec<(crate::IdentId, ExprRef)>,
+        fields: Vec<crate::FieldInit>,
     },
     /// a `::`-chain path: segments collected so far
     PathColons {
@@ -458,7 +459,7 @@ enum AtomStage {
     /// generic args on a later `::` segment (`Option<T>::Some(x)`)
     PathSegGen {
         segs: Vec<PathSeg>,
-        name: crate::IdentId,
+        name: Name,
         args: Vec<crate::TyRef>,
     },
     Postfix {
@@ -466,12 +467,12 @@ enum AtomStage {
     },
     PostDotGen {
         recv: ExprRef,
-        name: crate::IdentId,
+        name: Name,
         args: Vec<crate::TyRef>,
     },
     PostDotCall {
         recv: ExprRef,
-        name: crate::IdentId,
+        name: Name,
         generics: Vec<crate::TyRef>,
         args: Vec<ExprRef>,
     },
@@ -609,6 +610,7 @@ impl AtomFrame {
                         span: sp,
                         segs: vec![PathSeg {
                             name: sym::SELF,
+                            name_span: sp,
                             generics: Vec::new(),
                         }],
                     }
@@ -626,6 +628,7 @@ impl AtomFrame {
                         span: sp,
                         segs: vec![PathSeg {
                             name: sym::SELF_TY,
+                            name_span: sp,
                             generics: Vec::new(),
                         }],
                     }
@@ -647,6 +650,7 @@ impl AtomFrame {
                 p.bump();
                 let first = PathSeg {
                     name: p.ast.intern(&name),
+                    name_span: sp,
                     generics: Vec::new(),
                 };
                 let segs = vec![first];
@@ -690,24 +694,28 @@ impl AtomFrame {
             match p.tok() {
                 Tok::Dot => {
                     p.bump();
-                    // `.0`/`.1` — tuple field access
-                    let name = match p.tok().clone() {
+                    // `.0`/`.1` — tuple field access (the int token's
+                    // span IS the member's recorded span)
+                    let (name, name_span) = match p.tok().clone() {
                         Tok::Int(v, None) => {
-                            p.bump();
-                            p.ast.intern(&v.to_string())
+                            let sp = p.bump().span;
+                            (p.ast.intern(&v.to_string()), sp)
                         }
                         _ => {
                             let Some(n) = p.expect_ident("a member name") else {
                                 return Step::Pop(Done::Failed);
                             };
-                            n.id
+                            (n.id, n.span)
                         }
                     };
                     if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
                         p.bump();
                         self.stage = AtomStage::PostDotGen {
                             recv: e,
-                            name,
+                            name: Name {
+                                id: name,
+                                span: name_span,
+                            },
                             args: Vec::new(),
                         };
                         return self.genarg_top(p);
@@ -716,7 +724,10 @@ impl AtomFrame {
                         p.bump();
                         self.stage = AtomStage::PostDotCall {
                             recv: e,
-                            name,
+                            name: Name {
+                                id: name,
+                                span: name_span,
+                            },
                             generics: Vec::new(),
                             args: Vec::new(),
                         };
@@ -726,6 +737,7 @@ impl AtomFrame {
                         span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                         recv: e,
                         name,
+                        name_span,
                     }
                     .allocate(&mut p.ast);
                 }
@@ -855,11 +867,14 @@ impl AtomFrame {
         if !ident_consumed {
             p.bump(); // the type ident
         }
+        // self.lo opens at the atom's FIRST token — the type ident
+        // (generics or not), so it IS the recorded name span
         p.bump(); // {
         let ty = crate::TyPathNode {
             span: self.lo,
             segs: vec![PathSeg {
                 name: ty_name,
+                name_span: self.lo,
                 generics,
             }],
         }
@@ -888,20 +903,25 @@ impl AtomFrame {
                 span: id_sp,
                 segs: vec![PathSeg {
                     name: f.id,
+                    name_span: f.span,
                     generics: Vec::new(),
                 }],
             }
             .allocate(&mut p.ast);
-            return self.struct_field_done(p, f.id, e);
+            return self.struct_field_done(p, f, e);
         }
         p.expect(Tok::Colon);
-        self.cur_field = Some(f.id);
+        self.cur_field = Some(f);
         Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)))
     }
 
-    fn struct_field_done(&mut self, p: &mut Parser, f: crate::IdentId, e: ExprRef) -> Step {
+    fn struct_field_done(&mut self, p: &mut Parser, f: Name, e: ExprRef) -> Step {
         match &mut self.stage {
-            AtomStage::Struct { fields, .. } => fields.push((f, e)),
+            AtomStage::Struct { fields, .. } => fields.push(FieldInit {
+                name: f.id,
+                name_span: f.span,
+                value: e,
+            }),
             _ => unreachable!("struct field at the wrong stage"),
         }
         if p.eat_punct(Tok::Comma) {
@@ -953,7 +973,7 @@ impl AtomFrame {
                 };
                 self.stage = AtomStage::PathSegGen {
                     segs,
-                    name: name.id,
+                    name,
                     args: Vec::new(),
                 };
                 return self.genarg_top(p);
@@ -961,6 +981,7 @@ impl AtomFrame {
             if let AtomStage::PathColons { segs } = &mut self.stage {
                 segs.push(PathSeg {
                     name: name.id,
+                    name_span: name.span,
                     generics: Vec::new(),
                 });
             }
@@ -1008,7 +1029,8 @@ impl AtomFrame {
                 let name = *name;
                 let mut segs = std::mem::take(segs);
                 segs.push(PathSeg {
-                    name,
+                    name: name.id,
+                    name_span: name.span,
                     generics: args,
                 });
                 self.stage = AtomStage::PathColons { segs };
@@ -1031,7 +1053,8 @@ impl AtomFrame {
                     let node = FieldNode {
                         span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                         recv,
-                        name,
+                        name: name.id,
+                        name_span: name.span,
                     }
                     .allocate(&mut p.ast);
                     self.stage = AtomStage::Postfix { e: node };
@@ -1086,7 +1109,8 @@ impl AtomFrame {
                 let node = MethodNode {
                     span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
                     recv,
-                    name,
+                    name: name.id,
+                    name_span: name.span,
                     generics,
                     args,
                 }

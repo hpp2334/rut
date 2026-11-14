@@ -1699,7 +1699,7 @@ impl<'a> P<'a> {
                             self.text(", ");
                         }
                         match arg {
-                            Some(id) => self.text(self.a.name(*id)),
+                            Some(b) => self.text(self.a.name(b.name)),
                             None => self.text("_"),
                         }
                     }
@@ -1981,22 +1981,22 @@ impl<'a> P<'a> {
                 let m = self.stamp();
                 self.in_flat += 1;
                 self.sp();
-                for (i, (name, v)) in d.fields.iter().enumerate() {
+                for (i, fi) in d.fields.iter().enumerate() {
                     if i > 0 {
                         self.text(", ");
                     }
-                    self.text(self.a.name(*name));
+                    self.text(self.a.name(fi.name));
                     self.text(": ");
-                    self.expr(*v);
+                    self.expr(fi.value);
                 }
                 self.in_flat -= 1;
                 if self.over_on_flat(m) {
                     self.rollback(m);
                     self.nl_band();
-                    for (name, v) in d.fields.iter() {
-                        self.text(self.a.name(*name));
+                    for fi in d.fields.iter() {
+                        self.text(self.a.name(fi.name));
                         self.text(": ");
-                        self.expr(*v);
+                        self.expr(fi.value);
                         self.text(",");
                         self.nl();
                     }

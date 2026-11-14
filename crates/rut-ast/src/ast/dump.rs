@@ -55,6 +55,8 @@ pub struct DumpField {
 /// interfaces. The JSON writer is a dumb serializer over these.
 pub struct DumpSeg {
     pub name: String,
+    /// the segment ident's recorded span
+    pub span: (u32, u32),
     pub generics: Vec<DumpNode>,
 }
 pub struct DumpMember {
@@ -62,6 +64,8 @@ pub struct DumpMember {
 }
 pub struct DumpStructField {
     pub ident: String,
+    /// the field name's recorded span
+    pub span: (u32, u32),
     pub node: DumpNode,
 }
 pub struct DumpBound {
@@ -104,6 +108,7 @@ fn segs_dump(a: &Ast, segs: &[PathSeg], next: &mut u32) -> Vec<DumpSeg> {
     segs.iter()
         .map(|s| DumpSeg {
             name: a.name(s.name).to_string(),
+            span: (s.name_span.lo, s.name_span.hi),
             generics: s.generics.iter().map(|&g| ty_dump(a, g, next)).collect(),
         })
         .collect()
@@ -807,7 +812,7 @@ fn pat_dump(a: &Ast, r: PatRef, next: &mut u32) -> DumpNode {
                 DumpVal::PatArgs(
                     d.args
                         .iter()
-                        .map(|x| x.map(|n| a.name(n).to_string()))
+                        .map(|x| x.map(|b| a.name(b.name).to_string()))
                         .collect(),
                 ),
             ));
@@ -1056,9 +1061,10 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> DumpNode {
                 DumpVal::StructFields(
                     d.fields
                         .iter()
-                        .map(|(n, v)| DumpStructField {
-                            ident: a.name(*n).to_string(),
-                            node: expr_dump(a, *v, next),
+                        .map(|fi| DumpStructField {
+                            ident: a.name(fi.name).to_string(),
+                            span: (fi.name_span.lo, fi.name_span.hi),
+                            node: expr_dump(a, fi.value, next),
                         })
                         .collect(),
                 ),
@@ -1249,6 +1255,7 @@ fn val_json(v: &DumpVal, out: &mut String) {
                 json_escape("ident", out);
                 out.push(':');
                 json_escape(&f.ident, out);
+                out.push_str(&format!(",\"span\":[{},{}]", f.span.0, f.span.1));
                 out.push_str(",\"node\":");
                 node_json(&f.node, out);
                 out.push('}');
@@ -1281,6 +1288,7 @@ fn val_json(v: &DumpVal, out: &mut String) {
                 json_escape("name", out);
                 out.push(':');
                 json_escape(&s.name, out);
+                out.push_str(&format!(",\"span\":[{},{}]", s.span.0, s.span.1));
                 if !s.generics.is_empty() {
                     out.push_str(",\"generics\":[");
                     for (j, g) in s.generics.iter().enumerate() {

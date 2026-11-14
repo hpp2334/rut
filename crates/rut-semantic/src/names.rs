@@ -489,7 +489,7 @@ fn classify_pat(toks: &[Token], ast: &Ast, p: PatRef, out: &mut Vec<(Span, Token
             let names: Vec<&str> = d
                 .args
                 .iter()
-                .filter_map(|a| a.map(|id| ast.name(id)))
+                .filter_map(|a| a.map(|b| ast.name(b.name)))
                 .collect();
             let mut i = 0;
             for tk in toks_in(toks, d.span) {
@@ -539,16 +539,16 @@ fn classify_expr(toks: &[Token], ast: &Ast, e: ExprRef, out: &mut Vec<(Span, Tok
         // struct literal labels (`Point { x: 1 }`) lead their values
         ExprRef::Struct(h) => {
             let d = h.get(ast);
-            for (fid, val) in &d.fields {
+            for fi in &d.fields {
                 push_name(
                     toks,
                     d.span,
-                    ast.name(*fid),
+                    ast.name(fi.name),
                     TokenType::Property,
                     out,
                     false,
                 );
-                classify_expr(toks, ast, *val, out);
+                classify_expr(toks, ast, fi.value, out);
             }
             classify_ty(toks, ast, d.ty, out);
         }

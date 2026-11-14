@@ -17,6 +17,9 @@ pub struct MethodNode {
     pub span: Span,
     pub recv: ExprRef,
     pub name: IdentId,
+    /// the member ident token's span (`.name` — or the tuple-index
+    /// token's, spelled `.0`)
+    pub name_span: Span,
     pub generics: Vec<crate::ast::ty::TyRef>,
     pub args: Vec<ExprRef>,
 }
@@ -26,6 +29,9 @@ pub struct FieldNode {
     pub span: Span,
     pub recv: ExprRef,
     pub name: IdentId,
+    /// the member ident token's span (`.name` — or the tuple-index
+    /// token's, spelled `.0`)
+    pub name_span: Span,
 }
 
 #[derive(Clone, Debug)]

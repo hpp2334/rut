@@ -13,7 +13,8 @@ use rut_lexer::span::Span;
 /// degenerate to `path = [pkg]`. `vis()` is the re-export edge: a `pub
 /// use`'s imported names join the module's public surface (a private
 /// `use` imports only). `name_span` is the PACKAGE ident's span (the
-/// head — definition targets key on it); `name_spans` are the leaf
+/// head — definition targets key on it); `path_spans` are the path
+/// idents' spans, parallel to `path`; `name_spans` are the leaf
 /// idents' spans, parallel to `names`.
 #[derive(Clone, Debug)]
 pub struct UseNode {
@@ -23,6 +24,7 @@ pub struct UseNode {
     /// the modifier chain in source order — `vis()` derives from it
     pub modifiers: Vec<ModifierNode>,
     pub path: Vec<IdentId>,
+    pub path_spans: Vec<Span>,
     pub name_span: Span,
     pub names: Vec<IdentId>,
     pub name_spans: Vec<Span>,

@@ -55,7 +55,15 @@ pub struct PatPathNode {
 pub struct PatCtorNode {
     pub span: Span,
     pub segs: Vec<PathSeg>,
-    pub args: Vec<Option<IdentId>>,
+    pub args: Vec<Option<PatBinding>>,
+}
+
+/// one constructor-pattern binding — the ident's id and its token's
+/// span (recorded at the match site)
+#[derive(Clone, Copy, Debug)]
+pub struct PatBinding {
+    pub name: IdentId,
+    pub name_span: Span,
 }
 
 #[derive(Clone, Debug)]

@@ -56,12 +56,12 @@ pub use stmt::{
 // expressions
 pub use expr::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
-    BlockNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode,
-    IsNode, LambdaNode, Lit, LitNode, MethodNode, PathNode, PathSeg, StructLitNode, TryNode,
-    TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
+    BlockNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode,
+    IndexNode, IsNode, LambdaNode, Lit, LitNode, MethodNode, PathNode, PathSeg, StructLitNode,
+    TryNode, TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
 };
 // types + patterns
-pub use pat::{PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};
+pub use pat::{PatBinding, PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};
 pub use ty::{
     TyArrayNode, TyConstNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode, TyUnionNode,
 };

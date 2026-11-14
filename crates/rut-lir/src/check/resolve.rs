@@ -478,6 +478,7 @@ impl<'a> Ctx<'a> {
                     if let Some(target) = self.own_use_target(name) {
                         let leaf = PathSeg {
                             name,
+                            name_span: seg.name_span,
                             generics: seg.generics.clone(),
                         };
                         let from = self.cur_mod.clone();

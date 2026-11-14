@@ -442,8 +442,8 @@ pub(crate) fn expr_children(ast: &Ast, e: ExprRef) -> Vec<ExprRef> {
         }
         ExprRef::Struct(h) => {
             let d = h.get(ast);
-            for (_, v) in &d.fields {
-                out.push(*v);
+            for fi in &d.fields {
+                out.push(fi.value);
             }
         }
         ExprRef::Tuple(h) => out.extend(h.get(ast).elems.iter().copied()),

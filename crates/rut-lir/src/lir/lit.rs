@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::check::TcResult;
-use rut_ast::Lit;
+use rut_ast::{FieldInit, Lit};
 use rut_core::binary::ConstVal;
 
 /// A `[v; n]` fill whose value is a compile-time all-zero literal —
@@ -789,7 +789,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     pub(crate) fn compile_struct(
         &mut self,
         ty: TyRef,
-        fields: Vec<(IdentId, ExprRef)>,
+        fields: Vec<FieldInit>,
         expected: Option<TypeId>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
@@ -912,7 +912,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         // whole record with one MakeRecord (no NewCell/SetF/MovRef sequence)
         let mut val_regs: Vec<Option<u16>> = vec![None; field_list.len()];
         let mut set: Vec<bool> = vec![false; field_list.len()];
-        for (fname, v) in &fields {
+        for fi in &fields {
+            let (fname, v) = (&fi.name, &fi.value);
             let Some(fidx) = field_list.iter().position(|(n, _, _)| n == fname) else {
                 self.ctx.err(
                     v.span(self.ctx.ast),
@@ -1037,7 +1038,7 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
     fn compile_struct_extern(
         &mut self,
         sty: TypeId,
-        fields: Vec<(IdentId, ExprRef)>,
+        fields: Vec<FieldInit>,
         sp: rut_lexer::span::Span,
     ) -> TcResult<TypeId> {
         let TyKind::Data { fields: desc } = self.ctx.types.kind(sty).clone() else {
@@ -1059,7 +1060,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
         }
         let n = desc.len();
         let mut val_regs: Vec<Option<u16>> = vec![None; n];
-        for (fname, v) in &fields {
+        for fi in &fields {
+            let (fname, v) = (&fi.name, &fi.value);
             let Some(fidx) = desc.iter().position(|f| f.name == *fname) else {
                 self.ctx.err(
                     v.span(self.ctx.ast),
@@ -1521,8 +1523,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             ExprRef::Struct(h) => {
-                for (_, v) in h.get(self.ctx.ast).fields.clone() {
-                    self.scan_names_expr(v, out);
+                for fi in h.get(self.ctx.ast).fields.clone() {
+                    self.scan_names_expr(fi.value, out);
                 }
             }
             ExprRef::ArrayLit(h) => {
@@ -1770,8 +1772,8 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 }
             }
             ExprRef::Struct(h) => {
-                for (_, v) in h.get(self.ctx.ast).fields.clone() {
-                    self.walk_capture_law_expr(v, inside, assigned, captured);
+                for fi in h.get(self.ctx.ast).fields.clone() {
+                    self.walk_capture_law_expr(fi.value, inside, assigned, captured);
                 }
             }
             ExprRef::ArrayLit(h) => {

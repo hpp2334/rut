@@ -6,8 +6,8 @@
 
 use crate::{
     BlockNode, BreakNode, ContinueNode, ElseBranch, ExprRef, ForCNode, ForOfNode, Handle, IfNode,
-    PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode, PathSeg, ReturnNode,
-    StmtRef, TyRef, WhenArmNode, WhenStmtNode, WhileNode,
+    PatBinding, PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode, PathSeg,
+    ReturnNode, StmtRef, TyRef, WhenArmNode, WhenStmtNode, WhileNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
@@ -785,7 +785,7 @@ pub(crate) struct PatternFrame {
     stage: PatStage,
     segs: Vec<PathSeg>,
     genargs: Vec<TyRef>,
-    ctor_args: Vec<Option<crate::IdentId>>,
+    ctor_args: Vec<Option<PatBinding>>,
 }
 
 enum PatStage {
@@ -796,7 +796,7 @@ enum PatStage {
     /// building a (possibly dotted, possibly generic) path
     Path,
     /// inside the path's `<..>`
-    GenArgs { seg_name: crate::IdentId },
+    GenArgs { seg_name: Name },
 }
 
 impl PatternFrame {
@@ -851,19 +851,18 @@ impl PatternFrame {
     /// and resume through `genargs_done` — the loops are iterative (C2).
     fn path_run(&mut self, p: &mut Parser) -> Step {
         loop {
-            let ident_sp = p.span();
             let Some(name) = p.expect_ident("a pattern name") else {
                 return Step::Pop(Done::Failed);
             };
-            let _ = ident_sp;
             self.sp = self.sp.to(name.span);
             if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(true) {
                 p.bump();
-                self.stage = PatStage::GenArgs { seg_name: name.id };
+                self.stage = PatStage::GenArgs { seg_name: name };
                 return self.genargs_top(p);
             }
             self.segs.push(PathSeg {
                 name: name.id,
+                name_span: name.span,
                 generics: Vec::new(),
             });
             if !p.eat_punct(Tok::Colon2) {
@@ -914,7 +913,10 @@ impl PatternFrame {
                 Tok::Ident(b) => {
                     let sp = p.bump().span;
                     self.sp = self.sp.to(sp);
-                    self.ctor_args.push(Some(p.ast.intern(&b)));
+                    self.ctor_args.push(Some(PatBinding {
+                        name: p.ast.intern(&b),
+                        name_span: sp,
+                    }));
                 }
                 _ => {
                     let found = p.peek(0).describe();
@@ -962,7 +964,8 @@ impl PatternFrame {
         let generics = std::mem::take(&mut self.genargs);
         self.stage = PatStage::Path;
         self.segs.push(PathSeg {
-            name: seg_name,
+            name: seg_name.id,
+            name_span: seg_name.span,
             generics,
         });
         self.path_resume(p)
