@@ -269,7 +269,7 @@ fn param_names(ast: &Ast, params: &[ParamRef]) -> Vec<String> {
 /// and toks are its read doors (`toks` is the same lex the parser
 /// consumed — the use-path interior segments' name-span recovery rides
 /// it; the only span the nodes do not record).
-pub fn index(doc: &rut_semantic::ParsedDoc, mount: Mount) -> DefIndex {
+pub fn index(doc: &rut_semantic::Document, mount: Mount) -> DefIndex {
     index_items(
         doc.src(),
         doc.ast(),

@@ -5,7 +5,7 @@
 //! Mirrors the parser corpus test (rut-ast) from the LSP side.
 
 use rut_ast::parser::{is_reserved_kw, Mode};
-use rut_lsp_wasm::semantic::{classify, symbols, TokenType};
+use rut_lsp_wasm::semantic::{Document, TokenType};
 use rut_lsp_wasm::LineIndex;
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
@@ -21,6 +21,14 @@ fn doc_ast(src: &str, mode: rut_ast::parser::Mode) -> rut_ast::Ast {
     )
     .into_parts()
     .0
+}
+
+/// the document under test — the editor entry itself (`Document::parse`),
+/// whose read doors hand out the toks/spans/symbols the checks read
+/// (the classifier + symbols lanes are the doc's private laziness now;
+/// these ARE the first readers)
+fn analyzed(src: &str, mode: Mode) -> Document {
+    Document::parse(mode, src.to_string())
 }
 
 fn corpus() -> Vec<std::path::PathBuf> {
@@ -50,20 +58,6 @@ fn corpus() -> Vec<std::path::PathBuf> {
     out
 }
 
-fn analyzed(
-    src: &str,
-    mode: Mode,
-) -> (
-    Vec<rut_lexer::token::Token>,
-    rut_ast::Ast,
-    Vec<(rut_lexer::span::Span, TokenType)>,
-) {
-    let (toks, _) = rut_lexer::lexer::lex(src);
-    let ast = doc_ast(src, mode);
-    let spans = classify(&toks, &ast);
-    (toks, ast, spans)
-}
-
 #[test]
 fn corpus_classifies() {
     let files = corpus();
@@ -76,11 +70,11 @@ fn corpus_classifies() {
         } else {
             Mode::Impl
         };
-        let (_, _, spans) = analyzed(&src, mode);
+        let doc = analyzed(&src, mode);
         // tokens: non-empty, in-file, strictly increasing, non-overlapping
         let len = src.len() as u32;
         let mut prev_hi = 0;
-        for (sp, _) in &spans {
+        for (sp, _) in doc.spans() {
             assert!(sp.lo < sp.hi, "{}: empty span at {}", path.display(), sp.lo);
             assert!(sp.hi <= len, "{}: span out of file", path.display());
             assert!(
@@ -93,7 +87,7 @@ fn corpus_classifies() {
         }
         // line index round-trips every token start
         let index = LineIndex::new(&src);
-        for (sp, _) in &spans {
+        for (sp, _) in doc.spans() {
             let (l, c) = index.position(&src, sp.lo);
             assert_eq!(
                 index.byte(&src, l, c),
@@ -104,10 +98,9 @@ fn corpus_classifies() {
         }
         // symbols exist for every Impl file
         if mode == Mode::Impl {
-            let (_, ast, _) = analyzed(&src, mode);
-            let syms = symbols(&ast);
+            let syms = doc.symbols();
             assert!(!syms.is_empty(), "{}: no document symbols", path.display());
-            for s in &syms {
+            for s in syms {
                 assert!(
                     s.selection.lo >= s.range.lo && s.selection.hi <= s.range.hi,
                     "{}: symbol `{}` selection outside range",
@@ -166,12 +159,13 @@ fn corpus_reserved_words_are_keywords() {
         } else {
             Mode::Impl
         };
-        let (toks, _, spans) = analyzed(&src, mode);
-        for t in &toks {
+        let doc = analyzed(&src, mode);
+        for t in doc.toks() {
             if let rut_lexer::token::Tok::Ident(s) = &t.tok {
                 // true/false lex as Bool literals, never Ident tokens
                 if is_reserved_kw(s) {
-                    let hit = spans
+                    let hit = doc
+                        .spans()
                         .iter()
                         .any(|(sp, ty)| sp.lo == t.span.lo && *ty == TokenType::Keyword);
                     assert!(

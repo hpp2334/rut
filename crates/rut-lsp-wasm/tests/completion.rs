@@ -9,8 +9,8 @@ use std::collections::HashSet;
 /// parse, read through the doc's doors (the test lane's replacement
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> rut_semantic::ParsedDoc {
-    rut_semantic::ParsedDoc::parse(mode, src.to_string())
+fn doc_of(src: &str, mode: Mode) -> rut_semantic::Document {
+    rut_semantic::Document::parse(mode, src.to_string())
 }
 
 fn complete_after(src: &str, needle: &str) -> Vec<CompletionOut> {

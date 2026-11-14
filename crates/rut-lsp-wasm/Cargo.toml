@@ -25,8 +25,8 @@ crate-type = ["cdylib", "rlib"]
 # proven by the CI lane.
 [dependencies]
 # THE LAYER LAW — this crate's ONLY frontend is rut-semantic (the
-# document layer: ParsedDoc, classify, symbols, mode derivation, the
-# position math). NO rut-lexer, and src/ never touches
+# document layer: Document (parse + its read/join doors), mode
+# derivation, the position math). NO rut-lexer, and src/ never touches
 # rut_ast::parser:: — nobody here drives normalize → lex → parse by
 # hand (the grammar/corpus TESTS may, via dev-dependencies: the
 # sanctioned seam). rut-ast stays as shared tree VOCABULARY (hover

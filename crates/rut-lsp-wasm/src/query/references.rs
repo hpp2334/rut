@@ -356,7 +356,7 @@ fn scan_files(
 ) {
     // parse the non-doc candidates once (doc-sized files; the per-query
     // re-parse is the house style — hover already rides it)
-    let mut parsed: Vec<(&DefIndex, rut_semantic::ParsedDoc)> = Vec::new();
+    let mut parsed: Vec<(&DefIndex, rut_semantic::Document)> = Vec::new();
     for f in files {
         if std::ptr::eq(*f, ctx.doc()) {
             continue;

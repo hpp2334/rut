@@ -236,9 +236,9 @@ pub fn check_doc(
         // uri can't name a location — related info drops rather than
         // guesses
         let diag = match Uri::from_str(uri) {
-            Ok(u) => crate::analysis::to_diagnostic(d, text, &index, &u),
+            Ok(u) => crate::analysis::to_diagnostic_parts(d, text, &index, &u),
             Err(_) => {
-                let mut dg = crate::analysis::to_diagnostic(
+                let mut dg = crate::analysis::to_diagnostic_parts(
                     d,
                     text,
                     &index,

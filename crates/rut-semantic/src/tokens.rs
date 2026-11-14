@@ -9,7 +9,7 @@ use super::legend::{is_keyword, is_primitive_ty, TokenType};
 /// Token-level classification — no AST needed. FStr is tiled separately
 /// (`classify_token`); structural punctuation stays unclassified (themes
 /// already paint it, and it keeps token streams small).
-pub fn token_type(tok: &Tok) -> Option<TokenType> {
+pub(crate) fn token_type(tok: &Tok) -> Option<TokenType> {
     match tok {
         Tok::Bool(_) => Some(TokenType::Keyword),
         Tok::Int(..) | Tok::Float(..) => Some(TokenType::Number),

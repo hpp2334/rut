@@ -62,7 +62,7 @@ impl Symbol {
     }
 }
 
-pub fn symbols(ast: &Ast) -> Vec<Symbol> {
+pub(crate) fn symbols(ast: &Ast) -> Vec<Symbol> {
     ast.root()
         .items(ast)
         .iter()

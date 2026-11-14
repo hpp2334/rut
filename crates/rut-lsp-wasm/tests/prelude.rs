@@ -46,8 +46,8 @@ fn myhost_chain() -> Vec<DefIndex> {
 /// parse, read through the doc's doors (the test lane's replacement
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape)
-fn doc_of(src: &str, mode: rut_ast::parser::Mode) -> rut_semantic::ParsedDoc {
-    rut_semantic::ParsedDoc::parse(mode, src.to_string())
+fn doc_of(src: &str, mode: rut_ast::parser::Mode) -> rut_semantic::Document {
+    rut_semantic::Document::parse(mode, src.to_string())
 }
 
 #[test]

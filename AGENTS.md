@@ -59,7 +59,7 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   handles with the store as ctx (`h.get(ast)`, `root().items(ast)`,
   `slot.span(ast)`) — no smart objects, no per-node back-pointers, no
   builder ceremony. The same law governs the computed artifacts —
-  `Parsed` (`ast()`/`src()`/`into_parts()`) and `ParsedDoc` (read
+  `Parsed` (`ast()`/`src()`/`into_parts()`) and `Document` (read
   doors only; consumers hold the doc and borrow) carry private
   fields. Plain records (node structs, index rows, `ParseOpts`,
   driver/lir rows, lsp-wasm's wire-bound `Analysis` — its rows exist
@@ -80,7 +80,7 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   its `src/` never spells `rut_ast::parser::` — that pair is the
   law's enforcement (the grammar now lives inside `rut-ast`, so the
   dep list alone can no longer prove it; grep the src tree). Its ONLY
-  frontend is `rut-semantic` (`ParsedDoc::parse(mode, src)` — mode
+  frontend is `rut-semantic` (`Document::parse(mode, src)` — mode
   from the filename convention (`mode_of`), editor opts baked);
   `rut-ast` stays as shared tree vocabulary, `rut-driver`/`rut-core`
   are other lanes. The grammar/corpus tests may drive the parser via

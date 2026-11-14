@@ -23,28 +23,29 @@ use self::names::classify_ast;
 use self::recover::finalize;
 use self::tokens::classify_token;
 
-pub use self::doc::{mode_of, ParsedDoc};
-pub use self::legend::{is_keyword, is_primitive_ty, TokenType, ALL};
-pub use self::symbols::{symbols, SymKind, Symbol};
-pub use self::tokens::token_type;
+pub use self::doc::{mode_of, Document};
+pub use self::legend::{is_keyword, is_primitive_ty, TokenType};
+pub(crate) use self::symbols::symbols;
+pub use self::symbols::{SymKind, Symbol};
 
 mod line_index;
 pub use self::line_index::LineIndex;
 
 // the document layer's vocabulary re-exports — ONLY what this crate's
 // own API hands out, so the layer above (`rut-lsp-wasm`) needs no
-// direct frontend Cargo dep to spell what ParsedDoc/classify return
-pub use rut_ast::parser::{is_reserved_kw, Mode, ParseOpts, PRIMITIVE_TYS, RESERVED_KW};
+// direct frontend Cargo dep to spell what Document returns
+pub use rut_ast::parser::{is_reserved_kw, Mode, PRIMITIVE_TYS, RESERVED_KW};
 pub use rut_lexer::diag::Diag;
 pub use rut_lexer::lexer::canonical;
 pub use rut_lexer::span::Span;
-pub use rut_lexer::token::{Comment, FloatSuffix, IntSuffix, Tok, Token};
+pub use rut_lexer::token::{FloatSuffix, IntSuffix, Tok, Token};
 
 /// Classify a whole document: token-level classes, then AST-level name
 /// classes at their recorded spans (which win at equal positions).
 /// Output is sorted by start and guaranteed non-overlapping — LSP's
-/// semantic-token contract.
-pub fn classify(toks: &[Token], ast: &Ast) -> Vec<(Span, TokenType)> {
+/// semantic-token contract. The classifier's lane: `Document::spans`
+/// rides it lazily; no consumer calls it by hand.
+pub(crate) fn classify(toks: &[Token], ast: &Ast) -> Vec<(Span, TokenType)> {
     let mut out: Vec<(Span, TokenType)> = Vec::new();
     for t in toks {
         classify_token(t, &mut out);

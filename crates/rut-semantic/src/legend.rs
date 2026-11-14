@@ -26,7 +26,7 @@ pub enum TokenType {
     Comment,
 }
 
-pub const ALL: [TokenType; 16] = [
+pub(crate) const ALL: [TokenType; 16] = [
     TokenType::Keyword,
     TokenType::Number,
     TokenType::String,
