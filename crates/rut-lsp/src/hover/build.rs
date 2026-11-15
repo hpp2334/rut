@@ -14,14 +14,14 @@
 //! node's shape. Error slots (items and members alike) render no rows:
 //! errors are the panel's business (`ast.errors()`), not the index's.
 
+use crate::semantic::LineIndex;
+use crate::semantic::Span;
+use crate::semantic::Tok;
+use crate::semantic::Token;
 use rut_ast::{
     Ast, BlockNode, DocData, EnumMemberNode, FieldDeclNode, FieldRef, Handle, IdentId, ItemRef,
     MethodDeclNode, MethodRef, ModuleLetNode, ParamRef, Vis,
 };
-use rut_semantic::LineIndex;
-use rut_semantic::Span;
-use rut_semantic::Tok;
-use rut_semantic::Token;
 
 use super::infer;
 use super::types::{
@@ -269,7 +269,7 @@ fn param_names(ast: &Ast, params: &[ParamRef]) -> Vec<String> {
 /// and toks are its read doors (`toks` is the same lex the parser
 /// consumed — the use-path interior segments' name-span recovery rides
 /// it; the only span the nodes do not record).
-pub fn index(doc: &rut_semantic::Document, mount: Mount) -> DefIndex {
+pub fn index(doc: &crate::semantic::Document, mount: Mount) -> DefIndex {
     index_items(
         doc.src(),
         doc.ast(),
@@ -558,7 +558,7 @@ pub fn index_items(
                         continue;
                     }
                     let Tok::Ident(text) = &t.tok else { continue };
-                    if rut_semantic::is_reserved_kw(text) {
+                    if crate::semantic::is_reserved_kw(text) {
                         continue;
                     }
                     if segs_left == 0 {

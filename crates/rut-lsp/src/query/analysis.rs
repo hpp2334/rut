@@ -3,8 +3,8 @@
 //! symbols → LSP values, every location stamped with the document's
 //! identity at construction. The server layer only routes and publishes.
 
+use crate::semantic::{Diag, LineIndex, Span};
 use ls_types::*;
-use rut_semantic::{Diag, LineIndex, Span};
 use std::collections::HashSet;
 use std::str::FromStr;
 
@@ -13,8 +13,8 @@ use crate::definition;
 use crate::hover;
 use crate::inlay;
 use crate::references;
+use crate::semantic::{SymKind, Symbol};
 use crate::signature_help;
-use rut_semantic::{SymKind, Symbol};
 
 /// the analysis envelope — the per-document rows (diags, tokens,
 /// symbols) plus the hover index, related-info URIs + provenance
@@ -29,14 +29,14 @@ pub struct Analysis {
     pub index: hover::DefIndex,
 }
 
-/// moved to `rut-semantic` (the document layer owns the filename
-/// convention); re-exported so the internal callers keep their spelling
-pub use rut_semantic::mode_of;
+/// the sealed `semantic` module owns the filename convention;
+/// re-exported so the internal callers keep their spelling
+pub use crate::semantic::mode_of;
 
 /// one Document → the LSP `Analysis` envelope — related info + hover
 /// provenance stamped at construction from the document's URI (the
 /// degenerate twin below rides the placeholder)
-fn analysis_of(doc: &rut_semantic::Document, uri: &Uri) -> Analysis {
+fn analysis_of(doc: &crate::semantic::Document, uri: &Uri) -> Analysis {
     let index = hover::index(doc, hover::Mount::doc(uri.as_str()));
     Analysis {
         diags: doc
@@ -56,7 +56,7 @@ fn analysis_of(doc: &rut_semantic::Document, uri: &Uri) -> Analysis {
 /// placeholder). `src` BY VALUE — it moves into the doc artifact.
 pub fn analyze_unstamped(uri: &str, src: String) -> Analysis {
     analysis_of(
-        &rut_semantic::Document::parse(mode_of(uri), src),
+        &crate::semantic::Document::parse(mode_of(uri), src),
         &placeholder_uri(),
     )
 }
@@ -82,7 +82,7 @@ pub fn range_of(index: &LineIndex, src: &str, span: Span) -> Range {
 /// manual `lines()`+`src()` pairing at the call site (the lanes above
 /// hold parts — definition's spans over a def's index — and keep
 /// [`range_of`])
-fn range_on(doc: &rut_semantic::Document, span: Span) -> Range {
+fn range_on(doc: &crate::semantic::Document, span: Span) -> Range {
     let (l1, c1) = doc.position(span.lo);
     let (l2, c2) = doc.position(span.hi);
     Range {
@@ -104,7 +104,7 @@ fn range_on(doc: &rut_semantic::Document, span: Span) -> Range {
 /// `lines()`+`src()` pairing). Spans must be sorted and
 /// non-overlapping (the classifier's contract). Lengths and columns
 /// are UTF-16 code units — LSP's position currency.
-pub fn encode(doc: &rut_semantic::Document) -> Vec<SemanticToken> {
+pub fn encode(doc: &crate::semantic::Document) -> Vec<SemanticToken> {
     let mut out = Vec::with_capacity(doc.spans().len());
     let (mut prev_line, mut prev_char) = (0u32, 0u32);
     for (sp, ty) in doc.spans() {
@@ -130,7 +130,7 @@ pub fn encode(doc: &rut_semantic::Document) -> Vec<SemanticToken> {
 /// The doc-door diagnostic — the positions join through the
 /// document's own doors (the one builder, [`to_diagnostic_parts`],
 /// under a `Document`).
-pub(crate) fn to_diagnostic(d: &Diag, doc: &rut_semantic::Document, uri: &Uri) -> Diagnostic {
+pub(crate) fn to_diagnostic(d: &Diag, doc: &crate::semantic::Document, uri: &Uri) -> Diagnostic {
     to_diagnostic_parts(d, doc.src(), doc.lines(), uri)
 }
 
@@ -201,7 +201,7 @@ pub fn merge_diags(base: Vec<Diagnostic>, extra: Vec<Diagnostic>) -> Vec<Diagnos
 /// into the doc artifact.
 pub fn analyze_at(uri: &Uri, src: String) -> Analysis {
     analysis_of(
-        &rut_semantic::Document::parse(mode_of(uri.as_str()), src),
+        &crate::semantic::Document::parse(mode_of(uri.as_str()), src),
         uri,
     )
 }
@@ -217,12 +217,12 @@ pub fn analyze_at(uri: &Uri, src: String) -> Analysis {
 /// the doc and borrow its parts (the capsule's read doors). `src` BY
 /// VALUE: it moves into the doc (the caller's store-clone IS the
 /// normalize copy the old shape paid on top).
-fn doc_ctx(uri: &str, src: String) -> (rut_semantic::Document, hover::DefIndex) {
+fn doc_ctx(uri: &str, src: String) -> (crate::semantic::Document, hover::DefIndex) {
     // ONE derivation per query: the facade parses (mode from the
     // filename convention) and the hover index builds over its parts —
     // the old shape parsed the same text twice (its own parse +
     // index_at's)
-    let d = rut_semantic::Document::parse(mode_of(uri), src);
+    let d = crate::semantic::Document::parse(mode_of(uri), src);
     let idx = hover::index(&d, hover::Mount::doc(uri));
     (d, idx)
 }
@@ -230,7 +230,7 @@ fn doc_ctx(uri: &str, src: String) -> (rut_semantic::Document, hover::DefIndex) 
 /// the definition index for one document (the open document's mount —
 /// origin only — riding the builder)
 pub fn index_at(uri: &str, src: String) -> hover::DefIndex {
-    let d = rut_semantic::Document::parse(mode_of(uri), src);
+    let d = crate::semantic::Document::parse(mode_of(uri), src);
     hover::index(&d, hover::Mount::doc(uri))
 }
 
@@ -360,8 +360,8 @@ pub fn type_definition_at(
 /// the doc itself — `references` re-parses candidate files over their
 /// indexed source (doc-sized files; the per-query re-parse is the
 /// house style — hover already rides it). `src` BY VALUE.
-pub(crate) fn parse_at(uri: &str, src: String) -> rut_semantic::Document {
-    rut_semantic::Document::parse(mode_of(uri), src)
+pub(crate) fn parse_at(uri: &str, src: String) -> crate::semantic::Document {
+    crate::semantic::Document::parse(mode_of(uri), src)
 }
 
 /// inlay hints over a document range (the survey §4.3): TYPE hints on
@@ -442,16 +442,16 @@ pub fn signature_help_at(
 
 // ---- symbols ----
 
-fn to_document_symbols(doc: &rut_semantic::Document) -> Vec<DocumentSymbol> {
+fn to_document_symbols(doc: &crate::semantic::Document) -> Vec<DocumentSymbol> {
     symbols_on(doc, doc.symbols())
 }
 
-fn symbols_on(doc: &rut_semantic::Document, raw: &[Symbol]) -> Vec<DocumentSymbol> {
+fn symbols_on(doc: &crate::semantic::Document, raw: &[Symbol]) -> Vec<DocumentSymbol> {
     raw.iter().map(|r| convert(r.clone(), doc)).collect()
 }
 
 #[allow(deprecated)] // `DocumentSymbol::deprecated` — kept for older clients; tags are the modern way
-fn convert(r: Symbol, doc: &rut_semantic::Document) -> DocumentSymbol {
+fn convert(r: Symbol, doc: &crate::semantic::Document) -> DocumentSymbol {
     // selection ⊆ range holds by construction at every symbol site and is
     // test-gated (semantic tests + the lsp-wasm corpus check) — no clamp here
     DocumentSymbol {

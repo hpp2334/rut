@@ -35,14 +35,15 @@ pub fn index() -> DefIndex {
     // the mode derives from the path (`mode_of` — the `.d.rut` suffix
     // IS the declaration surface's mode, the filename convention every
     // lane reads)
-    let doc = rut_semantic::Document::parse(rut_semantic::mode_of(CORE_PATH), CORE.to_string());
+    let doc =
+        crate::semantic::Document::parse(crate::semantic::mode_of(CORE_PATH), CORE.to_string());
     hover::index(
         &doc,
         Mount {
             origin: "core".to_string(),
             src_path: Some(CORE_PATH.to_string()),
             module: Some("core".to_string()),
-            mode: Some(rut_semantic::mode_of(CORE_PATH)),
+            mode: Some(crate::semantic::mode_of(CORE_PATH)),
             ..Mount::default()
         },
     )

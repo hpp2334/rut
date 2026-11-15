@@ -1,8 +1,8 @@
 //! Classifier + symbol tests — driven through the public artifact
 //! (`Document::parse` + `spans()`/`symbols()`), never private items.
 
+use crate::semantic::{mode_of, Document, Mode, Span, SymKind, TokenType};
 use rut_lexer::token::Comment;
-use rut_semantic::{mode_of, Document, Mode, Span, SymKind, TokenType};
 
 fn classify_in(src: &str, mode: Mode) -> Vec<(Span, TokenType)> {
     Document::parse(mode, src.to_string()).spans().to_vec()

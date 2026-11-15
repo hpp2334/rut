@@ -222,7 +222,6 @@ rut/
 │   ├── rut-ast/          # the flat arena AST + dumper, and the
 │   │                     #   frame machine (src/parser: Mode::Impl
 │   │                     #   | Mode::Decl)
-│   ├── rut-semantic/     # the semantic classifier (spans + token classes)
 │   ├── rut-lir/          # the fused middle end: check/ (resolve,
 │   │                     #   typecheck, monomorphize) + lir/ (bodies,
 │   │                     #   peephole, SROA, async lowering)
@@ -234,9 +233,10 @@ rut/
 │   ├── rut-fmt/          # the formatter
 │   ├── rut-std/          # host bodies: log, math, nmap, http, async
 │   ├── rut-wasm/         # the wasm ABI (compile/run envelope)
-│   ├── rut-lsp-wasm/     # the language core AND its editor ABI: tokens,
-│   │                     #   diagnostics, hover, completion, definition,
-│   │                     #   check — served to the extension in-process
+│   ├── rut-lsp/          # the language core: the queries + the sealed
+│   │                     #   `semantic` module (classifier, Document)
+│   ├── rut-lsp-wasm/     # the wasm-bindgen face over rut-lsp: the
+│   │                     #   editor ABI served in-process
 │   └── rut-cli/          # the `rut` binary ([The rut CLI](cli.md))
 ├── rut/                  # the in-tree packages (below)
 ├── examples/             # 00-todolist … 06-github-viewer-cli
@@ -252,17 +252,18 @@ install law), `rut-native` beside the driver (it depends on the
 driver, never the reverse — the driver is provably pure: no fs, no
 net, no `std::path`), hosts
 (`rut-std`, `rut-wasm`) on top, and `rut-cli`/`demo` above those.
-`rut-lsp-wasm` sits on the frontend crates — tokens, diagnostics, and
+`rut-lsp` sits on the frontend crates — tokens, diagnostics, and
 symbols need no VM — plus the driver's pure core for manifest and
-bundle parsing (the dep tables behind the editor's dep walk). It is the
-language core and its editor ABI in ONE crate: the queries
-(`analysis`, `completion`, `definition`, `check`, and the rest) live
-beside the wasm-bindgen face that serves them, so a feature cannot
-land on one and miss the other. The VS Code extension and the
-playground bundle it; there is no second face to keep in step. The
-crate's classifier is `rut-semantic` (re-exported as
-`rut_lsp_wasm::semantic`), which sits on the frontend crates for the
-same reason — embedders take it without an editor at all.
+bundle parsing (the dep tables behind the editor's dep walk). It is
+the language core: the queries (`analysis`, `completion`,
+`definition`, `check`, and the rest) live beside the classifier — the
+SEALED `semantic` module (a private `mod` hides even its own `pub`
+items), which sits on the frontend crates for the same reason — so a
+feature cannot land on one and miss the other, and embedders take the
+core without an editor at all. `rut-lsp-wasm` is the thin
+wasm-bindgen face over that core: every exported method delegates
+onto the `Lsp` handle, so the extension and the playground bundle the
+face with no second implementation to keep in step.
 
 ## The in-tree packages
 

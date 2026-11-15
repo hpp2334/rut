@@ -28,9 +28,9 @@ use ls_types::{
     InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip, MarkupContent, MarkupKind, Position,
 };
 
+use crate::semantic::LineIndex;
+use crate::semantic::Token;
 use rut_ast::{Ast, ElseBranch, ExprRef, ItemRef, StmtRef};
-use rut_semantic::LineIndex;
-use rut_semantic::Token;
 
 use crate::hover::lookup::{self, recv_type};
 use crate::hover::types::{head_of_ty, DefIndex, FnDef};

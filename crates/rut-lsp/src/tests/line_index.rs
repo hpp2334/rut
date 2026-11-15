@@ -1,4 +1,4 @@
-use rut_semantic::LineIndex;
+use crate::semantic::LineIndex;
 
 #[test]
 fn ascii_round_trip() {

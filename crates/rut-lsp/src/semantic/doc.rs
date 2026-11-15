@@ -28,8 +28,8 @@ use rut_lexer::lexer::lex_normalized;
 use rut_lexer::span::Span;
 use rut_lexer::token::Token;
 
-use crate::line_index::LineIndex;
-use crate::{classify, symbols, Symbol, TokenType};
+use super::line_index::LineIndex;
+use super::{classify, symbols, Symbol, TokenType};
 
 /// `.d.rut` parses in declaration mode; everything else is
 /// full `Mode::Impl` — the filename convention, THE authority on which

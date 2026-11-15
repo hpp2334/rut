@@ -15,7 +15,7 @@
 //! consumers never spell a module path; file layout stays free to
 //! move. The grammar's entries live under `parser::` on purpose:
 //! the parse lane is reachable by name, so hosts that only read
-//! trees (the LSP wasm rides `rut-semantic`) can be checked to
+//! trees (the LSP wasm rides `rut-lsp`) can be checked to
 //! never drive it directly.
 
 pub mod ast;

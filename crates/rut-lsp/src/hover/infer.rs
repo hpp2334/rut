@@ -8,8 +8,8 @@
 //! take the `f32` default). Names resolve through the binding pass.
 //! A miss is `None` — never wrong text.
 
+use crate::semantic::IntSuffix;
 use rut_ast::{Ast, BinOp, ExprRef, Lit, PathSeg};
-use rut_semantic::IntSuffix;
 
 use super::bindings::{elem_ty, resolve, Binding};
 use super::lookup::find_ty;
@@ -244,10 +244,10 @@ fn int_suffix(sfx: IntSuffix) -> &'static str {
     }
 }
 
-fn float_suffix(sfx: rut_semantic::FloatSuffix) -> &'static str {
+fn float_suffix(sfx: crate::semantic::FloatSuffix) -> &'static str {
     match sfx {
-        rut_semantic::FloatSuffix::F32 => "f32",
-        rut_semantic::FloatSuffix::F64 => "f64",
+        crate::semantic::FloatSuffix::F32 => "f32",
+        crate::semantic::FloatSuffix::F64 => "f64",
     }
 }
 

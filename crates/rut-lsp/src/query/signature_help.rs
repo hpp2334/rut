@@ -30,8 +30,8 @@ use ls_types::{
     SignatureInformation,
 };
 
+use crate::semantic::{Tok, Token};
 use rut_ast::Ast;
-use rut_semantic::{Tok, Token};
 
 use crate::hover::lookup::{self, recv_type};
 use crate::hover::types::FnDef;

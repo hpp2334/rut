@@ -1,17 +1,17 @@
+use crate::hover::DefIndex;
+use crate::hover::Mount;
+use crate::signature_help::*;
 use ls_types::{Documentation, ParameterLabel, SignatureHelp};
 use rut_ast::parser::Mode;
 use rut_ast::Ast;
 use rut_lexer::token::Token;
-use rut_lsp::hover::DefIndex;
-use rut_lsp::hover::Mount;
-use rut_lsp::signature_help::*;
 
 /// one doc artifact — the (normalized src, toks, ast) triple from ONE
 /// parse, read through the doc's doors (the test lane's replacement
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> rut_semantic::Document {
-    rut_semantic::Document::parse(mode, src.to_string())
+fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
+    crate::semantic::Document::parse(mode, src.to_string())
 }
 
 const DOC: &str = "file:///t/main.rut";
@@ -19,7 +19,7 @@ const DOC: &str = "file:///t/main.rut";
 /// a document + its hover index — the doc is the context (src, toks,
 /// and ast read through its doors)
 struct Doc {
-    pd: rut_semantic::Document,
+    pd: crate::semantic::Document,
     index: DefIndex,
 }
 
@@ -37,7 +37,7 @@ impl Doc {
 
 fn doc(src: &str) -> Doc {
     let pd = doc_of(src, Mode::Impl);
-    let index = rut_lsp::hover::index(&pd, Mount::doc(DOC));
+    let index = crate::hover::index(&pd, Mount::doc(DOC));
     Doc { pd, index }
 }
 

@@ -229,7 +229,7 @@ fn walk_manifest(
     // children), a host pkg's root is its DECL entry (the `.d.rut`
     // surface, `NAME/mod.d.rut` children — the loader's own flavor
     // law), and an entry-less dev state probes the lib convention.
-    let entry_rows: Vec<(&str, rut_semantic::Mode)> = table
+    let entry_rows: Vec<(&str, crate::semantic::Mode)> = table
         .entries
         .iter()
         .map(|e| (e.path.as_str(), e.mode))
@@ -295,20 +295,24 @@ fn mount_mod_tree(
     state: &mut SessionState,
     pkg_dir: &str,
     module: &str,
-    entries: &[(&str, rut_semantic::Mode)],
+    entries: &[(&str, crate::semantic::Mode)],
     depth: usize,
 ) {
     if depth > MAX_DEP_DEPTH || ctx.files == 0 {
         return; // the caps truncate — the set stays incomplete
     }
-    let (root_path, decl_flavor, charged) = if let Some((first, _)) =
-        entries.iter().find(|(_, m)| *m == rut_semantic::Mode::Impl)
+    let (root_path, decl_flavor, charged) = if let Some((first, _)) = entries
+        .iter()
+        .find(|(_, m)| *m == crate::semantic::Mode::Impl)
     {
         // the root-module lane: `src/mod.rut` is the root (the entries
         // loop already indexed and charged it — this re-stamp at mod
         // path "" is the same answer, replace-by-origin)
         (join(pkg_dir, first), false, false)
-    } else if let Some((first, _)) = entries.iter().find(|(_, m)| *m == rut_semantic::Mode::Decl) {
+    } else if let Some((first, _)) = entries
+        .iter()
+        .find(|(_, m)| *m == crate::semantic::Mode::Decl)
+    {
         // the HOST lane: the DECL entry is the root module (indexed
         // flat by the entries loop — this re-stamp carries its own
         // `mod` edges), and the tree mounts Decl-flavored

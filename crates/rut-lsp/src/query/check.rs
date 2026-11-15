@@ -30,10 +30,10 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use crate::hover::DefIndex;
+use crate::semantic::Diag;
 use ls_types::{Diagnostic, Uri};
 use rut_ast::Vis;
 use rut_driver::{lower_decl_module, Manifest, ModSource, Mounted, RutRun};
-use rut_semantic::Diag;
 
 /// One assembled package's file modules, keyed by mod path (`""` = the
 /// pkg root's module file).
@@ -50,7 +50,7 @@ pub struct FileSrc {
     /// the NORMALIZED text — the byte space every span of the lane
     /// speaks (the parse lane's ranges ride the same normalization)
     pub text: String,
-    pub mode: rut_semantic::Mode,
+    pub mode: crate::semantic::Mode,
     /// the `mod` edge the file was mounted under (its parent's spelling)
     pub vis: Vis,
 }
@@ -77,7 +77,7 @@ pub fn groups_from_defs(defs: &[DefIndex]) -> Vec<PkgFiles> {
         let mode = d
             .mount
             .mode
-            .unwrap_or_else(|| rut_semantic::mode_of(&d.mount.origin));
+            .unwrap_or_else(|| crate::semantic::mode_of(&d.mount.origin));
         let name = module.clone();
         if !groups.contains_key(&name) {
             order.push(name.clone());
@@ -160,7 +160,7 @@ pub fn check_doc(
     // the LIVE text, canonicalized through the Cow door — borrowed when
     // LF-clean, one pass when dirty (the check lane never hands out
     // tokens; it only builds text rows for the world's own parse)
-    let doc_text = rut_semantic::canonical(doc_src).into_owned();
+    let doc_text = crate::semantic::canonical(doc_src).into_owned();
     // the doc's package rides its LIVE text: find (or synthesize) the
     // group and upsert the doc's file — an unsaved buffer is the truth
     // for its own mod path, the stamps only name the place
@@ -183,7 +183,7 @@ pub fn check_doc(
         FileSrc {
             uri: doc_uri.to_string(),
             text: doc_text,
-            mode: rut_semantic::mode_of(doc_uri),
+            mode: crate::semantic::mode_of(doc_uri),
             vis,
         },
     );
@@ -231,7 +231,7 @@ pub fn check_doc(
             continue; // out of bounds — never a misplaced squiggle
         }
         // the index builds per text — the rows name DIFFERENT files
-        let index = rut_semantic::LineIndex::new(text);
+        let index = crate::semantic::LineIndex::new(text);
         // stamped at construction with the document's URI; a degenerate
         // uri can't name a location — related info drops rather than
         // guesses
@@ -273,8 +273,11 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
             .filter(|n| n.as_str() != g.module)
             .map(|n| n.as_str())
             .collect();
-        let mut pkg = if root.mode == rut_semantic::Mode::Impl {
-            if g.files.values().any(|f| f.mode != rut_semantic::Mode::Impl) {
+        let mut pkg = if root.mode == crate::semantic::Mode::Impl {
+            if g.files
+                .values()
+                .any(|f| f.mode != crate::semantic::Mode::Impl)
+            {
                 continue;
             }
             let mut p = Mounted::source(&g.module, root.text.clone());
@@ -299,7 +302,7 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
             // parse failure) is inert — consumers' misses skip
             let mut children: BTreeMap<String, ModSource> = BTreeMap::new();
             for (path, f) in &g.files {
-                if path.is_empty() || f.mode != rut_semantic::Mode::Decl {
+                if path.is_empty() || f.mode != crate::semantic::Mode::Decl {
                     continue;
                 }
                 children.insert(

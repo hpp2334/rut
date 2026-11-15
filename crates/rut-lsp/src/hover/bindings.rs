@@ -21,12 +21,12 @@
 //! as written, else the `infer::expr_ty` heuristic);
 //! `Binding::ty_head` cuts it to the lookup head.
 
+use crate::semantic::Span;
+use crate::semantic::{Tok, Token};
 use rut_ast::{
     Ast, BlockNode, ElseBranch, ExprRef, FnNode, Handle, ItemRef, LetStmtNode, MethodRef, ParamRef,
     StmtRef, TyRef, TyTupleNode,
 };
-use rut_semantic::Span;
-use rut_semantic::{Tok, Token};
 
 use super::infer;
 use super::lookup::contains;
@@ -506,7 +506,7 @@ pub(crate) fn ident_span(toks: &[Token], span: Span, name: &str) -> Option<Span>
     toks.iter()
         .filter(|t| t.span.lo >= span.lo && t.span.hi <= span.hi)
         .find_map(|t| match &t.tok {
-            Tok::Ident(s) if s == name && !rut_semantic::is_reserved_kw(s) => Some(t.span),
+            Tok::Ident(s) if s == name && !crate::semantic::is_reserved_kw(s) => Some(t.span),
             _ => None,
         })
 }

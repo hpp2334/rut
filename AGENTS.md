@@ -15,10 +15,11 @@ these fail loudly on drift). Practical consequences:
   `#[allow(...)]` with a one-line reason is the house style (grep for
   existing examples before inventing wording).
 
-## Frontend layering: one parse entry, lsp talks only to rut-semantic
+## Frontend layering: one parse entry, lsp-wasm talks only to rut-lsp
 
 **Call the layer whose abstraction you consume.** Document semantics
-(classify, symbols, mode derivation, position math) → `rut-semantic`.
+(classify, symbols, mode derivation, position math) → rut-lsp's
+`semantic` module.
 Syntax only (reprint, transform) → the grammar's entry pair
 `rut_ast::parser::parse` / `parse_with_recover` (fmt does exactly
 this). Nobody outside `rut-ast`'s `parser` module drives
@@ -76,20 +77,21 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   damage → fences (an `ErrorNode` covering the unparseable region, in
   the list it belongs to), lex rows → root-level. `ast.errors()` is
   the flat ordered view of every diag.
-- **`rut-lsp`'s `[dependencies]` carries NO `rut-lexer`**, and
-  its `src/` never spells `rut_ast::parser::` — that pair is the
-  law's enforcement (the grammar now lives inside `rut-ast`, so the
-  dep list alone can no longer prove it; grep the src tree). Its ONLY
-  frontend is `rut-semantic` (`Document::parse(mode, src)` — mode
-  from the filename convention (`mode_of`), editor opts baked);
+- **`rut-lsp`'s `semantic` module is the only grammar lane**, and
+  production src spells `rut_ast::parser::` ONLY inside
+  `semantic/doc.rs` (the `Document::parse` lane — mode from the
+  filename convention (`mode_of`), editor opts baked) — grep the src
+  tree. The module is SEALED (`mod semantic;` — a private decl hides
+  even its own `pub` items), so the queries spell
+  `crate::semantic::…` and no consumer reaches past the ABI;
   `rut-ast` stays as shared tree vocabulary, `rut-driver`/`rut-core`
-  are other lanes. The grammar/corpus tests may drive the parser via
-  the crate's test seam (the sanctioned seam, like the futures
+  are other lanes. The grammar/corpus tests drive the parser via the
+  crate's unit-test tree (the sanctioned seam, like the futures
   LocalPool); the fail-fast `parse` door exists for "a diag means
   stop" callers — today only its own crate's tests — while
   fmt/semantic/driver ride the recovering entry. (The wasm face
-  `rut-lsp-wasm` layers one crate higher still: its only language dep
-  is `rut-lsp`.)
+  `rut-lsp-wasm` layers one crate higher: its only language dep is
+  `rut-lsp`.)
 
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 

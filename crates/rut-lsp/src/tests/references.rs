@@ -1,19 +1,19 @@
+use crate::definition;
+use crate::definition::DefLocation;
+use crate::hover::DefIndex;
+use crate::hover::Mount;
+use crate::references::*;
+use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
 use rut_lexer::lexer::canonical;
 use rut_lexer::token::Token;
-use rut_lsp::definition;
-use rut_lsp::definition::DefLocation;
-use rut_lsp::hover::DefIndex;
-use rut_lsp::hover::Mount;
-use rut_lsp::references::*;
-use rut_lsp::LineIndex;
 
 /// one doc artifact — the (normalized src, toks, ast) triple from ONE
 /// parse, read through the doc's doors (the test lane's replacement
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> rut_semantic::Document {
-    rut_semantic::Document::parse(mode, src.to_string())
+fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
+    crate::semantic::Document::parse(mode, src.to_string())
 }
 
 const DOC: &str = "file:///t/main.rut";
@@ -21,7 +21,7 @@ const DOC: &str = "file:///t/main.rut";
 /// a document + its hover index — the doc is the context (src, toks,
 /// and ast read through its doors)
 struct Doc {
-    pd: rut_semantic::Document,
+    pd: crate::semantic::Document,
     index: DefIndex,
 }
 
@@ -39,7 +39,7 @@ impl Doc {
 
 fn doc_at(uri: &str, src: &str) -> Doc {
     let pd = doc_of(src, Mode::Impl);
-    let index = rut_lsp::hover::index(&pd, Mount::doc(uri));
+    let index = crate::hover::index(&pd, Mount::doc(uri));
     Doc { pd, index }
 }
 
@@ -71,7 +71,7 @@ fn ref_offsets(src: &str, uri: &str, locs: &[DefLocation]) -> Vec<u32> {
 
 fn refs(d: &Doc, pos: u32, extra: &[DefIndex], include_decl: bool) -> Vec<DefLocation> {
     let idxs: Vec<&DefIndex> = std::iter::once(&d.index).chain(extra.iter()).collect();
-    let dm = rut_lsp::mods::DocMods::default();
+    let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
         toks: d.toks(),
@@ -387,7 +387,7 @@ fn cross_file_refs_find_the_importing_files() {
     let idxs: Vec<&DefIndex> = std::iter::once(&main.index)
         .chain(extra.iter().copied())
         .collect();
-    let dm = rut_lsp::mods::DocMods::default();
+    let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
         toks: main.toks(),
@@ -416,7 +416,7 @@ fn refs_from_the_decl_side_reach_the_importing_doc() {
     let idxs: Vec<&DefIndex> = std::iter::once(&lib.index)
         .chain(extra.iter().copied())
         .collect();
-    let dm = rut_lsp::mods::DocMods::default();
+    let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: WIDGET_URI,
         toks: lib.toks(),
@@ -449,7 +449,7 @@ fn an_unrelated_same_named_type_does_not_leak_in() {
     let idxs: Vec<&DefIndex> = std::iter::once(&main.index)
         .chain(extra.iter().copied())
         .collect();
-    let dm = rut_lsp::mods::DocMods::default();
+    let dm = crate::mods::DocMods::default();
     let ctx = definition::Ctx {
         doc_uri: DOC,
         toks: main.toks(),

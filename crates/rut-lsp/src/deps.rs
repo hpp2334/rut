@@ -32,7 +32,7 @@ type ModHead = (
     String,
     std::collections::BTreeMap<String, rut_driver::ModSource>,
 );
-use rut_semantic::Mode;
+use crate::semantic::Mode;
 use sha2::{Digest, Sha256};
 
 use crate::hover::DefIndex;
@@ -229,7 +229,7 @@ pub fn dep_table_compat(manifest_text: &str) -> Result<DepTable, String> {
 fn dep_table_of(m: Manifest) -> Result<DepTable, String> {
     let mut entries = Vec::new();
     // the decl surface indexes in Decl mode; the body in Impl mode —
-    // the same split the filename convention (`rut_semantic::mode_of`)
+    // the same split the filename convention (`crate::semantic::mode_of`)
     // speaks for every document. On a host pkg with no spelled
     // surface, `src/mod.d.rut` under the shell IS the root (the
     // loader's default-root discovery mirrored) — an unreadable row
@@ -852,7 +852,7 @@ pub fn index_dep(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> 
     // convention (every caller already derived it that way). `src` BY
     // VALUE: it moves into the doc (a fresh walk read moves for free,
     // a borrowed text clones to move)
-    let doc = rut_semantic::Document::parse(rut_semantic::mode_of(uri), src);
+    let doc = crate::semantic::Document::parse(crate::semantic::mode_of(uri), src);
     crate::hover::index(&doc, crate::hover::Mount::dep(name, uri, mod_path))
 }
 
@@ -871,7 +871,7 @@ pub fn index_dep_decl_group(
 ) -> Vec<(String, DefIndex)> {
     // the ordinary parse once — `mode_of(uri)`: the `.d.rut` suffix IS
     // the declaration entry lane's mode (the filename convention)
-    let doc = rut_semantic::Document::parse(rut_semantic::mode_of(uri), src);
+    let doc = crate::semantic::Document::parse(crate::semantic::mode_of(uri), src);
     let (ast, toks, src) = (doc.ast(), doc.toks(), doc.src());
     // the module slices: the root's items, then each inline module's,
     // path-stamped, first-wins (the loader's own edge law)
@@ -896,7 +896,7 @@ pub fn index_dep_decl_group(
                 mod_path: Some(path.clone()),
                 // the parse mode rides the mount — the definition
                 // layer's body-over-decl preference reads it
-                mode: Some(rut_semantic::mode_of(uri)),
+                mode: Some(crate::semantic::mode_of(uri)),
                 ..crate::hover::Mount::default()
             };
             (

@@ -4,16 +4,16 @@
 //! layer (field + enum-member + module-let decl sites), and the M7
 //! primitive blurbs.
 
+use crate::hover::*;
 use rut_ast::parser::Mode;
 use rut_lexer::token::{Tok, Token};
-use rut_lsp::hover::*;
 
 /// one doc artifact — the (normalized src, toks, ast) triple from ONE
 /// parse, read through the doc's doors (the test lane's replacement
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> rut_semantic::Document {
-    rut_semantic::Document::parse(mode, src.to_string())
+fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
+    crate::semantic::Document::parse(mode, src.to_string())
 }
 
 fn hover_at(src: &str, needle: &str) -> Option<String> {
@@ -32,7 +32,7 @@ fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<HoverOut> {
     let idx = index(&ddoc, Mount::default());
     let idxs = [&idx];
     let pos = find_ident_pos(toks, needle, n)?;
-    hover(&idxs, toks, ast, &rut_lsp::mods::DocMods::default(), pos)
+    hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos)
 }
 
 fn find_ident_pos(toks: &[Token], name: &str, n: usize) -> Option<u32> {
@@ -195,7 +195,7 @@ fn hover_decl_at(src: &str, needle: &str) -> Option<String> {
     let idx = index(&ddoc, Mount::default());
     let idxs = [&idx];
     let pos = find_ident_pos(toks, needle, 0)?;
-    hover(&idxs, toks, ast, &rut_lsp::mods::DocMods::default(), pos).map(|h| h.markdown)
+    hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
 }
 
 #[test]
@@ -320,7 +320,7 @@ fn ambiguity_lists_candidates() {
     let doc = index(&ddoc, Mount::doc("main.rut"));
     let idxs = [&doc, &a, &b];
     let pos = find_ident_pos(toks, "helper", 0).unwrap();
-    let md = hover(&idxs, toks, ast, &rut_lsp::mods::DocMods::default(), pos)
+    let md = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos)
         .unwrap()
         .markdown;
     assert!(md.contains("multiple definitions"), "{md}");
@@ -339,7 +339,7 @@ fn host_fn_surface_favors_own_methods() {
     let di = index(&ddoc, Mount::doc("main.rut"));
     let idxs = [&di, &surf];
     let pos = find_ident_pos(toks, "string_join", 0).unwrap();
-    let h = hover(&idxs, toks, ast, &rut_lsp::mods::DocMods::default(), pos).unwrap();
+    let h = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).unwrap();
     assert!(h.markdown.contains("fn string_join"), "{}", h.markdown);
     assert!(h.markdown.contains("core"), "{}", h.markdown);
 }
@@ -420,7 +420,7 @@ fn foreign_interface_member_requires_use() {
         let di = index(&ddoc, Mount::doc("main.rut"));
         let idxs = [&di, &surf];
         let pos = find_ident_pos(toks, "greet", 0).unwrap();
-        hover(&idxs, toks, ast, &rut_lsp::mods::DocMods::default(), pos).map(|h| h.markdown)
+        hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
     };
 
     let gated = "fn go(g: Greeter) -> nil { g.greet(); }\n";
@@ -771,14 +771,7 @@ fn binding_decl_span_is_byte_exact() {
     assert_eq!(total.decl_ident_span, decl_span);
     // the hover decorates exactly the token under the cursor
     let use_pos = src2.rfind("total").unwrap() as u32;
-    let out = hover(
-        &idxs,
-        toks,
-        ast,
-        &rut_lsp::mods::DocMods::default(),
-        use_pos,
-    )
-    .unwrap();
+    let out = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), use_pos).unwrap();
     let use_span = toks
         .iter()
         .rev()
@@ -822,7 +815,7 @@ fn surface_primitives_keep_their_rich_hover() {
     let di = index(&ddoc, Mount::default());
     let idxs = [&di, &core];
     let pos = find_ident_pos(toks, "str", 0).unwrap();
-    let md = hover(&idxs, toks, ast, &rut_lsp::mods::DocMods::default(), pos)
+    let md = hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos)
         .unwrap()
         .markdown;
     assert!(md.contains("primitive str {"), "{md}");
@@ -905,7 +898,7 @@ fn hover_over_dep(doc: &str, name: &str, n: usize) -> Option<String> {
     let mut idxs: Vec<&DefIndex> = vec![&idx];
     idxs.extend(dep.iter());
     let pos = find_ident_pos(toks, name, n)?;
-    hover(&idxs, toks, ast, &rut_lsp::mods::DocMods::default(), pos).map(|h| h.markdown)
+    hover(&idxs, toks, ast, &crate::mods::DocMods::default(), pos).map(|h| h.markdown)
 }
 
 #[test]
@@ -1019,23 +1012,23 @@ fn host_fn_hover_via_the_calc_fixture_has_no_next_decl_artifact() {
     let (s, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
     let di = index(&ddoc, Mount::default());
     let std = [
-        rut_lsp::deps::index_dep(
+        crate::deps::index_dep(
             "calc",
             "rut/calc/src/mod.rut",
             None,
-            include_str!("../../../rut/calc/src/mod.rut").to_string(),
+            include_str!("../../../../rut/calc/src/mod.rut").to_string(),
         ),
-        rut_lsp::deps::index_dep(
+        crate::deps::index_dep(
             "calc",
             "rut/calc/src/math.rut",
             Some("math"),
-            include_str!("../../../rut/calc/src/math.rut").to_string(),
+            include_str!("../../../../rut/calc/src/math.rut").to_string(),
         ),
     ];
     let mut chain: Vec<&DefIndex> = vec![&di];
     chain.extend(std.iter());
     let pos = s.find("abs(").unwrap() as u32;
-    let md = hover(&chain, toks, ast, &rut_lsp::mods::DocMods::default(), pos)
+    let md = hover(&chain, toks, ast, &crate::mods::DocMods::default(), pos)
         .expect("abs hovers through the calc math module")
         .markdown;
     assert!(

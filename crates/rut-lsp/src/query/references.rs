@@ -27,9 +27,9 @@
 
 use std::collections::HashSet;
 
+use crate::semantic::Span;
+use crate::semantic::{Tok, Token};
 use rut_ast::Ast;
-use rut_semantic::Span;
-use rut_semantic::{Tok, Token};
 
 use crate::definition::{self, DefLocation};
 use crate::hover::lookup;
@@ -356,7 +356,7 @@ fn scan_files(
 ) {
     // parse the non-doc candidates once (doc-sized files; the per-query
     // re-parse is the house style — hover already rides it)
-    let mut parsed: Vec<(&DefIndex, rut_semantic::Document)> = Vec::new();
+    let mut parsed: Vec<(&DefIndex, crate::semantic::Document)> = Vec::new();
     for f in files {
         if std::ptr::eq(*f, ctx.doc()) {
             continue;

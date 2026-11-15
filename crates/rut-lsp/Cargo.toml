@@ -16,15 +16,15 @@ path = "src/lib.rs"
 # — the tests run in the workspace's native nextest lane — and
 # wasm32-clean, proven by the face's CI lane.
 [dependencies]
-# THE LAYER LAW — this crate's ONLY frontend is rut-semantic (the
-# document layer: Document (parse + its read/join doors), mode
-# derivation, the position math). NO rut-lexer, and src/ never touches
-# rut_ast::parser:: — nobody here drives normalize → lex → parse by
-# hand (the grammar/corpus TESTS may, via dev-dependencies: the
-# sanctioned seam). rut-ast stays as shared tree VOCABULARY (hover
-# walks trees); rut-driver carries the manifest/bundle bytes;
-# rut-core the checker's run chain.
-rut-semantic = { path = "../rut-semantic" }
+# THE LAYER LAW — the frontend lives INSIDE this crate: the sealed
+# `semantic` module (Document — parse + its read/join doors, mode
+# derivation, the position math) is the crate's ONLY consumer of the
+# grammar, so `rut-lexer`/`rut-ast` are its vocabulary and nothing
+# else here drives normalize → lex → parse by hand (production src
+# spells the parser lane only inside semantic/doc.rs; the corpus tests
+# in src/tests are the sanctioned seam). rut-driver carries the
+# manifest/bundle bytes; rut-core the checker's run chain.
+rut-lexer = { path = "../rut-lexer" }
 rut-ast = { path = "../rut-ast" }
 rut-core = { path = "../rut-core" }
 # the manifest/bundle bridge (`deps`): parse_manifest + the STORE-only
@@ -55,10 +55,6 @@ futures = { version = "0.3", default-features = false, features = [
 futures = { version = "0.3", features = ["executor"] }
 
 [dev-dependencies]
-# the TEST seam: the grammar/corpus tests drive the parser directly —
-# production code never may (the [dependencies] block above is the law;
-# this block is the sanctioned exception, like the futures LocalPool)
-rut-lexer = { path = "../rut-lexer" }
 # the mod-carrying bundle fixture is packed through the same writer the
 # CLI uses (wasm32-clean — it rides the main graph already)
 rut-driver = { path = "../rut-driver" }

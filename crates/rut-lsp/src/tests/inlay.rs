@@ -1,18 +1,18 @@
+use crate::hover::DefIndex;
+use crate::hover::Mount;
+use crate::inlay::*;
+use crate::semantic::LineIndex;
 use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip};
 use rut_ast::parser::Mode;
 use rut_ast::*;
 use rut_lexer::token::Token;
-use rut_lsp::hover::DefIndex;
-use rut_lsp::hover::Mount;
-use rut_lsp::inlay::*;
-use rut_lsp::LineIndex;
 
 /// one doc artifact — the (normalized src, toks, ast) triple from ONE
 /// parse, read through the doc's doors (the test lane's replacement
 /// for the hand-spelled `normalize → lex → doc_ast` triple; doc
 /// grafting ON — the editor lane's shape, the recovering entry)
-fn doc_of(src: &str, mode: Mode) -> rut_semantic::Document {
-    rut_semantic::Document::parse(mode, src.to_string())
+fn doc_of(src: &str, mode: Mode) -> crate::semantic::Document {
+    crate::semantic::Document::parse(mode, src.to_string())
 }
 
 const DOC: &str = "file:///t/main.rut";
@@ -20,7 +20,7 @@ const DOC: &str = "file:///t/main.rut";
 /// a document + its hover index — the doc is the context (src, toks,
 /// ast, and the line index read through its doors)
 struct Doc {
-    pd: rut_semantic::Document,
+    pd: crate::semantic::Document,
     index: DefIndex,
 }
 
@@ -41,7 +41,7 @@ impl Doc {
 
 fn doc(src: &str) -> Doc {
     let pd = doc_of(src, Mode::Impl);
-    let index = rut_lsp::hover::index(&pd, Mount::doc(DOC));
+    let index = crate::hover::index(&pd, Mount::doc(DOC));
     Doc { pd, index }
 }
 
@@ -228,11 +228,11 @@ fn hint_and_hover_agree_on_the_type_text() {
     let idxs: Vec<&DefIndex> = vec![&d.index];
     let (hl, hc) = at(&src, "let c", 1);
     let byte = d.lines().byte(d.src(), hl, hc) + 4; // the `c` ident
-    let hov = rut_lsp::hover::hover(
+    let hov = crate::hover::hover(
         &idxs,
         d.toks(),
         d.ast(),
-        &rut_lsp::mods::DocMods::default(),
+        &crate::mods::DocMods::default(),
         byte,
     );
     let md = hov.expect("hover at the binding").markdown;
@@ -304,11 +304,11 @@ fn tuple_types_render_no_empty_hints() {
     let idxs: Vec<&DefIndex> = vec![&d.index];
     let (hl, hc) = at(&src, "let v", 1);
     let byte = d.lines().byte(d.src(), hl, hc) + 4; // the `v` ident
-    let md = rut_lsp::hover::hover(
+    let md = crate::hover::hover(
         &idxs,
         d.toks(),
         d.ast(),
-        &rut_lsp::mods::DocMods::default(),
+        &crate::mods::DocMods::default(),
         byte,
     )
     .expect("hover at the binding")

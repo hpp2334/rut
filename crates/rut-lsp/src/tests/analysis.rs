@@ -1,17 +1,17 @@
+use crate::analysis::analyze_unstamped;
+use crate::analysis::*;
 use ls_types::*;
 use rut_lexer::lexer::canonical;
 use rut_lexer::span::Span;
-use rut_lsp::analysis::analyze_unstamped;
-use rut_lsp::analysis::*;
 
 /// the modeless analyze died with the mode leak — these tests pin
 /// grammar behavior through the unstamped facade entry, the uri
 /// spelling the mode (the filename convention)
 const IMPL_URI: &str = "file:///t/x.rut";
+use crate::check;
+use crate::check::{FileSrc, PkgFiles};
+use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
-use rut_lsp::check;
-use rut_lsp::check::{FileSrc, PkgFiles};
-use rut_lsp::LineIndex;
 use std::collections::BTreeMap;
 
 #[test]
@@ -92,12 +92,12 @@ fn pub_on_a_use_classifies_as_the_keyword() {
     // the cap law rides unchanged beneath the modifier
     assert_eq!(
         ty_of("util"),
-        rut_semantic::TokenType::Namespace.index(),
+        crate::semantic::TokenType::Namespace.index(),
         "{seen:?}"
     );
     assert_eq!(
         ty_of("helper"),
-        rut_semantic::TokenType::Function.index(),
+        crate::semantic::TokenType::Function.index(),
         "{seen:?}"
     );
 }

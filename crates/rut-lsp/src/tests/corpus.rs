@@ -4,9 +4,9 @@
 //! every Impl file yields symbols; `.d.rut` parses in `Mode::Decl`.
 //! Mirrors the parser corpus test (rut-ast) from the LSP side.
 
+use crate::semantic::LineIndex;
+use crate::semantic::{Document, TokenType};
 use rut_ast::parser::{is_reserved_kw, Mode};
-use rut_lsp::semantic::{Document, TokenType};
-use rut_lsp::LineIndex;
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
 /// reads doc chains off the decl nodes) and the recovering entry (the

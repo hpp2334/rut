@@ -121,13 +121,18 @@ pub use query::{analysis, check, completion, definition, inlay, references, sign
 pub mod deps;
 pub mod env;
 pub mod hover;
-pub use rut_semantic::LineIndex;
 pub mod mods;
-// the classifier/document layer — re-exported under the crate's
-// historical `semantic` path so the queries keep one spelling (the
-// crate's ONLY frontend: no lexer/parser dep, see Cargo.toml)
-pub use rut_semantic as semantic;
+// the classifier/document layer — absorbed from `rut-semantic` and
+// SEALED: the private `mod` decl makes even the module's own `pub`
+// items invisible outside the crate, so the queries keep one spelling
+// (`crate::semantic::…`) and no consumer can reach past the ABI
 pub mod prelude;
+mod semantic;
+
+// the unit-test tree — the sealed modules' tests live INSIDE the
+// crate (an integration test in `tests/` cannot spell private paths)
+#[cfg(test)]
+mod tests;
 
 /// the language core as the host holds it — one per editing session.
 /// Not the state itself: the INBOX HANDLE. The loop task owns `SessionState`

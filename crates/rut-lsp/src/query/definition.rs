@@ -34,17 +34,17 @@
 
 use std::collections::HashMap;
 
+use crate::semantic::Mode;
+use crate::semantic::Span;
+use crate::semantic::{Tok, Token};
 use ls_types::Range;
 use rut_ast::Ast;
-use rut_semantic::Mode;
-use rut_semantic::Span;
-use rut_semantic::{Tok, Token};
 
 use crate::hover::lookup::{self, MemberHit, MemberTarget};
 use crate::hover::types::head_of_ty;
 use crate::hover::{bindings, DefIndex, FnDef, MemberSrc, TyDef};
 use crate::mods::DocMods;
-use rut_semantic::LineIndex;
+use crate::semantic::LineIndex;
 
 /// one resolved jump target — the uri is the doc itself, a workspace
 /// path/URI, or (for the embedded prelude) the true repo-relative
@@ -328,13 +328,13 @@ fn definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
 
     // 4. type position — capitalized / primitive names, restricted to
     //    the use graph for imported names
-    if crate::hover::infer::is_cap(name) || rut_semantic::is_primitive_ty(name) {
+    if crate::hover::infer::is_cap(name) || crate::semantic::is_primitive_ty(name) {
         if let Some(locs) = ty_name_locations(ctx, idxs, &imported, name) {
             return locs;
         }
         // a primitive token with no surface decl (i32, bool …) is a
         // miss — never a wrong jump
-        if rut_semantic::is_primitive_ty(name) {
+        if crate::semantic::is_primitive_ty(name) {
             return Vec::new();
         }
     }
@@ -426,11 +426,11 @@ fn type_definition_targets(ctx: &Ctx, pos: u32) -> Vec<DefLocation> {
     }
 
     // a type token: its own declaration (definition's answer)
-    if crate::hover::infer::is_cap(name) || rut_semantic::is_primitive_ty(name) {
+    if crate::hover::infer::is_cap(name) || crate::semantic::is_primitive_ty(name) {
         if let Some(locs) = ty_name_locations(ctx, idxs, &imported, name) {
             return locs;
         }
-        if rut_semantic::is_primitive_ty(name) {
+        if crate::semantic::is_primitive_ty(name) {
             return Vec::new();
         }
     }

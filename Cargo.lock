@@ -1251,7 +1251,6 @@ dependencies = [
  "rut-core",
  "rut-driver",
  "rut-lexer",
- "rut-semantic",
  "serde",
  "serde_json",
  "sha2",
@@ -1276,14 +1275,6 @@ dependencies = [
  "rut-driver",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "rut-semantic"
-version = "0.2.0"
-dependencies = [
- "rut-ast",
- "rut-lexer",
 ]
 
 [[package]]

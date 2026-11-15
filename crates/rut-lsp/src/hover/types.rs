@@ -1,9 +1,9 @@
 //! The index data — one entry per type, fn, or impl declaration:
 //! verbatim signature slices, doc lines, and spans for rendering.
 
+use crate::semantic::Mode;
+use crate::semantic::Span;
 use rut_ast::{Ast, TyRef, Vis};
-use rut_semantic::Mode;
-use rut_semantic::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TyForm {
@@ -26,7 +26,7 @@ pub enum TyForm {
     Alias,
 }
 
-use rut_semantic::LineIndex;
+use crate::semantic::LineIndex;
 
 #[derive(Debug, Clone)]
 pub struct MemberSrc {
@@ -247,7 +247,7 @@ impl Mount {
             origin: uri.to_string(),
             module: Some(name.to_string()),
             mod_path: mod_path.map(str::to_string),
-            mode: Some(rut_semantic::mode_of(uri)),
+            mode: Some(crate::semantic::mode_of(uri)),
             ..Mount::default()
         }
     }
