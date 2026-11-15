@@ -36,6 +36,7 @@ impl LineIndex {
         }
     }
 
+    #[allow(dead_code)] // the tests' line tally — production walks spans, never totals
     pub fn line_count(&self) -> usize {
         self.line_starts.len()
     }

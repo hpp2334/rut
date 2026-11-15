@@ -137,6 +137,7 @@ impl Document {
     }
 
     /// (line, UTF-16 column) -> byte offset over the artifact's src
+    #[allow(dead_code)] // the position math's inverse pair — kept whole; tests spell lines().byte directly
     pub fn byte(&self, line: u32, character: u32) -> u32 {
         self.lines.byte(&self.src, line, character)
     }

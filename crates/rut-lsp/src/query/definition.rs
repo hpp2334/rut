@@ -42,7 +42,8 @@ use rut_ast::Ast;
 
 use crate::hover::lookup::{self, MemberHit, MemberTarget};
 use crate::hover::types::head_of_ty;
-use crate::hover::{bindings, DefIndex, FnDef, MemberSrc, TyDef};
+use crate::hover::types::{FnDef, MemberSrc, TyDef};
+use crate::hover::{bindings, DefIndex};
 use crate::mods::DocMods;
 use crate::semantic::LineIndex;
 

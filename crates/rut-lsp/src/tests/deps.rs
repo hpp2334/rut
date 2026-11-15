@@ -1,11 +1,11 @@
+use crate::deps::*;
+use crate::hover::types::TyForm;
 use rut_ast::parser::Mode;
 use rut_ast::Vis;
 use rut_driver::bundle::files::MANIFEST_NAME;
-use rut_lsp::deps::*;
-use rut_lsp::hover::TyForm;
 
-const CALC_HOST_MANIFEST: &str = include_str!("../../../rut/calc_host/rut.jsonc");
-const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
+const CALC_HOST_MANIFEST: &str = include_str!("../../../../rut/calc_host/rut.jsonc");
+const POUCH_BUNDLE: &[u8] = include_bytes!("../../../../dist/std/pouch.rutbundle");
 
 /// The plugin manifest's dep shape, INLINE and unpinned: the real
 /// `examples/03-plugin/plugin/rut.jsonc` — the directory grammar's
@@ -368,7 +368,7 @@ fn srczip_rides_the_unpack_ingredients() {
     // the manifest text beside the files, the group's entries under
     // it (the unpack law: the ordinary dir lane mounts the pkg's own
     // path rows INTO the embedded groups, first mount wins)
-    let b = srczip_sources(include_bytes!("../../../dist/std/ink.zip"))
+    let b = srczip_sources(include_bytes!("../../../../dist/std/ink.zip"))
         .expect("the ink source zip indexes");
     assert_eq!(b.module, "ink");
     assert!(
@@ -537,11 +537,11 @@ fn dep_impl_methods_ride_the_dep_index() {
         .position(|l| l.contains(".info"))
         .expect("the .info line") as u32;
     let ch = lines[line as usize].find(".info").unwrap() as u32 + 1;
-    let hits = rut_lsp::analysis::definition_at(
+    let hits = crate::query::analysis::definition_at(
         "file:///ws/main.rut",
         consumer.to_string(),
         &[idx],
-        &rut_lsp::mods::DocMods::default(),
+        &crate::mods::DocMods::default(),
         line,
         ch,
     );

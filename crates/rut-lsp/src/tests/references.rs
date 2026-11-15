@@ -1,8 +1,8 @@
-use crate::definition;
-use crate::definition::DefLocation;
 use crate::hover::DefIndex;
 use crate::hover::Mount;
-use crate::references::*;
+use crate::query::definition;
+use crate::query::definition::DefLocation;
+use crate::query::references::*;
 use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
 use rut_lexer::lexer::canonical;

@@ -31,9 +31,9 @@ use crate::semantic::Span;
 use crate::semantic::{Tok, Token};
 use rut_ast::Ast;
 
-use crate::definition::{self, DefLocation};
 use crate::hover::lookup;
 use crate::hover::{bindings, DefIndex};
+use crate::query::definition::{self, DefLocation};
 
 /// what the ident at `pos` was resolved to — drives how far the scan
 /// reaches (locals stay in the doc; module-level names ride the use
@@ -365,7 +365,7 @@ fn scan_files(
         // it) — clone to move: this IS the parse's one copy now
         parsed.push((
             f,
-            crate::analysis::parse_at(f.mount.origin.as_str(), f.src.clone()),
+            crate::query::analysis::parse_at(f.mount.origin.as_str(), f.src.clone()),
         ));
     }
 

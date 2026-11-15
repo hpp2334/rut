@@ -63,8 +63,9 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   `Parsed` (`ast()`/`src()`/`into_parts()`) and `Document` (read
   doors only; consumers hold the doc and borrow) carry private
   fields. Plain records (node structs, index rows, `ParseOpts`,
-  driver/lir rows, rut-lsp's wire-bound `Analysis` — its rows exist
-  to move to the wire, so the server reads the fields) stay open —
+  driver/lir rows, rut-lsp's wire-bound `Analysis` — private impl
+  now, but its rows exist to move to the wire, so the event loop
+  reads the fields) stay open —
   many construction sites, no invariant.
 - **The parse-opts row**: recovery is NOT a knob — the ENTRY is the
   choice. `parse` is fail-fast (`Err` = the first diag, no tree; `Ok`
@@ -91,7 +92,14 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   stop" callers — today only its own crate's tests — while
   fmt/semantic/driver ride the recovering entry. (The wasm face
   `rut-lsp-wasm` layers one crate higher: its only language dep is
-  `rut-lsp`.)
+  `rut-lsp`.) And since the privacy wall the WHOLE crate is sealed
+  the way `semantic` is: **rut-lsp's public surface is `Lsp` +
+  `env::Io`** (`WakeFn` rides beside it — the face implements `Io`
+  for `JsEnv` across the crate boundary, and the test mocks
+  implement it too); `semantic` and every struct are private impl —
+  the JSON envelopes are `String`s, so `wire` carries no public type
+  either. The face's deps (rut-lsp + the wasm trio) are the layer
+  proof: it spells `rut_lsp::{Lsp, env::…}` and nothing else.
 
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 
@@ -203,8 +211,13 @@ order:
 
 - **Two crates — core + face**: `crates/rut-lsp` is the queries + actor
   core — the event loop, the session state, the envelope `wire` —
-  native-clean AND wasm32-clean; other crates dep on it directly for
-  language-server logic. `crates/rut-lsp-wasm` is the wasm-bindgen
+  native-clean AND wasm32-clean, and sealed to `Lsp` + `env::Io` (see
+  the privacy wall above): the tests that spell internal paths live
+  in the crate's unit-test tree (`src/tests/` — an integration test
+  cannot name a private module), and `crates/rut-lsp/tests/` keeps
+  only the public-door trio (abi/sched/walk — envelopes, clock, dep
+  walk, each through `Lsp` + an `Io` mock).
+  `crates/rut-lsp-wasm` is the wasm-bindgen
   face: one exported `RutLsp` class whose every method delegates onto
   the core's `Lsp` handle; its deps are rut-lsp + the wasm trio
   (`wasm-bindgen`/`js-sys`/`wasm-bindgen-futures`) — the dep line is

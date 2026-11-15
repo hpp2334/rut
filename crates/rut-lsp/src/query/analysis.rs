@@ -8,13 +8,13 @@ use ls_types::*;
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use crate::completion;
-use crate::definition;
 use crate::hover;
-use crate::inlay;
-use crate::references;
+use crate::query::completion;
+use crate::query::definition;
+use crate::query::inlay;
+use crate::query::references;
+use crate::query::signature_help;
 use crate::semantic::{SymKind, Symbol};
-use crate::signature_help;
 
 /// the analysis envelope — the per-document rows (diags, tokens,
 /// symbols) plus the hover index, related-info URIs + provenance
@@ -26,6 +26,8 @@ pub struct Analysis {
     pub symbols: Vec<DocumentSymbol>,
     /// the hover definition index (origin stamped at construction from
     /// the document's URI)
+    #[allow(dead_code)]
+    // the unit tests' window onto the hover index — the wire rows carry diags/tokens/symbols only
     pub index: hover::DefIndex,
 }
 

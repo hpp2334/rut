@@ -28,6 +28,7 @@ use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
 use rut_driver::bundle::{parse_bundle, Manifest};
 
 /// A bundle's rows head: the owning spec plus its mounted sources.
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 type ModHead = (
     String,
     std::collections::BTreeMap<String, rut_driver::ModSource>,
@@ -313,6 +314,7 @@ pub struct BundleIndex {
 /// old flat envelope, which keeps loading byte-for-byte. The flavor
 /// rides the pkg: a host tree speaks Decl and mounts `mod.d.rut`
 /// children, a lib body's tree the Impl `mod.rut` shape.
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 fn bundle_rows(entries: &[(String, Vec<u8>)], host: bool) -> Result<Option<ModHead>, String> {
     let text = match read_entry(entries, rut_driver::mods::ROWS_NAME) {
         Ok(t) => t,
@@ -336,6 +338,7 @@ fn bundle_rows(entries: &[(String, Vec<u8>)], host: bool) -> Result<Option<ModHe
 /// modules), so the single-file spelling falling alone is the loud
 /// missing error. Keys are bundle-normalized exactly like the
 /// loader's.
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 fn entry_child_lookup(
     entries: &[(String, Vec<u8>)],
 ) -> impl FnMut(&str, &str) -> Result<rut_driver::ChildLookup, String> + '_ {
@@ -395,6 +398,7 @@ fn entry_child_lookup(
 /// `rut.jsonc` + `.rut` sources, and a non-text ride-along has no
 /// editor face. The zip64/grammar/CRC laws ride
 /// [`rut_driver::bundle::read_srczip`].
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let entries = rut_driver::bundle::read_srczip(bytes).map_err(|e| e.to_string())?;
     let manifest_text = entries
@@ -444,6 +448,7 @@ pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     })
 }
 
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let entries = parse_bundle(bytes).map_err(|e| e.to_string())?;
     let manifest_text = read_entry(&entries, MANIFEST_NAME)
@@ -660,6 +665,7 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
 /// not parameter names, so a faithful trait re-spelling is impossible
 /// here). This is the indexed answer for a compiled-only url dep — a
 /// consumer's `use pouch::{ Vec }` resolves against the bundle's own bytes.
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 fn decl_face(prog: &rut_core::binary::Program) -> String {
     use rut_core::types::TyKind;
     use rut_core::types::{TypeId, TY_NIL};
@@ -788,6 +794,7 @@ fn decl_face(prog: &rut_core::binary::Program) -> String {
 /// tables — boot ids answer through the shared boot prefix, carried
 /// rows name through the program interner, placeholder rows (`#T`)
 /// render as their parameter spelling (`T`).
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 fn ty_text(prog: &rut_core::binary::Program, t: rut_core::types::TypeId) -> String {
     use rut_core::types::TyKind;
     let raw_name = |id: rut_core::types::TypeId| -> String {
@@ -824,6 +831,7 @@ fn ty_text(prog: &rut_core::binary::Program, t: rut_core::types::TypeId) -> Stri
 /// (`Some("")` — the twin of the lib root's spelling) — `Some(path)`;
 /// anything else is today's flat shape (`None`) — the dep walk and
 /// the workspace scan index identically
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 pub fn bundle_file_mod_path(path: &str) -> Option<String> {
     if let Some(p) = path.strip_suffix("/mod.rut") {
         return Some(p.to_string());
@@ -863,6 +871,7 @@ pub fn index_dep(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> 
 /// never in paths: the file is one, the modules many, the parse one.
 /// `mod_path` prefixes every stamp (the file's own position — `""` for
 /// a group root).
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 pub fn index_dep_decl_group(
     name: &str,
     uri: &str,
@@ -901,7 +910,7 @@ pub fn index_dep_decl_group(
             };
             (
                 path,
-                crate::hover::index_items(src, ast, toks, &items, mount),
+                crate::hover::build::index_items(src, ast, toks, &items, mount),
             )
         })
         .collect()
@@ -910,6 +919,7 @@ pub fn index_dep_decl_group(
 /// The inline modules of one parsed item list, depth-first, path-stamped
 /// under `prefix`. First-wins: a repeated inline edge never mounts
 /// twice.
+#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 fn collect_inline_modules(
     ast: &rut_ast::Ast,
     items: &[rut_ast::ItemRef],

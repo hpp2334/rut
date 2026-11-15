@@ -177,6 +177,6 @@ impl SessionState {
             return Vec::new();
         };
         let doc = self.doc_mods_of(uri);
-        crate::analysis::complete_at(uri, src, &self.defs, line, ch, &doc, &self.direct_deps)
+        crate::query::analysis::complete_at(uri, src, &self.defs, line, ch, &doc, &self.direct_deps)
     }
 }

@@ -124,6 +124,8 @@ pub struct TyDef {
     /// decl or the import-gated spelling (`pub builtin`, mirrored in
     /// `DefIndex::pub_gated`)
     pub ambient: bool,
+    #[allow(dead_code)]
+    // built beside head — the verbatim head slice renders the generics as written
     pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
     pub methods: Vec<MemberSrc>,
@@ -166,6 +168,8 @@ pub struct FnDef {
 /// gone, so there is no other half to record)
 #[derive(Debug, Clone)]
 pub struct ImplDef {
+    #[allow(dead_code)]
+    // the row's identity — lookup joins impl methods through the index, not the name
     pub target_name: String,
 }
 

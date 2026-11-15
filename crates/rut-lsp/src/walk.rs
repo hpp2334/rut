@@ -50,7 +50,7 @@ use std::collections::HashSet;
 
 use crate::deps::{DepRow, DepSource};
 use crate::env::Io;
-use crate::SessionState;
+use crate::state::SessionState;
 
 /// the manifest recursion cap — the extension's `MAX_DEP_DEPTH`
 /// mirrored (a guest, not an indexer daemon)

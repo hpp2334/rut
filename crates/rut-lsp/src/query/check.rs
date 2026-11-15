@@ -142,7 +142,7 @@ pub fn merged_doc_diags(
 ) -> Vec<Diagnostic> {
     let Some(pkg) = pkg else { return parse_diags };
     let hits = check_doc(doc_uri, doc_src, &pkg, mod_path.as_deref(), groups);
-    crate::analysis::merge_diags(parse_diags, hits)
+    crate::query::analysis::merge_diags(parse_diags, hits)
 }
 
 /// Check one open document's package: assemble the world, run the graph
@@ -236,13 +236,13 @@ pub fn check_doc(
         // uri can't name a location — related info drops rather than
         // guesses
         let diag = match Uri::from_str(uri) {
-            Ok(u) => crate::analysis::to_diagnostic_parts(d, text, &index, &u),
+            Ok(u) => crate::query::analysis::to_diagnostic_parts(d, text, &index, &u),
             Err(_) => {
-                let mut dg = crate::analysis::to_diagnostic_parts(
+                let mut dg = crate::query::analysis::to_diagnostic_parts(
                     d,
                     text,
                     &index,
-                    &crate::analysis::placeholder_uri(),
+                    &crate::query::analysis::placeholder_uri(),
                 );
                 dg.related_information = None;
                 dg

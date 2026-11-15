@@ -56,7 +56,7 @@ use futures::StreamExt;
 use ls_types::Uri;
 
 use crate::wire;
-use crate::{json_envelope, locations_envelope, SessionState};
+use crate::{json_envelope, locations_envelope, state::SessionState};
 
 /// the deferral window — the walk lane's debounce interval (the old JS
 /// engine's 200ms, now the ACTOR's own clock read: ONE armed window
@@ -377,19 +377,26 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             // the analyze clone MOVES into the parse — the old
             // normalize copy is gone; the check lane still borrows.
             let a = match Uri::from_str(&uri) {
-                Ok(u) => crate::analysis::analyze_at(&u, src.clone()),
-                Err(_) => crate::analysis::analyze_unstamped(&uri, src.clone()),
+                Ok(u) => crate::query::analysis::analyze_at(&u, src.clone()),
+                Err(_) => crate::query::analysis::analyze_unstamped(&uri, src.clone()),
             };
             // the envelope's rows move to the wire field by field (a
             // plain record — no consuming ceremony)
             let diags = {
                 let dm = l.state.doc_mods_of(&uri);
                 let groups = if dm.pkg.is_some() {
-                    crate::check::groups_from_defs(&l.state.defs)
+                    crate::query::check::groups_from_defs(&l.state.defs)
                 } else {
                     Vec::new()
                 };
-                crate::check::merged_doc_diags(&uri, &src, dm.pkg, dm.mod_path, groups, a.diags)
+                crate::query::check::merged_doc_diags(
+                    &uri,
+                    &src,
+                    dm.pkg,
+                    dm.mod_path,
+                    groups,
+                    a.diags,
+                )
             };
             let answer = json_envelope(wire::Analysis {
                 diags,
@@ -412,7 +419,8 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 None => "null".to_string(),
                 Some(src) => {
                     let doc = l.state.doc_mods_of(&uri);
-                    let out = crate::analysis::hover_at(&uri, src, &l.state.defs, &doc, line, ch);
+                    let out =
+                        crate::query::analysis::hover_at(&uri, src, &l.state.defs, &doc, line, ch);
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -438,8 +446,14 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 None => "null".to_string(),
                 Some(src) => {
                     let doc = l.state.doc_mods_of(&uri);
-                    let locs =
-                        crate::analysis::definition_at(&uri, src, &l.state.defs, &doc, line, ch);
+                    let locs = crate::query::analysis::definition_at(
+                        &uri,
+                        src,
+                        &l.state.defs,
+                        &doc,
+                        line,
+                        ch,
+                    );
                     locations_envelope(&locs)
                 }
             };
@@ -450,7 +464,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 None => "null".to_string(),
                 Some(src) => {
                     let doc = l.state.doc_mods_of(&uri);
-                    let locs = crate::analysis::type_definition_at(
+                    let locs = crate::query::analysis::type_definition_at(
                         &uri,
                         src,
                         &l.state.defs,
@@ -474,7 +488,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = match l.state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
-                    let hints = crate::analysis::inlay_hints_at(
+                    let hints = crate::query::analysis::inlay_hints_at(
                         &uri,
                         src,
                         &l.state.defs,
@@ -505,7 +519,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
                 None => "null".to_string(),
                 Some(src) => {
                     let doc = l.state.doc_mods_of(&uri);
-                    let locs = crate::analysis::references_at(
+                    let locs = crate::query::analysis::references_at(
                         &uri,
                         src,
                         &l.state.defs,
@@ -523,8 +537,13 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = match l.state.docs.get(&uri).cloned() {
                 None => "null".to_string(),
                 Some(src) => {
-                    let out =
-                        crate::analysis::signature_help_at(&uri, src, &l.state.defs, line, ch);
+                    let out = crate::query::analysis::signature_help_at(
+                        &uri,
+                        src,
+                        &l.state.defs,
+                        line,
+                        ch,
+                    );
                     json_envelope(serde_json::json!(out))
                 }
             };
@@ -533,7 +552,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
         Cmd::IndexFile { uri, src, tx } => {
             // the wire's String moves into the parse — a fresh read,
             // zero copies end to end
-            let idx = crate::analysis::index_at(&uri, src);
+            let idx = crate::query::analysis::index_at(&uri, src);
             match l.state.defs.iter().position(|d| d.mount.origin == uri) {
                 Some(slot) => l.state.defs[slot] = idx,
                 None => l.state.defs.push(idx),

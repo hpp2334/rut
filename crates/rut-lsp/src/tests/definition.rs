@@ -1,7 +1,7 @@
-use crate::definition::*;
 use crate::hover::DefIndex;
 use crate::hover::Mount;
 use crate::mods::DocMods;
+use crate::query::definition::*;
 use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
 use rut_ast::Ast;

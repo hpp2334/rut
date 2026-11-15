@@ -1,7 +1,7 @@
-use crate::completion::*;
 use crate::hover::DefIndex;
 use crate::hover::Mount;
 use crate::mods::DocMods;
+use crate::query::completion::*;
 use rut_ast::parser::Mode;
 use std::collections::HashSet;
 

@@ -389,7 +389,7 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
         ));
     }
     let doc = idxs[0];
-    let imported = crate::definition::import_map(doc);
+    let imported = crate::query::definition::import_map(doc);
     for i in idxs {
         let own = std::ptr::eq(*i, doc);
         // the names this document's `use`s bound FROM this index's
@@ -398,7 +398,7 @@ fn bare_completions(idxs: &[&DefIndex]) -> Vec<CompletionOut> {
         // origin/stem derivation on an unnamed index)
         let used_from: HashSet<&str> = imported
             .iter()
-            .filter(|(_, pkg)| crate::definition::matches_pkg(i, pkg))
+            .filter(|(_, pkg)| crate::query::definition::matches_pkg(i, pkg))
             .map(|(name, _)| *name)
             .collect();
         // the bare gate per row: own decls always; foreign rows only
@@ -563,7 +563,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     let chain: Vec<&DefIndex> = idxs
         .iter()
         .copied()
-        .filter(|i| crate::definition::matches_pkg(i, pkg))
+        .filter(|i| crate::query::definition::matches_pkg(i, pkg))
         .collect();
     if chain.is_empty() {
         return Vec::new();
@@ -815,12 +815,12 @@ fn type_tier_completions(idxs: &[&DefIndex], prefix: &str) -> Vec<CompletionOut>
         );
     }
     let doc = idxs[0];
-    let imported = crate::definition::import_map(doc);
+    let imported = crate::query::definition::import_map(doc);
     for i in idxs {
         let own = std::ptr::eq(*i, doc);
         let used_from: HashSet<&str> = imported
             .iter()
-            .filter(|(_, pkg)| crate::definition::matches_pkg(i, pkg))
+            .filter(|(_, pkg)| crate::query::definition::matches_pkg(i, pkg))
             .map(|(name, _)| *name)
             .collect();
         for t in &i.types {

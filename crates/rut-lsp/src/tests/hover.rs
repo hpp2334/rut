@@ -26,7 +26,7 @@ fn hover_nth(src: &str, needle: &str, n: usize) -> Option<String> {
     hover_out_nth(src, needle, n).map(|h| h.markdown)
 }
 
-fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<HoverOut> {
+fn hover_out_nth(src: &str, needle: &str, n: usize) -> Option<crate::hover::lookup::HoverOut> {
     let ddoc = doc_of(src, Mode::Impl);
     let (toks, ast) = (ddoc.toks(), ddoc.ast());
     let idx = index(&ddoc, Mount::default());

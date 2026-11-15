@@ -1,6 +1,6 @@
 use crate::hover::DefIndex;
 use crate::hover::Mount;
-use crate::signature_help::*;
+use crate::query::signature_help::*;
 use ls_types::{Documentation, ParameterLabel, SignatureHelp};
 use rut_ast::parser::Mode;
 use rut_ast::Ast;

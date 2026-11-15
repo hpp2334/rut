@@ -93,7 +93,7 @@ pub fn vis_allows(from: &str, def_mod: &str, vis: Vis) -> bool {
 /// unstamped files can never impersonate a module).
 pub fn matches_mod(i: &DefIndex, pkg: Option<&str>, path: &str) -> bool {
     match pkg {
-        Some(p) => crate::definition::matches_pkg(i, p) && mod_path_of(i) == path,
+        Some(p) => crate::query::definition::matches_pkg(i, p) && mod_path_of(i) == path,
         None => i.mount.module.is_none() && i.mount.mod_path.as_deref() == Some(path),
     }
 }
@@ -109,7 +109,10 @@ pub(crate) fn find_mod<'a>(
 
 /// the `mod NAME;` edge `parent` (an index) declares for `name`,
 /// the child's full mod path attached
-fn child_edge<'a>(parent: &'a DefIndex, name: &str) -> Option<(&'a crate::hover::ModDef, String)> {
+fn child_edge<'a>(
+    parent: &'a DefIndex,
+    name: &str,
+) -> Option<(&'a crate::hover::types::ModDef, String)> {
     let from = mod_path_of(parent);
     parent
         .mods
@@ -212,7 +215,7 @@ pub fn display(path: &str) -> String {
 /// origin basename is the flavor's `mod.rut`/`mod.d.rut`).
 pub fn display_of(idxs: &[&DefIndex], pkg: Option<&str>, child: &str) -> String {
     let mounted = idxs.iter().copied().find(|i| {
-        mod_path_of(i) == child && pkg.is_none_or(|p| crate::definition::matches_pkg(i, p))
+        mod_path_of(i) == child && pkg.is_none_or(|p| crate::query::definition::matches_pkg(i, p))
     });
     match mounted.and_then(|i| origin_file_name(&i.mount.origin)) {
         Some(name) if name != "mod.rut" && name != rut_driver::decl::DECL_CHILD_FILE => name,

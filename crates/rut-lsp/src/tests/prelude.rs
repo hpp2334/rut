@@ -91,7 +91,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
         "pub fn ambient_offered() -> i32 { return 1; }\n".to_string(),
     );
     let idxs = [&di, &core];
-    let items = crate::completion::complete(
+    let items = crate::query::completion::complete(
         &idxs,
         toks,
         ast,
@@ -180,7 +180,7 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let idxs = myhost_chain();
     let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
     let dm = crate::mods::DocMods::default();
-    let ctx = crate::definition::Ctx {
+    let ctx = crate::query::definition::Ctx {
         doc_uri,
         toks,
         ast,
@@ -189,7 +189,7 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     };
     // the leaf: the `connect` inside the braces
     let leaf = normalized.find("connect").expect("the leaf") as u32;
-    let hits = crate::definition::definition(&ctx, leaf);
+    let hits = crate::query::definition::definition(&ctx, leaf);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri, "rut/myhost/src/net/mod.d.rut",
@@ -197,7 +197,7 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     );
     // the segment: `net` in the use path — the declaring edge
     let seg = normalized.find("net").expect("the segment") as u32;
-    let hits = crate::definition::definition(&ctx, seg);
+    let hits = crate::query::definition::definition(&ctx, seg);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri, "rut/myhost/src/myhost.d.rut",

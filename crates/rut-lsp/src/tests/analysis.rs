@@ -1,5 +1,5 @@
-use crate::analysis::analyze_unstamped;
-use crate::analysis::*;
+use crate::query::analysis::analyze_unstamped;
+use crate::query::analysis::*;
 use ls_types::*;
 use rut_lexer::lexer::canonical;
 use rut_lexer::span::Span;
@@ -8,8 +8,8 @@ use rut_lexer::span::Span;
 /// grammar behavior through the unstamped facade entry, the uri
 /// spelling the mode (the filename convention)
 const IMPL_URI: &str = "file:///t/x.rut";
-use crate::check;
-use crate::check::{FileSrc, PkgFiles};
+use crate::query::check;
+use crate::query::check::{FileSrc, PkgFiles};
 use crate::semantic::LineIndex;
 use rut_ast::parser::Mode;
 use std::collections::BTreeMap;

@@ -1,6 +1,6 @@
 use crate::hover::DefIndex;
 use crate::hover::Mount;
-use crate::inlay::*;
+use crate::query::inlay::*;
 use crate::semantic::LineIndex;
 use ls_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintTooltip};
 use rut_ast::parser::Mode;

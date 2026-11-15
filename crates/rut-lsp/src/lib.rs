@@ -1,9 +1,10 @@
 //! rut-lsp — the rut language core for language servers: the queries
-//! (`crate::analysis` and the sibling modules below), the values, the
-//! actor event loop, and the session state, ONE crate with no wasm
-//! coupling. Hosts embed it directly — the wasm-bindgen face (the
-//! exported `RutLsp` class, the JS envelope glue) lives beside it in
-//! `rut-lsp-wasm`, a thin delegation over this crate's [`Lsp`].
+//! (`crate::query::analysis` and the sibling modules below), the
+//! values, the actor event loop, and the session state, ONE crate
+//! with no wasm coupling. Hosts embed it directly — the wasm-bindgen
+//! face (the exported `RutLsp` class, the JS envelope glue) lives
+//! beside it in `rut-lsp-wasm`, a thin delegation over this crate's
+//! [`Lsp`].
 //!
 //! Every method on [`Lsp`] is an ASYNC RPC bridge (the actor seam):
 //! the call posts one [`event_loop::Msg`] on the loop's mpsc inbox and
@@ -104,29 +105,28 @@ mod walk;
 mod wire;
 
 // ---- the session state — the editing session's accumulated facts,
-// moved whole to `state`; the flat `crate::SessionState` path the
-// handlers spell stays through the re-export ----
+// moved whole to `state`; the loop and the boot doors spell
+// `state::SessionState` ----
 mod state;
-pub(crate) use state::SessionState;
 
 // ---- the language core — the queries and the values ----
 //
-// `query` is a private directory with public leaves — the canonical
-// paths stay the flat `crate::analysis`, `crate::completion`, … that
-// the bridges (and the tests) spell.
+// `query` and every sibling below are PRIVATE impl: the host's whole
+// world is the [`Lsp`] handle and its JSON envelopes — no internal
+// name crosses the crate boundary (the face crate implements
+// [`env::Io`] and nothing else). The canonical paths inside the crate
+// spell the module tree (`crate::query::analysis`, `crate::hover`, …).
 mod query;
 
-pub use query::{analysis, check, completion, definition, inlay, references, signature_help};
-
-pub mod deps;
+mod deps;
 pub mod env;
-pub mod hover;
-pub mod mods;
+mod hover;
+mod mods;
 // the classifier/document layer — absorbed from `rut-semantic` and
 // SEALED: the private `mod` decl makes even the module's own `pub`
 // items invisible outside the crate, so the queries keep one spelling
 // (`crate::semantic::…`) and no consumer can reach past the ABI
-pub mod prelude;
+mod prelude;
 mod semantic;
 
 // the unit-test tree — the sealed modules' tests live INSIDE the
@@ -155,7 +155,7 @@ impl Lsp {
     pub fn boot(spawn: impl FnOnce(Pin<Box<dyn Future<Output = ()>>>)) -> Lsp {
         let (tx, rx) = event_loop::pair();
         spawn(Box::pin(event_loop::run(
-            SessionState::boot(),
+            state::SessionState::boot(),
             tx.clone(),
             rx,
         )));
@@ -444,7 +444,7 @@ impl Lsp {
         // SetEnv arm installs captures it (the clock's tick re-enters
         // this loop), while `tx` moves to the host handle
         pool.spawner()
-            .spawn_local(event_loop::run(SessionState::boot(), tx.clone(), rx))
+            .spawn_local(event_loop::run(state::SessionState::boot(), tx.clone(), rx))
             .expect("the loop parks on the fresh pool");
         (Lsp { tx }, pool)
     }
@@ -467,7 +467,7 @@ pub(crate) fn json_envelope<T: serde::Serialize>(value: T) -> String {
 /// the definition-target envelope — `DefLocation` is serde-free in the
 /// queries (they carry no serializer), so this module spells
 /// the LSP `Location` JSON: `{ uri, range }`
-pub(crate) fn locations_envelope(locs: &[crate::definition::DefLocation]) -> String {
+pub(crate) fn locations_envelope(locs: &[crate::query::definition::DefLocation]) -> String {
     let value: Vec<wire::Location> = locs
         .iter()
         .map(|l| wire::Location {
