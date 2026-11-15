@@ -5,8 +5,8 @@
 //! Mirrors the parser corpus test (rut-ast) from the LSP side.
 
 use rut_ast::parser::{is_reserved_kw, Mode};
-use rut_lsp_wasm::semantic::{Document, TokenType};
-use rut_lsp_wasm::LineIndex;
+use rut_lsp::semantic::{Document, TokenType};
+use rut_lsp::LineIndex;
 
 /// parse with doc grafting ON — the editor lane's shape (hover's index
 /// reads doc chains off the decl nodes) and the recovering entry (the

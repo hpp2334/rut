@@ -17,8 +17,8 @@ use std::rc::Rc;
 
 use futures::executor::LocalPool;
 use futures::FutureExt;
-use rut_lsp_wasm::env::{Io, WakeFn};
-use rut_lsp_wasm::RutLsp;
+use rut_lsp::env::{Io, WakeFn};
+use rut_lsp::Lsp;
 
 /// the walk lane's debounce window — `event_loop::DEBOUNCE_MS`
 /// (pub(crate); the gate spells the same 200 the JS engine spelled)
@@ -127,9 +127,9 @@ fn root(io: &mut MemIo, path: &str, name: &str) {
 }
 
 /// boot a fresh core with `io` injected through the same door the wasm
-/// bridge posts its `JsEnv` — the clock rides `io.clock`
-fn boot(io: MemIo) -> (RutLsp, LocalPool, Rc<MemIo>) {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+/// face posts its `JsEnv` — the clock rides `io.clock`
+fn boot(io: MemIo) -> (Lsp, LocalPool, Rc<MemIo>) {
+    let (lsp, mut pool) = Lsp::spawn_native();
     let io = Rc::new(io);
     pool.run_until(lsp.set_env_io(io.clone()));
     (lsp, pool, io)
@@ -276,7 +276,7 @@ fn a_clockless_env_reloads_eagerly_in_turn() {
 fn an_envless_reload_answers_the_error_envelope_eagerly() {
     // no env at all: the walk cannot read anything — the loud error
     // envelope, in-turn (the eager degrade again, the no-env body)
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     let out = take(pool.run_until(lsp.reload_deps(rjson(&["/ws/nowhere"]))));
     assert!(
         out["error"]
@@ -327,7 +327,7 @@ fn env_reinjection_installs_the_new_wake_and_a_stale_wake_is_harmless() {
     let io1 = Rc::new(io1);
     let io2 = Rc::new(io2);
 
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     pool.run_until(lsp.set_env_io(io1.clone()));
     pool.run_until(lsp.set_env_io(io2.clone()));
     assert!(

@@ -15,7 +15,7 @@ these fail loudly on drift). Practical consequences:
   `#[allow(...)]` with a one-line reason is the house style (grep for
   existing examples before inventing wording).
 
-## Frontend layering: one parse entry, lsp-wasm talks only to rut-semantic
+## Frontend layering: one parse entry, lsp talks only to rut-semantic
 
 **Call the layer whose abstraction you consume.** Document semantics
 (classify, symbols, mode derivation, position math) → `rut-semantic`.
@@ -62,7 +62,7 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   `Parsed` (`ast()`/`src()`/`into_parts()`) and `Document` (read
   doors only; consumers hold the doc and borrow) carry private
   fields. Plain records (node structs, index rows, `ParseOpts`,
-  driver/lir rows, lsp-wasm's wire-bound `Analysis` — its rows exist
+  driver/lir rows, rut-lsp's wire-bound `Analysis` — its rows exist
   to move to the wire, so the server reads the fields) stay open —
   many construction sites, no invariant.
 - **The parse-opts row**: recovery is NOT a knob — the ENTRY is the
@@ -76,7 +76,7 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   damage → fences (an `ErrorNode` covering the unparseable region, in
   the list it belongs to), lex rows → root-level. `ast.errors()` is
   the flat ordered view of every diag.
-- **`rut-lsp-wasm`'s `[dependencies]` carries NO `rut-lexer`**, and
+- **`rut-lsp`'s `[dependencies]` carries NO `rut-lexer`**, and
   its `src/` never spells `rut_ast::parser::` — that pair is the
   law's enforcement (the grammar now lives inside `rut-ast`, so the
   dep list alone can no longer prove it; grep the src tree). Its ONLY
@@ -87,7 +87,9 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   the crate's test seam (the sanctioned seam, like the futures
   LocalPool); the fail-fast `parse` door exists for "a diag means
   stop" callers — today only its own crate's tests — while
-  fmt/semantic/driver ride the recovering entry.
+  fmt/semantic/driver ride the recovering entry. (The wasm face
+  `rut-lsp-wasm` layers one crate higher still: its only language dep
+  is `rut-lsp`.)
 
 ## Browser drives: use `agent-browser`, not hand-rolled WebDriver
 
@@ -197,11 +199,16 @@ order:
                            # skip-tolerant host suite) → vsce package →
                            # byte-verify the wasm inside the vsix
 
-- **One crate — core + face**: `crates/rut-lsp-wasm` is the queries AND
-  the wasm-bindgen ABI (the old `rut-lsp` core / `rut-lsp-server` stdio
-  split is gone; the stdio face lives only in git history). Add a
-  feature to the queries and wire it into `src/lib.rs`'s ABI methods —
-  there is no second shell.
+- **Two crates — core + face**: `crates/rut-lsp` is the queries + actor
+  core — the event loop, the session state, the envelope `wire` —
+  native-clean AND wasm32-clean; other crates dep on it directly for
+  language-server logic. `crates/rut-lsp-wasm` is the wasm-bindgen
+  face: one exported `RutLsp` class whose every method delegates onto
+  the core's `Lsp` handle; its deps are rut-lsp + the wasm trio
+  (`wasm-bindgen`/`js-sys`/`wasm-bindgen-futures`) — the dep line is
+  the law's proof. Add a feature to the core's queries and wire it
+  into the face's `src/lib.rs` ABI methods; the old stdio face lives
+  only in git history.
 - **The read-only env law (dep lane)**: the extension injects a
   READ-ONLY fs capability (`src/env.ts` — sync `read`/`readDir`/
   `isDir`/`notify` over `node:fs`, plus the optional clock

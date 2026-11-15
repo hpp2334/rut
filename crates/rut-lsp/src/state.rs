@@ -1,7 +1,7 @@
 //! the session state — one instance per editing session (the
 //! language core's accumulated facts): the open documents, the defs
 //! store, the walk lane's ledgers. The loop task owns this value
-//! exclusively (see [`crate::event_loop`]); the host's `RutLsp` is
+//! exclusively (see [`crate::event_loop`]); the host's `Lsp` is
 //! only the inbox handle, and no caller ever borrows the state.
 
 use std::collections::{BTreeMap, HashMap, HashSet};

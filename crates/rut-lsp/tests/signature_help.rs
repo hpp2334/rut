@@ -2,9 +2,9 @@ use ls_types::{Documentation, ParameterLabel, SignatureHelp};
 use rut_ast::parser::Mode;
 use rut_ast::Ast;
 use rut_lexer::token::Token;
-use rut_lsp_wasm::hover::DefIndex;
-use rut_lsp_wasm::hover::Mount;
-use rut_lsp_wasm::signature_help::*;
+use rut_lsp::hover::DefIndex;
+use rut_lsp::hover::Mount;
+use rut_lsp::signature_help::*;
 
 /// one doc artifact — the (normalized src, toks, ast) triple from ONE
 /// parse, read through the doc's doors (the test lane's replacement
@@ -37,7 +37,7 @@ impl Doc {
 
 fn doc(src: &str) -> Doc {
     let pd = doc_of(src, Mode::Impl);
-    let index = rut_lsp_wasm::hover::index(&pd, Mount::doc(DOC));
+    let index = rut_lsp::hover::index(&pd, Mount::doc(DOC));
     Doc { pd, index }
 }
 

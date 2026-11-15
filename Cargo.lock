@@ -1242,11 +1242,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "rut-lsp-wasm"
+name = "rut-lsp"
 version = "0.2.0"
 dependencies = [
  "futures",
- "js-sys",
  "ls-types",
  "rut-ast",
  "rut-core",
@@ -1256,6 +1255,14 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "rut-lsp-wasm"
+version = "0.2.0"
+dependencies = [
+ "js-sys",
+ "rut-lsp",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

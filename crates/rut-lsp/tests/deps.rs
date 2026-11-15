@@ -1,8 +1,8 @@
 use rut_ast::parser::Mode;
 use rut_ast::Vis;
 use rut_driver::bundle::files::MANIFEST_NAME;
-use rut_lsp_wasm::deps::*;
-use rut_lsp_wasm::hover::TyForm;
+use rut_lsp::deps::*;
+use rut_lsp::hover::TyForm;
 
 const CALC_HOST_MANIFEST: &str = include_str!("../../../rut/calc_host/rut.jsonc");
 const POUCH_BUNDLE: &[u8] = include_bytes!("../../../dist/std/pouch.rutbundle");
@@ -537,11 +537,11 @@ fn dep_impl_methods_ride_the_dep_index() {
         .position(|l| l.contains(".info"))
         .expect("the .info line") as u32;
     let ch = lines[line as usize].find(".info").unwrap() as u32 + 1;
-    let hits = rut_lsp_wasm::analysis::definition_at(
+    let hits = rut_lsp::analysis::definition_at(
         "file:///ws/main.rut",
         consumer.to_string(),
         &[idx],
-        &rut_lsp_wasm::mods::DocMods::default(),
+        &rut_lsp::mods::DocMods::default(),
         line,
         ch,
     );

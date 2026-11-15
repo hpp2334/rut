@@ -1,12 +1,13 @@
-//! The wasm ABI's own gate — the envelopes and the session state the
-//! extension drives, asserted through the public `RutLsp` binding the
+//! The language core's ABI gate — the envelopes and the session state
+//! the extension drives, asserted through the public `Lsp` handle the
 //! same way the hosts call it — async bridges over the loop, driven on
-//! a deterministic single-threaded `LocalPool` (`RutLsp::spawn_native`,
-//! the native half of the executor seam; the wasm parks the same loop
-//! on `spawn_local`). The crates' other tests cover the queries
-//! underneath.
+//! a deterministic single-threaded `LocalPool` (`Lsp::spawn_native`,
+//! the native half of the executor seam; the wasm face parks the same
+//! loop on `spawn_local`). The queries underneath have their own
+//! gates, and the wasm attribute layer itself (the exported class, the
+//! promise bridge) is covered by the extension's through-wasm e2e.
 
-use rut_lsp_wasm::RutLsp;
+use rut_lsp::Lsp;
 
 /// the CDN url's own cache filename (the URL STRING is hashed, never
 /// the bytes) — the row the BOOT-EMPTY ledger leaves unpinned
@@ -32,7 +33,7 @@ const PLUGIN_SHAPE: &str = r#"{
 
 #[test]
 fn manifest_envelope_spells_the_dep_table() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     // the BOOT ledger is empty: the url row answers `sha256: null` —
     // the unpinned refusal, never a guessed pin
     let out = take(pool.run_until(lsp.parse_manifest(PLUGIN_SHAPE.to_string())));
@@ -63,7 +64,7 @@ fn manifest_envelope_spells_the_dep_table() {
 
 #[test]
 fn a_decl_entry_and_the_error_envelope() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     let src = r#"{ "name": "host", "type": "host", "entry": { "type": "./surface.d.rut" } }"#;
     let out = take(pool.run_until(lsp.parse_manifest(src.to_string())));
     assert_eq!(
@@ -81,7 +82,7 @@ fn a_decl_entry_and_the_error_envelope() {
 
 #[test]
 fn complete_answers_locals_and_members_at_the_end_of_buffer() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     // plan3 phase 1 (A7): the doc ends EXACTLY at the incomplete
     // stmt — the parser ends the block's span at the EOF token, the
     // cursor sits ON `hi`, and before the scope extension the member
@@ -135,7 +136,7 @@ fn complete_answers_locals_and_members_at_the_end_of_buffer() {
 
 #[test]
 fn complete_answers_the_type_tier_at_an_annotation() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     // A3 through the bindgen face: `let v: u⏐` — the primitive table
     // rides the prefix, the keyword table / fns / locals stay off
     let doc = "fn go() -> nil {\n    let v: u\n}\n";
@@ -180,7 +181,7 @@ fn complete_answers_the_type_tier_at_an_annotation() {
 
 #[test]
 fn definition_on_the_mod_edge_names_the_child_file_top() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     // the plan-C lane through the bindgen face: the root file is
     // BOTH a stamped index (its uri carries the (module, mod_path)
     // pair `doc_mods_of` reads) and the analyzed doc; the `helpers`
@@ -232,7 +233,7 @@ fn definition_on_the_mod_edge_names_the_child_file_top() {
 
 #[test]
 fn complete_syncs_the_doc_and_the_dot_guard_holds() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     // ink rides the dep lane now (the embedded surface died): the
     // repo's own ink source indexes as a named dep through the
     // workspace-push ABI — ctor inference reads `Logger` off it, so
@@ -286,7 +287,7 @@ fn complete_syncs_the_doc_and_the_dot_guard_holds() {
 /// the corpus lock's foundation.
 #[test]
 fn analyze_runs_the_checker_over_a_stamped_chain() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     // the dep: one mod-tree file mounted under its module NAME
     let dep_src = "pub struct Task {\n    id: u32;\n    title: str;\n    completed: bool;\n}\n";
     let dep_uri = "file:///ws/chk/dep/mod.rut";
@@ -357,7 +358,7 @@ fn analyze_runs_the_checker_over_a_stamped_chain() {
 
 #[test]
 fn index_mod_at_stamps_the_tree_and_feeds_the_use_walk() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     // the root: `pub mod layout;` rides back as the mount walk's
     // next hop (the host reads its children from the envelope)
     let root_src = "pub mod layout;\nmod secret;\npub fn tag() -> i32 { return 1; }\n";
@@ -428,7 +429,7 @@ fn index_mod_at_stamps_the_tree_and_feeds_the_use_walk() {
 /// a panic, and the bridge resolves so a tearing-down page can move on
 #[test]
 fn a_dropped_loop_answers_the_error_envelope() {
-    let (lsp, pool) = RutLsp::spawn_native();
+    let (lsp, pool) = Lsp::spawn_native();
     drop(pool);
     let out = take(futures::executor::block_on(
         lsp.analyze("file:///ws/gone.rut".into(), "fn main() -> nil {}\n".into()),

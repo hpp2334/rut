@@ -13,6 +13,7 @@ members = [
     "crates/rut-native",
     "crates/rut-fmt",
     "crates/rut-wasm",
+    "crates/rut-lsp",
     "crates/rut-lsp-wasm",
     "crates/rut-cli",
     "examples/00-todolist",

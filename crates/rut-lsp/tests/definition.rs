@@ -2,11 +2,11 @@ use rut_ast::parser::Mode;
 use rut_ast::Ast;
 use rut_lexer::lexer::canonical;
 use rut_lexer::token::Token;
-use rut_lsp_wasm::definition::*;
-use rut_lsp_wasm::hover::DefIndex;
-use rut_lsp_wasm::hover::Mount;
-use rut_lsp_wasm::mods::DocMods;
-use rut_lsp_wasm::LineIndex;
+use rut_lsp::definition::*;
+use rut_lsp::hover::DefIndex;
+use rut_lsp::hover::Mount;
+use rut_lsp::mods::DocMods;
+use rut_lsp::LineIndex;
 
 /// one doc artifact — the (normalized src, toks, ast) triple from ONE
 /// parse, read through the doc's doors (the test lane's replacement
@@ -39,7 +39,7 @@ impl Doc {
 
 fn doc_at(uri: &str, src: &str) -> Doc {
     let pd = doc_of(src, Mode::Impl);
-    let index = rut_lsp_wasm::hover::index(&pd, Mount::doc(uri));
+    let index = rut_lsp::hover::index(&pd, Mount::doc(uri));
     Doc { pd, index }
 }
 
@@ -343,13 +343,13 @@ fn a_both_files_dep_answers_from_the_body() {
     // the body root's file top (0:0)
     let src = "use pkg::{ make };\nentry fn main() -> nil {\n    let x = make();\n}\n";
     let d = doc(src);
-    let surface = rut_lsp_wasm::deps::index_dep(
+    let surface = rut_lsp::deps::index_dep(
         "pkg",
         "file:///deps/pkg/pkg.d.rut",
         None,
         "pub host fn make() -> i32;\n".to_string(),
     );
-    let body = rut_lsp_wasm::deps::index_dep(
+    let body = rut_lsp::deps::index_dep(
         "pkg",
         "file:///deps/pkg/mod.rut",
         Some(""),
@@ -382,7 +382,7 @@ fn a_decl_only_host_pkg_lands_in_the_surface() {
     // all there is, so it is kept
     let src = "use calc::{ sqrt };\nentry fn main() -> nil {\n    let x = sqrt(1.0);\n}\n";
     let d = doc(src);
-    let surface = rut_lsp_wasm::deps::index_dep(
+    let surface = rut_lsp::deps::index_dep(
         "calc",
         "file:///deps/calc/calc.d.rut",
         None,
@@ -413,13 +413,13 @@ fn a_mounted_root_beats_the_ambient_surface_twin() {
     // pinned these bytes, the ambient index is only ever the fallback
     let src = "use ink_host::{ create_logger };\nentry fn main() -> nil {\n    create_logger(\"a\");\n}\n";
     let d = doc(src);
-    let ambient = rut_lsp_wasm::deps::index_dep(
+    let ambient = rut_lsp::deps::index_dep(
         "ink_host",
         "rut/ink_host/src/ink_host.d.rut",
         None,
         "pub host fn create_logger(name: str) -> opaque;\n".to_string(),
     );
-    let mounted = rut_lsp_wasm::deps::index_dep(
+    let mounted = rut_lsp::deps::index_dep(
         "ink_host",
         "file:///ws/.rut/deps/ink-eb2b568316ef/deps/ink_host@7e9a5d738fbd9797/src/ink_host.d.rut",
         None,
@@ -570,13 +570,13 @@ fn a_middle_use_segment_jumps_to_the_mod_edge() {
     // root's mod.rut (the dep lane; the e2e face re-covers it)
     let src = "use gadgets::layout::{ Column };\nentry fn main() -> nil {\n}\n";
     let d = doc(src);
-    let root = rut_lsp_wasm::deps::index_dep(
+    let root = rut_lsp::deps::index_dep(
         "gadgets",
         "file:///deps/gadgets/mod.rut",
         Some(""),
         "pub mod layout;\npub fn tag() -> i32 { return 1; }\n".to_string(),
     );
-    let layout = rut_lsp_wasm::deps::index_dep(
+    let layout = rut_lsp::deps::index_dep(
         "gadgets",
         "file:///deps/gadgets/layout/mod.rut",
         Some("layout"),
@@ -616,7 +616,7 @@ fn app_root() -> Doc {
 /// the mounted `helpers` child, stamped the way the faces' mount
 /// lays it into the chain
 fn app_helpers() -> DefIndex {
-    rut_lsp_wasm::deps::index_dep(
+    rut_lsp::deps::index_dep(
         "app",
         "file:///ws/app/helpers/mod.rut",
         Some("helpers"),
@@ -667,7 +667,7 @@ fn a_nested_edge_click_walks_from_the_doc_s_own_path() {
         "file:///ws/app/helpers.rut",
         "mod deep;\npub struct Slot {\n    n: i32;\n}\n",
     );
-    let deep = rut_lsp_wasm::deps::index_dep(
+    let deep = rut_lsp::deps::index_dep(
         "app",
         "file:///ws/app/helpers/deep.rut",
         Some("helpers/deep"),
@@ -690,7 +690,7 @@ fn an_edge_click_never_leaks_across_packages() {
     // another pkg's index stamped at the SAME mod path must not
     // answer the app root's edge click (the (pkg, path) pair keys)
     let d = app_root();
-    let other = rut_lsp_wasm::deps::index_dep(
+    let other = rut_lsp::deps::index_dep(
         "other",
         "file:///ws/other/helpers/mod.rut",
         Some("helpers"),
@@ -709,7 +709,7 @@ fn an_own_pkg_use_path_resolves_intra_package() {
         "file:///ws/app/mod.rut",
         "mod helpers;\nuse app::helpers::{ Slot };\nentry fn main() -> nil {\n}\n",
     );
-    let root_twin = rut_lsp_wasm::deps::index_dep(
+    let root_twin = rut_lsp::deps::index_dep(
         "app",
         "file:///ws/app/on-disk/mod.rut",
         Some(""),
@@ -752,13 +752,13 @@ fn an_own_mod_edge_use_head_resolves_through_the_ancestor_walk() {
         "file:///ws/app/mod.rut",
         "use helpers::deep::{ Gem };\nmod helpers;\nentry fn main() -> nil {\n}\n",
     );
-    let helpers = rut_lsp_wasm::deps::index_dep(
+    let helpers = rut_lsp::deps::index_dep(
         "app",
         "file:///ws/app/helpers/mod.rut",
         Some("helpers"),
         "mod deep;\npub struct Slot {\n    n: i32;\n}\n".to_string(),
     );
-    let deep = rut_lsp_wasm::deps::index_dep(
+    let deep = rut_lsp::deps::index_dep(
         "app",
         "file:///ws/app/helpers/deep.rut",
         Some("helpers/deep"),
@@ -797,7 +797,7 @@ fn the_explicit_module_name_beats_the_path_derivation() {
     // a dep index named `pouch` whose paths spell something else:
     // the explicit module is the WHOLE match
     let src = "class Widget {\n    id: i32;\n}\n";
-    let mut idx = rut_lsp_wasm::hover::index(&doc_of(src, Mode::Impl), Mount::default());
+    let mut idx = rut_lsp::hover::index(&doc_of(src, Mode::Impl), Mount::default());
     idx.mount.origin = "file:///ws/gadgets/lib.rut".to_string();
     idx.mount.src_path = Some("somewhere/else/lib.rut".to_string());
     idx.mount.module = Some("pouch".to_string());
@@ -814,7 +814,7 @@ fn the_unnamed_fallback_stays_verbatim() {
     // module None → today's derivation, byte-for-byte: the
     // src_path segment, then the origin's file stem
     let src = "class Widget {\n    id: i32;\n}\n";
-    let mut idx = rut_lsp_wasm::hover::index(&doc_of(src, Mode::Impl), Mount::default());
+    let mut idx = rut_lsp::hover::index(&doc_of(src, Mode::Impl), Mount::default());
     idx.mount.origin = "file:///ws/gadgets/lib.rut".to_string();
     assert!(matches_pkg(&idx, "gadgets"), "the file stem still resolves");
     idx.mount.src_path = Some("rut/pouch/mod.rut".to_string());
@@ -847,7 +847,7 @@ fn std_use_jumps_to_the_true_source_path() {
     const POUCH: &str = include_str!("../../../rut/pouch/src/mod.rut");
     let src = "use pouch::{ Vec };\nfn main() -> nil {\n    let v = Vec::new();\n}\n";
     let d = doc(src);
-    let extra = [rut_lsp_wasm::deps::index_dep(
+    let extra = [rut_lsp::deps::index_dep(
         "pouch",
         "rut/pouch/src/mod.rut",
         None,

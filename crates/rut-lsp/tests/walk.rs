@@ -18,8 +18,8 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use futures::executor::LocalPool;
-use rut_lsp_wasm::env::Io;
-use rut_lsp_wasm::RutLsp;
+use rut_lsp::env::Io;
+use rut_lsp::Lsp;
 
 /// a full 64-hex pin — the lock stores, the dir name abbreviates
 const KIT_PIN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -162,11 +162,11 @@ fn project(root: &Path, name: &str, lock: Option<&str>, deps: &str, body: &str) 
 
 /// boot a fresh core with the recording env installed, and point
 /// `$RUT_HOME` at `home` (the store the walk's url rows derive into)
-fn boot(home: &Path) -> (RutLsp, LocalPool, Rc<FsIo>) {
+fn boot(home: &Path) -> (Lsp, LocalPool, Rc<FsIo>) {
     // Env mutation is safe under nextest's one-process-per-test model
     // (the suite's runner): this test owns its process's environment.
     std::env::set_var("RUT_HOME", home);
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     let io = Rc::new(FsIo::default());
     pool.run_until(lsp.set_env_io(io.clone()));
     (lsp, pool, io)
@@ -193,13 +193,7 @@ fn pos_of(src: &str, needle: &str, occurrence: usize) -> (u32, u32) {
 /// analyze `doc` at `uri`, answer the definition targets at the
 /// needle — the uris, sorted (the world-identity the idempotency law
 /// compares)
-fn def_uris_at(
-    lsp: &RutLsp,
-    pool: &mut LocalPool,
-    uri: &str,
-    doc: &str,
-    needle: &str,
-) -> Vec<String> {
+fn def_uris_at(lsp: &Lsp, pool: &mut LocalPool, uri: &str, doc: &str, needle: &str) -> Vec<String> {
     let uri = uri.to_string();
     take(pool.run_until(lsp.analyze(uri.clone(), doc.to_string())));
     let (line, ch) = pos_of(doc, needle, 1);
@@ -217,12 +211,12 @@ fn def_uris_at(
 }
 
 /// [`def_uris_at`] at the shared scratch doc uri
-fn def_uris(lsp: &RutLsp, pool: &mut LocalPool, doc: &str, needle: &str) -> Vec<String> {
+fn def_uris(lsp: &Lsp, pool: &mut LocalPool, doc: &str, needle: &str) -> Vec<String> {
     def_uris_at(lsp, pool, "file:///ws/walkdoc.rut", doc, needle)
 }
 
 /// the walk over `roots` — the `WalkOut` JSON
-fn resolve(lsp: &RutLsp, pool: &mut LocalPool, roots: &[&str]) -> serde_json::Value {
+fn resolve(lsp: &Lsp, pool: &mut LocalPool, roots: &[&str]) -> serde_json::Value {
     let roots: Vec<String> = roots.iter().map(|s| s.to_string()).collect();
     take(pool.run_until(lsp.resolve_deps(serde_json::to_string(&roots).unwrap())))
 }
@@ -1042,7 +1036,7 @@ fn a_path_dep_with_no_manifest_hints_once() {
 
 #[test]
 fn resolving_without_an_env_is_the_error_envelope() {
-    let (lsp, mut pool) = RutLsp::spawn_native();
+    let (lsp, mut pool) = Lsp::spawn_native();
     let out = resolve(&lsp, &mut pool, &["/ws/nowhere"]);
     assert!(
         out["error"]

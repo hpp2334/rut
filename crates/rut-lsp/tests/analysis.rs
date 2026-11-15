@@ -1,17 +1,17 @@
 use ls_types::*;
 use rut_lexer::lexer::canonical;
 use rut_lexer::span::Span;
-use rut_lsp_wasm::analysis::analyze_unstamped;
-use rut_lsp_wasm::analysis::*;
+use rut_lsp::analysis::analyze_unstamped;
+use rut_lsp::analysis::*;
 
 /// the modeless analyze died with the mode leak — these tests pin
 /// grammar behavior through the unstamped facade entry, the uri
 /// spelling the mode (the filename convention)
 const IMPL_URI: &str = "file:///t/x.rut";
 use rut_ast::parser::Mode;
-use rut_lsp_wasm::check;
-use rut_lsp_wasm::check::{FileSrc, PkgFiles};
-use rut_lsp_wasm::LineIndex;
+use rut_lsp::check;
+use rut_lsp::check::{FileSrc, PkgFiles};
+use rut_lsp::LineIndex;
 use std::collections::BTreeMap;
 
 #[test]

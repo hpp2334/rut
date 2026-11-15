@@ -1,281 +1,129 @@
-//! rut-lsp-wasm — the language core AND its wasm ABI, one crate.
-//! The queries (`crate::analysis` and the sibling modules below) and the
-//! values live here beside the wasm-bindgen face; the VS Code extension
-//! instantiates it and registers its providers directly — no server
-//! process, no per-platform binaries, no second crate to keep in step.
+//! rut-lsp-wasm — the wasm-bindgen FACE over the rut language core.
+//! The queries, the values, the actor event loop, and the session
+//! state live in [`rut_lsp`] (the core crate — native-clean AND
+//! wasm32-clean; the VS Code extension instantiates this face and
+//! registers its providers directly — no server process, no
+//! per-platform binaries). The face is the boundary only: ONE class,
+//! [`RutLsp`], every method a one-line delegation onto the core's
+//! [`rut_lsp::Lsp`] handle — the names, the signatures, and the JSON
+//! envelopes are frozen (the JS glue in `js/` and the hosts depend on
+//! them byte for byte).
 //!
-//! wasm-bindgen over the language core (the `rut-wasm` pattern): the
-//! module exports ONE class, [`RutLsp`]; the host constructs it with
+//! The module exports ONE class; the host constructs it with
 //! `new RutLsp()` and calls its methods. Every method is an ASYNC RPC
-//! bridge (a `Promise` — the actor seam): the call posts one
-//! [`event_loop::Msg`] on the loop's mpsc inbox and awaits a oneshot
-//! reply, while ONE long-lived loop task owns the `SessionState` exclusively and
-//! answers messages FIFO — sync handlers over `&mut SessionState` (see
-//! [`event_loop`]). A dropped loop answers the error envelope; a
-//! panicked handler isolates to its own reply channel. Every text
-//! answer is the JSON envelope; the wasm-bindgen runtime owns the
-//! string copies both ways (the raw-ABI era's
-//! `rut_begin`/`rut_alloc` arena and its ptr/len plumbing are gone — no
-//! `unsafe` anywhere in this crate):
+//! bridge (a `Promise` — the actor seam lives in the core): the call
+//! posts one message on the loop's mpsc inbox and awaits a oneshot
+//! reply, while ONE long-lived loop task owns the session state
+//! exclusively and answers FIFO. A dropped loop answers the error
+//! envelope. Every text answer is the JSON envelope; the wasm-bindgen
+//! runtime owns the string copies both ways (no `unsafe` anywhere in
+//! this crate).
 //!
 //!   new RutLsp()                               the language core, with
-//!                                              the core prelude pre-indexed
+//!                                              the core prelude pre-indexed;
+//!                                              the loop parks on the JS
+//!                                              microtask queue
 //!   set_env(env)                               hand the core the READ-ONLY
 //!                                              host environment (`HostEnv`:
 //!                                              read/readDir/isDir/notify,
 //!                                              plus the OPTIONAL clock
-//!                                              `wakeAfter` — see `env`)
-//!                                              — the dep walk's
-//!                                              capability
-//!   resolve_deps(roots_json) -> String         the READ-ONLY dep walk over
-//!                                              the injected env: one JSON
-//!                                              array of workspace roots in,
-//!                                              the walk's answer (`WalkOut`:
-//!                                              the url rows it refused —
-//!                                              informational rows for
-//!                                              hosts) out; every mounted dep
-//!                                              lands in the SAME defs store
-//!                                              the index lanes write (see
-//!                                              `walk`) — the EAGER manual
-//!                                              door
-//!   reload_deps(roots_json) -> String          RELOAD the deps — the
-//!                                              level-triggered door: the
-//!                                              walk defers under the loop's
-//!                                              own 200ms window (the env's
-//!                                              optional `wakeAfter` clock)
-//!                                              and coalesces; the promise
-//!                                              carries the WalkOut once the
-//!                                              walk runs (`null` when a
-//!                                              later reload supersedes it)
-//!   legend() -> String                         token-type names, JSON array
-//!   analyze(uri, src) -> String                store the doc + return
-//!                                              {diags, tokens, symbols}
-//!   forget(uri)                                drop a closed doc
-//!   hover(uri, line, ch) -> String             LSP Hover JSON or null
-//!   complete(uri, src, line, ch) -> String     LSP CompletionItem array
-//!                                              over the doc's CURRENT
-//!                                              text (stored first — the
-//!                                              doc-sync lane; completion
-//!                                              fires on the keystroke,
-//!                                              the analyze lane
-//!                                              debounces)
-//!   definition(uri, line, ch) -> String        LSP Location array or null
-//!   type_definition(uri, line, ch) -> String   same shape
-//!   inlay(uri, sl, sc, el, ec) -> String       LSP InlayHint array or null
-//!   references(uri, line, ch, incl) -> String  LSP Location array or null
-//!   signature_help(uri, line, ch) -> String    LSP SignatureHelp or null
-//!   index_file(uri, src)                       index a workspace file
-//!   parse_manifest(text) -> String             rut.jsonc bytes -> the
-//!                                              dep-table JSON (or the
-//!                                              error envelope)
-//!   index_mod_at(uri, pkg, path, src)          index a source file at a
-//!                                              MOD PATH (the workspace
-//!                                              scan lane); the envelope
-//!                                              names the file's own mod
-//!                                              decls (the scan's mount
-//!                                              walk reads its next hop
-//!                                              from them)
+//!                                              `wakeAfter` — wrapped into
+//!                                              the core's `env::Io` by
+//!                                              `JsEnv`, `js_env`)
+//!
+//! plus the provider queries, the workspace-scan push, and the dep
+//! pull — all delegated verbatim (their contracts are spelled on the
+//! core's `Lsp` methods).
 //!
 //! The package the hosts consume is `pkg/`: `wasm-pack build --target
 //! web` writes the generated glue there, then `scripts/build-lsp-pkg.mjs`
 //! installs this crate's JS face (`js/index.js` — the one place that
 //! `JSON.parse`s the answers) and its declarations (`js/index.d.ts`)
-//! beside it. Hosts import `pkg/index.js` and never declare these shapes
-//! themselves; the field names live in `wire` (this module's serializers)
-//! and the JS face's d.ts mirror, locked by `tsc` in every host and by
-//! the extension's wire-shape e2e block.
+//! beside it. Hosts import `pkg/index.js` and never declare these
+//! shapes themselves; the field names live in the core's `wire` (the
+//! serializers) and the JS face's d.ts mirror, locked by `tsc` in
+//! every host and by the extension's wire-shape e2e block.
 //!
 //! THE SURFACE LAW — the ABI is exactly three lanes: the provider
-//! queries above; the workspace-scan push (`index_file`/`index_mod_at`/
-//! `parse_manifest` — the host's `findFiles` sees editor ignore
-//! semantics the env cannot); and the dep pull (`set_env` +
-//! `resolve_deps`/`reload_deps`). NO entry mutates dep state except through
-//! the injected env — the lock feed, the direct-dep stamp, and the named
-//! index lanes are SessionState internals the walk drives, not messages. The
-//! old push family (`set_lock`, `set_direct_deps`, `add_def_named`,
-//! `add_bundle`, `extract_bundle`, `extract_srczip`, `doc_len`) lived
-//! in the blind-wasm era and is gone; its behaviors survive through
-//! the walk (see `walk` and its tests).
-//!
-//! One deviation from `rut-wasm`'s one-shot model carries over from the
-//! raw ABI: an LSP serves a long-lived editing session, so the instance
-//! OWNS its session state (open docs + the index) for its lifetime —
-//! the host holds one `RutLsp` per boot and mutates it per request.
-//! The state lives in `SessionState` (see [`state`]), owned exclusively
-//! by the loop task ([`event_loop`]); the host's `RutLsp` is the inbox
-//! handle. Calls
-//! serialize on the loop's FIFO — single-threaded JS makes the order
-//! total, and no caller ever borrows the state.
+//! queries (`analyze`, `hover`, `complete` with src,
+//! definition/inlay/references/signature-help, `legend`, `forget`);
+//! the workspace-scan push (`index_file`/`index_mod_at`/`parse_manifest`
+//! — the host's `findFiles` respects editor ignore semantics the env
+//! cannot); and the dep pull (`set_env` + `resolve_deps`/
+//! `reload_deps`, the deferred door the hosts ride; `resolve_deps`
+//! stays as the eager manual door — tests, cold boot, env-less
+//! hosts). No entry may bypass the env capability to mutate dep
+//! state — the law lives in the core now; this face cannot spell a
+//! violation (it only forwards the core's own messages).
 
 use std::rc::Rc;
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
-mod event_loop;
-mod walk;
-mod wire;
+mod js_env;
+use js_env::JsEnv;
 
-// ---- the session state — the editing session's accumulated facts,
-// moved whole to `state`; the flat `crate::SessionState` path the
-// handlers spell stays through the re-export ----
-mod state;
-pub(crate) use state::SessionState;
-
-// ---- the language core — the queries and the values ----
-//
-// One crate now: the queries live beside the ABI that serves them, so
-// a feature cannot land on one face and miss the other. `query` is a
-// private directory with public leaves — the canonical paths stay the
-// flat `crate::analysis`, `crate::completion`, … that the ABI bodies
-// (and the tests) spell.
-mod query;
-
-pub use query::{analysis, check, completion, definition, inlay, references, signature_help};
-
-pub mod deps;
-pub mod env;
-pub mod hover;
-pub use rut_semantic::LineIndex;
-pub mod mods;
-// the classifier/document layer — re-exported under the crate's
-// historical `semantic` path so the queries keep one spelling (the
-// crate's ONLY frontend: no lexer/parser dep, see Cargo.toml)
-pub use rut_semantic as semantic;
-pub mod prelude;
-
-/// the language core as the host holds it — one per editing session.
-/// Not the state itself: the INBOX HANDLE. The loop task owns `SessionState`
-/// exclusively; every entry posts one `event_loop::Msg` and awaits the
-/// oneshot reply (the actor seam — the handlers are sync bodies over
-/// `&mut SessionState`, so no bridge can borrow across an await and no handler
-/// can post).
+/// the wasm face of the language core — one per editing session.
+/// Not the state itself: the DELEGATION HANDLE over the core's
+/// [`rut_lsp::Lsp`] inbox (the loop task owns the session state
+/// exclusively; see the core's `Lsp` docs for the actor seam).
 #[wasm_bindgen]
 pub struct RutLsp {
-    tx: futures::channel::mpsc::UnboundedSender<event_loop::Msg>,
+    core: rut_lsp::Lsp,
 }
 
 #[wasm_bindgen]
 impl RutLsp {
-    /// the session boots with the prelude pre-indexed — the same
-    /// the crate indexes at construction
+    /// the session boots with the prelude pre-indexed — the loop
+    /// parks on the JS microtask queue (`spawn_local`), the wasm
+    /// spelling of the core's boot seam
     #[wasm_bindgen(constructor)]
     pub fn new() -> RutLsp {
         RutLsp {
-            tx: event_loop::spawn(SessionState::boot()),
+            core: rut_lsp::Lsp::boot(wasm_bindgen_futures::spawn_local),
         }
     }
 
-    // ---- the bridges ----
-    //
-    // Every entry: own the arguments (an async future must not borrow —
-    // the JS caller may drop anything between microtasks), post one
-    // message, await the reply. A dropped loop answers the loop-gone
-    // error envelope; a panicked handler answers through its canceled
-    // oneshot the same way.
-
-    /// post one message, await its reply — the shared bridge body. Both
-    /// failure shapes (the inbox refused the post, the reply channel
-    /// dropped) map onto `Canceled`: the loop cannot answer.
-    async fn rpc(
-        &self,
-        build: impl FnOnce(event_loop::Tx) -> event_loop::Msg,
-    ) -> Result<event_loop::Reply, futures::channel::oneshot::Canceled> {
-        let (tx, rx) = futures::channel::oneshot::channel();
-        self.tx
-            .unbounded_send(build(tx))
-            .map_err(|_| futures::channel::oneshot::Canceled)?;
-        rx.await
-    }
-
-    /// the text-envelope bridge: the JSON answer, or the loop-gone
-    /// error envelope
-    async fn text(&self, build: impl FnOnce(event_loop::Tx) -> event_loop::Msg) -> String {
-        match self.rpc(build).await {
-            Ok(event_loop::Reply::Text(s)) => s,
-            // a void completion (a superseded reload answers Done — its
-            // WalkOut merged into the later reload's promise)
-            Ok(_) => "null".to_string(),
-            Err(_) => event_loop::loop_gone(),
-        }
-    }
+    // ---- the bridges — one-line delegations, the JS API is frozen ----
 
     /// the semantic-token legend (names in token-type index order)
     pub async fn legend(&self) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Legend { tx }))
-            .await
+        self.core.legend().await
     }
 
-    /// open / FULL-sync change: store the document, return one analysis —
-    /// `{diags, tokens, symbols}` (the values the LSP face would push over
-    /// the wire). The diags are the MERGED set (B1+B2): the parse lane's
-    /// diags plus the check lane's — the doc's package (its stamped twin
-    /// names it) compiles with its dep closure and the checker's per-file
-    /// diags map back through the file stamps. No package context →
-    /// parse-only, exactly the pre-B1 answer.
+    /// open / FULL-sync change: store the document, return one
+    /// analysis — `{diags, tokens, symbols}`
     pub async fn analyze(&self, uri: String, src: String) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Analyze { uri, src, tx }))
-            .await
+        self.core.analyze(uri, src).await
     }
 
-    /// close: drop the document (the prelude/workspace index stays). The
-    /// await is ordering only — this lane answers no payload.
+    /// close: drop the document (the prelude/workspace index stays)
     pub async fn forget(&self, uri: String) {
-        let _ = self
-            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Forget { uri, tx }))
-            .await;
+        self.core.forget(uri).await;
     }
 
-    /// hover at an LSP position — the doc index first, then the
-    /// prelude + workspace; `null` when there's nothing to say
+    /// hover at an LSP position — `null` when there's nothing to say
     pub async fn hover(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Hover { uri, line, ch, tx }))
-            .await
+        self.core.hover(uri, line, ch).await
     }
 
-    /// completions over the document's CURRENT text — `analyze`'s
-    /// uri+src shape: the text is stored FIRST, so the tiers lex the
-    /// text the cursor sits in, dot included. The extension debounces
-    /// `analyze` (~200 ms) while completion fires on the keystroke — a
-    /// stored-only read would race that window and answer a stale tail
-    /// (typing `log.` would hit the bare keyword dump when the stored
-    /// doc still ended at `log`), so the source always rides the call.
+    /// completions over the document's CURRENT text (`uri`+`src`,
+    /// the doc-sync lane)
     pub async fn complete(&self, uri: String, src: String, line: u32, ch: u32) -> String {
-        self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::Complete {
-                uri,
-                src,
-                line,
-                ch,
-                tx,
-            })
-        })
-        .await
+        self.core.complete(uri, src, line, ch).await
     }
 
-    /// definitions at an LSP position — the doc index first, then the
-    /// prelude + workspace; `null` when the doc is unknown, `[]` when nothing
-    /// resolves. Targets carry the doc URI, a workspace origin, or the prelude's
-    /// true `rut/...` source path (relative — the extension
-    /// resolves it against the workspace). The doc's file-module context
-    /// rides from its stamped twin (see `doc_mods_of`) — the mod-edge
-    /// clicks and the own-package use lanes key on it.
+    /// definitions at an LSP position — LSP `Location` array or null
     pub async fn definition(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::Definition { uri, line, ch, tx }))
-            .await
+        self.core.definition(uri, line, ch).await
     }
 
-    /// type definitions at an LSP position (an expression -> its type's
-    /// declaration) — same shape as `definition`
+    /// type definitions at an LSP position — same shape
     pub async fn type_definition(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::TypeDefinition { uri, line, ch, tx }))
-            .await
+        self.core.type_definition(uri, line, ch).await
     }
 
-    /// inlay hints for a document range — the inline inference display:
-    /// TYPE hints on unannotated bindings + PARAMETER hints at exact-arity
-    /// call sites. `null` when the doc is unknown, `[]` when nothing
-    /// resolves. The hints are full LSP values (position + label + kind +
-    /// tooltip); the client renders them.
+    /// inlay hints for a document range — LSP `InlayHint` array or null
     pub async fn inlay(
         &self,
         uri: String,
@@ -284,140 +132,56 @@ impl RutLsp {
         end_line: u32,
         end_ch: u32,
     ) -> String {
-        self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::Inlay {
-                uri,
-                start_line,
-                start_ch,
-                end_line,
-                end_ch,
-                tx,
-            })
-        })
-        .await
+        self.core
+            .inlay(uri, start_line, start_ch, end_line, end_ch)
+            .await
     }
 
-    /// references — the definition index read BACKWARDS: every position
-    /// whose go-to-definition lands on the declaration under `line`/`ch`.
-    /// Within-file through the binding pass (shadow-aware), cross-file
-    /// through the use graph's reverse edges. `include_decl` (0/1) follows
-    /// the LSP toggle. `null` when the doc is unknown, `[]` when nothing
-    /// resolves — the same `{uri, range}` Location JSON `definition`
-    /// speaks.
+    /// references — LSP `Location` array or null
     pub async fn references(&self, uri: String, line: u32, ch: u32, include_decl: u32) -> String {
-        self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::References {
-                uri,
-                line,
-                ch,
-                include_decl,
-                tx,
-            })
-        })
-        .await
+        self.core.references(uri, line, ch, include_decl).await
     }
 
-    /// signature help at an LSP position — the callee resolves through the
-    /// same machinery the parameter-name hints ride (free calls by unique
-    /// recorded params, methods through the receiver's type head), the
-    /// signature renders verbatim, the active parameter comes from the
-    /// comma/paren depth at the request position. Ambiguity or arity
-    /// mismatch → `null` (never wrong help).
+    /// signature help at an LSP position — LSP `SignatureHelp` or null
     pub async fn signature_help(&self, uri: String, line: u32, ch: u32) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::SignatureHelp { uri, line, ch, tx }))
-            .await
+        self.core.signature_help(uri, line, ch).await
     }
 
-    /// index one workspace file (the host's stand-in for an fs walk —
-    /// server's fs walk — the 500-file cap is the caller's). Re-indexing
-    /// a URI replaces its entry. The await is ordering only.
+    /// index one workspace file (the host's stand-in for an fs walk)
     pub async fn index_file(&self, uri: String, src: String) {
-        let _ = self
-            .rpc(|tx| event_loop::Msg::Cmd(event_loop::Cmd::IndexFile { uri, src, tx }))
-            .await;
+        self.core.index_file(uri, src).await;
     }
 
-    // ---- the deps face (crate::deps — one engine, no JS-side parsing) ----
-
-    /// parse one `rut.jsonc` — the dep-table JSON out (the module's
-    /// identity, its entry sources with the mode each indexes in, and
-    /// its dep rows with the url rows' cache paths and lock-sourced
-    /// pins). A malformed manifest is the error envelope — the host
-    /// surfaces it as a hint.
+    /// parse one `rut.jsonc` — the dep-table JSON out (or the error
+    /// envelope)
     pub async fn parse_manifest(&self, text: String) -> String {
-        self.text(|tx| event_loop::Msg::Cmd(event_loop::Cmd::ParseManifest { text, tx }))
-            .await
+        self.core.parse_manifest(text).await
     }
 
     /// hand the core the READ-ONLY host environment — one object
     /// carrying `read` / `readDir` / `isDir` / `notify` (the JS face's
-    /// `HostEnv`, `js/index.d.ts`). The four functions are cached off
-    /// the object at this call ([`env::JsEnv`]) and the loop stores
-    /// the capability; the dep walk ([`resolve_deps`](Self::resolve_deps))
-    /// reads through it and nothing else does. A host that never
-    /// calls it keeps the env-less core (the demo path), and its
-    /// `resolve_deps` answers the no-env error envelope — loud, never
-    /// a silent empty walk. Replace-on-reinject: a later call swaps
-    /// the capability. The await is ordering only.
+    /// `HostEnv`, `js/index.d.ts`), wrapped into the core's
+    /// [`rut_lsp::env::Io`] by [`JsEnv`]. Replace-on-reinject; the
+    /// await is ordering only.
     pub async fn set_env(&self, env: js_sys::Object) {
-        let _ = self
-            .rpc(|tx| event_loop::Msg::SetEnv {
-                env: Rc::new(crate::env::JsEnv::new(env)) as Rc<dyn crate::env::Io>,
-                tx,
-            })
-            .await;
+        let io = Rc::new(JsEnv::new(env)) as Rc<dyn rut_lsp::env::Io>;
+        self.core.set_env_io(io).await;
     }
 
-    /// the READ-ONLY dep walk (`walk` — the extension's manifest walk
-    /// moved into the crate): one JSON array of workspace-root paths
-    /// in, the walk's answer out. Per root: its `rut.lock` feeds the
-    /// pin ledger, its `rut.jsonc` walks — entries and mod trees index
-    /// through the SAME index lanes the workspace scan uses, path
-    /// rows recurse cycle-safe under the depth/file budgets, and url
-    /// rows mount from the global dep store (`$RUT_HOME/deps`, the
-    /// address rut-driver derives) when its `meta.json` vouches the
-    /// lock pin — never fetched, never written; a refused row answers
-    /// one `missing` row plus ONE hint per reason through the env's
-    /// notify lane. The answer is `{"missing": [...]}` (see
-    /// `wire::WalkOut`); the mounted world itself is the defs store's,
-    /// exactly as a host-indexed dep leaves it.
+    /// the READ-ONLY dep walk — one JSON array of workspace roots in,
+    /// the walk's `WalkOut` envelope out (the EAGER manual door)
     pub async fn resolve_deps(&self, roots_json: String) -> String {
-        let roots = match serde_json::from_str::<Vec<String>>(&roots_json) {
-            Ok(r) => r,
-            Err(e) => return json_envelope(wire::Error::new(e.to_string())),
-        };
-        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::ResolveDeps { roots, tx }))
-            .await
+        self.core.resolve_deps(roots_json).await
     }
 
-    /// RELOAD the deps — the level-triggered door onto the same walk
-    /// [`resolve_deps`](Self::resolve_deps) runs eagerly: the walk
-    /// DEFERS under the loop's own debounce window (200ms, armed
-    /// through the env's optional `wakeAfter` clock — see
-    /// [`env::Io::arm_wake`]) and COALESCES, so a burst of reloads
-    /// walks once over the freshest roots (a superseded reload's
-    /// promise answers `null` — merged, not lost; the LAST reload's
-    /// promise carries the world). The promise resolves with the walk's
-    /// `WalkOut` envelope once the deferred walk runs — the answer
-    /// rides this RPC's own reply channel, no push lane exists. No
-    /// clock on the env ⇒ the walk runs eagerly in-turn (D3), exactly
-    /// the eager door.
+    /// RELOAD the deps — the level-triggered door: defers under the
+    /// loop's own debounce window and coalesces
     pub async fn reload_deps(&self, roots_json: String) -> String {
-        let roots = match serde_json::from_str::<Vec<String>>(&roots_json) {
-            Ok(r) => r,
-            Err(e) => return json_envelope(wire::Error::new(e.to_string())),
-        };
-        self.text(move |tx| event_loop::Msg::Cmd(event_loop::Cmd::ReloadDeps { roots, tx }))
-            .await
+        self.core.reload_deps(roots_json).await
     }
 
     /// index one dep source file under its module NAME at a MOD PATH —
-    /// the mod-aware twin of `index_named_at` (the dep walk's per-file
-    /// move for a mod-carrying package: the root at `""`, each child at
-    /// its path). Returns the parsed file's own `mod` declarations —
-    /// `{ "decls": [{ "name", "vis" }] }` — so the host's mount walk
-    /// reads its next hop from the wasm's parse (JS moves bytes, the
-    /// module parses; no JS-side rut parsing).
+    /// the envelope names the file's own `mod` declarations
     pub async fn index_mod_at(
         &self,
         uri: String,
@@ -425,16 +189,7 @@ impl RutLsp {
         mod_path: String,
         src: String,
     ) -> String {
-        self.text(|tx| {
-            event_loop::Msg::Cmd(event_loop::Cmd::IndexModAt {
-                uri,
-                pkg,
-                mod_path,
-                src,
-                tx,
-            })
-        })
-        .await
+        self.core.index_mod_at(uri, pkg, mod_path, src).await
     }
 }
 
@@ -442,64 +197,4 @@ impl Default for RutLsp {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// the native ABI harness — the executor seam's native half (cfg-gated:
-/// the pool never ships in the wasm). The loop + its bridges over a
-/// deterministic single-threaded `LocalPool`; tests drive
-/// `pool.run_until(bridge)` and own the ordering. (A wasm `RutLsp`
-/// parks its loop on `spawn_local` instead — one cfg seam, two
-/// executors.)
-#[cfg(not(target_family = "wasm"))]
-#[doc(hidden)]
-impl RutLsp {
-    pub fn spawn_native() -> (RutLsp, futures::executor::LocalPool) {
-        use futures::task::LocalSpawnExt;
-        let (tx, rx) = event_loop::pair();
-        let pool = futures::executor::LocalPool::new();
-        // tx.clone() is the loop's SELF-ADDRESS — the wake source the
-        // SetEnv arm installs captures it (the clock's tick re-enters
-        // this loop), while `tx` moves to the host handle
-        pool.spawner()
-            .spawn_local(event_loop::run(SessionState::boot(), tx.clone(), rx))
-            .expect("the loop parks on the fresh pool");
-        (RutLsp { tx }, pool)
-    }
-
-    /// the native tests' env seam: hand the loop ANY [`env::Io`] (the
-    /// recording fs wrapper the walk tests drive) through the same
-    /// door `set_env` posts its `JsEnv` — one capability lane, two
-    /// constructors. cfg-gated like `spawn_native`: the wasm face
-    /// builds its `JsEnv` at the bridge, native tests have no JS.
-    pub async fn set_env_io(&self, io: Rc<dyn env::Io>) {
-        let _ = self.rpc(|tx| event_loop::Msg::SetEnv { env: io, tx }).await;
-    }
-}
-
-// ---- the envelope writers (the answers are JSON strings) ----
-//
-// The field names live in `wire` — this module only serializes. The
-// error envelope spells `{"error": …}`; every other answer is the
-// struct `wire` declares, so the JS face's `.d.ts` has one mirror to
-// keep true.
-
-fn json_envelope<T: serde::Serialize>(value: T) -> String {
-    match serde_json::to_string(&value) {
-        Ok(json) => json,
-        Err(_) => "null".to_string(), // unreachable for these types
-    }
-}
-
-/// the definition-target envelope — `DefLocation` is serde-free in the
-/// queries (they carry no serializer), so this module spells
-/// the LSP `Location` JSON: `{ uri, range }`
-fn locations_envelope(locs: &[crate::definition::DefLocation]) -> String {
-    let value: Vec<wire::Location> = locs
-        .iter()
-        .map(|l| wire::Location {
-            uri: l.uri.clone(),
-            range: l.range,
-        })
-        .collect();
-    json_envelope(value)
 }

@@ -1,0 +1,68 @@
+[package]
+name = "rut-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "the rut language core for language servers — the queries, the actor event loop, and the session state behind the editor ABI (the wasm-bindgen face lives in rut-lsp-wasm)"
+
+[lib]
+name = "rut_lsp"
+path = "src/lib.rs"
+# rlib — the wasm face, the tests, and any native embedder link the
+# queries directly (a cdylib face would be the wasm crate's business)
+
+# The language core: the graph is the frontend crates + the driver's
+# pure core + ls-types, plus serde for the envelope wire. Native-clean
+# — the tests run in the workspace's native nextest lane — and
+# wasm32-clean, proven by the face's CI lane.
+[dependencies]
+# THE LAYER LAW — this crate's ONLY frontend is rut-semantic (the
+# document layer: Document (parse + its read/join doors), mode
+# derivation, the position math). NO rut-lexer, and src/ never touches
+# rut_ast::parser:: — nobody here drives normalize → lex → parse by
+# hand (the grammar/corpus TESTS may, via dev-dependencies: the
+# sanctioned seam). rut-ast stays as shared tree VOCABULARY (hover
+# walks trees); rut-driver carries the manifest/bundle bytes;
+# rut-core the checker's run chain.
+rut-semantic = { path = "../rut-semantic" }
+rut-ast = { path = "../rut-ast" }
+rut-core = { path = "../rut-core" }
+# the manifest/bundle bridge (`deps`): parse_manifest + the STORE-only
+# zip reader live here, and the crate is wasm32-clean (rut-wasm already
+# builds it for the shim) — pure bytes in, values out
+rut-driver = { path = "../rut-driver" }
+# LSP values — the same crate tower-lsp-server re-exports; the queries
+# produce them whole and `wire` serializes them for the ABI
+ls-types = "0.0.6"
+# the url-dep cache filename (`.rut/cache/<sha256(url)>.rutbundle`) is
+# computed Rust-side — JS never hashes URLs; pure Rust, wasm-clean
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] } # user-approved: the `wire` structs derive Serialize (serde_json's own backend; no runtime beyond the derive)
+serde_json = "1" # user-approved: serializes the ls-types values over the ABI
+# the actor seam: the event loop's mpsc inbox + oneshot replies ride
+# the channels (std — the mpsc lives behind it; the wasm target ships
+# std anyway). No executor is picked here: the loop's parking is the
+# host's choice (`Lsp::boot`'s spawn seam — the wasm face hands
+# `spawn_local`, native tests a LocalPool)
+futures = { version = "0.3", default-features = false, features = [
+    "std",
+    "async-await",
+] }
+
+# `Lsp::spawn_native`'s LocalPool — native targets only; the wasm never
+# references the executor
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+futures = { version = "0.3", features = ["executor"] }
+
+[dev-dependencies]
+# the TEST seam: the grammar/corpus tests drive the parser directly —
+# production code never may (the [dependencies] block above is the law;
+# this block is the sanctioned exception, like the futures LocalPool)
+rut-lexer = { path = "../rut-lexer" }
+# the mod-carrying bundle fixture is packed through the same writer the
+# CLI uses (wasm32-clean — it rides the main graph already)
+rut-driver = { path = "../rut-driver" }
+
+# opt into the workspace lint gate (warnings = deny)
+[lints]
+workspace = true

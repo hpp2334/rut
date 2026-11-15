@@ -77,8 +77,8 @@ pub enum Msg {
     Wake,
     /// the injected READ-ONLY host environment (the dep walk's
     /// capability — `crate::env`). Carried as the [`env::Io`] trait
-    /// object: the wasm bridge wraps its `JsEnv` in the `Rc` at
-    /// `set_env`, native tests hand over their own `Io` — one
+    /// object: the wasm face wraps its `JsEnv` in the `Rc` at
+    /// `set_env`, native callers hand over their own `Io` — one
     /// capability lane, two constructors.
     SetEnv { env: Rc<dyn crate::env::Io>, tx: Tx },
 }
@@ -619,27 +619,9 @@ fn walk_now(l: &mut Loop, roots: &[String]) -> Result<wire::WalkOut, wire::Error
     }
 }
 
-/// the executor seam: the wasm face parks the loop on the JS microtask
-/// queue (`spawn_local`); native ABI tests drive it on a `LocalPool`
-/// they own (`RutLsp::spawn_native`). Answers the inbox handle the
-/// bridges post on.
-pub(crate) fn spawn(state: SessionState) -> UnboundedSender<Msg> {
-    let (tx, rx) = unbounded::<Msg>();
-    #[cfg(target_family = "wasm")]
-    wasm_bindgen_futures::spawn_local(run(state, tx.clone(), rx));
-    // A native build has no executor for a plain `RutLsp::new()` — the
-    // ABI face belongs to the wasm; native tests go through
-    // `spawn_native`, which parks the loop on a pool IT hands back.
-    // Here the inbox drops and every bridge answers the loop-gone
-    // envelope — the honest dead-loop shape.
-    #[cfg(not(target_family = "wasm"))]
-    drop((state, rx));
-    tx
-}
-
-/// the channel pair behind [`spawn`] — `spawn_native` parks the loop
-/// itself and needs the receiver (native targets only).
-#[cfg(not(target_family = "wasm"))]
+/// the channel pair behind every boot — `Lsp::boot` hands the loop
+/// body to the CALLER's spawn seam (the wasm face: `spawn_local`;
+/// `Lsp::spawn_native`: a LocalPool IT hands back).
 pub(crate) fn pair() -> (UnboundedSender<Msg>, UnboundedReceiver<Msg>) {
     unbounded::<Msg>()
 }

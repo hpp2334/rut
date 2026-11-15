@@ -7,9 +7,9 @@
 //! below ports the old surface's mod-tree assertions onto the same
 //! lane the walk mounts through.
 
-use rut_lsp_wasm::deps::index_dep;
-use rut_lsp_wasm::hover::DefIndex;
-use rut_lsp_wasm::prelude;
+use rut_lsp::deps::index_dep;
+use rut_lsp::hover::DefIndex;
+use rut_lsp::prelude;
 use std::collections::HashSet;
 
 /// the myhost fixture tree — the repo's own host pkg, mounted the way
@@ -83,7 +83,7 @@ fn the_prelude_index_stamps_the_manifest_shape() {
     let doc = "entry fn main() -> nil { }\n";
     let ddoc = doc_of(doc, rut_ast::parser::Mode::Impl);
     let (d2, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
-    let di = rut_lsp_wasm::hover::index(&ddoc, rut_lsp_wasm::hover::Mount::default());
+    let di = rut_lsp::hover::index(&ddoc, rut_lsp::hover::Mount::default());
     let core = index_dep(
         "core",
         "core",
@@ -91,13 +91,13 @@ fn the_prelude_index_stamps_the_manifest_shape() {
         "pub fn ambient_offered() -> i32 { return 1; }\n".to_string(),
     );
     let idxs = [&di, &core];
-    let items = rut_lsp_wasm::completion::complete(
+    let items = rut_lsp::completion::complete(
         &idxs,
         toks,
         ast,
         d2.len() as u32,
         d2,
-        &rut_lsp_wasm::mods::DocMods::default(),
+        &rut_lsp::mods::DocMods::default(),
         &HashSet::new(),
     );
     assert!(
@@ -176,11 +176,11 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
     let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
     let doc_uri = "file:///t/main.rut";
-    let doc_idx = rut_lsp_wasm::hover::index(&ddoc, rut_lsp_wasm::hover::Mount::doc(doc_uri));
+    let doc_idx = rut_lsp::hover::index(&ddoc, rut_lsp::hover::Mount::doc(doc_uri));
     let idxs = myhost_chain();
     let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
-    let dm = rut_lsp_wasm::mods::DocMods::default();
-    let ctx = rut_lsp_wasm::definition::Ctx {
+    let dm = rut_lsp::mods::DocMods::default();
+    let ctx = rut_lsp::definition::Ctx {
         doc_uri,
         toks,
         ast,
@@ -189,7 +189,7 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     };
     // the leaf: the `connect` inside the braces
     let leaf = normalized.find("connect").expect("the leaf") as u32;
-    let hits = rut_lsp_wasm::definition::definition(&ctx, leaf);
+    let hits = rut_lsp::definition::definition(&ctx, leaf);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri, "rut/myhost/src/net/mod.d.rut",
@@ -197,7 +197,7 @@ fn definition_over_a_qualified_host_use_jumps_into_the_tree() {
     );
     // the segment: `net` in the use path — the declaring edge
     let seg = normalized.find("net").expect("the segment") as u32;
-    let hits = rut_lsp_wasm::definition::definition(&ctx, seg);
+    let hits = rut_lsp::definition::definition(&ctx, seg);
     assert_eq!(hits.len(), 1, "{hits:?}");
     assert_eq!(
         hits[0].uri, "rut/myhost/src/myhost.d.rut",
@@ -213,18 +213,12 @@ fn hover_over_a_qualified_host_use_renders_the_row() {
     let ddoc = doc_of(src, rut_ast::parser::Mode::Impl);
     let (normalized, toks, ast) = (ddoc.src(), ddoc.toks(), ddoc.ast());
     let doc_uri = "file:///t/main.rut";
-    let doc_idx = rut_lsp_wasm::hover::index(&ddoc, rut_lsp_wasm::hover::Mount::doc(doc_uri));
+    let doc_idx = rut_lsp::hover::index(&ddoc, rut_lsp::hover::Mount::doc(doc_uri));
     let idxs = myhost_chain();
     let chain: Vec<&DefIndex> = std::iter::once(&doc_idx).chain(idxs.iter()).collect();
     let leaf = normalized.find("connect").expect("the leaf") as u32;
-    let h = rut_lsp_wasm::hover::hover(
-        &chain,
-        toks,
-        ast,
-        &rut_lsp_wasm::mods::DocMods::default(),
-        leaf,
-    )
-    .expect("the leaf hovers");
+    let h = rut_lsp::hover::hover(&chain, toks, ast, &rut_lsp::mods::DocMods::default(), leaf)
+        .expect("the leaf hovers");
     assert!(h.markdown.contains("connect"), "{}", h.markdown);
     assert!(
         h.markdown.contains("myhost"),

@@ -1,9 +1,9 @@
 use rut_ast::Vis;
 use rut_lexer::span::Span;
-use rut_lsp_wasm::hover::DefIndex;
-use rut_lsp_wasm::hover::Mount;
-use rut_lsp_wasm::hover::{ModDef, TyDef, TyForm};
-use rut_lsp_wasm::mods::*;
+use rut_lsp::hover::DefIndex;
+use rut_lsp::hover::Mount;
+use rut_lsp::hover::{ModDef, TyDef, TyForm};
+use rut_lsp::mods::*;
 
 /// a named index standing at `mod_path` with the given mod edges
 fn mod_index(pkg: &str, mod_path: &str, edges: &[(&str, Vis)]) -> DefIndex {
