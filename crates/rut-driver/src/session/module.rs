@@ -503,13 +503,11 @@ mod srczip_tests {
 
     #[test]
     fn from_srczip_mounts_the_real_std_nmapset() {
-        // the frozen std-v16 envelope — committed, immutable, the
-        // exact bytes a primed cache serves for the pinned url
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../dist/std-v16/nmapset.zip"
-        );
-        let bytes = std::fs::read(path).expect("the committed std-v16 envelope");
+        // the current std envelope — committed, immutable, the exact
+        // bytes a primed cache serves for the pinned url (the dist/std
+        // mirror of the std-vNN cut)
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std/nmapset.zip");
+        let bytes = std::fs::read(path).expect("the committed std envelope");
         let walk = Mounted::from_srczip(&bytes).expect("the real zip mounts");
         assert_eq!(walk.root, "nmapset");
         let specs: Vec<&str> = walk.pkgs.iter().map(|p| p.spec.as_str()).collect();

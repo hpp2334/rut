@@ -190,10 +190,12 @@ git writes); `node scripts/publish-std.cjs --dry-run` runs the publish
 gates and PRINTS the tag + push without doing them (it still derives the
 tag from origin).
 
-History: the `.rutbundle` bin lane is retired. The frozen `dist/std*`
-envelopes (`dist/std/`, `dist/std-v12/`, `dist/std-v13/`, …) stay committed
-untouched — old readers and test fixtures still read them — and the old
-pack script lives in git history.
+History: the `.rutbundle` bin lane is retired and its committed
+envelopes are GONE — the `dist/std-v8`…`std-v16/` dirs and the
+`dist/std/*.rutbundle` mirrors were purged (their bytes refuse at the
+current toolchain's doors). The only committed envelope is the current
+cut: `dist/std-vNN/` + the `dist/std/` zip mirror. The old pack script
+lives in git history.
 
 ## VS Code extension — `npm run release` (build → gates → pack)
 

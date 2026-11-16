@@ -1,8 +1,9 @@
 //! flow e2e — the `rut/flow` push-pipeline package through the shipped
-//! bundle lane: the consumer world mounts the committed `dist/std`
-//! bundles (pouch + nmapset + flow — the exact bytes jsDelivr serves),
-//! and every case runs the full pipeline: compile → decode → verify →
-//! interpret. The surface: the spelled adapters at every entry
+//! source-zip lane: the consumer world mounts the unpacked `dist/std`
+//! flow zip (the exact bytes jsDelivr serves at the pinned tag — its
+//! closure rides inside), and every case runs the full pipeline:
+//! compile → decode → verify → interpret. The surface: the spelled
+//! adapters at every entry
 //! (`VecFlow<i32>(nums).into_flow()` / `ArrFlow<i32>(a).into_flow()` /
 //! `StrFlow(s).into_flow()` / `BytesFlow(b).into_flow()` — primitives
 //! and bare containers carry no members, the wrappers ARE the
@@ -37,44 +38,46 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The consumer world: core + calc mounted, the flow closure's bundles
-/// from `dist/std` (the committed artifacts), ink for the logger.
+/// The flow closure's unpacked zip — the exact bytes jsDelivr serves
+/// at the pinned tag: the zip carries its closure closed (the
+/// rewritten rows resolve inside), so ONE unpack mounts the whole
+/// graph — pouch + nmapset + nmap_host ride inside it. This is the
+/// source transport's own lane (`rut install` unpacks the same bytes
+/// into `deps/<name>@<fp16>/` and mounts the directory package it
+/// carries).
+fn unpacked_flow() -> Vec<rut_driver::Mounted> {
+    let base = root();
+    let bytes = std::fs::read(base.join("dist/std/flow.zip"))
+        .unwrap_or_else(|e| panic!("dist/std/flow.zip: {e}"));
+    let entries =
+        rut_driver::bundle::read_srczip(&bytes).unwrap_or_else(|e| panic!("read flow.zip: {e}"));
+    static UNPACK_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "rut-flow-e2e-{}-{}",
+        std::process::id(),
+        UNPACK_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    for (path, data) in &entries {
+        let p = dir.join(path);
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&p, data).unwrap();
+    }
+    rut_native::dir_pkgs(&dir)
+        .unwrap_or_else(|e| panic!("mount flow (unpacked zip): {e}"))
+        .pkgs
+}
+
+/// The consumer world: core + calc mounted, the flow closure's
+/// unpacked zip, ink for the logger.
 fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
     let base = root();
     let mut world = rut_native::dir_pkgs(&base.join("rut/ink"))
         .expect("mount ink")
         .pkgs;
-    // flow's zip carries its closure closed (the rewritten rows resolve
-    // inside): pouch + nmapset + nmap_host ride inside it, so the
-    // consumer mounts ONE unpacked zip — the exact bytes jsDelivr serves
-    // at the pinned tag, the source transport's own lane (`rut install`
-    // unpacks the same bytes into `deps/<name>@<fp16>/` and mounts the
-    // directory package it carries)
-    {
-        let bytes = std::fs::read(base.join("dist/std/flow.zip"))
-            .unwrap_or_else(|e| panic!("dist/std/flow.zip: {e}"));
-        let entries = rut_driver::bundle::read_srczip(&bytes)
-            .unwrap_or_else(|e| panic!("read flow.zip: {e}"));
-        static UNPACK_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "rut-flow-e2e-{}-{}",
-            std::process::id(),
-            UNPACK_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        for (path, data) in &entries {
-            let p = dir.join(path);
-            if let Some(parent) = p.parent() {
-                std::fs::create_dir_all(parent).unwrap();
-            }
-            std::fs::write(&p, data).unwrap();
-        }
-        world.extend(
-            rut_native::dir_pkgs(&dir)
-                .unwrap_or_else(|e| panic!("mount flow (unpacked zip): {e}"))
-                .pkgs,
-        );
-    }
+    world.extend(unpacked_flow());
     world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     // the root DECLARES its uses structurally — exactly the heads this
     // world mounts (calc, ink, pouch, nmapset, flow; the bundles ride
@@ -486,18 +489,10 @@ entry fn main() -> nil {
 fn unannotated_lambda_diagnoses_with_the_fix() {
     // the inference ladder's last rung is the diagnostic: an
     // unannotated lambda cannot drive the method's inference
-    let base = root();
-    let mut world = rut_native::dir_pkgs(&base.join("rut/ink"))
+    let mut world = rut_native::dir_pkgs(&root().join("rut/ink"))
         .expect("ink")
         .pkgs;
-    for b in ["pouch", "nmapset", "flow"] {
-        let bytes = std::fs::read(base.join(format!("dist/std/{b}.rutbundle"))).expect(b);
-        world.extend(
-            rut_driver::Mounted::from_bundle(&bytes)
-                .expect("mount bundle")
-                .pkgs,
-        );
-    }
+    world.extend(unpacked_flow());
     world.push(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"));
     world.push(
         rut_driver::Mounted::source(

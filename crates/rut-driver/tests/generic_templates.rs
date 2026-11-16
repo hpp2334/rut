@@ -6,7 +6,7 @@
 //!    the same consumer over the DIRECTORY world (the source lane): the
 //!    closure compiles clean, verifies clean, runs to the same answer,
 //!    and the fn inventories agree.
-//! 2. **The templates section** — every committed std bundle with an
+//! 2. **The templates section** — every packed std bundle with an
 //!    open generic surface carries template rows whose fids sit inside
 //!    the declared window and whose param rows spell `#<param>`
 //!    placeholders.
@@ -288,11 +288,15 @@ fn nmapset_bundle_served_shapes_match_the_directory_lane() {
 // ---- the templates section ------------------------------------------
 
 #[test]
-fn committed_generic_bundles_carry_template_rows_in_surface_order() {
+fn packed_std_bundles_carry_template_rows_in_surface_order() {
+    // the LIVE packs (the committed envelope lane is gone — the same
+    // trees the cut packs, packed in-test): every std pkg with an open
+    // generic surface carries template rows whose fids sit inside the
+    // declared window and whose param rows spell `#<param>`
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     for name in ["json", "flow", "pouch", "nmapset"] {
-        let bytes = std::fs::read(base.join(format!("dist/std/{name}.rutbundle")))
-            .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
+        let bytes = rut_native::pack_dir(&base.join("rut").join(name))
+            .unwrap_or_else(|e| panic!("pack rut/{name}: {e}"));
         for pkg in rut_driver::Mounted::from_bundle(&bytes)
             .expect("mount")
             .pkgs

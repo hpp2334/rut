@@ -12,7 +12,7 @@ use rut_lsp::Lsp;
 /// the CDN url's own cache filename (the URL STRING is hashed, never
 /// the bytes) — the row the BOOT-EMPTY ledger leaves unpinned
 const POUCH_CACHE: &str =
-    ".rut/cache/02bcf87de17b5c095f2c1a768f20f2506a10b9a56a1290ffe4241536e672dbe0.rutbundle";
+    ".rut/cache/ce5972cceaaff2517e69195ddaafa8c2cce9816e8b1bd6fb00701d1e38e4d588.zip";
 
 /// parse an export's JSON answer
 fn take(json: String) -> serde_json::Value {
@@ -27,7 +27,7 @@ const PLUGIN_SHAPE: &str = r#"{
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v12/dist/std/pouch.rutbundle" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip" }
   }
 }"#;
 

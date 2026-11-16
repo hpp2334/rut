@@ -19,11 +19,10 @@
 //!   surface-only dev state stands when no `mod.rut` exists, and the
 //!   ambiguity (`entry.type`, no kind, no body) names both fixes;
 //! - bundles: a mod package packs its tree as the `rut.mods` rows
-//!   section and loads mounting the same tree; the PUBLISHED std-v8
-//!   artifacts (the OLD flat envelope, committed at `dist/std-v8/`)
-//!   refuse at the manifest door — no lane crosses a wire era — and a
-//!   flat package repacks byte-identically (the freshness gate over
-//!   all 16);
+//!   section and loads mounting the same tree; retired keys refuse at
+//!   the manifest door — no lane crosses a wire era (the old-envelope
+//!   splice forges the refusal synthetically; the committed envelope
+//!   lane is gone) — and a flat package repacks byte-identically;
 //! - a mod file's `use` statements join the run chain's closure check.
 
 use std::path::{Path, PathBuf};
@@ -530,8 +529,7 @@ fn a_mod_package_packs_rows_and_loads_the_same_tree() {
 #[test]
 fn flat_packages_pack_without_a_rows_entry() {
     // a package with no mod children: no `rut.mods` — the flat
-    // envelope's pack shape (the freshness gate over the committed std
-    // bundles is the exhaustive version of this)
+    // envelope's pack shape (every std tree's pack gates the same)
     let root = scratch("flat-pack");
     let pkg = root.join("pkg");
     write(&pkg, "rut.jsonc", r#"{"name": "pkg"}"#);
@@ -550,84 +548,11 @@ fn flat_packages_pack_without_a_rows_entry() {
 }
 
 #[test]
-fn the_published_std_v8_bundles_refuse_at_the_manifest_door() {
-    // the wire law: every PUBLISHED std-v8 artifact (the OLD flat
-    // envelope — manifests spelling the repealed keys) refuses — no
-    // lane crosses a wire era. With one grammar everywhere the
-    // refusal fires at the MANIFEST door now (the repealed
-    // `entry.lib` refuses at parse, before the version gate). The
-    // published bytes are committed at `dist/std-v8/` so the gate
-    // never networks; `dist/std` (the working envelope) is the
-    // freshness gate's business and `dist/std-v12/` the pin envelope.
-    let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std-v8"));
-    let mut names = Vec::new();
-    for entry in std::fs::read_dir(&dir).expect("dist/std") {
-        let path = entry.unwrap().path();
-        if path.extension().is_some_and(|e| e == "rutbundle") {
-            names.push(path.clone());
-        }
-    }
-    names.sort();
-    let stems: Vec<String> = names
-        .iter()
-        .map(|p| p.file_stem().unwrap().to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(
-        stems,
-        vec!["http", "json", "nmapset", "pouch"],
-        "the pinned artifacts ride in dist/std-v8: {names:?}"
-    );
-    for path in names.iter() {
-        let bytes = std::fs::read(path).expect("read the bundle");
-        // the ONE grammar refuses the archive's own rut.jsonc — the
-        // repealed keys have no lane anywhere
-        let manifest_text = rut_driver::bundle::Bundle::parse(&bytes)
-            .unwrap()
-            .read("rut.jsonc")
-            .unwrap();
-        let err = rut_driver::bundle::parse_manifest(&manifest_text).unwrap_err();
-        assert!(
-            err.to_string().starts_with("entry.lib: repealed"),
-            "{}: {err}",
-            path.display()
-        );
-        // the artifact itself refuses at the same manifest door —
-        // the parse precedes the version gate, so the old envelope's
-        // text is what names the death
-        let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
-        assert!(
-            err.contains("entry.lib: repealed"),
-            "{}: {err}",
-            path.display()
-        );
-    }
-}
-
-#[test]
-fn the_peer_deps_bundle_refuses_at_the_manifest_door() {
-    // the strict-keys law against a PUBLISHED artifact: the one
-    // grammar grants NO retired lane — json's std-v8 manifest carries
-    // the repealed `entry.lib` AND `[peer-deps]`, and the grammar
-    // refuses at the FIRST retired key (sorted walk: `entry` first),
-    // exactly like any unknown key, at parse and at the bundle door.
-    // Old artifacts riding the keys must be re-packed.
-    let bytes = std::fs::read(PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../dist/std-v8/json.rutbundle"
-    )))
-    .expect("the pinned artifact");
-    let manifest_text = rut_driver::bundle::Bundle::parse(&bytes)
-        .unwrap()
-        .read("rut.jsonc")
-        .unwrap();
-    let err = rut_driver::bundle::parse_manifest(&manifest_text).unwrap_err();
-    assert!(err.to_string().starts_with("entry.lib: repealed"), "{err}");
-    // at the bundle door the manifest parse precedes the version gate —
-    // the repealed key refuses first, exactly like any unknown key
-    let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
-    assert!(err.contains("entry.lib: repealed"), "{err}");
-    // `[peer-deps]` itself refuses as the unknown key it is — pinned
-    // on a manifest whose entry keys are current
+fn an_unknown_dep_table_refuses_at_the_manifest_door() {
+    // the strict-keys law: the one grammar grants NO retired lane —
+    // `[peer-deps]` (the old bundle grammar's side table) refuses as
+    // the unknown key it is, exactly like any key the grammar never
+    // spelled. Old artifacts riding the keys must be re-packed.
     let err = rut_driver::bundle::parse_manifest(
         r#"{"name": "j", "peer-deps": {"pouch": {"path": "../pouch"}}}"#,
     )

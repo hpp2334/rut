@@ -1,11 +1,19 @@
-//! The std-CDN laws over the COMMITTED artifacts (`dist/std/`):
+//! The std-CDN laws — the url-dep mount lane end to end. The COMMITTED
+//! `.rutbundle` envelopes are GONE (purged with the readers that
+//! refused them): every world here packs the LIVE tree fresh and
+//! serves the bytes through the test-local fetcher table, because
+//! these laws are about MOUNT/COMPILE behavior, not frozen bytes. The
+//! CDN lane itself is the `std-vNN` SOURCE zips (freshness lives in
+//! rut-cli's `new_lane` pin gate + `pack-std --check`); older tags
+//! stay at their immutable commits, and their bytes refuse at this
+//! toolchain's doors — no lane crosses a wire era.
 //!
-//! 1. **Freshness** — `pack_dir(rut/<pkg>)` is byte-identical to the
-//!    committed bundle, for all 16 (the Q4 determinism law turned into
-//!    a pure equality gate; CI never touches the network).
-//! 2. **The one wire family** — every manifest reads `format_version`
-//!    12 (the current wire; the 11 lane is gone); the manifest's
-//!    `type` routes the root kind, read from the committed bytes.
+//! 1. **Freshness, re-scoped** — every toolchain tree still PACKS
+//!    clean (the std cut's raw material; the zip pins gate the cut).
+//! 2. **The one wire family** — the retired manifest keys
+//!    (`consts`, `namespace`) refuse loudly at the parse, naming the
+//!    fix; the wire pair parses legal-optional (synthetic — the
+//!    envelope that carried the retired keys is gone).
 //! 3. **The duplicate-mount law** — two archives in one session:
 //!    first-mount-wins, and the scope ledgers namespace per archive
 //!    (independently packed bundles never argue about a number).
@@ -75,13 +83,9 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
     }
 }
 
-fn dist_std() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std"))
-}
-
-/// The 16 pkgs: (tree dir, artifact name) — the frozen .rutbundle
-/// envelope set (nothing repacks it). The live zip rows are the lock's:
-/// crates/rut-cli/template/rut.lock (the lock is the carrier).
+/// The std tree set: (tree dir, artifact name) — every pkg the cut
+/// packs. The live zip rows are the lock's: crates/rut-cli/template/
+/// rut.lock (the lock is the carrier).
 const PKGS: &[(&str, &str)] = &[
     ("pouch", "pouch"),
     ("flow", "flow"),
@@ -102,12 +106,17 @@ const PKGS: &[(&str, &str)] = &[
     ("bench-cross", "bench_cross"),
 ];
 
-/// One artifact's bytes + its jsDelivr url, keyed by the DEPS KEY a
-/// consumer row spells (the manifest name).
+/// One artifact's bytes + its url, keyed by the DEPS KEY a consumer
+/// row spells (the manifest name). The bytes are the LIVE tree's fresh
+/// pack — the committed envelope lane is gone — and the url is a
+/// stand-in string: the fetcher here IS the test's in-memory table,
+/// so any url a publisher might name works (the url's extension
+/// routes the artifact kind, so a compiled bundle's url spells
+/// `.rutbundle`).
 fn artifact(key: &str) -> (String, Vec<u8>) {
-    let bytes = std::fs::read(dist_std().join(format!("{key}.rutbundle")))
-        .unwrap_or_else(|e| panic!("dist/std/{key}.rutbundle: {e}"));
-    let url = format!("https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v2/dist/std/{key}.rutbundle");
+    let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(key);
+    let bytes = rut_native::pack_dir(&tree).unwrap_or_else(|e| panic!("pack rut/{key}: {e}"));
+    let url = format!("https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/{key}.rutbundle");
     (url, bytes)
 }
 
@@ -145,295 +154,52 @@ fn load_and_compile(
     Ok(g.graph.diags.iter().map(|d| d.msg.clone()).collect())
 }
 
-/// The frozen envelopes' sha256 pins — the corruption guard. The
-/// .rutbundle bin lane is RETIRED: these bytes are frozen history
-/// (cut by older toolchains — ast-v1's numerals, and the pre-v17
-/// manifest grammar whose keys `namespace`/`consts`/the wire pair the
-/// directory grammar has since retired), so the current pack cannot
-/// reproduce them BY DESIGN: the tree's manifests no longer spell the
-/// retired keys, and `rut pack --mode bin` STAMPS the wire pair at
-/// the pack door — bytes the old envelopes never spelled. What stays
-/// enforced is the envelopes' own immutability (the pin IS their
-/// freshness law — restore the committed bytes on drift, never
-/// repack) and that the live tree still PACKS. The live CDN lane is
-/// the source zips (`node scripts/pack-std.cjs` cuts them).
-const COMMITTED_ENVELOPE_SHA256: &[(&str, &str)] = &[
-    (
-        "pouch",
-        "1e3e293b74326fb6de36cf2d789d3aea57164c0c9d61bbf61bc9c85350d974d7",
-    ),
-    (
-        "flow",
-        "8a487b159a64c9b88be6d6a2783706dc4d5154ea17a0002bbc9bb3f3da693603",
-    ),
-    (
-        "nmapset",
-        "6c828bfb40302fb872403f976e0a27cb562526221175187e3073568c2e6ba445",
-    ),
-    (
-        "strbuild",
-        "e47c5b3d4805e0d38407ab260384356dc8ffc76bc10e9554095f50a5d2184df4",
-    ),
-    (
-        "json",
-        "d46837fdb62af55db4f6e48aecd84a681df5debc5295e636745c75b2d9bd1dce",
-    ),
-    (
-        "ink",
-        "832c202636c3b8108d7540018374618c7cf79131ee4c1f595bd741314b2c8137",
-    ),
-    (
-        "http",
-        "c85f3449e5097a0119302f1da1c43487ce0c36ea81515e00515a0c04f21d50bd",
-    ),
-    (
-        "futures",
-        "5d949a0714d199e3b7bee2f4b380a66dc84e9326e0144772f9bec357616e2ddd",
-    ),
-    (
-        "calc",
-        "378f0be85be193c8e584233f2f9b19017edf86686db4068a569b81995434967e",
-    ),
-    (
-        "ink_host",
-        "ba484afc9b5a2494f5646913d7d218175bb8937648e98e9399afc55260882e05",
-    ),
-    (
-        "http_host",
-        "ed00ad447db41d8f9b5fa8be9cba6d1962061a0d6da5b045d6b424c2c195aec9",
-    ),
-    (
-        "nmap_host",
-        "d80a45c2e927aef951f8f99807c0fe699f495879b8982000d904b819b6e76a9e",
-    ),
-    (
-        "strbuild_host",
-        "ccfeda9c3e266241b0ea6864b28113748a161504169a8f1d0e3b3c1dbeb6675e",
-    ),
-    (
-        "async_host",
-        "1efc500e5d911a5f27942f1f2a5cab4ca8f519998da0081fa4510059c57c416e",
-    ),
-    (
-        "core",
-        "7204d1d8c45766373e2b54542aab1933b6c1625f748283cbc2e2d40577a8ebdb",
-    ),
-    (
-        "calc_host",
-        "bab25be0c5b359d930781476f95bd52e856af1b51542d9dc7dace120226c0757",
-    ),
-    (
-        "bench_cross",
-        "ab2f8f405f48797f8c97c1add37450aee8c7693b15bc433cfae8a50270b69ffa",
-    ),
-];
-
 #[test]
-fn every_committed_artifact_is_byte_fresh() {
-    for (dir, name) in PKGS {
-        // the live tree still packs — the freshness signal that rides
-        // the current toolchain
+fn every_toolchain_tree_packs_clean() {
+    // the std cut's raw material: every tree in the set packs clean
+    // under the current toolchain (the zip freshness law itself is the
+    // pin gate — rut-cli's `new_lane` — and `pack-std --check`'s
+    // byte-compare)
+    for (dir, _) in PKGS {
         let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(dir);
         rut_native::pack_dir(&tree).unwrap_or_else(|e| panic!("pack rut/{dir}: {e}"));
-        // the frozen envelope itself never moves — the sha pin above
-        // is its law (fixture corruption guard, never a repack trigger)
-        let committed = std::fs::read(dist_std().join(format!("{name}.rutbundle")))
-            .unwrap_or_else(|e| panic!("dist/std/{name}.rutbundle: {e}"));
-        assert_eq!(
-            sha256_hex(&committed),
-            COMMITTED_ENVELOPE_SHA256
-                .iter()
-                .find(|(n, _)| n == name)
-                .map(|(_, h)| &h[..])
-                .unwrap_or(""),
-            "dist/std/{name}.rutbundle: the frozen envelope's bytes changed — \
-             restore the committed bytes (`git restore dist/std`), never repack"
-        );
     }
-}
-
-/// sha256 hex of the frozen envelopes — the corruption pin above.
-fn sha256_hex(bytes: &[u8]) -> String {
-    use sha2::Digest;
-    let mut h = sha2::Sha256::new();
-    h.update(bytes);
-    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
-}
-
-/// The numeral-sensitive trio's freshness signal (flow/json/http):
-/// their envelopes are frozen history the current pack cannot
-/// reproduce BYTE-for-byte by design — the pre-v17 manifest grammar's
-/// retirement ripples into the bytes two ways (the pack door now
-/// stamps the wire pair into `rut.jsonc`, and every embedded group's
-/// `@<fp16>` IDENTITY dir re-fingers, renaming the entry and the
-/// `rut.scopes` rows that name it) — so the gate normalizes the
-/// ripple away and demands the rest STRUCTURALLY echo the frozen
-/// program: the same entry set (identity suffixes stripped), every
-/// text entry byte-for-byte beyond `rut.jsonc`/`rut.scopes`, and
-/// every compiled body's decoded shape (the function/type/export/
-/// template tables and the trait/vtable geometry — codes and
-/// signatures included).
-#[test]
-fn the_numeral_sensitive_trio_structurally_echoes_the_frozen_envelope() {
-    for (dir, name) in PKGS {
-        if !matches!(*name, "flow" | "json" | "http") {
-            continue;
-        }
-        let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(dir);
-        let fresh = rut_native::pack_dir(&tree).unwrap_or_else(|e| panic!("pack rut/{dir}: {e}"));
-        let committed = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
-        assert!(
-            structurally_echoes(&fresh, &committed),
-            "rut/{dir} no longer structurally echoes dist/std/{name}.rutbundle \
-             (entry set, text entries beyond rut.jsonc/rut.scopes, or compiled shape drifted)"
-        );
-    }
-}
-
-/// The structural echo: the current pack and the frozen envelope agree
-/// on the entry set (group identity suffixes `@<fp16>` stripped — the
-/// fingerprints ride the manifest-grammar ripple), every text entry
-/// byte-for-byte (the exemptions: `rut.jsonc`, whose bytes the
-/// wire-pair stamp moved by design, and `rut.scopes`, which names the
-/// re-fingered identity dirs), and every compiled body's decoded
-/// shape (function/type/export/template tables, the trait/vtable
-/// geometry, and each function's code and signature).
-fn structurally_echoes(fresh: &[u8], committed: &[u8]) -> bool {
-    let Ok(fz) = rut_driver::bundle::parse_bundle(fresh) else {
-        return false;
-    };
-    let Ok(cz) = rut_driver::bundle::parse_bundle(committed) else {
-        return false;
-    };
-    let deidentify = |n: &str| -> String {
-        n.split('/')
-            .map(|seg| match seg.split_once('@') {
-                Some((head, tail))
-                    if tail.len() == 16 && tail.chars().all(|c| c.is_ascii_hexdigit()) =>
-                {
-                    head.to_string()
-                }
-                _ => seg.to_string(),
-            })
-            .collect::<Vec<_>>()
-            .join("/")
-    };
-    let mut fnames: Vec<String> = fz.iter().map(|(n, _)| deidentify(n)).collect();
-    let mut cnames: Vec<String> = cz.iter().map(|(n, _)| deidentify(n)).collect();
-    fnames.sort();
-    cnames.sort();
-    if fnames != cnames {
-        return false;
-    }
-    fz.iter().all(|(n, fb)| {
-        let key = deidentify(n);
-        let Some((_, cb)) = cz.iter().find(|(cn, _)| deidentify(cn) == key) else {
-            return false;
-        };
-        if key.ends_with("mod.rutc") {
-            let Ok(fp) = rut_core::binary::decode(fb) else {
-                return false;
-            };
-            let Ok(cp) = rut_core::binary::decode(cb) else {
-                return false;
-            };
-            fp.funcs.len() == cp.funcs.len()
-                && fp.types.types.len() == cp.types.types.len()
-                && fp.exports.len() == cp.exports.len()
-                && fp.iface_slots == cp.iface_slots
-                && fp.vtables == cp.vtables
-                && fp.templates.len() == cp.templates.len()
-                && (fp.template_first_fid, fp.template_end_fid)
-                    == (cp.template_first_fid, cp.template_end_fid)
-                && fp
-                    .funcs
-                    .iter()
-                    .zip(cp.funcs.iter())
-                    .all(|(a, b)| a.code == b.code && a.params == b.params && a.ret == b.ret)
-        } else {
-            // the manifest bytes are the wire-pair stamp's to move —
-            // the ROOT's and every group's alike — and the scopes rows
-            // name the re-fingered identity dirs; both ride the
-            // manifest-grammar ripple by design
-            let manifest = key == "rut.jsonc" || key.ends_with("/rut.jsonc");
-            manifest || key == "rut.scopes" || fb == cb
-        }
-    })
 }
 
 #[test]
-fn the_artifact_set_spells_the_one_wire_number() {
-    // every manifest packs format_version 12 — the current wire; the
-    // manifest's `type` routes the root kind (read from the committed
-    // bytes). The frozen envelopes' manifests ride the ONE grammar
-    // now: the wire pair is legal-optional, and calc_host — whose
-    // frozen manifest still carries the retired `namespace` key —
-    // refuses LOUDLY at the parse, naming the fix (old bytes carrying
-    // the key die at the parse, never silently)
-    for (dir, name) in PKGS {
-        let bytes = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
-        let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
-        if *name == "calc_host" {
-            // the frozen envelope's manifest still carries the retired
-            // `consts` + `namespace` keys — the first one the sorted
-            // walk meets refuses LOUDLY, naming the fix (old bytes
-            // carrying the keys die at the parse, never silently)
-            let err =
-                rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap_err();
-            assert!(
-                err.to_string().starts_with("consts: retired"),
-                "the refusal names the key: {err}"
-            );
-            // the sibling retirement, pinned on the same shape minus
-            // consts: `namespace` refuses the same way
-            let err = rut_driver::bundle::parse_manifest(
-                r#"{"name": "calc_host", "type": "host", "namespace": "Math"}"#,
-            )
-            .unwrap_err();
-            assert!(
-                err.to_string().contains("namespace: retired"),
-                "the refusal names the key: {err}"
-            );
-            continue;
-        }
-        let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap();
-        let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
-        assert_eq!(
-            m.format_version,
-            Some(12),
-            "rut/{dir}: the manifest packs the current wire number"
-        );
-        if is_host {
-            // single-package: manifest + the ONE consolidated entry
-            // (wire v12 — the tree normalized into the inline form, no
-            // rows envelope; flat pkgs stay the two-entry shape)
-            let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
-            assert_eq!(names.len(), 2, "rut/{name}: {names:?}");
-            assert!(names.contains(&"mod.d.rut"), "rut/{name}: {names:?}");
-            let entry = bundle.read("mod.d.rut").unwrap();
-            assert!(
-                rut_driver::pack::facts_of_text(&entry).is_ok(),
-                "rut/{name}: the consolidated entry parses back clean"
-            );
-        } else {
-            assert!(
-                bundle.bytes("rut.scopes").is_some(),
-                "rut/{name}: a compiled root carries the ledger"
-            );
-            // the declaration entry rides EVERY compiled group now
-            // (wire v12 — generated, round-trip gated at pack)
-            let entry = bundle.read("mod.d.rut").unwrap();
-            assert!(
-                entry.contains("GENERATED by rut pack"),
-                "rut/{name}: the compiled root's entry is generated"
-            );
-        }
-    }
+fn retired_manifest_keys_refuse_at_the_parse() {
+    // the strict-grammar law, synthetic (the committed envelope that
+    // carried the retired keys is gone): `consts` and `namespace` —
+    // the surface spellings replaced them — refuse LOUDLY at the
+    // parse, naming the fix (old bytes carrying the keys die at the
+    // parse, never silently); the wire pair itself parses
+    // legal-optional on the ONE grammar (the pack door stamps it)
+    let err = rut_driver::bundle::parse_manifest(
+        r#"{"name": "calc_host", "type": "host", "consts": {"PI": 3.141592653589793}}"#,
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().starts_with("consts: retired"),
+        "the refusal names the key: {err}"
+    );
+    let err = rut_driver::bundle::parse_manifest(
+        r#"{"name": "calc_host", "type": "host", "namespace": "Math"}"#,
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("namespace: retired"),
+        "the refusal names the key: {err}"
+    );
+    let m = rut_driver::bundle::parse_manifest(
+        r#"{"name": "x", "format": "rutbundle", "format_version": 12}"#,
+    )
+    .unwrap();
+    assert_eq!(m.format_version, Some(12), "the wire pair parses");
 }
 
 #[test]
 fn the_six_pin_set_loads_and_duplicates_first_mount_wins() {
-    // 06-github-viewer-cli's pin set, loaded over the committed
+    // 06-github-viewer-cli's pin set, loaded over the fresh-packed
     // artifacts: two archives (json's and http's) carry the SAME
     // strbuild (+ strbuild_host) groups — first-mount-wins mounts one
     // body, and the per-archive ledger namespacing means neither
@@ -473,7 +239,7 @@ fn a_generic_owning_bundle_without_template_bodies_refuses_at_mount() {
     // archive. The mount refuses LOUDLY (the earliest point the decoded
     // program is in hand), naming the fix.
     let (url, bytes) = artifact("pouch");
-    let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the committed pouch");
+    let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the pouch pack");
     assert!(
         !parsed.iter().any(|(n, _)| n == "mod.rut"),
         "the fresh pack carries no source (the delivery law: ledger | templates)"
@@ -524,7 +290,7 @@ fn a_doctored_bundle_missing_one_template_row_refuses_loudly() {
     // law: ledger | templates | refusal — never a fabricated `Method
     // { fid: 0 }`)
     let (url, bytes) = artifact("pouch");
-    let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the committed pouch");
+    let parsed = rut_driver::bundle::parse_bundle(&bytes).expect("parse the pouch pack");
     let torn: Vec<(String, Vec<u8>)> = parsed
         .into_iter()
         .map(|(n, b)| {
@@ -566,8 +332,9 @@ fn a_doctored_bundle_missing_one_template_row_refuses_loudly() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// One consumer world over the committed CDN artifacts: rows + source →
-/// (diags, linked program, the session). Empty diags ⇒ compiled.
+/// One consumer world over the fresh-packed CDN stand-ins: rows +
+/// source → (diags, linked program, the session). Empty diags ⇒
+/// compiled.
 fn load_compile_run(
     dir: &Path,
     rows: &str,

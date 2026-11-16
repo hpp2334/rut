@@ -116,14 +116,14 @@ async function depWalkChecks(log) {
     const REPO = join(__dirname, '..', '..', '..');
     const FIXTURES = join(__dirname, 'fixtures', 'dep-walk');
 
-    // the url identity + its pin: the committed pouch bundle's bytes
-    // hash (nothing reads the artifact here — the store's meta vouches
-    // the pin; install-time verification is the only hash pass). The
-    // probe name `VecPouch` exists ONLY in the fixture store tree, so
-    // no std-twin can answer for it.
-    const bundleBytes = fs.readFileSync(join(REPO, 'dist', 'std', 'pouch.rutbundle'));
+    // the url identity + its pin: the committed pouch zip's bytes
+    // hash (the std-v17 lane; nothing reads the artifact here — the
+    // store's meta vouches the pin; install-time verification is the
+    // only hash pass). The probe name `VecPouch` exists ONLY in the
+    // fixture store tree, so no std-twin can answer for it.
+    const bundleBytes = fs.readFileSync(join(REPO, 'dist', 'std', 'pouch.zip'));
     const pin = crypto.createHash('sha256').update(bundleBytes).digest('hex');
-    const url = 'https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.rutbundle';
+    const url = 'https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip';
 
     // the scratch world: ws/ becomes a workspace folder; outside/ sits
     // beside it — outside the folder boundary by construction; home/
@@ -248,7 +248,7 @@ async function depWalkChecks(log) {
                 name: 'pouch',
                 url,
                 sha256: pin,
-                format: 'rutbundle',
+                format: 'zip',
                 format_version: 1,
             }),
         );

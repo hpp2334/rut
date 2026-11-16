@@ -5,9 +5,11 @@
  * serve; a stale mirror is publish poison — the publish's CDN verify
  * would compare fresh pins against stale bytes) — and re-pin the two
  * template carriers. The std CDN lane is source zips only — the
- * .rutbundle bin lane is RETIRED (git history holds that script); the
- * frozen committed envelopes (dist/std*, the older dist/std-vNN/) stay
- * in the repo untouched, and nothing here rewrites them.
+ * .rutbundle bin lane is RETIRED and its committed envelopes are
+ * GONE (the old dist/std-v8..v16/ dirs and the dist/std/*.rutbundle
+ * mirrors were purged; their bytes refuse at this toolchain's doors,
+ * and git history holds the old pack script). Nothing here rewrites
+ * the current envelope.
  *
  * THREE ACTS, ONE BOUNDARY: this script CUTS (pack the zips + re-pin
  * crates/rut-cli/template/rut.{jsonc,lock}) and STOPS — no git. A
