@@ -65,12 +65,13 @@ The keys, all of them:
 | `dev-deps` | mounted only while building/testing this pkg itself — never in a consumer's world. Descriptors are **`path`-only**: a dev row is directory-time metadata for the declarer's own build, nothing to fetch ([Dependency kinds](dependency-kinds.md)) |
 | `style` | formatter knobs: `indent_width` (1–8, default 4), `max_width` (≥ 20, default 100). Schema-free at the manifest layer — unknown keys ride; malformed values are formatter errors, never compile errors. Resolution: the nearest ancestor manifest of the formatted file; no manifest → defaults. |
 
-Three keys are **retired** and refuse loudly, each error naming the
-fix: `format`/`format_version` (the bundle wire pair — the version
-lives in the bundle container, and `rut pack --mode bin` stamps the
-pair into the packed manifest at the pack door; a manifest riding
-*inside* a published artifact still parses it through the reader's
-compat lane), `consts` (declare `pub let NAME: f64 = <literal>;` in
+The bundle wire pair `format`/`format_version` is **legal-optional**
+on the ONE grammar — every lane: `rut pack --mode bin` stamps the
+pair into the packed manifest at the pack door, the bundle reader
+gates on it, and a directory manifest carrying it is unusual but
+harmless and legal. Two keys are **retired** and refuse loudly —
+everywhere, nothing grandfathered — each error naming the fix:
+`consts` (declare `pub let NAME: f64 = <literal>;` in
 the surface instead — see [Host fns and declaration
 files](host-fns.md)), and `namespace` (module paths and `pub use`
 re-exports are the spellings).
@@ -84,10 +85,9 @@ keeps its dedicated retirement refusal — the registration scope is
 the package name.
 
 The **body keys are repealed**: `entry.lib` and `entry.libs` refuse
-loudly, each error naming the fix — the root module is `src/mod.rut`,
-structure lives in `mod` directories under `src/`. (Inside a
-*published* bundle the old keys still load — the reader's compat lane;
-see [Module bundles](bundles.md).)
+loudly — on every lane, the packed manifest included — each error
+naming the fix: the root module is `src/mod.rut`, structure lives in
+`mod` directories under `src/`.
 
 The manifest text is **JSONC** — `//` line comments, `/* */` block
 comments, and trailing commas are all legal — parsed by `serde_json`

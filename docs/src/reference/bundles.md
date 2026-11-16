@@ -197,9 +197,10 @@ without hand-editing:
 {
   // the bundle wire — 12, always; the manifest's `type` routes the
   // root kind (the module-binary version is a different constant).
-  // The pair is the PACKER's stamp: the directory grammar retired the
-  // keys (writing them in rut.jsonc refuses loudly), and `rut pack
-  // --mode bin` adds them right after the opening brace
+  // The pair is legal-optional on the ONE grammar: `rut pack --mode
+  // bin` stamps it into the packed manifest at the pack door, and the
+  // bundle reader gates on it (a directory manifest carrying it is
+  // unusual but harmless and legal)
   "format": "rutbundle",
   "format_version": 12,
   // the package this bundle answers to
@@ -213,15 +214,14 @@ without hand-editing:
 }
 ```
 
-The directory grammar **refuses** `format`/`format_version` — a
-directory is not a bundle, and the version lives in the bundle
-container; each refusal names the fix. A manifest riding INSIDE a
-published artifact (this one, a group's, a source zip's) parses
-through the reader's **compat lane**, where the pair still parses (the
-version gate reads it) and the retired `consts` table DISCARDS whole
-(the `entry.lib` precedent): an old artifact still mounts, its
-constants binding nothing — no backward compat; the surface `pub let`
-is the one spelling.
+ONE grammar, every lane: the directory door, the bundle reader, the
+zip boundary — the same value laws everywhere, no compat parameter,
+nothing grandfathered. The wire pair above is legal-optional
+EVERYWHERE: the packer stamps it, the reader gates on it, and a
+directory manifest carrying it is legal. The retired keys — `consts`,
+`entry.lib`/`entry.libs`, `sha256`, `peer-deps`, `inline`, … — refuse
+loudly on every lane, each error naming the fix; the surface `pub let`
+is the one constants spelling.
 
 The rest of the manifest grammar — the dep tables, `dev-deps`,
 `style`, and the strict-keys law — is defined in [Project structure
@@ -294,8 +294,7 @@ consumer-spelled
 shapes stay servable and a published bundle never carries source.
 This version-unstability is exactly why source sharing over the wire
 moved to the source zip ([below](#the-source-zip--the-source-transport)):
-a `.rutbundle`'s IR is not stable across rut toolchains — a bundle is
-readable only by the toolchain generation that packed it, so a fresh
+a `.rutbundle`'s IR is not stable across rut toolchains — a fresh
 toolchain compiles from source, never from old IR.
 
 **The groups mirror the manifest.** The archive root is the root's own

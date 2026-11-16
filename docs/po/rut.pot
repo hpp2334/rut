@@ -18799,7 +18799,7 @@ msgstr ""
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:335 src/reference/bundles.md:537
+#: src/reference/embedding.md:335 src/reference/bundles.md:536
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
@@ -20172,9 +20172,9 @@ msgid ""
 "literal, another type — refuses loudly at the lowering. One const, one name "
 "across the pkg: the rows bind bare at the root, so a name folded twice (here "
 "or in a sibling module) refuses. This is the one spelling — the manifest's "
-"old `consts` table is retired from the directory grammar (the key refuses "
-"loudly); on the reader's compat lane it DISCARDS whole (an old artifact "
-"still mounts, its constants binding nothing — no backward compat)."
+"old `consts` table is retired: the key refuses loudly on the ONE grammar, "
+"every lane (directory door, bundle reader, zip boundary — nothing old "
+"mounts; stale bytes re-pack)."
 msgstr ""
 
 #: src/reference/host-fns.md:95
@@ -24648,7 +24648,7 @@ msgid ""
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:192 src/reference/bundles.md:448
+#: src/reference/module-binary.md:192 src/reference/bundles.md:447
 msgid "check"
 msgstr ""
 
@@ -24949,7 +24949,7 @@ msgid ""
 "trivially. A refused world packs fine without `--strip`."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:551
+#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:550
 msgid "CLI"
 msgstr ""
 
@@ -26232,9 +26232,10 @@ msgid ""
 "{\n"
 "  // the bundle wire — 12, always; the manifest's `type` routes the\n"
 "  // root kind (the module-binary version is a different constant).\n"
-"  // The pair is the PACKER's stamp: the directory grammar retired the\n"
-"  // keys (writing them in rut.jsonc refuses loudly), and `rut pack\n"
-"  // --mode bin` adds them right after the opening brace\n"
+"  // The pair is legal-optional on the ONE grammar: `rut pack --mode\n"
+"  // bin` stamps it into the packed manifest at the pack door, and the\n"
+"  // bundle reader gates on it (a directory manifest carrying it is\n"
+"  // unusual but harmless and legal)\n"
 "  \"format\": \"rutbundle\",\n"
 "  \"format_version\": 12,\n"
 "  // the package this bundle answers to\n"
@@ -26249,16 +26250,15 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:216
+#: src/reference/bundles.md:217
 msgid ""
-"The directory grammar **refuses** `format`/`format_version` — a directory is "
-"not a bundle, and the version lives in the bundle container; each refusal "
-"names the fix. A manifest riding INSIDE a published artifact (this one, a "
-"group's, a source zip's) parses through the reader's **compat lane**, where "
-"the pair still parses (the version gate reads it) and the retired `consts` "
-"table DISCARDS whole (the `entry.lib` precedent): an old artifact still "
-"mounts, its constants binding nothing — no backward compat; the surface `pub "
-"let` is the one spelling."
+"ONE grammar, every lane: the directory door, the bundle reader, the zip "
+"boundary — the same value laws everywhere, no compat parameter, nothing "
+"grandfathered. The wire pair above is legal-optional EVERYWHERE: the packer "
+"stamps it, the reader gates on it, and a directory manifest carrying it is "
+"legal. The retired keys — `consts`, `entry.lib`/`entry.libs`, `sha256`, "
+"`peer-deps`, `inline`, … — refuse loudly on every lane, each error naming "
+"the fix; the surface `pub let` is the one constants spelling."
 msgstr ""
 
 #: src/reference/bundles.md:226
@@ -26356,12 +26356,11 @@ msgid ""
 "servable and a published bundle never carries source. This "
 "version-unstability is exactly why source sharing over the wire moved to the "
 "source zip ([below](#the-source-zip--the-source-transport)): a "
-"`.rutbundle`'s IR is not stable across rut toolchains — a bundle is readable "
-"only by the toolchain generation that packed it, so a fresh toolchain "
+"`.rutbundle`'s IR is not stable across rut toolchains — a fresh toolchain "
 "compiles from source, never from old IR."
 msgstr ""
 
-#: src/reference/bundles.md:301
+#: src/reference/bundles.md:300
 msgid ""
 "**The groups mirror the manifest.** The archive root is the root's own "
 "files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the content "
@@ -26373,7 +26372,7 @@ msgid ""
 "to one identity only when their bytes are equal)."
 msgstr ""
 
-#: src/reference/bundles.md:311
+#: src/reference/bundles.md:310
 msgid ""
 "**The ledger namespaces per archive.** Each archive's scope rows shift into "
 "a fresh numeric range of the consuming run's world (boot passes through), "
@@ -26386,18 +26385,18 @@ msgid ""
 "independently, each numbering its own closure."
 msgstr ""
 
-#: src/reference/bundles.md:322
+#: src/reference/bundles.md:321
 msgid "The source zip — the source transport"
 msgstr ""
 
-#: src/reference/bundles.md:324
+#: src/reference/bundles.md:323
 msgid ""
 "The `.zip` source archive is the directory grammar packed for travel — the "
 "SOURCE counterpart of the compiled wire above, and the book's recommendation "
 "for publication. A source zip is a package directory with every dep embedded:"
 msgstr ""
 
-#: src/reference/bundles.md:341
+#: src/reference/bundles.md:340
 msgid ""
 "**The published manifest.** Every `[deps]` row's descriptor becomes `{ "
 "\"path\": \"deps/<name>@<fp16>\" }` — the `url` fields and the external "
@@ -26411,7 +26410,7 @@ msgid ""
 "(`normalize the manifest's dep rows and re-pack`)."
 msgstr ""
 
-#: src/reference/bundles.md:353
+#: src/reference/bundles.md:352
 msgid ""
 "**The identity is the TREE flavor.** A dep dirname's `name@<fp16>` is the "
 "first 16 lowercase hex of sha256 over that package's own **rewritten** "
@@ -26423,7 +26422,7 @@ msgid ""
 "closure."
 msgstr ""
 
-#: src/reference/bundles.md:362
+#: src/reference/bundles.md:361
 msgid ""
 "**The grammar is enforced at both doors.** Exactly one `rut.jsonc`, at a "
 "package root (the archive root or `deps/<identity>/`); rut code ONLY under a "
@@ -26435,7 +26434,7 @@ msgid ""
 "this module`)."
 msgstr ""
 
-#: src/reference/bundles.md:371
+#: src/reference/bundles.md:370
 msgid ""
 "**Deterministic.** STORE entries, fixed order, the DOS epoch — the bundle "
 "writer's knobs, shared: same input ⇒ byte-identical zip, so published zips "
@@ -26443,7 +26442,7 @@ msgid ""
 "bundle's)."
 msgstr ""
 
-#: src/reference/bundles.md:376
+#: src/reference/bundles.md:375
 msgid ""
 "**Why the book recommends the zip.** A source zip compiles with the "
 "CONSUMER's toolchain, so it never goes stale the way compiled IR does: a "
@@ -26454,11 +26453,11 @@ msgid ""
 "lane: a consumer's `rut install` fetches it once, and every dep rides inside."
 msgstr ""
 
-#: src/reference/bundles.md:385
+#: src/reference/bundles.md:384
 msgid "The `bundle` module"
 msgstr ""
 
-#: src/reference/bundles.md:387
+#: src/reference/bundles.md:386
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, "
 "and the reader (both root kinds) live in the driver's `rut_driver::bundle` "
@@ -26475,15 +26474,15 @@ msgid ""
 "compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
-#: src/reference/bundles.md:403
+#: src/reference/bundles.md:402
 msgid "Deterministic packing"
 msgstr ""
 
-#: src/reference/bundles.md:405
+#: src/reference/bundles.md:404
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr ""
 
-#: src/reference/bundles.md:407
+#: src/reference/bundles.md:406
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's "
 "binary, then the root's generated declaration entry (plus its module rows "
@@ -26491,26 +26490,26 @@ msgid ""
 "distinct identity);"
 msgstr ""
 
-#: src/reference/bundles.md:411
+#: src/reference/bundles.md:410
 msgid "fixed (zeroed) timestamps;"
 msgstr ""
 
-#: src/reference/bundles.md:412
+#: src/reference/bundles.md:411
 msgid "STORE (no compression) — determinism over size."
 msgstr ""
 
-#: src/reference/bundles.md:414
+#: src/reference/bundles.md:413
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr ""
 
-#: src/reference/bundles.md:418
+#: src/reference/bundles.md:417
 msgid "Stripping — the private sidecar"
 msgstr ""
 
-#: src/reference/bundles.md:420
+#: src/reference/bundles.md:419
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol "
 "table** at the sibling path `<out-without-ext>.rutsym`. Every renameable "
@@ -26525,7 +26524,7 @@ msgid ""
 "against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/bundles.md:433
+#: src/reference/bundles.md:432
 msgid ""
 "**The declaration entry is the strip policy's other half (v1): a stripped "
 "pack OMITS every compiled group's generated entry.** The entry's plaintext "
@@ -26536,146 +26535,146 @@ msgid ""
 "and a host root refuses `--strip` outright."
 msgstr ""
 
-#: src/reference/bundles.md:442
+#: src/reference/bundles.md:441
 msgid "Checks on load"
 msgstr ""
 
-#: src/reference/bundles.md:444
+#: src/reference/bundles.md:443
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes. The order is the law: container, then manifest and version, "
 "then every group's decode, then the mount."
 msgstr ""
 
-#: src/reference/bundles.md:448
+#: src/reference/bundles.md:447
 msgid "rule on mismatch"
 msgstr ""
 
-#: src/reference/bundles.md:450
+#: src/reference/bundles.md:449
 msgid "zip entry CRC-32"
 msgstr ""
 
-#: src/reference/bundles.md:450
+#: src/reference/bundles.md:449
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr ""
 
-#: src/reference/bundles.md:451
+#: src/reference/bundles.md:450
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
-#: src/reference/bundles.md:451
+#: src/reference/bundles.md:450
 msgid "refuse — not a rut bundle"
 msgstr ""
 
-#: src/reference/bundles.md:452
+#: src/reference/bundles.md:451
 msgid "`format_version` exactly 12"
 msgstr ""
 
-#: src/reference/bundles.md:452
+#: src/reference/bundles.md:451
 msgid ""
 "anything else refuses — `this toolchain reads bundle format_version 12 only "
 "(found {v}) — re-pack the directory`"
 msgstr ""
 
-#: src/reference/bundles.md:453
+#: src/reference/bundles.md:452
 msgid "a host root carrying a root `mod.rutc`"
 msgstr ""
 
-#: src/reference/bundles.md:453
+#: src/reference/bundles.md:452
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr ""
 
-#: src/reference/bundles.md:454
+#: src/reference/bundles.md:453
 msgid "a host root carrying a `rut.scopes` ledger or any group entry"
 msgstr ""
 
-#: src/reference/bundles.md:454
+#: src/reference/bundles.md:453
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr ""
 
-#: src/reference/bundles.md:455
+#: src/reference/bundles.md:454
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not "
 "a content identity (`name@<16 hex>`)"
 msgstr ""
 
-#: src/reference/bundles.md:455
+#: src/reference/bundles.md:454
 msgid "refuse — a corrupt compiled bundle"
 msgstr ""
 
-#: src/reference/bundles.md:456
+#: src/reference/bundles.md:455
 msgid "an entry under a top-level prefix other than `deps/`"
 msgstr ""
 
-#: src/reference/bundles.md:456
+#: src/reference/bundles.md:455
 msgid ""
 "refuse — the archive root carries only the root's own files; dep groups ride "
 "at `deps/<name>@<fp16>/`"
 msgstr ""
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:456
 msgid "a `deps/` group directory whose name is not a content identity"
 msgstr ""
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:456
 msgid "refuse — expected `<name>@<16 hex>`"
 msgstr ""
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:457
 msgid "a group's manifest `name` disagreeing with its dirname's name half"
 msgstr ""
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:457
 msgid "refuse — names both"
 msgstr ""
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:458
 msgid ""
 "a group dirname's fingerprint disagreeing with the hash of its rode source "
 "set"
 msgstr ""
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:458
 msgid "refuse — the dirname and the content disagree"
 msgstr ""
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:459
 msgid "`mod.rutc` decode (root and groups): version, tables, surface ids"
 msgstr ""
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:459
 msgid "refuse — names the entry and the cause"
 msgstr ""
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:460
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr ""
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:460
 msgid "refuse — corrupt or doctored"
 msgstr ""
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:461
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr ""
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:461
 msgid "refuse — names the entry; a bad archive never reaches the run"
 msgstr ""
 
-#: src/reference/bundles.md:463
+#: src/reference/bundles.md:462
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr ""
 
-#: src/reference/bundles.md:463
+#: src/reference/bundles.md:462
 msgid "refuse — names the missing group"
 msgstr ""
 
-#: src/reference/bundles.md:465
+#: src/reference/bundles.md:464
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr ""
 
-#: src/reference/bundles.md:467
+#: src/reference/bundles.md:466
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package source zips at "
 "`dist/std/<pkg>.zip` — one zip per std package a `deps` row can spell. Only "
@@ -26686,7 +26685,7 @@ msgid ""
 "(the tag push and jsDelivr's propagation are the maintainer's manual step):"
 msgstr ""
 
-#: src/reference/bundles.md:476
+#: src/reference/bundles.md:475
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -26700,14 +26699,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:486
+#: src/reference/bundles.md:485
 msgid ""
 "`<tag>` is a placeholder — real urls live in the worked manifests, and the "
 "real pins live in each project's committed `rut.lock` (the in-repo examples' "
 "locks are the reference; anti-rot: docs never rot pins). The laws:"
 msgstr ""
 
-#: src/reference/bundles.md:491
+#: src/reference/bundles.md:490
 msgid ""
 "**Committed artifacts, immutable tags.** The zips are packed by `rut pack "
 "--mode source`'s lane (deterministic — same input ⇒ byte-identical, so "
@@ -26715,7 +26714,7 @@ msgid ""
 "re-pointed — jsDelivr caches aggressively."
 msgstr ""
 
-#: src/reference/bundles.md:495
+#: src/reference/bundles.md:494
 msgid ""
 "**What the source zip delivers — everything, current.** A zip compiles with "
 "the CONSUMER's toolchain, so the std set moves to zips as the primary lane: "
@@ -26727,7 +26726,7 @@ msgid ""
 "[`install`](cli.md) never walks into one, the lock keeps direct rows only)."
 msgstr ""
 
-#: src/reference/bundles.md:505
+#: src/reference/bundles.md:504
 msgid ""
 "**The compiled lane keeps serving.** The `.rutbundle` files stay for "
 "consumers of the compiled wire: **host surfaces** (decl bundles), "
@@ -26745,7 +26744,7 @@ msgid ""
 "wherever it travels (the ordinary closure law)."
 msgstr ""
 
-#: src/reference/bundles.md:521
+#: src/reference/bundles.md:520
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group "
 "(`json`'s and `http`'s closures both carry `strbuild`): the same identity "
@@ -26756,25 +26755,25 @@ msgid ""
 "— pin one of them with your own `deps` row."
 msgstr ""
 
-#: src/reference/bundles.md:530
+#: src/reference/bundles.md:529
 msgid "Loading"
 msgstr ""
 
-#: src/reference/bundles.md:532
+#: src/reference/bundles.md:531
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same identity-keyed groups:"
 msgstr ""
 
-#: src/reference/bundles.md:536
+#: src/reference/bundles.md:535
 msgid "// from a file\n"
 msgstr ""
 
-#: src/reference/bundles.md:537
+#: src/reference/bundles.md:536
 msgid "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
-#: src/reference/bundles.md:542
+#: src/reference/bundles.md:541
 msgid ""
 "After the offer, the package name resolves exactly as the directory form "
 "does — with one difference: a compiled group's body is the decoded program "
@@ -26785,15 +26784,15 @@ msgid ""
 "valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 
-#: src/reference/bundles.md:554
+#: src/reference/bundles.md:553
 msgid "# the default: the source zip, <dir>.zip\n"
 msgstr ""
 
-#: src/reference/bundles.md:555
+#: src/reference/bundles.md:554
 msgid "# the compiled wire\n"
 msgstr ""
 
-#: src/reference/bundles.md:559
+#: src/reference/bundles.md:558
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."
@@ -26907,7 +26906,7 @@ msgid ""
 "naming both fixes"
 msgstr ""
 
-#: src/reference/project-structure.md:64 src/reference/dependency-kinds.md:186
+#: src/reference/project-structure.md:64 src/reference/dependency-kinds.md:184
 msgid "`deps`"
 msgstr ""
 
@@ -26927,7 +26926,7 @@ msgid ""
 "is rejected here."
 msgstr ""
 
-#: src/reference/project-structure.md:65 src/reference/dependency-kinds.md:187
+#: src/reference/project-structure.md:65 src/reference/dependency-kinds.md:185
 msgid "`dev-deps`"
 msgstr ""
 
@@ -26953,17 +26952,17 @@ msgstr ""
 
 #: src/reference/project-structure.md:68
 msgid ""
-"Three keys are **retired** and refuse loudly, each error naming the fix: "
-"`format`/`format_version` (the bundle wire pair — the version lives in the "
-"bundle container, and `rut pack --mode bin` stamps the pair into the packed "
-"manifest at the pack door; a manifest riding _inside_ a published artifact "
-"still parses it through the reader's compat lane), `consts` (declare `pub "
-"let NAME: f64 = <literal>;` in the surface instead — see [Host fns and "
-"declaration files](host-fns.md)), and `namespace` (module paths and `pub "
-"use` re-exports are the spellings)."
+"The bundle wire pair `format`/`format_version` is **legal-optional** on the "
+"ONE grammar — every lane: `rut pack --mode bin` stamps the pair into the "
+"packed manifest at the pack door, the bundle reader gates on it, and a "
+"directory manifest carrying it is unusual but harmless and legal. Two keys "
+"are **retired** and refuse loudly — everywhere, nothing grandfathered — each "
+"error naming the fix: `consts` (declare `pub let NAME: f64 = <literal>;` in "
+"the surface instead — see [Host fns and declaration files](host-fns.md)), "
+"and `namespace` (module paths and `pub use` re-exports are the spellings)."
 msgstr ""
 
-#: src/reference/project-structure.md:78
+#: src/reference/project-structure.md:79
 msgid ""
 "The **grammar is strict at the top level**: the keys above are all of them, "
 "and any other top-level key refuses naming the key — `manifest: unknown key "
@@ -26973,13 +26972,12 @@ msgid ""
 "retirement refusal — the registration scope is the package name."
 msgstr ""
 
-#: src/reference/project-structure.md:86
+#: src/reference/project-structure.md:87
 msgid ""
-"The **body keys are repealed**: `entry.lib` and `entry.libs` refuse loudly, "
-"each error naming the fix — the root module is `src/mod.rut`, structure "
-"lives in `mod` directories under `src/`. (Inside a _published_ bundle the "
-"old keys still load — the reader's compat lane; see [Module "
-"bundles](bundles.md).)"
+"The **body keys are repealed**: `entry.lib` and `entry.libs` refuse loudly — "
+"on every lane, the packed manifest included — each error naming the fix: the "
+"root module is `src/mod.rut`, structure lives in `mod` directories under "
+"`src/`."
 msgstr ""
 
 #: src/reference/project-structure.md:92
@@ -27393,15 +27391,14 @@ msgstr ""
 #: src/reference/dependency-kinds.md:72
 msgid ""
 "**The manifest row carries no pin.** The old optional `sha256` key is "
-"**retired** from the descriptor grammar — the strict (directory) lane "
-"refuses it, naming the fix: `deps.pouch: 'sha256' retired — pins live in "
-"rut.lock (run `rut install`)`. Pins live in the walk root's **`rut.lock`** "
-"([`rut install`](cli.md) writes it), read fresh on every load. (Inside a "
-"_published_ bundle the reader's compat lane still parses the old key — inert "
-"metadata, never enforced — [module bundles](bundles.md).)"
+"**retired** from the descriptor grammar — the ONE grammar refuses it on "
+"every lane (a packed manifest included), naming the fix: `deps.pouch: "
+"'sha256' retired — pins live in rut.lock (run `rut install`)`. Pins live in "
+"the walk root's **`rut.lock`** ([`rut install`](cli.md) writes it), read "
+"fresh on every load."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:80
+#: src/reference/dependency-kinds.md:78
 msgid ""
 "**The layer split.** The _call site_ owns HOW bytes arrive — transport, "
 "caching, offline policy — by implementing the `DepRemote` contract "
@@ -27417,7 +27414,7 @@ msgid ""
 "mount point can enforce it."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:93
+#: src/reference/dependency-kinds.md:91
 msgid ""
 "**Url deps are leaves.** The `deps` walk never follows them: one fetch "
 "brings the whole closure, because **packed artifacts stay closed** — every "
@@ -27429,7 +27426,7 @@ msgid ""
 "artifact is inert metadata; loading it never fetches."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:102
+#: src/reference/dependency-kinds.md:100
 msgid ""
 "**The lock is the pin lane.** A url the lock has no row for refuses at the "
 "mount door, naming the fix: ``dep `pouch` (https://…) is not pinned — "
@@ -27441,7 +27438,7 @@ msgid ""
 "verifies the pair before anything runs."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:111
+#: src/reference/dependency-kinds.md:109
 msgid ""
 "The CLI lane: **the install-first law** — `rut run`/`rut pack` never "
 "download. They read the global dep store cache-only "
@@ -27454,11 +27451,11 @@ msgid ""
 "CLI](cli.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:122
+#: src/reference/dependency-kinds.md:120
 msgid "The std tree on jsDelivr"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:124
+#: src/reference/dependency-kinds.md:122
 msgid ""
 "**Which kind, when.** The toolchain's standard packages (`core`, `ink`, "
 "`pouch`, `json`, …) are consumed as **url rows pinned by the project's "
@@ -27471,7 +27468,7 @@ msgid ""
 "(re-pack, never load back)."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:134
+#: src/reference/dependency-kinds.md:132
 msgid ""
 "**Publish your own packages as source zips.** The same recommendation runs "
 "in both directions: `rut pack <dir>` (the default `--mode source`) emits the "
@@ -27483,7 +27480,7 @@ msgid ""
 "([Module bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:144
+#: src/reference/dependency-kinds.md:142
 msgid ""
 "The std tree ships as committed per-package source zips — "
 "`https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.zip` (only the "
@@ -27496,7 +27493,7 @@ msgid ""
 "propagation is the maintainer's manual step."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:155
+#: src/reference/dependency-kinds.md:153
 msgid ""
 "**What a url row can deliver** is the engine's instantiation law, read from "
 "the CDN side. A source zip delivers by compiling: the consumer's toolchain "
@@ -27508,7 +27505,7 @@ msgid ""
 "binary**:"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:164
+#: src/reference/dependency-kinds.md:162
 msgid ""
 "**host surfaces and concrete-class libs deliver** — a `type = \"host\"` "
 "bundle is a declaration surface (no generics), and a lib of concrete classes "
@@ -27516,7 +27513,7 @@ msgid ""
 "whole closure riding inside;"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:168
+#: src/reference/dependency-kinds.md:166
 msgid ""
 "**generic owners deliver too** — `pouch`, `flow`, `nmapset`, `json`, "
 "`futures` carry their generic bodies as templates in the binaries, so a "
@@ -27532,65 +27529,65 @@ msgid ""
 "nothing to supply at the consumer's side."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:182
+#: src/reference/dependency-kinds.md:180
 msgid "Semantics"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:184
+#: src/reference/dependency-kinds.md:182
 msgid "table"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:184
+#: src/reference/dependency-kinds.md:182
 msgid "who supplies it"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:184
+#: src/reference/dependency-kinds.md:182
 msgid "transitive?"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:184
+#: src/reference/dependency-kinds.md:182
 msgid "missing behavior"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:186
+#: src/reference/dependency-kinds.md:184
 msgid "the declarer's own graph"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:186
+#: src/reference/dependency-kinds.md:184
 msgid "yes — walked recursively"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:186
+#: src/reference/dependency-kinds.md:184
 msgid "mount error"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:187
+#: src/reference/dependency-kinds.md:185
 msgid "the pkg's own self-build"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:187
+#: src/reference/dependency-kinds.md:185
 msgid "root only — never walked for a dep"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:187
+#: src/reference/dependency-kinds.md:185
 msgid "n/a (they exist to be there)"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:189
+#: src/reference/dependency-kinds.md:187
 msgid ""
 "The tables decide mounting; what a mounted head lets its consumer _name_ is "
 "the declaration-scoped law of [Nameability](#nameability) below."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:193
+#: src/reference/dependency-kinds.md:191
 msgid "The mount law — three passes"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:195
+#: src/reference/dependency-kinds.md:193
 msgid "All loader-owned; the run stays I/O-free."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:197
+#: src/reference/dependency-kinds.md:195
 msgid ""
 "**The `deps` walk.** Recursive, name order, first-mount-wins, cycle guard, "
 "name-mismatch error. A dep mounted from a url artifact brings its whole "
@@ -27601,7 +27598,7 @@ msgid ""
 "[Coexistence](#coexistence))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:205
+#: src/reference/dependency-kinds.md:203
 msgid ""
 "**The dev pass — root only.** The program root's `dev-deps` mount exactly "
 "like `deps`. A dep's dev table is **never** walked — a consumer's world "
@@ -27610,7 +27607,7 @@ msgid ""
 "law: it walks no dev-deps."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:211
+#: src/reference/dependency-kinds.md:209
 msgid ""
 "**Compile.** Every mounted module links — sources compile in dependency "
 "post-order, and the walk's yield is the whole program. There is no "
@@ -27618,11 +27615,11 @@ msgid ""
 "walk."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:216
+#: src/reference/dependency-kinds.md:214
 msgid "Nameability"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:218
+#: src/reference/dependency-kinds.md:216
 msgid ""
 "The passes above decide what **mounts**; a separate, declaration-scoped law "
 "decides what a source may **name**. Mounting stays transitive — A's `deps` "
@@ -27631,7 +27628,7 @@ msgid ""
 "`use` exactly the heads it declares itself,"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:228
+#: src/reference/dependency-kinds.md:226
 msgid ""
 "— and there is no ambient tier. `core` rides unconditionally (the graph "
 "threads the prelude into every unit, and the resolver passes the `core` head "
@@ -27641,7 +27638,7 @@ msgid ""
 "inert."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:235
+#: src/reference/dependency-kinds.md:233
 msgid ""
 "The dedicated diagnostic is **D5**, and it fires only when a head is MOUNTED "
 "but UNDECLARED by the consumer — an unmounted head keeps its existing shape "
@@ -27649,14 +27646,14 @@ msgid ""
 "the head in — and the fix, in two renderings:"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:240
+#: src/reference/dependency-kinds.md:238
 msgid ""
 "**The walked edge** (the consumer mounts through the dep walk, an archive "
 "group, or a dev row — there is a first-mount `mounted_by` edge to name): the "
 "puller and the jsonc row to add:"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:244
+#: src/reference/dependency-kinds.md:242
 msgid ""
 "```text\n"
 "cannot resolve `b` — `b` is mounted in this program (pulled by `a`) but "
@@ -27665,13 +27662,13 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:248
+#: src/reference/dependency-kinds.md:246
 msgid ""
 "**The host edge** (a hand offer — no walk edge exists): the \"offered by the "
 "host\" clause, and a fix that names the manifest-builder doors, never a file:"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:252
+#: src/reference/dependency-kinds.md:250
 msgid ""
 "```text\n"
 "cannot resolve `b` — `b` is mounted in this program (offered by the host) "
@@ -27681,7 +27678,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:256
+#: src/reference/dependency-kinds.md:254
 msgid ""
 "The closure check reads every mounted source's uses at every depth, so the "
 "law is per-package, not root-only: a dep naming a head it never declared is "
@@ -27690,7 +27687,7 @@ msgid ""
 "a dep naming the root's dev-dep is D5."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:262
+#: src/reference/dependency-kinds.md:260
 msgid ""
 "Heads are one axis of nameability; the **file** is the other. A head must be "
 "declared by the package's manifest, and a leaf must be bound by the _file_ "
@@ -27708,7 +27705,7 @@ msgid ""
 "[Uses](modules-and-visibility.md#uses)."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:278
+#: src/reference/dependency-kinds.md:276
 msgid ""
 "**This is a breaking law change.** Mounting was always transitive, and "
 "nameability used to ride along with it: a program could `use` any head the "
@@ -27717,7 +27714,7 @@ msgid ""
 "consumer's own manifest."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:284
+#: src/reference/dependency-kinds.md:282
 msgid ""
 "Embedders and hand-mounted worlds are lawed by the same declaration table, "
 "carried structurally on the `Pkg` — `parse_manifest` for an embedded jsonc, "
@@ -27726,11 +27723,11 @@ msgid ""
 "defaulting the program's declaration host-side to the offered lib names."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:291
+#: src/reference/dependency-kinds.md:289
 msgid "Coexistence"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:293
+#: src/reference/dependency-kinds.md:291
 msgid ""
 "A dep group mounted from a bundle carries its **content identity** — "
 "`name@<16 hex>`, the first 16 hex chars of the sha256 over the group's own "
@@ -27745,23 +27742,23 @@ msgid ""
 "bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:305
+#: src/reference/dependency-kinds.md:303
 msgid ""
 "A bare `use` head stays exact while one identity spells the name; under "
 "several, it refuses naming them all:"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:312
+#: src/reference/dependency-kinds.md:310
 msgid ""
 "— mount one of them under its bare name (your own `deps` row) or bind "
 "through the bundle's scope ledger ([Module bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:315
+#: src/reference/dependency-kinds.md:313
 msgid "Interplay"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:317
+#: src/reference/dependency-kinds.md:315
 msgid ""
 "**Dev-deps are invisible to bundles-as-consumers.** A packed package carries "
 "its closure; a consumer packing _their_ app never pulls the package's dev "
@@ -27769,14 +27766,14 @@ msgid ""
 "into consumer worlds ([Module bundles](bundles.md))."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:322
+#: src/reference/dependency-kinds.md:320
 msgid ""
 "**Structural satisfaction is unaffected**: a consumer's own types satisfy "
 "json's interfaces by having the members, whether the interface came from a "
 "path row or a packed bundle."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:325
+#: src/reference/dependency-kinds.md:323
 msgid ""
 "**The LSP is advisory.** The language server embeds the toolchain packages' "
 "sources, never parses manifests, indexes every dep it can reach (any depth, "
@@ -27786,11 +27783,11 @@ msgid ""
 "law."
 msgstr ""
 
-#: src/reference/dependency-kinds.md:332
+#: src/reference/dependency-kinds.md:330
 msgid "Consuming a toolchain package"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:334
+#: src/reference/dependency-kinds.md:332
 msgid ""
 "```jsonc\n"
 "// an app that wants json's whole surface\n"
@@ -27803,7 +27800,7 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/dependency-kinds.md:343
+#: src/reference/dependency-kinds.md:341
 msgid ""
 "One row is the whole story: the zip is closed, and json's own `deps` — "
 "`strbuild`, `pouch`, `nmapset` — ride inside it as embedded trees, so every "

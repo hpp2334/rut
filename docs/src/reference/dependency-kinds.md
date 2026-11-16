@@ -70,13 +70,11 @@ bundle (the compiled wire):
   directory-time metadata for the declarer's own build, nothing to
   fetch.
 - **The manifest row carries no pin.** The old optional `sha256` key
-  is **retired** from the descriptor grammar — the strict (directory)
-  lane refuses it, naming the fix: `deps.pouch: 'sha256' retired —
-  pins live in rut.lock (run `rut install`)`. Pins live in the walk
-  root's **`rut.lock`** ([`rut install`](cli.md) writes it), read
-  fresh on every load. (Inside a *published* bundle the reader's
-  compat lane still parses the old key — inert metadata, never
-  enforced — [module bundles](bundles.md).)
+  is **retired** from the descriptor grammar — the ONE grammar refuses
+  it on every lane (a packed manifest included), naming the fix:
+  `deps.pouch: 'sha256' retired — pins live in rut.lock (run `rut
+  install`)`. Pins live in the walk root's **`rut.lock`**
+  ([`rut install`](cli.md) writes it), read fresh on every load.
 - **The layer split.** The *call site* owns HOW bytes arrive —
   transport, caching, offline policy — by implementing the `DepRemote`
   contract (`fetch(url)` — one required method returning a boxed future
