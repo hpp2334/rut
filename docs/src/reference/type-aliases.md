@@ -45,7 +45,7 @@ entry fn main() {
 - **One name = one type**: an alias may not share its name with an
   alias, enum, struct, class, or interface in the same module — the
   duplicate-name check is symmetric and fires in both orders.
-- Visibility: `pub`, `pub(mod)`, `pub(super)`, `pub(self)` all parse on
+- Visibility: `pub`, `pub(super)`, `pub(pkg)` parse on
   `type` (see [Modules and visibility](modules-and-visibility.md)).
   Like every name, the alias is usable in a consumer only when the
   consumer's `use` names it.

@@ -268,7 +268,7 @@ functions; polymorphism is structural interfaces — the next chapter.
 
 - Struct members: public, always.
 - Class members: unannotated is module-private; `pub` exposes to
-  importers (also `pub(mod)`, `pub(super)`, `pub(self)`).
+  importers (also `pub(super)`, `pub(pkg)`).
 - The types themselves follow the same rule: `pub class Vec<T>` is
   importable, a bare `class Helper` stays in its module. See
   [modules and packages](modules.md).

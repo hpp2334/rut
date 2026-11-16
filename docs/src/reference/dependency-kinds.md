@@ -127,28 +127,29 @@ project's `rut.lock`** from this CDN — that is the recommended import
 for everything the toolchain ships. A `path` row is for **your own
 local packages**: a sibling directory in the same project (the modules
 tutorial's `greet` app mounting `../pkg` is the shape). The tag
-advances with format changes (`std-v17` today) and is never re-pointed,
-so a lock pin at a tag stays honest forever.
+advances with format changes (`std-v17` today) and is never re-pointed
+— a lock pin names the current cut's envelope, and an old tag's bytes
+are refused by this toolchain (re-pack, never load back).
 
 **Publish your own packages as source zips.** The same recommendation
 runs in both directions: `rut pack <dir>` (the default `--mode
 source`) emits the `.zip`, and the zip compiles with the CONSUMER's
 toolchain — so it never goes stale the way compiled IR does. A
-`.rutbundle`'s IR is version-unstable across rut toolchains (it stays
-loadable forever — the reader keeps every old lane — but it is the
+`.rutbundle`'s IR is version-unstable across rut toolchains (a bundle
+is readable only by the toolchain generation that packed it — the
 compiled wire, not a source contract), which is why a source zip is
 the publication lane and the bundle the compiled-delivery lane
 ([Module bundles](bundles.md)).
 
 The std tree ships as committed per-package source zips —
 `https://cdn.jsdelivr.net/gh/hpp2334/rut@<tag>/dist/std/<pkg>.zip`
-(the old `.rutbundle` files sit beside them, still loadable).
+(only the current cut is committed; old tags are refused).
 The manifests here keep placeholder tags; the worked manifests in the
 quick-start, the tutorial, and the examples carry the real urls, and
-their committed `rut.lock`s carry the real pins (a pin at an immutable
-tag cannot rot). Tags advance (`std-vNN`) and are never re-pointed —
-jsDelivr caches aggressively; the artifacts are committed at
-`dist/std/`, and the tag push plus jsDelivr's propagation is the
+their committed `rut.lock`s carry the real pins (the pin names the
+current cut's envelope). Tags advance (`std-vNN`) and are never
+re-pointed — jsDelivr caches aggressively; the artifacts are committed
+at `dist/std/`, and the tag push plus jsDelivr's propagation is the
 maintainer's manual step.
 
 **What a url row can deliver** is the engine's instantiation law, read

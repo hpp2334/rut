@@ -191,8 +191,11 @@ hosts spell by hand) is `Mounted`:
 | `Mounted::decl(name, text)` | a `.d.rut` surface (declaration mode) |
 | `Mounted::host(name, rows)` | the native rows — exported constants, bodyless host fns |
 | `Mounted::compiled(name, program)` | a decoded `.rutc` binary pushed as-is |
-| `Mounted::from_bundle(bytes)` | the pure parse — the bundle's pkgs as a `Walk` (below) |
 | `lower_decl_module(text, children, file)` | a `.d.rut` lowered to host rows — the wasm hosts' surface lane; `children` is the mounted `mod` tree (`NAME/mod.d.rut` files, mount with `mount_mod_children` in Decl mode) and each row carries the path it lives under |
+
+A packed archive enters as `Bundle::parse(&bytes)` — the pure decode +
+verify — and `bundle.walk()` assembles the pkgs as a `Walk` (below);
+its members are `Mounted`s like any walked pkg.
 
 `Mounted` is pure data: the walker-found metadata (the `[deps]` table and
 the declaration rows the nameability law reads) is pub data on it —
@@ -387,7 +390,7 @@ contain those names.
 | `Compiled { graph, hosts }` | the linked graph (diags inside — check `graph.diags` before trusting `graph.program`) and the host registry every `Offer::Host` installed |
 | `Bundle::parse(&bytes)` | decode + verify an archive ONCE (CRC, version, group decode) — the handle is reusable across runs; `bundle.restore_symbols(&map)` restores a stripped artifact's names on the handle ([symbol stripping](symbol-stripping.md)); `bundle.walk()` is the raw mount assembly |
 | `Walk { pkgs, root }` | a walk's yield; `walked.pkg(name)` picks one pkg |
-| `Mounted::source / decl / host / compiled / from_bundle` | the walked pkg data's constructors ([the offer](#the-walk-vs-the-offer)) |
+| `Mounted::source / decl / host / compiled` | the walked pkg data's constructors ([the offer](#the-walk-vs-the-offer)) |
 | `RunError` | why a run refused to compose or compile — shape (bad name, missing entrypoint) or closure (a `use` nothing offered resolves); the message IS the diagnostic |
 | `declared_host_fns(pkgs)` | the declared rows, async-expanded, flattened — the raw lane's `verify_against` input |
 | `host_pkg_ctx(pkgs)` | the declared rows, partitioned by scope — for hosts that build registries OUTSIDE the chain (a bench probe's fresh `Vm` per iteration, a raw-row host's `verify_against`) |

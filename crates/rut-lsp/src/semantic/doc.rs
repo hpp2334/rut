@@ -136,12 +136,6 @@ impl Document {
         self.lines.position(&self.src, byte)
     }
 
-    /// (line, UTF-16 column) -> byte offset over the artifact's src
-    #[allow(dead_code)] // the position math's inverse pair — kept whole; tests spell lines().byte directly
-    pub fn byte(&self, line: u32, character: u32) -> u32 {
-        self.lines.byte(&self.src, line, character)
-    }
-
     /// the parse diags, ALL of them (the recovering parse yields the
     /// tree regardless) — the FLAT view on `ast.errors()`; the
     /// positional view is the `ErrorNode`s in the streams

@@ -124,9 +124,6 @@ pub struct TyDef {
     /// decl or the import-gated spelling (`pub builtin`, mirrored in
     /// `DefIndex::pub_gated`)
     pub ambient: bool,
-    #[allow(dead_code)]
-    // built beside head — the verbatim head slice renders the generics as written
-    pub generics: Vec<String>,
     pub fields: Vec<MemberSrc>,
     pub methods: Vec<MemberSrc>,
     pub doc: Vec<String>,
@@ -167,11 +164,7 @@ pub struct FnDef {
 /// extends (`impl Circle { .. }` records `Circle`; `impl I for T` is
 /// gone, so there is no other half to record)
 #[derive(Debug, Clone)]
-pub struct ImplDef {
-    #[allow(dead_code)]
-    // the row's identity — lookup joins impl methods through the index, not the name
-    pub target_name: String,
-}
+pub struct ImplDef {}
 
 /// a `pub? mod NAME;` declaration — the file-module namespace edge.
 /// The namespace itself is the mounted `NAME/mod.rut`'s own index

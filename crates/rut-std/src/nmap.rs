@@ -594,7 +594,8 @@ pub(crate) struct IterCursor {
     pos: usize,
 }
 
-/// The table is a HostOpaque payload (nmap-hostvals P2) whose release/// hook is REAL since P5: at store-entry death (rc-0 inside the release
+/// The table is a HostOpaque payload (nmap-hostvals P2) whose release
+/// hook is REAL since P5: at store-entry death (rc-0 inside the release
 /// walk, BEFORE the payload's own Drop) every held value
 /// cell releases through the provided heap view — the record-field
 /// pattern, children through the same walk that frees the parent — and
@@ -728,14 +729,11 @@ fn mint_key_box(vm: &mut Vm, ty: u32, key: &KeyVal) -> Result<OpaqueRef, Trap> {
     OpaqueRef::from_slot(vm, box_slot, rut_core::types::TY_OPAQUE)
 }
 
-/// The two hash constants the removed pure-rut `mapset` pkg's
-/// `Hashable` impls ran (the ONE key contract, now nmapset.rut's
-/// `mix64`/`fnv1a64` alone): FNV-1a 64's offset basis
-/// and prime. These are the checksum law — ported BIT-FOR-BIT, so the
-/// map's bucket hashing equals the wrapper's `k.hash()` bit for bit
-/// and the bench checksums pinned in `expected.json` hold. A one-ulp
-/// difference here breaks the gate; the unit test pins
-/// the exact outputs as literals.
+/// FNV-1a 64's offset basis and prime — the checksum law, ported
+/// BIT-FOR-BIT from the removed pure-rut `mapset` pkg, so the map's
+/// bucket hashing equals the bench checksums pinned in
+/// `expected.json`. A one-ulp difference here breaks the gate; the
+/// unit test pins the exact outputs as literals.
 const FNV_OFFSET: u64 = 14695981039346656037;
 const FNV_PRIME: u64 = 1099511628211;
 
@@ -762,7 +760,7 @@ fn hash_bits(v: u64) -> u64 {
 
 /// The ONE shared payload hasher — the exact word the table buckets a
 /// stored [`KeyVal`] on: mix64 for the integer/bool bits, FNV-1a 64
-/// over the octets for `str`/`bytes`. Same inputs, nmapset.rut's
+/// over the octets for `str`/`bytes`. Same inputs, the pinned
 /// constants, bit-exact (the pinned-literal tests). No `Hasher` trait
 /// involved — lanes hand this word to `HashTable::{find, entry}`
 /// directly, and [`KeyRef::hash`] answers the same bits over the
@@ -916,7 +914,6 @@ fn fused_remove_sv(
     fused_remove_s(vm, t, range)
 }
 
-/// Install the `nmap_host` bodies under the `nmap_host` scope (the `calc`
 /// Install the `nmap_host` bodies under the `nmap_host` scope (the `calc`
 /// pattern): the callable's Rust shape IS the `.d.rut`
 /// row, so the surface declares exactly these signatures. `map_new`'s
@@ -1247,8 +1244,8 @@ mod tests {
             .expect("bare vm")
     }
 
-    /// mapset.rut's mix64 — the pinned integer/bool hash, mirrored here
-    /// so the hash-law tests can name the exact bits.
+    /// The pinned integer/bool hash word — the pinned-literal tests
+    /// name the exact bits.
     fn mix64(bits: u64) -> u64 {
         (14695981039346656037u64 ^ bits).wrapping_mul(1099511628211u64)
     }
@@ -1326,11 +1323,11 @@ mod tests {
     // ---- the hash law (the checksum constants — unchanged) ------------
 
     /// The checksum law, pinned as LITERALS: hash_payload must answer
-    /// nmapset.rut's exact bits (the `mix64` / `fnv1a64` constants,
-    /// originally ported bit-for-bit from the removed mapset pkg) — a
-    /// one-ulp difference breaks the bench gate, which pins the
-    /// value-derived checksums in `expected.json`. These are also the
-    /// words `KeyVal`'s `Hash` writes into the map.
+    /// the pinned constants' exact words (the `mix64` / `fnv1a64`
+    /// constants, originally ported bit-for-bit from the removed
+    /// mapset pkg) — a one-ulp difference breaks the bench gate, which
+    /// pins the value-derived checksums in `expected.json`. These are
+    /// also the words `KeyVal`'s `Hash` writes into the map.
     #[test]
     fn hash_payload_bits_are_pinned_bit_for_bit() {
         // mix64 — the integer/bool lane: (offset ^ bits) * prime

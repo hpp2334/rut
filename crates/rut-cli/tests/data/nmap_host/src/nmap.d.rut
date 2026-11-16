@@ -23,9 +23,8 @@
 // The native side owns KEYS (closed set: the integer primitives,
 // `bool`, `str`, `bytes`), their HASHES, their HANDLES, and now the
 // VALUE BOXES as `HashMap` entries — hashed with the pinned mapset
-// constants (mix64 / FNV-1a 64, bit-for-bit) through an identity
-// hasher, compared by CONTENT, released by the payload's `finalize`
-// hook at store-entry death.
+// constants (mix64 / FNV-1a 64, bit-for-bit), compared by CONTENT,
+// released by the payload's `finalize` hook at store-entry death.
 
 pub host fn map_new(cap: i64) -> opaque;
 

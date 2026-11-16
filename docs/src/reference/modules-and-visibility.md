@@ -330,9 +330,8 @@ and every class member — carries a visibility:
 
 - Unannotated = private to the declaring module *and its descendants*
   (a child module sees its ancestors' privates, never a sibling's).
-- The paren forms `pub(mod)` / `pub(self)` are repealed — they parsed
-  but gated nothing; the parser refuses them with the fix (bare
-  private, or `pub(super)`/`pub(pkg)`/`pub`).
+- The paren forms `pub(mod)` / `pub(self)` are gone — a paren scope
+  other than `super`/`pkg` is the ordinary `pub(..)` error.
 - Applies uniformly: `let`, `enum`, `struct`, `class`, `interface`,
   `impl` (an impl exports with its target type), `fn`, `type` aliases,
   the `mod` edge itself (`pub mod` opens the child's `pub` members

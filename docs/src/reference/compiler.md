@@ -55,7 +55,7 @@ Name resolution walks the AST and binds every path to a symbol:
 - `is` expressions resolve their right-hand side to a concrete type or an
   interface instantiation id; `is` on an erasure-typed receiver answers by the
   box (see [opaque — erasure and downcast](opaque.md)).
-- `host`/`extern` surface references resolve against the declaration
+- `host` surface references resolve against the declaration
   surfaces of the packages the module imports, with slot ids attached to
   every member reference.
 

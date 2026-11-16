@@ -7,9 +7,8 @@
 //! `r"..."` raw strings, hash-leveled multi-line raw and format strings
 //! (`r#"..."#`, `f#"..."#` — the hash count is the multi-line opt-in
 //! AND the quote-embedding level; level 0 stays newline-terminated),
-//! maximal munch with a longest-match table, reserved-word rejection
-//! with rut-specific messages, and the bracket depth budget
-//! (C3 — exceeding it is a Diag, never a host crash).
+//! maximal munch with a longest-match table, and the bracket depth
+//! budget (C3 — exceeding it is a Diag, never a host crash).
 
 use std::borrow::Cow;
 
@@ -68,8 +67,8 @@ pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
 }
 
 /// Decl-mode lexing: a `.d.rut` surface parses the same
-/// token vocabulary as `.rut` source — the reserved-word law
-/// (a closed three-word list) is mode-independent.
+/// token vocabulary as `.rut` source — every word is an identifier
+/// token; the keyword tables are the parser's, mode-independent.
 pub fn lex_mode(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let (toks, diags, _) = lex_collect(src, false);
     (toks, diags)
@@ -230,9 +229,6 @@ impl<'a> Lexer<'a> {
                     let s = self.lex_plain_string_body(lo);
                     self.push(Tok::Str(s), lo);
                 }
-                b'\'' => {
-                    self.lex_removed_char_lit(lo);
-                }
                 b'0'..=b'9' => self.lex_number(lo),
                 c if is_ident_start(c) || c >= 0x80 => self.lex_word(lo),
                 _ => self.lex_punct(lo),
@@ -315,25 +311,6 @@ impl<'a> Lexer<'a> {
                 format!("unknown escape `\\{}`", other as char),
             ),
         }
-    }
-
-    /// `'x'` — removed in v1.1: consume the literal, diagnose,
-    /// push nothing. Codepoints are `u32` (`s.code()`, `str.from_code`).
-    fn lex_removed_char_lit(&mut self, lo: usize) {
-        self.pos += 1; // opening '
-        while !self.at_end() && self.peek() != b'\n' && self.peek() != b'\'' {
-            if self.peek() == b'\\' {
-                self.pos += 1;
-            }
-            if !self.at_end() {
-                let len = utf8_len(self.peek());
-                self.pos += len;
-            }
-        }
-        if self.peek() == b'\'' {
-            self.pos += 1;
-        }
-        self.err(self.span(lo), "`char` literals were removed —use a one-character str (\"x\"); `s.code()` reads a codepoint, `str.from_code(n)` builds one");
     }
 
     fn lex_number(&mut self, lo: usize) {
@@ -493,16 +470,7 @@ impl<'a> Lexer<'a> {
             }
             "true" => self.push(Tok::Bool(true), lo),
             "false" => self.push(Tok::Bool(false), lo),
-            w => {
-                // the reservation is mode-independent: the same closed
-                // three-word list draws the diagnostic in `.rut` source
-                // and `.d.rut` decls alike; everything else — including
-                // words like `switch` or `null` — is an ordinary identifier
-                if let Some(msg) = reserved_word_msg(w) {
-                    self.err(self.span(lo), msg);
-                }
-                self.push(Tok::Ident(w.to_string()), lo);
-            }
+            w => self.push(Tok::Ident(w.to_string()), lo),
         }
     }
 
@@ -669,7 +637,6 @@ impl<'a> Lexer<'a> {
                 b'"' => {} // string literal — allowed (hole termination is
                 // brace-based; the every-byte-literal rule stays as a
                 // style rule, not a lexer error)
-                b'\'' => {} // char literal — legal in holes
                 _ => {}
             }
             // lex one token into the hole
@@ -691,7 +658,6 @@ impl<'a> Lexer<'a> {
                     self.pos = (self.pos + 2).min(self.src.len());
                 }
                 b'0'..=b'9' => self.lex_number(hlo),
-                b'\'' => self.lex_removed_char_lit(hlo),
                 b'"' => {
                     self.pos += 1; // opening quote
                     let s = self.lex_plain_string_body(hlo);
@@ -808,26 +774,7 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b"<", Tok::Lt),
     (b">", Tok::Gt),
     (b"?", Tok::Question),
-    (b"@", Tok::At),
 ];
-
-/// The reserved words — a closed three-word list; hard errors naming
-/// the rut replacement. Everything else, including words that are
-/// keywords in other languages (`switch`, `match`, `null`, `var`, …),
-/// lexes as an ordinary identifier.
-/// NOTE: `super` and `as` are NOT here — they are contextual
-/// (`pub(super)`; `as` is the numeric-cast word); the parser rejects
-/// them in every other position. `trait` left the list with the
-/// structural-interfaces fork: it is an ordinary identifier now.
-fn reserved_word_msg(w: &str) -> Option<String> {
-    let repl: &str = match w {
-        "void" => "rut spells the empty type `nil`",
-        "in" => "`in` is not an operator; iteration is `for (let x of ...)`",
-        "private" => "members are private by default —add `pub`",
-        _ => return None,
-    };
-    Some(repl.to_string())
-}
 
 fn is_ident_start(b: u8) -> bool {
     b.is_ascii_alphabetic() || b == b'_' || b == b'$'

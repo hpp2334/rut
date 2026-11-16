@@ -190,12 +190,11 @@ context; after that, use the zh-CN rendering alone.
 | mount | 挂载 | mounting is declared, not discovered → 挂载由声明决定，而非目录发现 |
 | declarations are the graph | 声明即图 | the `mod` decls ARE the module set — never a directory listing |
 | repealed | 已废除 | a retired manifest key refuses loudly → 被废除的键会大声拒绝并给出修复方法 |
-| reader compat | 读取器兼容 | old published bundle envelopes keep loading — a loading law |
 | module rows | 模块行 | the `rut.mods` additive envelope section（path-keyed source rows） |
 | riding source | 承载源码 | generic-source riding：the source that serves consumer-spelled shapes |
 | run chain | 运行链 | `RutRun::new()..compile()` 的组合 —— `Pkg` → `RutRun` → `Compiled` → `Vm` 一值贯通 |
 | auto-ride / auto-offer | 自动承载 / 自动 offer | core 在 `.compile()` 中自动承载（riding → 承载）；除非已 offer 了名为 `core` 的包 |
-| yield | 产出 | a walk's yield → 遍历的产出（`Loaded { pkgs, root }`） |
+| yield | 产出 | a walk's yield → 遍历的产出（`Walk { pkgs, root }`） |
 | world | 世界 | the walk's world → 遍历的世界；close the world → 收束世界；the consumer's world → 消费者的世界 |
 | named record | 具名记录 | user struct/class rows; never cross → 具名记录永不跨越 |
 | anonymous tuple | 匿名元组 | the `(T, ..)` spelling crosses field-by-field → 匿名元组逐字段跨越 |

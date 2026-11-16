@@ -13,7 +13,7 @@ both sides.
 
 ```rust
 // the surface offers as a pkg — a .d.rut lowered to host rows
-let gfx = rut_driver::Pkg::decl("app:gfx", GFX_DECL);
+let gfx = rut_driver::Mounted::decl("app:gfx", GFX_DECL);
 
 // the raw lane: bind the bodies on a bare registry, full `scope::name`
 // strings (the HostPkg/pkg_fn! builder lane is [host fns](../reference/host-fns.md))

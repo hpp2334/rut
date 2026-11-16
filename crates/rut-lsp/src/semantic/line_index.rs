@@ -36,11 +36,6 @@ impl LineIndex {
         }
     }
 
-    #[allow(dead_code)] // the tests' line tally — production walks spans, never totals
-    pub fn line_count(&self) -> usize {
-        self.line_starts.len()
-    }
-
     /// byte offset -> (line, UTF-16 column); clamps to file end
     pub fn position(&self, src: &str, byte: u32) -> (u32, u32) {
         let byte = byte.min(self.len);

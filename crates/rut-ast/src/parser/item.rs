@@ -89,27 +89,6 @@ pub(crate) fn classify_item(p: &mut Parser) -> Option<Frame> {
                     with_mod(Vec::new(), sp, ModKind::Builtin { ambient: true }),
                 )))
             }
-            // bare `builtin` — the old spelling is gone: diagnosed, then
-            // recovered as ambient so downstream diagnostics stay sane.
-            // The keyword IS the modifier (the diag aims at it)
-            "builtin" => {
-                p.err(
-                    sp,
-                    "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)",
-                );
-                p.bump();
-                Some(Frame::Surface(SurfaceFrame::new(
-                    Linkage::Builtin { ambient: true },
-                    with_mod(Vec::new(), sp, ModKind::Builtin { ambient: true }),
-                )))
-            }
-            "extern" => {
-                p.err(
-                    sp,
-                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader",
-                );
-                None
-            }
             // statement keywords at module scope
             "if" | "while" | "for" | "return" | "when" | "break" | "continue" | "await" => {
                 p.err(
@@ -165,12 +144,6 @@ pub(crate) fn classify_pub(p: &mut Parser, mods: Vec<ModifierNode>) -> Option<Fr
                 Linkage::Builtin { ambient: false },
                 mods,
             ))),
-            "extern" => {
-                p.err_here(
-                    "`extern` linkage is removed —`host` is the only native surface (embedding Rust); rut packages arrive through the module loader",
-                );
-                None
-            }
             _ => {
                 p.err_here(format!("`pub` must precede a declaration, found `{kw}`"));
                 None
@@ -329,10 +302,9 @@ impl UseFrame {
 /// `pub? mod NAME;` — a file-module DECLARATION: the body lives in the
 /// sibling `NAME/mod.rut`; the loader mounts it. In implementation
 /// files the inline `mod NAME { .. }` block form is gone — one
-/// mechanism, files only — and diagnosing it still produces the decl
-/// (the stray block is skipped so the tail keeps parsing). In a
-/// DECLARATION file (`Mode::Decl`) the inline form IS legal and the
-/// block parses as a `ModInlineNode`.
+/// mechanism, files only — and a stray block is the ordinary
+/// `expected `;`` error. In a DECLARATION file (`Mode::Decl`) the
+/// inline form IS legal and the block parses as a `ModInlineNode`.
 pub(crate) struct ModDeclFrame {
     modifiers: Vec<ModifierNode>,
     lo: u32,
@@ -362,36 +334,17 @@ impl ModDeclFrame {
             return Step::Pop(Done::Failed);
         };
         self.name = name;
-        if p.eat_punct(Tok::LBrace) {
-            if p.mode == Mode::Decl {
-                // the inline declaration module: the frame collects the
-                // nested declarations (it consumed the `{` above); this
-                // frame stays underneath and relays its item
-                self.inline = true;
-                let (modifiers, lo, name) =
-                    (std::mem::take(&mut self.modifiers), self.lo, self.name);
-                return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(
-                    modifiers, lo, name,
-                )));
-            }
-            p.err_here(
-                "inline `mod { }` blocks are gone — the body lives in `NAME/mod.rut` beside this file",
-            );
-            // skip the stray block so the module's tail still parses —
-            // one diag, and the declaration itself survives
-            let mut depth = 1usize;
-            while depth > 0 && !p.at_eof() {
-                if p.eat_punct(Tok::LBrace) {
-                    depth += 1;
-                } else if p.eat_punct(Tok::RBrace) {
-                    depth -= 1;
-                } else {
-                    p.bump();
-                }
-            }
-        } else {
-            p.expect(Tok::Semi);
+        if p.mode == Mode::Decl && p.eat_punct(Tok::LBrace) {
+            // the inline declaration module: the frame collects the
+            // nested declarations (it consumed the `{` above); this
+            // frame stays underneath and relays its item
+            self.inline = true;
+            let (modifiers, lo, name) = (std::mem::take(&mut self.modifiers), self.lo, self.name);
+            return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(
+                modifiers, lo, name,
+            )));
         }
+        p.expect(Tok::Semi);
         let node = with_doc!(
             p,
             ModDeclNode {
@@ -1635,26 +1588,12 @@ impl MethodFrame {
     }
 
     fn finish_sig(&mut self, p: &mut Parser) -> Step {
-        self.stray_where(p);
         if self.with_body && p.mode == Mode::Impl {
             self.stage = MeStage::Body;
             Step::Push(Frame::Block(BlockFrame::lax(p, self.lo)))
         } else {
             p.expect(Tok::Semi);
             self.pop(p, None)
-        }
-    }
-
-    /// A `where` clause is gone: diagnose with the inline
-    /// replacement and skip past the stray clause.
-    fn stray_where(&mut self, p: &mut Parser) {
-        if p.at_kw("where") {
-            p.err_here(
-                "`where` clauses are removed — write the bound inline: `fn m<T requires B>(..)`",
-            );
-            while !matches!(p.tok(), Tok::LBrace | Tok::Semi | Tok::Eof) {
-                p.bump();
-            }
         }
     }
 
@@ -1800,18 +1739,10 @@ impl FnFrame {
         self.body(p)
     }
 
-    /// The fn body — a stray `where` clause diagnoses and is skipped.
-    /// In a DECLARATION file a bodiless signature (`fn f(..);`) is the
-    /// legal spelling; a braced body is implementation and diagnoses.
+    /// The fn body. In a DECLARATION file a bodiless signature
+    /// (`fn f(..);`) is the legal spelling; a braced body is
+    /// implementation and diagnoses.
     fn body(&mut self, p: &mut Parser) -> Step {
-        if p.at_kw("where") {
-            p.err_here(
-                "`where` clauses are removed — write the bound inline: `fn f<T requires B>(..)`",
-            );
-            while !matches!(p.tok(), Tok::LBrace | Tok::Eof) {
-                p.bump();
-            }
-        }
         if p.mode == Mode::Decl {
             if matches!(p.tok(), Tok::Semi) {
                 self.semi_hi = p.span().hi;
@@ -2085,10 +2016,7 @@ impl SurfaceFrame {
                 self.stage = SuStage::Params;
                 Step::Push(Frame::Params(ParamsFrame::new()))
             }
-            Tok::Ident(k) if k == "class" || k == "trait" => {
-                if k == "trait" {
-                    p.err(p.span(), "`builtin trait` is removed — engine contracts are spelled on types now: `Future`/`RunContext` are `builtin class` rows, and `Iterable`/`Disposal` are bracket markers (`[iterable] fn` / `[disposal] fn` in an inherent `impl`)");
-                }
+            Tok::Ident(k) if k == "class" => {
                 p.bump();
                 let Some(name) = p.expect_ident("a builtin type name") else {
                     return Step::Pop(Done::Failed);
@@ -2135,7 +2063,7 @@ impl SurfaceFrame {
             }
             Tok::Ident(_) => {
                 p.err_here(
-                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, or `builtin impl <prim> { .. }` (`builtin trait` is removed — engine contracts are `builtin class` rows and bracket markers now)",
+                    "`builtin` spells its kind — `builtin primitive <name> { .. }`, `builtin class Name { .. }`, or `builtin impl <prim> { .. }`",
                 );
                 Step::Pop(Done::Failed)
             }

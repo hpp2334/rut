@@ -16,7 +16,7 @@
   // deps. No presence gating, no light mount: every consumer gets the
   // whole surface, and the packed bundle is CLOSED — its `deps/`
   // carries the strbuild + pouch + nmapset groups under identity dirs
-  // (the v11 wire), so the wrappers' `use` heads resolve wherever json
+  // (the v12 wire), so the wrappers' `use` heads resolve wherever json
   // travels.
   "name": "json",
   "deps": {

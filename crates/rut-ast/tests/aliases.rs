@@ -132,22 +132,22 @@ impl Widget {
 }
 
 #[test]
-fn stray_where_diagnoses_with_inline_replacement() {
-    // after the return type
+fn stray_where_is_the_ordinary_error_ladder() {
+    // `where` is an ordinary identifier — no tailored skip arm; a
+    // stray clause in signature position hits the ordinary expected-X
+    // errors and the parse resyncs (termination is the contract)
     let src = "interface D { fn d(self) -> u64; }\nfn load<T>(v: str) -> T where T requires D { panic(\"x\"); }\n";
     let (_, diags) = parse(src, Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`where` clauses are removed") && d.msg.contains("<T requires")),
-        "stray where must diagnose with the replacement: {diags:?}"
+        !diags.is_empty() && !diags.iter().any(|d| d.msg.contains("where clause")),
+        "stray where fails through the ordinary ladder: {diags:?}"
     );
     // bodiless position too
     let src2 = "interface D { fn d(self) -> u64; }\ninterface Tr { fn m<T>(self) -> i32 where T requires D; }\n";
     let (_, diags2) = parse(src2, Mode::Impl);
     assert!(
-        diags2
-            .iter()
-            .any(|d| d.msg.contains("`where` clauses are removed")),
-        "stray where on a method must diagnose: {diags2:?}"
+        !diags2.is_empty(),
+        "stray where on a method fails: {diags2:?}"
     );
 }
 
@@ -285,17 +285,20 @@ pub(pkg) type P = i64;
 }
 
 #[test]
-fn pub_mod_self_scopes_are_gone_on_type_alias() {
-    // the repealed paren spellings diagnose (one diag each) but the
-    // aliases still parse at the default
+fn pub_mod_self_scopes_are_the_ordinary_scope_error() {
+    // the repealed paren spellings draw the ordinary pub(..) scope
+    // error (one per spelling) and the aliases still parse at the
+    // default
     let (ast, diags) = parse(
         "pub(mod) type B = i64;\npub(self) type D = i64;\n",
         Mode::Impl,
     );
     assert_eq!(diags.len(), 2, "one diag per repealed spelling: {diags:?}");
     assert!(
-        diags.iter().all(|d| d.msg.contains("are gone")),
-        "each diag names the fix: {diags:?}"
+        diags
+            .iter()
+            .all(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
+        "each diag is the ordinary scope error: {diags:?}"
     );
     let items = ast.root().items(&ast);
     for item in items.iter().take(2) {

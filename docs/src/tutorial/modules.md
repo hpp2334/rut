@@ -52,9 +52,9 @@ Every declaration has a visibility, and unannotated means
 | Form | Meaning |
 |---|---|
 | `pub fn ..` | public — importable by any module, other packages included |
-| `pub(mod) fn ..` | visible everywhere in this package's module tree |
+| `pub(pkg) fn ..` | visible everywhere in this package's module tree |
 | `pub(super) fn ..` | visible to the parent module only |
-| `fn ..` | module-private (`pub(self)`) — the default |
+| `fn ..` | module-private — the default |
 
 The same forms apply to types, module `let`s, and class members.
 Structs are the exception: a struct is an open record — all members

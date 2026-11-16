@@ -566,7 +566,6 @@ pub const RESERVED_KW: &[&str] = &[
     "static",
     "async",
     "await",
-    "extern",
     "is",
     "host",
     "fn",

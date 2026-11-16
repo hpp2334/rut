@@ -64,7 +64,6 @@ pub enum Tok {
     AmpAmpEq,
     PipePipeEq, // &&= ||=
     Question,
-    At,
 
     Eof,
 }
@@ -185,7 +184,6 @@ impl Token {
             AmpAmpEq => "`&&=`".into(),
             PipePipeEq => "`||=`".into(),
             Question => "`?`".into(),
-            At => "`@`".into(),
             Eof => "end of file".into(),
         }
     }

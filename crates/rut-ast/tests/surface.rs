@@ -152,25 +152,25 @@ pub host fn legacy_ping() -> bool;
 }
 
 #[test]
-fn builtin_trait_spelling_is_removed() {
+fn builtin_trait_spelling_is_the_ordinary_kind_error() {
+    // the removed spelling hits the ordinary expected-arm error —
+    // `trait` is an ordinary identifier and no recovery arm mints a
+    // BuiltinTy anymore
     let src = "prelude builtin trait Index<T> {\n    fn len(self) -> i32;\n}\n";
     let (ast, diags) = parse(src, Mode::Decl);
     assert!(
         diags
             .iter()
-            .any(|d| d.msg.contains("`builtin trait` is removed")),
-        "the removed spelling must be diagnosed: {diags:?}"
+            .any(|d| d.msg.contains("`builtin` spells its kind")),
+        "the stray kind word draws the kind error: {diags:?}"
     );
-    // recovery: the members still parse (as a class)
+    // the whole item fences — no BuiltinTy recovery
     let items = ast.root().items(&ast);
-    assert_eq!(items.len(), 1);
-    let ItemRef::BuiltinTy(h) = items[0] else {
-        panic!("expected the recovered BuiltinTy item, got {:?}", items[0]);
-    };
-    let d = h.get(&ast);
-    assert_eq!(ast.name(d.name), "Index");
-    assert_eq!(d.generics.len(), 1);
-    assert_eq!(d.members.len(), 1);
+    assert!(
+        items.iter().any(|i| matches!(i, ItemRef::Error(_))),
+        "the item fences as an Error, got {:?}",
+        items
+    );
 }
 
 const BUILTIN_SURFACE: &str = "\
@@ -198,7 +198,7 @@ fn builtin_ty_parses() {
 #[test]
 fn builtin_requires_a_kind_word() {
     // builtin decls spell their kind — `prelude builtin primitive` /
-    // `prelude builtin class` / `prelude builtin trait`; a
+    // `prelude builtin class` / `prelude builtin impl`; a
     // bare `builtin Name { .. }` is diagnosed
     let (_, diags) = parse(
         "prelude builtin Option<T> { fn some(v: T) -> Self; }",
@@ -226,19 +226,18 @@ fn zero_member_builtin_bodies_parse() {
     };
     assert!(h.get(&ast).members.is_empty());
 
+    // the `trait` kind word is gone: the spelling hits the ordinary
+    // expected-arm error and the item fences
     let (ast, diags) = parse("prelude builtin trait Mark { }", Mode::Decl);
     assert!(
         diags
             .iter()
-            .any(|d| d.msg.contains("`builtin trait` is removed")),
-        "the removed spelling must be diagnosed: {diags:?}"
+            .any(|d| d.msg.contains("`builtin` spells its kind")),
+        "the stray kind word draws the kind error: {diags:?}"
     );
     let items = ast.root().items(&ast);
     assert_eq!(items.len(), 1);
-    let ItemRef::BuiltinTy(h) = items[0] else {
-        panic!("expected the recovered BuiltinTy item, got {:?}", items[0]);
-    };
-    assert!(h.get(&ast).members.is_empty());
+    assert!(matches!(items[0], ItemRef::Error(_)));
 }
 
 const HOST_STRUCT: &str = "\
@@ -468,8 +467,8 @@ fn the_two_builtin_spellings_parse_clean() {
         h.get(&ast).linkage()
     );
 
-    // the kind words compose with both spellings (the `builtin trait`
-    // row kind is GONE — v20)
+    // the kind words compose with both spellings (`trait` is no kind
+    // word — it is an ordinary identifier now)
     for src in [
         "pub builtin class opaque { fn new<T>(v: T) -> Self; }",
         "pub builtin impl i32 { fn abs(self) -> i32; }",
@@ -482,24 +481,25 @@ fn the_two_builtin_spellings_parse_clean() {
     assert!(
         diags
             .iter()
-            .any(|d| d.msg.contains("`builtin trait` is removed")),
-        "the removed spelling must diagnose: {diags:?}"
+            .any(|d| d.msg.contains("`builtin` spells its kind")),
+        "the stray kind word draws the kind error: {diags:?}"
     );
 }
 
 #[test]
-fn bare_builtin_diagnoses_the_two_spellings() {
-    // the bare keyword is gone: it diagnoses with the two-spelling
-    // message and recovers as ambient so parsing continues
+fn bare_builtin_is_an_ordinary_item_error() {
+    // the bare keyword's recovery arm is gone: the word hits the
+    // ordinary item error — only `prelude builtin` and `pub builtin`
+    // spell the surface
     let (_, diags) = parse(
         "builtin fn assert(cond: bool, msg: str) -> nil;",
         Mode::Decl,
     );
     assert!(
-        diags.iter().any(|d| d.msg.contains(
-            "`builtin` must be spelled `prelude builtin` (ambient) or `pub builtin` (import-gated)"
-        )),
-        "bare `builtin` must diagnose the two spellings: {diags:?}"
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected a declaration, found `builtin`")),
+        "bare `builtin` draws the ordinary item error: {diags:?}"
     );
 }
 
@@ -549,13 +549,15 @@ fn removed_forms_are_rejected() {
             .any(|d| d.msg.contains("`host class` is removed")),
         "`host class` must be diagnosed: {diags:?}"
     );
-    // `extern` — removed linkage
+    // `extern` left the reserved table with its refusal arm: the word
+    // is an ordinary identifier, so `pub extern fn` draws the ordinary
+    // `pub` error
     let (_, diags) = parse("pub extern fn string_encode(s: str) -> bytes;", Mode::Decl);
     assert!(
-        diags
-            .iter()
-            .any(|d| d.msg.contains("`extern` linkage is removed")),
-        "`extern` must be diagnosed: {diags:?}"
+        diags.iter().any(|d| d
+            .msg
+            .contains("`pub` must precede a declaration, found `extern`")),
+        "`pub extern` draws the ordinary pub error: {diags:?}"
     );
 }
 
@@ -694,12 +696,13 @@ pub host fn legacy() -> bool;
     assert_eq!(ast.name(ch.get(&ast).name), "connect");
 
     // the file-form edge still parses beside inline blocks, and the
-    // inline form is DECL-ONLY
+    // inline form is DECL-ONLY — in an implementation file the stray
+    // block is the ordinary error
     let (_, diags) = parse("mod gone { }", Mode::Impl);
     assert!(
         diags
             .iter()
-            .any(|d| d.msg.contains("inline `mod { }` blocks are gone")),
+            .any(|d| d.msg.contains("expected ;, found `{`")),
         "implementation files keep the refusal: {diags:?}"
     );
 }

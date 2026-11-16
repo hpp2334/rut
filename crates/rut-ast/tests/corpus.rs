@@ -101,13 +101,33 @@ fn enum_member_values_are_gone() {
 }
 
 #[test]
-fn reserved_words_explain_themselves() {
-    for (word, want) in [("private", "pub"), ("void", "nil"), ("in", "of")] {
-        let src = format!("fn f() -> nil {{ let x = {word}; }}");
-        let (_, diags) = parse(&src, Mode::Impl);
+fn the_reserved_trio_are_ordinary_identifiers() {
+    // the lexer's hard-ban trio (`private`/`void`/`in`) retired: the
+    // words are plain identifiers now — they lex and parse clean, in
+    // BOTH modes, like the retired 13 before them
+    for (label, src, mode) in [
+        (
+            "binding",
+            "fn f() -> nil { let private = 1; let void = private; let x = void; }",
+            Mode::Impl,
+        ),
+        ("fn name", "fn in() -> nil { }", Mode::Impl),
+        ("struct name", "struct void { n: i32 }", Mode::Impl),
+        (
+            "method call",
+            "fn f() -> nil { let m = 1; let k = m.private(m); }",
+            Mode::Impl,
+        ),
+        (
+            "decl param",
+            "pub host fn del(private: opaque, in: bytes) -> any;",
+            Mode::Decl,
+        ),
+    ] {
+        let (_, diags) = parse(src, mode);
         assert!(
-            diags.iter().any(|d| d.msg.contains(want)),
-            "`{word}` diag should name its rut replacement `{want}`: {diags:?}"
+            diags.is_empty(),
+            "{label}: reserved-trio word drew a diag: {diags:?}"
         );
     }
 }
@@ -132,6 +152,37 @@ fn interface_is_reserved_and_trait_is_not() {
     assert!(
         !diags.iter().any(|d| d.msg.contains("reserved word")),
         "`interface` must not be a lexer hard-ban anymore: {diags:?}"
+    );
+}
+
+#[test]
+fn where_is_an_ordinary_identifier() {
+    // `where` left even the removal lane: the word is an ordinary
+    // identifier — it names bindings, params, and fns clean; a stray
+    // `where` in a signature position hits the ordinary error ladder
+    // (no tailored skip arm anymore)
+    assert!(!rut_ast::parser::is_reserved_kw("where"));
+    let src = "fn f() -> nil { let where = 1; let y = where; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(
+        diags.is_empty(),
+        "`where` must parse as an ident: {diags:?}"
+    );
+    let src = "fn where(where: i32) -> i32 { return where; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(diags.is_empty(), "`where` names a fn + param: {diags:?}");
+}
+
+#[test]
+fn extern_is_an_ordinary_identifier() {
+    // `extern` left the reserved table with its refusal arm: the word
+    // is a plain identifier now
+    assert!(!rut_ast::parser::is_reserved_kw("extern"));
+    let src = "fn f() -> nil { let extern = 1; let y = extern; }";
+    let (_, diags) = parse(src, Mode::Impl);
+    assert!(
+        diags.is_empty(),
+        "`extern` must lex and parse as an identifier: {diags:?}"
     );
 }
 
@@ -218,23 +269,26 @@ fn nil_is_the_empty_type_and_value() {
 }
 
 #[test]
-fn empty_parens_are_rejected_with_nil_hint() {
-    // v1.2: neither `()` the value nor `()` the type survives; both
-    // diagnostics must point at `nil`
+fn empty_parens_are_the_ordinary_error() {
+    // v1.2 repealed `()` both ways — now through the ORDINARY ladder:
+    // the value arm says "expected an expression", the type arm
+    // "expected a type name" (the empty type/value is `nil`)
     let (_, diags) = parse("fn f() -> nil { let x = (); }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`nil`")),
-        "`()` value diag should point at `nil`: {diags:?}"
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected an expression")),
+        "`()` value diag is the ordinary error: {diags:?}"
     );
     let (_, diags) = parse("fn f() -> () { }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`nil`")),
-        "`()` type diag should point at `nil`: {diags:?}"
+        diags.iter().any(|d| d.msg.contains("expected a type name")),
+        "`()` type diag is the ordinary error: {diags:?}"
     );
     let (_, diags) = parse("fn f() -> nil { let x: () = nil; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`nil`")),
-        "`()` annotation diag should point at `nil`: {diags:?}"
+        diags.iter().any(|d| d.msg.contains("expected a type name")),
+        "`()` annotation diag is the ordinary error: {diags:?}"
     );
 }
 
@@ -356,10 +410,11 @@ fn nullable_types_parse() {
 }
 
 #[test]
-fn the_postfix_nullable_spelling_is_removed() {
-    // the user ruling: `T?` / `[T]?` no longer parse — each trailing `?`
-    // diagnoses pointing at the prefix spelling, and the bare type is
-    // the recovery result (the Diag fails the compile either way)
+fn the_postfix_nullable_spelling_is_an_ordinary_error() {
+    // the user ruling: `T?` / `[T]?` no longer parse — a trailing `?`
+    // after a completed type hits the ordinary error ladder (no
+    // tailored arm, no recovery): every spelling draws a diag and the
+    // compile fails
     for src in [
         "fn f(p: i32?) -> nil { }",
         "fn f(p: [i32]?) -> nil { }",
@@ -368,36 +423,37 @@ fn the_postfix_nullable_spelling_is_removed() {
     ] {
         let (_, diags) = parse(src, Mode::Impl);
         assert!(
-            diags
-                .iter()
-                .any(|d| d.msg.contains("the postfix spelling `T?` was removed")
-                    && d.msg.contains("`?T`")),
-            "`{src}` must diagnose the removed postfix spelling: {diags:?}"
+            !diags.is_empty() && !diags.iter().any(|d| d.msg.contains("removed")),
+            "`{src}` must fail through the ordinary ladder: {diags:?}"
         );
     }
 }
 
 #[test]
-fn removed_pointer_spellings_diagnose() {
-    // the `*T` type spelling points at `?T`...
+fn removed_pointer_spellings_are_ordinary_errors() {
+    // `*T` in type position and `&x` / `*x` in expression position
+    // fall to the ordinary prefix errors — no tailored removal diags
     let (_, diags) = parse("fn f(p: *i32) -> nil { }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("`?T`")),
-        "`*T` should diagnose `?T`: {diags:?}"
+        diags.iter().any(|d| d.msg.contains("expected a type name")),
+        "`*T` should hit the ordinary type error: {diags:?}"
     );
-    // ...and the `&x` / `*x` prefix forms point at direct passing
     let (_, diags) = parse("fn f() -> nil { let p: ?i32 = &7; }", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("share by reference")),
-        "`&x` should diagnose the sharing law: {diags:?}"
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected an expression")),
+        "`&x` should hit the ordinary expression error: {diags:?}"
     );
     let (_, diags) = parse(
         "fn f() -> nil { let p: ?i32 = 7; let y: i32 = *p; }",
         Mode::Impl,
     );
     assert!(
-        diags.iter().any(|d| d.msg.contains("share by reference")),
-        "`*x` should diagnose the sharing law: {diags:?}"
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected an expression")),
+        "`*x` should hit the ordinary expression error: {diags:?}"
     );
 }
 
@@ -566,36 +622,46 @@ fn pub_use_parses_with_the_reexport_vis() {
 }
 
 #[test]
-fn inline_mod_blocks_are_gone() {
-    // no inline `mod { }` blocks — the body lives in `NAME/mod.rut`.
-    // One diag naming the file location; the declaration survives and
-    // the tail keeps parsing.
+fn inline_mod_blocks_are_an_ordinary_error() {
+    // no inline `mod { }` blocks in implementation files — the body
+    // lives in `NAME/mod.rut`. A stray block is the ordinary
+    // `expected `;`` error at the decl; the decl survives and the
+    // block fences (the tail behind it is the resync's cost — the
+    // ordinary ladder's, no tailored skip arm anymore). In DECL files
+    // the inline form is legal current syntax.
     let src = "mod W { fn f() -> nil { } }\nfn g() -> nil { }\n";
     let (ast, diags) = parse(src, Mode::Impl);
-    assert_eq!(diags.len(), 1, "one diag, no cascade: {diags:?}");
     assert!(
-        diags[0].msg.contains("inline `mod { }` blocks are gone")
-            && diags[0].msg.contains("NAME/mod.rut"),
-        "the inline-block diag names the fix: {diags:?}"
+        !diags.is_empty() && !diags.iter().any(|d| d.msg.contains("gone")),
+        "the stray block fails through the ordinary ladder: {diags:?}"
     );
     let items = ast.root().items(&ast);
     assert!(matches!(items[0], ItemRef::ModDecl(_)), "the decl survives");
-    assert!(matches!(items[1], ItemRef::Fn(_)), "the tail still parses");
+    assert!(
+        items.iter().any(|i| matches!(i, ItemRef::Error(_))),
+        "the block fences: {:?}",
+        items
+    );
 }
 
 #[test]
-fn pub_mod_and_pub_self_are_gone_everywhere() {
-    // the paren spellings diagnose at module scope too; the bare
-    // default and the widened forms keep parsing
+fn pub_mod_and_pub_self_are_the_ordinary_scope_error() {
+    // the paren spellings hit the ordinary pub(..) scope error (the
+    // same one `pub(crate)` draws); the bare default and the widened
+    // forms keep parsing
     let (ast, diags) = parse("pub(mod) type T = i64;\n", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("are gone")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
         "{diags:?}"
     );
     assert!(matches!(ast.root().items(&ast)[0], ItemRef::Alias(_)));
     let (_, diags) = parse("pub(self) mod m;", Mode::Impl);
     assert!(
-        diags.iter().any(|d| d.msg.contains("are gone")),
+        diags
+            .iter()
+            .any(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
         "{diags:?}"
     );
     // the surviving set: `pub(super)`, `pub(pkg)`, `pub`

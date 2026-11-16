@@ -266,7 +266,9 @@ prelude builtin impl u64 {
 // Constants: `NAN` — core's one const (f64 bits, materialized with
 // `ConstRaw`), name-explicit like every other prelude name:
 // `use core::{NAN}`. The float constants (`PI`, `E`, `INFINITY`, …)
-// are `calc_host`'s (`use calc_host::{ Math }` — the `Math::` head).
+// are `calc_host`'s surface `pub let` rows — they bind bare at the
+// pkg root (`use calc_host::{ PI }`), and the `math` module
+// re-exports the family (`math::PI`).
 
 // ---- engine contracts ----
 // The engine's contracts are SPELLINGS ON TYPES now (no `builtin

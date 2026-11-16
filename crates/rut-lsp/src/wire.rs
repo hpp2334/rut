@@ -84,7 +84,6 @@ pub struct DepRow {
     pub name: String,
     pub source: DepSource,
     pub optional: bool,
-    pub lib: Option<String>,
 }
 
 /// one entry source: the path a pkg indexes, and the mode it indexes in.
@@ -172,7 +171,6 @@ impl From<&crate::deps::DepRow> for DepRow {
             name: r.name.clone(),
             source: DepSource::from(&r.source),
             optional: r.optional,
-            lib: r.lib.clone(),
         }
     }
 }

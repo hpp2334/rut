@@ -19,7 +19,7 @@ use crate::semantic::Span;
 use crate::semantic::Tok;
 use crate::semantic::Token;
 use rut_ast::{
-    Ast, BlockNode, DocData, EnumMemberNode, FieldDeclNode, FieldRef, Handle, IdentId, ItemRef,
+    Ast, BlockNode, DocData, EnumMemberNode, FieldDeclNode, FieldRef, Handle, ItemRef,
     MethodDeclNode, MethodRef, ModuleLetNode, ParamRef, Vis,
 };
 
@@ -223,7 +223,6 @@ fn ty_def(
     form: TyForm,
     head: String,
     vis: Vis,
-    generics: Vec<String>,
     fields: Vec<MemberSrc>,
     methods: Vec<MemberSrc>,
     span: Span,
@@ -239,17 +238,12 @@ fn ty_def(
         // plain decls are not ambient — the `prelude builtin` rows set
         // the flag through ONE struct-update at their arms
         ambient: false,
-        generics,
         fields,
         methods,
         doc,
         span,
         line: line_of(src, span.lo),
     }
-}
-
-fn generics_of(ast: &Ast, gs: &[IdentId]) -> Vec<String> {
-    gs.iter().map(|&g| ast.name(g).to_string()).collect()
 }
 
 /// declared parameter names in order, `self` excluded — the AST's own
@@ -310,7 +304,6 @@ pub fn index_items(
                     TyForm::Class,
                     head_src(src, span, d.body_span),
                     d.vis(),
-                    generics_of(ast, &d.generics),
                     fs,
                     ms,
                     span,
@@ -328,7 +321,6 @@ pub fn index_items(
                     TyForm::Struct,
                     head_src(src, span, d.body_span),
                     d.vis(),
-                    generics_of(ast, &d.generics),
                     fs,
                     ms,
                     span,
@@ -345,7 +337,6 @@ pub fn index_items(
                     TyForm::Interface,
                     head_src(src, span, d.body_span),
                     d.vis(),
-                    generics_of(ast, &d.generics),
                     Vec::new(),
                     ms,
                     span,
@@ -364,7 +355,6 @@ pub fn index_items(
                     TyForm::Enum,
                     head_src(src, span, d.body_span),
                     d.vis(),
-                    Vec::new(),
                     ms,
                     Vec::new(),
                     span,
@@ -377,9 +367,7 @@ pub fn index_items(
                 // is the target type's name, so an impl method renders
                 // like the type's own surface (`impl I for T` is gone)
                 let target_head = ty_head(ast, d.target);
-                idx.impls.push(ImplDef {
-                    target_name: target_head.clone(),
-                });
+                idx.impls.push(ImplDef {});
                 for m in &d.methods {
                     let MethodRef::Method(mh) = m else {
                         continue; // the recovery slot renders no row
@@ -461,7 +449,6 @@ pub fn index_items(
                         TyForm::Builtin,
                         head_src(src, span, d.body_span),
                         Vis::Pub,
-                        generics_of(ast, &d.generics),
                         Vec::new(),
                         ms,
                         span,
@@ -485,7 +472,6 @@ pub fn index_items(
                         head_src(src, span, d.body_span),
                         Vis::Pub,
                         Vec::new(),
-                        Vec::new(),
                         ms,
                         span,
                         doc_of(&d.doc, src),
@@ -502,7 +488,6 @@ pub fn index_items(
                     TyForm::HostStruct,
                     head_src(src, span, d.body_span),
                     Vis::Pub,
-                    Vec::new(),
                     fs,
                     Vec::new(),
                     span,
@@ -527,7 +512,6 @@ pub fn index_items(
                     vis: d.vis(),
                     is_pub: d.vis() == Vis::Pub,
                     ambient: false,
-                    generics: Vec::new(),
                     fields: Vec::new(),
                     methods: Vec::new(),
                     doc: doc_of(&d.doc, src),

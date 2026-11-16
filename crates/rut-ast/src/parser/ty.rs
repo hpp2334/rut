@@ -27,8 +27,6 @@ enum TyStage {
     Init,
     /// `?T` — the nullable
     Opt,
-    /// `*T` — the removed pointer spelling, recovered
-    LegacyPtr,
     /// `[T]` — the array type
     Bracket,
     /// `(A, B)` / `(T)` — tuple, grouping
@@ -84,13 +82,6 @@ impl TypeFrame {
                 // `?T` — the nullable type: prefix, binds tightest
                 if p.eat_punct(Tok::Question) {
                     self.stage = TyStage::Opt;
-                    return Step::Push(Frame::Type(TypeFrame::new(p)));
-                }
-                // the removed pointer spelling `*T`: diagnose and recover
-                if matches!(p.tok(), Tok::Star) {
-                    p.err_here("the pointer spelling `*T` was renamed — write `?T`");
-                    p.bump();
-                    self.stage = TyStage::LegacyPtr;
                     return Step::Push(Frame::Type(TypeFrame::new(p)));
                 }
                 // `[T]` — the array type
@@ -173,12 +164,8 @@ impl TypeFrame {
     }
 
     /// A completed type either pops — or a `|` follows and it continues
-    /// as a union bound. A trailing postfix `?` is the removed spelling.
+    /// as a union bound.
     fn pop_or_union(&mut self, p: &mut Parser, t: TyRef) -> Step {
-        while matches!(p.tok(), Tok::Question) {
-            p.err_here("the postfix spelling `T?` was removed — write `?T`");
-            p.bump();
-        }
         if self.allow_union && p.eat_punct(Tok::Pipe) {
             self.stage = TyStage::Union { elems: vec![t] };
             return Step::Push(Frame::Type(TypeFrame::new(p)));
@@ -246,12 +233,9 @@ impl TypeFrame {
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
-    /// tuple type element list: `()` is the nil type — spelled `nil`
+    /// tuple type element list — at least one element; `()` is the
+    /// ordinary "expected a type name" error (the empty type is `nil`)
     fn tuple_top(&mut self, p: &mut Parser) -> Step {
-        if p.eat_punct(Tok::RParen) {
-            p.err_here("`()` is not a type — the empty type is spelled `nil` (v1.2)");
-            return Step::Pop(Done::Ty(self.nil_ty(p)));
-        }
         Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
@@ -305,10 +289,6 @@ impl TypeFrame {
                     }
                     .allocate(&mut p.ast);
                     self.pop_or_union(p, node)
-                }
-                TyStage::LegacyPtr => {
-                    // `*T` recovery: the element type IS the result
-                    Step::Pop(Done::Ty(t))
                 }
                 TyStage::Bracket => {
                     p.expect(Tok::RBracket);

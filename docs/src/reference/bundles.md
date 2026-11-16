@@ -17,8 +17,9 @@ closure embedded as source. It compiles with the **consumer's**
 toolchain, so it never goes stale the way compiled IR does — which is
 why the book recommends the zip as the publication lane
 ([the source zip](#the-source-zip--the-source-transport)); the
-`.rutbundle` stays the compiled-delivery lane, and a published bundle
-is forever old yet loadable forever ([the wire version](#the-wire-version)).
+`.rutbundle` stays the compiled-delivery lane, and its wire is ONE
+number — a bundle this toolchain did not pack refuses at the door
+([the wire version](#the-wire-version)).
 
 ## Layout rules
 
@@ -277,13 +278,12 @@ not ride.
 ## The wire version
 
 `format_version` is 12 — the one bundle wire, both root kinds; the
-manifest's `type` routes lib-compiled vs host-decl. The 11 lane — the
-pre-declaration-entry wire — READS FOREVER (a published bundle is
-forever old, and a `rut.lock` pin to v11 bytes keeps working;
-migration is a re-pin, not a break). Anything else refuses **before
-reading anything else** — refuse, never guess: `this toolchain reads
-bundle format_version 12 (and the old 11 lane) only (found {v}) —
-re-pack the directory`.
+manifest's `type` routes lib-compiled vs host-decl. Anything else
+refuses **before reading anything else** — refuse, never guess, and
+there is no old lane to fall back to: `this toolchain reads bundle
+format_version 12 only (found {v}) — re-pack the directory`. Stale
+bytes never load back — the pack is deterministic, so a re-pack
+reproduces today's bundle byte-for-byte.
 
 Every file in the two layouts is part of the package: a bundle that
 dropped a declared child module would load partial — semantically
@@ -294,9 +294,9 @@ consumer-spelled
 shapes stay servable and a published bundle never carries source.
 This version-unstability is exactly why source sharing over the wire
 moved to the source zip ([below](#the-source-zip--the-source-transport)):
-a `.rutbundle`'s IR is not stable across rut toolchains — it stays
-LOADABLE forever (the reader keeps every old lane), but a freshly
-published toolchain compiles from source, not from old IR.
+a `.rutbundle`'s IR is not stable across rut toolchains — a bundle is
+readable only by the toolchain generation that packed it, so a fresh
+toolchain compiles from source, never from old IR.
 
 **The groups mirror the manifest.** The archive root is the root's own
 files; every dep rides at `deps/<name>@<fp16>/` — the dirname IS the
@@ -448,7 +448,7 @@ and version, then every group's decode, then the mount.
 |---|---|
 | zip entry CRC-32 | refuse — corrupt bundle (names the entry) |
 | `rut.jsonc` present, `"format": "rutbundle"` | refuse — not a rut bundle |
-| `format_version` exactly 12 (or 11 — the old lane, read forever) | anything else refuses — `this toolchain reads bundle format_version 12 (and the old 11 lane) only (found {v}) — re-pack the directory` |
+| `format_version` exactly 12 | anything else refuses — `this toolchain reads bundle format_version 12 only (found {v}) — re-pack the directory` |
 | a host root carrying a root `mod.rutc` | refuse — a host bundle's root is its surface, not a compiled unit |
 | a host root carrying a `rut.scopes` ledger or any group entry | refuse — a host bundle is its surface, single-package |
 | a compiled root without its `rut.scopes` ledger, or a ledger row that is not a content identity (`name@<16 hex>`) | refuse — a corrupt compiled bundle |
@@ -465,7 +465,9 @@ and version, then every group's decode, then the mount.
 
 The std tree (`rut/`) ships as **committed** per-package source zips
 at `dist/std/<pkg>.zip` — one zip per std package a `deps` row can
-spell (the old `.rutbundle` files sit beside them and stay loadable).
+spell. Only the current cut is committed (the `dist/std/` working
+mirror plus the latest `dist/std-vNN/` envelope); old tags serve their
+own immutable commits, and this toolchain refuses their bytes.
 jsDelivr's gh lane serves repo files at a ref, so the artifacts ARE
 the delivery and the publish act is a git tag (the tag push and
 jsDelivr's propagation are the maintainer's manual step):

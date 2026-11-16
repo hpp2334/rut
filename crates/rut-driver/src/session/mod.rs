@@ -49,7 +49,7 @@ pub use module::{HostRow, Mounted, MountedBody};
 
 use std::collections::BTreeMap;
 
-use crate::bundle::{parse_manifest, valid_mount_key, ManifestError};
+use crate::bundle::{valid_mount_key, ManifestError};
 
 /// The business-owned mount table. The host decides what exists; the
 /// resolver maps exact specifiers. Crate-internal: the run chain
@@ -134,25 +134,6 @@ impl Session {
                 }
                 _ => {}
             }
-        }
-        Err(ResolveError::NoModule {
-            spec: spec.to_string(),
-        })
-    }
-
-    /// Mutable exact resolution — the symbol-table apply lane's
-    /// take/replace access to a mounted pkg's body (a stripped
-    /// bundle's sidecar restores names + positions in place, before the
-    /// graph compiles). Same miss diagnostics as [`Session::resolve`].
-    #[allow(dead_code)] // the stripped-bundle sidecar lane applies in place — not wired yet
-    pub(crate) fn resolve_mut(&mut self, spec: &str) -> Result<&mut Mounted, ResolveError> {
-        if !valid_mount_key(spec) {
-            return Err(ResolveError::BadSpec {
-                spec: spec.to_string(),
-            });
-        }
-        if self.modules.contains_key(spec) {
-            return Ok(self.modules.get_mut(spec).unwrap());
         }
         Err(ResolveError::NoModule {
             spec: spec.to_string(),
@@ -332,52 +313,11 @@ impl Session {
     pub(crate) fn modules(&self) -> impl Iterator<Item = (&String, &Mounted)> {
         self.modules.iter()
     }
-
-    /// Take every mounted pkg out — the walk collectors' yield
-    /// (`Walk`): the session dies, the pkgs travel.
-    #[allow(dead_code)] // the walk collectors' yield — not wired yet
-    pub(crate) fn drain_pkgs(&mut self) -> Vec<Mounted> {
-        self.modules.values().cloned().collect()
-    }
-
-    /// Parse and mount a pkg manifest; a consumer manifest's `[deps]`
-    /// are folded into the mounted pkg's own table. Crate-internal
-    /// today (the wasm wall it served is a chain now) — the manifest
-    /// grammar's tests pin through it. Dies with the walk in Phase B.
-    #[allow(dead_code)]
-    pub(crate) fn load_manifest(&mut self, text: &str) -> Result<(), ManifestError> {
-        let manifest = parse_manifest(text)?;
-        if let Some(name) = &manifest.name {
-            self.mount(Mounted {
-                spec: name.clone(),
-                entry: manifest.entry.clone(),
-                manifest: manifest.clone(),
-                ..Default::default()
-            })?;
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const POUCH: &str = r#"
-// rut/pouch manifest — the surface + the body
-{
-  "name": "pouch",
-  "entry": { "type": "./pouch.d.rut" }
-}
-"#;
-
-    #[test]
-    fn mount_and_resolve() {
-        let mut s = Session::new();
-        s.load_manifest(POUCH).unwrap();
-        let m = s.resolve("pouch").unwrap();
-        assert_eq!(m.entry.type_path.as_deref(), Some("./pouch.d.rut"));
-    }
 
     #[test]
     fn missing_module_names_the_manifest() {

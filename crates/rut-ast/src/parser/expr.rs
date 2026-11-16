@@ -157,15 +157,6 @@ impl ExprFrame {
 
     fn sweep(&mut self, p: &mut Parser) -> Option<Frame> {
         loop {
-            // the removed `*x` / `&x` prefix forms diagnose themselves
-            match p.tok() {
-                Tok::Star | Tok::Amp => {
-                    p.err_here("`*x` / `&x` were removed — bindings share by reference now — pass `x` directly");
-                    p.bump();
-                    continue;
-                }
-                _ => {}
-            }
             let pfx = match p.tok() {
                 Tok::Minus => Some(Pfx::Un(UnOp::Neg)),
                 Tok::Bang => Some(Pfx::Un(UnOp::Not)),
@@ -777,23 +768,17 @@ impl AtomFrame {
                     AtomStage::Paren { e, elems, .. } => (e.take(), std::mem::take(elems)),
                     _ => unreachable!(),
                 };
-                // `(a)` groups; `(a, b)` are tuples; `()` is
-                // the nil value and must be spelled `nil` (v1.2)
+                // `(a)` groups; `(a, b)` are tuples; `()` is no value —
+                // the ordinary expression error
                 if elems.is_empty() {
-                    return match e {
-                        Some(v) => self.finish(p, v),
-                        None => {
-                            p.err_here(
-                                "`()` is not a value — the empty value is spelled `nil` (v1.2)",
-                            );
-                            let node = LitNode {
-                                span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
-                                lit: Lit::Nil,
-                            }
-                            .allocate(&mut p.ast);
-                            Step::Pop(Done::Expr(node))
-                        }
+                    let Some(v) = e else {
+                        p.err(
+                            Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
+                            "expected an expression",
+                        );
+                        return Step::Pop(Done::Failed);
                     };
+                    return self.finish(p, v);
                 }
                 let mut elems = elems;
                 if let Some(v) = e {

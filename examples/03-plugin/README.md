@@ -3,10 +3,10 @@
 A Rust chat-room **server** with a rut **moderator plugin**, in the shape
 of [00-todolist](../00-todolist), [01-sort](../01-sort), and
 [02-digest](../02-digest) — but loaded as a **module directory**:
-`plugin/rut.json` names the module (`plugin`), `plugin/mod.rut` is
+`plugin/rut.jsonc` names the module (`plugin`), `plugin/src/mod.rut` is
 the whole plugin (adapter + business logic), `src/lib.rs` is the
 embedder SDK, and `src/main.rs` drives a scripted run through **both
-load forms** — the directory and a v5 **compiled** `.rutbundle` packed
+load forms** — the directory and a **compiled** `.rutbundle` packed
 from it at runtime
 ([bundles](../../docs/src/reference/bundles.md)). This is the first
 example built on **re-entrant `vm.call`**
@@ -38,8 +38,9 @@ Neither business layer touches the crossing protocol. `Moderator` holds
 the bus handle and speaks through one private `say(topic, payload)`;
 `Plugin` exposes `join`/`msg`/`tick`/`shutdown` and dispatches through
 one `fire`. The plugin stays free of generic packages, so it publishes
-compiled: the manifest is bundle-shaped (v5) and the same directory
-packs unchanged — linkable pkgs ride `.rutc`, host pkgs ride source.
+compiled: the manifest is the plain directory grammar and the same
+directory packs unchanged — the pack door stamps the wire pair into
+the packed manifest; linkable pkgs ride `.rutc`, host pkgs ride source.
 
 ## The round trip
 
@@ -70,7 +71,7 @@ cargo run -p plugin
 ```
 
 The transcript prints at the end, followed by the packed-form run: the
-same directory packed to a v5 compiled `.rutbundle` in temp, loaded
+same directory packed to a compiled `.rutbundle` in temp, loaded
 back, and driven through the identical run — the printed
 "identical" line is the round-trip proof. `tests/session.rs` asserts the transcript exactly,
 proves every line crossed the nested render (`emits == renders`), and
@@ -81,7 +82,7 @@ The same loader drives the CLI for any self-contained module (this
 example's host fns live in the embedder, so it needs `cargo run`):
 
 ```
-rut run path/to/mod            # a module directory (rut.json)
+rut run path/to/mod            # a module directory (rut.jsonc)
 rut pack path/to/mod           # -> mod.rutbundle
 rut run path/to/mod.rutbundle  # the packed form
 ```

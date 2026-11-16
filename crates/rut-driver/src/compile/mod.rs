@@ -37,8 +37,8 @@ pub struct CompileOutput {
 /// `.compile()` law), the source offers as the root pkg under
 /// `module_name`, and one `.compile()` runs the whole law. The
 /// embedder-facing single-source lane (the wasm demo, `rut dump`).
-/// NOTE: the walked packages (`calc`'s `Math`, the async pair) are NOT
-/// here — a host that wants them offers them (`rut-native`'s
+/// NOTE: the walked packages (`calc_host`'s math, the async pair) are
+/// NOT here — a host that wants them offers them (`rut-native`'s
 /// `tree_pkg`); the single-source lane knows no names.
 pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput {
     // the recovering entry: ALWAYS a tree, and `p.src` is the

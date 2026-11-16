@@ -170,7 +170,6 @@ export interface DepRow {
   name: string;
   source: DepSource;
   optional: boolean;
-  lib: string | null;
 }
 
 /** the parsed `rut.jsonc` */

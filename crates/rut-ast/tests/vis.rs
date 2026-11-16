@@ -64,16 +64,17 @@ impl Widget {
 }
 
 #[test]
-fn member_pub_mod_self_are_gone() {
-    // the paren spellings are repealed — one diag naming the fix, and
-    // the member still parses (the default) so the tail stays sane
+fn member_pub_mod_self_are_the_ordinary_scope_error() {
+    // the paren spellings are repealed — each draws the ordinary
+    // pub(..) scope error, and the member still parses (the default)
+    // so the tail stays sane
     let (_, diags) = parse("class C { pub(mod) n: i32; pub(self) m: i32; }", Mode::Impl);
+    assert_eq!(diags.len(), 2, "one diag per repealed spelling: {diags:?}");
     assert!(
         diags
             .iter()
-            .any(|d| d.msg.contains("`pub(mod)`/`pub(self)` are gone")
-                && d.msg.contains("bare private is the default")),
-        "the repealed spellings must name the fix: {diags:?}"
+            .all(|d| d.msg.contains("expected `super` or `pkg` in pub(..)")),
+        "each diag is the ordinary scope error: {diags:?}"
     );
 }
 
@@ -197,15 +198,19 @@ fn struct_rejects_member_pub() {
 }
 
 #[test]
-fn private_is_a_dropped_word() {
-    // dropped keywords hard-error naming the replacement
-    let (_, diags) = parse("class C { private n: i32; }", Mode::Impl);
-    assert!(
-        diags
-            .iter()
-            .any(|d| d.msg.contains("members are private by default")),
-        "`private` must name its replacement: {diags:?}"
+fn private_is_an_ordinary_identifier() {
+    // the lexer's hard-ban retired: `private` is a plain identifier —
+    // it names bindings and fns clean
+    let (_, diags) = parse(
+        "fn f() -> nil { let private = 1; let y = private; }",
+        Mode::Impl,
     );
+    assert!(
+        diags.is_empty(),
+        "`private` must parse as an identifier: {diags:?}"
+    );
+    let (_, diags) = parse("fn private() -> nil { }", Mode::Impl);
+    assert!(diags.is_empty(), "`private` names a fn: {diags:?}");
 }
 
 #[test]

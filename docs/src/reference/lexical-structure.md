@@ -44,7 +44,7 @@ The keyword set is exactly:
 | `while` | `for` | `of` | `return` | `when` |
 | `enum` | `struct` | `class` | `interface` | `impl` |
 | `requires` | `use` | `pub` | `static` | `async` |
-| `await` | `extern` | `is` | `host` | |
+| `await` | `is` | `host` | | |
 | `true` | `false` | `nil` | | |
 
 Contextual words — ordinary identifiers elsewhere:
@@ -63,22 +63,14 @@ Contextual words — ordinary identifiers elsewhere:
 
 `panic(msg)` is a prelude function, not a keyword.
 
-## Reserved words
-
-Each reserved word is a hard error whose message names the rut
-replacement:
-
-| Reserved | Error replacement |
-|---|---|
-| `void` | the empty type spells `nil` |
-| `in` | iteration is `for (let x of ..)` |
-| `private` | members are private by default; add `pub` |
-
-The list is short and closed. Words that are keywords in JavaScript or
-Rust — `switch`, `match`, `null`, `var`, `const`, `delete`, `new`, … —
-are ordinary identifiers here: `let null = 5;` and `fn match()` are
-legal rut — and so is `trait`: an ordinary identifier (name your pet
-snake `trait` if you like; it carries no meaning).
+There is NO reserved-word hard-ban left: every word the lexer scans is
+an identifier token, and the parser's own keyword table decides what a
+word means. Words that are keywords in JavaScript or Rust — `switch`,
+`match`, `null`, `var`, `const`, `delete`, `new`, `void`, `in`,
+`private`, `extern`, `where`, … — are ordinary identifiers here:
+`let null = 5;` and `fn match()` are legal rut — and so is `trait`:
+an ordinary identifier (name your pet snake `trait` if you like; it
+carries no meaning).
 
 ## Punctuation: `::` and `.`
 

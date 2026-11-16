@@ -1473,14 +1473,14 @@ async function main() {
         smokes++;
     }
 
-    // ---- the dedicated postfix-removal diagnostic (M2's acceptance;
-    // the RFC sweep reworded it — the message names the fix, not a
-    // proposal number) ----
+    // ---- the postfix `T?` spelling is an ORDINARY error now (the
+    // dedicated removal diag is gone — the ladder's, no tailored arm);
+    // the prefix `?T` spelling stays the one legal form ----
     {
         const b = await rut.analyze('file:///ws/e2e-postfix.rut', 'fn f(p: i32?) -> nil {\n}\n');
-        if (!(b.diags.length === 1 && b.diags[0].message.includes('postfix spelling'))) {
+        if (!(b.diags.length > 0 && b.diags.every((d) => !d.message.includes('removed')))) {
             bad.push(
-                `postfix T? must give the ONE dedicated postfix-removal diag, got: ${JSON.stringify(b.diags)}`,
+                `postfix T? must fail through the ordinary ladder, got: ${JSON.stringify(b.diags)}`,
             );
         }
         const g = await rut.analyze('file:///ws/e2e-prefix.rut', 'fn g(p: ?i32) -> nil {\n}\n');
@@ -1533,7 +1533,6 @@ async function main() {
                 name: 'server',
                 source: { kind: 'path', dir: '../server' },
                 optional: false,
-                lib: null,
             },
             `path row: ${JSON.stringify(row('server'))}`,
         );
@@ -2334,7 +2333,7 @@ async function main() {
         assert.ok(!table.error, `manifest parse: ${JSON.stringify(table)}`);
         eqKeys(table, ['name', 'entries', 'deps', 'dev_deps'], 'dep table');
         eqKeys(table.entries[0], ['path', 'mode'], 'entry source');
-        eqKeys(table.deps[0], ['name', 'source', 'optional', 'lib'], 'dep row');
+        eqKeys(table.deps[0], ['name', 'source', 'optional'], 'dep row');
         eqKeys(
             table.deps.find((r) => r.source.kind === 'path').source,
             ['kind', 'dir'],

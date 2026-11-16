@@ -33,15 +33,16 @@ pub enum MountedBody {
     Compiled(rut_core::binary::Program),
     /// a native/host module: no rut body — bodyless
     /// functions the embedder binds at run time, exported constants,
-    /// and the builtin rows (`core`'s prelude, `calc`'s `Math`). The
-    /// graph synthesizes a placeholder program from these rows.
+    /// and the builtin rows (`core`'s prelude). The graph synthesizes
+    /// a placeholder program from these rows.
     Host {
         /// the declared rows — [`HostRow`] carries the mod path each
         /// row lives under (`""` = the pkg root's own surface),
         /// `is_async` marks a `host async fn` (the row family expands
         /// at the mount)
         host_funcs: Vec<HostRow>,
-        /// exported constants: `(name, type, raw bits)` — `calc::PI`
+        /// exported constants: `(name, type, raw bits)` — the surface
+        /// `pub let` rows folded in (`calc_host::PI`)
         consts: Vec<(String, rut_core::types::TypeId, u64)>,
         /// Builtin containers published by name (`core` only), each
         /// with its ambient bit — `true` (`prelude builtin`) binds in

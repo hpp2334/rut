@@ -81,7 +81,6 @@ fn plugin_manifest_rows_path_and_url() {
         }
     );
     assert!(!server.optional);
-    assert!(server.lib.is_none());
     // … and the url row: UNPINNED at parse (sha256 retired from the
     // grammar), the cache path computed here
     let pouch = t
@@ -222,7 +221,6 @@ fn dev_descriptor_rows_ride() {
         .find(|r| r.name == "nmapset")
         .expect("dev row");
     assert!(!nmapset.optional);
-    assert!(nmapset.lib.is_none());
     assert_eq!(
         nmapset.source,
         DepSource::Path {

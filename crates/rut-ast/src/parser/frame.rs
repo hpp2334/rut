@@ -276,12 +276,6 @@ pub(crate) fn pub_scope(p: &mut Parser) -> Vis {
         let v = match p.tok().clone() {
             Tok::Ident(m) if m == "super" => Vis::Super,
             Tok::Ident(m) if m == "pkg" => Vis::Pkg,
-            Tok::Ident(m) if m == "mod" || m == "self" => {
-                p.err_here(
-                    "`pub(mod)`/`pub(self)` are gone — bare private is the default; widen with `pub(super)`, `pub(pkg)`, or `pub`",
-                );
-                Vis::Self_
-            }
             _ => {
                 p.err_here("expected `super` or `pkg` in pub(..)");
                 p.bump();

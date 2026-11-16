@@ -1,9 +1,9 @@
 //! P3 of the appkit-retirement proof (restructure survey §2.5/§5.2):
 //! THE TWO LANES AGREE. The native lane walks the MANIFEST
 //! (`load_dir_with` over `rut/` — the manifest is the truth); the
-//! wasm lane offers the MIRROR (`mirror_pkgs` — one `Pkg` per package,
-//! because wasm has no filesystem and the app's source crosses the
-//! ABI). The mirror cannot drift: this test pins the two closures to
+//! wasm lane offers the MIRROR (`mirror_pkgs` — one `Mounted` per
+//! package, because wasm has no filesystem and the app's source crosses
+//! the ABI). The mirror cannot drift: this test pins the two closures to
 //! the same offered-name set, the same host-fn surface, and — the
 //! strongest form — the same compiled binary. (P1 is every green
 //! suite here: the packages offer SEPARATELY, no concatenation

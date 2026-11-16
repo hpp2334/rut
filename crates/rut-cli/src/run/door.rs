@@ -15,8 +15,9 @@ pub(crate) fn admit<'a>(path: &'a str, symbols: Option<&str>) -> &'a std::path::
     if !(p.is_dir() || p.extension().is_some_and(|e| e == "rutbundle")) {
         eprintln!(
             "run: {path} is not a runnable unit — give the directory a `rut.jsonc` \
-             (`{{\"name\": \"…\", \"entry\": {{\"lib\": \"./<file>.rut\"}}}}` — JSONC: \
-             `//` comments and trailing commas are legal), or run a packed `.rutbundle`"
+             (`{{\"name\": \"…\", \"entry\": {{\"type\": \"./<surface>.d.rut\"}}}}`, or \
+             a `src/mod.rut` body beside it — JSONC: `//` comments and trailing \
+             commas are legal), or run a packed `.rutbundle`"
         );
         std::process::exit(2);
     }

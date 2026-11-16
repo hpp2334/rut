@@ -93,10 +93,9 @@
 //
 // THIS BASE IS POUCH-FREE BY LAW (survey §2.7): no `Vec` anywhere — the
 // reader/writer grow over fixed `[?T]`/`[T]` columns sized by their own
-// limits, so json mounts light when no peer is present. The container
-// impl rows (Vec via pouch; the HashMap/HashSet family via nmapset)
-// live in the impl-only group files the peer gate appends when the
-// peer is in the program's closure.
+// limits. The container impl rows (`Vec` via pouch; the `HashMap`/
+// `HashSet` family via nmapset) ride the wrapper families below —
+// json's own source, the peers plain `deps` (no presence gating).
 //
 // THE WRITER'S ACCUMULATOR (strbuild batch phase 1): the builder rides
 // the std `strbuild` pkg — `StringBuilder`, the 10th std pkg's
@@ -677,7 +676,7 @@ impl JsonReader {
     }
 
     // the next token's NUMBER lexeme, grammatically consumed — the
-    // numeric widths beyond the base matrix (the group files' u64
+    // numeric widths beyond the base matrix (the wrappers' u64
     // values; the menu's i8..u32) parse from this text with their own
     // checked folds
     pub fn read_number_text(mut self) -> str {
@@ -1617,7 +1616,7 @@ fn utf8_err(byte: u32, at: i32) -> ?DecodeJsonError {
 // folded here when the peer key retired: the wrappers are plain
 // root-module source, and `pouch` / `nmapset` are plain deps (the
 // manifest's rows), so every consumer gets the whole surface and the
-// packed bundle carries the deps closed (the v11 `deps/` wire).
+// packed bundle carries the deps closed (the v12 `deps/` wire).
 //
 // THE WRAPPER LAW (the structural-interfaces fork): `Vec` is pouch's
 // class, and satisfaction is having the members on the type's own

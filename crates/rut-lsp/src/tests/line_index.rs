@@ -4,7 +4,8 @@ use crate::semantic::LineIndex;
 fn ascii_round_trip() {
     let src = "entry fn main() -> nil {\n    let x = 1;\n}\n";
     let ix = LineIndex::new(src);
-    assert_eq!(ix.line_count(), 4);
+    // the line tally, spelled through the walk: EOF sits on line 3
+    assert_eq!(ix.position(src, src.len() as u32), (3, 0));
     for (byte, _) in src.bytes().enumerate() {
         let byte = byte as u32;
         let (l, c) = ix.position(src, byte);

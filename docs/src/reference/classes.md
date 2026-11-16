@@ -245,8 +245,8 @@ like every class.
 
 Members follow the same visibility forms as declarations (see
 [Modules and visibility](modules-and-visibility.md)): an unannotated
-field or method is **module-private**; `pub`, `pub(mod)`, `pub(super)`,
-`pub(self)` expose it to the form's audience. The construction surface
+field or method is **module-private**; `pub`, `pub(super)`, `pub(pkg)`
+expose it to the form's audience. The construction surface
 is therefore explicit: `pub fn new(..)` builds; unannotated members
 stay the class's own business within its module.
 

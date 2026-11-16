@@ -47,7 +47,6 @@ fn pub_ty(name: &str, vis: Vis) -> TyDef {
         vis,
         is_pub: vis == Vis::Pub,
         ambient: false,
-        generics: Vec::new(),
         fields: Vec::new(),
         methods: Vec::new(),
         doc: Vec::new(),

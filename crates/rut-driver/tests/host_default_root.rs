@@ -14,9 +14,9 @@
 //! - a `mod.rut` beside a host manifest is an inert unread file (the
 //!   stray-body refusal is repealed) — a host pkg is pure surface,
 //!   with or without a spelled entry;
-//! - reader compat: an OLD host bundle (manifest `entry.type` + the
-//!   custom root key — the pre-amendment pack shape) loads unchanged
-//!   through the override lane;
+//! - canonical root: the archive's ONE consolidated entry rides as
+//!   `mod.d.rut`, whatever the directory spelled (the old custom-root
+//!   override lane is gone);
 //! - the pack lane mirrors the discovery (it verifies the exact
 //!   layout the reader mounts back) and refuses the both-missing dir.
 

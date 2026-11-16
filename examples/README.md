@@ -50,9 +50,10 @@ The std tree ships as committed per-package source zips
 on every load, offline or not (the committed artifact IS the cache; a
 project manifest is the only url carrier, and the embedder seeds the
 fetcher from it — [embedding](../docs/src/reference/embedding.md)).
-The retired `.rutbundle` envelopes stay committed frozen
-(`dist/std/`, `dist/std-v12/`, …) — old readers and test fixtures
-still read them; nothing repacks them.
+Only the CURRENT cut is committed: the `dist/std/` working mirror plus
+the `dist/std-vNN/` envelope of the latest tag. Old tags serve their
+own immutable commits, but this toolchain reads wire 12 only — stale
+bytes re-pack, they are never fetched back.
 The delivery is the engine's instantiation law: a compiled bundle
 carries its pack closure's instantiations in its ledger and its
 generic bodies as templates inside the binaries — so the

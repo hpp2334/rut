@@ -706,11 +706,6 @@ impl<'a> GraphCompiler<'a> {
             return None;
         }
         let program = out.program.unwrap();
-        // NOTE (deferred): a MIXED module — a compiled body plus a host
-        // surface (calc.rut helpers alongside `sqrt`..`fma`) — is
-        // deliberately NOT built in this phase; `Math` stays wholly on
-        // the Rust side (rut-std bodies + mount_calc). It lands with the
-        // host-pkgs plan, where calc becomes a declared package.
         // the exact compile inputs, for the owner-side recompile a
         // consumer request triggers (seeds aside, the replay is verbatim
         // — same surface bindings, same text, same module layout)

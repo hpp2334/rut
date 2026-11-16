@@ -49,13 +49,6 @@ impl FsSource {
             root: dir.to_string_lossy().into_owned(),
         }
     }
-
-    /// The root as a path — the native lanes' own door (the walk's
-    /// cycle guard canonicalizes through it). Not wired yet.
-    #[allow(dead_code)]
-    pub(crate) fn root_path(&self) -> std::path::PathBuf {
-        std::path::PathBuf::from(&self.root)
-    }
 }
 
 impl Source for FsSource {
