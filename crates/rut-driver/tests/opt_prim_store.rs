@@ -668,8 +668,11 @@ fn version_gate_rejects_stale_artifacts() {
     // interface decls, the program carries `ifaces`/`iface_slots`);
     // v22 is the templates section — generic bodies ride the binary
     // (first fid + the template index after the surface; the riding
-    // law is dead), so stale v21 artifacts refuse at the gate
-    assert_eq!(VERSION, 22, "the templates section owns this VERSION bump");
+    // law is dead), so stale v21 artifacts refuse at the gate; v23 is
+    // the legacy-tables cut — the retired `WELL_KNOWN` rows and the
+    // reserved boot shells are removed, ids renumbered dense, and the
+    // surface section drops the namespace head's filler byte
+    assert_eq!(VERSION, 23, "the legacy-tables cut owns this VERSION bump");
     let out = rut_driver::compile_module(
         "entry fn main() -> i64 { let mut a: [?i64] = [nil; 2]; a[0] = 1; let x = a[0]; return x; }",
         rut_ast::parser::Mode::Impl,

@@ -333,18 +333,14 @@ pub struct Surface {
     pub fn_generics: Vec<SurfaceGenericFn>,
     /// declared trait declarations (non-generic)
     pub ifaces: Vec<SurfaceIface>,
-    /// trait impl registrations `(trait, target, [method → fn ref])`
-    /// — merged at link, where duplicate pairs error
     /// inherent method surfaces (the linkable-classes phase): one row
-    /// per class with methods — the wire's reserved table, populated
-    /// since the phase that retired source-inlining
+    /// per class with methods — populated since the phase that retired
+    /// source-inlining
     pub inherents: Vec<SurfaceInherent>,
     /// builtin container names (`core` only): name -> constructor, plus
     /// the name's ambient bit (`true` binds in every unit with no `use`;
     /// `false` is the import-gated spelling, resolved through `use`)
     pub native_types: Vec<(IdentId, NativeTy, bool)>,
-    /// builtin trait names (`core` only), each with its ambient bit
-    /// (same law as [`Surface::native_types`])
     /// compiler-lowered builtin function names (`core` only) — no
     /// `FuncCode`; the bodies are rut-lir lowering. Each row carries its
     /// ambient bit (same law as [`Surface::native_types`])
@@ -774,7 +770,11 @@ pub const MAGIC: &[u8; 4] = b"RUTC";
 /// v21 binaries, refused here). Stale v21 artifacts refuse with the
 /// standard version error; the recipe is re-pack + re-tag + `rut
 /// install` re-pin (old CDN pins die at this gate, by law).
-pub const VERSION: u32 = 22;
+/// v23: the legacy-tables cut — the retired `WELL_KNOWN` rows and the
+/// reserved boot shells are removed and the symbol/boot ids renumbered
+/// dense; the surface section drops the retired namespace head's filler
+/// byte. Every earlier artifact refuses at this byte.
+pub const VERSION: u32 = 23;
 
 pub fn encode(prog: &Program) -> Vec<u8> {
     let mut e = Enc::default();
@@ -868,9 +868,6 @@ pub fn encode(prog: &Program) -> Vec<u8> {
                 e.u8(2);
                 e.u8(*v as u8);
             }
-            // const tag 3 is RETIRED (ConstVal::Char died with the char
-            // exorcism — zero mint sites since the literal removal); a
-            // stale artifact carrying it fails decode loudly
             ConstVal::Str(s) => {
                 e.u8(4);
                 e.str(s);
@@ -1022,16 +1019,12 @@ pub fn encode(prog: &Program) -> Vec<u8> {
 }
 
 /// The surface section (v16): funcs, consts, the carried
-/// type descriptors + scope blocks + type exports, trait decls, impl
-/// registrations (both ABI lists), the reserved inherent-impl table,
-/// and the native rows with their ambient bits — in that wire order.
+/// type descriptors + scope blocks + type exports, fn generics,
+/// trait decls, the inherent-method rows, and the native rows with
+/// their ambient bits — in that wire order.
 /// A module's rows spell their module path qualified (`math::sqrt`,
 /// the host rows' `net::connect` convention); the root's stay bare.
 fn encode_surface(e: &mut Enc, s: &Surface) {
-    // the retired namespace head's slot: always the empty tag now (the
-    // mechanism died — module paths and bare consts), still WRITTEN so
-    // old binaries and new share the one decode shape
-    e.u8(0);
     // funcs: the usable name, its signature, the exporter's local fn
     // id, and the async/host rows (decl/native modules only)
     e.u32(s.funcs.len() as u32);
@@ -1142,10 +1135,6 @@ fn encode_surface(e: &mut Enc, s: &Surface) {
         e.u8(match k {
             NativeTy::Opaque => 0,
             NativeTy::StackTrace => 1,
-            // tag 2 (`NativeTy::StrBuf`) is WITHDRAWN — never
-            // re-meaninged: the builder left the engine surface, and a
-            // stale artifact carrying the tag fails at the version byte
-            // first anyway
             NativeTy::Weak => 3,
             NativeTy::DisposalContext => 4,
             // v20: the async pair became CLOSED builtin classes
@@ -1234,10 +1223,6 @@ fn encode_kind(e: &mut Enc, k: &TyKind) {
             e.u32(*elem);
         }
         TyKind::Trace => e.u8(14),
-        // kind tag 15 (`TyKind::StrBuf`) is WITHDRAWN — the builder left
-        // the engine, and the tag is never re-meaninged (the char
-        // exorcism's opcode-48 precedent): a stale artifact fails at the
-        // version byte first, and one forced past it fails loudly here
         TyKind::Weak { elem } => {
             e.u8(16);
             e.u32(*elem);
@@ -1338,8 +1323,6 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
             0 => ConstVal::I64(d.i64()?),
             1 => ConstVal::F64(d.f64()?),
             2 => ConstVal::Bool(d.u8()? != 0),
-            // 3 is RETIRED (ConstVal::Char) — decode-only dead since the
-            // literal removal; the fallthrough names the tag loudly
             4 => ConstVal::Str(d.str()?),
             5 => ConstVal::TypeId(d.u32()?),
             t => return Err(format!("bad const tag {t}")),
@@ -1463,9 +1446,6 @@ pub fn decode(bytes: &[u8]) -> Result<Program, String> {
                     origins,
                 }
             }
-            // tag 2 is RETIRED (v21: the `ImplMethod` impl-registration
-            // rows died with `impl I for T` — satisfaction is structural,
-            // nothing registers); a stale artifact carrying it fails loudly
             3 => {
                 let name = interned(&mut d)?;
                 InstFnKind::HostThunk { name }
@@ -1648,11 +1628,6 @@ fn decode_surface(
         names: interner.clone(),
         ..Default::default()
     };
-    // the retired namespace head's slot — read and discarded (an old
-    // binary may carry a name id there; the field is gone)
-    if d.u8()? != 0 {
-        let _ = name(d)?;
-    }
     // funcs
     let n = d.u32()? as usize;
     s.funcs = Vec::with_capacity(n);
@@ -1818,7 +1793,6 @@ fn decode_surface(
         let kind = match d.u8()? {
             0 => NativeTy::Opaque,
             1 => NativeTy::StackTrace,
-            // tag 2 withdrawn with `NativeTy::StrBuf` — never re-meaninged
             3 => NativeTy::Weak,
             4 => NativeTy::DisposalContext,
             // v20: the async pair became CLOSED builtin classes
@@ -1964,7 +1938,6 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
             8 => PrimTy::F32,
             9 => PrimTy::F64,
             10 => PrimTy::Bool,
-            // 11 is RETIRED (the char prim) — a stale artifact fails loudly
             t => return Err(format!("bad prim tag {t}")),
         }),
         2 => TyKind::Str,
@@ -1999,7 +1972,6 @@ fn decode_kind(d: &mut Dec) -> Result<TyKind, String> {
         }
         13 => TyKind::Opt { elem: d.u32()? },
         14 => TyKind::Trace,
-        // 15 withdrawn with `TyKind::StrBuf` — never re-meaninged
         16 => TyKind::Weak { elem: d.u32()? },
         17 => TyKind::DisposalContext,
         // v20: the `Future<T>` closed builtin class (the async handle)
@@ -2578,90 +2550,406 @@ fn encode_op(e: &mut Enc, op: &Op) {
 
 fn decode_op(d: &mut Dec) -> Result<Op, String> {
     Ok(match d.u8()? {
-        0 => Op::Mov { dst: d.u16()?, src: d.u16()? },
-        1 => Op::MovRef { dst: d.u16()?, src: d.u16()? },
-        2 => Op::Const { dst: d.u16()?, k: d.u32()? },
-        3 => Op::ConstRaw { dst: d.u16()?, bits: d.u64()? },
-        8 => Op::Not { dst: d.u16()?, a: d.u16()? },
-        10 => Op::StrCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        11 => Op::RefEq { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
+        0 => Op::Mov {
+            dst: d.u16()?,
+            src: d.u16()?,
+        },
+        1 => Op::MovRef {
+            dst: d.u16()?,
+            src: d.u16()?,
+        },
+        2 => Op::Const {
+            dst: d.u16()?,
+            k: d.u32()?,
+        },
+        3 => Op::ConstRaw {
+            dst: d.u16()?,
+            bits: d.u64()?,
+        },
+        8 => Op::Not {
+            dst: d.u16()?,
+            a: d.u16()?,
+        },
+        10 => Op::StrCmp {
+            eq: d.u8()? != 0,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        11 => Op::RefEq {
+            eq: d.u8()? != 0,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
         12 => Op::Jmp { target: d.u32()? },
-        13 => Op::Br { cond: d.u16()?, then_t: d.u32()?, else_t: d.u32()? },
-        14 => Op::BrTable { idx: d.u16()?, table_off: d.u32()?, count: d.u16()?, default: d.u32()? },
-        15 => Op::Call { func: d.u32()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
-        16 => Op::CallM { func: d.u32()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
-        17 => Op::CallI { slot: d.u32()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
-        18 => Op::CallNat { nat: nat(d.u8()?)?, recv: d.u16()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
-        19 => Op::CallFn { fval: d.u16()?, argv_off: d.u32()?, argc: d.u16()?, dst: d.u16()? },
+        13 => Op::Br {
+            cond: d.u16()?,
+            then_t: d.u32()?,
+            else_t: d.u32()?,
+        },
+        14 => Op::BrTable {
+            idx: d.u16()?,
+            table_off: d.u32()?,
+            count: d.u16()?,
+            default: d.u32()?,
+        },
+        15 => Op::Call {
+            func: d.u32()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+            dst: d.u16()?,
+        },
+        16 => Op::CallM {
+            func: d.u32()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+            dst: d.u16()?,
+        },
+        17 => Op::CallI {
+            slot: d.u32()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+            dst: d.u16()?,
+        },
+        18 => Op::CallNat {
+            nat: nat(d.u8()?)?,
+            recv: d.u16()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+            dst: d.u16()?,
+        },
+        19 => Op::CallFn {
+            fval: d.u16()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+            dst: d.u16()?,
+        },
         20 => Op::Ret { val: d.u8opt()? },
-        21 => Op::NewCell { dst: d.u16()?, ty: d.u32()? },
-        22 => Op::GetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, repr: repr(d.u8()?)? },
-        23 => Op::SetF { obj: d.u16()?, field: d.u32()?, val: d.u16()?, repr: repr(d.u8()?)? },
-        24 => Op::Own { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        89 => Op::MakeOpt { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        25 => Op::ArrNew { dst: d.u16()?, ty: d.u32()?, len: d.u16()?, repr: repr(d.u8()?)? },
-        26 => Op::ArrLit { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
-        27 => Op::ArrGet { dst: d.u16()?, arr: d.u16()?, idx: d.u16()?, repr: repr(d.u8()?)? },
-        28 => Op::ArrSet { arr: d.u16()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
-        29 => Op::EnumNew { dst: d.u16()?, ty: d.u32()?, member: d.u32()? },
-        38 => Op::TidOf { dst: d.u16()?, obj: d.u16()? },
-        39 => Op::IsType { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
-        40 => Op::IsIface { dst: d.u16()?, obj: d.u16()?, want: d.u32()? },
-        41 => Op::Unbox { dst: d.u16()?, box_: d.u16()?, ty: d.u32()? },
-        42 => Op::Box { dst: d.u16()?, val: d.u16()?, ty: d.u32()? },
-        43 => Op::MakeClosure { dst: d.u16()?, func: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
+        21 => Op::NewCell {
+            dst: d.u16()?,
+            ty: d.u32()?,
+        },
+        22 => Op::GetF {
+            dst: d.u16()?,
+            obj: d.u16()?,
+            field: d.u32()?,
+            repr: repr(d.u8()?)?,
+        },
+        23 => Op::SetF {
+            obj: d.u16()?,
+            field: d.u32()?,
+            val: d.u16()?,
+            repr: repr(d.u8()?)?,
+        },
+        24 => Op::Own {
+            dst: d.u16()?,
+            src: d.u16()?,
+            ty: d.u32()?,
+        },
+        89 => Op::MakeOpt {
+            dst: d.u16()?,
+            src: d.u16()?,
+            ty: d.u32()?,
+        },
+        25 => Op::ArrNew {
+            dst: d.u16()?,
+            ty: d.u32()?,
+            len: d.u16()?,
+            repr: repr(d.u8()?)?,
+        },
+        26 => Op::ArrLit {
+            dst: d.u16()?,
+            ty: d.u32()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+        },
+        27 => Op::ArrGet {
+            dst: d.u16()?,
+            arr: d.u16()?,
+            idx: d.u16()?,
+            repr: repr(d.u8()?)?,
+        },
+        28 => Op::ArrSet {
+            arr: d.u16()?,
+            idx: d.u16()?,
+            val: d.u16()?,
+            repr: repr(d.u8()?)?,
+        },
+        29 => Op::EnumNew {
+            dst: d.u16()?,
+            ty: d.u32()?,
+            member: d.u32()?,
+        },
+        38 => Op::TidOf {
+            dst: d.u16()?,
+            obj: d.u16()?,
+        },
+        39 => Op::IsType {
+            dst: d.u16()?,
+            obj: d.u16()?,
+            want: d.u32()?,
+        },
+        40 => Op::IsIface {
+            dst: d.u16()?,
+            obj: d.u16()?,
+            want: d.u32()?,
+        },
+        41 => Op::Unbox {
+            dst: d.u16()?,
+            box_: d.u16()?,
+            ty: d.u32()?,
+        },
+        42 => Op::Box {
+            dst: d.u16()?,
+            val: d.u16()?,
+            ty: d.u32()?,
+        },
+        43 => Op::MakeClosure {
+            dst: d.u16()?,
+            func: d.u32()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+        },
         44 => Op::Panic { msg: d.u16()? },
         46 => Op::LoopHead,
-        47 => Op::Conv { dst: d.u16()?, src: d.u16()?, from: prim(d.u8()?)?, to: prim(d.u8()?)? },
-        // 48 is RETIRED (StrCharAt died with the char exorcism — never
-        // re-meaninged): name the number loudly instead of the generic catch-all
-        48 => return Err("bad opcode 48 (StrCharAt retired by the char exorcism — recompile under VERSION 13)".into()),
-        // 90 is RETIRED (OnDrop died with the destructor removal — never
-        // re-meaninged): name the number loudly instead of the generic catch-all
-        90 => return Err("bad opcode 90 (OnDrop retired — cell-death code is the `Disposal` trait; recompile)".into()),
-        // 45 is RETIRED (Assert died with the builtin's removal — never
-        // re-meaninged): assert is plain rut code over `panic` now
-        45 => return Err("bad opcode 45 (Assert retired — `assert` is plain rut code over `panic` now; recompile)".into()),
-        91 => Op::StrCodeAt { dst: d.u16()?, s: d.u16()?, idx: d.u16()? },
-        92 => Op::WeakNew { dst: d.u16()?, src: d.u16()?, ty: d.u32()? },
-        93 => Op::WeakUpgrade { recv: d.u16()?, dst: d.u16()?, ty: d.u32()? },
-        49 => Op::MakeRecord { dst: d.u16()?, ty: d.u32()?, argv_off: d.u32()?, argc: d.u16()? },
-        50 => Op::AddF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        51 => Op::SubF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        52 => Op::MulF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        53 => Op::DivF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        54 => Op::ModF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        55 => Op::NegF { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
-        56 => Op::EqF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        57 => Op::NeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        58 => Op::LtF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        59 => Op::GtF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        60 => Op::LeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        61 => Op::GeF { dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        62 => Op::AddI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        63 => Op::SubI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        64 => Op::MulI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        65 => Op::DivI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        66 => Op::ModI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        67 => Op::WAddI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        68 => Op::WSubI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        69 => Op::WMulI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        72 => Op::AndI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        73 => Op::OrI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        74 => Op::XorI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        75 => Op::ShlI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        76 => Op::ShrI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        77 => Op::WrapShlI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        78 => Op::EqI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        79 => Op::NeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        80 => Op::LtI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        81 => Op::GtI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        82 => Op::LeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        83 => Op::GeI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        84 => Op::NegI { prim: prim(d.u8()?)?, dst: d.u16()?, a: d.u16()? },
-        85 => Op::ArrayCmp { eq: d.u8()? != 0, dst: d.u16()?, a: d.u16()?, b: d.u16()? },
-        87 => Op::ArrGetF { dst: d.u16()?, obj: d.u16()?, field: d.u32()?, idx: d.u16()?, repr: repr(d.u8()?)? },
-        88 => Op::ArrSetF { obj: d.u16()?, field: d.u32()?, idx: d.u16()?, val: d.u16()?, repr: repr(d.u8()?)? },
+        47 => Op::Conv {
+            dst: d.u16()?,
+            src: d.u16()?,
+            from: prim(d.u8()?)?,
+            to: prim(d.u8()?)?,
+        },
+        91 => Op::StrCodeAt {
+            dst: d.u16()?,
+            s: d.u16()?,
+            idx: d.u16()?,
+        },
+        92 => Op::WeakNew {
+            dst: d.u16()?,
+            src: d.u16()?,
+            ty: d.u32()?,
+        },
+        93 => Op::WeakUpgrade {
+            recv: d.u16()?,
+            dst: d.u16()?,
+            ty: d.u32()?,
+        },
+        49 => Op::MakeRecord {
+            dst: d.u16()?,
+            ty: d.u32()?,
+            argv_off: d.u32()?,
+            argc: d.u16()?,
+        },
+        50 => Op::AddF {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        51 => Op::SubF {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        52 => Op::MulF {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        53 => Op::DivF {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        54 => Op::ModF {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        55 => Op::NegF {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+        },
+        56 => Op::EqF {
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        57 => Op::NeF {
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        58 => Op::LtF {
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        59 => Op::GtF {
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        60 => Op::LeF {
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        61 => Op::GeF {
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        62 => Op::AddI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        63 => Op::SubI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        64 => Op::MulI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        65 => Op::DivI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        66 => Op::ModI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        67 => Op::WAddI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        68 => Op::WSubI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        69 => Op::WMulI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        72 => Op::AndI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        73 => Op::OrI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        74 => Op::XorI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        75 => Op::ShlI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        76 => Op::ShrI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        77 => Op::WrapShlI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        78 => Op::EqI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        79 => Op::NeI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        80 => Op::LtI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        81 => Op::GtI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        82 => Op::LeI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        83 => Op::GeI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        84 => Op::NegI {
+            prim: prim(d.u8()?)?,
+            dst: d.u16()?,
+            a: d.u16()?,
+        },
+        85 => Op::ArrayCmp {
+            eq: d.u8()? != 0,
+            dst: d.u16()?,
+            a: d.u16()?,
+            b: d.u16()?,
+        },
+        87 => Op::ArrGetF {
+            dst: d.u16()?,
+            obj: d.u16()?,
+            field: d.u32()?,
+            idx: d.u16()?,
+            repr: repr(d.u8()?)?,
+        },
+        88 => Op::ArrSetF {
+            obj: d.u16()?,
+            field: d.u32()?,
+            idx: d.u16()?,
+            val: d.u16()?,
+            repr: repr(d.u8()?)?,
+        },
         t => return Err(format!("bad opcode {t}")),
     })
 }
@@ -2692,8 +2980,6 @@ fn nat(b: u8) -> Result<Nat, String> {
         13 => Nat::TraceRender,
         14 => Nat::StrScan,
         15 => Nat::StrStartsWith,
-        // 16..=20 were the `Nat::StrBuf*` builder rows — withdrawn with
-        // the builder's engine surface; every later tag shifted down
         16 => Nat::StrFromCode,
         _ => return Err("bad nat tag".into()),
     })
@@ -2994,7 +3280,7 @@ mod tests {
             (sym::OPAQUE, NativeTy::Opaque, true),
             (sym::DISPOSAL_CONTEXT, NativeTy::DisposalContext, false),
         ];
-        p.surface.native_fns = vec![(sym::ASSERT, true)];
+        p.surface.native_fns = vec![(sym::STRING_JOIN, true)];
         p.surface.native_impls = vec![(TY_I32, sym::WRAPPING_ADD, Intrinsic::WrappingAdd)];
         // the producer's law (the compiler mounts a clone of the
         // program interner — `Surface::names`): the surface's names ARE

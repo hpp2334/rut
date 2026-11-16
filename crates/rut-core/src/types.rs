@@ -77,8 +77,6 @@ impl PrimTy {
             8 => PrimTy::F32,
             9 => PrimTy::F64,
             10 => PrimTy::Bool,
-            // 11 is RETIRED (the char exorcism): a stale artifact's char
-            // prim tag lands in the `_ => None` arm and fails decode loudly
             _ => return None,
         })
     }
@@ -317,39 +315,22 @@ pub const TY_I64: TypeId = 8;
 pub const TY_F32: TypeId = 9;
 pub const TY_F64: TypeId = 10;
 pub const TY_BOOL: TypeId = 11;
-/// RESERVED (the char exorcism): the boot row at this id is a `Nil` shell —
-/// the enumerated `char` kind is gone, and the id is kept only so the
-/// wire-stable boot ids above it never move.
-pub const TY_CHAR: TypeId = 12;
-pub const TY_STR: TypeId = 13;
-pub const TY_OPAQUE: TypeId = 14;
-/// immutable binary buffer — appended after `Opaque`; fixed ids
-/// are wire-stable and must never be reordered
-pub const TY_BYTES: TypeId = 15;
-/// the `StackTrace` snapshot — appended
-/// after `Bytes`; fixed ids are wire-stable and must never be reordered
-pub const TY_STACK_TRACE: TypeId = 16;
-/// RESERVED (the host strbuild pkg): the growable string builder's boot
-/// row — the engine surface is GONE (the builder is a host package over
-/// `strbuild_host::*`), but the ROW stays so every id above it keeps its
-/// wire-stable boot position (the fixed ids must never be reordered);
-/// nothing reaches it — the resolver's removed-core check fires on the
-/// NAME long before any id could.
-pub const TY_STRBUF: TypeId = 17;
+pub const TY_STR: TypeId = 12;
+pub const TY_OPAQUE: TypeId = 13;
+/// immutable binary buffer
+pub const TY_BYTES: TypeId = 14;
+/// the `StackTrace` snapshot
+pub const TY_STACK_TRACE: TypeId = 15;
 /// the `?str` answer lane (the legal-host-returns phase): the boot row
-/// `Opt { elem: TY_STR }` a `.d.rut` `-> ?str` return maps to — the
-/// fixed id the registry's `Option<String>` binding verifies against.
-/// Appended after the RESERVED row 18 (the retired `any` lane, below);
-/// fixed ids are wire-stable and must never be reordered.
-pub const TY_OPT_STR: TypeId = 19;
+/// `Opt { elem: TY_STR }` a `.d.rut` `-> ?str` return maps to — the id
+/// the registry's `Option<String>` binding verifies against.
+pub const TY_OPT_STR: TypeId = 16;
 /// the `?bytes` answer lane (the legal-host-returns phase): `Opt { elem: TY_BYTES }`.
-pub const TY_OPT_BYTES: TypeId = 20;
+pub const TY_OPT_BYTES: TypeId = 17;
 /// the `?opaque` answer lane (the legal-host-returns phase): `Opt { elem: TY_OPAQUE }`.
-pub const TY_OPT_OPAQUE: TypeId = 21;
-/// the `DisposalContext` builtin class (the disposal surface) — appended
-/// after the host-answer optionals; fixed ids are wire-stable and must
-/// never be reordered
-pub const TY_DISPOSAL_CONTEXT: TypeId = 22;
+pub const TY_OPT_OPAQUE: TypeId = 18;
+/// the `DisposalContext` builtin class (the disposal surface)
+pub const TY_DISPOSAL_CONTEXT: TypeId = 19;
 /// A host payload box's runtime type as `TidOf` reports it:
 /// the payload is Rust, so no rut type describes it. Type ids are type-table
 /// indices, which can never reach this value — `downcast<T>` therefore
@@ -389,40 +370,18 @@ impl TypeTable {
         push(sym::F32, TyKind::Prim(PrimTy::F32));
         push(sym::F64, TyKind::Prim(PrimTy::F64));
         push(sym::BOOL, TyKind::Prim(PrimTy::Bool));
-        // RESERVED (the char exorcism): `char` is gone — the
-        // enumerated kind died with `PrimTy::Char`. The ROW stays so every
-        // id above it keeps its wire-stable boot position (the fixed ids
-        // must never be reordered); nothing reaches it — the resolver's
-        // removed-core check fires on the NAME long before any id could.
-        push(sym::CHAR, TyKind::Nil);
         push(sym::STR, TyKind::Str);
         push(sym::OPAQUE, TyKind::Opaque);
         push(sym::BYTES, TyKind::Bytes);
         push(sym::STACK_TRACE, TyKind::Trace);
-        // RESERVED (the host strbuild pkg, the TY_CHAR convention): the
-        // builder's engine surface is GONE — the kind is deleted and the
-        // removed-core check diagnoses the NAME. The ROW stays so every
-        // id above it keeps its wire-stable boot position; nothing
-        // reaches it. The name keeps its well-known symbol (the
-        // removed-name lookup spells it).
-        push(sym::STRBUF, TyKind::Nil);
-        // RESERVED (the any-lane removal, the TY_CHAR convention): the
-        // `any` crossing row (nmap-hostvals P3) is GONE from the surface
-        // — the lexer refuses the spelling in every mode, the decl
-        // grammar has no `any` arm, and nothing maps to this id. The ROW
-        // stays so every id above it keeps its wire-stable boot position
-        // (the fixed ids must never be reordered); nothing reaches it.
-        // The name rides the shell convention (sym::NIL).
-        push(sym::NIL, TyKind::Nil);
         // the host-answer optionals (the legal-host-returns phase): REAL
         // crossing rows — `?str`/`?bytes`/`?opaque` cross back
         // nil-flattened (the optionals law, the read direction
         // always promised). The decl surface's `-> ?T` spellings map to
         // the CONSTS above (the driver's answer table), and the registry's
         // `Option<T>` SIG shares them, so the boot join verifies the
-        // pair by identity. The row names ride the shell convention (the
-        // elem's own symbol — the reserved-row convention); a diagnostic
-        // that needs the `?` shape names it from the CONST.
+        // pair by identity. The row names are the elem's own symbol; a
+        // diagnostic that needs the `?` shape names it from the CONST.
         push(sym::STR, TyKind::Opt { elem: TY_STR });
         push(sym::BYTES, TyKind::Opt { elem: TY_BYTES });
         push(sym::OPAQUE, TyKind::Opt { elem: TY_OPAQUE });

@@ -114,14 +114,15 @@ impl Interner {
     }
 }
 
-/// The well-known table — **append-only, never reorder** (ids are baked
-/// into every compiled module and every `sym::` constant below).
+/// The well-known table — dense; a row's position IS its id (every
+/// compiled module and every `sym::` constant below bakes the ids).
+/// Stability is the binary VERSION gate: a bump renames nothing but
+/// refuses every stale artifact, so rows whose conventions died are
+/// deleted and the survivors renumber.
 pub const WELL_KNOWN: &[&str] = &[
-    "self", // SELF
-    "Self", // SELF_TY
-    "nil",  // NIL
-    "main", // retired row: the id stays fixed (append-only); the
-    // MAIN const died with the main convention
+    "self",               // SELF
+    "Self",               // SELF_TY
+    "nil",                // NIL
     "iterate",            // ITERATE
     "len",                // LEN
     "set",                // SET
@@ -131,7 +132,6 @@ pub const WELL_KNOWN: &[&str] = &[
     "decode",             // DECODE
     "slice",              // SLICE
     "bool",               // BOOL
-    "char",               // CHAR
     "str",                // STR
     "bytes",              // BYTES
     "f32",                // F32
@@ -148,10 +148,8 @@ pub const WELL_KNOWN: &[&str] = &[
     "opaque",             // OPAQUE
     "Iterable",           // ITERABLE
     "downcast",           // DOWNCAST
-    "assert",             // ASSERT
     "panic",              // PANIC
     "make_ptr",           // MAKE_PTR
-    "on_drop",            // ON_DROP
     "string_join",        // STRING_JOIN
     "type_id",            // TYPE_ID
     "from",               // FROM
@@ -169,9 +167,6 @@ pub const WELL_KNOWN: &[&str] = &[
     "checked_sub",        // CHECKED_SUB
     "checked_mul",        // CHECKED_MUL
     "NAN",                // NAN
-    "print",              // retired rows: ids stay fixed (append-only), the
-    "size_of",            // consts died with the removal diagnostics
-    "align_of",           // they served
     "clone",              // CLONE
     "capture_stacktrace", // CAPTURE_STACKTRACE
     "StackTrace",         // STACK_TRACE
@@ -183,7 +178,6 @@ pub const WELL_KNOWN: &[&str] = &[
     "code_at",            // CODE_AT
     "scan",               // SCAN
     "starts_with",        // STARTS_WITH
-    "StrBuf",             // STRBUF
     "push",               // PUSH
     "push_code",          // PUSH_CODE
     "finish",             // FINISH
@@ -220,156 +214,137 @@ pub const WELL_KNOWN: &[&str] = &[
     "cx",       // CX
     // the third designated surface: `[constructor]` designates the
     // member the call form `Type(..)` lowers to (a call-site consumer,
-    // not an engine row). Appended — the ids are positional, never
-    // renumbered.
+    // not an engine row).
     "constructor", // CONSTRUCTOR_MARKER
     // the erasure box's inverse: `unopaque<T>(b) -> T` — the typed
     // recovery whose mismatch is the bad-cast trap (downcast is the
-    // checked `?T` recovery). Appended — the ids are positional, never
-    // renumbered.
+    // checked `?T` recovery).
     "unopaque", // UNOPAQUE
 ];
 
-/// The well-known symbols — fixed ids into [`WELL_KNOWN`], meaningful in
-/// every interner instance. Retired names are ordinary identifiers:
-/// `Option`/`Result` never joined the table, and `print`/`size_of`/
-/// `align_of`/`main` kept their rows (append-only) but lost their consts
-/// once nothing compared them by symbol — `main`'s const died with the
-/// main convention (the `entry fn` surface replaced it). (`Weak`
-/// joined the table in the weak batch — it was absent
-/// while the M5 stub diagnosed it.)
+/// The well-known symbols — ids into [`WELL_KNOWN`], meaningful in every
+/// interner instance. Table and constants move together: when a row's
+/// convention dies the row is deleted and the survivors renumber (the
+/// binary VERSION gate carries the stability law), so every id below
+/// names a live row.
 ///
 /// Used as `rut_core::SELF` etc.
 pub const SELF: IdentId = IdentId(0); // `self`
 pub const SELF_TY: IdentId = IdentId(1); // `Self`
 pub const NIL: IdentId = IdentId(2);
-pub const ITERATE: IdentId = IdentId(4); // `iterate`
-pub const LEN: IdentId = IdentId(5);
-pub const SET: IdentId = IdentId(6);
-pub const NEW: IdentId = IdentId(7);
-pub const CODE: IdentId = IdentId(8);
-pub const ENCODE: IdentId = IdentId(9);
-pub const DECODE: IdentId = IdentId(10);
-pub const SLICE: IdentId = IdentId(11);
-pub const BOOL: IdentId = IdentId(12);
-pub const CHAR: IdentId = IdentId(13);
-pub const STR: IdentId = IdentId(14);
-pub const BYTES: IdentId = IdentId(15);
-pub const F32: IdentId = IdentId(16);
-pub const F64: IdentId = IdentId(17);
-pub const I8: IdentId = IdentId(18);
-pub const I16: IdentId = IdentId(19);
-pub const I32: IdentId = IdentId(20);
-pub const I64: IdentId = IdentId(21);
-pub const U8: IdentId = IdentId(22);
-pub const U16: IdentId = IdentId(23);
-pub const U32: IdentId = IdentId(24);
-pub const U64: IdentId = IdentId(25);
-pub const ARRAY: IdentId = IdentId(26);
-pub const OPAQUE: IdentId = IdentId(27);
-/// The iteration contract's name — the push contract: a type is
-/// iterable when it registers `impl Iterable<E> for T`. The old
-/// `Iterator` spelling retired (it suggested a pull cursor).
-pub const ITERABLE: IdentId = IdentId(28);
-pub const DOWNCAST: IdentId = IdentId(29);
-pub const ASSERT: IdentId = IdentId(30);
-pub const PANIC: IdentId = IdentId(31);
-pub const MAKE_PTR: IdentId = IdentId(32);
-pub const ON_DROP: IdentId = IdentId(33);
-pub const STRING_JOIN: IdentId = IdentId(34);
-pub const TYPE_ID: IdentId = IdentId(35);
-pub const FROM: IdentId = IdentId(36);
-pub const ZEROED: IdentId = IdentId(37);
-pub const FROM_CODE: IdentId = IdentId(38);
-pub const BUF: IdentId = IdentId(39);
+pub const ITERATE: IdentId = IdentId(3);
+pub const LEN: IdentId = IdentId(4);
+pub const SET: IdentId = IdentId(5);
+pub const NEW: IdentId = IdentId(6);
+pub const CODE: IdentId = IdentId(7);
+pub const ENCODE: IdentId = IdentId(8);
+pub const DECODE: IdentId = IdentId(9);
+pub const SLICE: IdentId = IdentId(10);
+pub const BOOL: IdentId = IdentId(11);
+pub const STR: IdentId = IdentId(12);
+pub const BYTES: IdentId = IdentId(13);
+pub const F32: IdentId = IdentId(14);
+pub const F64: IdentId = IdentId(15);
+pub const I8: IdentId = IdentId(16);
+pub const I16: IdentId = IdentId(17);
+pub const I32: IdentId = IdentId(18);
+pub const I64: IdentId = IdentId(19);
+pub const U8: IdentId = IdentId(20);
+pub const U16: IdentId = IdentId(21);
+pub const U32: IdentId = IdentId(22);
+pub const U64: IdentId = IdentId(23);
+pub const ARRAY: IdentId = IdentId(24);
+pub const OPAQUE: IdentId = IdentId(25);
+/// The iteration contract's name — a type is iterable when it registers
+/// `impl Iterable<E> for T` (the old `Iterator` spelling retired).
+pub const ITERABLE: IdentId = IdentId(26);
+pub const DOWNCAST: IdentId = IdentId(27);
+pub const PANIC: IdentId = IdentId(28);
+pub const MAKE_PTR: IdentId = IdentId(29);
+pub const STRING_JOIN: IdentId = IdentId(30);
+pub const TYPE_ID: IdentId = IdentId(31);
+pub const FROM: IdentId = IdentId(32);
+pub const ZEROED: IdentId = IdentId(33);
+pub const FROM_CODE: IdentId = IdentId(34);
+pub const BUF: IdentId = IdentId(35);
 // core's builtin-impl method names (`builtin impl i32 { .. }`) + `NAN`, core's first const — well-known so every interner
 // agrees on the method-table keys
-pub const WRAPPING_ADD: IdentId = IdentId(40);
-pub const WRAPPING_SUB: IdentId = IdentId(41);
-pub const WRAPPING_MUL: IdentId = IdentId(42);
-pub const WRAPPING_SHL: IdentId = IdentId(43);
-pub const SATURATING_ADD: IdentId = IdentId(44);
-pub const SATURATING_SUB: IdentId = IdentId(45);
-pub const SATURATING_MUL: IdentId = IdentId(46);
-pub const CHECKED_ADD: IdentId = IdentId(47);
-pub const CHECKED_SUB: IdentId = IdentId(48);
-pub const CHECKED_MUL: IdentId = IdentId(49);
-pub const NAN: IdentId = IdentId(50);
-// `print`/`size_of`/`align_of` (ids 51–53) are retired names — the
-// removal diagnostics that compared them by symbol are gone, and the
-// consts died with them. The WELL_KNOWN rows STAY (append-only: the
-// ids are baked), they just have no named handles anymore.
+pub const WRAPPING_ADD: IdentId = IdentId(36);
+pub const WRAPPING_SUB: IdentId = IdentId(37);
+pub const WRAPPING_MUL: IdentId = IdentId(38);
+pub const WRAPPING_SHL: IdentId = IdentId(39);
+pub const SATURATING_ADD: IdentId = IdentId(40);
+pub const SATURATING_SUB: IdentId = IdentId(41);
+pub const SATURATING_MUL: IdentId = IdentId(42);
+pub const CHECKED_ADD: IdentId = IdentId(43);
+pub const CHECKED_SUB: IdentId = IdentId(44);
+pub const CHECKED_MUL: IdentId = IdentId(45);
+pub const NAN: IdentId = IdentId(46);
 // the one copy escape hatch — `bytes.clone()` (every other
 // binding shares its cell)
-pub const CLONE: IdentId = IdentId(54);
+pub const CLONE: IdentId = IdentId(47);
 // the StackTrace surface: the opt-in
 // capture fn, the builtin class name, and its member contract —
 // well-known so every interner agrees on the surface names
-pub const CAPTURE_STACKTRACE: IdentId = IdentId(55);
-pub const STACK_TRACE: IdentId = IdentId(56);
-pub const NAME: IdentId = IdentId(57);
-pub const LINE: IdentId = IdentId(58);
-pub const COL: IdentId = IdentId(59);
-pub const RENDER: IdentId = IdentId(60);
+pub const CAPTURE_STACKTRACE: IdentId = IdentId(48);
+pub const STACK_TRACE: IdentId = IdentId(49);
+pub const NAME: IdentId = IdentId(50);
+pub const LINE: IdentId = IdentId(51);
+pub const COL: IdentId = IdentId(52);
+pub const RENDER: IdentId = IdentId(53);
 // the nullable's structural impl-target placeholder (`impl I for ?T`,
 // the rut-json batch phase 1): the TyKind::Opt arm mirrors `Array` — a
 // template target whose methods monomorphize per element instantiation.
 // Compiler-internal interner name only (never a wire surface).
-pub const OPT: IdentId = IdentId(61);
-// the json-perf batch phase 2's general scan/classify + builder surface:
-// the `str` members `code_at`/`scan`/`starts_with` — well-known so every
-// interner agrees on the surface names (the tokenizer primitives ANY
-// parser wants; the engine never learns json). `STRBUF` keeps its
-// well-known id after the builder's engine surface was withdrawn (the
-// host strbuild pkg owns the builder now): the removed-name lookup and
-// the reserved boot row still spell the name, and shifting the ids of
-// everything after it would renumber the wire for nothing.
-pub const CODE_AT: IdentId = IdentId(62);
-pub const SCAN: IdentId = IdentId(63);
-pub const STARTS_WITH: IdentId = IdentId(64);
-pub const STRBUF: IdentId = IdentId(65);
-pub const PUSH: IdentId = IdentId(66);
-pub const PUSH_CODE: IdentId = IdentId(67);
-pub const FINISH: IdentId = IdentId(68);
+pub const OPT: IdentId = IdentId(54);
+// the json-perf batch phase 2's general scan/classify surface: the `str`
+// members `code_at`/`scan`/`starts_with` — well-known so every interner
+// agrees on the surface names (the tokenizer primitives ANY parser
+// wants; the engine never learns json)
+pub const CODE_AT: IdentId = IdentId(55);
+pub const SCAN: IdentId = IdentId(56);
+pub const STARTS_WITH: IdentId = IdentId(57);
+pub const PUSH: IdentId = IdentId(58);
+pub const PUSH_CODE: IdentId = IdentId(59);
+pub const FINISH: IdentId = IdentId(60);
 
 // the weak-reference surface: the `Weak<T>` builtin class
 // and its one member `upgrade()` (`docs/src/reference/weak-refs.md`). Well-known so every interner agrees
 // (the Weak name was previously reserved-by-absence — the M5 stub
 // diagnosed it; the weak batch gives it its real surface).
-pub const WEAK: IdentId = IdentId(69);
-pub const UPGRADE: IdentId = IdentId(70);
+pub const WEAK: IdentId = IdentId(61);
+pub const UPGRADE: IdentId = IdentId(62);
 
 // the async vocabulary (the Future-only landing)
-pub const FUTURE: IdentId = IdentId(71);
-pub const RUN_CONTEXT: IdentId = IdentId(72);
-pub const YIELD: IdentId = IdentId(73);
-pub const CHECKPOINT: IdentId = IdentId(74);
-pub const NEXT_CHECKPOINT: IdentId = IdentId(75);
-pub const CANCELLED: IdentId = IdentId(76);
-pub const ABORT: IdentId = IdentId(77);
-pub const SLEEP: IdentId = IdentId(78);
-pub const LAUNCH_FUTURE: IdentId = IdentId(79);
-pub const LAUNCHED_FUTURE_HANDLE: IdentId = IdentId(80);
-pub const LAUNCH_RAW: IdentId = IdentId(81);
-pub const ABORT_RAW: IdentId = IdentId(82);
-pub const SLEEP_RAW: IdentId = IdentId(83);
-pub const SLEEP_YIELD: IdentId = IdentId(84);
+pub const FUTURE: IdentId = IdentId(63);
+pub const RUN_CONTEXT: IdentId = IdentId(64);
+pub const YIELD: IdentId = IdentId(65);
+pub const CHECKPOINT: IdentId = IdentId(66);
+pub const NEXT_CHECKPOINT: IdentId = IdentId(67);
+pub const CANCELLED: IdentId = IdentId(68);
+pub const ABORT: IdentId = IdentId(69);
+pub const SLEEP: IdentId = IdentId(70);
+pub const LAUNCH_FUTURE: IdentId = IdentId(71);
+pub const LAUNCHED_FUTURE_HANDLE: IdentId = IdentId(72);
+pub const LAUNCH_RAW: IdentId = IdentId(73);
+pub const ABORT_RAW: IdentId = IdentId(74);
+pub const SLEEP_RAW: IdentId = IdentId(75);
+pub const SLEEP_YIELD: IdentId = IdentId(76);
 
 // the disposal surface (the cell-death contract): the engine calls
 // `dispose` when a value of an implementing type reaches refcount zero,
 // minting one `DisposalContext` per call — well-known so every interner
 // agrees on the surface names
-pub const DISPOSAL: IdentId = IdentId(85);
-pub const DISPOSAL_CONTEXT: IdentId = IdentId(86);
-// v20 — the marker vocabulary + the injected cx binding (append-only
-// tail: fixed ids never move)
-pub const DISPOSAL_MARKER: IdentId = IdentId(87);
-pub const ITERABLE_MARKER: IdentId = IdentId(88);
-pub const CX: IdentId = IdentId(89);
-// the third designated surface (append-only tail: fixed ids never move)
-pub const CONSTRUCTOR_MARKER: IdentId = IdentId(90);
-// the erasure box's inverse (append-only tail: fixed ids never move)
-pub const UNOPAQUE: IdentId = IdentId(91);
+pub const DISPOSAL: IdentId = IdentId(77);
+pub const DISPOSAL_CONTEXT: IdentId = IdentId(78);
+// v20 — the marker vocabulary + the injected cx binding
+pub const DISPOSAL_MARKER: IdentId = IdentId(79);
+pub const ITERABLE_MARKER: IdentId = IdentId(80);
+pub const CX: IdentId = IdentId(81);
+// the third designated surface
+pub const CONSTRUCTOR_MARKER: IdentId = IdentId(82);
+// the erasure box's inverse
+pub const UNOPAQUE: IdentId = IdentId(83);
 
 /// The text of a well-known id, if it is one — the bridge back to text at
 /// host-facing boundaries (e.g. mounting `core` into a `Session`).
@@ -421,7 +396,6 @@ mod tests {
             ("decode", DECODE),
             ("slice", SLICE),
             ("bool", BOOL),
-            ("char", CHAR),
             ("str", STR),
             ("bytes", BYTES),
             ("f32", F32),
@@ -438,10 +412,8 @@ mod tests {
             ("opaque", OPAQUE),
             ("Iterable", ITERABLE),
             ("downcast", DOWNCAST),
-            ("assert", ASSERT),
             ("panic", PANIC),
             ("make_ptr", MAKE_PTR),
-            ("on_drop", ON_DROP),
             ("string_join", STRING_JOIN),
             ("type_id", TYPE_ID),
             ("from", FROM),
@@ -470,7 +442,6 @@ mod tests {
             ("code_at", CODE_AT),
             ("scan", SCAN),
             ("starts_with", STARTS_WITH),
-            ("StrBuf", STRBUF),
             ("push", PUSH),
             ("push_code", PUSH_CODE),
             ("finish", FINISH),
@@ -510,15 +481,8 @@ mod tests {
             assert_eq!(i.lookup(text), Some(*id));
             assert_eq!(i.intern(text), *id, "intern must not re-assign");
         }
-        // the retired rows (`main`, `print`/`size_of`/`align_of` —
-        // ids 3 and 51–53) carry no consts — the ids stay fixed
-        // (append-only law), the consts died with the conventions and
-        // removal diagnostics they served
-        assert_eq!(
-            WELL_KNOWN.len(),
-            cases.len() + 4,
-            "table and cases disagree"
-        );
+        // the table is dense: every row carries its const
+        assert_eq!(WELL_KNOWN.len(), cases.len(), "table and cases disagree");
     }
 
     #[test]

@@ -278,9 +278,10 @@ fn the_nil_shapes_answer_the_flat_nil_through_compiled_rut() {
 
 #[test]
 fn the_boot_rows_keep_their_positions() {
-    // guard of the boot-table append: the pre-existing ids keep their
-    // rows and names (nothing reordered)
+    // guard of the boot table's shape: the named rows land at their
+    // documented ids (the table is dense; the VERSION gate carries
+    // cross-artifact stability)
     assert_eq!(TY_I64, 8);
-    assert_eq!(TY_BYTES, 15);
-    assert_eq!(TY_OPT_STR, 19);
+    assert_eq!(TY_BYTES, 14);
+    assert_eq!(TY_OPT_STR, 16);
 }
