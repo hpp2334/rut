@@ -45,7 +45,7 @@ use rut_native::load_dir_with;
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -59,11 +59,11 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
         rut_driver::RutRun::new()
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+            .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -146,8 +146,8 @@ fn load_and_compile(
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .map_err(|e| e.to_string())?;
@@ -365,8 +365,8 @@ fn load_compile_run(
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .map_err(|e| e.to_string())?;
@@ -537,8 +537,8 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     let g = session
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&session.root)
         .compile()
         .expect("compile the walk");

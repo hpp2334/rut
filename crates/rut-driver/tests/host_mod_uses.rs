@@ -67,8 +67,8 @@ fn compile(host: rut_driver::Mounted, src: &str) -> rut_driver::GraphOutput {
     let head = host.spec.clone();
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(host)
-            .pkg(
+            .mount(host)
+            .mount(
                 // the app DECLARES its use (the host surface's spec)
                 rut_driver::Mounted::source("app", src)
                     .manifest(rut_driver::Manifest::lib("app", &[&head])),
@@ -229,9 +229,9 @@ fn a_qualified_host_call_runs_the_registered_body() {
     pkg.register::<_, (&str,), i64, _>("net::connect", |_vm: &mut Vm, url: &str| url.len() as i64);
     pkg.register::<_, (i64,), i64, _>("net::tls::handshake", |_vm: &mut Vm, c: i64| c * 2);
     let compiled = rut_driver::RutRun::new()
-        .pkg(myhost())
+        .mount(myhost())
         .pkg(pkg.build())
-        .pkg(
+        .mount(
             // the app DECLARES its use (the myhost host surface)
             rut_driver::Mounted::source(
                 "app",
@@ -294,10 +294,10 @@ fn an_async_mod_row_binds_through_the_qualified_spelling() {
         futures
             .pkgs
             .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(host)
-            .pkg(
-                // the app DECLARES its uses (futures + the fixture surface)
+            .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+            .mount(host)
+            .mount(
+            // the app DECLARES its uses (futures + the fixture surface)
                 rut_driver::Mounted::source(
                     "app",
                     "use futures::{ launch_future };\nuse fixture::net::{ probe };\n\nasync fn job() -> nil {\n    let n = await probe(\"k\");\n    let _ = n;\n}\n\nentry fn main() -> nil {\n    launch_future(job());\n}\n",

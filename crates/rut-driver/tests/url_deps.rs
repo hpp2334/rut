@@ -29,7 +29,7 @@ use rut_native::{load_dir, pack_dir};
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -43,11 +43,11 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
         rut_driver::RutRun::new()
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+            .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -117,7 +117,7 @@ fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -139,8 +139,8 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -335,7 +335,8 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     );
 
     // the direct bundle lane
-    let err = rut_driver::Mounted::from_bundle(&doctored)
+    let err = rut_driver::Bundle::parse(&doctored)
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(
@@ -400,13 +401,13 @@ fn embedder_mount_outranks_the_url_dep() {
 
     let mut chain = rut_driver::RutRun::new()
         // the embedder's own mount, offered first
-        .pkg(rut_driver::Mounted::source("util", "// the embedder's"));
+        .mount(rut_driver::Mounted::source("util", "// the embedder's"));
     let mut table = BTreeMap::new();
     table.insert(url.to_string(), bytes);
     write_lock(&app, &table);
     let walked = block_on(rut_native::dir_pkgs_with(&app, &Table::from(table))).expect("mount");
     assert_eq!(walked.root, "app");
-    chain = walked.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
+    chain = walked.pkgs.iter().fold(chain, |r, p| r.mount(p.clone()));
     // the compile closes the world; the closure check would name a
     // wrong winner, so just compile the offered world's root
     let g = chain
@@ -607,7 +608,9 @@ fn pack_url_dep_rode_along_and_deterministic() {
     assert!(!out_manifest.contains("sha256"), "{out_manifest}");
 
     // the packed artifact runs, straight from the output bytes
-    let session = rut_driver::Mounted::from_bundle(&packed).expect("load");
+    let session = rut_driver::Bundle::parse(&packed)
+        .and_then(|b| b.walk())
+        .expect("load");
     assert_eq!(session.root, "app");
     assert_eq!(run_entry::<i64>(session, "go"), 42);
 

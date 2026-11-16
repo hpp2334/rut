@@ -95,8 +95,8 @@ fn session(fuel: Option<u64>, invocations: &Rc<Cell<u32>>) -> rut_vm::interp::Vm
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-    .pkg(
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+    .mount(
         rut_driver::Mounted::source("app_re", SRC)
             .manifest(rut_driver::Manifest::lib("app_re", &["pouch", "re"])),
     )

@@ -169,13 +169,14 @@ fn the_loader_never_reads_a_compiled_groups_entry() {
         }
     }
     let sealed = rut_driver::bundle::write_bundle(&doctored).unwrap();
-    let loaded =
-        rut_driver::Mounted::from_bundle(&sealed).expect("the loader never reads the entry");
+    let loaded = rut_driver::Bundle::parse(&sealed)
+        .and_then(|b| b.walk())
+        .expect("the loader never reads the entry");
     assert_eq!(loaded.root, "app");
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("app")
         .compile()
         .expect("the run compiles from the binary");
@@ -202,7 +203,9 @@ fn strip_omits_the_declaration_entry() {
         "no declaration entry under --strip: {names:?}"
     );
     // the load still works (L5 — nothing editor-facing is load-required)
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("loads without the entry");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("loads without the entry");
     assert_eq!(loaded.root, "app");
     // and an unstripped pack of the same dir differs (the entry moved
     // the identity basis, as intended)
@@ -306,7 +309,8 @@ fn an_old_v11_archive_refuses_the_11_lane_is_gone() {
         ("rut.mods".into(), mods_rows.into_bytes()),
     ])
     .unwrap();
-    let err = rut_driver::Mounted::from_bundle(&bytes)
+    let err = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(err.contains("reads bundle format_version 12 only"), "{err}");

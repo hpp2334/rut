@@ -59,7 +59,7 @@ fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     let compiled = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .pkg(rut_std::math::pkg()) // calc: .d.rut ↔ bodies, checked at the install
         .entrypoint(&loaded.root)
         .compile()

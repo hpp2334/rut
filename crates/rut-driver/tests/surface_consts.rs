@@ -48,7 +48,7 @@ fn compile_world(host: Mounted, app_src: &str) -> rut_driver::Compiled {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .expect("the world compiles");

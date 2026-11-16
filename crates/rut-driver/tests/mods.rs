@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 
 use rut_ast::Vis;
 use rut_driver::mods::{collect_module_set, DeclKind, ModSource};
-use rut_driver::{Mounted, MountedBody, Walk};
+use rut_driver::{MountedBody, Walk};
 
 mod common;
 use common::{dep_dir, pkg_named};
@@ -84,7 +84,7 @@ fn run_main(loaded: Walk) -> i64 {
     let c = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -351,7 +351,7 @@ fn a_mounted_module_nothing_declares_is_named_at_compile() {
         },
     );
     let c = rut_driver::RutRun::new()
-        .pkg(pkg)
+        .mount(pkg)
         .entrypoint("pkg")
         .compile()
         .expect("compile carries the diags");
@@ -376,7 +376,7 @@ fn a_mod_files_uses_join_the_closure_check() {
     let err = load(&pkg)
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("pkg")
         .compile()
         .unwrap_err()
@@ -515,7 +515,9 @@ fn a_mod_package_packs_rows_and_loads_the_same_tree() {
     assert!(names.contains(&"rut.mods".to_string()), "{names:?}");
     // loading the bundle mounts the tree exactly as the directory did
     // (the group mounts under its content identity)
-    let loaded = Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     let bundled = pkg_named(&loaded, "pkg");
     let dir = load(&root.join("pkg"));
     let on_disk = dir.pkg("pkg").expect("pkg mounted");
@@ -592,7 +594,9 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
         names.contains(&format!("{}/rut.mods", dep_dir(&names, "pkg"))),
         "{names:?}"
     );
-    let loaded = Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     let pkg = pkg_named(&loaded, "pkg");
     let keys: Vec<&str> = pkg.mods.keys().map(String::as_str).collect();
     assert_eq!(keys, vec!["layout", "layout/grid"]);
@@ -626,7 +630,10 @@ fn an_old_envelopes_legacy_splice_refuses() {
         })
         .collect();
     let legacy_bytes = rut_driver::bundle::write_bundle(&entries).unwrap();
-    let err = Mounted::from_bundle(&legacy_bytes).unwrap_err().to_string();
+    let err = rut_driver::Bundle::parse(&legacy_bytes)
+        .and_then(|b| b.walk())
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains("entry.lib: repealed"),
         "the old envelope refuses at the manifest door: {err}"
@@ -682,7 +689,7 @@ fn compile_with_diags(pkgs: &[rut_driver::Mounted], entry: &str) -> Vec<String> 
             .map(|q| q.spec.as_str())
             .filter(|s| *s != p.spec)
             .collect();
-        run = run.pkg(
+        run = run.mount(
             p.clone()
                 .manifest(rut_driver::Manifest::lib(&p.spec, &heads)),
         );
@@ -703,7 +710,7 @@ fn run_main_pkgs(pkgs: &[rut_driver::Mounted], entry: &str) -> i64 {
             .map(|q| q.spec.as_str())
             .filter(|s| *s != p.spec)
             .collect();
-        run = run.pkg(
+        run = run.mount(
             p.clone()
                 .manifest(rut_driver::Manifest::lib(&p.spec, &heads)),
         );
@@ -2446,7 +2453,7 @@ fn anchor_no_longer_feeds_the_child() {
             .map(|q| q.spec.as_str())
             .filter(|s| *s != p.spec)
             .collect();
-        run = run.pkg(
+        run = run.mount(
             p.clone()
                 .manifest(rut_driver::Manifest::lib(&p.spec, &heads)),
         );

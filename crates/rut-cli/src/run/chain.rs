@@ -10,7 +10,7 @@
 /// unknown-pkg error. `core` is the one unconditional head (the
 /// prelude auto-rides in .compile()).
 ///
-/// Every walked pkg offers through the ONE verb, `pkg(..)` — first
+/// Every walked pkg mounts through the data door, `mount(..)` — first
 /// offer wins, the walk's law. Symbol restore is not here: it is a
 /// property of the decoded artifact (`bundle.restore_symbols(..)`),
 /// applied before the offer, not a run step.
@@ -18,7 +18,7 @@ pub(crate) fn compile(loaded: &rut_driver::Walk) -> rut_driver::Compiled {
     let chain = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()));
     let compiled = match chain
         .pkg(rut_std::math::pkg())
         // the nmap experiment's native key table (the mapset-host plan) — a

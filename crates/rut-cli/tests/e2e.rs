@@ -171,7 +171,7 @@ fn compile_out(src: &str, module: &str) -> rut_driver::CompileOutput {
 fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let combined = with_logger_use(src);
     let mut chain =
-        rut_driver::RutRun::new().pkg(rut_driver::Mounted::source(module, &combined).manifest(
+        rut_driver::RutRun::new().mount(rut_driver::Mounted::source(module, &combined).manifest(
             rut_driver::Manifest::lib(module, &["calc", "calc_host", "ink", "pouch"]),
         ));
     for d in ["rut/ink", "rut/pouch", "rut/calc"] {
@@ -181,7 +181,7 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
                 .join(d),
         )
         .expect("mount case libs");
-        chain = pkgs.pkgs.iter().fold(chain, |r, p| r.pkg(p.clone()));
+        chain = pkgs.pkgs.iter().fold(chain, |r, p| r.mount(p.clone()));
     }
     chain
         .entrypoint(module)
@@ -1520,7 +1520,7 @@ entry fn main() -> nil {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app_main")
     .compile()
     .expect("compile the walk");
@@ -1595,7 +1595,7 @@ entry fn main() -> nil {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app_main")
     .compile()
     .expect("compile the walk");
@@ -2639,10 +2639,10 @@ fn dbg_digest() {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     // the root declares the heads it names (the nameability law —
     // mounted-but-undeclared is D5)
-    .pkg(
+    .mount(
         rut_driver::Mounted::source("digests", &src).manifest(rut_driver::Manifest::lib(
             "digests",
             &["pouch", "json", "calc"],

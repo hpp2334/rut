@@ -40,8 +40,9 @@ fn pack_world() -> Vec<u8> {
 #[test]
 fn compiled_bundle_mounts_from_bytes_and_runs() {
     let bytes = pack_world();
-    // the mount: bytes in, no fs
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    // the mount: bytes in, no fs — decode once, walk the yield
+    let bundle = rut_driver::Bundle::parse(&bytes).expect("load");
+    let loaded = bundle.walk().expect("load");
     assert_eq!(loaded.root, "app");
     // the root and its dep mounted as compiled bodies — decoded
     // programs, not sources. The dep group mounts under its content
@@ -61,8 +62,8 @@ fn compiled_bundle_mounts_from_bytes_and_runs() {
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");

@@ -260,7 +260,7 @@ pub fn mirror_pkgs() -> Result<Vec<Mounted>, String> {
 pub fn mirror_run() -> Result<RutRun, String> {
     let mut run = RutRun::new();
     for p in mirror_pkgs()? {
-        run = run.pkg(p);
+        run = run.mount(p);
     }
     Ok(run.pkg(rut_std::nmap::pkg()))
 }
@@ -376,9 +376,9 @@ pub fn probe(probe: &str) -> Result<Walk, String> {
 /// probes without the scope skip the install, the blanket law's gate).
 /// The core prelude auto-offers at `.compile()`.
 pub fn offer(mut run: RutRun, loaded: &Walk) -> RutRun {
-    run = loaded.pkgs.iter().fold(run, |r, p| r.pkg(p.clone()));
+    run = loaded.pkgs.iter().fold(run, |r, p| r.mount(p.clone()));
     run = match web_pkg() {
-        Ok(w) => run.pkg(w),
+        Ok(w) => run.mount(w),
         Err(_) => run, // unreachable: the surface is include_str!'d
     };
     if loaded
@@ -408,7 +408,7 @@ pub fn expected_host_fns(loaded: &Walk) -> rut_vm::interp::ExpectedHostFns {
 pub fn compile_root_pkg(run: RutRun, pkg: Mounted) -> Result<Compiled, String> {
     let spec = pkg.spec.clone();
     let compiled = run
-        .pkg(pkg)
+        .mount(pkg)
         .entrypoint(&spec)
         .compile()
         .map_err(|e| format!("the app does not compile: {e}"))?;

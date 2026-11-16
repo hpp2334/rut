@@ -58,7 +58,7 @@ pub fn compile_module(src: &str, mode: Mode, module_name: &str) -> CompileOutput
         };
     }
     let compiled: Result<Compiled, RunError> = RutRun::new()
-        .pkg(Mounted::source(module_name, src))
+        .mount(Mounted::source(module_name, src))
         .entrypoint(module_name)
         .compile();
     render(compiled, ast_dump, ast_json)

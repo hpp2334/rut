@@ -149,14 +149,14 @@ fn brain(src: &str) -> rut_driver::Mounted {
 fn compile_brain(src: &str, extra_hosts: Vec<rut_vm::HostPkg>) -> rut_driver::Compiled {
     let mut chain = rut_driver::RutRun::new();
     for p in world_pkgs() {
-        chain = chain.pkg(p);
+        chain = chain.mount(p);
     }
     for hp in extra_hosts {
         chain = chain.pkg(hp);
     }
     let compiled = chain
-        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
-        .pkg(brain(src))
+        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+        .mount(brain(src))
         .entrypoint("rgh")
         .compile()
         .expect("compile the brain");

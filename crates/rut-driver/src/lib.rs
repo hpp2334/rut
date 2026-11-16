@@ -26,8 +26,6 @@ pub use compile::{
 };
 pub use decl::lower_decl_module;
 pub use graph::GraphOutput;
-#[allow(deprecated)] // bundle_walk_bytes retires with its family (one release)
-pub use loader::bundle_walk_bytes;
 pub use loader::{bundle_entry_pkg, sha256_hex};
 /// The pin ledger: `rut.lock` parses and renders through here —
 /// one lock per walk root, beside the root `rut.jsonc`.
@@ -39,10 +37,9 @@ pub use pack::{
     lower_inline_entry, normalize_decl_tree, pack, pack_inline_pkg, rows_agree, Archive, PackError,
     PackOpts, PackWorld, PkgSource, FORMAT_VERSION,
 };
-#[allow(deprecated)] // the deprecated one-release aliases re-export with the real names
 pub use run::{
-    declared_host_fns, host_pkg_ctx, Bundle, Compiled, Loaded, Mounted, MountedBody, Offer, Pkg,
-    PkgBody, RunError, RutRun, Walk,
+    declared_host_fns, host_pkg_ctx, Bundle, Compiled, Mounted, MountedBody, Offer, RunError,
+    RutRun, Walk,
 };
 /// The parse mode the mount flavors speak (`Mode::Impl` for a lib
 /// body tree, `Mode::Decl` for a host surface tree) — re-exported so

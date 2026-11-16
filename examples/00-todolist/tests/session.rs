@@ -59,7 +59,7 @@ fn vm() -> (rut_vm::interp::Vm, OpaqueRef) {
     let compiled = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the module dir");

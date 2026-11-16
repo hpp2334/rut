@@ -94,19 +94,19 @@ fn main() {
     let mut chain = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()));
     // the async pair (the launcher set `boot` drives)
     for p in async_pkgs {
-        chain = chain.pkg(p);
+        chain = chain.mount(p);
     }
     let chain = rgh_host
         .pkgs
         .iter()
         .fold(
-            chain.pkg(
+            chain.mount(
                 rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"),
             ),
-            |r, p| r.pkg(p.clone()),
+            |r, p| r.mount(p.clone()),
         )
         .pkg(rut_std::math::pkg())
         .pkg(rut_std::nmap::pkg())

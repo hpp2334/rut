@@ -9,7 +9,7 @@ use rut_ast::parser::Mode;
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -23,11 +23,11 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
         rut_driver::RutRun::new()
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+            .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -228,14 +228,14 @@ fn binary_round_trips_the_whole_surface() {
 fn graph_compiles_and_links_uses_in_order() {
     let out = graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(
+            .mount(rut_driver::Mounted::source(
                 "math",
                 "pub fn seven() -> i32 { return 7; }\n\
                  entry fn main() -> i32 { return seven(); }\n",
             ))
             // the consumer declares the head it names (the nameability
             // law — mounted-but-undeclared is D5)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(
                     "app_main",
                     "use math::{ seven };\n\
@@ -267,7 +267,7 @@ fn graph_compiles_and_links_uses_in_order() {
 fn graph_threads_a_type_through_a_chain() {
     let out = graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(
+            .mount(rut_driver::Mounted::source(
                 "geo_base",
                 "struct Point { x: i32; y: i32; }\n\
                  pub fn origin() -> Point { return Point { x: 0, y: 0 }; }\n\
@@ -275,7 +275,7 @@ fn graph_threads_a_type_through_a_chain() {
             ))
             // the chain's consumers declare the heads they name (the
             // nameability law — mounted-but-undeclared is D5)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(
                     "geo_mid",
                     "use geo_base::{Point, origin};\n\
@@ -284,7 +284,7 @@ fn graph_threads_a_type_through_a_chain() {
                 )
                 .manifest(rut_driver::Manifest::lib("geo_mid", &["geo_base"])),
             )
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(
                     "app_main",
                     "use geo_base::{Point};\n\
@@ -378,7 +378,7 @@ fn loads_a_directory_graph() {
     let out = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile_dir");
@@ -409,8 +409,8 @@ fn consumer_uses_pouch_vec() {
     let out = graph_of(
         rut_driver::RutRun::new()
             // core first: the pouch source uses its prelude names
-            .pkg(rut_driver::Mounted::source("pouch", coll_src))
-            .pkg(
+            .mount(rut_driver::Mounted::source("pouch", coll_src))
+            .mount(
                 rut_driver::Mounted::source(
                     "app_main",
                     "use pouch::{ Vec };\n\

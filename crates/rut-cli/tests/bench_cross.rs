@@ -70,7 +70,7 @@ fn vm_with_surface(pkg_dir: &str) -> Vm {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .unwrap();

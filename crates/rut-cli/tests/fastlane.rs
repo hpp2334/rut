@@ -86,7 +86,7 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .unwrap();

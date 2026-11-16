@@ -23,7 +23,7 @@ fn run_graph(modules: &[(&str, &str)]) -> i32 {
             .map(|(s, _)| *s)
             .filter(|s| *s != *spec)
             .collect();
-        chain = chain.pkg(
+        chain = chain.mount(
             rut_driver::Mounted::source(spec, *src)
                 .manifest(rut_driver::Manifest::lib(spec, &heads)),
         );
@@ -60,7 +60,7 @@ fn compile_expect_err(modules: &[(&str, &str)]) -> Vec<String> {
             .map(|(s, _)| *s)
             .filter(|s| *s != *spec)
             .collect();
-        chain = chain.pkg(
+        chain = chain.mount(
             rut_driver::Mounted::source(spec, *src)
                 .manifest(rut_driver::Manifest::lib(spec, &heads)),
         );

@@ -134,8 +134,8 @@ fn main() {
         let compiled = loaded
             .pkgs
             .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
+            .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+            .mount(rut_native::tree_pkg("calc").expect("the toolchain tree's rut/calc"))
             .entrypoint(&loaded.root)
             .compile()
             .unwrap_or_else(|e| fail(format!("compile: {e}")));
@@ -183,10 +183,10 @@ fn main() {
         ));
         let mut chain = rut_driver::RutRun::new();
         for p in &world {
-            chain = chain.pkg(p.clone());
+            chain = chain.mount(p.clone());
         }
         let compiled = chain
-            .pkg(bench)
+            .mount(bench)
             .entrypoint("bench")
             .compile()
             .unwrap_or_else(|e| fail(format!("compile: {e}")));

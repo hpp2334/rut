@@ -548,8 +548,8 @@ fn compile_playground(
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-    .pkg(rut_driver::Mounted::source("main", src).manifest(main_manifest))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+    .mount(rut_driver::Mounted::source("main", src).manifest(main_manifest))
     .entrypoint("main")
     .compile();
     match compiled {

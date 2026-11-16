@@ -30,7 +30,7 @@ mod common;
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -44,11 +44,11 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
         rut_driver::RutRun::new()
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+            .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -203,7 +203,7 @@ fn same_name_two_identities_one_program() {
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the diamond");
@@ -314,7 +314,7 @@ fn same_identity_via_two_routes_mounts_once() {
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile");
@@ -354,7 +354,7 @@ fn run_main(loaded: rut_driver::Walk) -> i64 {
     let g = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("compile the walk");
@@ -525,12 +525,12 @@ entry fn main() -> i64 {
     // each hand pkg declares the head it names (the nameability law —
     // the declarations bound uses, never the reverse)
     let chain = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("cell", cell_src))
-        .pkg(
+        .mount(rut_driver::Mounted::source("cell", cell_src))
+        .mount(
             rut_driver::Mounted::source("wrap", wrap_src)
                 .manifest(rut_driver::Manifest::lib("wrap", &["cell"])),
         )
-        .pkg(
+        .mount(
             rut_driver::Mounted::source("app", app_src)
                 .manifest(rut_driver::Manifest::lib("app", &["wrap"])),
         );
@@ -656,17 +656,17 @@ entry fn main() -> i64 {
     // each hand pkg declares the heads it names (the nameability law)
     let g = graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source("cell", cell_src))
-            .pkg(
+            .mount(rut_driver::Mounted::source("cell", cell_src))
+            .mount(
                 rut_driver::Mounted::source("wrap", wrap_src)
                     .manifest(rut_driver::Manifest::lib("wrap", &["cell"])),
             )
-            .pkg(rut_driver::Mounted::source("boxx", box_src))
-            .pkg(
+            .mount(rut_driver::Mounted::source("boxx", box_src))
+            .mount(
                 rut_driver::Mounted::source("held", held_src)
                     .manifest(rut_driver::Manifest::lib("held", &["boxx"])),
             )
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source("app", app_src)
                     .manifest(rut_driver::Manifest::lib("app", &["wrap", "held"])),
             )

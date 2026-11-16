@@ -100,7 +100,8 @@ fn packed_module_generic_serves_consumer_typed_instantiation() {
     let _ = std::fs::remove_dir_all(&world);
 
     // The consumer EXPLICITLY instantiates the module-resident generic.
-    let mut loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let bundle = rut_driver::Bundle::parse(&bytes).expect("load");
+    let mut loaded = bundle.walk().expect("load");
     loaded.pkgs.push(
         rut_driver::Mounted::source(
             "consumer",
@@ -112,7 +113,7 @@ fn packed_module_generic_serves_consumer_typed_instantiation() {
         loaded
             .pkgs
             .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+            .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
             .entrypoint("consumer")
             .compile(),
     );

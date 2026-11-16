@@ -11,7 +11,7 @@ use rut_ast::parser::Mode;
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )

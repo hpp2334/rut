@@ -10,7 +10,7 @@ use rut_vm::interp::Vm;
 /// one diagnostic, its message
 fn one_diag(src: &str) -> String {
     let d = match rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("app", src))
+        .mount(rut_driver::Mounted::source("app", src))
         .entrypoint("app")
         .compile()
     {
@@ -35,7 +35,7 @@ fn one_diag(src: &str) -> String {
 /// compile + run `main` returning i32
 fn run_main(src: &str) -> i32 {
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("app", src))
+        .mount(rut_driver::Mounted::source("app", src))
         .entrypoint("app")
         .compile()
         .expect("compile");

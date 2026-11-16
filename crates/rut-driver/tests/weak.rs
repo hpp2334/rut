@@ -43,7 +43,7 @@ use std::rc::Rc;
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -57,11 +57,11 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
         rut_driver::RutRun::new()
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+            .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -144,8 +144,8 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let out = graph_of(
         ink.pkgs
             .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(
+            .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+            .mount(
                 // the root DECLARES its uses structurally (ink; the
                 // logger use is appended above)
                 rut_driver::Mounted::source("app_main", &combined)
@@ -429,10 +429,10 @@ entry fn main() -> i32 {
     let mut chain = weak_host
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()));
     let ctx = rut_driver::host_pkg_ctx(&weak_host.pkgs);
     chain = chain
-        .pkg(
+        .mount(
             // the root DECLARES its uses structurally (the weak_host
             // surface's names)
             rut_driver::Mounted::source("app_main", src)

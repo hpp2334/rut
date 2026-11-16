@@ -132,7 +132,7 @@ fn main() {
     let compiled = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         // json's writer rides the strbuild pkg — its `strbuild_host` rows
         // are in this closure's declared set, so the bodies install here
         .pkg(rut_std::strbuild::pkg())

@@ -43,8 +43,8 @@ fn dep_pkg() -> rut_driver::Mounted {
 /// one span-0 diagnostic).
 fn graph_of(app_src: &str) -> rut_driver::GraphOutput {
     match rut_driver::RutRun::new()
-        .pkg(dep_pkg())
-        .pkg(
+        .mount(dep_pkg())
+        .mount(
             rut_driver::Mounted::source("app", app_src)
                 .manifest(rut_driver::Manifest::lib("app", &[DEP])),
         )
@@ -212,15 +212,15 @@ fn reexport_graph_of(reexport: bool, app_src: &str) -> rut_driver::GraphOutput {
         "use util::{ helper };\n"
     };
     match rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source(
+        .mount(rut_driver::Mounted::source(
             "util",
             "pub fn helper() -> i32 { return 3; }\n",
         ))
-        .pkg(
+        .mount(
             rut_driver::Mounted::source("mid", mid_root)
                 .manifest(rut_driver::Manifest::lib("mid", &["util"])),
         )
-        .pkg(
+        .mount(
             rut_driver::Mounted::source("app", app_src)
                 .manifest(rut_driver::Manifest::lib("app", &["mid"])),
         )
@@ -302,12 +302,12 @@ fn a_qualified_leaf_reads_the_re_exported_row_of_the_walked_module() {
         },
     );
     let g = match rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source(
+        .mount(rut_driver::Mounted::source(
             "util",
             "pub fn helper() -> i32 { return 3; }\n",
         ))
-        .pkg(mid)
-        .pkg(
+        .mount(mid)
+        .mount(
             rut_driver::Mounted::source(
                 "app",
                 "use mid::sub::{ helper };\nentry fn main() -> i32 { return 0; }\n",
@@ -355,8 +355,8 @@ fn std_graph_of(app_src: &str) -> rut_driver::GraphOutput {
     match tree
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(
             rut_driver::Mounted::source("app", app_src)
                 .manifest(rut_driver::Manifest::lib("app", &["ink"])),
         )

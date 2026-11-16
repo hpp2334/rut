@@ -1,8 +1,9 @@
 //! The package value: its body kinds.
 //!
 //! A `Mounted` is pure data — a named package. The walk (rut-native)
-//! yields them; [`crate::run::RutRun`] offers them; the compile-time
-//! mount table (the crate-internal `Session`) holds them. Walker-found
+//! yields them; [`crate::run::RutRun::mount`] mounts them; the
+//! compile-time mount table (the crate-internal `Session`) holds
+//! them. Walker-found
 //! metadata (the pkg's own manifest — dep tables included) is pub data
 //! on it; the walk's own bookkeeping (where the pkg's files live) never
 //! rides — it died with the walk's move to rut-native.
@@ -144,8 +145,8 @@ impl Default for MountedBody {
 }
 
 /// One package: the bare name it answers to, its entry files, its body
-/// ([`MountedBody`]), and the walker-found metadata. Pure data — offer it
-/// to a run with [`crate::run::RutRun::pkg`].
+/// ([`MountedBody`]), and the walker-found metadata. Pure data — mount it
+/// to a run with [`crate::run::RutRun::mount`].
 #[derive(Clone, Debug, Default)]
 pub struct Mounted {
     /// the exact package name — bare `[a-zA-Z0-9_]+`
@@ -259,16 +260,6 @@ impl Mounted {
         }
     }
 
-    /// The pure container parse: a packed `.rutbundle`'s bytes → the
-    /// walked yield ([`crate::run::Walk`]) — gates, groups, and the
-    /// scope ledger. No filesystem, no network: the same contract a
-    /// url dep rides. The legacy one-shot spelling — decode ONCE and
-    /// reuse the handle instead ([`crate::Bundle::parse`], then offer
-    /// it to any number of runs).
-    pub fn from_bundle(bytes: &[u8]) -> Result<crate::run::Walk, crate::run::RunError> {
-        crate::run::Bundle::parse(bytes)?.walk()
-    }
-
     /// The pure source-zip parse: a packed `.zip`'s bytes → the
     /// walked yield — the in-memory twin of the native lane's url-dep
     /// mount ([`crate::bundle::read_srczip`] → the manifest → the
@@ -276,8 +267,9 @@ impl Mounted {
     /// dep groups, each identity-verified against the archive's own
     /// `deps/<name>@<fp16>/` spelling). No filesystem, no network:
     /// the mirror lanes' door onto the SAME bytes a primed cache
-    /// serves — the [`Mounted::from_bundle`] of the source-zip era
-    /// (which it supersedes for `--mode source` artifacts).
+    /// serves. (The container twin is the decode-once handle:
+    /// [`crate::Bundle::parse`], then offer it to any number of
+    /// runs.)
     pub fn from_srczip(bytes: &[u8]) -> Result<crate::run::Walk, crate::run::RunError> {
         let entries = crate::bundle::read_srczip(bytes)
             .map_err(|e| crate::run::RunError::law(format!("srczip: {e}")))?;

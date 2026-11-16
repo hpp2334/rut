@@ -27,7 +27,7 @@ use rut_native::{load_dir_with, pack_dir, pack_dir_opts, DepRemote, RemoteError}
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -41,11 +41,11 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
         rut_driver::RutRun::new()
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+            .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -165,7 +165,9 @@ fn host_root_packs_v6_and_loads_back() {
     assert_eq!(m.format_version, Some(12), "a decl root declares 12");
 
     // load: the root mounts as the pkg's host rows
-    let session = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let session = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     assert_eq!(session.root, "logger_host");
     match &session.pkg("logger_host").unwrap().body {
         MountedBody::Host { host_funcs, .. } => {
@@ -214,7 +216,7 @@ fn consumer_compiles_against_a_decl_bundle_url_dep() {
     let units = session
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&session.root)
         .compile()
         .expect("compile the walk");
@@ -267,7 +269,8 @@ fn the_real_tree_host_pkgs_pack_and_load() {
             vec!["rut.jsonc".to_string(), "mod.d.rut".to_string()],
             "rut/{name}: the surface rides at the canonical name: {names:?}"
         );
-        let session = rut_driver::Mounted::from_bundle(&bytes)
+        let session = rut_driver::Bundle::parse(&bytes)
+            .and_then(|b| b.walk())
             .unwrap_or_else(|e| panic!("load rut/{name}: {e}"));
         assert_eq!(session.root, name);
         assert!(matches!(
@@ -341,7 +344,8 @@ fn any_other_version_refuses_with_the_one_recipe() {
     let dir = host_world("pairing", "h", "h.d.rut", "pub host fn f(x: i32) -> i32;\n");
     let bytes = pack_dir(&dir).expect("pack");
     let v9_host = r#"{"format": "rutbundle", "format_version": 9, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#.to_string();
-    let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", &v9_host))
+    let err = rut_driver::Bundle::parse(&resealed(&bytes, "rut.jsonc", &v9_host))
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(err.contains("reads bundle format_version 12 only"), "{err}");
@@ -351,7 +355,8 @@ fn any_other_version_refuses_with_the_one_recipe() {
     // 11 — the retired lane — refuses the same way: the reader reads
     // ONE number, and the re-pack recipe is the migration
     let v11_host = r#"{"format": "rutbundle", "format_version": 11, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#;
-    let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", v11_host))
+    let err = rut_driver::Bundle::parse(&resealed(&bytes, "rut.jsonc", v11_host))
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(err.contains("reads bundle format_version 12 only"), "{err}");
@@ -360,7 +365,8 @@ fn any_other_version_refuses_with_the_one_recipe() {
     // a missing version refuses with the same one-line shape
     let nov =
         r#"{"format": "rutbundle", "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#;
-    let err = rut_driver::Mounted::from_bundle(&resealed(&bytes, "rut.jsonc", nov))
+    let err = rut_driver::Bundle::parse(&resealed(&bytes, "rut.jsonc", nov))
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(err.contains("found none"), "{err}");
@@ -374,7 +380,8 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
     // a root `.rutc` in a host bundle: the contradiction refusal —
     // a host bundle's root is its surface, not a compiled unit
     let with_rutc = appended(&bytes, "mod.rutc", b"not a real program");
-    let err = rut_driver::Mounted::from_bundle(&with_rutc)
+    let err = rut_driver::Bundle::parse(&with_rutc)
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(err.contains("a host bundle's root is its surface"), "{err}");
@@ -382,7 +389,8 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
 
     // a scope ledger: no programs, no ledger
     let with_ledger = appended(&bytes, "rut.scopes", b"0 = \"h\"\n");
-    let err = rut_driver::Mounted::from_bundle(&with_ledger)
+    let err = rut_driver::Bundle::parse(&with_ledger)
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(err.contains("no programs"), "{err}");
@@ -399,7 +407,8 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
         .chain(rut_driver::bundle::parse_bundle(&group_manifest).unwrap())
         .collect();
     let with_group = rut_driver::bundle::write_bundle(&entries).unwrap();
-    let err = rut_driver::Mounted::from_bundle(&with_group)
+    let err = rut_driver::Bundle::parse(&with_group)
+        .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
     assert!(err.contains("single-package"), "{err}");
@@ -410,10 +419,10 @@ fn a_decl_root_refuses_compiled_shaped_entries() {
         .into_iter()
         .filter(|(n, _)| n != "mod.d.rut")
         .collect();
-    let err =
-        rut_driver::Mounted::from_bundle(&rut_driver::bundle::write_bundle(&stripped).unwrap())
-            .unwrap_err()
-            .to_string();
+    let err = rut_driver::Bundle::parse(&rut_driver::bundle::write_bundle(&stripped).unwrap())
+        .and_then(|b| b.walk())
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains("root is `mod.d.rut` beside the manifest"),
         "{err}"
@@ -562,8 +571,8 @@ fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
     let g = session
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
         .entrypoint(&session.root)
         .compile()
         .expect("compile the walk");

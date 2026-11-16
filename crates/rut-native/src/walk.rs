@@ -731,7 +731,7 @@ pub async fn load_path_session_with(path: &Path, remote: &dyn DepRemote) -> Resu
 }
 
 /// The walk: a module directory's whole closure as walked pkgs —
-/// offer them to a run with `RutRun::new().pkg(..)`. Url deps need a
+/// mount them to a run with `RutRun::new().mount(..)`. Url deps need a
 /// remote: this lane is the loud no-fetcher error, never a network
 /// call.
 pub fn load_dir(dir: &Path) -> Result<Walk, RunError> {
@@ -1548,7 +1548,7 @@ fn bundle_entry_pkg(
 /// Offer one package directory — and, recursively, its `[deps]` — as
 /// walked pkgs: the programmatic counterpart of a manifest's dep walk
 /// (native hosts, tests, plugin loaders). The root is
-/// [`Walk::root`]; offer every pkg to a run with `RutRun::new().pkg(..)`.
+/// [`Walk::root`]; mount every pkg to a run with `RutRun::new().mount(..)`.
 ///
 /// This is an OFFER to someone else's program, not "building the pkg
 /// itself": no dev-deps are mounted (pass 2 is root-only).

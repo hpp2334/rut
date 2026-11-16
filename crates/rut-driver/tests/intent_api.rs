@@ -3,8 +3,9 @@
 //! [`rut_driver::Offer`] classification. The archive handle
 //! ([`rut_driver::Bundle`]) decodes + verifies once and relocates +
 //! mounts per world; `pack_inline_pkg` assembles ephemeral source
-//! without compiling; strip restore lives on the handle; the retired
-//! names keep working one release under `#[deprecated]`.
+//! without compiling; strip restore lives on the handle; walked pkg
+//! data mounts through `RutRun::mount(..)`, the data door beside the
+//! classification.
 
 use std::path::Path;
 
@@ -74,7 +75,7 @@ fn bundle_parse_once_offers_many_across_runs() {
         .expect("walk the dir")
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("app")
         .compile()
         .expect("the dir lane compiles");
@@ -118,20 +119,22 @@ fn run_entry(binary: Vec<u8>) -> i64 {
 }
 
 /// `pkg(..)` over a host pkg's bodies — the `Offer::Host` arm of the
-/// classification — installs them like the old `host_pkg` did.
+/// classification — installs them against the rows snapshot at
+/// `.compile()`; the walked pkg data (the consumer source, the
+/// declared rows) mounts through the data door beside it.
 #[test]
 fn pkg_host_offers_the_host_bodies() {
     let mut calc = rut_vm::HostPkg::new("calc_host");
     calc.register::<_, (i64,), i64, _>("twice", |_vm: &mut rut_vm::interp::Vm, v: i64| v * 2);
     let compiled = rut_driver::RutRun::new()
-        .pkg(
+        .mount(
             Mounted::source(
                 "app",
                 "use calc_host::{ twice };\n\nentry fn go() -> i64 {\n    return twice(20);\n}\n",
             )
             .manifest(rut_driver::Manifest::lib("app", &["calc_host"])),
         )
-        .pkg(Mounted::host(
+        .mount(Mounted::host(
             "calc_host",
             vec![rut_driver::HostRow::root(
                 "twice",
@@ -170,7 +173,7 @@ fn pkg_host_offers_the_host_bodies() {
 /// `pack_inline_pkg` assembles a one-member source bundle — no
 /// compile, no container — and a run compiles the member at the
 /// offer. The linked program equals the same source offered as
-/// mounted data (the legacy bridge).
+/// mounted data (the data door).
 #[test]
 fn pack_inline_pkg_assembles_and_the_run_compiles() {
     let src = "entry fn go() -> i64 {\n    return 6 * 7;\n}\n";
@@ -181,53 +184,16 @@ fn pack_inline_pkg_assembles_and_the_run_compiles() {
         .entrypoint("app")
         .compile()
         .expect("the run compiles the member");
-    let via_legacy = rut_driver::RutRun::new()
-        .pkg(Mounted::source("app", src))
+    let via_data = rut_driver::RutRun::new()
+        .mount(Mounted::source("app", src))
         .entrypoint("app")
         .compile()
-        .expect("the legacy offer compiles");
+        .expect("the data-door offer compiles");
     assert_eq!(
         linked_binary(&via_handle),
-        linked_binary(&via_legacy),
+        linked_binary(&via_data),
         "one member, one program — the offer shape cannot matter"
     );
-}
-
-/// The legacy surface still works, one release of deprecation: the
-/// `Mounted` data, the `Walk` yield, `from_bundle`, `pkgs`,
-/// `host_pkg`, and `bundle_walk_bytes` all function exactly as before.
-#[test]
-#[allow(deprecated)]
-fn the_retired_names_still_function() {
-    let root = util_world("legacy");
-    let dir = root.join("app");
-    let bytes = pack_dir(&dir).expect("pack the closure");
-
-    // the byte walk: the retired spelling of decode + mount (groups
-    // mount under their content identities — the root under its name)
-    let walked: rut_driver::Loaded = rut_driver::bundle_walk_bytes(&bytes).expect("walk");
-    assert_eq!(walked.root, "app");
-    assert_eq!(walked.pkgs.len(), 2, "the root + its util group");
-
-    // from_bundle and the pkgs/host_pkg offering pair
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
-    let compiled = rut_driver::RutRun::new()
-        .pkgs(&loaded)
-        .entrypoint(&loaded.root)
-        .compile()
-        .expect("compile");
-    assert!(compiled.graph.program.is_some());
-
-    // the pkg data constructor, through the deprecated alias
-    let data: rut_driver::Pkg =
-        rut_driver::Pkg::source("solo", "entry fn go() -> i64 { return 1; }");
-    let compiled = rut_driver::RutRun::new()
-        .pkg(data)
-        .entrypoint("solo")
-        .compile()
-        .expect("compile");
-    assert!(compiled.graph.program.is_some());
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// A decoded archive whose per-world mount refuses defers the error to

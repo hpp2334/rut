@@ -201,7 +201,7 @@ pub fn check_doc(
     // the caller's parse set stands alone
     let mut run = RutRun::new();
     for p in build_world(&groups) {
-        run = run.pkg(p);
+        run = run.mount(p);
     }
     let diags: Vec<Diag> = match run.entrypoint(doc_pkg).compile() {
         Ok(c) => c.graph.diags,

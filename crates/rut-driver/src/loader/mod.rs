@@ -402,19 +402,6 @@ pub(crate) fn walk_decoded(
     })
 }
 
-/// The packed-container walk: a packed `.rutbundle`'s bytes → the
-/// walked yield ([`Walk`]). The retired spelling of the load stage's
-/// decode + mount pair — one shot per call. Decode ONCE and reuse the
-/// handle instead: `Bundle::parse(bytes)` then `run.pkg(&bundle)` (or
-/// `bundle.walk()` for the raw mount assembly).
-#[deprecated = "decode once, offer many: `Bundle::parse(bytes)` then \
-                `run.pkg(&bundle)` — the handle relocates + mounts per \
-                world without re-decoding"]
-pub fn bundle_walk_bytes(bytes: &[u8]) -> Result<Walk, RunError> {
-    let bundle = crate::run::Bundle::parse(bytes)?;
-    bundle.walk()
-}
-
 /// The rows lane: the archive's `rut.mods` entry at `prefix` — the
 /// additive envelope section carrying a package's module set as
 /// path-keyed source rows (`""` = the root source, `<path>` = each

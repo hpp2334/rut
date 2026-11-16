@@ -195,7 +195,7 @@ fn run_archive_bytes(
         let mut chain = walked
             .pkgs
             .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()));
+            .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()));
         for pkg in [
             rut_std::math::pkg(),
             rut_std::nmap::pkg(),

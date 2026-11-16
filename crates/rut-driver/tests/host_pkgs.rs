@@ -24,7 +24,7 @@ const SERVER_DIR: &str = concat!(
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -38,11 +38,11 @@ fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
         rut_driver::RutRun::new()
             // the root DECLARES its calc use (the structural form; the
             // offer stays the walked tree pkg)
-            .pkg(
+            .mount(
                 rut_driver::Mounted::source(spec, src)
                     .manifest(rut_driver::Manifest::lib(spec, &["calc_host"])),
             )
-            .pkg(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
+            .mount(rut_native::tree_pkg("calc_host").expect("the toolchain tree's rut/calc_host"))
             .entrypoint(spec)
             .compile(),
     )
@@ -107,8 +107,8 @@ fn a_consumer_compiles_against_a_loaded_host_pkg() {
         server
             .pkgs
             .iter()
-            .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-            .pkg(
+            .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+            .mount(
                 // the app DECLARES its use (the server host surface)
                 rut_driver::Mounted::source("app", src)
                     .manifest(rut_driver::Manifest::lib("app", &["server"])),
@@ -239,8 +239,8 @@ fn the_surface_only_dev_state_mounts_as_a_decl_unit() {
     let out = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(
             // the app DECLARES its use (the `s` surface)
             rut_driver::Mounted::source(
                 "app",
@@ -563,7 +563,7 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .unwrap();

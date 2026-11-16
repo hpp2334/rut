@@ -156,8 +156,8 @@ fn book_blocks_compile_and_run() {
                 let chain = walk
                     .pkgs
                     .iter()
-                    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-                    .pkg(
+                    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+                    .mount(
                         rut_driver::Mounted::source("main", &body)
                             .manifest(rut_driver::Manifest::lib("main", &heads)),
                     )

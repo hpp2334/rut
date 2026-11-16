@@ -203,7 +203,9 @@ fn the_default_root_packs_and_loads_back() {
         "the root rides its default key"
     );
     assert_eq!(bytes, pack_dir(&dir).unwrap(), "deterministic");
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     assert_eq!(
         rows_of(loaded.pkg("flat_host").unwrap())[0].full_name("flat_host"),
         "flat_host::ping",
@@ -238,7 +240,9 @@ fn the_default_root_packs_and_loads_back() {
         "the child's rows ride inside: {entry}"
     );
     assert_eq!(bytes, pack_dir(&dir).unwrap(), "deterministic");
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     let m = loaded.pkg("myhost").unwrap();
     // the tree lives in the grammar now — no file modules mount
     assert!(m.mods.is_empty(), "{:?}", m.mods.keys().collect::<Vec<_>>());
@@ -284,7 +288,9 @@ fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
         vec!["rut.jsonc", "mod.d.rut"],
         "the ONE consolidated entry rides at the canonical name, no rows envelope",
     );
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     let names: Vec<String> = rows_of(loaded.pkg("http_host").unwrap())
         .iter()
         .map(|r| r.full_name("http_host"))

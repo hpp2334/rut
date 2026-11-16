@@ -20,8 +20,10 @@
 //! call site spells the verb, not the wrapping. Ephemeral source rides
 //! a source bundle: `pack_inline_pkg(name, text)` assembles one —
 //! assembly only, never compiles; the run compiles the member when it
-//! is offered. First offer wins: a pkg whose name is already offered
-//! is ignored.
+//! is offered. The walked pkg data — a dir/srczip walk's yield, a hand
+//! mount's builder shape — mounts through [`RutRun::mount`], the data
+//! door beside the classification. First offer wins: a pkg whose name
+//! is already offered is ignored.
 //!
 //! The `.compile()` law, in order:
 //! 1. any deferred offer refusal surfaces (an archive that decoded at
@@ -60,8 +62,9 @@ pub use archive::Bundle;
 pub use crate::session::HostRow;
 
 /// A walk's yield: the pkgs in the closure (root included) and the
-/// root's name — offer them to a run through [`RutRun::pkg`], one pkg
-/// at a time.
+/// root's name — mount them to a run through [`RutRun::mount`], one
+/// pkg at a time (or offer a decoded archive whole with
+/// [`RutRun::pkg`]).
 #[derive(Clone, Debug)]
 pub struct Walk {
     pub pkgs: Vec<Mounted>,
@@ -93,13 +96,6 @@ pub enum Offer<'a> {
     /// (`rut_vm::HostPkg`), installed against the rows snapshot at
     /// `.compile()`.
     Host(rut_vm::HostPkg),
-    /// A walked/mounted pkg as pure data — the pre-bundle offering
-    /// shape, one release of deprecation so existing embedders keep
-    /// building. Offer bundles ([`Offer::Lib`]) instead.
-    #[deprecated = "the walked pkg data retires to internals — offer a \
-                    decoded bundle (`Offer::Lib(&bundle)`, or \
-                    `pack_inline_pkg(..)` for ephemeral source)"]
-    Mounted(Mounted),
 }
 
 impl<'a> From<&'a Bundle> for Offer<'a> {
@@ -113,33 +109,6 @@ impl<'a> From<rut_vm::HostPkg> for Offer<'a> {
         Offer::Host(pkg)
     }
 }
-
-// the legacy bridge: a walked/mounted pkg offers as pure data (the
-// deprecated variant — this impl is the ONE construction site). No
-// impl-level allow here: the construction names a deprecated variant,
-// so the narrowest possible allow rides the conversion itself, and
-// anything else added to this impl warns.
-impl<'a> From<Mounted> for Offer<'a> {
-    #[allow(deprecated)] // the bridge's own construction site — external `.pkg(mounted)` offers ride here
-    fn from(pkg: Mounted) -> Offer<'a> {
-        Offer::Mounted(pkg)
-    }
-}
-
-/// Deprecated one-release aliases — the pre-bundle names, kept so
-/// existing embedders compile against the new surface with warnings
-/// only. `Mounted`/`MountedBody` are the real names; offer through
-/// [`Offer`] and [`Bundle`](crate::Bundle).
-#[deprecated = "renamed `Mounted` — the offering surface is `RutRun::pkg(..)` \
-                over `Offer::Lib(&bundle)` / `Offer::Host(hp)`"]
-pub type Pkg = Mounted;
-/// Deprecated one-release alias of [`MountedBody`].
-#[deprecated = "renamed `MountedBody`"]
-pub type PkgBody = MountedBody;
-/// Deprecated one-release alias of [`Walk`].
-#[deprecated = "renamed `Walk` — the offered world is bundles \
-                (`Bundle::parse` + `Offer::Lib`) + host bodies"]
-pub type Loaded = Walk;
 
 /// Why a run refused to compose or compile: a shape failure (a bad
 /// package name, a missing entrypoint) or a closure failure (a `use`
@@ -302,8 +271,8 @@ impl RutRun {
     /// classification: `&Bundle` (a decoded archive — relocated +
     /// mounted per world; or a source member from `pack_inline_pkg`)
     /// coerces to [`Offer::Lib`], a `rut_vm::HostPkg` to
-    /// [`Offer::Host`], and the legacy walked pkg data rides the
-    /// deprecated [`Offer::Mounted`] bridge.
+    /// [`Offer::Host`]. Walked pkg data rides the data door,
+    /// [`RutRun::mount`].
     ///
     /// FIRST OFFER WINS: a pkg whose name is already offered is
     /// ignored — the embedder's (or the chain's) earlier mount
@@ -311,7 +280,6 @@ impl RutRun {
     ///
     /// Infallible by law (the chain stays fluent): an archive whose
     /// per-world mount refuses defers the error to `.compile()`.
-    #[allow(deprecated)] // the legacy variant arm
     pub fn pkg<'a>(mut self, pkg: impl Into<Offer<'a>>) -> Self {
         match pkg.into() {
             Offer::Lib(bundle) => match bundle.walk() {
@@ -323,43 +291,20 @@ impl RutRun {
                 Err(e) => self.deferred.push(e),
             },
             Offer::Host(hp) => self.host_pkgs.push(hp),
-            Offer::Mounted(pkg) => {
-                self.pkgs.entry(pkg.spec.clone()).or_insert(pkg);
-            }
         }
         self
     }
 
-    /// Offer every pkg of a walk's yield, first-pkg-wins.
-    #[deprecated = "offer each pkg through `pkg(..)` — or, for a decoded \
-                    archive, one `pkg(Offer::Lib(&bundle))`"]
-    pub fn pkgs(mut self, loaded: &Walk) -> Self {
-        for p in &loaded.pkgs {
-            self = self.pkg(p.clone());
-        }
-        self
-    }
-
-    /// Hand over one host pkg's bodies. Installed at `.compile()`
-    /// against the rows snapshot: a mounted scope whose declared rows
-    /// the installer does not bind is the loud panic (the .d.rut ↔
-    /// host-impl contract); an unmounted scope's rows merge inert (the
-    /// blanket-install law).
-    #[deprecated = "one offering verb: `pkg(Offer::Host(pkg))` — `pkg(hp)` \
-                    coerces"]
-    pub fn host_pkg(self, pkg: rut_vm::HostPkg) -> Self {
-        self.pkg(pkg)
-    }
-
-    /// Restore a symbol table's names and positions into the offered
-    /// compiled pkgs — the load half of compile-time symbol stripping,
-    /// applied immediately. Sections whose pkg is absent (or not a
-    /// compiled body) match nothing, which is tolerated, not an error.
-    #[deprecated = "strip restore lives on the decoded archive: \
-                    `bundle.restore_symbols(&map)` — restoration is a \
-                    property of the artifact, not of a run"]
-    pub fn symbols(mut self, map: &rut_core::strip::SymbolMap) -> Self {
-        apply_symbols(&mut self.pkgs, map);
+    /// Mount one walked pkg — the DATA door beside the [`Offer`]
+    /// classification: the dir/srczip walks' yield
+    /// ([`rut_native`](https://docs.rs/rut-native) `load_dir*`,
+    /// [`crate::run::Walk`]) and the hand mounts' builder shape
+    /// (`Mounted::source(..).manifest(..)`, `Mounted::host(..)`)
+    /// enter the run here — byte carriers (a decoded archive, an
+    /// assembled source member) offer through [`RutRun::pkg`]
+    /// instead. First offer wins, exactly like the classification.
+    pub fn mount(mut self, pkg: Mounted) -> Self {
+        self.pkgs.entry(pkg.spec.clone()).or_insert(pkg);
         self
     }
 
@@ -491,7 +436,7 @@ impl RutRun {
         })?;
         if session.resolve(&root).is_err() {
             return Err(RunError::law(format!(
-                "entrypoint `{root}` is not offered — .pkg(..) it (or offer the walk's root) before .compile()"
+                "entrypoint `{root}` is not offered — .pkg(..)/.mount(..) it (or offer the walk's root) before .compile()"
             )));
         }
         let mounted: Vec<(String, Mounted)> = session
@@ -555,42 +500,5 @@ impl RutRun {
         //    load gate's final pass AFTER link)
         let graph = compile_graph(&session, &root);
         Ok(Compiled { graph, hosts })
-    }
-}
-
-/// Restore a symbol table's names and positions into the offered
-/// compiled pkgs — names first (linking and the VM both see the real
-/// thing), then the span/pos sections. Sections whose pkg is absent
-/// (or not a compiled body) are skipped; a map from a different build
-/// matches nothing, tolerated.
-fn apply_symbols(pkgs: &mut BTreeMap<String, Mounted>, map: &rut_core::strip::SymbolMap) {
-    // names first: exact-key restore over every offered compiled pkg
-    // (kept strings and non-keys pass through)
-    let restore: std::collections::HashMap<&str, &str> = map
-        .names
-        .iter()
-        .map(|(m, o)| (m.as_str(), o.as_str()))
-        .collect();
-    for pkg in pkgs.values_mut() {
-        if let MountedBody::Compiled(prog) = &mut pkg.body {
-            prog.interner
-                .remap_tail(|s| restore.get(s).copied().unwrap_or(s).to_string());
-        }
-    }
-    // then the span/pos sections, spec-resolved like the names
-    for section in &map.sections {
-        if let Some(pkg) = pkgs.get_mut(&section.spec) {
-            if let MountedBody::Compiled(prog) = &mut pkg.body {
-                // a fn-count mismatch means the section was taken
-                // from a different build — matches nothing,
-                // tolerated silently (the same law as the name rows)
-                if prog.funcs.len() == section.fns.len() {
-                    for (f, sy) in prog.funcs.iter_mut().zip(&section.fns) {
-                        f.spans = sy.spans.clone();
-                        f.pos = sy.pos.clone();
-                    }
-                }
-            }
-        }
     }
 }

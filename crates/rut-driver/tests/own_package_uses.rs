@@ -87,7 +87,7 @@ impl TodoList {
 fn graph_of(pkgs: Vec<rut_driver::Mounted>, root: &str) -> rut_driver::GraphOutput {
     let mut run = rut_driver::RutRun::new();
     for p in pkgs {
-        run = run.pkg(p);
+        run = run.mount(p);
     }
     match run.entrypoint(root).compile() {
         Ok(c) => c.graph,

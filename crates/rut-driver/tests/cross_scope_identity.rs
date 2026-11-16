@@ -31,7 +31,7 @@ fn graph(modules: &[(&str, &str)]) -> rut_driver::GraphOutput {
             .map(|(s, _)| *s)
             .filter(|s| *s != *spec)
             .collect();
-        chain = chain.pkg(
+        chain = chain.mount(
             rut_driver::Mounted::source(spec, *src)
                 .manifest(rut_driver::Manifest::lib(spec, &heads)),
         );

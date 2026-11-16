@@ -786,7 +786,7 @@ entry fn boot_stream(url: str) -> nil {
         }
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -1005,7 +1005,7 @@ entry fn boot(url: str) -> nil {
         }
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -1141,7 +1141,7 @@ entry fn boot(url: str) -> nil {
         }
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -1262,7 +1262,7 @@ entry fn boot() -> nil {
         }
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();
@@ -1444,7 +1444,7 @@ entry fn boot_stream(url: str) -> nil {
         }
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint("app")
         .compile()
         .unwrap();

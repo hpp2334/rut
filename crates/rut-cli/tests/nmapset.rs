@@ -41,7 +41,7 @@ fn setup(src: &str) -> Vm {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .unwrap();

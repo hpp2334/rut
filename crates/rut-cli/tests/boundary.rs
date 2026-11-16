@@ -34,8 +34,8 @@ fn compile(src: &str, module: &str) -> rut_driver::Compiled {
     let world = case_world();
     match world
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(
             rut_driver::Mounted::source(module, &combined)
                 .manifest(rut_driver::Manifest::lib(module, &["calc", "ink", "pouch"])),
         )

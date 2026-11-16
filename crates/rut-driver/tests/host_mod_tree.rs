@@ -305,9 +305,9 @@ fn the_registration_contract_speaks_the_path_spelling() {
     let compiled = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .pkg(pkg.build())
-        .pkg(
+        .mount(
             // the app DECLARES its use (the myhost host surface)
             rut_driver::Mounted::source(
                 "app",
@@ -348,7 +348,9 @@ fn flat_host_pkgs_pack_byte_identically() {
     let again = pack_dir(&dir).expect("repack");
     assert_eq!(bytes, again, "deterministic");
     // and it loads back exactly as before: one flat row
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     let m = loaded.pkg("flat_host").unwrap();
     assert!(m.mods.is_empty());
     assert_eq!(
@@ -384,7 +386,9 @@ fn a_host_tree_packs_into_the_rows_envelope_and_loads_back() {
         entry.contains("mod tls {"),
         "the nesting splices recursively: {entry}"
     );
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     let m = loaded.pkg("myhost").unwrap();
     assert!(
         m.mods.is_empty(),
@@ -438,9 +442,9 @@ fn the_same_leaf_name_in_two_mods_is_legal() {
     let compiled = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .pkg(pkg.build())
-        .pkg(
+        .mount(
             // the app DECLARES its use (the duo host surface)
             rut_driver::Mounted::source(
                 "app",
@@ -470,8 +474,8 @@ fn ensure_host_synthesizes_the_path_qualified_surface() {
     let compiled = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(
             // the app DECLARES its use (the myhost host surface)
             rut_driver::Mounted::source(
                 "app",

@@ -19,7 +19,7 @@ use rut_ast::parser::Mode;
 /// the same loop the example suites run.
 fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("testroot", src))
+        .mount(rut_driver::Mounted::source("testroot", src))
         .entrypoint("testroot")
         .compile()
         .map_err(|e| e.to_string())?;

@@ -39,11 +39,11 @@ fn chain(src: &str) -> rut_driver::RutRun {
     world
         .iter()
         .fold(
-            rut_driver::RutRun::new().pkg(
+            rut_driver::RutRun::new().mount(
                 rut_driver::Mounted::source("test", &combined)
                     .manifest(rut_driver::Manifest::lib("test", &["ink"])),
             ),
-            |r, p| r.pkg(p.clone()),
+            |r, p| r.mount(p.clone()),
         )
         .entrypoint("test")
 }
@@ -458,7 +458,7 @@ fn async_setup(src: &str) -> (rut_vm::interp::Vm, Rc<RefCell<Vec<String>>>) {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .unwrap();
@@ -503,7 +503,7 @@ fn async_diags_of(src: &str) -> Vec<String> {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .unwrap()

@@ -97,8 +97,8 @@ fn compile_app(
     let c = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-        .pkg(
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+        .mount(
             rut_driver::Mounted::source("app", src)
                 .manifest(rut_driver::Manifest::lib("app", deps)),
         )
@@ -297,7 +297,8 @@ fn packed_std_bundles_carry_template_rows_in_surface_order() {
     for name in ["json", "flow", "pouch", "nmapset"] {
         let bytes = rut_native::pack_dir(&base.join("rut").join(name))
             .unwrap_or_else(|e| panic!("pack rut/{name}: {e}"));
-        for pkg in rut_driver::Mounted::from_bundle(&bytes)
+        for pkg in rut_driver::Bundle::parse(&bytes)
+            .and_then(|b| b.walk())
             .expect("mount")
             .pkgs
         {
@@ -388,7 +389,8 @@ fn strip_with_a_generic_surface_is_legal_and_still_serves_shapes() {
         parsed.iter().map(|(n, _)| n).collect::<Vec<_>>()
     );
     // and it still serves a consumer-spelled shape
-    let mut world = rut_driver::Mounted::from_bundle(&bytes)
+    let mut world = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
         .expect("mount the stripped pouch")
         .pkgs;
     world.push(
@@ -401,7 +403,7 @@ fn strip_with_a_generic_surface_is_legal_and_still_serves_shapes() {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
     .entrypoint("app")
     .compile()
     .expect("the consumer of the stripped bundle compiles");

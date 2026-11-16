@@ -18,7 +18,7 @@ use rut_vm::interp::Vm;
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -54,7 +54,7 @@ fn one_diag(src: &str) -> String {
 /// still runs to completion.
 fn run_ok(src: &str) {
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("app", src))
+        .mount(rut_driver::Mounted::source("app", src))
         .entrypoint("app")
         .compile()
         .expect("compile");

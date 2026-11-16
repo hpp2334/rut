@@ -99,7 +99,7 @@ fn compile_root(dir: &Path, src: &str) -> Result<rut_driver::GraphOutput, String
     loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .map(|c| c.graph)
@@ -296,11 +296,13 @@ fn bundle_group_names_its_declared_in_archive_dep() {
     // (the compiled root's ledger walk re-ensures the source groups)
     // takes g's `use u::` through the same allowlist — declared, green
     let (_root, bytes) = bundle_world("bundle-ok");
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     let c = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .expect("the declared bundle compiles");
@@ -323,7 +325,9 @@ fn bundle_group_with_the_row_stripped_is_d5() {
     // the source group's use of `u` is now mounted-but-undeclared →
     // D5, and the mount edge names the archive root
     let (_root, bytes) = bundle_world("bundle-d5");
-    let mut loaded = rut_driver::Mounted::from_bundle(&bytes).expect("load");
+    let mut loaded = rut_driver::Bundle::parse(&bytes)
+        .and_then(|b| b.walk())
+        .expect("load");
     for p in loaded.pkgs.iter_mut() {
         // groups mount under their content identity — match by the
         // bare name half
@@ -334,7 +338,7 @@ fn bundle_group_with_the_row_stripped_is_d5() {
     let err = loaded
         .pkgs
         .iter()
-        .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
+        .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
         .entrypoint(&loaded.root)
         .compile()
         .unwrap_err();
@@ -390,8 +394,8 @@ fn hand_world_without_a_row_is_d5_host_clause() {
     // (offered by the host — no walk edge exists) and `c` never
     // declared it → D5's STRUCTURAL rendering
     let err = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("b", B_SRC))
-        .pkg(rut_driver::Mounted::source("c", C_USES_B))
+        .mount(rut_driver::Mounted::source("b", B_SRC))
+        .mount(rut_driver::Mounted::source("c", C_USES_B))
         .entrypoint("c")
         .compile()
         .unwrap_err()
@@ -404,7 +408,7 @@ fn hand_world_without_a_row_is_d5_host_clause() {
 
 #[test]
 fn manifest_lib_fills_the_tables_structurally() {
-    // the builder door: `Mounted::manifest(Manifest::lib(..))` stamps the
+    // the builder door: `rut_driver::Mounted::manifest(Manifest::lib(..))` stamps the
     // structural form — no json text anywhere — and the use is
     // declared
     let c =
@@ -414,8 +418,8 @@ fn manifest_lib_fills_the_tables_structurally() {
         "the structural row rides"
     );
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("b", B_SRC))
-        .pkg(c)
+        .mount(rut_driver::Mounted::source("b", B_SRC))
+        .mount(c)
         .entrypoint("c")
         .compile()
         .expect("the declared hand world compiles");
@@ -434,8 +438,8 @@ fn parse_manifest_stamps_the_same_law() {
     let m = rut_driver::parse_manifest(r#"{"name": "c", "deps": {"b": {"path": "../b"}}}"#)
         .expect("the manifest parses");
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("b", B_SRC))
-        .pkg(rut_driver::Mounted::source("c", C_USES_B).manifest(m))
+        .mount(rut_driver::Mounted::source("b", B_SRC))
+        .mount(rut_driver::Mounted::source("c", C_USES_B).manifest(m))
         .entrypoint("c")
         .compile()
         .expect("the parsed declaration declares");
@@ -452,8 +456,8 @@ fn over_declaration_stays_legal() {
     // uses: a row naming a head the source never spells is inert —
     // declared-unused is legal (D4 guards the bad shape, deps ∩ dev-deps)
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source("b", B_SRC))
-        .pkg(
+        .mount(rut_driver::Mounted::source("b", B_SRC))
+        .mount(
             rut_driver::Mounted::source("c", "entry fn main() -> i32 { return 1; }\n")
                 .manifest(rut_driver::Manifest::lib("c", &["b"])),
         )
@@ -477,7 +481,7 @@ fn core_names_no_row() {
     // graph rides the prelude into every unit, and the resolver passes
     // the head unconditionally
     let compiled = rut_driver::RutRun::new()
-        .pkg(rut_driver::Mounted::source(
+        .mount(rut_driver::Mounted::source(
             "solo",
             "use core::{panic};\nentry fn main() -> i32 { return 1; }\n",
         ))

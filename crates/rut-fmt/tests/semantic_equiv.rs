@@ -30,8 +30,8 @@ fn run(src: &str) -> Result<Vec<String>, String> {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-    .pkg(
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+    .mount(
         // the probe DECLARES its uses structurally — the world's
         // heads (the fmt lane must not change them, and doesn't:
         // both texts compile over the same declaration)

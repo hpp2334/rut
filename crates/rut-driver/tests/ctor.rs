@@ -29,7 +29,7 @@ use rut_vm::interp::{HostRegistry, Limits, Vm};
 fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
         rut_driver::RutRun::new()
-            .pkg(rut_driver::Mounted::source(spec, src))
+            .mount(rut_driver::Mounted::source(spec, src))
             .entrypoint(spec)
             .compile(),
     )
@@ -109,7 +109,7 @@ fn graph(modules: &[(&str, &str)]) -> rut_driver::GraphOutput {
             .map(|(s, _)| *s)
             .filter(|s| *s != *spec)
             .collect();
-        chain = chain.pkg(
+        chain = chain.mount(
             rut_driver::Mounted::source(spec, *src)
                 .manifest(rut_driver::Manifest::lib(spec, &heads)),
         );

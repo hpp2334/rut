@@ -93,8 +93,8 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-    .pkg(
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+    .mount(
         rut_driver::Mounted::source("app_boxes", SRC)
             .manifest(rut_driver::Manifest::lib("app_boxes", &["boxes", "pouch"])),
     )
@@ -305,8 +305,8 @@ entry fn churn(n: i64) -> nil {
     }
     .pkgs
     .iter()
-    .fold(rut_driver::RutRun::new(), |r, p| r.pkg(p.clone()))
-    .pkg(
+    .fold(rut_driver::RutRun::new(), |r, p| r.mount(p.clone()))
+    .mount(
         rut_driver::Mounted::source("churn", src)
             .manifest(rut_driver::Manifest::lib("churn", &["calc", "pouch"])),
     )
