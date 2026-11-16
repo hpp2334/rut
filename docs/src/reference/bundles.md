@@ -78,8 +78,7 @@ deps/<name>@<fp16>/mod.rutc    a compiled group (the ordinary case: a source
                            bodies)
 deps/<name>@<fp16>/mod.d.rut   the group's ONE declaration entry — GENERATED
                            for a compiled group (rendered from the validated
-                           surface); a v11 archive group copies whatever its
-                           own archive carried
+                           surface)
 deps/<name>@<fp16>/rut.mods    its module rows, when it has mod children
 deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
                            not link) → its ONE consolidated declaration
@@ -112,15 +111,16 @@ deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
   row is refused.
 - **The module rows are a lib body tree's wire form** (`rut.mods` —
   `deps/<ident>/rut.mods` for a group): one JSON object, mod path →
-  source text, `""` = the root module, one row per mounted child. A
-  package with no mod children writes no rows entry. (A HOST pkg's
-  tree no longer rides the rows envelope — wire 12 consolidates it
-  into the inline form inside the group's declaration entry; the rows
-  lane remains the READER's law for v11 bundles.) The section is
-  **additive**: the reader accepts both envelopes, so a bundle packed
-  before file modules keeps loading — that is a loading law, not a
-  transition; a NEW directory whose manifest spells the repealed
-  `entry.lib`/`entry.libs` keys refuses loudly at the manifest walk.
+  source text, `""` = the root module, one row per mounted child. The
+  entry is present IFF the package has mod children — a flat package
+  writes none (byte-identical pack, the freshness gate proves it) and
+  loads as its single module; a carried-but-undeclared row refuses.
+  (A HOST pkg's tree does not ride the rows envelope at all — wire 12
+  consolidates it into the inline form inside the group's declaration
+  entry.) A directory whose manifest spells the repealed
+  `entry.lib`/`entry.libs` keys refuses loudly at the manifest walk —
+  and a packed manifest parses through the same strict grammar, so the
+  repeal holds on every lane.
 - **Group kinds are the packer's one decision**: a source body rides
   compiled iff the graph linked it; a host body (or a declared dep
   whose unit did not link) rides its ONE consolidated declaration
@@ -173,8 +173,7 @@ inline at its declaration edge, recursively, verbatim (comments and
 authored signatures survive byte-for-byte). Structure lives in the
 grammar, never in paths. The generation invariant gates the pack: the
 consolidated entry must lower to the same path-qualified rows the
-file-tree form did. (The v11 shape — the tree as a `rut.mods` rows
-envelope — still READS forever; it just is not written anymore.)
+file-tree form did. Older wires refuse at the door — re-pack.
 
 `rut pack <host-dir>` works (the surface verifies by parsing and
 lowering once — the exact lane a mount runs — then consolidates),
