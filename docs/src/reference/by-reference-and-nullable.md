@@ -67,9 +67,11 @@ dereferencing it traps `NilDeref` — never a silent read.
 | `?[T]` | `[T] \| nil` | nullable array |
 | `??T` | chained | the same runtime box, unwrapped transitively |
 
-There is no postfix `T?` and no `*T` — each is a diagnosed error naming
-`?T`. In expression position, `*x`/`&x` diagnose: "bindings share by
-reference now — pass `x` directly" (binary `*`/`&` operators are
+There is no postfix `T?` and no `*T` — each falls to the ordinary
+error ladder (in type position, "expected a type name"); the nullable
+spells `?T`. In expression position, `*x`/`&x` are the ordinary
+expression error ("expected an expression") — bindings share by
+reference; pass the value itself (binary `*`/`&` operators are
 untouched).
 
 ### Coercions and uses

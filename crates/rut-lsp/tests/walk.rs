@@ -1157,7 +1157,7 @@ const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/st
 const POUCH_PIN: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
 
 /// THE FULL STD WORLD (the playground's own shape): all nine source
-/// zips — the COMMITTED frozen envelope — declared + pinned +
+/// zips — the committed current-cut envelope — declared + pinned +
 /// store-mounted at once. The pinning law this gate owns: the check
 /// lane must keep answering through a world that carries `calc` over
 /// the v17 bytes — the zips are STRICT-CLEAN (the surface `pub let`
@@ -1234,8 +1234,8 @@ fn the_full_std_world_keeps_the_check_lane_alive() {
     // the doc IS the project's entry (the uri the walk's origin stamps)
     // — the check lane compiles it against the whole mounted world
     let uri = proj.join("src/mod.rut").to_str().unwrap().to_string();
-    // (a) the doc's own type error surfaces — the retained consts keep
-    // calc's re-exports from eating it
+    // (a) the doc's own type error surfaces — the surface-let consts
+    // keep calc's re-exports from eating it
     let bad = "entry fn main() {\n    let x = 1 + \"nope\";\n}\n";
     let a = take(pool.run_until(lsp.analyze(uri.clone(), bad.to_string())));
     assert!(

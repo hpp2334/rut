@@ -25,7 +25,7 @@ fn pack_seeded() -> Result<Vec<u8>, String> {
     let _ = std::fs::remove_dir_all(&cache);
     let remote = rut_native::HttpRemote::at(&cache);
     let manifest_text =
-        std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.json: {e}"))?;
+        std::fs::read_to_string(d.join("rut.jsonc")).map_err(|e| format!("rut.jsonc: {e}"))?;
     let manifest = rut_driver::bundle::parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
     let dist = d.join("../../../dist/std-v17");
     for desc in manifest.deps.values() {

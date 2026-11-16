@@ -375,10 +375,11 @@ sha256 exactly like a bundle's).
 
 **Why the book recommends the zip.** A source zip compiles with the
 CONSUMER's toolchain, so it never goes stale the way compiled IR does:
-a `.rutbundle`'s IR is version-unstable across rut toolchains (it
-stays loadable forever — [the wire version](#the-wire-version) — but a
-zip keeps a package publishable across engine releases without
-re-publishing). The zip is also the whole-closure lane: a consumer's
+a `.rutbundle`'s IR is version-unstable across rut toolchains (readable
+only by the toolchain generation that packed it —
+[the wire version](#the-wire-version) — a zip keeps a package
+publishable across engine releases without re-publishing). The zip is
+also the whole-closure lane: a consumer's
 `rut install` fetches it once, and every dep rides inside.
 
 ## The `bundle` module

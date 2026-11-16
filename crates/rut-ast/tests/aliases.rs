@@ -1,6 +1,6 @@
 //! Type aliases, union bounds, and inline `requires`: parse
-//! shapes, the `where` removal diagnostic, misplaced bounds rejected,
-//! dumper output, and `pub(..)` on `type`.
+//! shapes, the stray-`where` ordinary ladder, misplaced bounds
+//! rejected, dumper output, and `pub(..)` on `type`.
 
 mod common;
 

@@ -1279,7 +1279,7 @@ msgstr ""
 #: src/tutorial/values-and-variables.md:19 src/reference/primitive-types.md:13
 #: src/reference/literals-and-inference.md:211
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:104
 #: src/reference/value-boundary.md:36 src/reference/value-boundary.md:37
 #: src/reference/templates.md:19
 msgid "`str`"
@@ -1295,7 +1295,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:20 src/examples/playground-corpus.md:55
 #: src/reference/primitive-types.md:14 src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:103
+#: src/reference/by-reference-and-nullable.md:105
 #: src/reference/value-boundary.md:38 src/reference/value-boundary.md:39
 msgid "`bytes`"
 msgstr ""
@@ -1625,7 +1625,7 @@ msgstr ""
 
 #: src/tutorial/values-and-variables.md:265
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:99
+#: src/reference/by-reference-and-nullable.md:101
 msgid "`==` means"
 msgstr ""
 
@@ -11546,7 +11546,7 @@ msgid ""
 msgstr ""
 
 #: src/reference/builtin-generic-types.md:65
-#: src/reference/by-reference-and-nullable.md:80
+#: src/reference/by-reference-and-nullable.md:82
 msgid ""
 "Auto-deref covers every value position: `p.x`, `p.m(..)`, `p[i]`, `for (x of "
 "p)`, arithmetic on `p`'s payload."
@@ -13776,22 +13776,22 @@ msgid ""
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:99
+#: src/reference/by-reference-and-nullable.md:101
 msgid "Operand type"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:121
-#: src/reference/by-reference-and-nullable.md:99
+#: src/reference/by-reference-and-nullable.md:101
 msgid "Lowering"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:103
 msgid "numeric / `bool` primitives"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:123
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:103
 msgid "value"
 msgstr ""
 
@@ -13800,19 +13800,19 @@ msgid "compare, IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:124
-#: src/reference/by-reference-and-nullable.md:102
+#: src/reference/by-reference-and-nullable.md:104
 msgid "content (codepoints)"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:124
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:102
-#: src/reference/by-reference-and-nullable.md:103
+#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:105
 msgid "content compare"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:125
-#: src/reference/by-reference-and-nullable.md:103
+#: src/reference/by-reference-and-nullable.md:105
 msgid "content (octets)"
 msgstr ""
 
@@ -13823,12 +13823,12 @@ msgid ""
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:106
 msgid "**cell identity**"
 msgstr ""
 
 #: src/reference/rc-dispose-identity.md:126
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:106
 msgid "the raw slot compare"
 msgstr ""
 
@@ -15801,34 +15801,36 @@ msgstr ""
 
 #: src/reference/by-reference-and-nullable.md:70
 msgid ""
-"There is no postfix `T?` and no `*T` — each is a diagnosed error naming "
-"`?T`. In expression position, `*x`/`&x` diagnose: \"bindings share by "
-"reference now — pass `x` directly\" (binary `*`/`&` operators are untouched)."
-msgstr ""
-
-#: src/reference/by-reference-and-nullable.md:75
-msgid "Coercions and uses"
+"There is no postfix `T?` and no `*T` — each falls to the ordinary error "
+"ladder (in type position, \"expected a type name\"); the nullable spells "
+"`?T`. In expression position, `*x`/`&x` are the ordinary expression error "
+"(\"expected an expression\") — bindings share by reference; pass the value "
+"itself (binary `*`/`&` operators are untouched)."
 msgstr ""
 
 #: src/reference/by-reference-and-nullable.md:77
+msgid "Coercions and uses"
+msgstr ""
+
+#: src/reference/by-reference-and-nullable.md:79
 msgid ""
 "**`T → ?T` boxes; `?T → T` derefs** — both implicit at the expected-type "
 "position, transitive through `??T`:"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:82
+#: src/reference/by-reference-and-nullable.md:84
 msgid ""
 "`p == nil` / `p != nil` compare against the null slot; guard before use. The "
 "trap is the bug-catcher, not the semantics."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:84
+#: src/reference/by-reference-and-nullable.md:86
 msgid ""
 "A `?T` binding IS the cell reference: writes through it hit the shared cell "
 "(a `nudge(mut pt: ?Point)` moves the caller's point)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:86
+#: src/reference/by-reference-and-nullable.md:88
 msgid ""
 "`nil` typing: a context-free `nil` has type `nil`; in an expected-`?T` "
 "position it types as that `?T` — so `let p: ?Node = nil` and a `left: nil` "
@@ -15836,34 +15838,34 @@ msgid ""
 "and `nil` means \"not found\"."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:91
+#: src/reference/by-reference-and-nullable.md:93
 msgid ""
 "When the cell's refcount reaches zero, the engine runs the type's "
 "`[disposal]` member — the cell-death hook (see [Rc, dispose, and "
 "identity](rc-dispose-identity.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:94
+#: src/reference/by-reference-and-nullable.md:96
 msgid ""
 "Across the host boundary `?T` crosses nil-flattened when its element crosses "
 "— an `entry fn -> (?T, err)` is a first-class host answer."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:97
+#: src/reference/by-reference-and-nullable.md:99
 msgid "`==` — identity for cells, content for text"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:101
+#: src/reference/by-reference-and-nullable.md:103
 msgid "IEEE 754 for floats (`NaN != NaN`, `-0.0 == 0.0`)"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:104
+#: src/reference/by-reference-and-nullable.md:106
 msgid ""
 "everything else — records, arrays, enums, closures, interface objects, "
 "`opaque`, `?T`"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:106
+#: src/reference/by-reference-and-nullable.md:108
 msgid ""
 "`[1, 2] == [1, 2]` is **false** — two cells. Identity is O(1) with no deep "
 "walk; compare content where content is the contract (a loop, or a hash/eq "
@@ -15873,12 +15875,12 @@ msgid ""
 "obviously-fresh composites."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:113
+#: src/reference/by-reference-and-nullable.md:115
 #: src/reference/typed-bytecode.md:121
 msgid "`bytes::clone()` — the one copy escape hatch"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:115
+#: src/reference/by-reference-and-nullable.md:117
 msgid ""
 "`b.clone() -> bytes` mints a fresh buffer with `b`'s octets — a one-shot "
 "deep copy, the **only copy syntax in the language**. `bytes::from(a)` also "
@@ -15886,7 +15888,7 @@ msgid ""
 "any other type is unreachable — build a new one instead."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:120
+#: src/reference/by-reference-and-nullable.md:122
 msgid ""
 "```rut\n"
 "use ink::{ Logger };\n"
@@ -15901,11 +15903,11 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:136
+#: src/reference/by-reference-and-nullable.md:138
 msgid "Containers under sharing"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:138
+#: src/reference/by-reference-and-nullable.md:140
 msgid ""
 "`Vec<T>` backs on `buf: [?T]` — `[nil; cap]` is the generic zero (`nil` is "
 "the slot's zero); `push` takes the `T → ?T`\\-boxed handle; loads yield the "
@@ -15913,32 +15915,32 @@ msgid ""
 "types](builtin-generic-types.md)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:142
+#: src/reference/by-reference-and-nullable.md:144
 msgid ""
 "Keyed collections: `get(k) -> ?V` — `nil` = absent, a hit answers the "
 "**stored cell** (the aliasing law: two gets of one key name one cell until a "
 "replace re-stores)."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:145
+#: src/reference/by-reference-and-nullable.md:147
 msgid ""
 "Array windows (`v.slice(a, b) -> ?Vec<T>`) are the shared cell: writes "
 "through the window hit the parent (see [String slicing and "
 "views](string-views.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:148
+#: src/reference/by-reference-and-nullable.md:150
 msgid ""
 "Erasure rides the same laws: `opaque(v)` aliases the payload's cell, and "
 "`opaque::downcast<T>(o)`'s match is the box's own inner cell (see [opaque — "
 "erasure and downcast](opaque.md))."
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:152
+#: src/reference/by-reference-and-nullable.md:154
 msgid "The answer channel"
 msgstr ""
 
-#: src/reference/by-reference-and-nullable.md:154
+#: src/reference/by-reference-and-nullable.md:156
 msgid ""
 "**`(?T, err)` — concretely `(value, ok)` / `(T, str)` — is THE answer "
 "channel.** The convention is law: empty err + a value = success; empty err + "
@@ -18797,7 +18799,7 @@ msgstr ""
 msgid "// from a file: the walk adds only the file read\n"
 msgstr ""
 
-#: src/reference/embedding.md:335 src/reference/bundles.md:536
+#: src/reference/embedding.md:335 src/reference/bundles.md:537
 msgid "\"vendor/plugin.rutbundle\""
 msgstr ""
 
@@ -24646,7 +24648,7 @@ msgid ""
 "binary:"
 msgstr ""
 
-#: src/reference/module-binary.md:192 src/reference/bundles.md:447
+#: src/reference/module-binary.md:192 src/reference/bundles.md:448
 msgid "check"
 msgstr ""
 
@@ -24947,7 +24949,7 @@ msgid ""
 "trivially. A refused world packs fine without `--strip`."
 msgstr ""
 
-#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:550
+#: src/reference/symbol-stripping.md:99 src/reference/bundles.md:551
 msgid "CLI"
 msgstr ""
 
@@ -26445,18 +26447,18 @@ msgstr ""
 msgid ""
 "**Why the book recommends the zip.** A source zip compiles with the "
 "CONSUMER's toolchain, so it never goes stale the way compiled IR does: a "
-"`.rutbundle`'s IR is version-unstable across rut toolchains (it stays "
-"loadable forever — [the wire version](#the-wire-version) — but a zip keeps a "
-"package publishable across engine releases without re-publishing). The zip "
-"is also the whole-closure lane: a consumer's `rut install` fetches it once, "
-"and every dep rides inside."
+"`.rutbundle`'s IR is version-unstable across rut toolchains (readable only "
+"by the toolchain generation that packed it — [the wire "
+"version](#the-wire-version) — a zip keeps a package publishable across "
+"engine releases without re-publishing). The zip is also the whole-closure "
+"lane: a consumer's `rut install` fetches it once, and every dep rides inside."
 msgstr ""
 
-#: src/reference/bundles.md:384
+#: src/reference/bundles.md:385
 msgid "The `bundle` module"
 msgstr ""
 
-#: src/reference/bundles.md:386
+#: src/reference/bundles.md:387
 msgid ""
 "The container codec, the `rut.jsonc` grammar, the source file-set collector, "
 "and the reader (both root kinds) live in the driver's `rut_driver::bundle` "
@@ -26473,15 +26475,15 @@ msgid ""
 "compiled root and its ledger + groups, or the decl root and its surface."
 msgstr ""
 
-#: src/reference/bundles.md:402
+#: src/reference/bundles.md:403
 msgid "Deterministic packing"
 msgstr ""
 
-#: src/reference/bundles.md:404
+#: src/reference/bundles.md:405
 msgid "Same directory + same toolchain ⇒ byte-identical `.rutbundle`:"
 msgstr ""
 
-#: src/reference/bundles.md:406
+#: src/reference/bundles.md:407
 msgid ""
 "fixed entry order — `rut.jsonc` first, then the scope ledger, the root's "
 "binary, then the root's generated declaration entry (plus its module rows "
@@ -26489,26 +26491,26 @@ msgid ""
 "distinct identity);"
 msgstr ""
 
-#: src/reference/bundles.md:410
+#: src/reference/bundles.md:411
 msgid "fixed (zeroed) timestamps;"
 msgstr ""
 
-#: src/reference/bundles.md:411
+#: src/reference/bundles.md:412
 msgid "STORE (no compression) — determinism over size."
 msgstr ""
 
-#: src/reference/bundles.md:413
+#: src/reference/bundles.md:414
 msgid ""
 "This is the module binary's determinism law extended one level up ([Module "
 "binary and verification](module-binary.md)): bundles are content-cacheable, "
 "and two builds of the same module diff to nothing."
 msgstr ""
 
-#: src/reference/bundles.md:417
+#: src/reference/bundles.md:418
 msgid "Stripping — the private sidecar"
 msgstr ""
 
-#: src/reference/bundles.md:419
+#: src/reference/bundles.md:420
 msgid ""
 "`rut pack <dir> --strip` emits the bundle as above **plus a private symbol "
 "table** at the sibling path `<out-without-ext>.rutsym`. Every renameable "
@@ -26523,7 +26525,7 @@ msgid ""
 "against a compiled bundle ([The rut CLI](cli.md))."
 msgstr ""
 
-#: src/reference/bundles.md:432
+#: src/reference/bundles.md:433
 msgid ""
 "**The declaration entry is the strip policy's other half (v1): a stripped "
 "pack OMITS every compiled group's generated entry.** The entry's plaintext "
@@ -26534,146 +26536,146 @@ msgid ""
 "and a host root refuses `--strip` outright."
 msgstr ""
 
-#: src/reference/bundles.md:441
+#: src/reference/bundles.md:442
 msgid "Checks on load"
 msgstr ""
 
-#: src/reference/bundles.md:443
+#: src/reference/bundles.md:444
 msgid ""
 "Every check runs at load time, before compilation and linking — a bad bundle "
 "never executes. The order is the law: container, then manifest and version, "
 "then every group's decode, then the mount."
 msgstr ""
 
-#: src/reference/bundles.md:447
+#: src/reference/bundles.md:448
 msgid "rule on mismatch"
 msgstr ""
 
-#: src/reference/bundles.md:449
+#: src/reference/bundles.md:450
 msgid "zip entry CRC-32"
 msgstr ""
 
-#: src/reference/bundles.md:449
+#: src/reference/bundles.md:450
 msgid "refuse — corrupt bundle (names the entry)"
 msgstr ""
 
-#: src/reference/bundles.md:450
+#: src/reference/bundles.md:451
 msgid "`rut.jsonc` present, `\"format\": \"rutbundle\"`"
 msgstr ""
 
-#: src/reference/bundles.md:450
+#: src/reference/bundles.md:451
 msgid "refuse — not a rut bundle"
 msgstr ""
 
-#: src/reference/bundles.md:451
+#: src/reference/bundles.md:452
 msgid "`format_version` exactly 12"
 msgstr ""
 
-#: src/reference/bundles.md:451
+#: src/reference/bundles.md:452
 msgid ""
 "anything else refuses — `this toolchain reads bundle format_version 12 only "
 "(found {v}) — re-pack the directory`"
 msgstr ""
 
-#: src/reference/bundles.md:452
+#: src/reference/bundles.md:453
 msgid "a host root carrying a root `mod.rutc`"
 msgstr ""
 
-#: src/reference/bundles.md:452
+#: src/reference/bundles.md:453
 msgid "refuse — a host bundle's root is its surface, not a compiled unit"
 msgstr ""
 
-#: src/reference/bundles.md:453
+#: src/reference/bundles.md:454
 msgid "a host root carrying a `rut.scopes` ledger or any group entry"
 msgstr ""
 
-#: src/reference/bundles.md:453
+#: src/reference/bundles.md:454
 msgid "refuse — a host bundle is its surface, single-package"
 msgstr ""
 
-#: src/reference/bundles.md:454
+#: src/reference/bundles.md:455
 msgid ""
 "a compiled root without its `rut.scopes` ledger, or a ledger row that is not "
 "a content identity (`name@<16 hex>`)"
 msgstr ""
 
-#: src/reference/bundles.md:454
+#: src/reference/bundles.md:455
 msgid "refuse — a corrupt compiled bundle"
 msgstr ""
 
-#: src/reference/bundles.md:455
+#: src/reference/bundles.md:456
 msgid "an entry under a top-level prefix other than `deps/`"
 msgstr ""
 
-#: src/reference/bundles.md:455
+#: src/reference/bundles.md:456
 msgid ""
 "refuse — the archive root carries only the root's own files; dep groups ride "
 "at `deps/<name>@<fp16>/`"
 msgstr ""
 
-#: src/reference/bundles.md:456
+#: src/reference/bundles.md:457
 msgid "a `deps/` group directory whose name is not a content identity"
 msgstr ""
 
-#: src/reference/bundles.md:456
+#: src/reference/bundles.md:457
 msgid "refuse — expected `<name>@<16 hex>`"
 msgstr ""
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:458
 msgid "a group's manifest `name` disagreeing with its dirname's name half"
 msgstr ""
 
-#: src/reference/bundles.md:457
+#: src/reference/bundles.md:458
 msgid "refuse — names both"
 msgstr ""
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:459
 msgid ""
 "a group dirname's fingerprint disagreeing with the hash of its rode source "
 "set"
 msgstr ""
 
-#: src/reference/bundles.md:458
+#: src/reference/bundles.md:459
 msgid "refuse — the dirname and the content disagree"
 msgstr ""
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:460
 msgid "`mod.rutc` decode (root and groups): version, tables, surface ids"
 msgstr ""
 
-#: src/reference/bundles.md:459
+#: src/reference/bundles.md:460
 msgid "refuse — names the entry and the cause"
 msgstr ""
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:461
 msgid "a compiled group's ledger row agrees with its binary's own scope"
 msgstr ""
 
-#: src/reference/bundles.md:460
+#: src/reference/bundles.md:461
 msgid "refuse — corrupt or doctored"
 msgstr ""
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:462
 msgid "a riding source entry that fails to read or decode (UTF-8)"
 msgstr ""
 
-#: src/reference/bundles.md:461
+#: src/reference/bundles.md:462
 msgid "refuse — names the entry; a bad archive never reaches the run"
 msgstr ""
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:463
 msgid "every declared dep satisfied by a group (compiled roots)"
 msgstr ""
 
-#: src/reference/bundles.md:462
+#: src/reference/bundles.md:463
 msgid "refuse — names the missing group"
 msgstr ""
 
-#: src/reference/bundles.md:464
+#: src/reference/bundles.md:465
 msgid "The std tree on a CDN — the per-package delivery"
 msgstr ""
 
-#: src/reference/bundles.md:466
+#: src/reference/bundles.md:467
 msgid ""
 "The std tree (`rut/`) ships as **committed** per-package source zips at "
 "`dist/std/<pkg>.zip` — one zip per std package a `deps` row can spell. Only "
@@ -26684,7 +26686,7 @@ msgid ""
 "(the tag push and jsDelivr's propagation are the maintainer's manual step):"
 msgstr ""
 
-#: src/reference/bundles.md:475
+#: src/reference/bundles.md:476
 msgid ""
 "```jsonc\n"
 "{\n"
@@ -26698,14 +26700,14 @@ msgid ""
 "```"
 msgstr ""
 
-#: src/reference/bundles.md:485
+#: src/reference/bundles.md:486
 msgid ""
 "`<tag>` is a placeholder — real urls live in the worked manifests, and the "
 "real pins live in each project's committed `rut.lock` (the in-repo examples' "
 "locks are the reference; anti-rot: docs never rot pins). The laws:"
 msgstr ""
 
-#: src/reference/bundles.md:490
+#: src/reference/bundles.md:491
 msgid ""
 "**Committed artifacts, immutable tags.** The zips are packed by `rut pack "
 "--mode source`'s lane (deterministic — same input ⇒ byte-identical, so "
@@ -26713,7 +26715,7 @@ msgid ""
 "re-pointed — jsDelivr caches aggressively."
 msgstr ""
 
-#: src/reference/bundles.md:494
+#: src/reference/bundles.md:495
 msgid ""
 "**What the source zip delivers — everything, current.** A zip compiles with "
 "the CONSUMER's toolchain, so the std set moves to zips as the primary lane: "
@@ -26725,7 +26727,7 @@ msgid ""
 "[`install`](cli.md) never walks into one, the lock keeps direct rows only)."
 msgstr ""
 
-#: src/reference/bundles.md:504
+#: src/reference/bundles.md:505
 msgid ""
 "**The compiled lane keeps serving.** The `.rutbundle` files stay for "
 "consumers of the compiled wire: **host surfaces** (decl bundles), "
@@ -26743,7 +26745,7 @@ msgid ""
 "wherever it travels (the ordinary closure law)."
 msgstr ""
 
-#: src/reference/bundles.md:520
+#: src/reference/bundles.md:521
 msgid ""
 "**Duplicate mounts are safe.** Two archives may carry the same group "
 "(`json`'s and `http`'s closures both carry `strbuild`): the same identity "
@@ -26754,25 +26756,25 @@ msgid ""
 "— pin one of them with your own `deps` row."
 msgstr ""
 
-#: src/reference/bundles.md:529
+#: src/reference/bundles.md:530
 msgid "Loading"
 msgstr ""
 
-#: src/reference/bundles.md:531
+#: src/reference/bundles.md:532
 msgid ""
 "A bundle is one more resolution source alongside the directory form — same "
 "name resolution, same compile, same identity-keyed groups:"
 msgstr ""
 
-#: src/reference/bundles.md:535
+#: src/reference/bundles.md:536
 msgid "// from a file\n"
 msgstr ""
 
-#: src/reference/bundles.md:536
+#: src/reference/bundles.md:537
 msgid "// from bytes (embedders, tests, wasm) — the pure container parse\n"
 msgstr ""
 
-#: src/reference/bundles.md:541
+#: src/reference/bundles.md:542
 msgid ""
 "After the offer, the package name resolves exactly as the directory form "
 "does — with one difference: a compiled group's body is the decoded program "
@@ -26783,15 +26785,15 @@ msgid ""
 "valid share layouts; the bundle packages them, nothing requires it."
 msgstr ""
 
-#: src/reference/bundles.md:553
+#: src/reference/bundles.md:554
 msgid "# the default: the source zip, <dir>.zip\n"
 msgstr ""
 
-#: src/reference/bundles.md:554
+#: src/reference/bundles.md:555
 msgid "# the compiled wire\n"
 msgstr ""
 
-#: src/reference/bundles.md:558
+#: src/reference/bundles.md:559
 msgid ""
 "The packed form and its directory compile to identical programs — pinned by "
 "tests (the linked binaries are equal)."

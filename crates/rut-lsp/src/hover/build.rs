@@ -25,8 +25,7 @@ use rut_ast::{
 
 use super::infer;
 use super::types::{
-    ty_head, ty_src, DefIndex, FnDef, ImplDef, LetDef, MemberSrc, ModDef, Mount, TyDef, TyForm,
-    UseDef,
+    ty_head, ty_src, DefIndex, FnDef, LetDef, MemberSrc, ModDef, Mount, TyDef, TyForm, UseDef,
 };
 
 /// A `let` awaiting its type resolution: the node + its span (the
@@ -367,7 +366,6 @@ pub fn index_items(
                 // is the target type's name, so an impl method renders
                 // like the type's own surface (`impl I for T` is gone)
                 let target_head = ty_head(ast, d.target);
-                idx.impls.push(ImplDef {});
                 for m in &d.methods {
                     let MethodRef::Method(mh) = m else {
                         continue; // the recovery slot renders no row

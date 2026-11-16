@@ -160,12 +160,6 @@ pub struct FnDef {
     pub line: u32,
 }
 
-/// an inherent impl block — the target type whose member surface it
-/// extends (`impl Circle { .. }` records `Circle`; `impl I for T` is
-/// gone, so there is no other half to record)
-#[derive(Debug, Clone)]
-pub struct ImplDef {}
-
 /// a `pub? mod NAME;` declaration — the file-module namespace edge.
 /// The namespace itself is the mounted `NAME/mod.rut`'s own index
 /// (found through the chain by its mod path); this row carries the
@@ -254,7 +248,6 @@ impl Mount {
 pub struct DefIndex {
     pub types: Vec<TyDef>,
     pub fns: Vec<FnDef>,
-    pub impls: Vec<ImplDef>,
     /// module-scope lets (the decl layer)
     pub lets: Vec<LetDef>,
     /// use-imported names (the decl layer)
