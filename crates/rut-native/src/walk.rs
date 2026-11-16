@@ -23,9 +23,7 @@ use std::path::{Path, PathBuf};
 
 use rut_core::id::ScopeId;
 
-use rut_driver::bundle::{
-    parse_manifest, parse_manifest_compat, read_entry, Manifest, PkgType, MANIFEST_NAME,
-};
+use rut_driver::bundle::{parse_manifest, read_entry, Manifest, PkgType, MANIFEST_NAME};
 use rut_driver::mods::{mount_mod_children, ChildLookup, ModSource};
 use rut_driver::{Mode, Mounted, MountedBody, RunError, Walk};
 
@@ -223,29 +221,9 @@ pub(crate) const MANIFEST_RETIRED: &str = "rut.json";
 /// bundle module's reader (the module itself never touches the
 /// filesystem). A directory still holding the RETIRED `rut.json` name
 /// gets the pointed cutover refusal — no fallback lane reads it.
-/// STRICT: this is the directory grammar's door.
+/// ONE grammar, every lane: the directory door, the zip boundary, the
+/// store tree.
 pub(crate) fn read_manifest(src: &dyn Source, dir: &str) -> Result<Manifest, LoadError> {
-    read_manifest_lane(src, dir, false)
-}
-
-/// [`read_manifest`] on the compat lane — the manifest read at the
-/// ZIP boundary: bytes unpacked from a source zip rode the wire, so
-/// the retired keys (the bundle wire pair, the `consts` table) parse
-/// or discard there instead of refusing — the same reader-compat law
-/// the `.rutbundle` lanes keep.
-pub(crate) fn read_manifest_compat(src: &dyn Source, dir: &str) -> Result<Manifest, LoadError> {
-    read_manifest_lane(src, dir, true)
-}
-
-/// The lane core: `compat` rides true at the wire boundaries (an
-/// unpacked source zip's tree — its root and embedded groups — where
-/// the retired keys parse or retain). Crate-visible: the pack lanes
-/// thread the same flag through their group-source recursion.
-pub(crate) fn read_manifest_lane(
-    src: &dyn Source,
-    dir: &str,
-    compat: bool,
-) -> Result<Manifest, LoadError> {
     let key = src.resolve(dir, MANIFEST_NAME).map_err(LoadError::law)?;
     let text = match read_source_text(src, &key) {
         Ok(text) => text,
@@ -260,12 +238,7 @@ pub(crate) fn read_manifest_lane(
             return Err(missing);
         }
     };
-    let parsed = if compat {
-        parse_manifest_compat(&text)
-    } else {
-        parse_manifest(&text)
-    };
-    parsed.map_err(LoadError::from)
+    parse_manifest(&text).map_err(LoadError::from)
 }
 
 // ---------------------------------------------------------------------
@@ -625,15 +598,11 @@ fn lib_pkg(
 /// `NAME/mod.rut` beside the declaring file (else the single-file
 /// `NAME.rut`), recursively, cycle-guarded — the tree living under the
 /// package's `src/` shell. The repealed `entry.lib`/`entry.libs` keys
-/// refused at parse (the manifest walk); a published BUNDLE's old
-/// manifest rides the reader's compat lane instead (a loading law).
+/// refuse at parse (the manifest walk) — no lane grandfathered.
 ///
 /// The consts are the SURFACE's own `pub let` rows (folded inside the
-/// lowering, bound bare at the pkg's root). A manifest that rode the
-/// wire (an unpacked source zip's tree — compat-parsed) also carries
-/// its RETAINED `consts` rows, stamped BESIDE the surface rows below;
-/// a directory's strict-parsed manifest cannot (the grammar refuses
-/// the key), so the fold is its own no-op there.
+/// lowering, bound bare at the pkg's root); the manifest carries no
+/// consts of its own — the retired `consts` table refuses at parse.
 fn load_entry_module(
     src: &dyn Source,
     dir: &str,
@@ -850,7 +819,6 @@ pub(crate) fn walk_dir(
         &manifest.deps,
         &mut visiting,
         &mut fetched,
-        false,
     )?;
     // the dev pass — the ROOT's dev table mounts exactly like `[deps]`;
     // a dep's dev table is never walked (pass 2 is root-only)
@@ -862,7 +830,6 @@ pub(crate) fn walk_dir(
         &manifest.dev_deps,
         &mut visiting,
         &mut fetched,
-        false,
     )?;
     Ok(root)
 }
@@ -929,9 +896,7 @@ pub(crate) fn mount_key_for(dep_dir: &str, spec: &str) -> String {
 
 /// Resolve a manifest's `[deps]` recursively — pass 1 of
 /// the mount order. `parent` is the spec of the pkg whose table walks
-/// (the first-mount edge every mount below records). `compat` rides
-/// true inside an unpacked source zip's tree (its manifests rode the
-/// wire; the retired keys parse or discard there).
+/// (the first-mount edge every mount below records).
 #[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn resolve_deps(
     world: &mut World,
@@ -941,18 +906,8 @@ fn resolve_deps(
     manifest: &Manifest,
     visiting: &mut Vec<PathBuf>,
     fetched: &mut Fetched<'_>,
-    compat: bool,
 ) -> Result<(), LoadError> {
-    resolve_table(
-        world,
-        src,
-        dir,
-        parent,
-        &manifest.deps,
-        visiting,
-        fetched,
-        compat,
-    )
+    resolve_table(world, src, dir, parent, &manifest.deps, visiting, fetched)
 }
 
 /// The dev-table mount — the pack lane's compile-once-per-owner pass:
@@ -983,7 +938,6 @@ pub(crate) fn mount_dev_table(
         &manifest.dev_deps,
         &mut visiting,
         &mut fetched,
-        false,
     )
 }
 
@@ -1000,8 +954,7 @@ pub(crate) fn mount_dev_table(
 /// — the first-mount edge every pkg mounted here records
 /// ([`Mounted::mounted_by`]). Every mounted pkg's manifest and directory
 /// (or archive location) are recorded — the pack lanes' group reads
-/// dispatch on them. `compat` rides true inside an unpacked source
-/// zip's tree (the wire-carried manifests parse on the compat lane).
+/// dispatch on them.
 #[allow(clippy::too_many_arguments)] // the walk threads exactly this state
 fn resolve_table(
     world: &mut World,
@@ -1011,7 +964,6 @@ fn resolve_table(
     table: &BTreeMap<String, BTreeMap<String, String>>,
     visiting: &mut Vec<PathBuf>,
     fetched: &mut Fetched<'_>,
-    compat: bool,
 ) -> Result<(), LoadError> {
     for (spec, desc) in table {
         if world.pkgs.contains_key(spec) {
@@ -1076,7 +1028,7 @@ fn resolve_table(
                 &bytes,
             );
         }
-        let dm = read_manifest_lane(src, &dep_dir, compat)?;
+        let dm = read_manifest(src, &dep_dir)?;
         if dm.name.as_deref() != Some(rut_driver::bundle::mount_name(&mount_key)) {
             return Err(LoadError::DepName {
                 spec: spec.clone(),
@@ -1093,9 +1045,7 @@ fn resolve_table(
         visiting.push(dep_canon);
         // a dep's dev-deps are NEVER walked — pass 2 is root-only, so a
         // consumer's world never contains another pkg's dev table
-        resolve_deps(
-            world, src, &dep_dir, &mount_key, &dm, visiting, fetched, compat,
-        )?;
+        resolve_deps(world, src, &dep_dir, &mount_key, &dm, visiting, fetched)?;
         visiting.pop();
     }
     Ok(())
@@ -1130,13 +1080,11 @@ fn mount_zip_dep(
     // the directory lane over the unpacked tree — the manifest, the
     // name-vs-key gate, the entry mount, then the dep recursion (the
     // rewritten rows resolve inside; the first-mount edge records the
-    // declaring pkg's spec). The manifest reads ride the COMPAT lane
-    // here and through the tree: these bytes rode the wire, where the
-    // retired keys still parse (the wire pair) or retain (`consts`
-    // stamps at the entry mount)
+    // declaring pkg's spec). ONE grammar here too: the unpacked tree
+    // parses like any directory.
     let dir_key = dir.to_string_lossy().into_owned();
     let src = FsSource::at(&dir);
-    let manifest = read_manifest_compat(&src, &dir_key)?;
+    let manifest = read_manifest(&src, &dir_key)?;
     let root_name = manifest
         .name
         .clone()
@@ -1164,7 +1112,6 @@ fn mount_zip_dep(
         &manifest,
         &mut visiting,
         fetched,
-        true,
     )?;
     Ok(())
 }
@@ -1456,9 +1403,10 @@ fn mount_bundle_bytes(
                 message: e,
             }
         })?;
-        // the group manifest rides the compat lane: a repacked
-        // archive's group manifests ride byte-for-byte from any era
-        let dm = parse_manifest_compat(&dep_toml)
+        // the group manifest parses on the ONE grammar (a repacked
+        // archive's group manifests carry at most the wire pair —
+        // legal-optional)
+        let dm = parse_manifest(&dep_toml)
             .map_err(|e| LoadError::law(format!("{url}: {prefix}/rut.jsonc: {e}")))?;
         let name = dm
             .name
@@ -1683,7 +1631,6 @@ pub(crate) fn offer_dir(
         &manifest,
         &mut visiting,
         &mut fetched,
-        false,
     )?;
     Ok(name)
 }

@@ -322,9 +322,8 @@ fn build_world(groups: &[PkgFiles]) -> Vec<Mounted> {
                 // <literal>;` rows folded into the host body's const
                 // rows INSIDE the lowering (bound bare at the pkg's
                 // root) — a `pub use calc_host::{ PI }` re-export
-                // resolves against them. An OLD pinned zip's manifest
-                // rows bind nothing (the table discards at the compat
-                // parse — no backward compat)
+                // resolves against them. The manifest carries no consts
+                // of its own (the retired table refuses at parse)
                 Ok(p) => p.named(&g.module),
                 Err(_) => continue,
             }

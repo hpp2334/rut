@@ -3,44 +3,34 @@
 //! string-keyed reader (the FS math is rut-native's); archive reads
 //! index the walked archives' entries.
 
-use crate::bundle::{bundle_key, parse_manifest, parse_manifest_compat, read_entry};
+use crate::bundle::{bundle_key, parse_manifest, read_entry};
 use crate::pack::Archive;
 use crate::pack::{PackRead, PkgSource};
 use crate::session::MountedBody;
 
 use std::collections::BTreeMap;
 
-/// A group's parsed manifest, read from wherever its files live. A
-/// DIRECTORY group parses strict (the post-repeal grammar — the body
-/// keys refuse); an UNPACKED group (a url source-zip dep's tree — its
-/// bytes rode the wire, where the retired keys parse or retain) and
-/// an ARCHIVE group (a published bundle's manifest is forever old)
-/// parse compat — the reader-compat law at every wire boundary.
+/// A group's parsed manifest, read from wherever its files live — the
+/// ONE grammar everywhere (the wire pair a packed manifest carries is
+/// legal-optional; nothing else survives the boundary).
 pub(super) fn group_manifest(
     source: &PkgSource,
     archives: &[Archive],
     read: &PackRead,
 ) -> Result<crate::bundle::Manifest, String> {
     match source {
-        PkgSource::Dir(gdir) => {
+        PkgSource::Dir(gdir) | PkgSource::Unpacked(gdir) => {
             let bytes = read(gdir, crate::bundle::files::MANIFEST_NAME)?;
             let text = String::from_utf8(bytes)
                 .map_err(|_| format!("{}: not UTF-8", crate::bundle::files::MANIFEST_NAME))?;
             parse_manifest(&text).map_err(|e| e.to_string())
-        }
-        PkgSource::Unpacked(gdir) => {
-            let bytes = read(gdir, crate::bundle::files::MANIFEST_NAME)?;
-            let text = String::from_utf8(bytes)
-                .map_err(|_| format!("{}: not UTF-8", crate::bundle::files::MANIFEST_NAME))?;
-            parse_manifest_compat(&text).map_err(|e| e.to_string())
         }
         PkgSource::Archive { slot, prefix } => {
             let archive = &archives[*slot];
             let name = crate::bundle::files::MANIFEST_NAME;
             let text = read_entry(&archive.entries, &format!("{prefix}{name}"))
                 .map_err(|e| format!("{}: {e}", archive.origin))?;
-            parse_manifest_compat(&text)
-                .map_err(|e| format!("{}: {prefix}{name}: {e}", archive.origin))
+            parse_manifest(&text).map_err(|e| format!("{}: {prefix}{name}: {e}", archive.origin))
         }
     }
 }
@@ -75,9 +65,7 @@ pub(super) fn group_file(
 /// A pkg with mounted
 /// mod children rides its module rows too (`rut.mods` — the additive
 /// envelope section; its root source is the `""` row, so the tree needs
-/// no standalone file). An OLD published archive being re-packed rides
-/// at the legacy `entry.lib` + `libs` spelling instead (the
-/// reader-compat law's writer twin). A
+/// no standalone file). A
 /// compiled group does not take this shape (its `.rutc` is the linking
 /// truth); host pkgs and declared-but-unused pkgs ride the bundle
 /// exactly like this. Dir reads go through the world's reader; same
@@ -93,33 +81,18 @@ pub fn collect_source_group(
     let name = crate::bundle::files::MANIFEST_NAME;
     let text = read(dir_key, name)?;
     out.push((format!("{prefix}{name}"), text));
-    // the body: the old envelope's legacy keys, else the root module —
-    // the rows entry carries the tree when children mount (the root
-    // text is the `""` row), so the standalone file is a FLAT pkg's
-    // shape. A bodyless pkg (a host group — the surface is the whole
-    // pkg) rides its `entry.type` surface instead, as always.
-    if let Some(base) = &manifest.legacy_entry.lib {
-        let rel = base.strip_prefix("./").unwrap_or(base);
-        let key = bundle_key(&format!("{prefix}{rel}"))?;
-        let body = read(dir_key, rel)?;
-        out.push((key, body));
-        // each legacy `libs` file rides beside the base, in manifest
-        // order — the array IS the order the reader splices back, so
-        // the archive stays deterministic
-        for lib in &manifest.legacy_entry.libs {
-            let rel = lib.strip_prefix("./").unwrap_or(lib);
-            let key = bundle_key(&format!("{prefix}{rel}"))?;
-            let body = read(dir_key, rel)?;
-            out.push((key, body));
-        }
-    } else if !mods.is_empty() {
+    // the body: the rows entry carries the tree when children mount
+    // (the root text is the `""` row), so the standalone file is a
+    // FLAT pkg's shape. A bodyless pkg (a host group — the surface is
+    // the whole pkg) rides its `entry.type` surface instead.
+    if !mods.is_empty() {
         // a mod-rooted pkg: the tree rides the rows entry the caller
         // writes beside this file set
     } else {
         // a flat pkg's root module — unless there is none (a host
         // group: the surface IS the whole pkg), which rides its
         // `entry.type` surface at the canonical `mod.d.rut` name
-        // (wire v11: the archive is name-free; the directory keeps
+        // (wire v12: the archive is name-free; the directory keeps
         // whatever spelling its grammar allows). Both probes live
         // under the package's `src/` shell.
         if let Ok(body) = read(dir_key, "src/mod.rut") {

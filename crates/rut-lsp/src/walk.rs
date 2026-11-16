@@ -116,7 +116,7 @@ pub(crate) fn resolve(state: &mut SessionState, io: &dyn Io, roots: &[String]) -
             files: MAX_DEP_FILES,
             missing: &mut out.missing,
         };
-        walk_manifest(&mut ctx, state, root, 1, false);
+        walk_manifest(&mut ctx, state, root, 1);
     }
     out
 }
@@ -146,17 +146,10 @@ fn feed_lock(state: &mut SessionState, io: &dyn Io, root: &str) {
 /// (origin = the file's rooted path, so go-to-definition lands in it),
 /// its mod tree mounts behind the parsed decls, then its dep rows walk
 /// — `deps` at any depth, `dev-deps` only at the root (the loader's
-/// law: a dep's dev table never enters a consumer's world).
-/// `compat` rides true inside a store mount (an unpacked url dep's
-/// manifest rode the wire — the retired keys parse or discard there,
-/// the loader's zip-boundary law).
-fn walk_manifest(
-    ctx: &mut WalkCtx,
-    state: &mut SessionState,
-    dir: &str,
-    depth: usize,
-    compat: bool,
-) {
+/// law: a dep's dev table never enters a consumer's world). ONE
+/// grammar everywhere: a store tree's manifest parses like any
+/// directory's.
+fn walk_manifest(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, depth: usize) {
     // the caps truncate: the referenced set stays incomplete, never a
     // failure
     if depth > MAX_DEP_DEPTH || ctx.files == 0 {
@@ -170,12 +163,7 @@ fn walk_manifest(
         return; // no manifest here — nothing to parse, nothing to hint
     };
     let text = String::from_utf8_lossy(&bytes).into_owned();
-    let parsed = if compat {
-        crate::deps::dep_table_pinned_compat(&text, &state.lock_pins)
-    } else {
-        crate::deps::dep_table_pinned(&text, &state.lock_pins)
-    };
-    let table = match parsed {
+    let table = match crate::deps::dep_table_pinned(&text, &state.lock_pins) {
         Ok(t) => t,
         Err(e) => {
             state.hint_once(
@@ -236,27 +224,19 @@ fn walk_manifest(
         .collect();
     mount_mod_tree(ctx, state, dir, &module, &entry_rows, depth);
     for row in &table.deps {
-        mount_row(ctx, state, dir, row, depth, compat);
+        mount_row(ctx, state, dir, row, depth);
     }
     if depth == 1 {
         for row in &table.dev_deps {
-            mount_row(ctx, state, dir, row, depth, compat);
+            mount_row(ctx, state, dir, row, depth);
         }
     }
 }
 
 /// one dep row's mount door: url rows go through the store lane, path
 /// rows recurse into the directory beside the manifest (OUTSIDE the
-/// walk root is the point). `compat` rides through — a store tree's
-/// embedded groups rode the same wire.
-fn mount_row(
-    ctx: &mut WalkCtx,
-    state: &mut SessionState,
-    dir: &str,
-    row: &DepRow,
-    depth: usize,
-    compat: bool,
-) {
+/// walk root is the point).
+fn mount_row(ctx: &mut WalkCtx, state: &mut SessionState, dir: &str, row: &DepRow, depth: usize) {
     if ctx.files == 0 {
         return; // the budget died — the set stays incomplete
     }
@@ -276,7 +256,7 @@ fn mount_row(
                 );
                 return;
             }
-            walk_manifest(ctx, state, &dep_dir, depth + 1, compat);
+            walk_manifest(ctx, state, &dep_dir, depth + 1);
         }
     }
 }
@@ -529,15 +509,13 @@ fn mount_url_dep(ctx: &mut WalkCtx, state: &mut SessionState, row: &DepRow, dept
     }
     // hit: the unpacked tree is a package directory like any other —
     // the SAME dir lanes mount it (and its embedded groups through its
-    // own path rows). Its manifest rode the wire (the zip's own
-    // bytes), so the tree reads on the compat lane — the loader's
-    // zip-boundary law
+    // own path rows). ONE grammar at the store door too — the unpacked
+    // manifest parses like any directory's.
     walk_manifest(
         ctx,
         state,
         &format!("{dir}/{}", rut_driver::UNPACK_DIR),
         depth + 1,
-        true,
     );
 }
 

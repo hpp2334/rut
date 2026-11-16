@@ -6,7 +6,7 @@
 use serde_json::{Map, Value};
 
 use super::descriptor::{check_dep_key, parse_deps_descriptor, parse_dev_descriptor};
-use super::expect::{expect_field_string, expect_field_string_array, expect_string, expect_u64};
+use super::expect::{expect_field_string, expect_string, expect_u64};
 use super::{valid_spec, Manifest, ManifestError, PkgType};
 
 // ---- the syntax boundary: serde_json's diagnostics become the
@@ -72,13 +72,15 @@ pub(crate) fn underscore_refused(path: &str, key: &str) -> ManifestError {
 /// Top-level keys. The grammar carries NO unknown keys — anything
 /// unnamed refuses loudly, naming the key (the no-forward-compat law:
 /// a typo or a retired key is a manifest error, never a silent
-/// ignore); `host_scope` keeps its dedicated retirement refusal.
+/// ignore); `host_scope` keeps its dedicated retirement refusal. The
+/// bundle wire pair (`format`/`format_version`) is the one
+/// legal-optional pair — the packer stamps it, the bundle reader gates
+/// on it.
 pub(super) fn walk_top_lane(
     key: &str,
     value: &Value,
     declared_type: &mut bool,
     m: &mut Manifest,
-    compat: bool,
 ) -> Result<(), ManifestError> {
     match key {
         "name" => {
@@ -105,28 +107,12 @@ pub(super) fn walk_top_lane(
                 }
             }
         }
-        // the bundle wire pair RETIRED from the directory grammar: the
-        // version lives in the bundle CONTAINER, and the packer stamps
-        // the pair at the bin pack door (`rut pack --mode bin`) — the
-        // only writer. A manifest riding INSIDE a published artifact
-        // still parses it (the compat lane below); the directory lane
-        // refuses LOUDLY, naming the fix
-        "format" if compat => m.format = Some(expect_string(key, value)?),
-        "format_version" if compat => m.format_version = Some(expect_u64(key, value)?),
-        "format" => {
-            return Err(ManifestError(
-                "format: retired — the version lives in the bundle container; the packer stamps \
-                 it (rut pack --mode bin); delete the key"
-                    .into(),
-            ));
-        }
-        "format_version" => {
-            return Err(ManifestError(
-                "format_version: retired — the version lives in the bundle container; the packer \
-                 stamps it; delete the key"
-                    .into(),
-            ));
-        }
+        // the bundle WIRE pair: the packer stamps it into every packed
+        // manifest and the bundle reader gates on it — legal-optional
+        // on the one grammar (a directory manifest carrying it is
+        // unusual but harmless and legal)
+        "format" => m.format = Some(expect_string(key, value)?),
+        "format_version" => m.format_version = Some(expect_u64(key, value)?),
         // `host_scope` (the retired registration-prefix override)
         // refuses LOUDLY: the key was load-bearing for
         // registration names, so a silent ignore would surface as
@@ -150,17 +136,10 @@ pub(super) fn walk_top_lane(
                     .into(),
             ));
         }
-        // the host body's constants (`calc_host`'s `PI` family) RETIRED
-        // from the directory grammar: the surface `let` row is the one
-        // FORWARD spelling (`pub let PI: f64 = 3.141592653589793;`,
-        // `inf`/`-inf` for the non-finite pair). The compat lane — the
-        // manifest read at the zip/bundle/store boundary, where today's
-        // published bytes still carry the rows — DISCARDS the table
-        // whole (the `entry.ir` precedent): an old pinned zip keeps
-        // mounting, its const rows bind nothing. The surface `pub let`
-        // row is the one spelling; old tags are not kept working
-        // (owner decree — no backward compat)
-        "consts" if compat => {}
+        // the host body's constants (`calc_host`'s `PI` family) RETIRED:
+        // the surface `let` row is the one spelling (`pub let PI: f64 =
+        // 3.141592653589793;`, `inf`/`-inf` for the non-finite pair) —
+        // the key refuses loudly, everywhere (no discard-by-decree lane)
         "consts" => {
             return Err(ManifestError(
                 "consts: retired — declare `pub let NAME: f64 = <literal>;` in the surface; \
@@ -168,8 +147,8 @@ pub(super) fn walk_top_lane(
                     .into(),
             ));
         }
-        "entry" => walk_entry(value, m, compat)?,
-        "deps" => walk_deps(value, m, compat)?,
+        "entry" => walk_entry(value, m)?,
+        "deps" => walk_deps(value, m)?,
         "dev-deps" => walk_dev_table(value, m)?,
         "style" => walk_style(value, m)?,
         other => {
@@ -185,17 +164,9 @@ pub(super) fn walk_top_lane(
 
 /// The `entry` object. The post-repeal grammar keeps only `type` (the
 /// `.d.rut` surface): the root module is `mod.rut` beside the manifest
-/// and the body keys refuse LOUDLY, naming the fix. `compat` is the
-/// bundle reader's lane — a PUBLISHED bundle's manifest is forever old
-/// (the pinned CDN tags), so there the keys parse onto
-/// [`Manifest::legacy_entry`] under the old value laws instead. The
-/// retired `entry.ir` rides either way; unknown keys are refused (the
-/// entry strictness).
-pub(super) fn walk_entry(
-    value: &Value,
-    m: &mut Manifest,
-    compat: bool,
-) -> Result<(), ManifestError> {
+/// and the body keys refuse LOUDLY, naming the fix. The retired
+/// `entry.ir` rides; unknown keys are refused (the entry strictness).
+pub(super) fn walk_entry(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
     let table = expect_object("entry", value)?;
     for (key, v) in table {
         if key.starts_with('_') {
@@ -203,12 +174,6 @@ pub(super) fn walk_entry(
         }
         match key.as_str() {
             "type" => m.entry.type_path = Some(expect_field_string("entry", "type", v)?),
-            "lib" if compat => {
-                m.legacy_entry.lib = Some(expect_field_string("entry", "lib", v)?);
-            }
-            "libs" if compat => {
-                m.legacy_entry.libs = expect_field_string_array("entry", "libs", v)?;
-            }
             "lib" => {
                 return Err(ManifestError(
                     "entry.lib: repealed — the root module is `mod.rut` beside the manifest: \
@@ -233,23 +198,16 @@ pub(super) fn walk_entry(
 }
 
 /// The `deps` object: exact specifier → descriptor; the descriptor
-/// laws are [`parse_deps_descriptor`]'s. `compat` is the bundle
-/// reader's lane — there the retired `sha256` pin still parses (inert).
-pub(super) fn walk_deps(
-    value: &Value,
-    m: &mut Manifest,
-    compat: bool,
-) -> Result<(), ManifestError> {
+/// laws are [`parse_deps_descriptor`]'s.
+pub(super) fn walk_deps(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
     let table = expect_object("deps", value)?;
     for (spec, v) in table {
         if spec.starts_with('_') {
             return Err(underscore_refused("deps", spec));
         }
         check_dep_key("deps", spec)?;
-        m.deps.insert(
-            spec.clone(),
-            parse_deps_descriptor("deps", spec, v, compat)?,
-        );
+        m.deps
+            .insert(spec.clone(), parse_deps_descriptor("deps", spec, v)?);
     }
     Ok(())
 }

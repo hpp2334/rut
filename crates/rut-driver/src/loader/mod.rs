@@ -14,8 +14,8 @@ type ModHead = (String, BTreeMap<String, ModSource>);
 use rut_core::id::ScopeId;
 
 use crate::bundle::{
-    bundle_key, fp16_of, parse_identity, parse_manifest_compat, read_entry, GroupKind, Layout,
-    Manifest, PkgType, DEPS_DIR,
+    bundle_key, fp16_of, parse_identity, parse_manifest, read_entry, GroupKind, Layout, Manifest,
+    PkgType, DEPS_DIR,
 };
 use crate::decl::DECL_CHILD_FILE;
 use crate::mods::{mount_mod_children, mount_rows, parse_rows, ChildLookup, ModSource, ROWS_NAME};
@@ -291,9 +291,10 @@ pub(crate) fn walk_decoded(
     for (prefix, kind) in &groups {
         let dep_toml = read_entry(entries, &format!("{prefix}/rut.jsonc"))
             .map_err(|e| RunError::law(format!("{origin}: {e}")))?;
-        // the group manifest rides the compat lane: a repacked
-        // archive's group manifests ride byte-for-byte from any era
-        let dm = parse_manifest_compat(&dep_toml)
+        // the group manifest parses on the ONE grammar (a repacked
+        // archive's group manifests carry at most the wire pair —
+        // legal-optional)
+        let dm = parse_manifest(&dep_toml)
             .map_err(|e| RunError::law(format!("{origin}: {prefix}/rut.jsonc: {e}")))?;
         let name = dm
             .name
@@ -509,9 +510,7 @@ fn entry_child_lookup<'a>(
 /// rides the rows envelope; a `type = "lib"` pkg with a surface and no
 /// body is the surface-only dev state). The consts are the SURFACE's
 /// own `pub let` rows — folded inside the lowering, bound bare at the
-/// pkg's root — with the manifest's RETAINED `consts` rows (this
-/// manifest rode the wire; the compat lane parsed it) stamping beside
-/// them.
+/// pkg's root.
 pub fn bundle_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -519,7 +518,7 @@ pub fn bundle_entry_pkg(
 ) -> Result<Mounted, String> {
     // the host lane: the decl tree rides the rows envelope when the
     // tree mounts (the packer's host lane), else the flat surface
-    // entry lowers alone — the byte-compat shape
+    // entry lowers alone — the flat pack shape
     if manifest.pkg_type == PkgType::Host {
         return host_entry_pkg(entries, prefix, manifest);
     }
@@ -545,17 +544,17 @@ pub fn bundle_entry_pkg(
     }
     // a lib pkg from here: the surface's host-row refusal (the
     // lib-surface law), then the body — the `mod.rut` entry, else the
-    // OLD envelope's legacy keys, else the surface-only dev state (a
-    // decl unit — no host rows, nothing exported; use sites
-    // resolve-miss, correctly). An ambiguity — `entry.type` spelled,
-    // no declared kind, no body anywhere — refuses, naming both fixes.
-    // The surface read is the ONE canonical name (`mod.d.rut`, wire
-    // v11): the directory grammar's spelling never rides the archive.
+    // surface-only dev state (a decl unit — no host rows, nothing
+    // exported; use sites resolve-miss, correctly). An ambiguity —
+    // `entry.type` spelled, no declared kind, no body anywhere —
+    // refuses, naming both fixes. The surface read is the ONE
+    // canonical name (`mod.d.rut`, wire v12): the directory grammar's
+    // spelling never rides the archive.
     let pkg = if manifest.entry.type_path.is_some() {
         let origin = format!("{prefix}{}", crate::decl::DECL_CHILD_FILE);
         let src = read(crate::decl::DECL_CHILD_FILE)?;
         crate::decl::refuse_host_rows(&src, &origin)?;
-        match root_source(entries, prefix, manifest)? {
+        match root_source(entries, prefix)? {
             Some(root) => plain_source_pkg(entries, prefix, manifest, root)?,
             None if !manifest.type_declared => {
                 return Err(format!(
@@ -586,9 +585,7 @@ pub fn bundle_entry_pkg(
 /// entry lowers alone — the root file is `mod.d.rut`, the ONE
 /// canonical name the packer emits at both levels. The surface `pub
 /// let` rows fold into the const rows inside the lowering (bound bare
-/// at the pkg's root); the manifest's RETAINED `consts` rows (compat
-/// lane — this manifest rode the wire and is forever old) stamp
-/// BESIDE them through the merge law.
+/// at the pkg's root).
 fn host_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
@@ -610,9 +607,8 @@ fn host_entry_pkg(
         return stamp(m);
     }
     // the flat lane's root file is `mod.d.rut` beside the manifest —
-    // the ONE canonical name (wire v11 canonicalizes the directory
-    // grammar's `entry.type` spelling; the in-archive override lane is
-    // gone). A packed host bundle always carries a root — a manifest
+    // the ONE canonical name (wire v12; the in-archive override lane
+    // is gone). A packed host bundle always carries a root — a manifest
     // whose archive names none is a packaging bug, named like the
     // directory lanes'.
     let key = bundle_key(&format!("{prefix}{DECL_CHILD_FILE}"))?;
@@ -628,18 +624,14 @@ fn host_entry_pkg(
 }
 
 /// The plain (non-decl) entry pkg. The root module is the `mod.rut`
-/// ENTRY beside the manifest; an OLD published bundle (the flat
-/// envelope — the pinned CDN tags are forever old) spells the repealed
-/// keys, and its manifest rides the compat lane, so the legacy lib +
-/// `libs` splice reads exactly as it always did. Either way the
-/// source's `mod` declarations mount the child tree from the archive,
-/// recursively, cycle-guarded.
+/// ENTRY beside the manifest; the source's `mod` declarations mount
+/// the child tree from the archive, recursively, cycle-guarded.
 fn plain_entry_pkg(
     entries: &[(String, Vec<u8>)],
     prefix: &str,
     manifest: &Manifest,
 ) -> Result<Mounted, String> {
-    let src = match root_source(entries, prefix, manifest)? {
+    let src = match root_source(entries, prefix)? {
         Some(src) => src,
         None => {
             return Err(format!(
@@ -651,33 +643,20 @@ fn plain_entry_pkg(
     plain_source_pkg(entries, prefix, manifest, src)
 }
 
-/// The bundle mount's body reader, ONE dispatch: the `mod.rut` entry
-/// (the post-repeal envelope — a source group's file set carries it,
-/// so does a generic root's riding source), else the OLD envelope's
-/// legacy keys read + spliced ('\n'-joined, the flat envelope's
-/// law), else `None` (no body anywhere).
-fn root_source(
-    entries: &[(String, Vec<u8>)],
-    prefix: &str,
-    manifest: &Manifest,
-) -> Result<Option<String>, String> {
+/// The bundle mount's body reader: the `mod.rut` entry beside the
+/// manifest (a source group's file set carries it, so does a generic
+/// root's riding source) — `None` when the archive carries no body
+/// (the surface-only dev state).
+fn root_source(entries: &[(String, Vec<u8>)], prefix: &str) -> Result<Option<String>, String> {
     let read = |rel: &str| -> Result<String, String> {
         let rel = rel.strip_prefix("./").unwrap_or(rel);
         let key = bundle_key(&format!("{prefix}{rel}"))?;
         read_entry(entries, &key)
     };
-    if let Ok(root) = read("mod.rut") {
-        return Ok(Some(root));
+    match read("mod.rut") {
+        Ok(root) => Ok(Some(root)),
+        Err(_) => Ok(None),
     }
-    let Some(base) = &manifest.legacy_entry.lib else {
-        return Ok(None);
-    };
-    let mut src = read(base)?;
-    for lib in &manifest.legacy_entry.libs {
-        src.push('\n');
-        src.push_str(&read(lib)?);
-    }
-    Ok(Some(src))
 }
 
 /// A source pkg from its assembled root text: the `mod` declarations

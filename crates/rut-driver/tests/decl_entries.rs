@@ -280,10 +280,11 @@ fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
 }
 
 #[test]
-fn an_old_v11_archive_still_loads() {
-    // the old lane reads forever: a hand-built v11 archive — manifest
-    // 11, a host tree riding the rows envelope — mounts exactly as it
-    // always did. Old pins keep working against old artifacts.
+fn an_old_v11_archive_refuses_the_11_lane_is_gone() {
+    // the old lane is GONE: a hand-built v11 archive — manifest 11, a
+    // host tree riding the rows envelope — refuses at the ONE version
+    // gate with the re-pack recipe. Stale bytes re-pack; nothing is
+    // grandfathered.
     let mods_rows = rut_driver::mods::rows_json(
         "pub mod net;\npub host fn legacy_ping() -> bool;\n",
         &BTreeMap::from([(
@@ -305,24 +306,24 @@ fn an_old_v11_archive_still_loads() {
         ("rut.mods".into(), mods_rows.into_bytes()),
     ])
     .unwrap();
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("the 11 lane reads");
-    let rows = match &loaded.pkg("oldie").unwrap().body {
-        MountedBody::Host { host_funcs, .. } => host_funcs,
-        _ => panic!("host rows"),
-    };
-    let names: Vec<String> = rows.iter().map(|r| r.full_name("oldie")).collect();
-    assert_eq!(names, vec!["oldie::legacy_ping", "oldie::net::connect"]);
+    let err = rut_driver::Mounted::from_bundle(&bytes)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("reads bundle format_version 12 only"), "{err}");
+    assert!(err.contains("found 11"), "{err}");
+    assert!(err.contains("re-pack the directory"), "{err}");
 }
 
 #[test]
-fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
-    // the migration note: a consumer holding v11 pins keeps working —
-    // a fresh v12 pack whose dep rides a v11 archive copies the group's
-    // file set (the archive's identity law) and the output loads.
+fn a_v11_url_pin_refuses_at_the_mount_door() {
+    // the migration note, inverted: a consumer holding v11 pins does
+    // NOT keep working — the gate refuses the archive at mount, and
+    // the recipe is the re-pack. (The pack lane never sees the old
+    // bytes: a url dep mounts through the same gate first.)
     let root = scratch("repin");
     // the "old artifact": pack the dep fresh (the current lane), then
     // re-label its manifest 11 and re-seal — exactly the bytes a v11
-    // publish shipped (the layout grammar is one; the label routes)
+    // publish shipped
     let dep_dir = root.join("dep");
     write(&dep_dir, "rut.jsonc", r#"{"name": "dep"}"#);
     write(
@@ -371,12 +372,10 @@ fn a_v12_consumer_repins_to_v11_url_bytes_and_loads() {
         },
     }]);
     write(&root, "rut.lock", &rut_driver::render_lock(&lock));
-    let (bytes, _symtab) =
-        pack_fetched(&root, &PackOpts::default(), &urls).expect("pack over the fetched v11 bytes");
-    let loaded = rut_driver::Mounted::from_bundle(&bytes).expect("the mixed-wire output loads");
-    assert!(loaded
-        .pkgs
-        .iter()
-        .any(|p| rut_driver::bundle::identity::mount_name(&p.spec) == "dep"));
+    let err = pack_fetched(&root, &PackOpts::default(), &urls)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("reads bundle format_version 12 only"), "{err}");
+    assert!(err.contains("found 11"), "{err}");
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -133,14 +133,11 @@ fn a_malformed_lock_is_the_error_not_silent_pins() {
 
 #[test]
 fn the_consts_table_retired_from_the_manifest_grammar() {
-    // the consts RETIRED from the manifest: the strict lane (a
-    // directory's rut.jsonc) refuses the key loudly, naming the
-    // surface spelling; the compat lane (the zip/bundle/store
-    // boundary, where today's published bytes still carry the rows)
-    // RETAINS them — the store lane mints and the check lane folds,
-    // so an old pinned zip's `math::PI` keeps resolving (D7). The
-    // real calc_host manifest — the surface lets are the one FORWARD
-    // spelling now — parses strict with no residue.
+    // the consts RETIRED from the manifest: the ONE grammar refuses
+    // the key loudly, naming the surface spelling — no lane
+    // grandfathered (the surface `pub let` row is the one spelling).
+    // The real calc_host manifest — the surface lets are the one
+    // spelling now — parses clean.
     let t = dep_table(CALC_HOST_MANIFEST).expect("the real calc_host manifest parses");
     assert_eq!(t.name.as_deref(), Some("calc_host"));
     // the host surface: decl mode, no body — the spelled surface
@@ -152,7 +149,7 @@ fn the_consts_table_retired_from_the_manifest_grammar() {
             mode: Mode::Decl
         }]
     );
-    // the strict refusal names the fix: the surface `pub let` row
+    // the refusal names the fix: the surface `pub let` row
     let err =
         dep_table(r#"{"name": "calc_host", "type": "host", "consts": {"PI": 3.141592653589793}}"#)
             .unwrap_err();
@@ -161,20 +158,10 @@ fn the_consts_table_retired_from_the_manifest_grammar() {
             && err.contains("declare `pub let NAME: f64 = <literal>;` in the surface"),
         "the refusal names the fix: {err}"
     );
-    // the compat lane DISCARDS the table whole (the `entry.ir`
-    // precedent) — an old manifest still parses and mounts, its
-    // constants binding nothing (no backward compat; the surface
-    // `pub let` row is the one spelling)
-    let t = dep_table_compat(
-        r#"{"name": "calc_host", "type": "host", "consts": {"PI": 3.141592653589793, "INFINITY": "inf"}}"#,
-    )
-    .expect("an old manifest still parses on the compat lane");
-    assert_eq!(t.name.as_deref(), Some("calc_host"));
-    // the wire pair refuses strict too (the packer stamps it at the
-    // bin pack door) but parses compat — the reader gates on it
-    let err =
-        dep_table(r#"{"name": "x", "format": "rutbundle", "format_version": 12}"#).unwrap_err();
-    assert!(err.contains("format: retired"), "{err}");
+    // the wire pair parses on the ONE grammar — the packer stamps it
+    // and the bundle reader gates on it (legal-optional)
+    let t = dep_table(r#"{"name": "x", "format": "rutbundle", "format_version": 12}"#).unwrap();
+    assert_eq!(t.name.as_deref(), Some("x"));
     // the retired `namespace` key refuses loudly, naming the spellings
     // that replaced it
     let err = dep_table(&CALC_HOST_MANIFEST.replace(

@@ -21,8 +21,9 @@
 //! - bundles: a mod package packs its tree as the `rut.mods` rows
 //!   section and loads mounting the same tree; the PUBLISHED std-v8
 //!   artifacts (the OLD flat envelope, committed at `dist/std-v8/`)
-//!   still load through the reader-compat lane, and a flat package
-//!   repacks byte-identically (the freshness gate over all 16);
+//!   refuse at the manifest door — no lane crosses a wire era — and a
+//!   flat package repacks byte-identically (the freshness gate over
+//!   all 16);
 //! - a mod file's `use` statements join the run chain's closure check.
 
 use std::path::{Path, PathBuf};
@@ -549,21 +550,15 @@ fn flat_packages_pack_without_a_rows_entry() {
 }
 
 #[test]
-fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
+fn the_published_std_v8_bundles_refuse_at_the_manifest_door() {
     // the wire law: every PUBLISHED std-v8 artifact (the OLD flat
-    // envelope — manifests spelling the repealed keys, sources at the
-    // legacy names) refuses at the ONE version gate with the re-pack
-    // recipe — no compat lane crosses a wire number. The published
-    // bytes are committed at `dist/std-v8/` so the gate never
-    // networks; `dist/std` (the working envelope) is the freshness
-    // gate's business and `dist/std-v12/` the pin envelope.
-    //
-    // The COMPAT LANE itself survives one level down: handed the
-    // artifact's manifest TEXT directly, `parse_manifest_compat` still
-    // reads the repealed entry keys (a repacked group manifest rides
-    // byte-for-byte from any era) — the strict-keys law still refuses
-    // `[peer-deps]` there (pinned in
-    // `the_peer_deps_bundle_refuses_at_the_manifest_door` below).
+    // envelope — manifests spelling the repealed keys) refuses — no
+    // lane crosses a wire era. With one grammar everywhere the
+    // refusal fires at the MANIFEST door now (the repealed
+    // `entry.lib` refuses at parse, before the version gate). The
+    // published bytes are committed at `dist/std-v8/` so the gate
+    // never networks; `dist/std` (the working envelope) is the
+    // freshness gate's business and `dist/std-v12/` the pin envelope.
     let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dist/std-v8"));
     let mut names = Vec::new();
     for entry in std::fs::read_dir(&dir).expect("dist/std") {
@@ -582,39 +577,26 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
         vec!["http", "json", "nmapset", "pouch"],
         "the pinned artifacts ride in dist/std-v8: {names:?}"
     );
-    for path in names
-        .iter()
-        .filter(|p| p.file_stem().unwrap().to_string_lossy() != "json")
-    {
+    for path in names.iter() {
         let bytes = std::fs::read(path).expect("read the bundle");
-        // the OLD manifest grammar still parses one level down: the
-        // archive's own rut.jsonc spells the repealed keys, and the
-        // compat parse answers them
+        // the ONE grammar refuses the archive's own rut.jsonc — the
+        // repealed keys have no lane anywhere
         let manifest_text = rut_driver::bundle::Bundle::parse(&bytes)
             .unwrap()
             .read("rut.jsonc")
             .unwrap();
-        let m = rut_driver::bundle::parse_manifest_compat(&manifest_text).unwrap();
+        let err = rut_driver::bundle::parse_manifest(&manifest_text).unwrap_err();
         assert!(
-            m.legacy_entry.lib.is_some(),
-            "{}: the old envelope's manifest carries the legacy keys",
-            path.display()
-        );
-        assert!(
-            rut_driver::bundle::parse_manifest(&manifest_text).is_err(),
-            "{}: the strict (directory) lane refuses the same text",
-            path.display()
-        );
-        // the WIRE gate refuses the artifact itself — the re-pack
-        // recipe, never a guessed load
-        let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
-        assert!(
-            err.contains("reads bundle format_version 12 (and the old 11 lane) only"),
+            err.to_string().starts_with("entry.lib: repealed"),
             "{}: {err}",
             path.display()
         );
+        // the artifact itself refuses at the same manifest door —
+        // the parse precedes the version gate, so the old envelope's
+        // text is what names the death
+        let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
         assert!(
-            err.contains("re-pack the directory"),
+            err.contains("entry.lib: repealed"),
             "{}: {err}",
             path.display()
         );
@@ -623,12 +605,12 @@ fn the_published_std_v8_bundles_refuse_at_the_version_gate() {
 
 #[test]
 fn the_peer_deps_bundle_refuses_at_the_manifest_door() {
-    // the strict-keys law against a PUBLISHED artifact: the compat lane
-    // relaxes the repealed entry keys (a loading law), but it grants NO
-    // retired lane to `[peer-deps]` — json's std-v8 manifest carries
-    // the key, and the grammar refuses it exactly like any unknown
-    // key, at parse and at the bundle door. Old artifacts riding the
-    // key must be re-packed.
+    // the strict-keys law against a PUBLISHED artifact: the one
+    // grammar grants NO retired lane — json's std-v8 manifest carries
+    // the repealed `entry.lib` AND `[peer-deps]`, and the grammar
+    // refuses at the FIRST retired key (sorted walk: `entry` first),
+    // exactly like any unknown key, at parse and at the bundle door.
+    // Old artifacts riding the keys must be re-packed.
     let bytes = std::fs::read(PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../dist/std-v8/json.rutbundle"
@@ -638,16 +620,19 @@ fn the_peer_deps_bundle_refuses_at_the_manifest_door() {
         .unwrap()
         .read("rut.jsonc")
         .unwrap();
-    let err = rut_driver::bundle::parse_manifest_compat(&manifest_text).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "manifest: unknown key 'peer-deps'",
-        "{err}"
-    );
+    let err = rut_driver::bundle::parse_manifest(&manifest_text).unwrap_err();
+    assert!(err.to_string().starts_with("entry.lib: repealed"), "{err}");
     // at the bundle door the manifest parse precedes the version gate —
-    // the unknown key refuses first, exactly like any unknown key
+    // the repealed key refuses first, exactly like any unknown key
     let err = Mounted::from_bundle(&bytes).unwrap_err().to_string();
-    assert!(err.contains("manifest: unknown key 'peer-deps'"), "{err}");
+    assert!(err.contains("entry.lib: repealed"), "{err}");
+    // `[peer-deps]` itself refuses as the unknown key it is — pinned
+    // on a manifest whose entry keys are current
+    let err = rut_driver::bundle::parse_manifest(
+        r#"{"name": "j", "peer-deps": {"pouch": {"path": "../pouch"}}}"#,
+    )
+    .unwrap_err();
+    assert_eq!(err.to_string(), "manifest: unknown key 'peer-deps'");
 }
 
 #[test]
@@ -689,13 +674,11 @@ fn a_mod_dep_group_packs_its_rows_and_mounts_as_a_dep() {
 }
 
 #[test]
-fn an_old_envelopes_legacy_splice_still_reads_back() {
-    // THE READER-COMPAT LAW, splice flavor: a PUBLISHED old-envelope
-    // bundle carries the repealed keys and its source at the legacy
-    // names — the reader mounts the body exactly as the old grammar
-    // spliced it (base, then `libs` in listed order, '\n'-joined), and
-    // the riding source a consumer's link needs carries the SAME
-    // splice. Forged honestly: a real pack of the toolchain's pouch,
+fn an_old_envelopes_legacy_splice_refuses() {
+    // THE REPEAL, wire flavor: an OLD-envelope manifest (the repealed
+    // keys, the source at the legacy names) refuses at parse — no
+    // lane splices the old shape back, whatever wire number it
+    // stamps. Forged honestly: a real pack of the toolchain's pouch,
     // re-spelled into the flat envelope (the manifest swaps to the
     // legacy keys, the root source takes the legacy name, the rows
     // section is dropped).
@@ -704,11 +687,6 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
         "/../../rut/pouch"
     )))
     .expect("pack the tree pouch");
-    let pouch_src = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../rut/pouch/src/mod.rut"
-    ))
-    .unwrap();
     let legacy = r#"{"format": "rutbundle", "format_version": 12, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
     let entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
@@ -716,28 +694,17 @@ fn an_old_envelopes_legacy_splice_still_reads_back() {
         .filter(|(n, _)| n != "rut.mods" && n != "mod.rut")
         .flat_map(|(n, b)| {
             if n == "rut.jsonc" {
-                vec![
-                    ("rut.jsonc".to_string(), legacy.as_bytes().to_vec()),
-                    ("pouch.rut".to_string(), pouch_src.clone().into_bytes()),
-                    (
-                        "extra.rut".to_string(),
-                        b"// the legacy splice tail\n".to_vec(),
-                    ),
-                ]
+                vec![("rut.jsonc".to_string(), legacy.as_bytes().to_vec())]
             } else {
                 vec![(n, b)]
             }
         })
         .collect();
     let legacy_bytes = rut_driver::bundle::write_bundle(&entries).unwrap();
-    // v22: source riding is GONE — the legacy splice rides no more; the
-    // bundle mounts compiled and the delivery law serves consumer-spelled
-    // shapes from the binary's own templates
-    let loaded = Mounted::from_bundle(&legacy_bytes).expect("the old envelope loads");
-    let pkg = loaded.pkg("pouch").expect("pouch mounted");
+    let err = Mounted::from_bundle(&legacy_bytes).unwrap_err().to_string();
     assert!(
-        matches!(pkg.body, rut_driver::MountedBody::Compiled(_)),
-        "the legacy envelope's pouch mounts compiled"
+        err.contains("entry.lib: repealed"),
+        "the old envelope refuses at the manifest door: {err}"
     );
 }
 

@@ -466,10 +466,10 @@ fn hash_closure(
         field(buf, rel.as_bytes());
         field(buf, &bytes);
     }
-    // the path deps: parse the manifest (compat lane — any era's
-    // manifest rides) and follow each `path` row, depth-first
+    // the path deps: parse the manifest (the one grammar) and follow
+    // each `path` row, depth-first
     let text = String::from_utf8_lossy(&manifest_bytes).into_owned();
-    let manifest = rut_driver::bundle::parse_manifest_compat(&text)
+    let manifest = rut_driver::bundle::parse_manifest(&text)
         .map_err(|e| format!("{}: {e}", manifest_path.display()))?;
     for (name, dep) in &manifest.deps {
         if let Some(rel) = dep.get("path") {

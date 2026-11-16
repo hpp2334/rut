@@ -175,10 +175,9 @@ fn field_string(
     }
 }
 
-/// The row's pin: exactly 64 hex digits, stored LOWERCASE — the same
-/// law the manifest's compat lane keeps, and the law the mount door
-/// compares the fetched bytes' hash against (byte-exact, so the parse
-/// normalizes first).
+/// The row's pin: exactly 64 hex digits, stored LOWERCASE — the law
+/// the mount door compares the fetched bytes' hash against
+/// (byte-exact, so the parse normalizes first).
 fn pin(path: &str, obj: &serde_json::Map<String, Value>) -> Result<String, LockError> {
     let v = field_string(path, obj, "sha256")?;
     if v.len() != 64 || !v.chars().all(|c| c.is_ascii_hexdigit()) {

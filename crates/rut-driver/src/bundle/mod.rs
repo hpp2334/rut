@@ -35,9 +35,6 @@ pub use identity::{
     fp16_of, fp16_of_tree, identity, is_identity, mount_name, parse_identity, valid_mount_key,
     DEPS_DIR,
 };
-pub use manifest::{
-    parse_manifest, parse_manifest_compat, valid_spec, Entry, LegacyEntry, Manifest, ManifestError,
-    PkgType,
-};
+pub use manifest::{parse_manifest, valid_spec, Entry, Manifest, ManifestError, PkgType};
 pub use read::{Bundle, GroupKind, Layout};
 pub use srczip::{read_srczip, rewrite_for_zip, write_srczip, SrcZipError};

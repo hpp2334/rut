@@ -366,11 +366,9 @@ fn srczip_pkg(
 ) -> Result<(), String> {
     let manifest_text = zip_text(entries, &format!("{prefix}rut.jsonc"))
         .ok_or_else(|| format!("{prefix}: the archive carries no rut.jsonc"))?;
-    // the zip boundary rides the compat lane: the manifest rode the
-    // wire, where today's published bytes may still carry the retired
-    // keys (the wire pair parses; the `consts` rows retain, stamping
-    // at the mount below)
-    let manifest = crate::bundle::parse_manifest_compat(&manifest_text)
+    // the zip boundary parses on the ONE grammar (the stamped wire
+    // pair is legal-optional)
+    let manifest = crate::bundle::parse_manifest(&manifest_text)
         .map_err(|e| format!("{prefix}rut.jsonc: {e}"))?;
     let name = manifest
         .name
@@ -380,10 +378,8 @@ fn srczip_pkg(
     // HOST pkg's surface is a `.d.rut` (a spelled `entry.type` wins,
     // `src/mod.d.rut` the default root), LOWERED to host rows — the
     // surface `pub let` rows fold into the const rows inside the
-    // lowering, with the manifest's RETAINED `consts` rows (the compat
-    // lane parsed this wire-carried manifest) stamping beside them; a
-    // LIB pkg's body is `src/mod.rut` (a spelled decl surface on a lib
-    // is the dir lane's law — refused here, named)
+    // lowering; a LIB pkg's body is `src/mod.rut` (a spelled decl
+    // surface on a lib is the dir lane's law — refused here, named)
     let pkg = match manifest.pkg_type {
         crate::bundle::PkgType::Host => {
             let rel = match &manifest.entry.type_path {

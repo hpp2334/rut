@@ -75,11 +75,9 @@ use crate::session::{MountedBody, Session};
 /// (the `.d.ts` pattern: generated, never hand-maintained; omitted
 /// under `--strip`), a host group's rides as the tree normalized into
 /// the one-file inline form (`mod NAME { .. }`, structure in the
-/// grammar, never in paths). (v11: dep groups ride at
-/// `deps/<name>@<fp16>/…` (content identity), the archive root carries
-/// only the root's own files, and the entry names are canonical —
-/// unchanged; the reader still loads the 11 lane, so pinned v11
-/// artifacts keep working and migration is a re-pin, not a break.)
+/// grammar, never in paths). (v11 laid the group identity dirs at
+/// `deps/<name>@<fp16>/…`, the root-only archive, and the canonical
+/// entry names — unchanged; the 11 lane is GONE, stale bytes re-pack.)
 pub const FORMAT_VERSION: u64 = 12;
 
 /// Assemble a one-member **source** bundle — a rut package whose body
@@ -397,28 +395,14 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
             ));
             // the GENERATED declaration entry (wire v12) — rendered from
             // the validated surface, round-trip gated, `--strip` omitted
-            // (the strip law). An ARCHIVE-sourced group copies the entry
-            // its own archive carries instead: the group's content
-            // identity is the archive's law (the mount key's fingerprint
-            // pins the rode source set), and a v11 group's file set is
-            // exactly what its archive vouches for — the ladder's
-            // object-surface floor serves its editor face.
-            match source {
-                PkgSource::Dir(_) if !opts.strip => {
-                    let entry = decl_entry::render_program_entry(&units.programs[idx]);
-                    decl_entry::check_round_trip(spec, &units.programs[idx], &entry)
-                        .map_err(PackError::law)?;
-                    files.push(("mod.d.rut".into(), entry.into_bytes()));
-                }
-                PkgSource::Archive { slot, prefix } => {
-                    let key = bundle_key(&format!("{prefix}mod.d.rut")).map_err(PackError::law)?;
-                    if let Some((_, bytes)) =
-                        w.archives[*slot].entries.iter().find(|(n, _)| *n == key)
-                    {
-                        files.push(("mod.d.rut".into(), bytes.clone()));
-                    }
-                }
-                _ => {}
+            // (the strip law). ONE grammar, one rendering: whatever the
+            // group's files rode from, the entry is THIS toolchain's
+            // rendering of the validated surface — stale bytes re-pack.
+            if !opts.strip {
+                let entry = decl_entry::render_program_entry(&units.programs[idx]);
+                decl_entry::check_round_trip(spec, &units.programs[idx], &entry)
+                    .map_err(PackError::law)?;
+                files.push(("mod.d.rut".into(), entry.into_bytes()));
             }
             // the module rows, group flavor (see the root arm above)
             if let Ok(m) = session.resolve(spec) {

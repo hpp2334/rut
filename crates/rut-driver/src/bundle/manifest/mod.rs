@@ -19,10 +19,7 @@
 //! and a spelled `entry.type` still wins. The body is `mod.rut` beside
 //! the manifest, the package's root module; its `mod` declarations
 //! mount the child tree. The repealed `entry.lib` / `entry.libs` keys
-//! refuse loudly, naming the fix — except inside a PUBLISHED bundle,
-//! whose manifest is forever old: the reader's compat lane parses them
-//! onto [`Manifest::legacy_entry`] so the pinned CDN tags keep
-//! loading. That is a loading law, not a transition.)
+//! refuse loudly everywhere, naming the fix — no lane grandfathered.)
 //!
 //! The declared kind: `"type": "lib"` (the default) is the ordinary
 //! source package; `"type": "host"` is a pure declaration surface the
@@ -43,14 +40,13 @@
 //!
 //! The url row carries NO pin: the old `sha256` key is RETIRED — pins
 //! live in `rut.lock` beside the walk root's manifest (written by
-//! `rut install`). The directory grammar refuses the key loudly,
-//! naming the fix; a manifest riding INSIDE a published bundle parses
-//! through the compat lane, where the key still lands on the row as
-//! inert metadata (bundles are closed — their url rows never fetch).
-//! The same law governs the RETIRED bundle wire pair
-//! (`format`/`format_version`) and the retired `consts` table: the
-//! directory grammar refuses all three loudly, the compat lane parses
-//! them (the frozen published envelopes and CDN tags are forever old).
+//! `rut install`). The grammar refuses the key loudly, naming the fix.
+//! The same loud refusal governs the retired `consts` table; the ONE
+//! exception is the bundle wire pair itself (`format`/
+//! `format_version`), which is legal-optional on the ONE grammar — the
+//! packer stamps it into every packed manifest and the bundle reader
+//! gates on it (a directory manifest carrying the pair is unusual but
+//! harmless and legal).
 //!
 //! Resolution is exact and single-step: a use path resolves only if a
 //! module with that `name` is mounted — nothing is derived. Package
@@ -107,22 +103,6 @@ pub struct Entry {
     pub type_path: Option<String>,
 }
 
-/// The REPEALED entry keys, as an old published bundle's manifest
-/// spells them. Reader compat for the flat envelope — a loading law,
-/// not a transition: the pinned CDN tags are forever old, so a
-/// bundle's own manifest parses through the compat lane and these
-/// fields carry the keys. The directory grammar refuses both keys
-/// loudly, and nothing NEW may spell them (a directory mount never
-/// fills this).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct LegacyEntry {
-    /// the old body path — a `.rut` source
-    pub lib: Option<String>,
-    /// additional `.rut` body files, spliced after `lib` in listed
-    /// order — ONE module, one namespace (the old multi-lib entry)
-    pub libs: Vec<String>,
-}
-
 /// The pkg's kind. `lib` is the ordinary rut package (a source body,
 /// deps allowed, no host rows); `host` is a pure declaration surface
 /// the embedding Rust binds at run time. Absent `type` ⇒ `lib` —
@@ -147,25 +127,19 @@ pub struct Manifest {
     /// fixes — the manifest text alone cannot see the file)
     pub type_declared: bool,
     pub entry: Entry,
-    /// the repealed entry keys, reader compat for OLD published
-    /// bundles (see [`LegacyEntry`]) — never filled by a directory
-    /// parse
-    pub legacy_entry: LegacyEntry,
-    /// `format = "rutbundle"` — READER COMPAT ONLY: the bundle wire
-    /// pair retired from the directory grammar (the version lives in
-    /// the bundle container; `rut pack --mode bin` stamps the pair at
-    /// the pack door — the only writer). The compat lane still parses
-    /// a published artifact's rows; a directory manifest carrying the
-    /// key refuses loudly
+    /// `format = "rutbundle"` — the bundle WIRE stamp, legal-optional
+    /// on the one grammar: the packer writes it (`rut pack --mode
+    /// bin` stamps the pair at the pack door — the only writer) and
+    /// the bundle reader gates on it
     pub format: Option<String>,
-    /// `format_version` — READER COMPAT ONLY (see [`format`]): the
-    /// bundle LAYOUT version, refused on load when unknown
+    /// `format_version` — the bundle LAYOUT version (see [`format`]):
+    /// the reader refuses an archive whose version is not the one it
+    /// knows
     pub format_version: Option<u64>,
     /// `deps` — exact specifier → descriptor: exactly one source key,
     /// `path` (a directory) or `url` (a remote `.rutbundle`). The old
     /// `sha256` pin key is retired from the grammar (pins live in
-    /// `rut.lock`): the strict lane refuses it, the bundle reader's
-    /// compat lane parses it as inert metadata. Kept for the host to
+    /// `rut.lock`): the grammar refuses it. Kept for the host to
     /// resolve; the run does not read the filesystem or the network.
     pub deps: BTreeMap<String, BTreeMap<String, String>>,
     /// `dev-deps` — mounted ONLY when building/testing
@@ -230,31 +204,10 @@ fn underscore_refused_top(key: &str) -> ManifestError {
 /// naming the key. Syntax errors keep the `line N:` prefix (the
 /// ORIGINAL file's line); value laws are path-targeted.
 ///
-/// This is the STRICT lane — the directory grammar: `entry.lib` /
-/// `entry.libs` refuse loudly. The bundle reader parses old published
-/// manifests through [`parse_manifest_compat`].
+/// ONE grammar, every lane: the directory door, the bundle reader, the
+/// zip boundary — the same value laws everywhere, no compat parameter,
+/// nothing grandfathered.
 pub fn parse_manifest(text: &str) -> Result<Manifest, ManifestError> {
-    parse_manifest_lane(text, false)
-}
-
-/// The bundle reader's compat lane: the same grammar, but a manifest
-/// riding INSIDE an archive may be OLD — a published bundle is forever
-/// old (the pinned CDN tags), so the repealed `entry.lib`/`entry.libs`
-/// keys parse onto [`Manifest::legacy_entry`] under the old value laws
-/// instead of refusing. The retired bundle wire pair
-/// (`format`/`format_version`) also parses HERE only — the packer
-/// stamps it into every packed manifest and the reader gates on it —
-/// and the retired `consts` table RETAINS onto [`Manifest::consts`]:
-/// the compat-fed mounts stamp its rows beside the surface `let` rows,
-/// so old published bytes keep their constants binding while the
-/// surface `pub let` stays the one FORWARD spelling. Nothing else
-/// relaxes: the same tables, the same value laws, the same loud
-/// shapes.
-pub fn parse_manifest_compat(text: &str) -> Result<Manifest, ManifestError> {
-    parse_manifest_lane(text, true)
-}
-
-fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestError> {
     let plain = jsonc::strip(text);
     let root: Value = serde_json::from_str(&plain).map_err(|e| syntax_error(&e))?;
     let Some(root) = root.as_object() else {
@@ -269,7 +222,7 @@ fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestErr
             // the retired prose lane — loud, never a silent ignore
             return Err(underscore_refused_top(key));
         }
-        walk_top_lane(key, value, &mut declared_type, &mut m, compat)?;
+        walk_top_lane(key, value, &mut declared_type, &mut m)?;
     }
     m.type_declared = declared_type;
     // D4: `deps` beside `dev-deps` under the same name is the
@@ -284,88 +237,32 @@ fn parse_manifest_lane(text: &str, compat: bool) -> Result<Manifest, ManifestErr
     }
     // The declared kind's rules. Host-pkg-ness is DECLARED (`type =
     // "host"`), never inferred: a host pkg is pure surface, so deps of
-    // any kind and a body are refused; the no-inference law makes an
-    // `entry.type`--only lib spelling an error — spell the kind, either
-    // way. (The bundle wire pair is COMPAT-lane only now — the
-    // directory grammar retired it — so nothing here keys on it.)
-    match m.pkg_type {
-        PkgType::Host => {
-            // deps of any kind — name the table AND the row (D4 style):
-            // a host pkg is pure surface; the wrapper lib declares the
-            // dep, never the host pkg
-            for (table, rows) in [("deps", &m.deps), ("dev-deps", &m.dev_deps)] {
-                if let Some(spec) = rows.keys().next() {
-                    return Err(ManifestError(format!(
-                        "`{spec}` appears in `[{table}]` of a `type = \"host\"` pkg — \
-                         a host pkg is pure surface; the wrapper lib declares the dep, \
-                         never the host pkg"
-                    )));
-                }
-            }
-            // the body refusal: post-repeal the body is `mod.rut`
-            // (filesystem — the loader lanes probe it), so the
-            // parse-level law keys on the COMPAT keys only (an old
-            // host manifest spelling a body refuses here; a new one is
-            // refused at the mount door when a `mod.rut` sits beside it)
-            if m.legacy_entry.lib.is_some() || !m.legacy_entry.libs.is_empty() {
-                return Err(ManifestError(
-                    "a `type = \"host\"` pkg has no body — drop `entry.lib`/`entry.libs` \
-                     (the wrapper lib owns the source), or declare the pkg `type = \"lib\"`"
-                        .into(),
-                ));
-            }
-            // `entry.type` is OPTIONAL on a host pkg: `mod.d.rut`
-            // beside the manifest is the default root (lib parity with
-            // a body's `mod.rut`). The manifest cannot see files, so
-            // the BOTH-missing refusal is the mount doors' law — they
-            // probe `mod.d.rut` and name both spellings.
-        }
-        PkgType::Lib => {
-            // the no-inference law, COMPAT shape: an old `entry.type` +
-            // no-lib spelling with no declared kind is the ambiguity —
-            // spell it. (The post-repeal grammar cannot see the body
-            // from manifest text — `mod.rut` is a file — so the strict
-            // lane's ambiguity law lives at the mount doors, which
-            // probe the file.)
-            if compat
-                && !declared_type
-                && m.entry.type_path.is_some()
-                && m.legacy_entry.lib.is_none()
-            {
-                return Err(ManifestError(
-                    "an `entry.type`-only pkg spells its kind — `type = \"host\"` for a \
-                     host pkg, or add a body (a `type = \"lib\"` surface-only pkg \
-                     is the dev state)"
-                        .into(),
-                ));
-            }
-        }
-    }
-    // The old multi-lib array law, compat only: `libs` is an ordered
-    // tail on the base `lib`, so the base must exist; every element is
-    // a `.rut` source (a `.d.rut` is a decl surface, not a body); and
-    // no file rides twice — the splice would duplicate every name in
-    // it.
-    if compat && !m.legacy_entry.libs.is_empty() {
-        if m.legacy_entry.lib.is_none() {
-            return Err(ManifestError("`entry.libs` needs `entry.lib` — the multi-lib entry is a base file plus an ordered tail".to_string()));
-        }
-        let base = m.legacy_entry.lib.as_deref().expect("checked just above");
-        let mut seen = vec![base.to_string()];
-        for lib in &m.legacy_entry.libs {
-            if lib == base || seen.contains(lib) {
+    // any kind are refused. (The body refusal is the mount doors' law
+    // — they probe `mod.rut`/`mod.d.rut`; the repealed entry keys
+    // already refuse at the walk, so a manifest cannot spell a body.)
+    if m.pkg_type == PkgType::Host {
+        // deps of any kind — name the table AND the row (D4 style):
+        // a host pkg is pure surface; the wrapper lib declares the
+        // dep, never the host pkg
+        for (table, rows) in [("deps", &m.deps), ("dev-deps", &m.dev_deps)] {
+            if let Some(spec) = rows.keys().next() {
                 return Err(ManifestError(format!(
-                    "`entry.libs` names `{lib}` twice — the splice would duplicate every name in it"
+                    "`{spec}` appears in `[{table}]` of a `type = \"host\"` pkg — \
+                     a host pkg is pure surface; the wrapper lib declares the dep, \
+                     never the host pkg"
                 )));
             }
-            if lib.ends_with(".d.rut") || !lib.ends_with(".rut") {
-                return Err(ManifestError(format!(
-                    "`entry.libs` names `{lib}` — every lib is a `.rut` source (a `.d.rut` decl surface is not a body)"
-                )));
-            }
-            seen.push(lib.clone());
         }
+        // `entry.type` is OPTIONAL on a host pkg: `mod.d.rut`
+        // beside the manifest is the default root (lib parity with
+        // a body's `mod.rut`). The manifest cannot see files, so
+        // the BOTH-missing refusal is the mount doors' law — they
+        // probe `mod.d.rut` and name both spellings.
     }
+    // the no-inference law: the manifest cannot see `mod.rut` (a
+    // file), so an `entry.type`-only pkg with no declared kind is the
+    // ambiguity — the MOUNT DOORS refuse it, naming both fixes (the
+    // manifest text alone cannot see the file)
     Ok(m)
 }
 
@@ -394,63 +291,34 @@ mod tests {
     }
 
     #[test]
-    fn bundle_manifest_keys() {
-        // the wire pair retired from the DIRECTORY grammar: the strict
-        // lane refuses loudly naming the fix (the packer stamps the
-        // pair at the bin pack door), the compat lane — the manifest
-        // read at the zip/bundle boundary — parses it (the reader
-        // gates on the version)
-        for (key, msg) in [
-            ("format", "format: retired"),
-            ("format_version", "format_version: retired"),
-            ("consts", "consts: retired"),
-        ] {
-            let err = parse_manifest(&format!("{{\"{key}\": 1}}")).unwrap_err();
-            assert!(err.to_string().starts_with(msg), "{key}: {err}");
-        }
-        let err =
-            parse_manifest("{\"format\": \"rutbundle\", \"format_version\": 12, \"name\": \"x\"}")
-                .unwrap_err();
-        assert!(
-            err.to_string().contains("delete the key"),
-            "the refusal names the fix: {err}"
-        );
-        let m =
-            parse_manifest_compat(r#"{"format": "rutbundle", "format_version": 11, "name": "x"}"#)
-                .unwrap();
+    fn the_wire_pair_parses_and_consts_refuses() {
+        // the wire pair is the CURRENT wire — the packer stamps it and
+        // the bundle reader gates on it — so the one grammar parses it
+        // (fields on `Manifest`); the retired `consts` table refuses
+        // loudly, naming the fix
+        let m = parse_manifest(r#"{"format": "rutbundle", "format_version": 12, "name": "x"}"#)
+            .unwrap();
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
-        assert_eq!(m.format_version, Some(11));
+        assert_eq!(m.format_version, Some(12));
+        let err = parse_manifest(r#"{"consts": 1}"#).unwrap_err();
+        assert!(err.to_string().starts_with("consts: retired"), "{err}");
     }
 
     #[test]
     fn the_retired_keys_refuse_even_value_shaped_wrong() {
         // the key's EXISTENCE is the crime, never its value (the
-        // host_scope/namespace treatment) — on both lanes for consts,
-        // strict-only for the wire pair (compat must READ the pair the
-        // packer stamps). The consts table DISCARDS on the compat lane
-        // WHOLESALE — the `entry.ir` precedent: an old artifact keeps
-        // mounting, the rows bind nothing (the surface `pub let` row
-        // is the one spelling)
+        // host_scope/namespace treatment) — the consts table refuses
+        // shape-blind, and so do the pair's keys when the VALUE is
+        // not what the grammar reads
         let err = parse_manifest(r#"{"format": 3}"#).unwrap_err();
-        assert!(err.to_string().starts_with("format: retired"), "{err}");
+        assert!(err.to_string().starts_with("format: expected"), "{err}");
         let err = parse_manifest(r#"{"format_version": "1"}"#).unwrap_err();
         assert!(
-            err.to_string().starts_with("format_version: retired"),
+            err.to_string().starts_with("format_version: expected"),
             "{err}"
         );
         let err = parse_manifest(r#"{"consts": "nope"}"#).unwrap_err();
         assert!(err.to_string().starts_with("consts: retired"), "{err}");
-        // … and DISCARDS on the compat lane, whole and shape-blind
-        // (the `entry.ir` precedent): an old manifest still parses
-        // and mounts, its constants binding nothing — no backward
-        // compat, the surface `pub let` is the one spelling
-        let m = parse_manifest_compat(
-            r#"{"name": "calc_host", "consts": {"PI": 3.141592653589793, "INFINITY": "inf"}}"#,
-        )
-        .unwrap();
-        assert_eq!(m.name.as_deref(), Some("calc_host"));
-        parse_manifest_compat(r#"{"name": "x", "consts": "nope"}"#)
-            .expect("a shape-blind discard never inspects the value");
     }
 
     #[test]
@@ -538,21 +406,9 @@ mod tests {
 
     #[test]
     fn host_pkg_refuses_a_body() {
-        // the body refusal lives on the COMPAT lane: a published
-        // bundle's old host manifest spelling a body refuses at parse
-        let err = parse_manifest_compat(
-            r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("no body"), "{err}");
-        // the libs tail is a body too
-        let err = parse_manifest_compat(
-            r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut", "libs": ["./more.rut"]}}"#,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("no body"), "{err}");
-        // post-repeal, a NEW host manifest cannot spell a body at all —
-        // the keys refuse before the host law fires
+        // post-repeal, NO manifest can spell a body — the keys refuse
+        // at the walk, before the host law fires (the mount doors
+        // probe `mod.rut` and refuse the file-form body)
         let err = parse_manifest(
             r#"{"name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
         )
@@ -561,40 +417,30 @@ mod tests {
     }
 
     #[test]
-    fn host_pkg_takes_the_bundle_root_keys_on_compat() {
-        // the decl-root grammar: the wire pair is compat-lane-only (a
-        // host pkg packs as a decl root, so its PACKED manifest —
-        // stamped by the bin pack door — carries the pair and reads
-        // back through the compat lane); the DIRECTORY spelling
-        // refuses loudly
-        let text = r#"{"format": "rutbundle", "format_version": 11, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#;
-        let m = parse_manifest_compat(text).unwrap();
+    fn the_wire_pair_is_legal_optional_on_the_one_grammar() {
+        // the packer stamps the pair into every packed manifest and
+        // the bundle reader gates on it — so the ONE grammar parses
+        // it (fields on `Manifest`), on a host manifest and a lib
+        // manifest alike; a directory manifest carrying the pair is
+        // unusual but harmless and legal
+        let text = r#"{"format": "rutbundle", "format_version": 12, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#;
+        let m = parse_manifest(text).unwrap();
         assert_eq!(m.pkg_type, PkgType::Host);
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
-        assert_eq!(m.format_version, Some(11));
-        let err = parse_manifest(text).unwrap_err();
-        assert!(err.to_string().starts_with("format: retired"), "{err}");
+        assert_eq!(m.format_version, Some(12));
+        let m = parse_manifest(r#"{"format_version": 12, "name": "x"}"#).unwrap();
+        assert_eq!(m.format_version, Some(12));
     }
 
     #[test]
     fn host_bundle_manifest_still_refuses_its_other_laws() {
-        // the wire pair changes nothing else: the deps tables and the
-        // body refusal still hold WITH the pair present on the compat
-        // lane (`entry.type` stays optional — the default-root
-        // discovery is the mount doors' law, never the manifest's)
+        // the wire pair changes nothing else: the deps tables still
+        // refuse WITH the pair present (`entry.type` stays optional —
+        // the default-root discovery is the mount doors' law, never
+        // the manifest's)
         for table in ["deps", "dev-deps"] {
-            let err = parse_manifest_compat(&format!(
-                r#"{{"format": "rutbundle", "format_version": 11, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
-            ))
-            .unwrap_err();
-            assert!(
-                err.to_string().contains("a host pkg is pure surface"),
-                "[{table}]: {err}"
-            );
-            // and without the pair, strict — the directory spelling —
-            // refuses the same laws
             let err = parse_manifest(&format!(
-                r#"{{"name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
+                r#"{{"format": "rutbundle", "format_version": 12, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
             .unwrap_err();
             assert!(
@@ -602,18 +448,13 @@ mod tests {
                 "[{table}]: {err}"
             );
         }
-        let err = parse_manifest_compat(
-            r#"{"format": "rutbundle", "format_version": 11, "name": "h", "type": "host", "entry": {"type": "./h.d.rut", "lib": "./h.rut"}}"#,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("no body"), "{err}");
     }
 
     #[test]
     fn format_version_must_be_an_integer() {
-        // a JSON-legal but non-integer value trips the value law — on
-        // the compat lane, the only lane that reads the pair
-        let err = parse_manifest_compat(
+        // a JSON-legal but non-integer value trips the value law — the
+        // reader gates on this field, so the grammar types it
+        let err = parse_manifest(
             r#"{"format": "rutbundle", "format_version": "1", "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#,
         )
         .unwrap_err();
@@ -623,7 +464,7 @@ mod tests {
         );
         // a float is not an integer either — the JSON spellings are
         // the parser's business, the law only sees u64
-        let err = parse_manifest_compat(r#"{"format_version": 1.0}"#).unwrap_err();
+        let err = parse_manifest(r#"{"format_version": 1.0}"#).unwrap_err();
         assert_eq!(
             err.to_string(),
             "format_version: expected an integer, found 1.0"
@@ -698,7 +539,7 @@ mod tests {
         // value laws are unchanged
         let m = parse_manifest(r#"{"name": "p\u006Fuch"}"#).unwrap();
         assert_eq!(m.name.as_deref(), Some("pouch"));
-        let m = parse_manifest_compat(
+        let m = parse_manifest(
             r#"{"name": "x", "format": "rutbundle", "format_version": 18446744073709551615}"#,
         )
         .unwrap();
@@ -770,7 +611,7 @@ mod tests {
     #[test]
     fn the_ambiguity_law_rides_the_declared_kind_flag() {
         // the no-inference law: the manifest cannot see `mod.rut` (a
-        // file), so the strict lane only records whether `type` was
+        // file), so the grammar only records whether `type` was
         // spelled — the MOUNT DOORS refuse the ambiguity
         // (`entry.type` + no declared kind + no `mod.rut`), naming
         // both fixes. Here: the flag travels.
@@ -789,18 +630,12 @@ mod tests {
                 .unwrap();
         assert_eq!(m.pkg_type, PkgType::Lib);
         assert!(m.type_declared);
-        // the COMPAT lane keeps the OLD spelling's ambiguity: an old
-        // `entry.type`-only manifest (no legacy lib) refuses, naming
-        // both fixes — this is what made old host-pkg manifests fail
-        // LOUDLY instead of silently becoming empty libs
-        let err = parse_manifest_compat(r#"{"name": "rt", "entry": {"type": "./rt.d.rut"}}"#)
-            .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("an `entry.type`-only pkg spells its kind"),
-            "{err}"
-        );
-        assert!(err.to_string().contains("`type = \"host\"`"), "{err}");
+        // an UNDECLARED kind with a spelled surface parses here — the
+        // ambiguity (no body on disk) refuses at the MOUNT DOORS,
+        // naming both fixes; the manifest records only the flag
+        let m = parse_manifest(r#"{"name": "rt", "entry": {"type": "./rt.d.rut"}}"#).unwrap();
+        assert_eq!(m.pkg_type, PkgType::Lib);
+        assert!(!m.type_declared);
     }
 
     #[test]
@@ -825,60 +660,14 @@ mod tests {
     }
 
     #[test]
-    fn the_compat_lane_maps_the_old_envelope() {
-        // the READER's lane: a PUBLISHED bundle's manifest is forever
-        // old (the pinned CDN tags), so the keys parse onto
-        // `legacy_entry` under the old value laws — a loading law, not
-        // a transition
-        let m = parse_manifest_compat(
-            r#"{"name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./a.rut",]}}"#,
-        )
-        .unwrap();
-        assert_eq!(m.legacy_entry.lib.as_deref(), Some("./pouch.rut"));
-        assert_eq!(m.legacy_entry.libs, vec!["./a.rut".to_string()]);
-        assert_eq!(m.entry.type_path, None, "the new Entry carries type only");
-        // the old array laws hold there: no libs without a base
-        let err = parse_manifest_compat(r#"{"entry": {"libs": ["./a.rut"]}}"#).unwrap_err();
-        assert!(
-            err.to_string().contains("`entry.libs` needs `entry.lib`"),
-            "{err}"
-        );
-        // no file rides twice
-        let err = parse_manifest_compat(r#"{"entry": {"lib": "./a.rut", "libs": ["./a.rut"]}}"#)
-            .unwrap_err();
-        assert!(err.to_string().contains("names `./a.rut` twice"), "{err}");
-        // every lib is a `.rut` source
-        let err = parse_manifest_compat(r#"{"entry": {"lib": "./a.rut", "libs": ["./a.d.rut"]}}"#)
-            .unwrap_err();
-        assert!(
-            err.to_string().contains("every lib is a `.rut` source"),
-            "{err}"
-        );
-        // the value laws are path-targeted there too
-        let err = parse_manifest_compat(r#"{"entry": {"libs": []}}"#).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "entry.libs: cannot be empty — drop the key for a single-file module"
-        );
-        let err = parse_manifest_compat(r#"{"entry": {"lib": 3}}"#).unwrap_err();
-        assert_eq!(err.to_string(), "entry: expected a string for 'lib'");
-        // the retired `ir` rides either lane
-        let m = parse_manifest_compat(r#"{"name": "x", "entry": {"lib": "./x.rut", "ir": false}}"#)
-            .unwrap();
-        assert_eq!(m.legacy_entry.lib.as_deref(), Some("./x.rut"));
-    }
-
-    #[test]
     fn entry_keys_are_path_targeted() {
         // the plan's canonical shape: the table's path, the key named
-        // in the message (compat lane — the only lane where the old
-        // keys' VALUE laws still speak)
-        let err = parse_manifest_compat(r#"{"entry": {"lib": 3}}"#).unwrap_err();
-        assert_eq!(err.to_string(), "entry: expected a string for 'lib'");
-        let err = parse_manifest_compat(r#"{"entry": {"libs": "./a.rut"}}"#).unwrap_err();
-        assert_eq!(err.to_string(), "entry: expected a string array for 'libs'");
-        let err = parse_manifest_compat(r#"{"entry": {"libs": ["./a.rut", 1]}}"#).unwrap_err();
-        assert_eq!(err.to_string(), "entry.libs: expected a string, found 1");
+        // in the message — the refusal fires even value-shaped wrong
+        // (the key's existence is the crime, not its value)
+        let err = parse_manifest(r#"{"entry": {"lib": 3}}"#).unwrap_err();
+        assert!(err.to_string().starts_with("entry.lib: repealed"), "{err}");
+        let err = parse_manifest(r#"{"entry": {"libs": ["./a.rut", 1]}}"#).unwrap_err();
+        assert!(err.to_string().starts_with("entry.libs: repealed"), "{err}");
         // unknown entry keys refuse (the entry strictness)
         let err = parse_manifest(r#"{"entry": {"type": "./x.d.rut", "feats": 1}}"#).unwrap_err();
         assert_eq!(err.to_string(), "entry: unknown key 'feats'");
@@ -1099,40 +888,6 @@ mod tests {
         assert!(
             err.to_string().starts_with("deps.pouch: 'sha256' retired"),
             "{err}"
-        );
-    }
-
-    #[test]
-    fn the_compat_lane_keeps_the_pin_as_inert_metadata() {
-        // a PUBLISHED bundle is forever old: the pin parses onto the
-        // row under the old value laws, stored LOWERCASE — inert (url
-        // rows inside bundles never fetch)
-        let m = parse_manifest_compat(
-            r#"{"name": "app", "deps": {"pouch": {"url": "https://example.com/pouch.rutbundle", "sha256": "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"}}}"#,
-        )
-        .unwrap();
-        let d = m.deps.get("pouch").unwrap();
-        assert_eq!(d.get("url").unwrap(), "https://example.com/pouch.rutbundle");
-        assert_eq!(
-            d.get("sha256").unwrap(),
-            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
-        );
-        // the old beside-path refusal is retired with the key: inert is
-        // inert, whatever it sits beside
-        let m = parse_manifest_compat(
-            r#"{"deps": {"pouch": {"path": "../pouch", "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}}}"#,
-        )
-        .unwrap();
-        assert!(m.deps.get("pouch").unwrap().get("sha256").is_some());
-        // the old value laws still hold there (the entry.lib treatment):
-        // the hex law speaks on the compat lane
-        let err = parse_manifest_compat(
-            r#"{"deps": {"pouch": {"url": "https://x/p.rutbundle", "sha256": "nothex"}}}"#,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "deps.pouch: 'sha256' must be 64 hex digits, found 'nothex'"
         );
     }
 

@@ -4,15 +4,15 @@
 //! manifest's `type` routes: a lib root (no `type`) is the **compiled**
 //! layout (`mod.rutc` + scope ledger + `deps/` groups), a
 //! `type = "host"` root is the **decl** layout (its `mod.d.rut`
-//! surface, single-package). One wire family: `format_version` is 12
-//! (the current wire — every group carries ONE generated declaration
-//! entry); the 11 lane reads forever (a published bundle is forever
-//! old). Parsing a layout verifies what each kind carries, so a bad
+//! surface, single-package). ONE wire: `format_version` is 12 — the
+//! current wire, every group carrying ONE generated declaration entry;
+//! anything else (older, newer, absent) refuses with the one re-pack
+//! recipe. Parsing a layout verifies what each kind carries, so a bad
 //! archive never reaches the run.
 
 use super::container::{parse_bundle, BundleError};
 use super::files::read_entry;
-use super::manifest::{parse_manifest_compat, Manifest};
+use super::manifest::{parse_manifest, Manifest};
 use rut_core::binary::{decode, Program};
 
 use super::identity::{self, DEPS_DIR};
@@ -71,8 +71,8 @@ pub enum GroupKind {
     Source,
 }
 
-/// The one bundle layout — ONE wire family (`format_version` 12; the
-/// 11 lane reads forever), the manifest's `type`
+/// The one bundle layout — ONE wire (`format_version` 12), the
+/// manifest's `type`
 /// routes the root kind: a lib root (no `type`) is **compiled**
 /// (`mod.rutc` + ledger + `deps/` groups), a `type = "host"` root is
 /// **decl** (the manifest + its `mod.d.rut` surface, single-package,
@@ -115,9 +115,9 @@ pub enum Layout {
 
 impl Layout {
     /// Parse a bundle: manifest + version gate first (`format_version`
-    /// is 12 — one wire family for both root kinds; 11, the old lane,
-    /// reads forever; anything else refuses with the one re-pack
-    /// recipe, never guesses), then the kind's own checks (compiled:
+    /// is 12 — the ONE wire for both root kinds; everything else,
+    /// older or newer, refuses with the one re-pack recipe, never
+    /// guesses), then the kind's own checks (compiled:
     /// the scope ledger's identity rows, the root and every group's
     /// binary decode + verification, every group dirname's
     /// fingerprint-over-content; decl: the single-package law and the
@@ -129,26 +129,21 @@ impl Layout {
             Ok(text) => text,
             Err(_) => return Err("no `rut.jsonc` entry — not a rut bundle".to_string()),
         };
-        let manifest = parse_manifest_compat(&manifest_text).map_err(|e| e.to_string())?;
+        let manifest = parse_manifest(&manifest_text).map_err(|e| e.to_string())?;
         if manifest.format.as_deref() != Some("rutbundle") {
             return Err("rut.jsonc has no `format = \"rutbundle\"` — not a rut bundle".into());
         }
         match manifest.format_version {
-            // ONE wire family, both root kinds: the manifest's `type`
-            // routes the layout — a host root is its own decl surface,
-            // a lib root the compiled layout. 12 is the current wire
-            // (generated declaration entries); 11 is the OLD lane,
-            // read forever — a published bundle is forever old, and a
-            // `rut.lock` pin to v11 bytes keeps working (migration is a
-            // re-pin, not a break). A v11 archive never carries
-            // generated entries, so nothing below dispatches on the
-            // number: the layout grammar is one, the lanes additive.
-            Some(11) | Some(12) => match manifest.pkg_type {
+            // ONE wire: 12 is the current wire — the manifest's `type`
+            // routes the layout (a host root is its own decl surface, a
+            // lib root the compiled layout); EVERYTHING else refuses —
+            // stale bytes re-pack, nothing is grandfathered.
+            Some(12) => match manifest.pkg_type {
                 super::manifest::PkgType::Host => Self::parse_decl(bundle, manifest),
                 super::manifest::PkgType::Lib => Self::parse_compiled(bundle, manifest),
             },
             other => Err(format!(
-                "this toolchain reads bundle format_version 12 (and the old 11 lane) only (found {}) — re-pack the directory",
+                "this toolchain reads bundle format_version 12 only (found {}) — re-pack the directory",
                 match other {
                     Some(v) => v.to_string(),
                     None => "none".to_string(),
@@ -246,7 +241,7 @@ impl Layout {
                         super::files::MANIFEST_NAME
                     )
                 })?;
-            let dm = parse_manifest_compat(&manifest_text)
+            let dm = parse_manifest(&manifest_text)
                 .map_err(|e| format!("{p}/{}: {e}", super::files::MANIFEST_NAME))?;
             // name-vs-key: the group's manifest `name` must equal the
             // deps key with `@fp16` stripped — the dirname's name half

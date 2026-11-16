@@ -930,10 +930,10 @@ fn use_path_completion_offers_the_reexported_names() {
         "{:?}",
         widget.kind
     );
-    // the flat spelling mirrors the fns/lets legacy shape: ungated —
-    // the private use's name rides too, the crossing law speaks only
-    // on walked paths (the next test)
-    assert!(ls.contains(&"secret_root"), "{ls:?}");
+    // the flat spelling rides the SAME gate now: a private use's name
+    // never offers — the crossing law speaks on flat and walked paths
+    // alike (the next test pins the walked flavor)
+    assert!(!ls.contains(&"secret_root"), "{ls:?}");
 }
 
 #[test]

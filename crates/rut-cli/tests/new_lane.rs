@@ -317,10 +317,10 @@ fn scaffolded_project_runs_against_a_local_server() {
     // names, plus the host surfaces they can pull (bundles are closed,
     // but the server answers whatever the graph asks). The tag is
     // DERIVED from the scaffold's own lock (the cut advances it).
-    // This gate PROVES the pinned-v16 world keeps working: the
-    // envelope's calc.zip carries calc_host's constants as manifest
-    // `consts` rows, and the compat-fed mounts stamp them (D7) —
-    // calc's `pub use` re-exports resolve, old pins intact
+    // This gate PROVES the pinned std world keeps working: the
+    // envelope's zips are STRICT-CLEAN on the one grammar (the surface
+    // `pub let` rows are the one constants spelling), so calc's `pub
+    // use` re-exports resolve, current pins intact
     let (_probe_root, probe_dir) = scaffold("e2e-tag", "hello");
     let probe_lock = std::fs::read_to_string(probe_dir.join("rut.lock")).unwrap();
     let tag = rut_driver::parse_lock(&probe_lock)
@@ -395,12 +395,10 @@ fn scaffolded_project_runs_against_a_local_server() {
     );
 
     // the reviewer's probe, STANDING: a consumer that USES calc over
-    // the frozen pins. The envelope's calc_host carries its constants
-    // as manifest `consts` rows (its v16 surface has no `pub let`s),
-    // so `math.rut`'s `pub use calc_host::{ PI, .. }` re-export dies
-    // with the fourteen `calc_host has no PI` unknown-imports —
-    // killing math::PI AND the const-free math::sqrt with it — unless
-    // the compat-fed mounts stamp the retained rows (D7)
+    // the frozen pins. The v17 envelope's calc_host carries its
+    // constants as SURFACE LETS (the one spelling), so `math.rut`'s
+    // `pub use calc_host::{ PI, .. }` re-export resolves and the probe
+    // prints PI and sqrt through the ordinary module path
     let probe = "use calc::{ math };\nuse ink::{ Logger };\n\nentry fn main() {\n    let log = \
                  Logger(\"probe\");\n    log.info(f\"sqrt={math::sqrt(4.0)} \
                  pi={math::PI}\");\n}\n";
@@ -408,14 +406,14 @@ fn scaffolded_project_runs_against_a_local_server() {
     let out = rut_cmd(&root.join("home"), &["run", dir.to_str().unwrap()]);
     assert!(
         out.status.success(),
-        "the frozen-pins math probe must run (the retained consts stamp): {}\nstdout: {}",
+        "the frozen-pins math probe must run: {}\nstdout: {}",
         String::from_utf8_lossy(&out.stderr),
         String::from_utf8_lossy(&out.stdout)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("pi=3.141592653589793"),
-        "the probe prints the retained PI: {stdout}"
+        "the probe prints PI: {stdout}"
     );
     assert!(
         stdout.contains("sqrt="),

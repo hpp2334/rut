@@ -30,12 +30,9 @@
 //! loudly at the lowering; one const, one name — a `let` spelling a
 //! name another module of the same pkg already folded is the loud
 //! refusal (the rows bind BARE at the pkg's root). The manifest's
-//! `consts` table is RETIRED: the strict lane refuses the key, and
-//! the compat lane — the manifest read at the zip/bundle/store
-//! boundary, where published bytes are forever old — DISCARDS it
-//! whole (old bytes mount; their const rows bind nothing — the
-//! surface `pub let` is the one spelling, and old tags are not kept
-//! working by owner decree).
+//! `consts` table is RETIRED: the grammar refuses the key everywhere
+//! (no lane grandfathered) — the surface `pub let` is the one
+//! spelling.
 
 use std::collections::{BTreeMap, BTreeSet};
 

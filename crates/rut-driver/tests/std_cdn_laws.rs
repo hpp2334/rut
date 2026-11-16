@@ -4,7 +4,7 @@
 //!    committed bundle, for all 16 (the Q4 determinism law turned into
 //!    a pure equality gate; CI never touches the network).
 //! 2. **The one wire family** — every manifest reads `format_version`
-//!    12 (the current wire; the 11 lane reads forever); the manifest's
+//!    12 (the current wire; the 11 lane is gone); the manifest's
 //!    `type` routes the root kind, read from the committed bytes.
 //! 3. **The duplicate-mount law** — two archives in one session:
 //!    first-mount-wins, and the scope ledgers namespace per archive
@@ -365,27 +365,38 @@ fn structurally_echoes(fresh: &[u8], committed: &[u8]) -> bool {
 fn the_artifact_set_spells_the_one_wire_number() {
     // every manifest packs format_version 12 — the current wire; the
     // manifest's `type` routes the root kind (read from the committed
-    // bytes). The frozen envelopes' manifests carry the retired keys
-    // of their era's grammar — they read through the COMPAT lane (the
-    // bundle boundary), where the wire pair still parses
+    // bytes). The frozen envelopes' manifests ride the ONE grammar
+    // now: the wire pair is legal-optional, and calc_host — whose
+    // frozen manifest still carries the retired `namespace` key —
+    // refuses LOUDLY at the parse, naming the fix (old bytes carrying
+    // the key die at the parse, never silently)
     for (dir, name) in PKGS {
         let bytes = std::fs::read(dist_std().join(format!("{name}.rutbundle"))).unwrap();
         let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
         if *name == "calc_host" {
             // the frozen envelope's manifest still carries the retired
-            // `namespace` key — it refuses LOUDLY on either lane,
-            // naming the fix (old bytes carrying the key die at the
-            // parse, never silently)
-            let err = rut_driver::bundle::parse_manifest_compat(&bundle.read("rut.jsonc").unwrap())
-                .unwrap_err();
+            // `consts` + `namespace` keys — the first one the sorted
+            // walk meets refuses LOUDLY, naming the fix (old bytes
+            // carrying the keys die at the parse, never silently)
+            let err =
+                rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap_err();
+            assert!(
+                err.to_string().starts_with("consts: retired"),
+                "the refusal names the key: {err}"
+            );
+            // the sibling retirement, pinned on the same shape minus
+            // consts: `namespace` refuses the same way
+            let err = rut_driver::bundle::parse_manifest(
+                r#"{"name": "calc_host", "type": "host", "namespace": "Math"}"#,
+            )
+            .unwrap_err();
             assert!(
                 err.to_string().contains("namespace: retired"),
                 "the refusal names the key: {err}"
             );
             continue;
         }
-        let m =
-            rut_driver::bundle::parse_manifest_compat(&bundle.read("rut.jsonc").unwrap()).unwrap();
+        let m = rut_driver::bundle::parse_manifest(&bundle.read("rut.jsonc").unwrap()).unwrap();
         let is_host = m.pkg_type == rut_driver::bundle::PkgType::Host;
         assert_eq!(
             m.format_version,

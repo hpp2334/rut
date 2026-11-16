@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use rut_driver::bundle::{bundle_key, parse_manifest, parse_manifest_compat};
+use rut_driver::bundle::{bundle_key, parse_manifest};
 use rut_driver::pack::{collect_source_group, PackRead};
 use rut_native::default_out_path;
 
@@ -66,41 +66,14 @@ fn bundles_the_source_file_set_in_manifest_order() {
         "rut.jsonc verbatim"
     );
 
-    // the OLD envelope's group shape (a published archive being
-    // re-packed): the compat manifest maps the repealed keys, and the
-    // legacy files ride in manifest order — the reader-compat law's
-    // writer twin
-    let mut old = BTreeMap::new();
-    old.insert(
-        "json/rut.jsonc".to_string(),
-        br#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}}"#.to_vec(),
-    );
-    old.insert(
-        "json/json.rut".to_string(),
-        b"pub fn f() -> str { return \"j\"; }\n".to_vec(),
-    );
-    old.insert(
-        "json/store.rut".to_string(),
-        b"// the store half\n".to_vec(),
-    );
-    let legacy =
-        parse_manifest_compat(&String::from_utf8(old["json/rut.jsonc"].clone()).unwrap()).unwrap();
-    let mut out2 = Vec::new();
-    collect_source_group(
-        "json",
-        &legacy,
-        &Default::default(),
-        "json/",
-        &map_read(&old),
-        &mut out2,
+    // the OLD envelope's spelling (the repealed keys) REFUSES at
+    // parse — no lane repacks it: the group shape is the root module
+    // + the rows entry, nothing else
+    let err = parse_manifest(
+        r#"{"name": "json", "entry": {"lib": "./json.rut", "libs": ["./store.rut"]}}"#,
     )
-    .unwrap();
-    let names2: Vec<&str> = out2.iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(
-        names2,
-        vec!["json/rut.jsonc", "json/json.rut", "json/store.rut"],
-        "manifest order IS the archive order"
-    );
+    .unwrap_err();
+    assert!(err.to_string().starts_with("entry.lib: repealed"), "{err}");
 }
 
 #[test]

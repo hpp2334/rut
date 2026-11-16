@@ -33,7 +33,7 @@ pub(super) fn expect_u64(path: &str, value: &Value) -> Result<u64, ManifestError
 }
 
 /// A string field inside a table — the diagnostic names the TABLE's
-/// path and the key (`entry: expected a string for 'lib'`).
+/// path and the key (`entry: expected a string for 'type'`).
 pub(super) fn expect_field_string(
     table: &str,
     key: &str,
@@ -45,36 +45,4 @@ pub(super) fn expect_field_string(
             "{table}: expected a string for '{key}'"
         ))),
     }
-}
-
-/// The `entry.libs` string array. Strict: every element a string (the
-/// bare-word and non-string refusals fall out of the same check). An
-/// empty array is nobody's multi-lib entry — drop the key.
-pub(super) fn expect_field_string_array(
-    table: &str,
-    key: &str,
-    value: &Value,
-) -> Result<Vec<String>, ManifestError> {
-    let Some(arr) = value.as_array() else {
-        return Err(ManifestError(format!(
-            "{table}: expected a string array for '{key}'"
-        )));
-    };
-    if arr.is_empty() {
-        return Err(ManifestError(format!(
-            "{table}.{key}: cannot be empty — drop the key for a single-file module"
-        )));
-    }
-    let mut out = Vec::new();
-    for el in arr {
-        match el.as_str() {
-            Some(s) => out.push(s.to_string()),
-            None => {
-                return Err(ManifestError(format!(
-                    "{table}.{key}: expected a string, found {el}"
-                )));
-            }
-        }
-    }
-    Ok(out)
 }

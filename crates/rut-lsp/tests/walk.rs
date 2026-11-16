@@ -1160,14 +1160,11 @@ const POUCH_PIN: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5
 /// zips — the COMMITTED frozen envelope — declared + pinned +
 /// store-mounted at once. The pinning law this gate owns: the check
 /// lane must keep answering through a world that carries `calc` over
-/// the v16 bytes — the zip's calc_host group carries its constants as
-/// manifest `consts` rows, and the compat store lane RETAINS them
-/// (minted onto the index, folded into the engine's mount — D7), so
-/// `math.rut`'s `pub use calc_host::{ PI, .. }` resolves exactly as it
-/// does on a current tree's surface lets. Without the retention those
-/// fourteen unknown-import errors stamp `calc/math` and eat every one
-/// of the doc's own diags (foreign squiggles skip by law, and the
-/// graph stops at the failing pkg).
+/// the v17 bytes — the zips are STRICT-CLEAN (the surface `pub let`
+/// rows are the one constants spelling; the manifest carries `name` +
+/// `deps` rows only), so `math.rut`'s `pub use calc_host::{ PI, .. }`
+/// resolves exactly as it does on a current tree's surface lets. One
+/// grammar, store mounts included.
 const NINE_STD: &[(&str, &[u8])] = &[
     ("calc", include_bytes!("../../../dist/std/calc.zip")),
     ("flow", include_bytes!("../../../dist/std/flow.zip")),

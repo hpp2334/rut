@@ -16,15 +16,13 @@
 //!   rode-along dep groups are the loader's business, not the
 //!   editor's.
 //! - [`index_dep`] indexes one dep source file under its mount (the
-//!   module NAMED, the mod path spelled); a compat-parsed wire
-//!   manifest's `consts` rows DISCARD whole (no backward compat — old
-//!   bytes mount, their constants bind nothing; the surface `pub let`
-//!   is the one spelling). The surface `pub let` rows of a current
-//!   tree ride the ordinary ModuleLet path; the qualified forms ride
-//!   the dep's own `mod` tree: `use calc::{ math }` + `math::PI`).
+//!   module NAMED, the mod path spelled); the surface `pub let` rows
+//!   of a current tree ride the ordinary ModuleLet path; the
+//!   qualified forms ride the dep's own `mod` tree: `use calc::{
+//!   math }` + `math::PI`).
 
 use rut_driver::bundle::files::{bundle_key, read_entry, MANIFEST_NAME};
-use rut_driver::bundle::manifest::{parse_manifest, parse_manifest_compat};
+use rut_driver::bundle::manifest::parse_manifest;
 use rut_driver::bundle::{parse_bundle, Manifest};
 
 /// A bundle's rows head: the owning spec plus its mounted sources.
@@ -39,7 +37,7 @@ use sha2::{Digest, Sha256};
 use crate::hover::DefIndex;
 
 /// One entry source a dep indexes: the manifest-relative file path and
-/// the mode it parses in (`entry.type` → Decl, `entry.lib`/`libs` →
+/// the mode it parses in (`entry.type` → Decl, the `mod.rut` root →
 /// Impl).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntrySource {
@@ -82,10 +80,7 @@ pub struct DepTable {
     /// the entry sources, in indexing order: the decl surface first
     /// (`entry.type`, Decl mode — or the default root `mod.d.rut` when
     /// a host pkg spells none), then the body — the root module
-    /// `mod.rut` (Impl mode; the convention, not a key). An OLD
-    /// published bundle's manifest (parsed through
-    /// [`dep_table_compat`]) carries the repealed keys instead, mapped
-    /// exactly as the loader's reader-compat law does.
+    /// `mod.rut` (Impl mode; the convention, not a key).
     pub entries: Vec<EntrySource>,
     /// `type = "host"` — the entry surface is a pure `.d.rut` and its
     /// `mod` tree mounts the Decl flavor (`NAME/mod.d.rut` children,
@@ -113,9 +108,8 @@ pub fn cache_path(url: &str) -> String {
 /// or url-sourced; `dev-deps` descriptors are path-only by
 /// grammar (a url there refused at parse) — the url arm simply never
 /// fires for them. Url rows parse UNPINNED: the manifest grammar
-/// retired `sha256` (an old bundle manifest's pin rides as inert
-/// metadata the compat lane ignores, exactly like the loader does) —
-/// the pin arrives from `rut.lock` via [`dep_table_pinned`].
+/// retired `sha256` (pins live in `rut.lock`) — the pin arrives from
+/// `rut.lock` via [`dep_table_pinned`].
 fn dep_row(name: &str, desc: &std::collections::BTreeMap<String, String>) -> DepRow {
     let source = match (desc.get("path"), desc.get("url")) {
         (_, Some(url)) => DepSource::Url {
@@ -136,11 +130,9 @@ fn dep_row(name: &str, desc: &std::collections::BTreeMap<String, String>) -> Dep
 
 /// Parse one `rut.jsonc` (JSONC: comments + trailing commas legal)
 /// into the editor's dep table. A malformed manifest is the error —
-/// the faces surface it as a hint, never silent bytes. STRICT: the
-/// repealed `entry.lib`/`entry.libs` keys and the retired wire pair
-/// (`format`/`format_version`) and `consts` table refuse; the body
-/// rides the `mod.rut` convention. The bundle face parses OLD
-/// published manifests through [`dep_table_compat`].
+/// the faces surface it as a hint, never silent bytes. ONE grammar,
+/// every lane — the directory door, the store tree, the archive's own
+/// manifest; the wire pair a packed manifest carries is legal-optional.
 pub fn dep_table(manifest_text: &str) -> Result<DepTable, String> {
     let m: Manifest = parse_manifest(manifest_text).map_err(|e| e.to_string())?;
     dep_table_of(m)
@@ -174,18 +166,6 @@ pub fn dep_table_pinned(
     stamp_pins(dep_table(manifest_text)?, pins)
 }
 
-/// [`dep_table_pinned`] on the compat lane — the STORE's mount door:
-/// an unpacked url dep's manifest rode the wire, where the retired
-/// keys parse (the wire pair) or discard (`consts` — whole, inert)
-/// instead of refusing, exactly as the loader's zip boundary reads
-/// them.
-pub(crate) fn dep_table_pinned_compat(
-    manifest_text: &str,
-    pins: &std::collections::BTreeMap<String, String>,
-) -> Result<DepTable, String> {
-    stamp_pins(dep_table_compat(manifest_text)?, pins)
-}
-
 /// the pin ledger's stamp: every url row the lock pins answers
 /// `sha256: Some(pin)`; a url with no lock row stays `None`.
 fn stamp_pins(
@@ -195,33 +175,6 @@ fn stamp_pins(
     for row in t.deps.iter_mut().chain(t.dev_deps.iter_mut()) {
         if let DepSource::Url { url, sha256, .. } = &mut row.source {
             *sha256 = pins.get(url).cloned();
-        }
-    }
-    Ok(t)
-}
-
-/// [`dep_table`] over the bundle reader's compat lane: an archive's
-/// own manifest may be OLD (a published bundle is forever old — the
-/// pinned CDN tags), so the repealed keys map onto Impl entries
-/// exactly as the loader's reader mounts them (the lib, then the
-/// `libs` splice, in listed order), REPLACING the `mod.rut`
-/// convention row an old archive cannot answer.
-pub fn dep_table_compat(manifest_text: &str) -> Result<DepTable, String> {
-    let m: Manifest = parse_manifest_compat(manifest_text).map_err(|e| e.to_string())?;
-    let mut t = dep_table_of(m.clone())?;
-    if m.legacy_entry.lib.is_some() || !m.legacy_entry.libs.is_empty() {
-        t.entries.retain(|e| e.mode != Mode::Impl);
-        if let Some(lib) = &m.legacy_entry.lib {
-            t.entries.push(EntrySource {
-                path: bundle_key(lib)?,
-                mode: Mode::Impl,
-            });
-        }
-        for lib in &m.legacy_entry.libs {
-            t.entries.push(EntrySource {
-                path: bundle_key(lib)?,
-                mode: Mode::Impl,
-            });
         }
     }
     Ok(t)
@@ -311,7 +264,8 @@ pub struct BundleIndex {
 /// additive envelope section: the root text (`""`) mounted with its
 /// child tree through rut-driver's rows codec (the same declaration-
 /// driven mount a directory runs). `Ok(None)` = no rows entry — the
-/// old flat envelope, which keeps loading byte-for-byte. The flavor
+/// flat pack shape (a flat host pkg's two-entry bundle), which loads
+/// byte-for-byte. The flavor
 /// rides the pkg: a host tree speaks Decl and mounts `mod.d.rut`
 /// children, a lib body's tree the Impl `mod.rut` shape.
 #[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
@@ -376,10 +330,8 @@ fn entry_child_lookup(
 
 /// Unpack a `.rutbundle`'s OWN sources: CRC-verified entries, the
 /// archive's `rut.jsonc` naming the module, then the root module —
-/// the `mod.rut` entry beside the manifest (an OLD published bundle
-/// rides at its legacy `entry.lib` spelling, mapped by
-/// [`dep_table_compat`] — the loader's reader-compat law mirrored) —
-/// plus the `rut.mods` rows entry when the bundle carries
+/// the `mod.rut` entry beside the manifest — plus the `rut.mods` rows
+/// entry when the bundle carries
 /// one (the additive envelope section: the tree as path-keyed rows),
 /// else the file-entry mount the loader's source lane runs. Rode-along
 /// dep groups (`<pkg>/…` prefixes) never ride — they are the loader's
@@ -408,10 +360,9 @@ pub fn srczip_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         .ok_or_else(|| {
             format!("no `{MANIFEST_NAME}` at the archive root — not a rut source zip")
         })?;
-    // the wire boundary rides the compat lane: the zip's manifest rode
-    // the wire, where the retired keys parse (the wire pair) or
-    // discard (`consts` — whole, inert) instead of refusing
-    let table = dep_table_compat(&manifest_text)?;
+    // the ONE grammar at the zip boundary too (the stamped wire pair
+    // is legal-optional)
+    let table = dep_table(&manifest_text)?;
     let module = table
         .name
         .clone()
@@ -453,7 +404,7 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
     let entries = parse_bundle(bytes).map_err(|e| e.to_string())?;
     let manifest_text = read_entry(&entries, MANIFEST_NAME)
         .map_err(|_| format!("no `{MANIFEST_NAME}` entry — not a rut bundle"))?;
-    let table = dep_table_compat(&manifest_text)?;
+    let table = dep_table(&manifest_text)?;
     let module = table
         .name
         .clone()
@@ -527,12 +478,10 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
             None if table.host => None, // a host surface carries no lib body
             None => {
                 // the source lane: root = the `mod.rut` entry (the
-                // post-repeal convention), or the OLD envelope's legacy
-                // lib — dep_table_compat mapped it onto the Impl entries.
-                // The table row spells the DIRECTORY path (`src/mod.rut`);
-                // the archive keeps the ONE canonical root name — the
-                // miss translates (a compat row rides its legacy key and
-                // reads directly)
+                // ONE convention — post-repeal, no legacy keys ride).
+                // The table row spells the DIRECTORY path
+                // (`src/mod.rut`); the archive keeps the ONE canonical
+                // root name — the miss translates
                 let root = match table.entries.iter().find(|e| e.mode == Mode::Impl) {
                     Some(e) => {
                         let read = read_entry(&entries, &e.path)
@@ -851,9 +800,7 @@ pub fn bundle_file_mod_path(path: &str) -> Option<String> {
 /// the ordinary [`analysis::index_at`] pass over `src`, the mount —
 /// origin, module name, mod path, parse mode — riding ONE [`Mount`]
 /// handed to the builder up front. The surface `pub let` rows ride the
-/// ordinary ModuleLet path; a compat-parsed wire manifest's `consts`
-/// rows DISCARD whole (no backward compat — old bytes mount, their
-/// constants bind nothing); the module-qualified forms ride the dep's
+/// ordinary ModuleLet path; the module-qualified forms ride the dep's
 /// own `mod` tree.
 pub fn index_dep(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> DefIndex {
     // the ordinary index pass — `mode_of(uri)` spells the filename
@@ -946,6 +893,5 @@ fn collect_inline_modules(
     }
 }
 
-// (the minted manifest-const rows died with the compat fold — old
-// bytes' consts discard whole; the surface `pub let` is the one
-// spelling)
+// (the minted manifest-const rows are gone — the retired `consts`
+// table refuses at parse; the surface `pub let` is the one spelling)

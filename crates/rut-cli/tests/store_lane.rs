@@ -188,9 +188,9 @@ fn install_publishes_the_store_layout_and_reruns_are_store_first() {
     let unpack = dir.join("unpack");
     // the extracted tree rides the bundle's entries verbatim — the
     // compiled wire: the manifest, the scopes, the compiled root (the
-    // manifest carries the pair the pack door stamps — the compat lane
-    // reads it back)
-    let unpacked = rut_driver::bundle::parse_manifest_compat(
+    // manifest carries the pair the pack door stamps — legal-optional
+    // on the one grammar)
+    let unpacked = rut_driver::bundle::parse_manifest(
         &std::fs::read_to_string(unpack.join("rut.jsonc")).unwrap(),
     )
     .expect("the extracted manifest parses");

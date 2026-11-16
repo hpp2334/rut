@@ -4,10 +4,9 @@
 //! folded at the lowering; the surface computes nothing). One const,
 //! one name: the rows bind BARE at the pkg's root, so a name spelled
 //! twice — here or in a sibling module — is the loud refusal. (The
-//! manifest's `consts` table is RETIRED: the directory grammar
-//! refuses the key naming this spelling; the compat lane — the
-//! zip/bundle/store boundary — discards the rows whole, so old
-//! published bytes keep mounting while binding nothing.)
+//! manifest's `consts` table is RETIRED: the grammar refuses the key
+//! everywhere naming this spelling — one grammar, no lane
+//! grandfathered.)
 
 use std::collections::BTreeMap;
 

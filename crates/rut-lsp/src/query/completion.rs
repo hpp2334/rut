@@ -535,10 +535,9 @@ fn use_path_before(toks: &[Token], pos: u32) -> Option<(Vec<String>, String)> {
 /// walkable path segments. Deeper paths (`use pkg::a::b::<cursor>`)
 /// walk the pub edges first (a bare `mod`/`pub(pkg)` child is never
 /// offered cross-package) and answer the resolved module's exports —
-/// now with the `pub` gate on fns/lets too, the gate the compiler's
-/// qualified-use check applies. No index is special-cased: a flat
-/// package's chain and gates are today's, byte for byte (the
-/// deps-batch law stands).
+/// the `pub` gate on fns/lets/re-exports holds on walked AND flat
+/// spellings alike: the gate the compiler's qualified-use check
+/// applies. No index is special-cased.
 fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Vec<CompletionOut> {
     let Some(pkg) = segs.first() else {
         let mut out: Vec<CompletionOut> = Vec::new();
@@ -597,7 +596,6 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
     } else {
         chain
     };
-    let crossed = !interior.is_empty();
     let mut out: Vec<CompletionOut> = Vec::new();
     for i in &scope {
         // the walkable children — pub edges only (cross-package law)
@@ -640,10 +638,10 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
             if f.owner.is_some() {
                 continue;
             }
-            // a walked path binds through the compiler's qualified-use
-            // gate: only `pub` names cross. The flat spelling keeps
-            // today's ungated shape (the deps-batch law)
-            if crossed && f.vis != Vis::Pub {
+            // the walked path binds through the compiler's qualified-use
+            // gate: only `pub` names cross — on walked AND flat spellings
+            // alike (one gate, no ungated legacy shape)
+            if f.vis != Vis::Pub {
                 continue;
             }
             push_item(
@@ -657,7 +655,7 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
             );
         }
         for l in &i.lets {
-            if crossed && l.vis != Vis::Pub {
+            if l.vis != Vis::Pub {
                 continue;
             }
             push_item(
@@ -672,11 +670,11 @@ fn use_path_completions(idxs: &[&DefIndex], segs: &[String], prefix: &str) -> Ve
         }
         // a `pub use` re-export: the imported name joined the module's
         // surface — the tier's gate mirrors the fns/lets above (a
-        // walked path binds only `pub` edges across packages; the flat
-        // spelling keeps the ungated legacy shape). The cap law picks
+        // walked path binds only `pub` edges across packages, flat
+        // spellings included). The cap law picks
         // the icon until real resolution (same as the use classifier)
         for u in &i.uses {
-            if crossed && u.vis != Vis::Pub {
+            if u.vis != Vis::Pub {
                 continue;
             }
             let src = u.path.join("::");

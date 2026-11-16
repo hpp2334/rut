@@ -25,19 +25,14 @@ pub(super) fn check_dep_key(table: &str, key: &str) -> Result<(), ManifestError>
 /// A `deps` descriptor: exactly ONE source — `path` (a directory) or
 /// `url` (a remote `.rutbundle`), never both, never neither. The
 /// `sha256` pin is RETIRED from the grammar — pins live in `rut.lock`
-/// — so the strict lane refuses the key loudly (the `host_scope`
-/// treatment: a silent ignore would surface as an unpinned fetch
-/// later), while the bundle reader's compat lane keeps parsing it onto
-/// the row as INERT metadata (a published bundle is forever old; url
-/// rows inside bundles are already inert — bundles are closed, never
-/// fetch). `optional` is rejected (not a deps key — the strict-keys
-/// law); any other key is the entry strictness — a path-targeted
-/// error.
+/// — so the key refuses loudly (the `host_scope` treatment: a silent
+/// ignore would surface as an unpinned fetch later). `optional` is
+/// rejected (not a deps key — the strict-keys law); any other key is
+/// the entry strictness — a path-targeted error.
 pub(super) fn parse_deps_descriptor(
     table: &str,
     spec: &str,
     value: &Value,
-    compat: bool,
 ) -> Result<BTreeMap<String, String>, ManifestError> {
     let path = format!("{table}.{spec}");
     let obj = expect_object(&path, value)?;
@@ -50,9 +45,6 @@ pub(super) fn parse_deps_descriptor(
         match k.as_str() {
             "path" | "url" => {
                 out.insert(k.clone(), expect_field_string(&path, k, v)?);
-            }
-            "sha256" if compat => {
-                out.insert(k.clone(), parse_pin(&path, k, v)?);
             }
             "sha256" => {
                 return Err(ManifestError(format!(
@@ -90,22 +82,6 @@ pub(super) fn parse_deps_descriptor(
         }
     }
     Ok(out)
-}
-
-/// The sha256 pin's OLD value laws, kept for the compat lane only:
-/// exactly 64 hex digits, stored LOWERCASE — the pin law compares the
-/// fetched bytes' hash against it, so the parse normalizes first and
-/// the comparison is byte-exact. The directory grammar refuses the key
-/// before this can speak (see the retirement arm above); the lock file
-/// carries the law forward (`crates/rut-driver/src/lock.rs`).
-pub(super) fn parse_pin(path: &str, key: &str, value: &Value) -> Result<String, ManifestError> {
-    let v = expect_field_string(path, key, value)?;
-    if v.len() != 64 || !v.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(ManifestError(format!(
-            "{path}: 'sha256' must be 64 hex digits, found '{v}'"
-        )));
-    }
-    Ok(v.to_ascii_lowercase())
 }
 
 /// A `dev-deps` descriptor: `path` is the one key — dev presence is

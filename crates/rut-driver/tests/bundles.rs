@@ -155,13 +155,12 @@ fn refusals() {
         .to_string();
     assert!(err.contains("rut.jsonc"), "{err}");
 
-    // anything outside the wire family refuses at the one-line version
-    // gate — the same refusal an OLDER loader applies to a version it
+    // anything outside wire 12 refuses at the one-line version gate —
+    // the same refusal an OLDER loader applies to a version it
     // does not know, before reading anything else (refuse, never
-    // guess). ONE uniform re-pack recipe: the old wires, the reserved
-    // band, anything. (11 stays readable — the old lane, a published
-    // bundle is forever old.)
-    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 99, 100] {
+    // guess). ONE uniform re-pack recipe: the old wires (11 included —
+    // the old lane is gone), the reserved band, anything.
+    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 99, 100] {
         let manifest = format!(
             r#"{{"format": "rutbundle", "format_version": {v}, "name": "x", "entry": {{"lib": "./x.rut"}}}}"#
         );
@@ -173,11 +172,25 @@ fn refusals() {
         let err = rut_driver::Mounted::from_bundle(&old)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("format_version"), "{err}");
-        assert!(
-            err.contains("reads bundle format_version 12 (and the old 11 lane) only"),
-            "{err}"
+        assert!(err.contains("entry.lib: repealed"), "{err}");
+    }
+
+    // the same matrix with a CURRENT manifest body: the version gate
+    // is the one refusal left
+    for v in [1u64, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 99, 100] {
+        let manifest = format!(
+            r#"{{"format": "rutbundle", "format_version": {v}, "name": "x", "entry": {{"type": "./x.d.rut"}}}}"#
         );
+        let old = rut_driver::bundle::write_bundle(&[
+            ("rut.jsonc".into(), manifest.as_bytes().to_vec()),
+            ("x.rut".into(), src.to_vec()),
+        ])
+        .unwrap();
+        let err = rut_driver::Mounted::from_bundle(&old)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("format_version"), "{err}");
+        assert!(err.contains("reads bundle format_version 12 only"), "{err}");
         assert!(err.contains("re-pack the directory"), "{err}");
     }
 
@@ -200,7 +213,7 @@ fn refusals() {
     assert!(err.contains("not a rut bundle"), "{err}");
 
     // missing `format = "rutbundle"`
-    let manifest = r#"{"format_version": 11, "name": "x", "entry": {"lib": "./x.rut"}}"#;
+    let manifest = r#"{"format_version": 12, "name": "x"}"#;
     let no_format = rut_driver::bundle::write_bundle(&[
         ("rut.jsonc".into(), manifest.as_bytes().to_vec()),
         ("x.rut".into(), src.to_vec()),
