@@ -91,12 +91,14 @@ function rowsOf(n: AstNode, src: string): Row[] {
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "fields", list: n.fields },
+        { label: "methods", list: n.methods },
       ];
     case "Interface":
       return [
         { label: "vis", text: VIS_LABEL[n.vis] },
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
+        { label: "methods", list: n.methods },
       ];
     case "Impl":
       return [
@@ -304,6 +306,7 @@ function rowsOf(n: AstNode, src: string): Row[] {
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "fields", list: n.fields },
+        { label: "methods", list: n.methods },
       ];
     case "ArrayLit":
       return [{ label: "elems", list: n.elems }];

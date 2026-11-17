@@ -41,9 +41,9 @@ export interface AstModule extends Base { kind: "Module"; items: AstNode[] }
 export interface AstUse extends Base { kind: "Use"; pkg: string; names: string[] }
 export interface AstModuleLet extends Base { kind: "ModuleLet"; vis: VisTag; name: string; ty?: AstNode; init: AstNode }
 export interface AstEnum extends Base { kind: "Enum"; vis: VisTag; name: string; members: AstMember[] }
-export interface AstStructDecl extends Base { kind: "Struct"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[] }
-export interface AstClass extends Base { kind: "Class"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[] }
-export interface AstInterface extends Base { kind: "Interface"; vis: VisTag; name: string; generics?: string[] }
+export interface AstStructDecl extends Base { kind: "Struct"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
+export interface AstClass extends Base { kind: "Class"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
+export interface AstInterface extends Base { kind: "Interface"; vis: VisTag; name: string; generics?: string[]; methods: AstNode[] }
 export interface AstImpl extends Base { kind: "Impl"; target: AstNode; methods: AstNode[] }
 export interface AstAlias extends Base { kind: "Alias"; vis: VisTag; name: string; target: AstNode }
 export interface AstFn extends Base { kind: "Fn"; vis: VisTag; async?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; bounds?: AstBound[]; body: AstNode }
