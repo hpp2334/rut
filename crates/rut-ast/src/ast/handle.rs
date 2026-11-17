@@ -153,7 +153,13 @@ macro_rules! plain_alloc {
 pub(crate) use plain_alloc;
 
 /// generate a slot enum's `span(ctx)` — one arm per variant, each a
-/// typed handle read (or-patterns can't unify distinct handle types)
+/// typed handle read (or-patterns can't unify distinct handle types).
+///
+/// Same laws as the alloc macros: the re-export chain stays
+/// `pub(crate)` (a macro_rules definition is module-private, so `pub`
+/// is not a legal spelling), and the `span` methods it expands into
+/// keep their own visibility marker — it rides the re-exported type,
+/// not the sealed module.
 macro_rules! slot_span {
     ($self:expr, $ctx:expr, $( $slot:ident :: $var:ident ),* $(,)?) => {
         match $self {

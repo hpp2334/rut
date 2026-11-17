@@ -117,7 +117,7 @@ const PKGS: &[(&str, &str)] = &[
 fn artifact(key: &str) -> (String, Vec<u8>) {
     let tree = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../rut")).join(key);
     let bytes = rut_native::pack_dir(&tree).unwrap_or_else(|e| panic!("pack rut/{key}: {e}"));
-    let url = format!("https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/{key}.rutbundle");
+    let url = format!("https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/{key}.rutbundle");
     (url, bytes)
 }
 

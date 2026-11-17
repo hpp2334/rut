@@ -401,7 +401,7 @@ fn dispatch(l: &mut Loop, cmd: Cmd) {
             let answer = json_envelope(wire::Analysis {
                 diags,
                 // SemanticTokens serializes `data` to the flat u32 wire format
-                // (the same bytes a stdio face would put on the wire)
+                // (the envelope carries the array verbatim)
                 tokens: ls_types::SemanticTokens {
                     result_id: None,
                     data: a.tokens,

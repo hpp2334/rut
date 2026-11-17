@@ -1,6 +1,6 @@
 //! The printer — the AST reprint (`pretty(ast)`).
 //!
-//! Structure is source-order (the parser is monotone — §4.2 — so a
+//! Structure is source-order (the parser is monotone, so a
 //! clean traversal walks nodes in the order they were written); layout
 //! is canonical house style, colored by the `[style]` knobs.
 //!
@@ -47,7 +47,7 @@ use crate::comments::CommentRun;
 use crate::style::Style;
 
 // operator levels — the parser's reduce levels, mined from
-// rut-ast/src/parser/expr.rs:247-316 (the fmt survey §2 table)
+// rut-ast/src/parser/expr.rs:290-352 (the fmt survey §2 table)
 const L_OR: u8 = 3;
 const L_AND: u8 = 4;
 const L_EQ: u8 = 5;
@@ -59,7 +59,7 @@ const L_ADD: u8 = 10;
 const L_MUL: u8 = 11;
 const L_CAST: u8 = 12;
 const L_UNARY: u8 = 13;
-const L_POSTFIX: u8 = 14; // call/index/field/try — children never anchor
+const L_POSTFIX: u8 = 14; // call/index/field — children never anchor
 
 fn binop_str(op: BinOp) -> &'static str {
     match op {
@@ -120,7 +120,7 @@ fn assign_str(op: Option<BinOp>) -> &'static str {
         BinOp::Shr => ">>=",
         // unreachable family: Eq/Ne/Lt/Gt/Le/Ge/And/Or never compound
         // — shift_assign only arms the arithmetic + bitwise table
-        // (rut-ast/src/parser/expr.rs:266-276)
+        // (rut-ast/src/parser/expr.rs:364-376)
         _ => "=",
     }
 }
@@ -163,7 +163,7 @@ fn float_suffix(s: Option<FloatSuffix>) -> &'static str {
     }
 }
 
-/// The escape inverse of the lexer's `lex_escape` (`lexer.rs:171-212`),
+/// The escape inverse of the lexer's `lex_escape` (`lexer.rs:270-314`),
 /// plus the f-string's `{{`/`}}` doubling (the fmt survey §2): every
 /// escape the lexer DECODES must re-encode so bytes re-lex identically.
 fn escape_str(body: &str, in_fstring: bool, literal_newline: bool) -> String {

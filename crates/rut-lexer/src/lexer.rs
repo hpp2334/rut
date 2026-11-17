@@ -1,8 +1,8 @@
 //! Lexer — mode-stack tokenizer. Two door shapes: [`lex_canonical`]
 //! takes the source BY VALUE and returns it (or its normalized twin)
 //! alongside the tokens — the caller cannot obtain spans indexing a
-//! text it does not hold — and the `&str` doors (`lex`/`lex_mode`/
-//! `lex_collect`) for tests and ad-hoc token streams. Handles `f"..."`
+//! text it does not hold — and the `&str` doors (`lex`/`lex_collect`)
+//! for tests and ad-hoc token streams. Handles `f"..."`
 //! interpolation holes (fully lexed token streams, brace-balanced),
 //! `r"..."` raw strings, hash-leveled multi-line raw and format strings
 //! (`r#"..."#`, `f#"..."#` — the hash count is the multi-line opt-in
@@ -62,22 +62,20 @@ pub fn lex_canonical(src: String, collect: bool) -> (String, Vec<Token>, Vec<Dia
     }
 }
 
+/// The test door: lex `src` into ad-hoc tokens (normalized
+/// internally). One door, no mode dial — a `.d.rut` surface parses
+/// the same token vocabulary as `.rut` source (every word an
+/// identifier token; the keyword tables are the parser's,
+/// mode-independent).
 pub fn lex(src: &str) -> (Vec<Token>, Vec<Diag>) {
-    lex_mode(src)
-}
-
-/// Decl-mode lexing: a `.d.rut` surface parses the same
-/// token vocabulary as `.rut` source — every word is an identifier
-/// token; the keyword tables are the parser's, mode-independent.
-pub fn lex_mode(src: &str) -> (Vec<Token>, Vec<Diag>) {
     let (toks, diags, _) = lex_collect(src, false);
     (toks, diags)
 }
 
-/// The collecting twin of `lex_mode`: when `collect` is set, every
+/// The collecting twin of `lex`: when `collect` is set, every
 /// main-scan comment lands in the side table (see [`crate::token::Comment`])
 /// — the skip the lexer performs anyway, promoted to data. The token
-/// stream and diags are IDENTICAL to `lex_mode`'s either way.
+/// stream and diags are IDENTICAL to `lex`'s either way.
 pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
     let normalized = normalize(src);
     lex_normalized(&normalized, collect)
@@ -87,8 +85,8 @@ pub fn lex_collect(src: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comm
 /// shares: [`lex_canonical`] (and through it the parser's entry pair,
 /// `rut_ast::parser::parse` / `parse_with_recover`) and every consumer
 /// re-deriving the leaf layer over a `Parsed` artifact ride `p.src`
-/// (the normalized text every span indexes). `lex`/`lex_collect`/
-/// `lex_mode` normalize internally; passing their output here would
+/// (the normalized text every span indexes). `lex`/`lex_collect`
+/// normalize internally; passing their output here would
 /// only re-copy it.
 pub fn lex_normalized(normalized: &str, collect: bool) -> (Vec<Token>, Vec<Diag>, Vec<Comment>) {
     let mut lx = Lexer::new(normalized, collect);

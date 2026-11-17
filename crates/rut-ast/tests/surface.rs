@@ -435,8 +435,7 @@ fn builtin_primitive_takes_no_generics() {
 fn the_two_builtin_spellings_parse_clean() {
     // TWO strict spellings: `prelude builtin` binds ambient, `pub
     // builtin` is the import-gated form. Both parse cleanly and both
-    // keep the full builtin grammar (fn / class / trait / impl /
-    // primitive).
+    // keep the full builtin grammar (fn / class / impl / primitive).
     let (ast, diags) = parse("prelude builtin fn own<T>(x: T) -> T;", Mode::Decl);
     assert!(
         diags.is_empty(),

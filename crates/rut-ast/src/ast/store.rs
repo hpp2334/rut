@@ -10,7 +10,10 @@
 //! THE MUTATION LAW: `&ctx` methods ask the store, `&mut ctx` methods
 //! tell it — and only the parse lane tells (`intern`, `set_root`,
 //! `allocate`, `set_errors`). Node fields are never mutated after
-//! allocation; there is no API for it.
+//! allocation; there is no API for it. The doors' `pub(crate)`
+//! markers stay load-bearing under the seal: the sealed module gates
+//! the PATHS, a method's own visibility gates the CALL — drop the
+//! marker and the door is method-private, unreachable even in-crate.
 
 use rut_core::{IdentId, Interner};
 use rut_lexer::diag::Diag;

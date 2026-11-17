@@ -1764,7 +1764,8 @@ pub(crate) fn compile_host_thunk(ctx: &mut Ctx, fid: u32, thunk_name: IdentId) -
 // The rows are registered by the embedder with `rut_vm::register_async!`
 // under the ONE registration name the decl surface carries (`host` on
 // the ExternFn). No new ops — the wrapper compiles from existing
-// vocabulary (GetF/Br/Call/Box/SetF/Ret), so VERSION stays 13.
+// vocabulary (GetF/Br/Call/Box/SetF/Ret), so no version bump rode
+// this change.
 
 /// Mint the host future machinery of one async host fn (idempotent per
 /// extern fn): the hidden frame type, the `Future<ret>` impl row, the

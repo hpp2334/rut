@@ -1152,7 +1152,7 @@ fn a_path_dep_feeds_the_use_path_tier() {
 /// install's read_srczip lane lays — the surface type-checks and F12
 /// lands in the REAL tree, never a `bundle:` origin
 const POUCH_ZIP: &[u8] = include_bytes!("../../../dist/std/pouch.zip");
-const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v15/dist/std/pouch.zip";
+const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip";
 /// self-consistent only — readers never re-hash (meta vouches the pin)
 const POUCH_PIN: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
 
@@ -1160,7 +1160,7 @@ const POUCH_PIN: &str = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5
 /// zips — the committed current-cut envelope — declared + pinned +
 /// store-mounted at once. The pinning law this gate owns: the check
 /// lane must keep answering through a world that carries `calc` over
-/// the v17 bytes — the zips are STRICT-CLEAN (the surface `pub let`
+/// the current cut's bytes — the zips are STRICT-CLEAN (the surface `pub let`
 /// rows are the one constants spelling; the manifest carries `name` +
 /// `deps` rows only), so `math.rut`'s `pub use calc_host::{ PI, .. }`
 /// resolves exactly as it does on a current tree's surface lets. One
@@ -1317,7 +1317,7 @@ fn a_std_zip_store_dep_mounts_the_pouch_surface() {
 /// playground's custom-dep lane found exactly that), and F12 lands in
 /// the real child files.
 const MYHOST_ZIP: &[u8] = include_bytes!("../../../dist/std/myhost.zip");
-const MYHOST_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v16/dist/std/myhost.zip";
+const MYHOST_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/myhost.zip";
 /// self-consistent only — readers never re-hash (meta vouches the pin)
 const MYHOST_PIN: &str = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
 

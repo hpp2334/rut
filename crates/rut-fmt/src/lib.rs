@@ -1,14 +1,14 @@
 //! rut-fmt — the rut source formatter. The
 //! language's own meaning-preserving pretty printer.
 //!
-//! The formatter is an **AST reprint** (the RFC's `pretty(ast)`), not a
+//! The formatter is an **AST reprint** (`pretty(ast)`), not a
 //! token-stream pass: every item, statement, expression and type
 //! reprints from the typed arena in canonical house layout, and the
-//! source's **comments** — which the AST deliberately drops (§7's law:
+//! source's **comments** — which the AST deliberately drops (the law:
 //! "formatting fidelity is the formatter's job") — are recovered by the
 //! between-token gap scan ([`comments`]) and re-attached verbatim.
 //!
-//! The two fidelity losses the RFC's AST carries are reconstructed:
+//! The two fidelity losses the AST carries are reconstructed:
 //! source parens (the AST is the precedence-reduced grouping — absent
 //! parens are re-emitted exactly where the parse's grouping would be
 //! flattened; the op-level table lives in [`printer`]) and literal
