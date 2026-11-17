@@ -122,7 +122,7 @@ export class Runner {
         {
           mode: "wasm",
           banner:
-            "live — rut.wasm · the playground slice: core, calc, rt, ink, pouch, nmapset mounted",
+            "live — rut.wasm · the playground slice: ink, pouch, nmapset, flow, futures, async_host, strbuild, json, calc (+math) mounted; the core prelude rides free",
         },
         api,
       );

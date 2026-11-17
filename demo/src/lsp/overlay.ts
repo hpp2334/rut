@@ -3,7 +3,7 @@
  * per-line spans for the editor's highlight layer. Pure — no React, no
  * DOM — so the smoke can drive the exact builder the browser paints.
  *
- * - token classes come from the `rut_legend()` NAMES (index -> name ->
+ * - token classes come from the `legend()` NAMES (index -> name ->
  *   `tok-<name>` in styles.css); the order is never hardcoded here
  * - diagnostics become squiggle marks carrying their message (the
  *   editor's hover tip / the span title)

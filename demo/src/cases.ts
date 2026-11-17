@@ -1,7 +1,9 @@
 /**
  * Prepared cases. Each is self-contained — the host
- * provides the bundled packages (`ink`, `core`, `calc`, `rt`, `pouch`,
- * plus the `nmapset` map lane), whose `info` lines stream back as
+ * provides the bundled packages (`ink`, `calc`, `pouch`, plus the
+ * `nmapset` map lane — the rest of the slice (`flow`, `futures`,
+ * `async_host`, `strbuild`, `json`) mounts too, and the core prelude
+ * rides free of rows), whose `info` lines stream back as
  * output.
  *
  * Sources reflect TODAY's

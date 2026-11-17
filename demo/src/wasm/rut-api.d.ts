@@ -158,8 +158,8 @@ export interface RunResult {
   heapBytes: number;
   /**
    * true when the guest trapped OutOfFuel with a live frame —
-   * `resume` continues THAT frame (rut_resume); a fresh `run`
-   * supersedes it (rut_drop_frame retires it explicitly)
+   * `resume` continues THAT frame; a fresh `run`
+   * supersedes it (`dropFrame` retires it explicitly)
    */
   parked?: boolean;
 }

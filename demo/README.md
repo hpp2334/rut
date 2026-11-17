@@ -137,8 +137,8 @@ The demo-journey batch later re-drove this whole journey end-to-end
 compile(src): { diags, ast, irDump, binary? }
 run(binary, { fuel, heapBytes }): { output, trap?, fuelUsed, heapBytes, parked? }
 resume(extraFuel): { ... }        // continues the PARKED frame — real
-                                  // park/resume (rut_resume), output
-                                  // accumulates, never a re-run
+                                  // park/resume (`resume` on the engine),
+                                  // output accumulates, never a re-run
 dropFrame(): number               // retire a parked frame (case switch,
                                   // any auto-run)
 ```
@@ -208,15 +208,19 @@ zoom regardless; Android forgoes it (honest trade, not a silent one).
 - **No expected-output machinery.** Every run — a prepared case or a
   free-form edit — executes for real, and the Output pane shows exactly
   what it produced; there is nothing to match against.
-- **The wasm host mounts a slice, not the whole std**: core, calc, rt,
-  ink, pouch, nmapset (+ the nmap host bindings). `select`/`await`
-  parse but have no host futures in this host — never taught, honestly.
+- **The wasm host mounts a slice, not the whole std**: ink, pouch,
+  nmapset (+ the `nmap_host` bindings), flow, futures, async_host,
+  strbuild, json, calc (+math), and the `ink_host`/`strbuild_host`/
+  `calc_host` surfaces — the core prelude rides free of rows. `await`
+  runs against the mounted async host (`async_host` + the `futures`
+  package); bare `select` is an ordinary identifier — the racers are
+  `futures`' `select2`/`select_all`.
 - **dist/ ships production React** (the build lane's mode split —
   `npm run dev` keeps react-refresh + dev React for iteration). The
   development-mode validators that used to burn ~27% of active CPU on
   big-doc keystrokes are gone from the shipped bundle; switching the
   mode was its own measured pass, not a silent change.
-- **The highlight is one `rut_analyze` per keystroke-debounce** (120
+- **The highlight is one `analyze` call per keystroke-debounce** (120
   ms, full-sync, whole doc). Doc-sized sources make that milliseconds
   (measured 9.3 ms at 1560 lines); there is no delta endpoint upstream,
   and the measured numbers keep it a menu item, not a silent change.

@@ -1,5 +1,6 @@
-// the extension's one set of budgets and names — mirrors the native
-// server's caps so the two faces stay guests of the same size. The
+// the extension's one set of budgets and names — the native server's
+// caps they once mirrored retired with the stdio face; this one wasm
+// face stays the guest. The
 // dep walk's own budgets (depth/files/fetch cap) are Rust-side now,
 // in the crate that owns the walk.
 

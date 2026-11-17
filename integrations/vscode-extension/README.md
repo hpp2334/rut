@@ -64,11 +64,13 @@ vouches the lock pin. A cold or drifted store is ONE hint per dep
 naming `rut install` (the rust-analyzer contract); the extension's
 whole dep lane is watchers + `reloadDeps()`.
 
-The module IS the language core: the queries (`analysis`, `hover`,
-`completion`, `definition`, `check`, …) live in the same crate as this
-ABI (`crates/rut-lsp-wasm`), so a feature lands on the editor face as
-soon as it lands on the engine — there is no second face to keep in
-step. Other editors have no first-party face today (see
+The language core is TWO crates: `crates/rut-lsp` holds the queries
+(`analysis`, `hover`, `completion`, `definition`, `check`, …) plus the
+actor event loop, and `crates/rut-lsp-wasm` is the face — one exported
+`RutLsp` class whose every method delegates onto the core's `Lsp`
+handle. A feature lands on the editor face as soon as it lands on the
+core: wiring one delegation method into the face's `src/lib.rs` is the
+whole step. Other editors have no first-party face today (see
 [`../README.md`](../README.md)).
 
 ## File modules — src/mod.rut
@@ -209,8 +211,8 @@ delete, and no fetch on it, by construction.
   document re-schedules its analysis (open diagnostics may have
   changed).
 - **One engine, one face** — the dep tables
-  (`crates/rut-lsp-wasm/src/deps.rs`) are the CLI's own parsers and
-  the walk (`crates/rut-lsp-wasm/src/walk.rs`) is the crate's; the
+  (`crates/rut-lsp/src/deps.rs`) are the CLI's own parsers and the
+  walk (`crates/rut-lsp/src/walk.rs`) is the core's; the
   extension injects the read-only capability and surfaces the hints,
   nothing more.
 - Auto-import completions offer foreign public names with the
@@ -327,6 +329,7 @@ store-hit mount (a dep dir published under a temp `$RUT_HOME`, its
 meta vouching the lock pin), and the auto-import insert all assert
 there (needs `code`; the lane skips loudly without it).
 
-The wasm module itself is gated by `crates/rut-lsp-wasm/smoke.js`
-(`node crates/rut-lsp-wasm/smoke.js` from the repo root after
-`npm run build:wasm`).
+The wasm module itself is gated by the lanes above: the grammar
+corpus, the through-wasm e2e, and the skip-tolerant host suite —
+`npm test` and the `release` lane run all three, and every
+wasm-facing assertion drives the shipped `bin/rut-lsp.wasm`.

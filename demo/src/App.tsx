@@ -30,7 +30,7 @@ const EMPTY_PANES: PaneData = { output: [], irDump: "" };
 const ANALYZE_DEBOUNCE_MS = 120;
 /** the D-1 auto-run stance: case switches and the edit lane run at the
  * host's explicit WATCHDOG slice — the mechanism default is OFF, but
- * `rut_run` is a synchronous main-thread wasm call, so an uncapped
+ * `run` is a synchronous main-thread wasm call, so an uncapped
  * auto-run on a stray long loop is a hard tab freeze. This slice is
  * the host's deliberate self-protection, NOT a user-facing default:
  * the user's own ▶ Run is uncapped unless they enable the fuel box. */
@@ -130,7 +130,7 @@ export function App(): JSX.Element {
    * typing keeps the panes' identity stable until the next run) */
   const lastCompiledSrc = useRef("");
   // the highlight layer (survey D3): one binding, booted once; the
-  // overlay + squiggles come from the debounced full rut_analyze
+  // overlay + squiggles come from the debounced full `analyze` call
   const [lsp, setLsp] = useState<RutLsp | null>(null);
   const [lspMode, setLspMode] = useState<"booting" | "live" | "error">(
     "booting",
