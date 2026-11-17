@@ -430,6 +430,24 @@ fn the_postfix_nullable_spelling_is_an_ordinary_error() {
 }
 
 #[test]
+fn the_postfix_question_expression_is_an_ordinary_error() {
+    // the same ruling in expression position: `x?` parses `x`, then
+    // the trailing `?` hits the enclosing frame — the ordinary ladder
+    // (no tailored arm, no removal sermon)
+    for src in [
+        "fn f() -> nil { let x = 1?; }",
+        "fn f() -> nil { let x = f()?; }",
+        "fn f() -> nil { return x?; }",
+    ] {
+        let (_, diags) = parse(src, Mode::Impl);
+        assert!(
+            !diags.is_empty() && !diags.iter().any(|d| d.msg.contains("removed")),
+            "`{src}` must fail through the ordinary ladder: {diags:?}"
+        );
+    }
+}
+
+#[test]
 fn removed_pointer_spellings_are_ordinary_errors() {
     // `*T` in type position and `&x` / `*x` in expression position
     // fall to the ordinary prefix errors — no tailored removal diags

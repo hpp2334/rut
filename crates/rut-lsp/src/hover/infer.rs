@@ -98,7 +98,6 @@ pub(crate) fn expr_ty(
                 _ => expr_ty(ast, binds, idxs, d.lhs).or_else(|| expr_ty(ast, binds, idxs, d.rhs)),
             }
         }
-        ExprRef::Try(h) => expr_ty(ast, binds, idxs, h.get(ast).expr),
         _ => None,
     }
 }

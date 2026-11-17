@@ -58,12 +58,10 @@ pub use expr::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
     BlockNode, CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode,
     IndexNode, IsNode, LambdaNode, Lit, LitNode, MethodNode, PathNode, PathSeg, StructLitNode,
-    TryNode, TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
+    TupleNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
 };
 // types + patterns
-pub use pat::{PatBinding, PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};
-pub use ty::{
-    TyArrayNode, TyConstNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode, TyUnionNode,
-};
+pub use pat::{PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode};
+pub use ty::{TyArrayNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode, TyUnionNode};
 
 pub use dump::{render_json, render_text, to_dump_tree, DumpNode};

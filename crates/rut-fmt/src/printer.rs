@@ -102,7 +102,6 @@ fn unop_str(op: UnOp) -> &'static str {
     match op {
         UnOp::Neg => "-",
         UnOp::Not => "!",
-        UnOp::BitNot => "~",
     }
 }
 
@@ -1189,9 +1188,6 @@ impl<'a> P<'a> {
                 }
                 self.text(")");
             }
-            TyRef::Const(h) => {
-                self.expr(h.get(self.a).expr);
-            }
             TyRef::Union(h) => {
                 let d = h.get(self.a);
                 for (i, e) in d.elems.iter().enumerate() {
@@ -1689,23 +1685,6 @@ impl<'a> P<'a> {
             PatRef::Path(h) => {
                 self.path(&h.get(self.a).segs);
             }
-            PatRef::Ctor(h) => {
-                let d = h.get(self.a);
-                self.path(&d.segs);
-                if !d.args.is_empty() {
-                    self.text("(");
-                    for (i, arg) in d.args.iter().enumerate() {
-                        if i > 0 {
-                            self.text(", ");
-                        }
-                        match arg {
-                            Some(b) => self.text(self.a.name(b.name)),
-                            None => self.text("_"),
-                        }
-                    }
-                    self.text(")");
-                }
-            }
             PatRef::Wild(_) => {
                 self.text("_");
             }
@@ -1937,11 +1916,6 @@ impl<'a> P<'a> {
             ExprRef::Lambda(h) => {
                 let d = h.get(self.a);
                 self.lambda(&d.params, d.ret, d.body);
-            }
-            ExprRef::Try(h) => {
-                let d = h.get(self.a);
-                self.operand(d.expr, L_POSTFIX, false);
-                self.text("?");
             }
             ExprRef::FStr(h) => {
                 let d = h.get(self.a);

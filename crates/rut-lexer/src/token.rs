@@ -1,6 +1,6 @@
 //! Tokens — one flat exhaustive enum. Keywords are `Ident`s
-//! (the parser matches them by interner text); the few reserved
-//! words are rejected by the LEXER with a message naming the rut replacement.
+//! (the parser matches them by interner text); every word lexes as a
+//! plain `Ident` and unknown keywords draw the ordinary parser errors.
 
 use crate::span::Span;
 
@@ -13,7 +13,7 @@ pub enum Tok {
     RawStr(String), // no escape processing
     FStr(FStrTok),  // parts + lexed holes
     Bool(bool),
-    Ident(String), // includes keywords after the reservation check
+    Ident(String), // every word — keywords included; the parser matches them by text
 
     // punctuation & operators — exhaustive, single flat enum
     LParen,
@@ -27,9 +27,8 @@ pub enum Tok {
     Colon,
     Colon2,
     Dot,
-    DotDot,
     Arrow,
-    FatArrow, // : :: . .. -> =>
+    FatArrow, // : :: . -> =>
     Plus,
     Minus,
     Star,
@@ -53,16 +52,13 @@ pub enum Tok {
     Amp,
     Pipe,
     Caret,
-    Tilde,
     Shl,
-    Shr, // & | ^ ~ << >>
+    Shr, // & | ^ << >>
     AmpEq,
     PipeEq,
     CaretEq,
     ShlEq,
     ShrEq, // &= |= ^= <<= >>=
-    AmpAmpEq,
-    PipePipeEq, // &&= ||=
     Question,
 
     Eof,
@@ -147,7 +143,6 @@ impl Token {
             Colon => "`:`".into(),
             Colon2 => "`::`".into(),
             Dot => "`.`".into(),
-            DotDot => "`..`".into(),
             Arrow => "`->`".into(),
             FatArrow => "`=>`".into(),
             Plus => "`+`".into(),
@@ -173,7 +168,6 @@ impl Token {
             Amp => "`&`".into(),
             Pipe => "`|`".into(),
             Caret => "`^`".into(),
-            Tilde => "`~`".into(),
             Shl => "`<<`".into(),
             Shr => "`>>`".into(),
             AmpEq => "`&=`".into(),
@@ -181,8 +175,6 @@ impl Token {
             CaretEq => "`^=`".into(),
             ShlEq => "`<<=`".into(),
             ShrEq => "`>>=`".into(),
-            AmpAmpEq => "`&&=`".into(),
-            PipePipeEq => "`||=`".into(),
             Question => "`?`".into(),
             Eof => "end of file".into(),
         }

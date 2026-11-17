@@ -1894,13 +1894,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         .map(|s| self.ctx.name(s.name).to_string())
                         .collect::<Vec<_>>()
                         .join("::"),
-                    PatRef::Ctor(ch) => ch
-                        .get(self.ctx.ast)
-                        .segs
-                        .iter()
-                        .map(|s| self.ctx.name(s.name).to_string())
-                        .collect::<Vec<_>>()
-                        .join("::"),
                     PatRef::Wild(_) => "_".to_string(),
                     PatRef::Error(_) => continue,
                 };
@@ -2126,13 +2119,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.ctx.err(
                     sp,
                     "patterns in this build: enum members, literals, and `else`",
-                );
-                Err(())
-            }
-            PatRef::Ctor { .. } => {
-                self.ctx.err(
-                    sp,
-                    "constructor patterns (Ok(x), Some(y)) are not supported in this build",
                 );
                 Err(())
             }

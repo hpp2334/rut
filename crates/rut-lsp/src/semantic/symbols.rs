@@ -355,7 +355,6 @@ fn ty_text(ast: &Ast, t: TyRef) -> String {
         TyRef::Opt(h) => format!("?{}", ty_text(ast, h.get(ast).inner)),
         TyRef::Array(h) => format!("[{}]", ty_text(ast, h.get(ast).elem)),
         TyRef::Tuple(_) => "(..)".to_string(),
-        TyRef::Const(_) => "const".to_string(),
         TyRef::Union(h) => h
             .get(ast)
             .elems

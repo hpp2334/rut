@@ -311,10 +311,6 @@ impl<'a> Ctx<'a> {
                 }
                 self.mk_tuple(etys)
             }
-            TyRef::Const(_) => {
-                self.err(sp, "a const expression is not a type here");
-                TY_I32
-            }
             TyRef::Union { .. } => {
                 // a union in a value position (bound-only)
                 self.err(

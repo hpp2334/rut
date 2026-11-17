@@ -2,8 +2,8 @@
 //! host functions/structs the runtime binds and the engine builtin
 //! contracts — `host fn string_len(s: str) -> i32;`, `prelude builtin
 //! primitive opaque { .. }`. Parses in declaration mode only; the
-//! removed forms (`host primitive`, `host class`, `extern`) are
-//! rejected, and `builtin` has TWO strict spellings — `prelude builtin`
+//! removed `host primitive` falls to the ordinary after-`host` error,
+//! and `builtin` has TWO strict spellings — `prelude builtin`
 //! (ambient) and `pub builtin` (import-gated); the bare keyword
 //! diagnoses.
 
@@ -538,7 +538,8 @@ fn removed_forms_are_rejected() {
             .any(|d| d.msg.contains("expected `fn` or `struct` after `host`")),
         "`host primitive` must be diagnosed: {diags:?}"
     );
-    // `host class` — removed: wrap native state in a rut class over opaque
+    // `host class` — the same ordinary error as `host primitive`: the
+    // after-`host` slot wants `fn` or `struct`
     let (_, diags) = parse(
         "pub host class Canvas { fn flush(self) -> nil; }",
         Mode::Decl,
@@ -546,7 +547,7 @@ fn removed_forms_are_rejected() {
     assert!(
         diags
             .iter()
-            .any(|d| d.msg.contains("`host class` is removed")),
+            .any(|d| d.msg.contains("expected `fn` or `struct` after `host`")),
         "`host class` must be diagnosed: {diags:?}"
     );
     // `extern` left the reserved table with its refusal arm: the word

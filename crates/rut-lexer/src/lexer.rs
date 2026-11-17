@@ -601,8 +601,8 @@ impl<'a> Lexer<'a> {
     }
 
     /// Hole body: lex a balanced-brace token stream through the closing `}`.
-    /// A string literal inside a hole is a lex error: "bind it
-    /// to a name first".
+    /// A string literal inside a hole is ALLOWED — hole termination is
+    /// brace-based, so the quote lexes as an ordinary string token.
     fn lex_hole(&mut self, lo: usize) -> Vec<Token> {
         let mut toks = Vec::new();
         let mut depth = 1u32;
@@ -726,8 +726,6 @@ impl<'a> Lexer<'a> {
 
 /// Longest-match table: 4+ char ops first.
 const LONGEST_MATCH: &[(&[u8], Tok)] = &[
-    (b"&&=", Tok::AmpAmpEq),
-    (b"||=", Tok::PipePipeEq),
     (b"<<=", Tok::ShlEq),
     (b">>=", Tok::ShrEq),
     (b"<<", Tok::Shl),
@@ -749,7 +747,6 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b"&=", Tok::AmpEq),
     (b"|=", Tok::PipeEq),
     (b"^=", Tok::CaretEq),
-    (b"..", Tok::DotDot),
     (b"(", Tok::LParen),
     (b")", Tok::RParen),
     (b"{", Tok::LBrace),
@@ -768,7 +765,6 @@ const LONGEST_MATCH: &[(&[u8], Tok)] = &[
     (b"&", Tok::Amp),
     (b"|", Tok::Pipe),
     (b"^", Tok::Caret),
-    (b"~", Tok::Tilde),
     (b"!", Tok::Bang),
     (b"=", Tok::Eq),
     (b"<", Tok::Lt),

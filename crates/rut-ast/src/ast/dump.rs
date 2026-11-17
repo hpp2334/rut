@@ -32,9 +32,9 @@ use crate::ast::ty::TyRef;
 use crate::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, Ast, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
     BlockNode, CallNode, CastNode, FPartAst, FStrNode, FieldNode, IfExprNode, IndexNode, IsNode,
-    LambdaNode, LitNode, MethodNode, PatCtorNode, PatLitNode, PatPathNode, PathSeg, StructLitNode,
-    TryNode, TupleNode, TyArrayNode, TyConstNode, TyFnNode, TyOptNode, TyPathNode, TyTupleNode,
-    TyUnionNode, UnOp, UnaryNode, WhenArmNode, WhenExprNode,
+    LambdaNode, LitNode, MethodNode, PatLitNode, PatPathNode, PathSeg, StructLitNode, TupleNode,
+    TyArrayNode, TyFnNode, TyOptNode, TyPathNode, TyTupleNode, TyUnionNode, UnOp, UnaryNode,
+    WhenArmNode, WhenExprNode,
 };
 use rut_core::IdentId;
 
@@ -85,7 +85,6 @@ pub enum DumpVal {
     StructFields(Vec<DumpStructField>),
     Bounds(Vec<DumpBound>),
     Segs(Vec<DumpSeg>),
-    PatArgs(Vec<Option<String>>),
     FParts(Vec<DumpFPart>),
     /// stored strings: interned names
     Str(String),
@@ -804,20 +803,6 @@ fn pat_dump(a: &Ast, r: PatRef, next: &mut u32) -> DumpNode {
             fields.push(field("segs", DumpVal::Segs(segs_dump(a, &d.segs, next))));
             "PatPath"
         }
-        PatRef::Ctor(h) => {
-            let d: &PatCtorNode = h.get(a);
-            fields.push(field("segs", DumpVal::Segs(segs_dump(a, &d.segs, next))));
-            fields.push(field(
-                "args",
-                DumpVal::PatArgs(
-                    d.args
-                        .iter()
-                        .map(|x| x.map(|b| a.name(b.name).to_string()))
-                        .collect(),
-                ),
-            ));
-            "PatCtor"
-        }
         PatRef::Wild(_) => "PatWild",
         PatRef::Else(_) => "PatElse",
         PatRef::Error(h) => return error_dump(a, h, next),
@@ -875,14 +860,6 @@ fn ty_dump(a: &Ast, r: TyRef, next: &mut u32) -> DumpNode {
                 DumpVal::Nodes(d.elems.iter().map(|e| ty_dump(a, *e, next)).collect()),
             ));
             "TyTuple"
-        }
-        TyRef::Const(h) => {
-            let d: &TyConstNode = h.get(a);
-            fields.push(field(
-                "expr",
-                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
-            ));
-            "TyConst"
         }
         TyRef::Union(h) => {
             let d: &TyUnionNode = h.get(a);
@@ -1028,14 +1005,6 @@ fn expr_dump(a: &Ast, r: ExprRef, next: &mut u32) -> DumpNode {
                 DumpVal::Node(Box::new(expr_dump(a, d.body, next))),
             ));
             "Lambda"
-        }
-        ExprRef::Try(h) => {
-            let d: &TryNode = h.get(a);
-            fields.push(field(
-                "expr",
-                DumpVal::Node(Box::new(expr_dump(a, d.expr, next))),
-            ));
-            "Try"
         }
         ExprRef::FStr(h) => {
             let d: &FStrNode = h.get(a);
@@ -1303,19 +1272,6 @@ fn val_json(v: &DumpVal, out: &mut String) {
             }
             out.push(']');
         }
-        DumpVal::PatArgs(xs) => {
-            out.push('[');
-            for (i, x) in xs.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                match x {
-                    Some(s) => json_escape(s, out),
-                    None => out.push_str("null"),
-                }
-            }
-            out.push(']');
-        }
         DumpVal::FParts(ps) => {
             out.push('[');
             for (i, p) in ps.iter().enumerate() {
@@ -1392,7 +1348,6 @@ fn unop_str(op: UnOp) -> &'static str {
     match op {
         UnOp::Neg => "-",
         UnOp::Not => "!",
-        UnOp::BitNot => "~",
     }
 }
 
@@ -1487,15 +1442,6 @@ fn val_text(label: &str, v: &DumpVal, d: usize, src: &str, out: &mut String) {
                     for g in &s.generics {
                         node_text(g, d + 2, src, out);
                     }
-                }
-            }
-        }
-        DumpVal::PatArgs(xs) => {
-            out.push_str(&format!("{i}{label}:\n"));
-            for x in xs {
-                match x {
-                    Some(s) => out.push_str(&format!("{}- {s}\n", ind(d + 1))),
-                    None => out.push_str(&format!("{}- _\n", ind(d + 1))),
                 }
             }
         }

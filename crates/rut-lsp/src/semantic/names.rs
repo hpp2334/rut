@@ -329,7 +329,6 @@ fn classify_ty(ast: &Ast, t: TyRef, out: &mut Vec<(Span, TokenType)>) {
             }
             classify_ty(ast, d.ret, out);
         }
-        TyRef::Const(h) => classify_expr(ast, h.get(ast).expr, out),
         TyRef::Opt(h) => classify_ty(ast, h.get(ast).inner, out),
         TyRef::Array(h) => classify_ty(ast, h.get(ast).elem, out),
         TyRef::Tuple(h) => {
@@ -349,21 +348,10 @@ fn classify_ty(ast: &Ast, t: TyRef, out: &mut Vec<(Span, TokenType)>) {
 fn classify_pat(ast: &Ast, p: PatRef, out: &mut Vec<(Span, TokenType)>) {
     match p {
         // path segments in order — the last names the member, the rest the
-        // type it rides on (`Color.Red`, `Option<T>.Some`); constructor
-        // args are binding names (variables)
+        // type it rides on (`Color.Red`, `Option<T>.Some`)
         PatRef::Path(h) => {
             let d = h.get(ast);
             classify_path_segs(ast, &d.segs, out, TypeRule::EnumLast);
-        }
-        PatRef::Ctor(h) => {
-            let d = h.get(ast);
-            classify_path_segs(ast, &d.segs, out, TypeRule::EnumLast);
-            for a in &d.args {
-                let Some(b) = a else {
-                    continue; // `_` — no binding name
-                };
-                emit(ast.name(b.name), b.name_span, TokenType::Variable, out);
-            }
         }
         PatRef::Lit(h) => classify_expr(ast, h.get(ast).expr, out),
         PatRef::Wild(_) | PatRef::Else(_) | PatRef::Error(_) => {}
@@ -523,7 +511,6 @@ fn classify_expr(ast: &Ast, e: ExprRef, out: &mut Vec<(Span, TokenType)>) {
         }
         ExprRef::Await(h) => classify_expr(ast, h.get(ast).expr, out),
         ExprRef::AsyncBlock(h) => classify_block(ast, h.get(ast).body, out),
-        ExprRef::Try(h) => classify_expr(ast, h.get(ast).expr, out),
         ExprRef::Is(h) => {
             let d = h.get(ast);
             classify_expr(ast, d.expr, out);

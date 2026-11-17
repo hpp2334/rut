@@ -1,17 +1,15 @@
-//! Patterns and the pattern slot (constructor/binding forms).
+//! Patterns and the pattern slot (literal/path forms).
 
 use crate::ast::error::ErrorNode;
 use crate::ast::expr::{ExprRef, PathSeg};
 use crate::ast::handle::Handle;
 use crate::slot_alloc;
-use rut_core::IdentId;
 use rut_lexer::span::Span;
 
 #[derive(Clone, Copy, Debug)]
 pub enum PatRef {
     Lit(Handle<PatLitNode>),
     Path(Handle<PatPathNode>),
-    Ctor(Handle<PatCtorNode>),
     Wild(Handle<PatWildNode>),
     Else(Handle<PatElseNode>),
     Error(Handle<ErrorNode>),
@@ -24,7 +22,6 @@ impl PatRef {
             ctx,
             PatRef::Lit,
             PatRef::Path,
-            PatRef::Ctor,
             PatRef::Wild,
             PatRef::Else,
             PatRef::Error,
@@ -49,23 +46,6 @@ pub struct PatPathNode {
     pub segs: Vec<PathSeg>,
 }
 
-/// constructor pattern: `Ok(cfg)`, `Option<T>.Some(x)`, `Some(_)` —
-/// args are binding names (`None` = `_`)
-#[derive(Clone, Debug)]
-pub struct PatCtorNode {
-    pub span: Span,
-    pub segs: Vec<PathSeg>,
-    pub args: Vec<Option<PatBinding>>,
-}
-
-/// one constructor-pattern binding — the ident's id and its token's
-/// span (recorded at the match site)
-#[derive(Clone, Copy, Debug)]
-pub struct PatBinding {
-    pub name: IdentId,
-    pub name_span: Span,
-}
-
 #[derive(Clone, Debug)]
 pub struct PatWildNode {
     pub span: Span,
@@ -78,6 +58,5 @@ pub struct PatElseNode {
 
 slot_alloc!(PatLitNode, PatRef::Lit);
 slot_alloc!(PatPathNode, PatRef::Path);
-slot_alloc!(PatCtorNode, PatRef::Ctor);
 slot_alloc!(PatWildNode, PatRef::Wild);
 slot_alloc!(PatElseNode, PatRef::Else);

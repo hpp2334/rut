@@ -3,13 +3,11 @@
 //! ( < ... > then ( or . ). Read-only lookahead; no backtracking.
 
 use crate::{
-    PathSeg, TyArrayNode, TyConstNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode,
-    TyUnionNode,
+    PathSeg, TyArrayNode, TyFnNode, TyOptNode, TyPathNode, TyRef, TyTupleNode, TyUnionNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
 
-use crate::parser::expr::{ExprFrame, ExprMode};
 use crate::parser::frame::{Done, Frame, Step};
 use crate::parser::{Name, Parser};
 use rut_core::sym;
@@ -196,14 +194,7 @@ impl TypeFrame {
         if p.eat_punct(Tok::Gt) {
             return self.genargs_done(p);
         }
-        // const-generic arg: integer expression
-        if matches!(p.tok(), Tok::Int(..))
-            || (matches!(p.tok(), Tok::Minus) && matches!(p.peek(1).tok, Tok::Int(..)))
-        {
-            Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::UnaryOnly)))
-        } else {
-            Step::Push(Frame::Type(TypeFrame::new(p)))
-        }
+        Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
     fn genargs_done(&mut self, p: &mut Parser) -> Step {
@@ -348,33 +339,12 @@ impl TypeFrame {
                 }
                 _ => unreachable!("type frame received a type at the wrong stage"),
             },
-            Done::Expr(e) => {
-                // const-generic argument
-                match &mut self.stage {
-                    TyStage::GenArgs { args, .. } => {
-                        args.push(
-                            TyConstNode {
-                                span: e.span(&p.ast),
-                                expr: e,
-                            }
-                            .allocate(&mut p.ast),
-                        );
-                    }
-                    _ => unreachable!("type frame received an expression at the wrong stage"),
-                }
-                if p.eat_punct(Tok::Comma) {
-                    self.genargs_top(p)
-                } else {
-                    p.expect_gt();
-                    self.genargs_done(p)
-                }
-            }
             Done::Failed => match self.stage {
                 // v1: a failed parameter type breaks to the arrow
                 TyStage::FnParams { .. } => self.step_fn_ret(p),
                 _ => Step::Pop(Done::Failed),
             },
-            _ => unreachable!("type frame receives types or const expressions"),
+            _ => unreachable!("type frame receives types"),
         }
     }
 }
@@ -432,7 +402,7 @@ impl Parser {
     /// §4.2 scan 2: from a `<` (at `self.pos`), is this a generic-argument
     /// list? Commits iff angle depth returns to 0 and the next token
     /// continues a generic use.
-    pub(crate) fn scan_is_generic_args(&self, _in_pattern: bool) -> bool {
+    pub(crate) fn scan_is_generic_args(&self) -> bool {
         let mut depth = 1i32; // the `<` at self.pos
         let mut i = self.pos + 1;
         while i < self.toks.len() {

@@ -33,7 +33,6 @@ pub struct AssignNode {
 pub enum UnOp {
     Neg,
     Not,
-    BitNot,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -12,7 +12,7 @@ use crate::{
     ArrayLitNode, ArrayRepeatNode, AssignNode, AsyncBlockNode, AwaitNode, BinOp, BinaryNode,
     CallNode, CastNode, ExprRef, FPartAst, FStrNode, FieldInit, FieldNode, IfExprNode, IndexNode,
     IsNode, LambdaNode, Lit, LitNode, MethodNode, ParamNode, ParamRef, PathNode, PathSeg,
-    StructLitNode, TryNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
+    StructLitNode, TupleNode, UnOp, UnaryNode, WhenExprNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::{FPart, FStrTok, FloatSuffix, Tok, Token};
@@ -160,7 +160,6 @@ impl ExprFrame {
             let pfx = match p.tok() {
                 Tok::Minus => Some(Pfx::Un(UnOp::Neg)),
                 Tok::Bang => Some(Pfx::Un(UnOp::Not)),
-                Tok::Tilde => Some(Pfx::Un(UnOp::BitNot)),
                 _ if p.at_kw("await") => Some(Pfx::Await),
                 _ => None,
             };
@@ -647,7 +646,7 @@ impl AtomFrame {
                 };
                 let segs = vec![first];
                 // generic args on the head segment: `Vec<f32>(1024)`
-                if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
+                if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args() {
                     p.bump();
                     self.stage = AtomStage::PathGen {
                         segs,
@@ -675,7 +674,7 @@ impl AtomFrame {
         self.postfix_top(p)
     }
 
-    // -- postfix loop: `.name` `.name<..>(..)` `(..)` `[..]` `?` --
+    // -- postfix loop: `.name` `.name<..>(..)` `(..)` `[..]` --
 
     fn postfix_top(&mut self, p: &mut Parser) -> Step {
         let mut e = match &self.stage {
@@ -700,7 +699,7 @@ impl AtomFrame {
                             (n.id, n.span)
                         }
                     };
-                    if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
+                    if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args() {
                         p.bump();
                         self.stage = AtomStage::PostDotGen {
                             recv: e,
@@ -745,14 +744,6 @@ impl AtomFrame {
                     p.bump();
                     self.stage = AtomStage::PostIndex { recv: e };
                     return Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::Full)));
-                }
-                Tok::Question => {
-                    p.bump();
-                    e = TryNode {
-                        span: Span::new(self.lo.lo, p.prev_end.max(self.lo.lo)),
-                        expr: e,
-                    }
-                    .allocate(&mut p.ast);
                 }
                 _ => return Step::Pop(Done::Expr(e)),
             }
@@ -945,7 +936,7 @@ impl AtomFrame {
             let Some(name) = p.expect_ident("a path segment") else {
                 return Step::Pop(Done::Failed);
             };
-            if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(false) {
+            if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args() {
                 p.bump();
                 let segs = match &mut self.stage {
                     AtomStage::PathColons { segs } => std::mem::take(segs),
@@ -973,11 +964,7 @@ impl AtomFrame {
         if p.eat_punct(Tok::Gt) {
             return self.genarg_done(p);
         }
-        if matches!(p.tok(), Tok::Int(..)) {
-            Step::Push(Frame::Expr(ExprFrame::new(p, ExprMode::UnaryOnly)))
-        } else {
-            Step::Push(Frame::Type(TypeFrame::new(p)))
-        }
+        Step::Push(Frame::Type(TypeFrame::new(p)))
     }
 
     fn genarg_after_arg(&mut self, p: &mut Parser) -> Step {
@@ -1171,19 +1158,6 @@ impl AtomFrame {
                     let f = self.cur_field.take().expect("struct field without a name");
                     self.struct_field_done(p, f, e)
                 }
-                AtomStage::PathGen { args, .. }
-                | AtomStage::PathSegGen { args, .. }
-                | AtomStage::PostDotGen { args, .. } => {
-                    // const-generic argument: integer expression
-                    args.push(
-                        crate::TyConstNode {
-                            span: e.span(&p.ast),
-                            expr: e,
-                        }
-                        .allocate(&mut p.ast),
-                    );
-                    self.genarg_after_arg(p)
-                }
                 AtomStage::PostCall { args, .. } | AtomStage::PostDotCall { args, .. } => {
                     args.push(e);
                     self.call_after_arg(p)
@@ -1200,7 +1174,11 @@ impl AtomFrame {
                     self.stage = AtomStage::Postfix { e: node };
                     self.postfix_top(p)
                 }
-                AtomStage::Postfix { .. } | AtomStage::PathColons { .. } => {
+                AtomStage::PathGen { .. }
+                | AtomStage::PathSegGen { .. }
+                | AtomStage::PostDotGen { .. }
+                | AtomStage::Postfix { .. }
+                | AtomStage::PathColons { .. } => {
                     unreachable!("atom frame received an operand at the wrong stage")
                 }
             },

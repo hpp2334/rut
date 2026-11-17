@@ -2,7 +2,7 @@
 //! (rut-core's type-table kind owns `TyKind`).
 
 use crate::ast::error::ErrorNode;
-use crate::ast::expr::{ExprRef, PathSeg};
+use crate::ast::expr::PathSeg;
 use crate::ast::handle::Handle;
 use crate::slot_alloc;
 use rut_lexer::span::Span;
@@ -14,7 +14,6 @@ pub enum TyRef {
     Opt(Handle<TyOptNode>),
     Array(Handle<TyArrayNode>),
     Tuple(Handle<TyTupleNode>),
-    Const(Handle<TyConstNode>),
     Union(Handle<TyUnionNode>),
     Error(Handle<ErrorNode>),
 }
@@ -29,7 +28,6 @@ impl TyRef {
             TyRef::Opt,
             TyRef::Array,
             TyRef::Tuple,
-            TyRef::Const,
             TyRef::Union,
             TyRef::Error,
         )
@@ -82,13 +80,6 @@ pub struct TyTupleNode {
     pub elems: Vec<TyRef>,
 }
 
-/// const-generic argument — an expression
-#[derive(Clone, Debug)]
-pub struct TyConstNode {
-    pub span: Span,
-    pub expr: ExprRef,
-}
-
 /// `A | B` — bound-only union (requires bounds and union aliases)
 #[derive(Clone, Debug)]
 pub struct TyUnionNode {
@@ -101,5 +92,4 @@ slot_alloc!(TyFnNode, TyRef::Fn);
 slot_alloc!(TyOptNode, TyRef::Opt);
 slot_alloc!(TyArrayNode, TyRef::Array);
 slot_alloc!(TyTupleNode, TyRef::Tuple);
-slot_alloc!(TyConstNode, TyRef::Const);
 slot_alloc!(TyUnionNode, TyRef::Union);

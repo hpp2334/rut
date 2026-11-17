@@ -6,8 +6,8 @@
 
 use crate::{
     BlockNode, BreakNode, ContinueNode, ElseBranch, ExprRef, ForCNode, ForOfNode, Handle, IfNode,
-    PatBinding, PatCtorNode, PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode, PathSeg,
-    ReturnNode, StmtRef, TyRef, WhenArmNode, WhenStmtNode, WhileNode,
+    PatElseNode, PatLitNode, PatPathNode, PatRef, PatWildNode, PathSeg, ReturnNode, StmtRef, TyRef,
+    WhenArmNode, WhenStmtNode, WhileNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
@@ -785,7 +785,6 @@ pub(crate) struct PatternFrame {
     stage: PatStage,
     segs: Vec<PathSeg>,
     genargs: Vec<TyRef>,
-    ctor_args: Vec<Option<PatBinding>>,
 }
 
 enum PatStage {
@@ -806,7 +805,6 @@ impl PatternFrame {
             stage: PatStage::Path,
             segs: Vec::new(),
             genargs: Vec::new(),
-            ctor_args: Vec::new(),
         }
     }
 
@@ -855,7 +853,7 @@ impl PatternFrame {
                 return Step::Pop(Done::Failed);
             };
             self.sp = self.sp.to(name.span);
-            if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args(true) {
+            if matches!(p.tok(), Tok::Lt) && p.scan_is_generic_args() {
                 p.bump();
                 self.stage = PatStage::GenArgs { seg_name: name };
                 return self.genargs_top(p);
@@ -880,70 +878,11 @@ impl PatternFrame {
     }
 
     fn path_end(&mut self, p: &mut Parser) -> Step {
-        if matches!(p.tok(), Tok::LParen) {
-            // constructor pattern: args are bindings or `_`
-            p.bump();
-            self.ctor_loop(p)
-        } else {
-            let segs = std::mem::take(&mut self.segs);
-            Step::Pop(Done::Pat(
-                PatPathNode {
-                    span: self.sp,
-                    segs,
-                }
-                .allocate(&mut p.ast),
-            ))
-        }
-    }
-
-    fn ctor_loop(&mut self, p: &mut Parser) -> Step {
-        loop {
-            let rp_sp = p.span();
-            if p.eat_punct(Tok::RParen) {
-                self.sp = self.sp.to(rp_sp);
-                return self.ctor_pop(p);
-            }
-            let arg_sp = p.span();
-            match p.tok().clone() {
-                Tok::Ident(b) if b == "_" => {
-                    p.bump();
-                    self.sp = self.sp.to(arg_sp);
-                    self.ctor_args.push(None);
-                }
-                Tok::Ident(b) => {
-                    let sp = p.bump().span;
-                    self.sp = self.sp.to(sp);
-                    self.ctor_args.push(Some(PatBinding {
-                        name: p.ast.intern(&b),
-                        name_span: sp,
-                    }));
-                }
-                _ => {
-                    let found = p.peek(0).describe();
-                    p.err_here(format!(
-                        "expected a binding name in a constructor pattern, found {found}"
-                    ));
-                    self.ctor_args.push(None);
-                    p.bump();
-                }
-            }
-            if !p.eat_punct(Tok::Comma) {
-                if let Some(sp) = p.expect(Tok::RParen) {
-                    self.sp = self.sp.to(sp);
-                }
-                return self.ctor_pop(p);
-            }
-        }
-    }
-
-    fn ctor_pop(&mut self, p: &mut Parser) -> Step {
         let segs = std::mem::take(&mut self.segs);
-        let args = std::mem::take(&mut self.ctor_args);
         Step::Pop(Done::Pat(
-            PatCtorNode {
+            PatPathNode {
                 span: self.sp,
                 segs,
-                args,
             }
             .allocate(&mut p.ast),
         ))

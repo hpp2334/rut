@@ -28,7 +28,7 @@ pub struct PathSeg {
     /// the segment ident token's own span (recorded at the match site —
     /// the classifier's position recovery used to token-walk for it)
     pub name_span: Span,
-    /// generic arguments — type slots (incl. const-generic `TyConst`)
+    /// generic arguments — type slots
     pub generics: Vec<crate::ast::ty::TyRef>,
 }
 
@@ -47,7 +47,6 @@ pub enum ExprRef {
     Binary(Handle<BinaryNode>),
     Assign(Handle<AssignNode>),
     Lambda(Handle<LambdaNode>),
-    Try(Handle<TryNode>),
     FStr(Handle<FStrNode>),
     Struct(Handle<StructLitNode>),
     Tuple(Handle<TupleNode>),
@@ -78,7 +77,6 @@ impl ExprRef {
             ExprRef::Binary,
             ExprRef::Assign,
             ExprRef::Lambda,
-            ExprRef::Try,
             ExprRef::FStr,
             ExprRef::Struct,
             ExprRef::Tuple,
@@ -197,13 +195,6 @@ pub struct LambdaNode {
     pub body: ExprRef,
 }
 
-/// postfix `?`
-#[derive(Clone, Debug)]
-pub struct TryNode {
-    pub span: Span,
-    pub expr: ExprRef,
-}
-
 impl Handle<BlockNode> {
     pub fn stmts(self, ctx: &crate::Ast) -> &[crate::ast::stmt::StmtRef] {
         &self.get(ctx).stmts
@@ -218,4 +209,3 @@ slot_alloc!(StructLitNode, ExprRef::Struct);
 slot_alloc!(ArrayLitNode, ExprRef::ArrayLit);
 slot_alloc!(ArrayRepeatNode, ExprRef::ArrayRepeat);
 slot_alloc!(LambdaNode, ExprRef::Lambda);
-slot_alloc!(TryNode, ExprRef::Try);

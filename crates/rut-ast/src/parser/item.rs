@@ -1698,23 +1698,6 @@ impl FnFrame {
     pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
         self.lo = item_lo(&self.modifiers, p.span().lo);
         p.bump(); // fn — the lo already covers a leading modifier
-                  // the postfix `async` spelling (`fn async f(..)`) — recorded
-                  // as the modifier it spells. The `async fn` prefix already
-                  // carries its own Async modifier, so `async fn async(..)`
-                  // keeps that `async` as the NAME (the old short-circuit)
-        if !self
-            .modifiers
-            .iter()
-            .any(|m| matches!(m.kind, ModKind::Async))
-            && p.at_kw("async")
-        {
-            let sp = p.span();
-            p.bump();
-            self.modifiers.push(ModifierNode {
-                span: sp,
-                kind: ModKind::Async,
-            });
-        }
         let Some(name) = p.expect_ident("a function name") else {
             return Step::Pop(Done::Failed);
         };
@@ -1961,13 +1944,6 @@ impl SurfaceFrame {
                 self.name = name;
                 self.stage = SuStage::Members;
                 Step::Push(Frame::TypeBody(TypeBodyFrame::new(BodyMode::HostStruct)))
-            }
-            Tok::Ident(k) if k == "class" => {
-                p.err(
-                    p.span(),
-                    "`host class` is removed —declare `host fn`s and wrap native state in a rut `class` over `opaque`",
-                );
-                Step::Pop(Done::Failed)
             }
             _ => {
                 let found = p.peek(0).describe();

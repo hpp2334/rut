@@ -153,7 +153,6 @@ arenas! {
     binaries: crate::ast::expr::BinaryNode,
     assigns: crate::ast::expr::AssignNode,
     lambdas: crate::ast::expr::LambdaNode,
-    tries: crate::ast::expr::TryNode,
     fstrs: crate::ast::expr::FStrNode,
     struct_lits: crate::ast::expr::StructLitNode,
     tuples: crate::ast::expr::TupleNode,
@@ -171,12 +170,10 @@ arenas! {
     ty_opts: crate::ast::ty::TyOptNode,
     ty_arrays: crate::ast::ty::TyArrayNode,
     ty_tuples: crate::ast::ty::TyTupleNode,
-    ty_consts: crate::ast::ty::TyConstNode,
     ty_unions: crate::ast::ty::TyUnionNode,
     // patterns
     pat_lits: crate::ast::pat::PatLitNode,
     pat_paths: crate::ast::pat::PatPathNode,
-    pat_ctors: crate::ast::pat::PatCtorNode,
     pat_wilds: crate::ast::pat::PatWildNode,
     pat_elses: crate::ast::pat::PatElseNode,
     // arms + recovery

@@ -1513,7 +1513,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                 self.scan_names_expr(n.value, out);
             }
             ExprRef::Lambda(h) => self.scan_names_expr(h.get(self.ctx.ast).body, out),
-            ExprRef::Try(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
             ExprRef::Await(h) => self.scan_names_expr(h.get(self.ctx.ast).expr, out),
             ExprRef::FStr(h) => {
                 for p in h.get(self.ctx.ast).parts.clone() {
@@ -1751,9 +1750,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
             }
             ExprRef::Lambda(h) => {
                 self.walk_capture_law_expr(h.get(self.ctx.ast).body, true, assigned, captured)
-            }
-            ExprRef::Try(h) => {
-                self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)
             }
             ExprRef::Await(h) => {
                 self.walk_capture_law_expr(h.get(self.ctx.ast).expr, inside, assigned, captured)

@@ -428,7 +428,6 @@ pub(crate) fn expr_children(ast: &Ast, e: ExprRef) -> Vec<ExprRef> {
             out.push(d.idx);
         }
         ExprRef::Unary(h) => out.push(h.get(ast).expr),
-        ExprRef::Try(h) => out.push(h.get(ast).expr),
         ExprRef::Await(h) => out.push(h.get(ast).expr),
         ExprRef::Binary(h) => {
             let d = h.get(ast);

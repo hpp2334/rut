@@ -233,10 +233,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                         }
                         self.emit(Op::Not { dst, a: src }, sp.lo);
                     }
-                    BitNot => {
-                        self.ctx.err(sp, "`~` is not supported in this build");
-                        return Err(());
-                    }
                 }
                 Ok(t)
             }
@@ -261,14 +257,6 @@ impl<'a, 'b> FnCompiler<'a, 'b> {
                     (n.params.clone(), n.ret, n.body)
                 };
                 self.compile_lambda(lh, params, ret, body, expected, sp)
-            }
-            ExprRef::Try { .. } => {
-                // `?` was Result-syntax: removed with the sums
-                self.ctx.err(
-                    sp,
-                    "`?` was removed — errors are `(T, err)` records; test the second element",
-                );
-                Err(())
             }
             ExprRef::Await(ah) => {
                 // the landing: the await expansion runs inside

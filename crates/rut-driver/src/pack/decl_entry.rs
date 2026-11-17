@@ -429,7 +429,7 @@ fn ty_ast_text(ast: &Ast, t: TyRef) -> String {
             .map(|&e| ty_ast_text(ast, e))
             .collect::<Vec<_>>()
             .join(" | "),
-        TyRef::Const(_) | TyRef::Error(_) => String::new(),
+        TyRef::Error(_) => String::new(),
     }
 }
 
