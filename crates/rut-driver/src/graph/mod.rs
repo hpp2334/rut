@@ -10,7 +10,7 @@
 //!
 //! The dispatch is on the mounted [`MountedBody`]: a source body takes
 //! the compile path, a host body synthesizes its placeholder program,
-//! and a compiled body (a v5 bundle's decoded `.rutc`) is pushed after
+//! and a compiled body (a bundle's decoded `.rutc`) is pushed after
 //! a fresh-scope rebase of its packed ids.
 //!
 //! Programs are pushed in post-order, so the link order registers every

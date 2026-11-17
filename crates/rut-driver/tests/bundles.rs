@@ -411,7 +411,7 @@ fn the_declared_kind_dispatches_in_bundle_groups_too() {
 
 #[test]
 fn packs_the_dep_graph_and_loads_it_by_name() {
-    // a v5 bundle embeds the whole `[deps]` closure — linkable pkgs as
+    // a bundle embeds the whole `[deps]` closure — linkable pkgs as
     // compiled groups, host pkgs as source groups — and the loader
     // resolves groups by NAME (the deps' `path` keys are directory-time
     // only)
@@ -557,7 +557,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
 
 #[test]
 fn entry_keys_admit_identities_under_deps() {
-    // THE @-ADMISSION LAW (wire v11): a group's entries ride at
+    // THE @-ADMISSION LAW: a group's entries ride at
     // `deps/<name>@<fp16>/…` — `@` is not in the spec alphabet, so an
     // identity can never collide with a real package name, and the
     // entry-key law admits it inside the `deps/` component: the key

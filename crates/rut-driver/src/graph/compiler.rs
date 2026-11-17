@@ -163,7 +163,7 @@ impl<'a> GraphCompiler<'a> {
             }
         };
         match &module.body {
-            // a decoded `.rutc` (a v5 compiled bundle's payload): no
+            // a decoded `.rutc` (a compiled bundle's payload): no
             // compilation, no binding — ensure its deps (the pack-time
             // scope ledger names them), assign a fresh scope, rebase
             // the packed ids, push. `inline` is a source-shape flag and

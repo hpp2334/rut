@@ -327,9 +327,9 @@ fn the_registration_contract_speaks_the_path_spelling() {
 
 #[test]
 fn flat_host_pkgs_pack_byte_identically() {
-    // the back-compat guarantee: a flat host pkg writes NO rows entry
-    // — the bundle stays the two-entry shape, byte-deterministic (same
-    // input ⇒ same bytes), no version bump
+    // the writer's shape law: a flat host pkg (no mod children) writes
+    // NO rows entry — the bundle stays the two-entry shape,
+    // byte-deterministic (same input ⇒ same bytes)
     let dir = make_pkg(
         &scratch("flat"),
         &[

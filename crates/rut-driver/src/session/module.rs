@@ -26,7 +26,7 @@ pub enum MountedBody {
     /// pkg (a `.d.rut` surface parsed as its own unit):
     /// nothing to compile or run, but `rut dump` shows the AST.
     Source { text: String, is_decl: bool },
-    /// a decoded `.rutc` program (a v7 compiled bundle's payload): the
+    /// a decoded `.rutc` program (a compiled bundle's payload): the
     /// body already exists — the graph assigns it a fresh scope,
     /// rebases its packed ids, and pushes it. The loader's decode gate
     /// (version + surface verification) has passed.
@@ -127,8 +127,8 @@ impl HostRow {
     /// The FULL registration name — `pkg::path::name` (`myhost::net::connect`).
     /// The one source for the registration string: the synthesized
     /// surface's host ids and the expected-fns table both spell it
-    /// through here, and the flat rows are the `path = ""` case
-    /// (`myhost::name`) — byte-identical to the old shape.
+    /// through here; flat rows are the `path = ""` case — they spell
+    /// `pkg::name` (`myhost::name`).
     pub fn full_name(&self, pkg: &str) -> String {
         format!("{pkg}::{}", self.rel_name())
     }

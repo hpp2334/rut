@@ -405,9 +405,10 @@ pub(crate) fn walk_decoded(
 /// The rows lane: the archive's `rut.mods` entry at `prefix` — the
 /// additive envelope section carrying a package's module set as
 /// path-keyed source rows (`""` = the root source, `<path>` = each
-/// child). `Ok(None)` when the archive carries no rows entry — the old
-/// flat envelope (every published bundle to date), which loads
-/// unchanged. The mounted children ride the same declaration-driven
+/// child). `Ok(None)` when the archive carries no rows entry — the
+/// writer's shape law: a childless pkg packs flat (no `rut.mods`
+/// written), so a flat archive is root source only, nothing to
+/// mount. The mounted children ride the same declaration-driven
 /// mount a directory would; a carried-but-undeclared row is refused.
 fn rows_body(entries: &[(String, Vec<u8>)], prefix: &str) -> Result<Option<ModHead>, String> {
     let key = bundle_key(&format!("{prefix}{ROWS_NAME}"))?;
@@ -424,8 +425,9 @@ fn rows_body(entries: &[(String, Vec<u8>)], prefix: &str) -> Result<Option<ModHe
 /// "host"` pkg's decl tree — `""` is the root `.d.rut`, `<path>` each
 /// child, mounted with the Decl flavor (`mod.d.rut` spellings) and
 /// read back as the mounted tree the lowering takes. `Ok(None)` when
-/// the archive carries no rows entry — a flat host bundle (the shape
-/// every pre-`mod` host pack has), which loads exactly as it did.
+/// the archive carries no rows entry — the writer's shape law: a
+/// childless host pkg packs flat (no `rut.mods` written), the root
+/// surface only.
 fn decl_rows_body(entries: &[(String, Vec<u8>)], prefix: &str) -> Result<Option<ModHead>, String> {
     let key = bundle_key(&format!("{prefix}{ROWS_NAME}"))?;
     let text = match read_entry(entries, &key) {

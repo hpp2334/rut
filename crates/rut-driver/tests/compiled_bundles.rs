@@ -301,7 +301,7 @@ fn same_dir_packs_byte_identical() {
     let root = mixed_world("det");
     let a = pack_dir(&root.join("app")).unwrap();
     let b = pack_dir(&root.join("app")).unwrap();
-    assert_eq!(a, b, "same dir => byte-identical v5 bundle");
+    assert_eq!(a, b, "same dir => byte-identical bundle");
 }
 
 /// Owner-anchored instantiation retired the generic-export and

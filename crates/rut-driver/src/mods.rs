@@ -25,9 +25,9 @@
 //!   (resolution/visibility) gates on.
 //! - the `rut.mods` rows codec — the bundle envelope's additive
 //!   section: a package's module set as path-keyed source rows
-//!   (`""` = root, `"layout"` = child). A package with no mod children
-//!   writes no rows entry (byte-identical pack, the freshness gate
-//!   proves it); the reader accepts the old flat envelope unchanged.
+//!   (`""` = root, `"layout"` = child). The writer's shape law: a pkg
+//!   with no mod children writes no `rut.mods` entry (byte-identical
+//!   pack, the freshness gate proves it).
 //!
 //! No fs, no net, no `Path` — the crate purity law. The FS probes live
 //! in rut-native's walk; the archive reads in the loader.

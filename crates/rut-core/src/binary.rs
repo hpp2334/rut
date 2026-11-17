@@ -207,8 +207,7 @@ pub const MARKER_CONSTRUCTOR: u8 = 3;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeTy {
     /// `Opaque` — the erasure box; a boot-table type whose
-    /// name is ambient like the other builtins (the `opaque` surface
-    /// spelling aliases it until the phase-2 interner rename)
+    /// name is ambient like the other builtins
     Opaque,
     /// `StackTrace` — the engine snapshot (err-channel phase
     /// 2): a boot-table type whose members are the engine-builtins
@@ -355,12 +354,11 @@ pub struct Surface {
 
 /// The core prelude function names, in surface order —
 /// well-known symbols, so the ids are meaningful in every interner.
-/// (`downcast` is no longer a declared prelude fn — builtin-surface
-/// phase 1 folded it into the `opaque` primitive's `downcast` member;
-/// rut-lir still lowers the free spelling as a phase-1 alias until the
-/// phase-2 sweep retires the call sites. `assert` is likewise no
-/// longer declared — it is plain rut code over `panic` now, and the
-/// bare spelling is an ordinary unknown name.)
+/// (Exactly three: `panic`, `string_join`, `capture_stacktrace` —
+/// `downcast` rides the `opaque` primitive's `downcast<T>` member and
+/// the `opaque::downcast<T>` static, and `assert` is plain rut code
+/// over `panic` — a bare `assert` spelling is an ordinary unknown
+/// name.)
 pub const CORE_FNS: &[IdentId] = &[sym::PANIC, sym::STRING_JOIN, sym::CAPTURE_STACKTRACE];
 
 impl Surface {

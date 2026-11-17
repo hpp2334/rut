@@ -5,8 +5,8 @@
 //! as given) and reads archives back verbatim: central-directory
 //! order, CRC verified in-read, every entry riding through — the
 //! layer has no opinion on names. The format's policy (which names
-//! are legal, which methods v1 accepts, how far back the zip64
-//! refusal reaches) lives one layer up, in `container`.
+//! are legal, which methods the format accepts, how far back the
+//! zip64 refusal reaches) lives one layer up, in `container`.
 
 use std::io::{Cursor, Read, Write};
 

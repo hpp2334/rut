@@ -346,7 +346,7 @@ entry fn go() -> i64 {
     assert_eq!(got, 42, "the request compiled in the owner; identity holds");
 }
 
-/// The packaged owner: a v5 bundle whose generic lib rides COMPILED.
+/// The packaged owner: a bundle whose generic lib rides COMPILED.
 /// The pack walk seeds the consumer's instantiation into the lib's
 /// binary; a later consumer session resolves its request against the
 /// binary's ledger. A request the binary does not carry refuses loudly.

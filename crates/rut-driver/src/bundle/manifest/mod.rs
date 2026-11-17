@@ -640,9 +640,10 @@ mod tests {
 
     #[test]
     fn the_repealed_entry_keys_refuse_loudly() {
-        // THE REPEAL: the directory grammar refuses both keys, each
+        // THE REPEAL: the directory grammar refuses all three keys, each
         // naming the fix — the root module is `mod.rut`; structure
-        // lives in `mod` directories
+        // lives in `mod` directories; the compiled view derives from
+        // the surface
         let err = parse_manifest(r#"{"name": "x", "entry": {"lib": "./x.rut"}}"#).unwrap_err();
         assert_eq!(
             err.to_string(),
@@ -652,6 +653,11 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "entry.libs: repealed — structure lives in `mod` directories: each file becomes `NAME/mod.rut` and the root declares `mod NAME;`"
+        );
+        let err = parse_manifest(r#"{"name": "x", "entry": {"ir": "./x.rutc"}}"#).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "entry.ir: repealed — the compiled view derives from the surface `entry.type` at pack time: drop the key"
         );
         // and the refusal fires even value-shaped wrong (the key's
         // existence is the crime, not its value)

@@ -1,5 +1,5 @@
-//! Source file-set tests: `collect_source_group` (the v4 group shape a
-//! splice-needed dep rides inside a v5 bundle), entry-name
+//! Source file-set tests: `collect_source_group` (the source group a
+//! splice-needed dep rides inside a bundle), entry-name
 //! normalization, and the string-keyed in-memory reader — the
 //! wasm/test shape of the dependency injection. The compiled-bundle
 //! pack/load round trips live in the sibling driver tests — this file

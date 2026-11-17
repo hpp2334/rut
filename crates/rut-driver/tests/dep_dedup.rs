@@ -73,7 +73,7 @@ fn load(rel: &str) -> Result<rut_driver::Walk, String> {
 }
 
 // ---------------------------------------------------------------------
-// content identity — the coexistence law (wire v11)
+// content identity — the coexistence law
 // ----------------------------------------------------------------------
 
 /// One util pkg whose manifest carries a distinguishing comment (the

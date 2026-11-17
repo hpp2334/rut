@@ -176,7 +176,7 @@ pub enum Op {
         dst: Reg,
         k: u32,
     },
-    /// raw scalar const (i64 bits / f64 bits / bool / char) — folded form
+    /// raw scalar const (i64 bits / f64 bits / bool) — folded form
     ConstRaw {
         dst: Reg,
         bits: u64,

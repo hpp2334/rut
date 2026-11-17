@@ -309,9 +309,7 @@ pub const PUSH_CODE: IdentId = IdentId(59);
 pub const FINISH: IdentId = IdentId(60);
 
 // the weak-reference surface: the `Weak<T>` builtin class
-// and its one member `upgrade()` (`docs/src/reference/weak-refs.md`). Well-known so every interner agrees
-// (the Weak name was previously reserved-by-absence — the M5 stub
-// diagnosed it; the weak batch gives it its real surface).
+// and its one member `upgrade()` (`docs/src/reference/weak-refs.md`)
 pub const WEAK: IdentId = IdentId(61);
 pub const UPGRADE: IdentId = IdentId(62);
 

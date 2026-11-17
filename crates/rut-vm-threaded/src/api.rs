@@ -82,23 +82,13 @@ pub const T_OWN: u8 = 62;
 pub const T_ARRNEW: u8 = 63;
 pub const T_ARRLIT: u8 = 64;
 pub const T_ENUMNEW: u8 = 65;
-pub const T_OPTSOME: u8 = 66;
-pub const T_OPTNONE: u8 = 67;
-pub const T_RESOK: u8 = 68;
-pub const T_RESERR: u8 = 69;
-pub const T_SUMIS: u8 = 70;
-pub const T_UNWRAP: u8 = 71;
-pub const T_UNWRAPOR: u8 = 72;
-pub const T_EXPECT: u8 = 73;
 pub const T_TIDOF: u8 = 74;
 pub const T_ISTYPE: u8 = 75;
-pub const T_ISTRAIT: u8 = 76;
+pub const T_ISIFACE: u8 = 76;
 pub const T_UNBOX: u8 = 77;
 pub const T_BOX: u8 = 78;
 pub const T_MAKECLOSURE: u8 = 79;
 pub const T_PANIC: u8 = 80;
-// 81 is RETIRED (T_ASSERT died with the `assert` builtin — never
-// re-meaninged, the same law as the wire's retired opcodes)
 pub const T_CONV: u8 = 82;
 pub const T_STRCODEAT: u8 = 83;
 pub const NTAGS: usize = 84;
@@ -170,7 +160,7 @@ pub fn tag_of(op: &Op) -> u8 {
         Op::EnumNew { .. } => T_ENUMNEW,
         Op::TidOf { .. } => T_TIDOF,
         Op::IsType { .. } => T_ISTYPE,
-        Op::IsIface { .. } => T_ISTRAIT,
+        Op::IsIface { .. } => T_ISIFACE,
         Op::Unbox { .. } => T_UNBOX,
         Op::Box { .. } => T_BOX,
         Op::MakeClosure { .. } => T_MAKECLOSURE,
@@ -1127,118 +1117,6 @@ pub trait Machine {
     /// engine's tag table guarantees the match) and `regs`/`pc` follow the
     /// register-file contract.
     unsafe fn op_enumnew(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_optsome(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_optnone(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_resok(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_reserr(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_sumis(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_unwrap(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_unwrapor(
-        &mut self,
-        op: &Op,
-        regs: *mut Self::Word,
-        pc: u32,
-    ) -> Result<Flow<Self::Out>, Self::Err> {
-        let _ = (op, regs, pc);
-        unimplemented!()
-    }
-    /// # Safety
-    ///
-    /// See the [`Machine`] trait docs: `op` must be this handler's op (the
-    /// engine's tag table guarantees the match) and `regs`/`pc` follow the
-    /// register-file contract.
-    unsafe fn op_expect(
         &mut self,
         op: &Op,
         regs: *mut Self::Word,

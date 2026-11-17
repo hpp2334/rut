@@ -1,4 +1,4 @@
-//! Content identity — the `deps/<name>@<fp16>/` law (wire v11). A
+//! Content identity — the `deps/<name>@<fp16>/` law. A
 //! package's identity is `name@<16 hex>` where fp16 is the first 16
 //! hex chars of sha256 over its own rode source set in fixed order
 //! (`rut.jsonc` + `mod.rut` + `mod.d.rut` + `rut.mods`, raw bytes,

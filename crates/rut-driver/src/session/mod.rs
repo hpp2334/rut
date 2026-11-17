@@ -58,7 +58,7 @@ use crate::bundle::{valid_mount_key, ManifestError};
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Session {
     modules: BTreeMap<String, Mounted>,
-    /// A mounted v7 compiled bundle's pack-time scope ledger (scope →
+    /// A mounted compiled bundle's pack-time scope ledger (scope →
     /// the spec that owned it when the closure was packed, engine
     /// mounts included). A decoded program's foreign ids spell these
     /// pack-time scopes; the graph's compiled-mount arm resolves each
@@ -277,7 +277,7 @@ impl Session {
         ctx
     }
 
-    /// Record one row of a v7 bundle's pack-time scope ledger (the
+    /// Record one row of a compiled bundle's pack-time scope ledger (the
     /// loader reads every row of `rut.scopes` at mount).
     pub(crate) fn record_bundle_scope(&mut self, scope: rut_core::id::ScopeId, spec: &str) {
         self.bundle_scopes.insert(scope, spec.to_string());

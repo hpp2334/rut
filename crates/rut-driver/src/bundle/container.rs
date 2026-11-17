@@ -3,15 +3,16 @@
 //! reference lives at `docs/src/reference/bundles.md`). The archive
 //! mechanics live in [`super::zip`] (the community `zip` crate behind
 //! a thin layer); this module is the format's POLICY: which entries
-//! may ride, which methods v1 accepts, and where the zip64 refusal
-//! sits — the crate reads zip64 transparently, v1 refuses it.
+//! may ride, which methods the format accepts, and where the zip64
+//! refusal sits — the crate reads zip64 transparently, the bundle
+//! lane refuses it.
 //!
 //! **Write** is deterministic: fixed entry order as given, STORE
 //! entries, the 1980-01-01 (DOS epoch) timestamp, no extra fields,
 //! no zip64 — same input ⇒ byte-identical output, so bundles are
-//! content-cacheable. The subset acceptance rules (what a v1 reader
-//! owes: the zip essentials, nothing richer) are the other half of
-//! the contract.
+//! content-cacheable. The subset acceptance rules (what a bundle
+//! reader owes: the zip essentials, nothing richer) are the other
+//! half of the contract.
 //!
 //! **Read** accepts what we write plus the zip essentials: the central
 //! directory is the index, each entry's CRC-32 is verified, and anything
@@ -87,7 +88,7 @@ pub fn parse_bundle(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>, BundleError> 
     let cd_size = get32(data, eocd + 12).unwrap_or(0);
     let cd_offset = get32(data, eocd + 16).unwrap_or(0);
     if n == 0xFFFF || cd_size == u32::MAX || cd_offset == u32::MAX {
-        return Err(BundleError("zip64 bundles are not supported in v1".into()));
+        return Err(BundleError("zip64 bundles are not supported".into()));
     }
     // the STORE-only law is POLICY here, not codec absence: the crate
     // may carry the deflate codec (the source-zip reader needs it for
@@ -97,7 +98,7 @@ pub fn parse_bundle(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>, BundleError> 
     for (name, method) in zip::entry_methods(data).map_err(policy)? {
         if method != 0 {
             return Err(BundleError(format!(
-                "bundle entry `{name}` uses compression method {method} — v1 bundles are STORE-only"
+                "bundle entry `{name}` uses compression method {method} — bundles are STORE-only"
             )));
         }
     }
@@ -115,7 +116,7 @@ fn policy(e: ZipLayerError) -> BundleError {
             "corrupt bundle: entry `{name}` fails its CRC-32 check"
         )),
         ZipLayerError::UnsupportedMethod { name, method } => BundleError(format!(
-            "bundle entry `{name}` uses compression method {method} — v1 bundles are STORE-only"
+            "bundle entry `{name}` uses compression method {method} — bundles are STORE-only"
         )),
         ZipLayerError::Corrupt(what) => BundleError(format!("corrupt bundle: {what}")),
     }
@@ -184,8 +185,8 @@ mod tests {
 
     #[test]
     fn zip64_sentinels_are_refused() {
-        // a bundle whose EOCD carries the zip64 sentinel fields is a
-        // v1 refusal even though the zip crate would read it fine
+        // a bundle whose EOCD carries the zip64 sentinel fields is
+        // refused even though the zip crate would read it fine
         let mut bytes = write_bundle(&[("x.rut".to_string(), b"hi".to_vec())]).unwrap();
         let eocd = bytes
             .windows(4)
@@ -194,7 +195,7 @@ mod tests {
         let cd_offset_at = eocd + 16;
         bytes[cd_offset_at..cd_offset_at + 4].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
         let err = parse_bundle(&bytes).unwrap_err();
-        assert_eq!(err.0, "zip64 bundles are not supported in v1");
+        assert_eq!(err.0, "zip64 bundles are not supported");
     }
 
     #[test]

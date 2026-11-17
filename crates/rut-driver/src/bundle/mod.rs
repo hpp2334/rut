@@ -1,7 +1,7 @@
 //! The `.rutbundle` container — one module owns the whole format:
 //! the container codec ([`container`]), the manifest grammar
 //! ([`manifest`]), the entry-key helpers ([`files`]), and the reader
-//! ([`read`], whose [`read::Layout`] is the v5 compiled view).
+//! ([`read`], whose [`read::Layout`] is the compiled view).
 //!
 //! **The module never touches the filesystem.** Everything is pure:
 //! bytes in, values out. The file-reading half of the format — the

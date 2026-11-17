@@ -257,11 +257,11 @@ fn the_default_root_packs_and_loads_back() {
 
 #[test]
 fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
-    // THE CANONICAL SURFACE LAW (wire v11, unchanged): a manifest
+    // THE CANONICAL SURFACE LAW: a manifest
     // spelling `entry.type` keeps the DIRECTORY key (the directory
     // grammar is untouched) — but the archive canonicalizes: the ONE
     // consolidated entry rides as `mod.d.rut`, whatever the directory
-    // spelled. The override lane is gone; the reader mounts `mod.d.rut`
+    // spelled. The reader mounts `mod.d.rut`
     // at both levels.
     let dir = make_pkg(
         &scratch("old-shape"),

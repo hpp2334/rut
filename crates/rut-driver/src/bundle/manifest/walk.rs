@@ -164,8 +164,8 @@ pub(super) fn walk_top_lane(
 
 /// The `entry` object. The post-repeal grammar keeps only `type` (the
 /// `.d.rut` surface): the root module is `mod.rut` beside the manifest
-/// and the body keys refuse LOUDLY, naming the fix. The retired
-/// `entry.ir` rides; unknown keys are refused (the entry strictness).
+/// and the body keys refuse LOUDLY, naming the fix. Unknown keys are
+/// refused (the entry strictness).
 pub(super) fn walk_entry(value: &Value, m: &mut Manifest) -> Result<(), ManifestError> {
     let table = expect_object("entry", value)?;
     for (key, v) in table {
@@ -188,7 +188,13 @@ pub(super) fn walk_entry(value: &Value, m: &mut Manifest) -> Result<(), Manifest
                         .into(),
                 ));
             }
-            "ir" => {}
+            "ir" => {
+                return Err(ManifestError(
+                    "entry.ir: repealed — the compiled view derives from the surface \
+                     `entry.type` at pack time: drop the key"
+                        .into(),
+                ));
+            }
             other => {
                 return Err(ManifestError(format!("entry: unknown key '{other}'")));
             }

@@ -304,8 +304,7 @@ impl Layout {
             }
         }
         // the surface entry: `mod.d.rut` beside the manifest — the ONE
-        // canonical name (wire v11 canonicalizes `entry.type`'s
-        // directory spelling; the override lane is gone)
+        // canonical name for a host bundle's root surface
         let surface = bundle.read(crate::decl::DECL_CHILD_FILE).map_err(|_| {
             "a host bundle's root is `mod.d.rut` beside the manifest — no such entry".to_string()
         })?;

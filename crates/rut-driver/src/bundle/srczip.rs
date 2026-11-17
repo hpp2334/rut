@@ -50,7 +50,8 @@ pub struct SrcZipError(pub String);
 /// file set the unpacker lays down verbatim.
 pub fn read_srczip(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>, SrcZipError> {
     // the zip64 gate is OURS — the same sentinel scan the bundle
-    // policy runs: the crate reads zip64 transparently, v1 refuses
+    // policy runs: the crate reads zip64 transparently, this reader
+    // refuses
     if !has_eocd(data) {
         return Err(SrcZipError(
             "not a zip archive (no end-of-central-directory)".into(),
@@ -70,9 +71,7 @@ pub fn read_srczip(data: &[u8]) -> Result<Vec<(String, Vec<u8>)>, SrcZipError> {
         let cd_size = get32(data, at + 12).unwrap_or(0);
         let cd_offset = get32(data, at + 16).unwrap_or(0);
         if n == 0xFFFF || cd_size == u32::MAX || cd_offset == u32::MAX {
-            return Err(SrcZipError(
-                "zip64 source zips are not supported in v1".into(),
-            ));
+            return Err(SrcZipError("zip64 source zips are not supported".into()));
         }
     }
     // the method gate runs BEFORE any payload decodes: this reader

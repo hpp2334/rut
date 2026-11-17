@@ -1645,7 +1645,7 @@ pub(crate) fn offer_dir(
 /// **decl** bundle (a `type = "host"` root: the declaration surface
 /// mounts as the pkg's host rows — the same lane a host group rides).
 /// One wire number, the manifest's `type` routes. The gate order is
-/// the law: container CRC, manifest + exact `format_version` (11 —
+/// the law: container CRC, manifest + exact `format_version` (12 —
 /// anything else refuses with the one re-pack recipe), then each
 /// kind's payload checks — then, and only then, the mount. Refuse,
 /// never guess. The walk itself is the driver's PURE container
@@ -1662,9 +1662,9 @@ pub fn load_bundle_session(path: &Path) -> Result<Walk, RunError> {
 // ---------------------------------------------------------------------
 
 /// Read one module source file. The language has no include form to
-/// expand (use paths are inter-module) — but a module may
-/// be AUTHORED as several files: the loader splices `entry.libs` into
-/// one source, which is assembly, not expansion.
+/// expand (use paths are inter-module) — a module's structure lives
+/// in `mod` directories (the root declares `mod NAME;`), each file
+/// read as its own unit: no splice, no expansion.
 pub fn load_module_source(path: &Path) -> Result<String, LoadError> {
     std::fs::read_to_string(path).map_err(|e| LoadError::io(path.display(), e))
 }
