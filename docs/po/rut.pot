@@ -11102,8 +11102,8 @@ msgstr ""
 #: src/reference/modules-and-visibility.md:308
 msgid ""
 "`const x = e;` — the **opt-out**: a _const binding_ refuses the binding's "
-"own reassignment, diagnosing `cannot reassign 'x' — a 'const' binding is not "
-"reassignable`."
+"own reassignment, diagnosing ``cannot reassign `x` — a `const` binding is "
+"not reassignable``."
 msgstr ""
 
 #: src/reference/modules-and-visibility.md:312

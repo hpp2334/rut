@@ -114,6 +114,10 @@ impl<T: NodeStore> Handle<T> {
 /// slot-returning construction: `XNode { .. }.allocate(&mut ast)`
 /// lands the node in its arena and hands back its slot. Every node
 /// knows its own slot — one call, slot out.
+///
+/// The generated method stays `pub(crate)` on purpose: it rides a
+/// publicly re-exported type, so visibility is the method's own
+/// marker, not the (sealed) module's.
 macro_rules! slot_alloc {
     ($ty:ty, $slot:ident :: $var:ident) => {
         impl $ty {
@@ -128,6 +132,12 @@ pub(crate) use slot_alloc;
 /// handle-returning construction for closed slots (BlockNode bodies,
 /// WhenArmNode arms — positions that hold exactly one kind and never
 /// an Error).
+///
+/// Same laws as `slot_alloc`: the macro's own re-export chain keeps
+/// `pub(crate)` (a macro_rules definition is module-private, so `pub`
+/// is not a legal spelling), and the generated method keeps its own
+/// `pub(crate)` — visibility rides the re-exported type, not the
+/// sealed module.
 macro_rules! plain_alloc {
     ($ty:ty) => {
         impl $ty {

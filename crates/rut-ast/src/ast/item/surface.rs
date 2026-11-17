@@ -22,7 +22,7 @@ pub enum Linkage {
 
 /// the spelled surface linkage — the surface accessors' shared
 /// derivation (`Linkage::Host` when no linkage modifier is present)
-pub(crate) fn item_linkage(modifiers: &[ModifierNode]) -> Linkage {
+pub fn item_linkage(modifiers: &[ModifierNode]) -> Linkage {
     for m in modifiers {
         match m.kind {
             ModKind::Host => return Linkage::Host,
@@ -35,7 +35,7 @@ pub(crate) fn item_linkage(modifiers: &[ModifierNode]) -> Linkage {
 
 /// the spelled ambient gate — `prelude builtin` (ambient); the surface
 /// accessors' shared derivation (`false` = a plain or import-gated decl)
-pub(crate) fn item_ambient(modifiers: &[ModifierNode]) -> bool {
+pub fn item_ambient(modifiers: &[ModifierNode]) -> bool {
     modifiers
         .iter()
         .any(|m| matches!(m.kind, ModKind::Builtin { ambient: true }))

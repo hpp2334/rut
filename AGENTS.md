@@ -30,7 +30,10 @@ this). Nobody outside `rut-ast`'s `parser` module drives
   dump), `src/parser/` is the grammar (the frame machine, the entry
   pair, keyword tables). They co-change on every syntax edit, so they
   live together; the halves stay nameable so the layer law below can
-  forbid reaching into the grammar from read-only lanes.
+  forbid reaching into the grammar from read-only lanes. The `ast`
+  module is a sealed `mod` (the same privacy wall as rut-lsp's
+  `semantic`), so the tree vocabulary is reachable ONLY through the
+  flat crate-root re-exports.
 - **The AST artifact law (v3)**: `Ast` stores PURE STRUCTURE — the
   nodes and nothing else; it holds NO src and no text. The artifact is
   the PAIR `Parsed { ast, src }` — `src` is the NORMALIZED text every

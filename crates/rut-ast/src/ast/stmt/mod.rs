@@ -85,7 +85,7 @@ pub struct LetStmtNode {
     pub is_const: bool,
     pub name: IdentId,
     pub name_span: Span,
-    /// `let (a, b) = ..` — tuple destructuring (name_span is names[0]'s)
+    /// `let (a, b) = ..` — tuple destructuring (name_span is names\[0]'s)
     pub destructure: Option<Vec<IdentId>>,
     pub ty: Option<TyRef>,
     pub init: ExprRef,

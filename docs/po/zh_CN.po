@@ -11315,9 +11315,9 @@ msgstr "`let x = e;`——**可变绑定**，普通的形状。"
 
 #: src/reference/modules-and-visibility.md:308
 msgid ""
-"`const x = e;` — the **opt-out**: a _const binding_ refuses the binding's own reassignment, diagnosing `cannot reassign 'x' — a 'const' binding is not reassignable`."
+"`const x = e;` — the **opt-out**: a _const binding_ refuses the binding's own reassignment, diagnosing ``cannot reassign `x` — a `const` binding is not reassignable``."
 msgstr ""
-"`const x = e;`——**退出选择**：一个_常量绑定_拒绝绑定自身的重新赋值，诊断为 `cannot reassign 'x' — a 'const' binding is not reassignable`。"
+"`const x = e;`——**退出选择**：一个_常量绑定_拒绝绑定自身的重新赋值，诊断为 ``cannot reassign `x` — a `const` binding is not reassignable``。"
 
 
 #: src/reference/modules-and-visibility.md:312

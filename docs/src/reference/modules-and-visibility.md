@@ -307,7 +307,7 @@ there is no `mut` parameter spelling to grant it.
 - `let x = e;` — a **mutable binding**, the ordinary shape.
 - `const x = e;` — the **opt-out**: a *const binding* refuses the
   binding's own reassignment, diagnosing
-  `cannot reassign 'x' — a 'const' binding is not reassignable`.
+  ``cannot reassign `x` — a `const` binding is not reassignable``.
 
 **The const opt-out is shallow — reassignment only.** It gates the one
 operation that rebinds the name: `x = ...` on a const binding errors.

@@ -112,7 +112,7 @@ impl ModifierNode {
 
 /// the spelled item visibility — `Vis::Self_` (module-private) when
 /// unannotated; the item accessors' shared derivation
-pub(crate) fn item_vis(modifiers: &[ModifierNode]) -> Vis {
+pub fn item_vis(modifiers: &[ModifierNode]) -> Vis {
     modifiers
         .iter()
         .find_map(ModifierNode::vis)
@@ -120,7 +120,7 @@ pub(crate) fn item_vis(modifiers: &[ModifierNode]) -> Vis {
 }
 
 /// spelled `async`? — the item accessors' shared derivation
-pub(crate) fn item_is_async(modifiers: &[ModifierNode]) -> bool {
+pub fn item_is_async(modifiers: &[ModifierNode]) -> bool {
     modifiers.iter().any(|m| matches!(m.kind, ModKind::Async))
 }
 

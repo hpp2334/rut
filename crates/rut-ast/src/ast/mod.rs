@@ -1,11 +1,16 @@
 //! The typed-arena AST — the tree half of the crate.
 //!
 //! THE CONTRACT (see AGENTS.md):
+//! - this module is SEALED (`mod ast;` at the crate root — the same
+//!   privacy wall as rut-lsp's `semantic`): the vocabulary is
+//!   reachable only through the flat re-exports below (which the
+//!   crate root globs), never an `ast::` module path
 //! - every node kind is its own struct; span + name_span + doc live
 //!   IN the node (D1); per-kind private arenas (D2)
 //! - `Ast` is a CAPSULE: plain mut doors for the parse lane
 //!   (`new`/`intern`/`set_root`/`alloc`/`set_errors` — `pub(crate)`:
-//!   the parse lane lives in this crate), reads
+//!   they are methods on a publicly re-exported type, so the marker
+//!   itself is the enforcement), reads
 //!   (`root`/`name`/`errors`/`is_clean`) — behavior binds to
 //!   nodes/handles with the store as ctx (D4/D5)
 //! - `Ast` holds NO src — `Parsed { ast, src }` is the pair artifact;
@@ -34,8 +39,12 @@ pub use doc::{CommentData, DocData};
 pub use error::ErrorNode;
 pub use handle::{Arena, Handle, NodeStore};
 pub use store::Ast;
-// the construction macros ride the same chain (crate-root reachable,
-// crate-only visible — the capsule's allocation lane)
+// the construction macros ride the same chain (crate-root reachable
+// via the root gate, crate-only visible — the capsule's allocation
+// lane). The marker here is LOAD-BEARING, not redundant: macro_rules
+// items are module-private at definition (no vis syntax), so a `pub
+// use` binding of one caps at pub(crate) and E0364 refuses the `pub`
+// spelling — the seal alone cannot publicize this chain.
 pub(crate) use handle::{plain_alloc, slot_alloc, slot_span};
 pub use rut_core::IdentId;
 pub use rut_lexer::span::Span;
