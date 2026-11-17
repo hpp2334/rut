@@ -582,25 +582,6 @@ pub fn index_items(
                     line: line_of(src, span.lo),
                 });
             }
-            ItemRef::ModInline(h) => {
-                let d = h.get(ast);
-                // the declaration entry's inline module — the SAME
-                // namespace edge; the nested declarations index into the
-                // child module's own (mod-path-stamped) index, built by
-                // the deps lane's one-parse splitter
-                idx.mods.push(ModDef {
-                    name: ast.name(d.name).to_string(),
-                    name_span: Some(d.name_span),
-                    vis: d.vis(),
-                    // the edge as spelled (span law v3.1 starts the
-                    // item at its first modifier), the trailing `;`
-                    // trimmed: render never re-synthesizes
-                    src: decl_src(src, span),
-                    doc: doc_of(&d.doc, src),
-                    span,
-                    line: line_of(src, span.lo),
-                });
-            }
             // the root module never rides an items list; an Error slot
             // renders no rows (errors are the panel's business)
             ItemRef::Module(_) | ItemRef::Error(_) => {}

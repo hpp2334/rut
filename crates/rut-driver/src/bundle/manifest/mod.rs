@@ -296,10 +296,10 @@ mod tests {
         // the bundle reader gates on it — so the one grammar parses it
         // (fields on `Manifest`); the retired `consts` table refuses
         // loudly, naming the fix
-        let m = parse_manifest(r#"{"format": "rutbundle", "format_version": 12, "name": "x"}"#)
+        let m = parse_manifest(r#"{"format": "rutbundle", "format_version": 13, "name": "x"}"#)
             .unwrap();
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
-        assert_eq!(m.format_version, Some(12));
+        assert_eq!(m.format_version, Some(13));
         let err = parse_manifest(r#"{"consts": 1}"#).unwrap_err();
         assert!(err.to_string().starts_with("consts: retired"), "{err}");
     }
@@ -423,13 +423,13 @@ mod tests {
         // it (fields on `Manifest`), on a host manifest and a lib
         // manifest alike; a directory manifest carrying the pair is
         // unusual but harmless and legal
-        let text = r#"{"format": "rutbundle", "format_version": 12, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#;
+        let text = r#"{"format": "rutbundle", "format_version": 13, "name": "h", "type": "host", "entry": {"type": "./h.d.rut"}}"#;
         let m = parse_manifest(text).unwrap();
         assert_eq!(m.pkg_type, PkgType::Host);
         assert_eq!(m.format.as_deref(), Some("rutbundle"));
-        assert_eq!(m.format_version, Some(12));
-        let m = parse_manifest(r#"{"format_version": 12, "name": "x"}"#).unwrap();
-        assert_eq!(m.format_version, Some(12));
+        assert_eq!(m.format_version, Some(13));
+        let m = parse_manifest(r#"{"format_version": 13, "name": "x"}"#).unwrap();
+        assert_eq!(m.format_version, Some(13));
     }
 
     #[test]
@@ -440,7 +440,7 @@ mod tests {
         // the manifest's)
         for table in ["deps", "dev-deps"] {
             let err = parse_manifest(&format!(
-                r#"{{"format": "rutbundle", "format_version": 12, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
+                r#"{{"format": "rutbundle", "format_version": 13, "name": "h", "type": "host", "entry": {{"type": "./h.d.rut"}}, "{table}": {{"ink": {{"path": "../ink"}}}}}}"#
             ))
             .unwrap_err();
             assert!(

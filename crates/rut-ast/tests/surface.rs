@@ -647,17 +647,13 @@ fn std_surface_parses_clean() {
 }
 
 #[test]
-fn inline_mod_blocks_parse_in_decl_files() {
-    // wire v12 — the declaration entry lane: `pub? mod NAME { .. }`
-    // nests declarations in the grammar (structure in the grammar,
-    // never in paths), recursively, and the block's items parse with
-    // their own spans so the deps lane can stamp mod paths from the
-    // nesting. Implementation files keep the refusal.
+fn inline_mod_blocks_refuse_in_both_modes() {
+    // wire 13 — ONE mod grammar, both modes: the inline
+    // `pub? mod NAME { .. }` block form is GONE from the grammar. A
+    // stray block is the ordinary ``expected `;` `` error — declaration
+    // file or implementation file alike, the same refusal parity.
     let src = "\
 pub mod net {
-    pub mod tls {
-        pub host fn handshake(c: opaque) -> opaque;
-    }
     pub host fn connect(url: str) -> opaque;
 }
 mod solo {
@@ -665,47 +661,32 @@ mod solo {
 }
 pub host fn legacy() -> bool;
 ";
-    let (ast, diags) = parse(src, Mode::Decl);
+    for mode in [Mode::Decl, Mode::Impl] {
+        let (_, diags) = parse(src, mode);
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.msg.contains("expected ;, found `{`")),
+            "{mode:?} files refuse the block form with the ordinary error: {diags:?}"
+        );
+    }
+
+    // the file-form edge is the one spelling, both modes
+    let (ast, diags) = parse("mod gone;\npub mod net;\n", Mode::Decl);
     assert!(diags.is_empty(), "expected a clean parse: {diags:?}");
     let items = ast.root().items(&ast);
-    assert_eq!(items.len(), 3);
-    let ItemRef::ModInline(nh) = items[0] else {
-        panic!("expected a ModInline, got {:?}", items[0]);
+    assert_eq!(items.len(), 2);
+    let ItemRef::ModDecl(nh) = items[0] else {
+        panic!("expected a ModDecl, got {:?}", items[0]);
     };
-    let net = nh.get(&ast);
-    assert_eq!(net.vis(), Vis::Pub);
-    assert_eq!(ast.name(net.name), "net");
-    assert_eq!(
-        net.items.len(),
-        2,
-        "the nested edge + the row: {:?}",
-        net.items
-    );
-    let ItemRef::ModInline(th) = net.items[0] else {
-        panic!("expected the nested ModInline, got {:?}", net.items[0]);
+    let gone = nh.get(&ast);
+    assert_eq!(ast.name(gone.name), "gone");
+    assert_eq!(gone.vis(), Vis::Self_);
+    let ItemRef::ModDecl(ph) = items[1] else {
+        panic!("expected a ModDecl, got {:?}", items[1]);
     };
-    let tls = th.get(&ast);
-    assert_eq!(ast.name(tls.name), "tls");
-    assert_eq!(tls.items.len(), 1);
-    let ItemRef::SurfaceFn(hh) = tls.items[0] else {
-        panic!("expected the nested row, got {:?}", tls.items[0]);
-    };
-    assert_eq!(ast.name(hh.get(&ast).name), "handshake");
-    let ItemRef::SurfaceFn(ch) = net.items[1] else {
-        panic!("expected the level-one row, got {:?}", net.items[1]);
-    };
-    assert_eq!(ast.name(ch.get(&ast).name), "connect");
-
-    // the file-form edge still parses beside inline blocks, and the
-    // inline form is DECL-ONLY — in an implementation file the stray
-    // block is the ordinary error
-    let (_, diags) = parse("mod gone { }", Mode::Impl);
-    assert!(
-        diags
-            .iter()
-            .any(|d| d.msg.contains("expected ;, found `{`")),
-        "implementation files keep the refusal: {diags:?}"
-    );
+    assert_eq!(ast.name(ph.get(&ast).name), "net");
+    assert_eq!(ph.get(&ast).vis(), Vis::Pub);
 }
 
 #[test]

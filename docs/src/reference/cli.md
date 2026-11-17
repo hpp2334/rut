@@ -315,7 +315,7 @@ input, same bytes — in one of two modes:
 | mode | default out | what rides |
 |---|---|---|
 | `--mode source` (the default) | `<dir>.zip` | the **source zip** — the directory packed for travel: `rut.jsonc` at the archive root, the module tree under `src/`, and every dep embedded under `deps/<name>@<fp16>/` — a source dep as its own tree, a compiled dep (a `.rutbundle` url dep) as its `.rutbundle` file verbatim ([the source zip](bundles.md#the-source-zip--the-source-transport)) |
-| `--mode bin` | `<dir>.rutbundle` | the **compiled wire** ([module bundles](bundles.md)): a **lib** pkg packs **compiled** (format_version 12) — the root and every source dep ride as `mod.rutc` binaries (bodies + surface — the linking truth) under `deps/<name>@<fp16>/` identity directories, host pkgs (and declared deps whose unit did not link) ride as declaration file sets, and the scope ledger's rows spell the identities so any loader can rebase the binaries onto its own numbering |
+| `--mode bin` | `<dir>.rutbundle` | the **compiled wire** ([module bundles](bundles.md)): a **lib** pkg packs **compiled** (format_version 13) — the root and every source dep ride as `mod.rutc` binaries (bodies + surface — the linking truth) under `deps/<name>@<fp16>/` identity directories, host pkgs (and declared deps whose unit did not link) ride as declaration file sets, and the scope ledger's rows spell the identities so any loader can rebase the binaries onto its own numbering |
 
 `-o` overrides the default sibling output in both modes. A root that
 produces no compiled program — a `type = "host"` pkg — is refused in

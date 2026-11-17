@@ -7,10 +7,10 @@
 
 use crate::{
     AliasNode, BlockNode, BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, ClassNode, DocData,
-    EnumNode, FieldDeclNode, FieldRef, FnNode, Handle, IdentId, ImplNode, InterfaceNode, ItemRef,
-    Linkage, MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ModKind,
-    ModifierNode, ModuleLetNode, ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode,
-    SurfaceStructNode, TyRef, UseNode,
+    EnumNode, FieldDeclNode, FieldRef, FnNode, Handle, IdentId, ImplNode, InterfaceNode, Linkage,
+    MemberRef, MethodDeclNode, MethodRef, ModDeclNode, ModKind, ModifierNode, ModuleLetNode,
+    ParamNode, ParamRef, SelfParamNode, StructNode, SurfaceFnNode, SurfaceStructNode, TyRef,
+    UseNode,
 };
 use rut_lexer::span::Span;
 use rut_lexer::token::Tok;
@@ -300,18 +300,15 @@ impl UseFrame {
 // ---- mod decl ----
 
 /// `pub? mod NAME;` — a file-module DECLARATION: the body lives in the
-/// sibling `NAME/mod.rut`; the loader mounts it. In implementation
-/// files the inline `mod NAME { .. }` block form is gone — one
-/// mechanism, files only — and a stray block is the ordinary
-/// `expected `;`` error. In a DECLARATION file (`Mode::Decl`) the
-/// inline form IS legal and the block parses as a `ModInlineNode`.
+/// sibling `NAME/mod.rut` (a `.d.rut` tree: `NAME/mod.d.rut`); the
+/// loader mounts it. ONE mod grammar, both modes — the inline
+/// `mod NAME { .. }` block form is gone from the grammar, so a stray
+/// block is the ordinary ``expected `;` `` error, declaration file or
+/// implementation file alike.
 pub(crate) struct ModDeclFrame {
     modifiers: Vec<ModifierNode>,
     lo: u32,
     name: Name,
-    /// the inline form is out for its block (Decl mode): the frame
-    /// relays the inline module's item upward when it pops
-    inline: bool,
 }
 
 impl ModDeclFrame {
@@ -323,7 +320,6 @@ impl ModDeclFrame {
                 id: IdentId(0),
                 span: Span::new(0, 0),
             },
-            inline: false,
         }
     }
 
@@ -334,16 +330,6 @@ impl ModDeclFrame {
             return Step::Pop(Done::Failed);
         };
         self.name = name;
-        if p.mode == Mode::Decl && p.eat_punct(Tok::LBrace) {
-            // the inline declaration module: the frame collects the
-            // nested declarations (it consumed the `{` above); this
-            // frame stays underneath and relays its item
-            self.inline = true;
-            let (modifiers, lo, name) = (std::mem::take(&mut self.modifiers), self.lo, self.name);
-            return Step::Push(Frame::ModInline(ModInlineFrame::from_decl(
-                modifiers, lo, name,
-            )));
-        }
         p.expect(Tok::Semi);
         let node = with_doc!(
             p,
@@ -358,88 +344,8 @@ impl ModDeclFrame {
         Step::Pop(Done::Item(node.allocate(&mut p.ast)))
     }
 
-    pub(crate) fn absorb(&mut self, _p: &mut Parser, d: Done) -> Step {
-        if self.inline {
-            // the inline module popped — relay its item upward
-            match d {
-                Done::Item(i) => return Step::Pop(Done::Item(i)),
-                Done::Failed => return Step::Pop(Done::Failed),
-                _ => unreachable!("mod decl frame's inline child yields an item"),
-            }
-        }
+    pub(crate) fn absorb(&mut self, _p: &mut Parser, _d: Done) -> Step {
         unreachable!("mod decl frame pushes no children")
-    }
-}
-
-/// The inline declaration module's frame — `pub? mod NAME { <decls> }`
-/// in a `.d.rut` (Decl mode only). Declarations only, recursively.
-pub(crate) struct ModInlineFrame {
-    modifiers: Vec<ModifierNode>,
-    lo: u32,
-    name: Name,
-    items: Vec<ItemRef>,
-    /// cursor position + diag watermark when the current item started
-    before: usize,
-    dmark: usize,
-}
-
-impl ModInlineFrame {
-    /// The `{` was already consumed by [`ModDeclFrame::step`].
-    fn from_decl(modifiers: Vec<ModifierNode>, lo: u32, name: Name) -> Self {
-        ModInlineFrame {
-            modifiers,
-            lo,
-            name,
-            items: Vec::new(),
-            before: 0,
-            dmark: 0,
-        }
-    }
-
-    pub(crate) fn step(&mut self, p: &mut Parser) -> Step {
-        loop {
-            if p.eat_punct(Tok::RBrace) || p.at_eof() {
-                let node = with_doc!(
-                    p,
-                    ModInlineNode {
-                        span: p.span_from(self.lo),
-                        modifiers: std::mem::take(&mut self.modifiers),
-                        name: self.name.id,
-                        name_span: self.name.span,
-                        items: std::mem::take(&mut self.items),
-                        doc: DocData::default(),
-                    }
-                );
-                return Step::Pop(Done::Item(node.allocate(&mut p.ast)));
-            }
-            self.before = p.pos;
-            self.dmark = p.mark();
-            match classify_item(p) {
-                Some(fr) => return Step::Push(fr),
-                None => self.recover(p),
-            }
-        }
-    }
-
-    pub(crate) fn absorb(&mut self, p: &mut Parser, d: Done) -> Step {
-        match d {
-            Done::Item(i) => self.items.push(i),
-            Done::Failed => self.recover(p),
-            _ => unreachable!("inline mod frame receives items"),
-        }
-        self.step(p)
-    }
-
-    /// the item-level fence, scoped to the block: guarantee progress,
-    /// resync (an unbalanced `}` is left for the frame's own loop top)
-    fn recover(&mut self, p: &mut Parser) {
-        if p.pos == self.before {
-            p.err_here("expected a declaration");
-            p.bump();
-        }
-        p.sync_stmt();
-        let (before, mark) = (self.before, self.dmark);
-        self.items.push(ItemRef::Error(p.fence(before, mark)));
     }
 }
 

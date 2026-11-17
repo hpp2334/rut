@@ -191,10 +191,10 @@ fn retired_manifest_keys_refuse_at_the_parse() {
         "the refusal names the key: {err}"
     );
     let m = rut_driver::bundle::parse_manifest(
-        r#"{"name": "x", "format": "rutbundle", "format_version": 12}"#,
+        r#"{"name": "x", "format": "rutbundle", "format_version": 13}"#,
     )
     .unwrap();
-    assert_eq!(m.format_version, Some(12), "the wire pair parses");
+    assert_eq!(m.format_version, Some(13), "the wire pair parses");
 }
 
 #[test]

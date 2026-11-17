@@ -1,15 +1,14 @@
-//! The declaration-entry lane (wire 12) — the `.d.ts` laws as tests:
+//! The declaration-entry lane (wire 13) — the `.d.ts` laws as tests:
 //! the generated entry round-trips (the generation invariant), a host
-//! tree's consolidated entry lowers to the tree's own rows, the loader
-//! NEVER reads a compiled group's entry (L2 — doctoring one changes
-//! nothing), `--strip` omits the entry (plaintext would leak the
-//! mangled names), and the inline grammar is the loader's second
-//! spelling for a host tree.
+//! tree's rows envelope mounts and lowers to the tree's own rows, the
+//! loader NEVER reads a compiled group's entry (L2 — doctoring one
+//! changes nothing), and `--strip` omits the entry (plaintext would
+//! leak the mangled names).
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use rut_driver::{lower_decl_module, normalize_decl_tree, ModSource, MountedBody, PackOpts};
+use rut_driver::{lower_decl_module, ModSource, MountedBody, PackOpts};
 use rut_native::{pack_dir, pack_dir_opts};
 
 // `pack_dir_opts_fetched` answers the pair; the tests below take the
@@ -214,10 +213,12 @@ fn strip_omits_the_declaration_entry() {
 }
 
 #[test]
-fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
+fn a_host_tree_packs_the_rows_envelope_and_lowers_the_same() {
     // the host group's two spellings, one truth: the file tree and the
-    // consolidated inline entry lower to the SAME rows — the pack gate
+    // SERIALIZED rows envelope lower to the SAME rows — the pack gate
     // checks it (refuse, never guess); this test checks the pieces.
+    // The envelope's root row is the tree's own root surface verbatim
+    // (file-form edges, the directory's bytes).
     let mods = BTreeMap::from([
         (
             "net".to_string(),
@@ -239,38 +240,32 @@ fn a_host_tree_normalizes_to_one_inline_entry_and_lowers_the_same() {
         ),
     ]);
     let root_text = "pub mod net;\n\n// the root's own row\npub host fn legacy_ping() -> bool;\n";
-    let entry = normalize_decl_tree(root_text, &mods).expect("normalize");
-    // the tree rides INSIDE the grammar: verbatim texts, inline blocks
-    assert!(entry.contains("pub mod net {"), "{entry}");
-    assert!(entry.contains("mod tls {"), "{entry}");
+    // the envelope IS the rows: root verbatim, children path-keyed
+    let envelope = rut_driver::mods::rows_json(root_text, &mods);
+    assert!(envelope.contains("pub mod net;"), "{envelope}");
     assert!(
-        entry.contains("// the request lane"),
-        "comments survive verbatim: {entry}"
-    );
-    assert!(
-        !entry.contains("mod net;"),
-        "the edge is spelled inline now: {entry}"
+        envelope.contains("// the request lane"),
+        "comments survive verbatim: {envelope}"
     );
     // deterministic
-    assert_eq!(entry, normalize_decl_tree(root_text, &mods).unwrap());
-    // the round-trip: the entry lowers (empty children map) to the
-    // tree lowering's rows, path-qualified
+    assert_eq!(envelope, rut_driver::mods::rows_json(root_text, &mods));
+    // the round-trip: the envelope mounts + lowers to the tree
+    // lowering's rows, path-qualified — the pack gate's two halves
     let tree = lower_decl_module(root_text, &mods, "tree").expect("the tree lowers");
     let tree_rows = match tree.body {
         MountedBody::Host { host_funcs, .. } => host_funcs,
         _ => panic!("host rows"),
     };
-    let inline =
-        lower_decl_module(&entry, &Default::default(), "inline").expect("the entry lowers");
-    let inline_rows = match inline.body {
-        MountedBody::Host { host_funcs, .. } => host_funcs,
-        _ => panic!("host rows"),
-    };
+    let envelope_rows =
+        rut_driver::lower_rows_envelope(root_text, &mods, "envelope").expect("the envelope lowers");
     assert!(
-        rut_driver::rows_agree(&tree_rows, &inline_rows),
-        "one truth, two renderings:\ntree: {tree_rows:?}\ninline: {inline_rows:?}"
+        rut_driver::rows_agree(&tree_rows, &envelope_rows),
+        "one truth, two renderings:\ntree: {tree_rows:?}\nenvelope: {envelope_rows:?}"
     );
-    let names: Vec<String> = inline_rows.iter().map(|r| r.full_name("myhost")).collect();
+    let names: Vec<String> = envelope_rows
+        .iter()
+        .map(|r| r.full_name("myhost"))
+        .collect();
     assert_eq!(
         names,
         vec![
@@ -313,7 +308,7 @@ fn an_old_v11_archive_refuses_the_11_lane_is_gone() {
         .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
-    assert!(err.contains("reads bundle format_version 12 only"), "{err}");
+    assert!(err.contains("reads bundle format_version 13 only"), "{err}");
     assert!(err.contains("found 11"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
 }
@@ -379,7 +374,7 @@ fn a_v11_url_pin_refuses_at_the_mount_door() {
     let err = pack_fetched(&root, &PackOpts::default(), &urls)
         .unwrap_err()
         .to_string();
-    assert!(err.contains("reads bundle format_version 12 only"), "{err}");
+    assert!(err.contains("reads bundle format_version 13 only"), "{err}");
     assert!(err.contains("found 11"), "{err}");
     let _ = std::fs::remove_dir_all(&root);
 }

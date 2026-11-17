@@ -611,7 +611,7 @@ mod tests {
         write(
             &dir,
             "rut.jsonc",
-            r#"{"format": "rutbundle", "format_version": 12, "name": "hello"}"#,
+            r#"{"format": "rutbundle", "format_version": 13, "name": "hello"}"#,
         );
         write(&dir, "src/mod.rut", "entry fn main() -> nil { return; }\n");
         dir
@@ -656,7 +656,7 @@ mod tests {
         write(
             &dir,
             "rut.jsonc",
-            r#"{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {"util": {"url": "https://x/util.rutbundle"}}}"#,
+            r#"{"format": "rutbundle", "format_version": 13, "name": "app", "deps": {"util": {"url": "https://x/util.rutbundle"}}}"#,
         );
         write(&dir, "src/mod.rut", "entry fn main() -> nil { return; }\n");
 
@@ -691,7 +691,7 @@ mod tests {
             &dir,
             "rut.jsonc",
             &format!(
-                r#"{{"format": "rutbundle", "format_version": 12, "name": "app", "deps": {{"util": {{"url": "{url}"}}}}}}"#
+                r#"{{"format": "rutbundle", "format_version": 13, "name": "app", "deps": {{"util": {{"url": "{url}"}}}}}}"#
             ),
         );
         let lock = rut_driver::LockFile::from_rows(vec![rut_driver::LockRow {
@@ -843,7 +843,7 @@ mod tests {
         let entries = vec![
             (
                 "rut.jsonc".to_string(),
-                br#"{"format": "rutbundle", "format_version": 12, "name": "ink"}"#.to_vec(),
+                br#"{"format": "rutbundle", "format_version": 13, "name": "ink"}"#.to_vec(),
             ),
             ("src/mod.rut".to_string(), b"pub fn dot()\n".to_vec()),
             (
@@ -868,7 +868,7 @@ mod tests {
         let unpack = dir.join(rut_driver::UNPACK_DIR);
         assert_eq!(
             std::fs::read_to_string(unpack.join("rut.jsonc")).unwrap(),
-            r#"{"format": "rutbundle", "format_version": 12, "name": "ink"}"#
+            r#"{"format": "rutbundle", "format_version": 13, "name": "ink"}"#
         );
         assert_eq!(
             std::fs::read_to_string(unpack.join("src/mod.rut")).unwrap(),

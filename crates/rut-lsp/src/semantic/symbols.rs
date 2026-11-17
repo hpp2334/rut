@@ -120,22 +120,6 @@ fn item_symbol(ast: &Ast, item: ItemRef) -> Option<Symbol> {
                 vec![],
             ))
         }
-        // the declaration file's inline module — the same outline
-        // entry, its nested declarations riding as children
-        ItemRef::ModInline(h) => {
-            let d = h.get(ast);
-            let children = h
-                .items(ast)
-                .iter()
-                .filter_map(|&i| item_symbol(ast, i))
-                .collect();
-            Some(sym(
-                ast.name(d.name),
-                SymKind::Module,
-                Some(d.name_span),
-                children,
-            ))
-        }
         ItemRef::Alias(h) => {
             let d = h.get(ast);
             Some(sym(

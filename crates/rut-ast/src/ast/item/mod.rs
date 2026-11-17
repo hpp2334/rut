@@ -21,7 +21,7 @@ pub use func::{FnNode, ParamNode, ParamRef, SelfParamNode};
 pub use impl_block::ImplNode;
 pub use import::UseNode;
 pub use let_decl::ModuleLetNode;
-pub use module_decl::{ModDeclNode, ModInlineNode, ModuleNode};
+pub use module_decl::{ModDeclNode, ModuleNode};
 pub use surface::{
     BuiltinImplNode, BuiltinPrimitiveNode, BuiltinTyNode, Linkage, SurfaceFnNode, SurfaceStructNode,
 };
@@ -37,7 +37,6 @@ use rut_lexer::span::Span;
 pub enum ItemRef {
     Module(Handle<ModuleNode>),
     ModDecl(Handle<ModDeclNode>),
-    ModInline(Handle<ModInlineNode>),
     Use(Handle<UseNode>),
     Alias(Handle<AliasNode>),
     ModuleLet(Handle<ModuleLetNode>),
@@ -62,7 +61,6 @@ impl ItemRef {
             ctx,
             ItemRef::Module,
             ItemRef::ModDecl,
-            ItemRef::ModInline,
             ItemRef::Use,
             ItemRef::Alias,
             ItemRef::ModuleLet,
@@ -93,12 +91,6 @@ impl ItemRef {
     pub fn as_mod_decl(self) -> Option<Handle<ModDeclNode>> {
         match self {
             ItemRef::ModDecl(h) => Some(h),
-            _ => None,
-        }
-    }
-    pub fn as_mod_inline(self) -> Option<Handle<ModInlineNode>> {
-        match self {
-            ItemRef::ModInline(h) => Some(h),
             _ => None,
         }
     }

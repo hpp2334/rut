@@ -164,16 +164,6 @@ fn item_dump(a: &Ast, r: ItemRef, next: &mut u32) -> DumpNode {
             fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
             "ModDecl"
         }
-        ItemRef::ModInline(h) => {
-            let d = h.get(a);
-            fields.push(field("vis", DumpVal::Vis(d.vis())));
-            fields.push(field("name", DumpVal::Str(a.name(d.name).to_string())));
-            fields.push(field(
-                "items",
-                DumpVal::Nodes(d.items.iter().map(|&i| item_dump(a, i, next)).collect()),
-            ));
-            "ModInline"
-        }
         ItemRef::Use(h) => {
             let d = h.get(a);
             fields.push(field("vis", DumpVal::Vis(d.vis())));

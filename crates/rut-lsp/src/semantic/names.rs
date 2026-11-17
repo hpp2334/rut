@@ -6,8 +6,7 @@
 
 use rut_ast::{
     Ast, ElseBranch, EnumNode, ExprRef, FieldDeclNode, FieldRef, FnNode, Handle, ItemRef,
-    MethodDeclNode, MethodRef, ModDeclNode, ModInlineNode, ParamRef, PatRef, StmtRef, TyRef,
-    UseNode,
+    MethodDeclNode, MethodRef, ModDeclNode, ParamRef, PatRef, StmtRef, TyRef, UseNode,
 };
 use rut_lexer::span::Span;
 
@@ -110,20 +109,12 @@ fn classify_item(ast: &Ast, item: ItemRef, out: &mut Vec<(Span, TokenType)>) {
             let d = h.get(ast);
             classify_methods(ast, &d.methods, out);
         }
-        // mod decls (file and inline) ARE namespaces — their names
-        // classify here (the declared head reads like the `layout` in
-        // `layout::mk`, which the path law colors too). The inline
-        // form's nested items classify through the same recursion.
+        // mod decls ARE namespaces — their names classify here (the
+        // declared head reads like the `layout` in `layout::mk`, which
+        // the path law colors too)
         ItemRef::ModDecl(h) => {
             let d: &ModDeclNode = h.get(ast);
             emit(ast.name(d.name), d.name_span, TokenType::Namespace, out);
-        }
-        ItemRef::ModInline(h) => {
-            let d: &ModInlineNode = h.get(ast);
-            emit(ast.name(d.name), d.name_span, TokenType::Namespace, out);
-            for nested in h.items(ast) {
-                classify_item(ast, *nested, out);
-            }
         }
         ItemRef::Use(h) => {
             let d: &UseNode = h.get(ast);

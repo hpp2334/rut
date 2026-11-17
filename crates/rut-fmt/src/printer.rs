@@ -737,23 +737,6 @@ impl<'a> P<'a> {
                 self.text(self.a.name(d.name));
                 self.text(";");
             }
-            ItemRef::ModInline(h) => {
-                let d = h.get(self.a);
-                // the declaration file's inline module (wire v12): the
-                // nested declarations print through the item walk
-                if let Some(v) = vis_opt(d.vis()) {
-                    self.text(v);
-                    self.sp();
-                }
-                self.text("mod ");
-                self.text(self.a.name(d.name));
-                self.text(" {");
-                let items: Vec<ItemRef> = d.items.to_vec();
-                for it in items {
-                    self.item(it);
-                }
-                self.text("}");
-            }
             ItemRef::Use(h) => {
                 let d = h.get(self.a);
                 // the full path — package, modules, in order — then the

@@ -4,11 +4,12 @@
 //! manifest's `type` routes: a lib root (no `type`) is the **compiled**
 //! layout (`mod.rutc` + scope ledger + `deps/` groups), a
 //! `type = "host"` root is the **decl** layout (its `mod.d.rut`
-//! surface, single-package). ONE wire: `format_version` is 12 — the
-//! current wire, every group carrying ONE generated declaration entry;
-//! anything else (older, newer, absent) refuses with the one re-pack
-//! recipe. Parsing a layout verifies what each kind carries, so a bad
-//! archive never reaches the run.
+//! surface, single-package). ONE wire: `format_version` is 13 — the
+//! current wire (a host tree rides the `rut.mods` rows envelope; the
+//! grammar's inline `mod` form is gone); anything else (older, newer,
+//! absent) refuses with the one re-pack recipe. Parsing a layout
+//! verifies what each kind carries, so a bad archive never reaches the
+//! run.
 
 use super::container::{parse_bundle, BundleError};
 use super::files::read_entry;
@@ -71,7 +72,7 @@ pub enum GroupKind {
     Source,
 }
 
-/// The one bundle layout — ONE wire (`format_version` 12), the
+/// The one bundle layout — ONE wire (`format_version` 13), the
 /// manifest's `type`
 /// routes the root kind: a lib root (no `type`) is **compiled**
 /// (`mod.rutc` + ledger + `deps/` groups), a `type = "host"` root is
@@ -115,7 +116,7 @@ pub enum Layout {
 
 impl Layout {
     /// Parse a bundle: manifest + version gate first (`format_version`
-    /// is 12 — the ONE wire for both root kinds; everything else,
+    /// is 13 — the ONE wire for both root kinds; everything else,
     /// older or newer, refuses with the one re-pack recipe, never
     /// guesses), then the kind's own checks (compiled:
     /// the scope ledger's identity rows, the root and every group's
@@ -134,16 +135,16 @@ impl Layout {
             return Err("rut.jsonc has no `format = \"rutbundle\"` — not a rut bundle".into());
         }
         match manifest.format_version {
-            // ONE wire: 12 is the current wire — the manifest's `type`
+            // ONE wire: 13 is the current wire — the manifest's `type`
             // routes the layout (a host root is its own decl surface, a
             // lib root the compiled layout); EVERYTHING else refuses —
             // stale bytes re-pack, nothing is grandfathered.
-            Some(12) => match manifest.pkg_type {
+            Some(13) => match manifest.pkg_type {
                 super::manifest::PkgType::Host => Self::parse_decl(bundle, manifest),
                 super::manifest::PkgType::Lib => Self::parse_compiled(bundle, manifest),
             },
             other => Err(format!(
-                "this toolchain reads bundle format_version 12 only (found {}) — re-pack the directory",
+                "this toolchain reads bundle format_version 13 only (found {}) — re-pack the directory",
                 match other {
                     Some(v) => v.to_string(),
                     None => "none".to_string(),

@@ -1,8 +1,7 @@
-//! Module declarations: the root module, the file-form `mod NAME;`,
-//! and the inline declaration module (Decl mode).
+//! Module declarations: the root module and the file-form
+//! `pub? mod NAME;` — the ONE mod spelling, both modes.
 
 use crate::ast::doc::DocData;
-use crate::ast::handle::Handle;
 use crate::ast::item::class::{item_vis, ModifierNode};
 use crate::ast::item::{ItemRef, Vis};
 use crate::slot_alloc;
@@ -31,22 +30,6 @@ pub struct ModDeclNode {
     pub doc: DocData,
 }
 
-/// `pub? mod NAME { <declarations> }` — the INLINE module form,
-/// declaration files only: a `.d.rut` nests its declarations in the
-/// grammar. Declarations only, recursively.
-#[derive(Clone, Debug)]
-pub struct ModInlineNode {
-    /// starts at the item's FIRST token — the leading modifier when
-    /// one is spelled, `mod` otherwise
-    pub span: Span,
-    /// the modifier chain in source order — `vis()` derives from it
-    pub modifiers: Vec<ModifierNode>,
-    pub name: IdentId,
-    pub name_span: Span,
-    pub items: Vec<ItemRef>,
-    pub doc: DocData,
-}
-
 impl ModDeclNode {
     /// the spelled edge visibility — `Vis::Self_` (bare `mod`) when
     /// unannotated
@@ -55,21 +38,6 @@ impl ModDeclNode {
     }
 }
 
-impl ModInlineNode {
-    /// the spelled edge visibility — `Vis::Self_` (bare `mod`) when
-    /// unannotated
-    pub fn vis(&self) -> Vis {
-        item_vis(&self.modifiers)
-    }
-}
-
-impl Handle<ModInlineNode> {
-    pub fn items(self, ctx: &crate::Ast) -> &[ItemRef] {
-        &self.get(ctx).items
-    }
-}
-
 use crate::plain_alloc;
 plain_alloc!(ModuleNode);
 slot_alloc!(ModDeclNode, ItemRef::ModDecl);
-slot_alloc!(ModInlineNode, ItemRef::ModInline);

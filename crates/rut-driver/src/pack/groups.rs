@@ -92,7 +92,7 @@ pub fn collect_source_group(
         // a flat pkg's root module — unless there is none (a host
         // group: the surface IS the whole pkg), which rides its
         // `entry.type` surface at the canonical `mod.d.rut` name
-        // (wire v12: the archive is name-free; the directory keeps
+        // (wire 13: the archive is name-free; the directory keeps
         // whatever spelling its grammar allows). Both probes live
         // under the package's `src/` shell.
         if let Ok(body) = read(dir_key, "src/mod.rut") {

@@ -616,7 +616,7 @@ fn an_old_envelopes_legacy_splice_refuses() {
         "/../../rut/pouch"
     )))
     .expect("pack the tree pouch");
-    let legacy = r#"{"format": "rutbundle", "format_version": 12, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
+    let legacy = r#"{"format": "rutbundle", "format_version": 13, "name": "pouch", "entry": {"lib": "./pouch.rut", "libs": ["./extra.rut"]}}"#;
     let entries: Vec<(String, Vec<u8>)> = rut_driver::bundle::parse_bundle(&bytes)
         .unwrap()
         .into_iter()

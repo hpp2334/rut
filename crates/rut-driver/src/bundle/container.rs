@@ -205,18 +205,19 @@ mod tests {
         // (The one-time shift off the hand-rolled writer was accepted;
         // stability starts at that hash.)
         //
-        // WIRE 12 RE-PIN (the plan's ONE deliberate bump — the
-        // declaration-entries lane): the fixture's `format_version`
-        // moved 11 -> 12 with the wire, which moves the manifest bytes,
-        // which moves the archive bytes. The shift is INTENDED: the
-        // failure message this test refused with was
+        // WIRE 13 RE-PIN (the plan's ONE deliberate bump — the inline
+        // `mod` form drops, host trees ride the rows envelope): the
+        // fixture's `format_version` moved 12 -> 13 with the wire,
+        // which moves the manifest bytes, which moves the archive
+        // bytes. The shift is INTENDED: the failure message this test
+        // refused with was
         // "the .rutbundle byte layout moved — is the shift intended?
         //  re-pin consciously: <hash>" — and the hash below is the
         // conscious re-pin of exactly that message.
         let entries = vec![
             (
                 "rut.jsonc".to_string(),
-                br#"{"format": "rutbundle", "format_version": 12, "name": "golden"}"#.to_vec(),
+                br#"{"format": "rutbundle", "format_version": 13, "name": "golden"}"#.to_vec(),
             ),
             (
                 "golden.rut".to_string(),
@@ -230,7 +231,7 @@ mod tests {
             .map(|b| format!("{b:02x}"))
             .collect();
         assert_eq!(
-            hex, "e7f97f09f4649be341bac18fb6783abcdb7941c072d83e3a6a752b280a979171",
+            hex, "8b2137952a4c83a5f1ff4145ec12ecb31b881b0de3cc249dd611aa536b919726",
             "the .rutbundle byte layout moved — is the shift intended? re-pin consciously: {hex}"
         );
     }

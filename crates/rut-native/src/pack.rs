@@ -673,13 +673,15 @@ fn ensure_wire_rows(text: &str, version: u64) -> Result<String, PackError> {
 }
 
 /// Pack a `type = "host"` directory as a **decl root** —
-/// single-package, byte-deterministic: the manifest byte-for-byte plus
-/// its ONE consolidated declaration entry (wire v12 — the tree
-/// normalized into the single-file inline form). The pack-time
-/// VERIFICATION is two-fold: the surface's tree parse + lower (the
-/// exact lane a mount runs — a broken `.d.rut` or a declared child
-/// with no mounted file refuses), and the generation invariant — the
-/// consolidated entry must lower to the same rows the file-tree form
+/// single-package, byte-deterministic: the manifest byte-for-byte, the
+/// root `mod.d.rut` VERBATIM (file-form edges, the directory's own
+/// bytes), and the `rut.mods` rows envelope when the tree mounts
+/// (wire 13 — structure lives in the rows, never in the grammar; the
+/// grammar's inline `mod` form is gone). The pack-time VERIFICATION is
+/// two-fold: the surface's tree parse + lower (the exact lane a mount
+/// runs — a broken `.d.rut` or a declared child with no mounted file
+/// refuses), and the generation invariant — the serialized rows
+/// envelope must mount and lower to the same rows the file-tree form
 /// did. A host pkg has no deps, no programs, no ledger — nothing else
 /// to emit.
 ///
@@ -687,11 +689,11 @@ fn ensure_wire_rows(text: &str, version: u64) -> Result<String, PackError> {
 /// package's `src/` shell) when the manifest carries one, else
 /// `src/mod.d.rut` — the load lane's default-root discovery, mirrored
 /// (the pack must verify the exact layout the reader mounts back).
-/// Neither present refuses, naming both doors. The entry rides at the
+/// Neither present refuses, naming both doors. The root rides at the
 /// ONE canonical name (`mod.d.rut`): the archive is name-free, whatever
-/// the directory grammar spelled. A FLAT host pkg's entry is its
-/// surface verbatim — its bytes stay the two-entry shape (no rows
-/// envelope; the `Ok(None)` lane the reader keeps).
+/// the directory grammar spelled. A FLAT host pkg keeps packing flat —
+/// its bytes stay the two-entry shape (no rows envelope; the `Ok(None)`
+/// lane the reader keeps).
 fn pack_host_root(
     dir: &Path,
     manifest: &Manifest,
@@ -737,30 +739,36 @@ fn pack_host_root(
     // lower into host rows — the exact lane a mount runs
     let tree = rut_driver::lower_decl_module(&src, &mods, &src_path.display().to_string())
         .map_err(PackError::law)?;
-    // half two, the generation invariant: the ONE consolidated entry
-    // (the tree normalized into the inline form) must lower to the same
-    // rows the file-tree form did
     let tree_rows = match &tree.body {
         rut_driver::MountedBody::Host { host_funcs, .. } => host_funcs.clone(),
         _ => Vec::new(),
     };
-    let entry = rut_driver::normalize_decl_tree(&src, &mods).map_err(PackError::law)?;
-    let entry_rows = rut_driver::lower_inline_entry(&entry, &src_path.display().to_string())
-        .map_err(PackError::law)?;
-    if !rut_driver::rows_agree(&tree_rows, &entry_rows) {
-        return Err(PackError::law(format!(
-            "{}: the consolidated declaration entry does not lower to the tree's own rows — \
-             the generation invariant refuses the pack",
-            src_path.display()
-        )));
-    }
-    // entries = rut.jsonc + the ONE consolidated entry — the exact shape
-    // the container lane reads back at load (the canonical `mod.d.rut`
-    // name; wire v12 carries no rows envelope for host roots)
-    let entries: Vec<(String, Vec<u8>)> = vec![
+    // half two, the generation invariant (tree mounts — the shape law
+    // keeps a childless pkg flat): the SERIALIZED rows envelope must
+    // mount and lower to the tree's own rows
+    let mut entries: Vec<(String, Vec<u8>)> = vec![
         (rut_driver::bundle::MANIFEST_NAME.into(), manifest_bytes),
-        (rut_driver::decl::DECL_CHILD_FILE.into(), entry.into_bytes()),
+        (
+            rut_driver::decl::DECL_CHILD_FILE.into(),
+            src.clone().into_bytes(),
+        ),
     ];
+    if !mods.is_empty() {
+        let envelope_rows =
+            rut_driver::lower_rows_envelope(&src, &mods, &src_path.display().to_string())
+                .map_err(PackError::law)?;
+        if !rut_driver::rows_agree(&tree_rows, &envelope_rows) {
+            return Err(PackError::law(format!(
+                "{}: the rows envelope does not lower to the tree's own rows — \
+                 the generation invariant refuses the pack",
+                src_path.display()
+            )));
+        }
+        entries.push((
+            rut_driver::mods::ROWS_NAME.into(),
+            rut_driver::mods::rows_json(&src, &mods).into_bytes(),
+        ));
+    }
     write_bundle(&entries).map_err(|e| PackError::law(e.to_string()))
 }
 

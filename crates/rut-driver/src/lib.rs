@@ -34,8 +34,8 @@ pub use mods::{
     collect_module_set, mount_mod_children, ChildLookup, ModSource, ModuleSet, ModuleUnit,
 };
 pub use pack::{
-    lower_inline_entry, normalize_decl_tree, pack, pack_inline_pkg, rows_agree, Archive, PackError,
-    PackOpts, PackWorld, PkgSource, FORMAT_VERSION,
+    lower_rows_envelope, pack, pack_inline_pkg, rows_agree, Archive, PackError, PackOpts,
+    PackWorld, PkgSource, FORMAT_VERSION,
 };
 pub use run::{
     declared_host_fns, host_pkg_ctx, Bundle, Compiled, Mounted, MountedBody, Offer, RunError,

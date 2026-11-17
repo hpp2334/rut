@@ -331,7 +331,7 @@ fn bundle_stays_closed_no_fetch_at_bundle_load() {
     let doctored = resealed(
         &bytes,
         "rut.jsonc",
-        r#"{"format": "rutbundle", "format_version": 12, "name": "util", "deps": {"ghost": {"url": "https://fixtures.test/ghost.rutbundle"}}}"#,
+        r#"{"format": "rutbundle", "format_version": 13, "name": "util", "deps": {"ghost": {"url": "https://fixtures.test/ghost.rutbundle"}}}"#,
     );
 
     // the direct bundle lane

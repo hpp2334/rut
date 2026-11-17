@@ -537,7 +537,7 @@ pub fn bundle_entry_pkg(
     // exported; use sites resolve-miss, correctly). An ambiguity —
     // `entry.type` spelled, no declared kind, no body anywhere —
     // refuses, naming both fixes. The surface read is the ONE
-    // canonical name (`mod.d.rut`, wire v12): the directory grammar's
+    // canonical name (`mod.d.rut`, wire 13): the directory grammar's
     // spelling never rides the archive.
     let pkg = if manifest.entry.type_path.is_some() {
         let origin = format!("{prefix}{}", crate::decl::DECL_CHILD_FILE);
@@ -596,7 +596,7 @@ fn host_entry_pkg(
         return stamp(m);
     }
     // the flat lane's root file is `mod.d.rut` beside the manifest —
-    // the ONE canonical name (wire v12; the in-archive override lane
+    // the ONE canonical name (wire 13; the in-archive override lane
     // is gone). A packed host bundle always carries a root — a manifest
     // whose archive names none is a packaging bug, named like the
     // directory lanes'.

@@ -50,7 +50,7 @@ number — a bundle this toolchain did not pack refuses at the door
 
 ```text
 rut.jsonc                the directory's manifest + the wire rows stamped at the
-                           pack door ("format": "rutbundle", "format_version": 12)
+                           pack door ("format": "rutbundle", "format_version": 13)
 rut.scopes               the pack-time scope ledger — one `<scope> = "<identity>"`
                            row per linked module, ascending by scope; every row
                            spells name@<16 hex> (the group identities; the loader
@@ -81,11 +81,12 @@ deps/<name>@<fp16>/mod.d.rut   the group's ONE declaration entry — GENERATED
                            surface)
 deps/<name>@<fp16>/rut.mods    its module rows, when it has mod children
 deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
-                           not link) → its ONE consolidated declaration
-                           entry: no binary, the source is the interface
+                           not link) → its root declaration surface plus
+                           its tree's rows envelope: no binary, the
+                           source is the interface
 ```
 
-- The **declaration entry is universal** (wire 12): every published
+- The **declaration entry is universal** (wire 13): every published
   group carries exactly ONE `mod.d.rut`. For a compiled group it is
   GENERATED — rendered from the validated surface, canonically
   ordered, and round-trip gated at pack (the emitted text must parse
@@ -109,22 +110,25 @@ deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
   ensure and rebases the ids onto its own numbering — pack-time and
   load-time numbering never have to agree. A reference with no ledger
   row is refused.
-- **The module rows are a lib body tree's wire form** (`rut.mods` —
-  `deps/<ident>/rut.mods` for a group): one JSON object, mod path →
-  source text, `""` = the root module, one row per mounted child. The
-  entry is present IFF the package has mod children — a flat package
-  writes none (byte-identical pack, the freshness gate proves it) and
-  loads as its single module; a carried-but-undeclared row refuses.
-  (A HOST pkg's tree does not ride the rows envelope at all — wire 12
-  consolidates it into the inline form inside the group's declaration
-  entry.) A directory whose manifest spells the repealed
+- **The module rows are a body tree's wire form, lib and host alike**
+  (`rut.mods` — `deps/<ident>/rut.mods` for a group): one JSON object,
+  mod path → source text, `""` = the root module (a host tree's root
+  row IS its `.d.rut` surface, verbatim), one row per mounted child.
+  The entry is present IFF the package has mod children — a flat
+  package writes none (byte-identical pack, the freshness gate proves
+  it) and loads as its single module; a carried-but-undeclared row
+  refuses. (Wire 13: the grammar's inline `mod NAME { .. }` form is
+  GONE — one mod grammar, both modes — so a host tree's structure
+  lives in the rows, never in the grammar.) A directory whose manifest
+  spells the repealed
   `entry.lib`/`entry.libs` keys refuses loudly at the manifest walk —
   and a packed manifest parses through the same strict grammar, so the
   repeal holds on every lane.
 - **Group kinds are the packer's one decision**: a source body rides
   compiled iff the graph linked it; a host body (or a declared dep
-  whose unit did not link) rides its ONE consolidated declaration
-  entry. Refuse, never guess: the packer calls the graph's own
+  whose unit did not link) rides its root declaration surface plus its
+  tree's rows envelope. Refuse, never guess: the packer calls the
+  graph's own
   classifier, there is no second implementation.
 - **Generics ride compiled — instantiation independence (the
   separate-compilation contract)**: instantiation
@@ -155,33 +159,38 @@ deps/<name>@<fp16>/…           a host pkg (or a declared dep whose unit did
 ## The decl root (host)
 
 A `type = "host"` pkg's root IS its declaration surface, so a host
-bundle is the manifest plus that ONE entry — single-package, no ledger,
+bundle is the manifest plus that surface — single-package, no ledger,
 no groups, nothing to decode:
 
 ```text
 rut.jsonc                the directory's manifest + the wire rows stamped at the
-                           pack door; "format": "rutbundle", "format_version": 12
-mod.d.rut                the ONE consolidated declaration entry — the tree
-                           normalized into the inline form, whatever the
-                           directory grammar spelled
+                           pack door; "format": "rutbundle", "format_version": 13
+mod.d.rut                the root surface, VERBATIM — file-form edges, the
+                           directory's own bytes, whatever the directory
+                           grammar spelled
+rut.mods                 the tree's rows envelope, when the surface declares
+                           children — "" = the root surface, one row per child
 ```
 
-The entry rides at the canonical `mod.d.rut` name. The mod tree lives
-IN THE GRAMMAR now (wire 12): a `pub mod net;` edge in the root
-surface rides as `pub mod net { .. }` — the child's own text spliced
-inline at its declaration edge, recursively, verbatim (comments and
-authored signatures survive byte-for-byte). Structure lives in the
-grammar, never in paths. The generation invariant gates the pack: the
-consolidated entry must lower to the same path-qualified rows the
-file-tree form did. Older wires refuse at the door — re-pack.
+The root rides at the canonical `mod.d.rut` name. The mod tree lives
+in the ROWS now (wire 13): a `pub mod net;` edge in the root surface
+stays a file-form declaration — the child's own text rides the rows
+envelope, path-keyed, verbatim (comments and authored signatures
+survive byte-for-byte). Structure lives in the rows, never in the
+grammar — the inline `mod NAME { .. }` form is gone from the grammar
+entirely (one mod grammar, both modes). The generation invariant
+gates the pack: the serialized envelope must mount and lower to the
+same path-qualified rows the file-tree form did. A FLAT host pkg keeps
+the two-entry shape (no rows envelope). Older wires refuse at the
+door — re-pack.
 
 `rut pack <host-dir>` works (the surface verifies by parsing and
-lowering once — the exact lane a mount runs — then consolidates),
+lowering once — the exact lane a mount runs — then the tree rides),
 `--strip` refuses on a host root (`no symbols to strip` — no programs,
 no sidecar), and `rut run <host.rutbundle>` refuses with intent: a
 host bundle carries a declaration surface — nothing to run; bind its
 rows from the embedder ([host fns](host-fns.md)). The mount is the
-same lane a host group rides inside a compiled bundle: the entry
+same lane a host group rides inside a compiled bundle: the envelope
 lowers into the pkg's host rows.
 
 ## The manifest — `rut.jsonc`
@@ -194,14 +203,14 @@ without hand-editing:
 
 ```jsonc
 {
-  // the bundle wire — 12, always; the manifest's `type` routes the
+  // the bundle wire — 13, always; the manifest's `type` routes the
   // root kind (the module-binary version is a different constant).
   // The pair is legal-optional on the ONE grammar: `rut pack --mode
   // bin` stamps it into the packed manifest at the pack door, and the
   // bundle reader gates on it (a directory manifest carrying it is
   // unusual but harmless and legal)
   "format": "rutbundle",
-  "format_version": 12,
+  "format_version": 13,
   // the package this bundle answers to
   "name": "plugin",
 
@@ -276,11 +285,11 @@ not ride.
 
 ## The wire version
 
-`format_version` is 12 — the one bundle wire, both root kinds; the
+`format_version` is 13 — the one bundle wire, both root kinds; the
 manifest's `type` routes lib-compiled vs host-decl. Anything else
 refuses **before reading anything else** — refuse, never guess, and
 there is no old lane to fall back to: `this toolchain reads bundle
-format_version 12 only (found {v}) — re-pack the directory`. Stale
+format_version 13 only (found {v}) — re-pack the directory`. Stale
 bytes never load back — the pack is deterministic, so a re-pack
 reproduces today's bundle byte-for-byte.
 
@@ -447,7 +456,7 @@ and version, then every group's decode, then the mount.
 |---|---|
 | zip entry CRC-32 | refuse — corrupt bundle (names the entry) |
 | `rut.jsonc` present, `"format": "rutbundle"` | refuse — not a rut bundle |
-| `format_version` exactly 12 | anything else refuses — `this toolchain reads bundle format_version 12 only (found {v}) — re-pack the directory` |
+| `format_version` exactly 13 | anything else refuses — `this toolchain reads bundle format_version 13 only (found {v}) — re-pack the directory` |
 | a host root carrying a root `mod.rutc` | refuse — a host bundle's root is its surface, not a compiled unit |
 | a host root carrying a `rut.scopes` ledger or any group entry | refuse — a host bundle is its surface, single-package |
 | a compiled root without its `rut.scopes` ledger, or a ledger row that is not a content identity (`name@<16 hex>`) | refuse — a corrupt compiled bundle |

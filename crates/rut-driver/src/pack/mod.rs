@@ -9,7 +9,7 @@
 //! an ordinary tree package) and emits from the pkgs and the reader.
 //! Same input directory ⇒ byte-identical bundle.
 //!
-//! TWO root kinds, ONE wire family (`format_version` is 12, always;
+//! TWO root kinds, ONE wire family (`format_version` is 13, always;
 //! the manifest's `type` routes): a **lib** root packs **compiled**
 //! (the root and every source dep ride as `.rutc` binaries (bodies +
 //! surface — the linking truth); host/decl pkgs ride as their
@@ -48,8 +48,8 @@ mod groups;
 mod strip;
 
 pub use decl_entry::{
-    check_round_trip, facts_of_program, facts_of_text, lower_inline_entry, normalize_decl_tree,
-    render_program_entry, rows_agree,
+    check_round_trip, facts_of_program, facts_of_text, lower_rows_envelope, render_program_entry,
+    rows_agree,
 };
 
 pub use error::PackError;
@@ -66,19 +66,20 @@ use crate::mods::{rows_json, ROWS_NAME};
 use crate::run::Walk;
 use crate::session::{MountedBody, Session};
 
-/// The bundle wire version — 12, always, ONE number for both root
+/// The bundle wire version — 13, always, ONE number for both root
 /// kinds. The manifest's `type` routes the layout (a lib root packs
 /// compiled, a `type = "host"` root packs its decl surface); a reader
 /// refuses anything else with one re-pack recipe — never guesses.
-/// v12: every group carries ONE generated declaration entry — a
-/// compiled group's `mod.d.rut` is rendered from the validated surface
-/// (the `.d.ts` pattern: generated, never hand-maintained; omitted
-/// under `--strip`), a host group's rides as the tree normalized into
-/// the one-file inline form (`mod NAME { .. }`, structure in the
-/// grammar, never in paths). (v11 laid the group identity dirs at
-/// `deps/<name>@<fp16>/…`, the root-only archive, and the canonical
-/// entry names — unchanged; the 11 lane is GONE, stale bytes re-pack.)
-pub const FORMAT_VERSION: u64 = 12;
+/// v13: the grammar's inline `mod NAME { .. }` form is GONE (one mod
+/// grammar, both modes) — a host tree rides the `rut.mods` rows
+/// envelope (the root surface verbatim beside it, file-form edges),
+/// structure in the rows, never in the grammar; a compiled group's
+/// `mod.d.rut` stays ONE generated entry rendered from the validated
+/// surface (the `.d.ts` pattern: generated, never hand-maintained;
+/// omitted under `--strip`). (v12 consolidated a host tree into the
+/// inline form inside its entry — the form the grammar dropped; the
+/// 12 lane is GONE, stale bytes re-pack.)
+pub const FORMAT_VERSION: u64 = 13;
 
 /// Assemble a one-member **source** bundle — a rut package whose body
 /// is the text — as a [`Bundle`](crate::Bundle) handle. A pack method
@@ -334,7 +335,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
     // in identity order.
 
     // the root's own file set (prefix ""): the GENERATED declaration
-    // entry at its canonical `mod.d.rut` name (wire v12 — rendered from
+    // entry at its canonical `mod.d.rut` name (wire 13 — rendered from
     // the validated surface, the `.d.ts` pattern; round-trip gated
     // below; `--strip` omits it — plaintext would leak the names the
     // binary mangles), the module rows. The manifest rides first (below)
@@ -393,7 +394,7 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                 "mod.rutc".into(),
                 rut_core::binary::encode(&units.programs[idx]),
             ));
-            // the GENERATED declaration entry (wire v12) — rendered from
+            // the GENERATED declaration entry (wire 13) — rendered from
             // the validated surface, round-trip gated, `--strip` omitted
             // (the strip law). ONE grammar, one rendering: whatever the
             // group's files rode from, the entry is THIS toolchain's
@@ -425,12 +426,14 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                         Ok(MountedBody::Host { .. })
                     );
                     if is_host {
-                        // the host group's ONE consolidated declaration
-                        // entry (wire v12): the tree normalized into the
-                        // single-file inline form — and the round-trip
-                        // gate: the entry must lower to the same rows the
-                        // file-tree form did (the loader law, checked at
-                        // pack)
+                        // the host group's file set (wire 13): the root
+                        // surface VERBATIM (file-form edges, the
+                        // directory's own bytes), the tree in the rows
+                        // envelope when it mounts — and the round-trip
+                        // gate: the serialized envelope must mount +
+                        // lower to the same rows the file-tree form did
+                        // (the loader law, checked at pack). A childless
+                        // host pkg keeps the flat shape (no `rut.mods`)
                         let m = session
                             .resolve(spec)
                             .map_err(|e| PackError::law(e.to_string()))?;
@@ -442,21 +445,29 @@ pub fn pack(w: &PackWorld, opts: &PackOpts) -> Result<(Vec<u8>, Option<Vec<u8>>)
                             } => (root_surface.clone().unwrap_or_default(), host_funcs.clone()),
                             _ => (String::new(), Vec::new()),
                         };
-                        let entry = decl_entry::normalize_decl_tree(&root_text, &mods)
-                            .map_err(PackError::law)?;
-                        let entry_rows =
-                            decl_entry::lower_inline_entry(&entry, &format!("{gdir}/mod.d.rut"))
-                                .map_err(PackError::law)?;
-                        if !decl_entry::rows_agree(&host_rows, &entry_rows) {
-                            return Err(PackError::law(format!(
-                                "dep `{spec}`: the consolidated declaration entry does not lower to \
-                                 the tree's own rows — the generation invariant refuses the pack"
-                            )));
-                        }
                         let toml = group_file(source, MANIFEST_NAME, &w.archives, &w.read)
                             .map_err(PackError::law)?;
                         files.push((MANIFEST_NAME.into(), toml));
-                        files.push(("mod.d.rut".into(), entry.into_bytes()));
+                        files.push(("mod.d.rut".into(), root_text.clone().into_bytes()));
+                        if !m.mods.is_empty() {
+                            let envelope_rows = decl_entry::lower_rows_envelope(
+                                &root_text,
+                                &m.mods,
+                                &format!("{gdir}/mod.d.rut"),
+                            )
+                            .map_err(PackError::law)?;
+                            if !decl_entry::rows_agree(&host_rows, &envelope_rows) {
+                                return Err(PackError::law(format!(
+                                    "dep `{spec}`: the rows envelope does not lower to \
+                                     the tree's own rows — the generation invariant refuses \
+                                     the pack"
+                                )));
+                            }
+                            files.push((
+                                ROWS_NAME.into(),
+                                rows_json(&root_text, &m.mods).into_bytes(),
+                            ));
+                        }
                     } else {
                         collect_source_group(gdir, &dm, &mods, "", &w.read, &mut files)
                             .map_err(PackError::law)?;

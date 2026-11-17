@@ -1,6 +1,6 @@
 //! The decl root — a `type = "host"` pkg packs as its OWN bundle:
 //! the root IS its declaration surface (single-package, no ledger, no
-//! groups, nothing to decode), `format_version` 12 — the ONE wire
+//! groups, nothing to decode), `format_version` 13 — the ONE wire
 //! number, the manifest's `type` routes the root kind. The mechanism
 //! tests: the pack/load round trip, the url lane (pin law,
 //! name-vs-key, the leaf law), the refusal matrix, the one-wire-number
@@ -156,13 +156,13 @@ fn host_root_packs_v6_and_loads_back() {
         .unwrap();
     let dir_manifest = std::fs::read_to_string(dir.join("rut.jsonc")).unwrap();
     let staged = format!(
-        "{}\n  \"format\": \"rutbundle\",\n  \"format_version\": 12,{}",
+        "{}\n  \"format\": \"rutbundle\",\n  \"format_version\": 13,{}",
         &dir_manifest[..dir_manifest.find('{').unwrap() + 1],
         &dir_manifest[dir_manifest.find('{').unwrap() + 1..]
     );
     assert_eq!(toml, staged, "the dir manifest + the stamped wire rows");
     let m = rut_driver::bundle::parse_manifest(&toml).unwrap();
-    assert_eq!(m.format_version, Some(12), "a decl root declares 12");
+    assert_eq!(m.format_version, Some(13), "a decl root declares 13");
 
     // load: the root mounts as the pkg's host rows
     let session = rut_driver::Bundle::parse(&bytes)
@@ -295,7 +295,7 @@ fn host_pack_is_deterministic() {
 
 #[test]
 fn a_lib_root_packs_the_one_wire_number_too() {
-    // a lib root packs compiled under the SAME one wire number: 12 in
+    // a lib root packs compiled under the SAME one wire number: 13 in
     // the riding manifest, compiled root, ledger, groups — the
     // `type` row (absent ⇒ lib) routes the layout, never the version
     let base = scratch("onewire");
@@ -316,8 +316,8 @@ fn a_lib_root_packs_the_one_wire_number_too() {
     .unwrap();
     assert_eq!(
         m.format_version,
-        Some(12),
-        "a lib root's manifest declares 12, the current wire"
+        Some(13),
+        "a lib root's manifest declares 13, the current wire"
     );
     let names = entry_names(&bytes);
     assert!(names.contains(&"rut.scopes".to_string()), "{names:?}");
@@ -348,7 +348,7 @@ fn any_other_version_refuses_with_the_one_recipe() {
         .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
-    assert!(err.contains("reads bundle format_version 12 only"), "{err}");
+    assert!(err.contains("reads bundle format_version 13 only"), "{err}");
     assert!(err.contains("found 9"), "{err}");
     assert!(err.contains("re-pack the directory"), "{err}");
 
@@ -359,7 +359,7 @@ fn any_other_version_refuses_with_the_one_recipe() {
         .and_then(|b| b.walk())
         .unwrap_err()
         .to_string();
-    assert!(err.contains("reads bundle format_version 12 only"), "{err}");
+    assert!(err.contains("reads bundle format_version 13 only"), "{err}");
     assert!(err.contains("found 11"), "{err}");
 
     // a missing version refuses with the same one-line shape

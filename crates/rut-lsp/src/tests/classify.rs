@@ -290,13 +290,35 @@ fn mod_decl_names_classify_as_namespace() {
         "the introducer is not a semantic keyword: {spans:?}"
     );
 
-    // the DECL-mode inline form: a `.d.rut`'s nested `mod` blocks (and
-    // their file-form edges) classify the same — the consolidated
-    // declaration entry parses to exactly this shape
-    let src = "mod net {\n    mod stream;\n}\n";
-    let spans = classify_in(src, Mode::Decl);
+    // the DECL file's file-form edges classify the same as the
+    // implementation file's — ONE mod grammar, both modes
+    let src = "mod net;\npub mod stream;\n";
+    let doc = Document::parse(Mode::Decl, src.to_string());
+    assert!(doc.diags().is_empty(), "{:?}", doc.diags());
+    let spans = doc.spans().to_vec();
     assert_eq!(find(src, &spans, "net"), vec![TokenType::Namespace]);
     assert_eq!(find(src, &spans, "stream"), vec![TokenType::Namespace]);
+
+    // the inline block form is GONE from the grammar: a stray block in
+    // a `.d.rut` is the ordinary ``expected `;` `` error — refusal
+    // parity with an implementation file
+    let src = "mod net {\n    mod stream;\n}\n";
+    let doc = Document::parse(Mode::Decl, src.to_string());
+    assert!(
+        doc.diags()
+            .iter()
+            .any(|d| d.msg.contains("expected ;, found `{`")),
+        "decl files refuse the block form with the ordinary error: {:?}",
+        doc.diags()
+    );
+    let doc = Document::parse(Mode::Impl, src.to_string());
+    assert!(
+        doc.diags()
+            .iter()
+            .any(|d| d.msg.contains("expected ;, found `{`")),
+        "impl files keep the refusal: {:?}",
+        doc.diags()
+    );
 }
 
 #[test]

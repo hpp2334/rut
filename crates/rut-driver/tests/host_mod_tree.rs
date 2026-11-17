@@ -367,32 +367,38 @@ fn flat_host_pkgs_pack_byte_identically() {
 
 #[test]
 fn a_host_tree_packs_into_the_rows_envelope_and_loads_back() {
-    // wire v12: the tree rides ONE consolidated declaration entry —
-    // the tree normalized into the inline `mod` blocks (no rows
-    // envelope) — and the archive reader lowers the inline nesting,
-    // the rows coming back path-qualified exactly as the file tree's
+    // wire 13: the root surface rides VERBATIM (file-form edges, the
+    // directory's own bytes) and the tree rides the `rut.mods` rows
+    // envelope — structure lives in the rows, never in the grammar —
+    // and the archive reader mounts the envelope, the rows coming
+    // back path-qualified exactly as the file tree's
     let dir = tree_world("pack");
     let bytes = pack_dir(&dir).expect("pack");
     let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names,
-        vec!["rut.jsonc", "mod.d.rut"],
-        "the tree consolidates into ONE entry: {names:?}"
+        vec!["rut.jsonc", "mod.d.rut", "rut.mods"],
+        "the tree rides the rows envelope: {names:?}"
     );
-    let entry = bundle.read("mod.d.rut").unwrap();
-    assert!(entry.contains("mod net {"), "the inline form: {entry}");
+    let surface = bundle.read("mod.d.rut").unwrap();
     assert!(
-        entry.contains("mod tls {"),
-        "the nesting splices recursively: {entry}"
+        surface.contains("pub mod net;"),
+        "the root surface stays file-form: {surface}"
+    );
+    let rows = bundle.read("rut.mods").unwrap();
+    assert!(
+        rows.contains("mod tls;"),
+        "the nesting rides the envelope, path-keyed: {rows}"
     );
     let loaded = rut_driver::Bundle::parse(&bytes)
         .and_then(|b| b.walk())
         .expect("load");
     let m = loaded.pkg("myhost").unwrap();
-    assert!(
-        m.mods.is_empty(),
-        "the tree lives in the grammar: {:?}",
+    assert_eq!(
+        m.mods.len(),
+        2,
+        "the envelope's file modules mount: {:?}",
         m.mods.keys().collect::<Vec<_>>()
     );
     assert_eq!(

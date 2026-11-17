@@ -246,8 +246,8 @@ fn lower_const_rows(
 }
 
 /// One module's `host fn` rows, off the module's OWN items — the
-/// row-lowering both lanes share (the host tree recursion, the inline
-/// form, and the lib-surface law's root probe).
+/// row-lowering every lane shares (the host tree recursion and the
+/// lib-surface law's root probe).
 fn lower_rows(ast: &Ast, path: &str, display: &str, rows: &mut Vec<HostRow>) -> Result<(), String> {
     lower_rows_in(ast, ast.root().items(ast), path, display, rows)
 }
@@ -318,13 +318,6 @@ fn lower_rows_in(
 /// root's `origin`, a child's `<mod path>/mod.d.rut`); a child that
 /// is not in the mounted map — or one that does not parse — is the
 /// loud error.
-///
-/// The INLINE form (`mod NAME { .. }`, wire v12) lowers in place: the
-/// nested declarations are walked at the child's mod path, no mounted
-/// file involved — the consolidated declaration entry a bundle group
-/// rides speaks this shape, and a normalized inline entry must lower
-/// to the same rows its file-tree form did (the generation invariant
-/// the pack round-trip gate pins).
 fn lower_module(
     ast: &Ast,
     path: &str,
@@ -377,60 +370,8 @@ fn lower_module(
                     lowered,
                 )?;
             }
-            ItemRef::ModInline(h) => {
-                let d = h.get(ast);
-                // the inline declaration module: the nested declarations
-                // lower at the child's mod path — no mounted file, no
-                // children-map entry. First-wins applies to the same
-                // FILE-FORM edge (an inline block and a `mod NAME;` for
-                // one path would double-lower); the inline walk lowers
-                // its own items directly, once.
-                let name = ast.name(d.name).to_string();
-                let child_path = join_path(path, &name);
-                if !lowered.insert(format!("inline:{child_path}")) {
-                    return Err(format!(
-                        "`mod {name} {{ .. }}` in {display} — the module is already declared \
-                         (one declaration per name, the one-name-one-decl law)"
-                    ));
-                }
-                lower_inline(ast, &d.items, &child_path, &display, rows, consts, lowered)?;
-            }
             _ => continue,
         }
-    }
-    Ok(())
-}
-
-/// Lower an INLINE module's items: its `host fn` rows and `let`
-/// const rows at its mod path, then its nested `mod` edges (file-form
-/// refuses — no children map backs a nested file lookup; inline
-/// blocks recurse). The structural twin of [`lower_module`], one
-/// parse deeper.
-fn lower_inline(
-    ast: &Ast,
-    items: &[ItemRef],
-    path: &str,
-    display: &str,
-    rows: &mut Vec<HostRow>,
-    consts: &mut Vec<(String, TypeId, u64)>,
-    lowered: &mut BTreeSet<String>,
-) -> Result<(), String> {
-    lower_rows_in(ast, items, path, display, rows)?;
-    lower_const_rows(ast, items, display, consts)?;
-    for &it in items {
-        let ItemRef::ModInline(h) = it else {
-            continue;
-        };
-        let d = h.get(ast);
-        let name = ast.name(d.name).to_string();
-        let child_path = join_path(path, &name);
-        if !lowered.insert(format!("inline:{child_path}")) {
-            return Err(format!(
-                "`mod {name} {{ .. }}` in {display} — the module is already declared \
-                 (one declaration per name, the one-name-one-decl law)"
-            ));
-        }
-        lower_inline(ast, &d.items, &child_path, display, rows, consts, lowered)?;
     }
     Ok(())
 }

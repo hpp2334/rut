@@ -91,10 +91,10 @@ the other:
 - The **declaration entry** (`mod.d.rut`) is the *editing truth*: the
   group's surface text, **generated** at pack time from the validated
   surface — never hand-maintained, so it cannot drift from what
-  links. This is universal (wire 12): every group carries exactly one.
-  A host group's entry IS its source (its tree consolidated into the
-  inline form); a compiled group's entry is rendered, round-trip
-  gated, and omitted under `--strip`.
+  links. This is universal (wire 13): every group carries exactly one.
+  A host group's entry IS its source (its tree riding the rows
+  envelope beside it); a compiled group's entry is rendered,
+  round-trip gated, and omitted under `--strip`.
 
 This is the TypeScript `.d.ts` pattern: ship the declaration beside
 the compiled code, generate it from the thing that links, and let the
@@ -110,8 +110,8 @@ ever load-required:
    editor's primary view of a dependency. Go-to-def on a dependency's
    member lands on the declaration — the declaration is where the name
    is published; the body is the owner's private code. The entry is
-   one Decl parse per group; a consolidated entry's inline `mod`
-   nesting stamps each row with its mod path.
+   one Decl parse per group; a host tree's mod paths come off the
+   rows envelope riding beside the entry.
 2. **Object surface (names + types)** — the binary's own surface
    section, always present, is the floor: tooling can read names and
    signatures from the decoded object alone. It answers when the entry

@@ -211,9 +211,11 @@ fn the_default_root_packs_and_loads_back() {
         "flat_host::ping",
     );
 
-    // tree: the ONE consolidated entry (wire v12 — the tree normalized
-    // into the inline form, no rows envelope), and the round trip
-    // re-lowers path-qualified through the inline grammar
+    // tree: the root surface rides VERBATIM (file-form edges, the
+    // directory's own bytes) and the tree rides the `rut.mods` rows
+    // envelope (wire 13 — structure lives in the rows, never in the
+    // grammar); the round trip re-lowers path-qualified through the
+    // envelope mount
     let dir = make_pkg(
         &scratch("pack-tree"),
         &[
@@ -231,21 +233,30 @@ fn the_default_root_packs_and_loads_back() {
     let bytes = pack_dir(&dir).expect("pack");
     let bundle = rut_driver::bundle::Bundle::parse(&bytes).unwrap();
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(names, vec!["rut.jsonc", "mod.d.rut"]);
-    // the entry IS the tree: the child's declaration spliced inline
-    let entry = bundle.read("mod.d.rut").unwrap();
-    assert!(entry.contains("mod net {"), "the inline form: {entry}");
+    assert_eq!(
+        names,
+        vec!["rut.jsonc", "mod.d.rut", "rut.mods"],
+        "the tree rides the rows envelope: {names:?}"
+    );
+    // the root surface IS the directory's bytes — the edge stays a
+    // file-form `mod` declaration, never an inline block
+    let surface = bundle.read("mod.d.rut").unwrap();
+    assert_eq!(
+        surface,
+        "pub mod net;\npub host fn legacy_ping() -> bool;\n"
+    );
+    let rows = bundle.read("rut.mods").unwrap();
     assert!(
-        entry.contains("connect"),
-        "the child's rows ride inside: {entry}"
+        rows.contains("pub host fn connect"),
+        "the child's text rides the envelope: {rows}"
     );
     assert_eq!(bytes, pack_dir(&dir).unwrap(), "deterministic");
     let loaded = rut_driver::Bundle::parse(&bytes)
         .and_then(|b| b.walk())
         .expect("load");
     let m = loaded.pkg("myhost").unwrap();
-    // the tree lives in the grammar now — no file modules mount
-    assert!(m.mods.is_empty(), "{:?}", m.mods.keys().collect::<Vec<_>>());
+    // the tree lives in the rows envelope now — the file modules mount
+    assert_eq!(m.mods.len(), 1, "{:?}", m.mods.keys().collect::<Vec<_>>());
     assert_eq!(
         rows_of(m)
             .iter()
@@ -259,9 +270,10 @@ fn the_default_root_packs_and_loads_back() {
 fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
     // THE CANONICAL SURFACE LAW: a manifest
     // spelling `entry.type` keeps the DIRECTORY key (the directory
-    // grammar is untouched) — but the archive canonicalizes: the ONE
-    // consolidated entry rides as `mod.d.rut`, whatever the directory
-    // spelled. The reader mounts `mod.d.rut`
+    // grammar is untouched) — but the archive canonicalizes: the root
+    // surface rides as `mod.d.rut`, whatever the directory
+    // spelled, the tree beside it in the rows envelope. The reader
+    // mounts `mod.d.rut`
     // at both levels.
     let dir = make_pkg(
         &scratch("old-shape"),
@@ -285,8 +297,8 @@ fn a_host_bundle_packs_its_surface_at_the_canonical_name() {
     let names: Vec<&str> = bundle.entries().iter().map(|(n, _)| n.as_str()).collect();
     assert_eq!(
         names,
-        vec!["rut.jsonc", "mod.d.rut"],
-        "the ONE consolidated entry rides at the canonical name, no rows envelope",
+        vec!["rut.jsonc", "mod.d.rut", "rut.mods"],
+        "the root surface rides at the canonical name, the tree in the rows envelope: {names:?}",
     );
     let loaded = rut_driver::Bundle::parse(&bytes)
         .and_then(|b| b.walk())

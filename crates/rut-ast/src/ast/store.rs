@@ -110,7 +110,6 @@ arenas! {
     // items
     modules: crate::ast::item::ModuleNode,
     mod_decls: crate::ast::item::ModDeclNode,
-    mod_inlines: crate::ast::item::ModInlineNode,
     uses: crate::ast::item::UseNode,
     aliases: crate::ast::item::AliasNode,
     module_lets: crate::ast::item::ModuleLetNode,

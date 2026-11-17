@@ -408,7 +408,7 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         .clone()
         .ok_or_else(|| format!("`{MANIFEST_NAME}` has no `name`"))?;
     let mut files = Vec::new();
-    // the declaration entry, ONE per group (wire v12 — the `.d.ts`
+    // the declaration entry, ONE per group (wire 13 — the `.d.ts`
     // lane): the manifest's spelled surface first (`entry.type` — a
     // host root's, the default `mod.d.rut` included), then the
     // archive's own `mod.d.rut` probe — a compiled group's GENERATED
@@ -538,7 +538,7 @@ pub fn bundle_sources(bytes: &[u8]) -> Result<BundleIndex, String> {
         // no source rode — the delivery law (v22): a published lib
         // bundle is COMPILED-ONLY, its generic bodies riding the binary
         // as templates. The editor's answer is the DECLARATION ENTRY
-        // when the group carries one (wire v12 — pushed above); the
+        // when the group carries one (wire 13 — pushed above); the
         // floor beneath it is the binary's own DECLARATION FACE: the
         // decoded surface rendered back as Impl-mode source (classes
         // with fields, the inherent methods, the free fns — signatures
@@ -809,13 +809,12 @@ pub fn index_dep(name: &str, uri: &str, mod_path: Option<&str>, src: String) -> 
     crate::hover::index(&doc, crate::hover::Mount::dep(name, uri, mod_path))
 }
 
-/// One declaration entry's module indexes — the wire-v12 consumption
-/// of a group's consolidated `mod.d.rut`: ONE Decl parse, and one
-/// `(mod path, index)` pair per nested inline module, each stamped with
-/// the mod path its nesting spells. Structure lives in the grammar,
-/// never in paths: the file is one, the modules many, the parse one.
-/// `mod_path` prefixes every stamp (the file's own position — `""` for
-/// a group root).
+/// One declaration entry's module index — the wire-13 consumption of
+/// a group's consolidated `mod.d.rut`: ONE Decl parse, ONE module.
+/// The inline form is gone — the entry is flat surface text, the mod
+/// tree rides the rows envelope ([`bundle_rows`]), so the file IS the
+/// one module and `mod_path` stamps it (the file's own position —
+/// `""` for a group root).
 #[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
 pub fn index_dep_decl_group(
     name: &str,
@@ -827,68 +826,20 @@ pub fn index_dep_decl_group(
     // the declaration entry lane's mode (the filename convention)
     let doc = crate::semantic::Document::parse(crate::semantic::mode_of(uri), src);
     let (ast, toks, src) = (doc.ast(), doc.toks(), doc.src());
-    // the module slices: the root's items, then each inline module's,
-    // path-stamped, first-wins (the loader's own edge law)
-    let mut modules: Vec<(String, Vec<rut_ast::ItemRef>)> =
-        vec![(String::new(), ast.root().items(ast).to_vec())];
-    collect_inline_modules(ast, ast.root().items(ast), mod_path, &mut modules);
-    modules
-        .into_iter()
-        .map(|(path, items)| {
-            // the slice's mount — ONE record: the entry uri for the
-            // file's own module, a `#<mod path>` suffix for the nested
-            // ones (one index per module, one origin each — the faces'
-            // defs store dedups by origin), the (module, mod_path)
-            // pair remaining the real key
-            let mount = crate::hover::Mount {
-                origin: if path == mod_path {
-                    uri.to_string()
-                } else {
-                    format!("{uri}#{path}")
-                },
-                module: Some(name.to_string()),
-                mod_path: Some(path.clone()),
-                // the parse mode rides the mount — the definition
-                // layer's body-over-decl preference reads it
-                mode: Some(crate::semantic::mode_of(uri)),
-                ..crate::hover::Mount::default()
-            };
-            (
-                path,
-                crate::hover::build::index_items(src, ast, toks, &items, mount),
-            )
-        })
-        .collect()
-}
-
-/// The inline modules of one parsed item list, depth-first, path-stamped
-/// under `prefix`. First-wins: a repeated inline edge never mounts
-/// twice.
-#[allow(dead_code)] // test-pinned: production mounts the store trees pre-unpacked — only the tests unpack
-fn collect_inline_modules(
-    ast: &rut_ast::Ast,
-    items: &[rut_ast::ItemRef],
-    prefix: &str,
-    out: &mut Vec<(String, Vec<rut_ast::ItemRef>)>,
-) {
-    for &it in items {
-        let rut_ast::ItemRef::ModInline(h) = it else {
-            continue;
-        };
-        let d = h.get(ast);
-        let name = ast.name(d.name).to_string();
-        let path = if prefix.is_empty() {
-            name
-        } else {
-            format!("{prefix}/{name}")
-        };
-        if out.iter().any(|(p, _)| *p == path) {
-            continue; // first mount wins
-        }
-        let nested = h.items(ast).to_vec();
-        out.push((path.clone(), nested.clone()));
-        collect_inline_modules(ast, &nested, &path, out);
-    }
+    let mount = crate::hover::Mount {
+        origin: uri.to_string(),
+        module: Some(name.to_string()),
+        mod_path: Some(mod_path.to_string()),
+        // the parse mode rides the mount — the definition
+        // layer's body-over-decl preference reads it
+        mode: Some(crate::semantic::mode_of(uri)),
+        ..crate::hover::Mount::default()
+    };
+    let items = ast.root().items(ast).to_vec();
+    vec![(
+        String::new(),
+        crate::hover::build::index_items(src, ast, toks, &items, mount),
+    )]
 }
 
 // (the minted manifest-const rows are gone — the retired `consts`
