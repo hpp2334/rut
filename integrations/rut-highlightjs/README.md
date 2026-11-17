@@ -77,11 +77,11 @@ Idempotent: already-baked blocks are skipped.
 The grammar is transcribed from the compiler's own tables, and where
 prose and code disagree the code wins:
 
-- **keywords** — `RESERVED_KW` in `crates/rut-ast/src/parser/mod.rs` (28
+- **keywords** — `RESERVED_KW` in `crates/rut-ast/src/parser/mod.rs` (26
   words) plus the contextual words the parser matches by interner text
-  (`entry`, `builtin`, `primitive`, `break`, `continue`, `self`,
-  `Self`, `super`, `as`, `type`). The keyword table in
-  `docs/src/reference/lexical-structure.md` matches `RESERVED_KW`
+  (`entry`, `builtin`, `primitive`, `prelude`, `mod`, `break`,
+  `continue`, `self`, `Self`, `super`, `as`, `type`). The keyword table
+  in `docs/src/reference/lexical-structure.md` matches `RESERVED_KW`
   exactly — no conflict there.
 - **primitive types** — `is_primitive_ty` in the same file (`bool`,
   `str`, `bytes`, `f32`, `f64`, `i8`–`i64`, `u8`–`u64`; `nil` colors as
@@ -103,8 +103,9 @@ prose and code disagree the code wins:
 Cross-check notes worth keeping in mind when editing:
 
 - There is no `loop` keyword — no `loop` anywhere in the parser.
-- `in` is not a keyword; it is a reserved word the lexer rejects with
-  "iteration is `for (let x of ...)`".
+- `in` is not a keyword — an ordinary identifier, like every word the
+  grammar does not claim (there is no reserved-word hard-ban; see
+  `docs/src/reference/lexical-structure.md`).
 - `break`/`continue` are statement keywords in the parser but NOT in
   `RESERVED_KW` (they don't bare-complete) — highlighted here anyway,
   as the TextMate grammar does.

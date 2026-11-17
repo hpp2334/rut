@@ -260,14 +260,15 @@ fn symbols_selection_stays_inside_range_on_damaged_sources() {
 }
 
 #[test]
-fn comment_is_appended_to_the_legend() {
+fn the_legend_is_fifteen_standard_types() {
+    // every type the legend names is a standard LSP token type and every
+    // one has an emitter — no dead rows (the never-emitted `comment`
+    // row was deleted, not appended to)
     let legend = TokenType::legend();
-    assert_eq!(legend.len(), 16);
-    assert_eq!(TokenType::Comment.index(), 15);
-    // the trailing append moved nothing
+    assert_eq!(legend.len(), 15);
     assert_eq!(TokenType::Operator.index(), 14);
     assert_eq!(TokenType::Namespace.index(), 13);
-    assert_eq!(legend.last().copied(), Some("comment"));
+    assert_eq!(legend.last().copied(), Some("operator"));
 }
 
 #[test]
@@ -275,19 +276,17 @@ fn mod_decl_names_classify_as_namespace() {
     // `mod NAME;` declares a name-resolution head — the name reads
     // namespace, the same class the `::` path law gives the head at
     // its uses. `pub` rides (its ident never matches the name), and
-    // the introducer word itself stays un-classed by the semantic
-    // layer: a contextual introducer, owned by the anchored TextMate
-    // rule (the `type` law) — never blanket-keyworded, a path may
-    // legally carry the name (`use mod::{ .. }`).
+    // the introducer word itself is token-owned by text: `mod` joins
+    // the classifier's keyword set (the `type` law — the introducer
+    // colors even though a path may legally carry the name, `use
+    // mod::{ .. }`).
     let src = "mod state;\npub mod theme;\nentry fn main() -> nil {}\n";
     let spans = classify_src(src);
     assert_eq!(find(src, &spans, "state"), vec![TokenType::Namespace]);
     assert_eq!(find(src, &spans, "theme"), vec![TokenType::Namespace]);
-    assert!(
-        !spans
-            .iter()
-            .any(|(sp, t)| *t == TokenType::Keyword && span_text(src, *sp) == "mod"),
-        "the introducer is not a semantic keyword: {spans:?}"
+    assert_eq!(
+        find(src, &spans, "mod"),
+        vec![TokenType::Keyword, TokenType::Keyword]
     );
 
     // the DECL file's file-form edges classify the same as the
@@ -389,10 +388,12 @@ fn use_lines_classify_by_the_capitalization_law() {
     assert_eq!(find(src, &spans, "Logger"), vec![TokenType::Type]);
     assert_eq!(find(src, &spans, "entry"), vec![TokenType::Keyword]);
 
-    // a lowercase import colors a function, its single-seg head a module
+    // a lowercase import colors a function; a keyword-named head stays
+    // token-owned (`mod` joins the classifier's keyword set — the text
+    // class wins in the token stream even in a legal path slot)
     let src = "use mod::{ helper };\n";
     let spans = classify_src(src);
-    assert_eq!(find(src, &spans, "mod"), vec![TokenType::Namespace]);
+    assert_eq!(find(src, &spans, "mod"), vec![TokenType::Keyword]);
     assert_eq!(find(src, &spans, "helper"), vec![TokenType::Function]);
 }
 

@@ -9,7 +9,6 @@
     { "include": "#raw-string-hash" },
     { "include": "#raw-string" },
     { "include": "#string" },
-    { "include": "#char" },
     { "include": "#number" },
     { "include": "#boolean" },
     { "include": "#null" },
@@ -96,13 +95,9 @@
       "patterns": [
         {
           "name": "constant.character.escape.rut",
-          "match": "\\\\(n|r|t|0|\\\\|\"|'|x[0-9a-fA-F]{2}|u\\{[0-9a-fA-F]{1,6}\\})"
+          "match": "\\\\(?:[tnrbf\\\\\"'0]|u\\{[0-9a-fA-F]{1,6}\\})"
         }
       ]
-    },
-    "char": {
-      "name": "constant.character.rut",
-      "match": "'(\\\\(n|r|t|0|\\\\|\"|'|x[0-9a-fA-F]{2}|u\\{[0-9a-fA-F]{1,6}\\})|[^'\\\\])'"
     },
     "number": {
       "patterns": [
@@ -177,9 +172,11 @@
       "match": "\\b(let|mut|enum|class|struct|interface|impl|requires|use|pub|static|is|host|fn|as|super|self|entry)\\b"
     },
     "builtin-keyword": {
-      "match": "\\b(builtin)(?=\\s+(?:fn|primitive|impl|class)\\b)",
+      "match": "\\b(?:(builtin)(?=\\s+(?:fn|primitive|impl|class)\\b)|(prelude)(?=\\s+builtin\\b)|(?<=builtin\\s)(primitive)(?=\\s+[A-Za-z_]))",
       "captures": {
-        "1": { "name": "keyword.other.rut" }
+        "1": { "name": "keyword.other.rut" },
+        "2": { "name": "keyword.other.rut" },
+        "3": { "name": "keyword.other.rut" }
       }
     },
     "use-line": {
@@ -221,7 +218,7 @@
     },
     "operator": {
       "name": "keyword.operator.rut",
-      "match": "<<=|>>=|&&=|\\|\\|=|&\\+=|&-=|&\\*=|&<<=|&<<|&\\+|&-|&\\*|<<|>>|<=|>=|==|!=|&&|\\|\\||->|=>|\\.\\.|[+\\-*/%&|^!~=?@]"
+      "match": "<<=|>>=|<<|>>|->|=>|==|!=|<=|>=|&&|\\|\\||\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|[+\\-*/%&|^!<>?=]"
     },
     "punctuation": {
       "patterns": [

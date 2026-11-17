@@ -16,18 +16,22 @@
  * Derived from the compiler's own tables (the code is the truth):
  *   - keywords:  `crates/rut-ast/src/parser/mod.rs` `RESERVED_KW`, plus the
  *     contextual words the parser matches by interner text: `entry`,
- *     `host`-lane siblings `builtin`/`primitive` (item.rs), `break`/
- *     `continue` (stmt.rs), `self`/`Self` (expr.rs, item.rs), `super`
- *     (frame.rs), `as` (casts), `type` (the alias introducer).
+ *     `host`-lane siblings `builtin`/`primitive` (item.rs), `prelude`
+ *     (the ambient builtin head), `mod` (the module introducer,
+ *     item.rs — symmetric with `type`), `break`/`continue` (stmt.rs),
+ *     `self`/`Self` (expr.rs, item.rs), `super` (frame.rs), `as`
+ *     (casts), `type` (the alias introducer).
  *   - primitive types: `is_primitive_ty` in the same file; `opaque` is
  *     added on top — a real contextual builtin type (the erasure box,
  *     declared `builtin primitive opaque`) that the table doesn't list.
  *   - literals: `crates/rut-lexer/src/lexer.rs` — `"…"` with `\t \n \r
- *     \b \f \\ \" \' \0 \u{…}` escapes, `r"…"` raw (no escapes),
- *     `f"…"` format strings with `{hole}` expressions (`{{`/`}}` are
- *     literal braces, string literals inside a hole are an error),
- *     numbers with `_` separators, `0x`/`0b`/`0o` radices and
- *     `i8..i64`/`u8..u64`/`f32`/`f64` suffixes.
+ *     \b \f \\ \" \' \0 \u{…}` escapes, `r"…"` raw (no escapes; the
+ *     `r#"…"#` hash levels are multi-line), `f"…"` format strings with
+ *     `{hole}` expressions (`{{`/`}}` are literal braces, string
+ *     literals inside a hole are an error), `inf` (the float-infinity
+ *     literal, folded from the ident), numbers with `_` separators,
+ *     `0x`/`0b`/`0o` radices and `i8..i64`/`u8..u64`/`f32`/`f64`
+ *     suffixes.
  * If a word is absent from those tables it does not belong here — see
  * README.md for the full derivation notes and cross-check results.
  *
@@ -53,7 +57,7 @@ const KEYWORDS = {
     'static async await is host ' +
     // contextual words — ordinary identifiers elsewhere, keywords in
     // their slots
-    'entry builtin primitive break continue self Self super as type',
+    'entry builtin primitive prelude mod break continue self Self super as type',
 
   literal: 'true false nil',
 
@@ -122,29 +126,55 @@ const USE_IMPORT_FUNCTION = mode('title', {
 });
 
 // Suffix included in the match, so `10u8`, `1.5f32`, `0xFFu64` color as
-// one number the way the lexer tokenizes them.
+// one number the way the lexer tokenizes them. `inf` joins the family:
+// the parser folds the ident to the float-infinity literal in expression
+// position (expr.rs, the `true`/`false` precedent; tmLanguage has
+// `\binf\b` as constant.numeric).
 const NUMBER = mode('number', {
-  begin: /\b(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?)(?:[iu](?:8|16|32|64)|f32|f64)?\b/,
+  begin: /\b(?:inf|0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?)(?:[iu](?:8|16|32|64)|f32|f64)?\b/,
 });
 
 // `f"…{expr}…"` — the hole is highlighted as `subst`; it recurses for
 // nested braces and carries the keywords so hole expressions color.
+// The body tiles are shared with the hash-leveled levels below.
+const FSTRING_TILES = [
+  // `{{`/`}}` are literal braces; the same escape set as plain
+  // strings — including `\u{…}`, so the `{…}` of an escape is not
+  // mistaken for a hole
+  mode('', { begin: /\{\{|\}\}|\\(?:[tnrbf\\"'0]|u\{[0-9a-fA-F]{1,6}\})/ }),
+  mode('subst', {
+    begin: /\{/,
+    end: /\}/,
+    keywords: KEYWORDS,
+    contains: ['self', NUMBER, MEMBER_CALL, MEMBER_FIELD],
+  }),
+];
+
 const FSTRING = mode('string', {
   begin: /f"/,
   end: /"/,
   illegal: /\n/, // rut strings are single-line
-  contains: [
-    // `{{`/`}}` are literal braces; the same escape set as plain
-    // strings — including `\u{…}`, so the `{…}` of an escape is not
-    // mistaken for a hole
-    mode('', { begin: /\{\{|\}\}|\\(?:[tnrbf\\"'0]|u\{[0-9a-fA-F]{1,6}\})/ }),
-    mode('subst', {
-      begin: /\{/,
-      end: /\}/,
-      keywords: KEYWORDS,
-      contains: ['self', NUMBER, MEMBER_CALL, MEMBER_FIELD],
-    }),
-  ],
+  contains: FSTRING_TILES,
+});
+
+// `f#"…"#` / `f##"…"##` — the multi-line levels: newlines are content,
+// the body closes at the first `"` followed by the opening `#` run.
+// begin/end are compiled as SEPARATE regexes here, so tmLanguage's
+// `f(#+)"` … `"\1` backreference pairing is unavailable — the two live
+// levels enumerate (the fixed prefixes keep the begins unambiguous).
+// `multiline` marks the level for the book baker (plain string scopes
+// bake single-line; hljs itself ignores the extra key).
+const FSTRING_HASH1 = mode('string', {
+  begin: /f#"/,
+  end: /"#/,
+  contains: FSTRING_TILES,
+  multiline: true,
+});
+const FSTRING_HASH2 = mode('string', {
+  begin: /f##"/,
+  end: /"##/,
+  contains: FSTRING_TILES,
+  multiline: true,
 });
 
 // `r"…"` — the lexer closes at the first `"` (see README: code wins)
@@ -152,6 +182,14 @@ const RAW_STRING = mode('string', {
   begin: /r"/,
   end: /"/,
   illegal: /\n/,
+});
+
+// `r#"…"#` — hash-leveled raw: multi-line, closes at the first `"`
+// followed by the opening `#` run. ONE regex — group + backref inside
+// the same pattern — is exact for every level (shorter-`#`-run quotes
+// are content; the surplus `#`s of a longer closer stay outside).
+const RAW_STRING_HASH = mode('string', {
+  begin: /r(#+)"[\s\S]*?"\1/,
 });
 
 const STRING = mode('string', {
@@ -172,7 +210,10 @@ function rutLanguage() {
       // comments do NOT nest
       mode('comment', { begin: /\/\//, end: /(?=\n)/ }),
       mode('comment', { begin: /\/\*/, end: /\*\// }),
+      FSTRING_HASH2,
+      FSTRING_HASH1,
       FSTRING,
+      RAW_STRING_HASH,
       RAW_STRING,
       STRING,
       NUMBER,

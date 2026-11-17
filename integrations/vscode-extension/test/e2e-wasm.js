@@ -138,15 +138,15 @@ async function main() {
     // is the probe.
     smokes++;
 
-    // ---- the semantic-token legend (16 types, the extension's map —
-    // comments joined the classes, phase 5 added the namespace class) ----
+    // ---- the semantic-token legend (15 types, the extension's map —
+    // phase 3 dropped the never-emitted comment class; namespace
+    // arrived in phase 5) ----
     const legend = await rut.legend();
     if (
         !(
-            legend.length === 16 &&
+            legend.length === 15 &&
             legend.includes('enumMember') &&
             legend.includes('keyword') &&
-            legend.includes('comment') &&
             legend.includes('namespace')
         )
     ) {

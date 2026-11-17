@@ -93,9 +93,6 @@
                     "class": [
                         "entity.name.type.class"
                     ],
-                    "trait": [
-                        "entity.name.type.trait"
-                    ],
                     "namespace": [
                         "entity.name.namespace"
                     ],

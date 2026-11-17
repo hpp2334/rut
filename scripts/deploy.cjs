@@ -204,10 +204,32 @@ if (unknown.length) {
 //      both into docs/dist-book
 // ---------------------------------------------------------------------------
 
+// The book's highlighter is a committed BYTE-COPY of the generated
+// register.js (docs/book.toml wires docs/theme/rut-highlight.js; see
+// integrations/rut-highlightjs/README.md). Drift here ships a stale
+// grammar to every book page, so the gate runs for the WHOLE book lane
+// — build, --no-build, and --dry-run alike. Pure fs check.
+if (book) {
+  const grammarSrc = path.join(ROOT, "integrations", "rut-highlightjs", "register.js");
+  const grammarCopy = path.join(ROOT, "docs", "theme", "rut-highlight.js");
+  if (
+    !fs.existsSync(grammarSrc) ||
+    !fs.existsSync(grammarCopy) ||
+    !fs.readFileSync(grammarSrc).equals(fs.readFileSync(grammarCopy))
+  ) {
+    die(
+      "docs/theme/rut-highlight.js is not byte-identical to integrations/rut-highlightjs/register.js — " +
+        "regen and copy: `cd integrations/rut-highlightjs && node scripts/build.mjs && " +
+        "cp register.js ../../docs/theme/rut-highlight.js`"
+    );
+  }
+}
+
 if (!doBuild) {
   info(dim("skipping build (--no-build)"));
 } else if (book) {
-  // ---- the book lane: artifact, then the rendered book ---------------
+  // ---- the book lane: artifacts, then the rendered book --------------
+
   // (a) wasm preflight — the run buttons' artifact target. Die loudly
   //     naming the exact command (the repo's no-silent-fallback law).
   const haveTarget = spawnSync("rustup", ["target", "list", "--installed"], {

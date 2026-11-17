@@ -212,12 +212,31 @@ const SNIPPETS = [
         text: 'mod',
         notScope: 'keyword',
     },
-    // M6: `..` is operator-classed the day range/slice syntax lands;
-    // a single `.` stays punctuation.
+    // M6: the operator row mirrors the lexer's LONGEST_MATCH — the live
+    // compound assignments are one operator token each (`..` is NOT a
+    // token; the deleted range spelling), a single `.` stays punctuation.
     {
-        name: 'M6 dotdot operator',
-        src: 'let r = 0..10;',
-        text: '..',
+        name: 'M6 compound assignment operator',
+        src: 'let x = 1;\nx += 1;',
+        text: '+=',
+        scope: 'keyword.operator.rut',
+    },
+    {
+        name: 'M6 shift assignment operator',
+        src: 'let x = 1;\nx <<= 2;',
+        text: '<<=',
+        scope: 'keyword.operator.rut',
+    },
+    {
+        name: 'M6 inequality operator',
+        src: 'let b = a != c;',
+        text: '!=',
+        scope: 'keyword.operator.rut',
+    },
+    {
+        name: 'M6 return arrow operator',
+        src: 'entry fn main() -> nil {}',
+        text: '->',
         scope: 'keyword.operator.rut',
     },
     {
@@ -232,6 +251,36 @@ const SNIPPETS = [
         src: 'builtin primitive opaque {',
         text: 'builtin',
         scope: 'keyword.other.rut',
+    },
+    {
+        name: 'M8 primitive keyword in builtin head',
+        src: 'builtin primitive opaque {',
+        text: 'primitive',
+        scope: 'keyword.other.rut',
+    },
+    {
+        name: 'M8 prelude keyword in ambient head',
+        src: 'prelude builtin primitive opaque {',
+        text: 'prelude',
+        scope: 'keyword.other.rut',
+    },
+    {
+        name: 'M8 builtin keyword in ambient head',
+        src: 'prelude builtin primitive opaque {',
+        text: 'builtin',
+        scope: 'keyword.other.rut',
+    },
+    {
+        name: 'M8 primitive identifier stays plain',
+        src: 'let primitive = 3;',
+        text: 'primitive',
+        notScope: 'keyword',
+    },
+    {
+        name: 'M8 prelude identifier stays plain',
+        src: 'let prelude = 3;',
+        text: 'prelude',
+        notScope: 'keyword',
     },
     {
         name: 'M8 builtin in comment plain',

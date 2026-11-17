@@ -52,13 +52,17 @@ Contextual words — ordinary identifiers elsewhere:
 | Word | Special meaning |
 |---|---|
 | `type` | the alias introducer (`type Km = Meters;` — see [Type aliases and union bounds](type-aliases.md)) |
+| `mod` | the module introducer (`mod state;` — a `.rut` sibling in the package, see [Modules and visibility](modules-and-visibility.md)) |
 | `entry` | `entry fn` at module scope publishes the function to the embedder |
 | `self` | the explicit receiver, first parameter of an instance method |
 | `Self` | names the enclosing class inside its body; the class-private literal `Self { .. }` |
 | `new` | not special — the conventional construction-method name (`Rect::new(..)`) |
 | `as` | the numeric cast (`x as u32`) |
 | `super` | only inside `pub(super)` |
+| `break` / `continue` | loop control — exit the loop / next iteration (see [Control flow and when](control-flow.md)) |
 | `builtin` | declaration modes of the engine's own surface — spelled `prelude builtin` (ambient) or `pub builtin` (import-gated); see [Host fns and declaration files](host-fns.md) |
+| `prelude` | only directly before `builtin` — the AMBIENT engine surface head (`prelude builtin`, [host fns](host-fns.md)) |
+| `primitive` | only directly after `builtin` — the engine's primitive decl (`builtin primitive <name> { .. }`) |
 | `disposal` / `iterable` / `constructor` | the bracket markers — `[disposal] fn` / `[iterable] fn` / `[constructor] fn` designate an inherent impl member as a designated surface (before visibility: `[disposal] pub fn ..`); the set is closed and engine-owned ([interfaces](interfaces.md)) |
 
 `panic(msg)` is a prelude function, not a keyword.

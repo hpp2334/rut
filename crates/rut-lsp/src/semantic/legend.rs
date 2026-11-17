@@ -23,10 +23,9 @@ pub enum TokenType {
     /// the `::` law's head class; `.` value access never spells one
     Namespace,
     Operator,
-    Comment,
 }
 
-pub(crate) const ALL: [TokenType; 16] = [
+pub(crate) const ALL: [TokenType; 15] = [
     TokenType::Keyword,
     TokenType::Number,
     TokenType::String,
@@ -42,7 +41,6 @@ pub(crate) const ALL: [TokenType; 16] = [
     TokenType::Interface,
     TokenType::Namespace,
     TokenType::Operator,
-    TokenType::Comment,
 ];
 
 impl TokenType {
@@ -63,7 +61,6 @@ impl TokenType {
             TokenType::Interface => "interface",
             TokenType::Namespace => "namespace",
             TokenType::Operator => "operator",
-            TokenType::Comment => "comment",
         }
     }
     pub fn index(self) -> u32 {
@@ -75,23 +72,38 @@ impl TokenType {
 }
 
 /// The highlighting keyword set: the grammar's reserved words
-/// (`rut_ast::parser::is_reserved_kw`) plus the contextual/statement words the
-/// parser matches by text (`break`, `continue`, `as`, `super`)
-/// and the receiver `self`. `entry` joins by TEXT for highlighting only:
-/// contextual before `fn` in the grammar, never an identifier in
-/// practice — but NOT reserved, so a name position may still legally
-/// carry it, and `owned_by_tokens` semantics then keep the token layer's
-/// keyword class there (the AST pass skips token-owned texts, so no
-/// same-named name is reclassified). The corpus never spells an
-/// identifier `entry`, so the tradeoff costs nothing. `true`/`false` lex
-/// as `Tok::Bool` and are classified there (keyword constants).
+/// (`rut_ast::parser::is_reserved_kw`) plus the contextual/statement
+/// words the parser matches by text — the item introducers `mod`/`type`
+/// (item.rs:45/47), the engine-surface trio `builtin`/`primitive`/
+/// `prelude` (item.rs:143/1918/85), the statement words `break`/
+/// `continue` (stmt.rs), the numeric cast `as` (expr.rs), the path
+/// head `super` (frame.rs) — and the receiver `self`. Every word in the
+/// `matches!` list joins by TEXT for highlighting only: contextual in
+/// the grammar, never reserved — so a name or path may still legally
+/// carry one, and `owned_by_tokens` semantics then keep the token
+/// layer's keyword class there (the AST pass skips token-owned texts,
+/// so no same-named name is reclassified). The corpus never spells an
+/// identifier with one, so the tradeoff costs nothing. `true`/`false`
+/// lex as `Tok::Bool` and are classified there (keyword constants).
 pub fn is_keyword(s: &str) -> bool {
-    matches!(s, "self" | "break" | "continue" | "as" | "super" | "entry")
-        || rut_ast::parser::is_reserved_kw(s)
+    matches!(
+        s,
+        "self"
+            | "break"
+            | "continue"
+            | "as"
+            | "super"
+            | "entry"
+            | "mod"
+            | "type"
+            | "builtin"
+            | "primitive"
+            | "prelude"
+    ) || rut_ast::parser::is_reserved_kw(s)
 }
 
 pub fn is_primitive_ty(s: &str) -> bool {
-    // canonical table lives with the grammar (shared with `host primitive`)
+    // the canonical table lives with the grammar
     rut_ast::parser::is_primitive_ty(s)
 }
 

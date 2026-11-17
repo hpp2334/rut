@@ -36,7 +36,7 @@ pub(crate) fn token_type(tok: &Tok) -> Option<TokenType> {
         | Tok::Semi
         | Tok::Colon
         | Tok::Dot => None,
-        // arrows, `?` `@` `~`, and the arithmetic/bitwise families
+        // arrows, `?`, and the arithmetic/bitwise families
         //
         _ => Some(TokenType::Operator),
     }

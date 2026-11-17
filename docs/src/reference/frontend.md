@@ -64,8 +64,10 @@ may contain any expression — a string literal included: termination is
 brace-based, so the quote lexes as an ordinary string token. See
 [Templates](templates.md) for the surface semantics.
 
-Raw strings `r"..."` carry everything up to the closing `"` literally;
-`\"` inside a raw string does not close it. The `#` count after the
+Raw strings `r"..."` carry no escapes — the body is literal bytes up to
+the closing `"`: the FIRST `"` closes the string, `\` or not (to hold a
+`"` in the body, bump the level — [literals and
+inference](literals-and-inference.md)). The `#` count after the
 `r`/`f` prefix is the literal's LEVEL: level 0 is single-line (a
 newline inside the body is an *unterminated* diagnostic), and at level
 `n >= 1` (`r#"..."#`, `f#"..."#`) the body spans lines and closes at
@@ -107,14 +109,14 @@ powers, loosest to tightest:
 | 3 | left | `\|\|` |
 | 4 | left | `&&` |
 | 5 | left | `==` `!=` |
-| 6 | left | `<` `>` `<=` `>=` |
+| 6 | left; `is` non-assoc | `<` `>` `<=` `>=` `is` |
 | 7 | left | `\|` `^` |
 | 8 | left | `&` |
 | 9 | left | `<<` `>>` |
 | 10 | left | `+` `-` |
 | 11 | left | `*` `/` `%` |
 | 12 | left | `as` — numeric cast; the RHS is a type-naming position |
-| 13 | right | unary `-` `!` |
+| 13 | right | unary `-` `!`; prefix `await` |
 | 14 | left | postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]` |
 
 Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose
@@ -208,7 +210,7 @@ enum NodeKind {
     Impl      { generics, bounds, target: NodeId },       // inherent only —
               // no trait_ref: `impl I for T` does not parse
     Fn     { vis, name, generics, params, ret, body },
-    SurfaceFn / SurfaceClass,                             // .d.rut only
+    SurfaceFn / SurfaceStruct,                            // .d.rut only
     // statements
     LetStmt, If, While, ForOf, ForC, Return, When, ExprStmt,
     // expressions
@@ -221,7 +223,8 @@ enum NodeKind {
     Lambda { params, ret, body }, When { scrut, arms },
     If { cond, then, els },              // the if ATOM (statement-if above)
     FStr { parts },               // holes are NodeIds
-    StructLit { ty, fields }, Array { elems }, Conv { ty, expr },
+    StructLit { ty, fields }, Array { elems }, ArrayRepeat { value, count },
+    Cast { ty, expr },                   // `expr as ty` — the one cast
 }
 ```
 

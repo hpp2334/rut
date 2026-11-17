@@ -12,10 +12,10 @@
  * Zero dependencies, one source of truth: it imports the SAME grammar
  * the runtime entry uses (`src/grammar.js`) and interprets the small
  * mode subset that grammar uses — `{ scope, begin, end?, keywords?,
- * contains? }` plus the `'self'` reference, with string-scoped modes
- * ending at end-of-line (rut strings are single-line). If grammar.js
- * grows a construct outside the subset, this engine says so rather
- * than mis-coloring.
+ * contains?, multiline? }` plus the `'self'` reference, with
+ * string-scoped modes ending at end-of-line (`multiline: true` opts
+ * the hash-leveled levels out). If grammar.js grows a construct
+ * outside the subset, this engine says so rather than mis-coloring.
  *
  *   mdbook build docs
  *   node scripts/bake-book.mjs [book-dir]   # default: ../../../docs/book
@@ -105,7 +105,10 @@ function renderLevel(text, start, limit, modes, kw, stop) {
           best.mode.keywords ?? null, // literals carry no keywords
           {
             end: best.mode.end,
-            singleLine: (best.mode.scope ?? '').startsWith('string'),
+            // hash-leveled strings opt out with `multiline: true` —
+            // newlines are content there (the lexer's level-`n >= 1` law)
+            singleLine:
+              (best.mode.scope ?? '').startsWith('string') && !best.mode.multiline,
           },
         );
         body += inner;

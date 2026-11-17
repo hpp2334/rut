@@ -11828,61 +11828,83 @@ msgstr ""
 "aliases.md)）"
 
 #: src/reference/lexical-structure.md:55
+msgid "`mod`"
+msgstr "`mod`"
+
+#: src/reference/lexical-structure.md:55
+msgid ""
+"the module introducer (`mod state;` — a `.rut` sibling in the package, see "
+"[Modules and visibility](modules-and-visibility.md))"
+msgstr ""
+"模块引入符（`mod state;`——包内的 `.rut` 同级文件，参见[模块与可见性]"
+"(modules-and-visibility.md)）"
+
+#: src/reference/lexical-structure.md:56
 msgid "`entry`"
 msgstr "`entry`"
 
-#: src/reference/lexical-structure.md:55
+#: src/reference/lexical-structure.md:56
 msgid "`entry fn` at module scope publishes the function to the embedder"
 msgstr "模块作用域下的 `entry fn` 会将该函数发布给嵌入方"
 
-#: src/reference/lexical-structure.md:56
+#: src/reference/lexical-structure.md:57
 msgid "`self`"
 msgstr "`self`"
 
-#: src/reference/lexical-structure.md:56
+#: src/reference/lexical-structure.md:57
 msgid "the explicit receiver, first parameter of an instance method"
 msgstr "显式接收者，实例方法的第一个参数"
 
-#: src/reference/lexical-structure.md:57
+#: src/reference/lexical-structure.md:58
 msgid "`Self`"
 msgstr "`Self`"
 
-#: src/reference/lexical-structure.md:57
+#: src/reference/lexical-structure.md:58
 msgid ""
 "names the enclosing class inside its body; the class-private literal `Self "
 "{ .. }`"
 msgstr "在类体内指代外围类；类私有的字面量 `Self { .. }`"
 
-#: src/reference/lexical-structure.md:58 src/reference/cli.md:92
+#: src/reference/lexical-structure.md:59 src/reference/cli.md:92
 msgid "`new`"
 msgstr "`new`"
 
-#: src/reference/lexical-structure.md:58
+#: src/reference/lexical-structure.md:59
 msgid ""
 "not special — the conventional construction-method name (`Rect::new(..)`)"
 msgstr "并非特殊关键字 —— 只是约定俗成的构造方法名（`Rect::new(..)`）"
 
-#: src/reference/lexical-structure.md:59
+#: src/reference/lexical-structure.md:60
 msgid "`as`"
 msgstr "`as`"
 
-#: src/reference/lexical-structure.md:59
+#: src/reference/lexical-structure.md:60
 msgid "the numeric cast (`x as u32`)"
 msgstr "数值转换（`x as u32`）"
 
-#: src/reference/lexical-structure.md:60
+#: src/reference/lexical-structure.md:61
 msgid "`super`"
 msgstr "`super`"
 
-#: src/reference/lexical-structure.md:60
+#: src/reference/lexical-structure.md:61
 msgid "only inside `pub(super)`"
 msgstr "仅在 `pub(super)` 内"
 
-#: src/reference/lexical-structure.md:61
+#: src/reference/lexical-structure.md:62
+msgid "`break` / `continue`"
+msgstr "`break` / `continue`"
+
+#: src/reference/lexical-structure.md:62
+msgid ""
+"loop control — exit the loop / next iteration (see [Control flow and when]"
+"(control-flow.md))"
+msgstr "循环控制——退出循环 / 下一轮迭代（参见[控制流与 when](control-flow.md)）"
+
+#: src/reference/lexical-structure.md:63
 msgid "`builtin`"
 msgstr "`builtin`"
 
-#: src/reference/lexical-structure.md:61
+#: src/reference/lexical-structure.md:63
 msgid ""
 "declaration modes of the engine's own surface — spelled `prelude builtin` "
 "(ambient) or `pub builtin` (import-gated); see [Host fns and declaration "
@@ -11891,11 +11913,33 @@ msgstr ""
 "引擎自有表面的声明模式——拼作 `prelude builtin`（环境自带）或 `pub builtin`"
 "（导入把守）；参见[宿主函数与声明文件](host-fns.md)"
 
-#: src/reference/lexical-structure.md:62
+#: src/reference/lexical-structure.md:64
+msgid "`prelude`"
+msgstr "`prelude`"
+
+#: src/reference/lexical-structure.md:64
+msgid ""
+"only directly before `builtin` — the AMBIENT engine surface head (`prelude "
+"builtin`, [host fns](host-fns.md))"
+msgstr ""
+"仅直接位于 `builtin` 之前——环境自带（AMBIENT）引擎表面的头（`prelude "
+"builtin`，参见[宿主函数](host-fns.md)）"
+
+#: src/reference/lexical-structure.md:65
+msgid "`primitive`"
+msgstr "`primitive`"
+
+#: src/reference/lexical-structure.md:65
+msgid ""
+"only directly after `builtin` — the engine's primitive decl (`builtin "
+"primitive <name> { .. }`)"
+msgstr "仅直接位于 `builtin` 之后——引擎的基本类型声明（`builtin primitive <name> { .. }`）"
+
+#: src/reference/lexical-structure.md:66
 msgid "`disposal` / `iterable` / `constructor`"
 msgstr "`disposal` / `iterable` / `constructor`"
 
-#: src/reference/lexical-structure.md:62
+#: src/reference/lexical-structure.md:66
 msgid ""
 "the bracket markers — `[disposal] fn` / `[iterable] fn` / `[constructor] fn` "
 "designate an inherent impl member as a designated surface (before "
@@ -11906,11 +11950,11 @@ msgstr ""
 "的一个成员指定为指定表面（写在可见性之前：`[disposal] pub fn ..`）；该集合是"
 "封闭且引擎所有的（[接口](interfaces.md)）"
 
-#: src/reference/lexical-structure.md:64
+#: src/reference/lexical-structure.md:68
 msgid "`panic(msg)` is a prelude function, not a keyword."
 msgstr "`panic(msg)` 是 prelude 函数，不是关键字。"
 
-#: src/reference/lexical-structure.md:66
+#: src/reference/lexical-structure.md:70
 msgid ""
 "There is NO reserved-word hard-ban left: every word the lexer scans is an "
 "identifier token, and the parser's own keyword table decides what a word "
@@ -11921,36 +11965,36 @@ msgid ""
 "snake `trait` if you like; it carries no meaning)."
 msgstr ""
 
-#: src/reference/lexical-structure.md:75
+#: src/reference/lexical-structure.md:79
 msgid "Punctuation: `::` and `.`"
 msgstr "标点：`::` 与 `.`"
 
-#: src/reference/lexical-structure.md:77
+#: src/reference/lexical-structure.md:81
 msgid "Two separators, one law:"
 msgstr "两个分隔符，一条法则："
 
-#: src/reference/lexical-structure.md:79
+#: src/reference/lexical-structure.md:83
 msgid "token"
 msgstr "记号"
 
-#: src/reference/lexical-structure.md:79 src/reference/host-fns.md:329
+#: src/reference/lexical-structure.md:83 src/reference/host-fns.md:329
 #: src/reference/symbol-stripping.md:26
 msgid "role"
 msgstr "角色"
 
-#: src/reference/lexical-structure.md:79
+#: src/reference/lexical-structure.md:83
 msgid "spells"
 msgstr "拼出"
 
-#: src/reference/lexical-structure.md:81
+#: src/reference/lexical-structure.md:85
 msgid "`::`"
 msgstr "`::`"
 
-#: src/reference/lexical-structure.md:81
+#: src/reference/lexical-structure.md:85
 msgid "the path separator — segments of any **name-resolution** path"
 msgstr "路径分隔符 —— 任何**名称解析**路径的段间分隔"
 
-#: src/reference/lexical-structure.md:81
+#: src/reference/lexical-structure.md:85
 msgid ""
 "use paths, module positions, enum members, statics/associated fns, dep "
 "module paths: `use pkg::a::b::{ C }`, `Light::Green`, `Rect::new(..)`, "
@@ -11959,19 +12003,19 @@ msgstr ""
 "use 路径、模块位置、枚举成员、静态项/关联函数、依赖模块路径：`use pkg::a::b::"
 "{ C }`、`Light::Green`、`Rect::new(..)`、`math::sqrt(..)`"
 
-#: src/reference/lexical-structure.md:82
+#: src/reference/lexical-structure.md:86
 msgid "`.`"
 msgstr "`.`"
 
-#: src/reference/lexical-structure.md:82
+#: src/reference/lexical-structure.md:86
 msgid "**value access** on an expression"
 msgstr "表达式上的**值访问**"
 
-#: src/reference/lexical-structure.md:82
+#: src/reference/lexical-structure.md:86
 msgid "fields, instance methods, tuple indices: `p.x`, `v.push(..)`, `t.0`"
 msgstr "字段、实例方法、元组索引：`p.x`、`v.push(..)`、`t.0`"
 
-#: src/reference/lexical-structure.md:84
+#: src/reference/lexical-structure.md:88
 msgid ""
 "A path never spells `.`; a value access never spells `::`. Qualified "
 "positions resolve names inside one package, `use` paths cross packages (see "
@@ -11983,11 +12027,11 @@ msgstr ""
 "包（见[模块与可见性](modules-and-visibility.md)）；`Self` 在 impl 块体内指代"
 "外围类型（类私有字面量，其成员经由普通的值访问后缀）。"
 
-#: src/reference/lexical-structure.md:90
+#: src/reference/lexical-structure.md:94
 msgid "The async block"
 msgstr "async 块"
 
-#: src/reference/lexical-structure.md:92
+#: src/reference/lexical-structure.md:96
 msgid ""
 "`async { .. }` — keyword before a block — is the async primitive: one "
 "expression form whose evaluation mints the frame (pure; legal in sync code) "
@@ -11998,11 +12042,11 @@ msgstr ""
 "（纯操作；同步代码中合法），其类型是 `Future<T>`（[async and await]"
 "(async.md)）。`fn` 前的 `async` 是它之上的声明糖。"
 
-#: src/reference/lexical-structure.md:98
+#: src/reference/lexical-structure.md:102
 msgid "Naming conventions (enforced)"
 msgstr "命名约定（强制执行）"
 
-#: src/reference/lexical-structure.md:100
+#: src/reference/lexical-structure.md:104
 msgid ""
 "**Types are PascalCase** — user types and parameterized builtins: `Vec<T>`, "
 "`[T]`, `Weak<T>`, `opaque`, `LaunchedFutureHandle<T>`, `Point`, `Drawable`. "
@@ -12013,7 +12057,7 @@ msgstr ""
 "`Weak<T>`、`opaque`、`LaunchedFutureHandle<T>`、`Point`、`Drawable`。标量与简"
 "单缓冲区保持小写：`i32`、`u8`、`f32`、`bool`、`str`、`bytes`。"
 
-#: src/reference/lexical-structure.md:105
+#: src/reference/lexical-structure.md:109
 msgid ""
 "**Functions and methods are lower_snake_case** — `unwrap_or(d)`, `push(v)`, "
 "`checked_add(y)`, `string_len(s)`."
@@ -12021,7 +12065,7 @@ msgstr ""
 "**函数与方法采用 lower_snake_case** —— `unwrap_or(d)`、`push(v)`、"
 "`checked_add(y)`、`string_len(s)`。"
 
-#: src/reference/lexical-structure.md:107
+#: src/reference/lexical-structure.md:111
 msgid ""
 "**Construction is a method call; the call form binds by designation.** User "
 "classes construct through their own class methods: `Rect::new(3, 4)`, "
@@ -12045,7 +12089,7 @@ msgstr ""
 "n]`，以及 `Vec<T>::from(..)`（参见[内置泛型类型](builtin-generic-"
 "types.md)）。"
 
-#: src/reference/lexical-structure.md:120
+#: src/reference/lexical-structure.md:124
 msgid ""
 "The trailing-`$` marker is kept meaningful by this style rule alone; the "
 "compiler attaches no semantics to it."
@@ -23166,7 +23210,7 @@ msgstr ""
 "盒的 rc 降到 0，先运行载荷的 finalize 钩子，然后是 Rust `Drop`（[Rc 堆](rc-"
 "heap.md)）。"
 
-#: src/reference/host-fns.md:146 src/reference/frontend.md:166
+#: src/reference/host-fns.md:146 src/reference/frontend.md:168
 #: src/reference/cli.md:374
 msgid "Declaration mode"
 msgstr "声明模式"
@@ -24742,7 +24786,7 @@ msgstr "0"
 msgid "`info(msg)` / `log(msg)`"
 msgstr "`info(msg)` / `log(msg)`"
 
-#: src/reference/stdlib.md:162 src/reference/frontend.md:105
+#: src/reference/stdlib.md:162 src/reference/frontend.md:107
 msgid "1"
 msgstr "1"
 
@@ -24750,7 +24794,7 @@ msgstr "1"
 msgid "`warn(msg)`"
 msgstr "`warn(msg)`"
 
-#: src/reference/stdlib.md:163 src/reference/frontend.md:106
+#: src/reference/stdlib.md:163 src/reference/frontend.md:108
 msgid "2"
 msgstr "2"
 
@@ -24758,7 +24802,7 @@ msgstr "2"
 msgid "`error(msg)`"
 msgstr "`error(msg)`"
 
-#: src/reference/stdlib.md:164 src/reference/frontend.md:107
+#: src/reference/stdlib.md:164 src/reference/frontend.md:109
 msgid "3"
 msgstr "3"
 
@@ -25856,7 +25900,7 @@ msgstr "四条不变式对任何输入都成立，包括敌意输入："
 msgid "invariant"
 msgstr "不变式"
 
-#: src/reference/frontend.md:19 src/reference/frontend.md:130
+#: src/reference/frontend.md:19 src/reference/frontend.md:132
 msgid "mechanism"
 msgstr "机制"
 
@@ -26013,29 +26057,33 @@ msgstr ""
 
 #: src/reference/frontend.md:67
 msgid ""
-"Raw strings `r\"...\"` carry everything up to the closing `\"` literally; `\\"
-"\"` inside a raw string does not close it. The `#` count after the `r`/`f` "
-"prefix is the literal's LEVEL: level 0 is single-line (a newline inside the "
-"body is an _unterminated_ diagnostic), and at level `n >= 1` (`r#\"...\"#`, "
-"`f#\"...\"#`) the body spans lines and closes at the first `\"` followed by "
-"`n` or more `#`s — any shorter-`#`\\-run `\"` is content. Holes stay single-"
-"line at every level."
+"Raw strings `r\"...\"` carry no escapes — the body is literal bytes up to "
+"the closing `\"`: the FIRST `\"` closes the string, `\\` or not (to hold a "
+"`\"` in the body, bump the level — [literals and inference](literals-and-"
+"inference.md)). The `#` count after the `r`/`f` prefix is the literal's "
+"LEVEL: level 0 is single-line (a newline inside the body is an "
+"_unterminated_ diagnostic), and at level `n >= 1` (`r#\"...\"#`, `f#\"..."
+"\"#`) the body spans lines and closes at the first `\"` followed by `n` or "
+"more `#`s — any shorter-`#`\\-run `\"` is content. Holes stay single-line at "
+"every level."
 msgstr ""
-"原始字符串 `r\"...\"` 逐字携带直到闭合 `\"` 为止的一切；原始字符串里的 `\\"
-"\"` 不会闭合它。`r`/`f` 前缀之后的 `#` 个数是该字面量的级别：级别 0 是单行的"
-"（体内出现换行是一条 _unterminated_ 诊断），而在级别 `n >= 1`（`r#\"...\"#`、"
-"`f#\"...\"#`），字符串体可以跨行，并在第一个后跟 `n` 个或更多 `#` 的 `\"` 处"
-"闭合——任何 `#` 串更短的 `\"` 都是内容。插值洞在所有级别下都保持单行。"
+"原始字符串 `r\"...\"` 不处理转义——字符串体是直到闭合 `\"` 为止的逐字字节：第"
+"一个 `\"` 就会闭合字符串，无论前面有没有 `\\`（要让体内装下一个 `\"`，就把级"
+"别提上去——参见[字面量与类型推断](literals-and-inference.md)）。`r`/`f` 前缀"
+"之后的 `#` 个数是该字面量的级别：级别 0 是单行的（体内出现换行是一条 "
+"_unterminated_ 诊断），而在级别 `n >= 1`（`r#\"...\"#`、`f#\"...\"#`），字符串"
+"体可以跨行，并在第一个后跟 `n` 个或更多 `#` 的 `\"` 处闭合——任何 `#` 串更短的 "
+"`\"` 都是内容。插值洞在所有级别下都保持单行。"
 
-#: src/reference/frontend.md:75
+#: src/reference/frontend.md:77
 msgid "Nesting budgets"
 msgstr "嵌套预算"
 
-#: src/reference/frontend.md:77
+#: src/reference/frontend.md:79
 msgid "Two budgets make C3 a law:"
 msgstr "两个预算让 C3 成为法则："
 
-#: src/reference/frontend.md:79
+#: src/reference/frontend.md:81
 msgid ""
 "`NEST_MAX = 1024` — the lexer's bracket depth budget (`rut-lexer/span.rs`). "
 "Exceeding it is one clean diagnostic at the offending opener."
@@ -26043,7 +26091,7 @@ msgstr ""
 "`NEST_MAX = 1024`——词法分析器的括号深度预算（`rut-lexer/span.rs`）。超出它会"
 "在肇事的开启符处产生一条干净的诊断。"
 
-#: src/reference/frontend.md:81
+#: src/reference/frontend.md:83
 msgid ""
 "`EXPR_MAX = 64` — the parser's expression-nesting budget. The frame machine "
 "itself has no host-stack cost, but downstream recursive walks (AST dump, "
@@ -26052,21 +26100,21 @@ msgstr ""
 "`EXPR_MAX = 64`——语法分析器的表达式嵌套预算。帧机本身没有宿主栈开销，但下游的"
 "递归遍历（AST 转储、类型检查）有；这个上限让它们访问的树保持浅。"
 
-#: src/reference/frontend.md:85
+#: src/reference/frontend.md:87
 msgid ""
 "Both produce the same diagnostic — _nesting too deep_ — and neither can "
 "overflow the host stack."
 msgstr "两者产生同一条诊断——_嵌套过深_——而且谁也不会溢出宿主栈。"
 
-#: src/reference/frontend.md:88
+#: src/reference/frontend.md:90
 msgid "The parser"
 msgstr "语法分析器"
 
-#: src/reference/frontend.md:90
+#: src/reference/frontend.md:92
 msgid "One loop over the token slice drives two mechanisms:"
 msgstr "一个循环扫过记号切片，驱动两个机制："
 
-#: src/reference/frontend.md:92
+#: src/reference/frontend.md:94
 msgid ""
 "A **frame stack** handles structure — one frame kind per grammar rule "
 "(`Module`, `Block`, `Pattern`, `When`, `Impl`, `Lambda`, …). A rule that "
@@ -26077,7 +26125,7 @@ msgstr ""
 "`When`、`Impl`、`Lambda`……）。需要子节点的规则压入一个帧；完成的帧弹出，把它"
 "的 `NodeId` 交给父级。"
 
-#: src/reference/frontend.md:96
+#: src/reference/frontend.md:98
 msgid ""
 "An embedded **Pratt engine** handles expressions — an operator stack plus an "
 "operand stack of `NodeId`s. Binary and assignment steps push an operator; "
@@ -26086,29 +26134,29 @@ msgstr ""
 "一个内嵌的 **Pratt 引擎**处理表达式——一个运算符栈加一个 `NodeId` 操作数栈。二"
 "元与赋值步骤压入运算符；归约弹出操作数并压入一个节点，自底向上。"
 
-#: src/reference/frontend.md:100
+#: src/reference/frontend.md:102
 msgid ""
 "There is no grammar generator and no left-recursion handling. Binding "
 "powers, loosest to tightest:"
 msgstr "没有文法生成器，也没有左递归处理。结合力从最松到最紧："
 
-#: src/reference/frontend.md:103
+#: src/reference/frontend.md:105
 msgid "prec"
 msgstr "优先级"
 
-#: src/reference/frontend.md:103
+#: src/reference/frontend.md:105
 msgid "assoc"
 msgstr "结合性"
 
-#: src/reference/frontend.md:103
+#: src/reference/frontend.md:105
 msgid "operators"
 msgstr "运算符"
 
-#: src/reference/frontend.md:105 src/reference/frontend.md:117
+#: src/reference/frontend.md:107 src/reference/frontend.md:119
 msgid "right"
 msgstr "右"
 
-#: src/reference/frontend.md:105
+#: src/reference/frontend.md:107
 msgid ""
 "`=` `+=` `-=` `*=` `/=` `%=` `&=` `\\|=` `^=` `<<=` `>>=` (target must be a "
 "path or index)"
@@ -26116,116 +26164,119 @@ msgstr ""
 "`=` `+=` `-=` `*=` `/=` `%=` `&=` `\\|=` `^=` `<<=` `>>=`（目标必须是路径或索"
 "引）"
 
-#: src/reference/frontend.md:106
+#: src/reference/frontend.md:108
 msgid "–"
 msgstr "–"
 
-#: src/reference/frontend.md:106
+#: src/reference/frontend.md:108
 msgid "`=>` lambda bodies — decided by the scan below, not by binding powers"
 msgstr "`=>` lambda 体——由下文的扫描决定，而不是由结合力决定"
 
-#: src/reference/frontend.md:107 src/reference/frontend.md:108
 #: src/reference/frontend.md:109 src/reference/frontend.md:110
-#: src/reference/frontend.md:111 src/reference/frontend.md:112
-#: src/reference/frontend.md:113 src/reference/frontend.md:114
-#: src/reference/frontend.md:115 src/reference/frontend.md:116
-#: src/reference/frontend.md:118
+#: src/reference/frontend.md:111 src/reference/frontend.md:113
+#: src/reference/frontend.md:114 src/reference/frontend.md:115
+#: src/reference/frontend.md:116 src/reference/frontend.md:117
+#: src/reference/frontend.md:118 src/reference/frontend.md:120
 msgid "left"
 msgstr "左"
 
-#: src/reference/frontend.md:107
+#: src/reference/frontend.md:109
 msgid "`\\|\\|`"
 msgstr "`\\|\\|`"
 
-#: src/reference/frontend.md:108
+#: src/reference/frontend.md:110
 msgid "4"
 msgstr "4"
 
-#: src/reference/frontend.md:108
+#: src/reference/frontend.md:110
 msgid "`&&`"
 msgstr "`&&`"
 
-#: src/reference/frontend.md:109
+#: src/reference/frontend.md:111
 msgid "5"
 msgstr "5"
 
-#: src/reference/frontend.md:109
+#: src/reference/frontend.md:111
 msgid "`==` `!=`"
 msgstr "`==` `!=`"
 
-#: src/reference/frontend.md:110
+#: src/reference/frontend.md:112
 msgid "6"
 msgstr "6"
 
-#: src/reference/frontend.md:110
-msgid "`<` `>` `<=` `>=`"
-msgstr "`<` `>` `<=` `>=`"
+#: src/reference/frontend.md:112
+msgid "left; `is` non-assoc"
+msgstr "左；`is` 无结合"
 
-#: src/reference/frontend.md:111
+#: src/reference/frontend.md:112
+msgid "`<` `>` `<=` `>=` `is`"
+msgstr "`<` `>` `<=` `>=` `is`"
+
+#: src/reference/frontend.md:113
 msgid "7"
 msgstr "7"
 
-#: src/reference/frontend.md:111
+#: src/reference/frontend.md:113
 msgid "`\\|` `^`"
 msgstr "`\\|` `^`"
 
-#: src/reference/frontend.md:112
+#: src/reference/frontend.md:114
 msgid "8"
 msgstr "8"
 
-#: src/reference/frontend.md:112
+#: src/reference/frontend.md:114
 msgid "`&`"
 msgstr "`&`"
 
-#: src/reference/frontend.md:113
+#: src/reference/frontend.md:115
 msgid "9"
 msgstr "9"
 
-#: src/reference/frontend.md:113
+#: src/reference/frontend.md:115
 msgid "`<<` `>>`"
 msgstr "`<<` `>>`"
 
-#: src/reference/frontend.md:114
+#: src/reference/frontend.md:116
 msgid "10"
 msgstr "10"
 
-#: src/reference/frontend.md:114
+#: src/reference/frontend.md:116
 msgid "`+` `-`"
 msgstr "`+` `-`"
 
-#: src/reference/frontend.md:115
+#: src/reference/frontend.md:117
 msgid "11"
 msgstr "11"
 
-#: src/reference/frontend.md:115
+#: src/reference/frontend.md:117
 msgid "`*` `/` `%`"
 msgstr "`*` `/` `%`"
 
-#: src/reference/frontend.md:116
+#: src/reference/frontend.md:118
 msgid "12"
 msgstr "12"
 
-#: src/reference/frontend.md:116
+#: src/reference/frontend.md:118
 msgid "`as` — numeric cast; the RHS is a type-naming position"
 msgstr "`as`——数值转换；右侧是一个命名类型的位置"
 
-#: src/reference/frontend.md:117
+#: src/reference/frontend.md:119
 msgid "13"
 msgstr "13"
 
-#: src/reference/frontend.md:117
-msgid "unary `-` `!`"
-msgstr "一元 `-` `!`"
+#: src/reference/frontend.md:119
+msgid "unary `-` `!`; prefix `await`"
+msgstr "一元 `-` `!`；前缀 `await`"
 
-#: src/reference/frontend.md:118
+#: src/reference/frontend.md:120
 msgid "14"
 msgstr "14"
 
-#: src/reference/frontend.md:118
+#: src/reference/frontend.md:120
 msgid "postfix: `.name`, `.name<..>(..)`, `(..)`, `[..]`"
 msgstr "后缀：`.name`、`.name<..>(..)`、`(..)`、`[..]`"
 
-#: src/reference/frontend.md:120
+#: src/reference/frontend.md:122
 msgid ""
 "Postfixes chain in one loop, so `p.value.x` and `arr[i].push(x)` compose "
 "without special cases. `is` (type test) is a keyword; `as` is the only cast."
@@ -26233,11 +26284,11 @@ msgstr ""
 "后缀在一个循环里链式处理，因此 `p.value.x` 与 `arr[i].push(x)` 无需特例即可组"
 "合。`is`（类型测试）是关键字；`as` 是唯一的转换。"
 
-#: src/reference/frontend.md:123
+#: src/reference/frontend.md:125
 msgid "Lookahead"
 msgstr "前瞻"
 
-#: src/reference/frontend.md:125
+#: src/reference/frontend.md:127
 msgid ""
 "rut's grammar makes shallow peeking enough: statements are keyword-led, `{` "
 "never starts an expression, imports are flat, and paths are `::`\\-separated "
@@ -26248,93 +26299,93 @@ msgstr ""
 "扁平的，路径用 `::` 相连（段间一个 `Colon2` 记号，在原子阶段循环读取 —— 无需"
 "向前窥探）。"
 
-#: src/reference/frontend.md:130
+#: src/reference/frontend.md:132
 msgid "decision"
 msgstr "决策"
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:134
 msgid "item dispatch"
 msgstr "条目分派"
 
-#: src/reference/frontend.md:132
+#: src/reference/frontend.md:134
 msgid "peek 1 (`use` `let` `enum` `struct` `class` `interface` `impl` `fn`)"
 msgstr ""
 
-#: src/reference/frontend.md:133
+#: src/reference/frontend.md:135
 msgid "statement vs expression-statement"
 msgstr "语句 vs 表达式语句"
 
-#: src/reference/frontend.md:133
+#: src/reference/frontend.md:135
 msgid "peek 1 (leading keyword)"
 msgstr "窥探 1（起始关键字）"
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:136
 msgid "`for`\\-of vs C-style `for`"
 msgstr "`for`\\-of 与 C 风格 `for`"
 
-#: src/reference/frontend.md:134
+#: src/reference/frontend.md:136
 msgid "peek 4: `for ( let Ident <of or =>`"
 msgstr "窥探 4：`for ( let Ident <of or =>`"
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:137
 msgid "instance vs class method"
 msgstr "实例方法 vs 类方法"
 
-#: src/reference/frontend.md:135
+#: src/reference/frontend.md:137
 msgid "peek 4: `fn Ident ( <mut? self? …>`"
 msgstr "窥探 4：`fn Ident ( <mut? self? …>`"
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:138
 msgid "struct literal vs path expression"
 msgstr "结构体字面量 vs 路径表达式"
 
-#: src/reference/frontend.md:136
+#: src/reference/frontend.md:138
 msgid "peek 2: `Ident {` ⇒ literal (classes have no instance literal)"
 msgstr "窥探 2：`Ident {` ⇒ 字面量（类没有实例字面量）"
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:139
 msgid "`when`\\-arm body form"
 msgstr "`when`\\- 分支体形式"
 
-#: src/reference/frontend.md:137
+#: src/reference/frontend.md:139
 msgid "peek 1 after `->` (`{` ⇒ block arm, else expression arm)"
 msgstr "在 `->` 之后窥探 1（`{` ⇒ 块分支，否则表达式分支）"
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:140
 msgid "`if` atom vs statement"
 msgstr "`if` 原子 vs 语句"
 
-#: src/reference/frontend.md:138
+#: src/reference/frontend.md:140
 msgid ""
 "peek 2: `if (` in expression position ⇒ the if ATOM (statement-leading `if` "
 "is claimed by the statement grammar first)"
 msgstr ""
 "窥探 2：表达式位置中的 `if (` ⇒ `if` 原子（语句开头的 `if` 先由语句文法领取）"
 
-#: src/reference/frontend.md:139
+#: src/reference/frontend.md:141
 msgid "postfix loop step"
 msgstr "后缀循环步"
 
-#: src/reference/frontend.md:139
+#: src/reference/frontend.md:141
 msgid "peek 1 (`.` `(` `[`)"
 msgstr "窥探 1（`.` `(` `[`）"
 
-#: src/reference/frontend.md:140
+#: src/reference/frontend.md:142
 msgid "assignment target"
 msgstr "赋值目标"
 
-#: src/reference/frontend.md:140
+#: src/reference/frontend.md:142
 msgid "no lookahead — parse, then validate"
 msgstr "无前瞻——先解析，再校验"
 
-#: src/reference/frontend.md:142
+#: src/reference/frontend.md:144
 msgid ""
 "Two decisions need more than 4 tokens and use **scans** — read-only, commit-"
 "once, never a guess:"
 msgstr ""
 "两个决策需要 4 个以上的记号，它们使用**扫描**——只读、一次性提交、绝不是猜测："
 
-#: src/reference/frontend.md:145
+#: src/reference/frontend.md:147
 msgid ""
 "**Lambda vs parenthesized expression.** Scan to the matching `)`; it is a "
 "lambda iff `=>` follows the matching `)` (an optional `-> Type` may sit "
@@ -26345,7 +26396,7 @@ msgstr ""
 "`=>`（中间可以有一个可选的 `-> Type`），它才是 lambda。否则括号就是分组——"
 "`(a)`——而一个逗号会把表达式变成元组——`(a, b)`。"
 
-#: src/reference/frontend.md:149
+#: src/reference/frontend.md:151
 msgid ""
 "**Generic call vs `<` comparison** (`Vec<f32>(n)` vs `a < b > (c)`). Scan "
 "from the `<` tracking angle depth; a `>>`/`<<` consumed where a closer/"
@@ -26360,7 +26411,7 @@ msgstr ""
 "后的记号是 `(`，泛型实参才提交。`a < b > (c)` 不加括号无法表达——请写 `(a < "
 "b) > (c)`。"
 
-#: src/reference/frontend.md:156
+#: src/reference/frontend.md:158
 msgid ""
 "Scans never mutate parser state. Peeking at arbitrary distance is allowed; "
 "checkpoint/rollback is not — the API does not exist, so the monotone-cursor "
@@ -26370,11 +26421,11 @@ msgstr ""
 "API 根本不存在，因此单调游标不变式（调试断言）不可能被违反，错误恢复期间也不"
 "例外。"
 
-#: src/reference/frontend.md:160
+#: src/reference/frontend.md:162
 msgid "Recovery"
 msgstr "恢复"
 
-#: src/reference/frontend.md:162
+#: src/reference/frontend.md:164
 msgid ""
 "Within a file the parser resynchronizes at `;`, `}`, or the token after a "
 "balanced block and keeps parsing — a file yields many diagnostics, not one. "
@@ -26383,7 +26434,7 @@ msgstr ""
 "在单个文件内，语法分析器在 `;`、`}` 或一个配平块之后的记号处重新同步并继续解"
 "析——一个文件产出许多条诊断，而不是一条。重新同步只会向前跳。"
 
-#: src/reference/frontend.md:168
+#: src/reference/frontend.md:170
 msgid ""
 "The mode is chosen by file extension: `Mode::Impl` for `.rut`, `Mode::Decl` "
 "for `.d.rut`. Both share one grammar; declaration mode adds the surface "
@@ -26401,7 +26452,7 @@ msgstr ""
 "绝。实现模式以镜像消息拒绝 `host`/`builtin`。完整表面及函数体在加载时如何绑定"
 "见[宿主函数与声明文件](host-fns.md)。"
 
-#: src/reference/frontend.md:179
+#: src/reference/frontend.md:181
 msgid ""
 "Declarations-only module scope is enforced by the parser itself: a statement "
 "at module top level is a syntax error, not a semantic one. The grammar "
@@ -26412,11 +26463,11 @@ msgstr ""
 "错误。文法本身在[词法结构](lexical-structure.md)与[模块与可见性](modules-and-"
 "visibility.md)中规定。"
 
-#: src/reference/frontend.md:184
+#: src/reference/frontend.md:186
 msgid "The AST"
 msgstr "AST"
 
-#: src/reference/frontend.md:186
+#: src/reference/frontend.md:188
 msgid ""
 "Nodes are plain records in one arena; children are `NodeId`s into it. Spans "
 "sit on every node; there are no `String` keys — names are `IdentId`s into an "
@@ -26434,15 +26485,15 @@ msgstr ""
 "基本类型……），因此低于 `well_known_len` 的 id 在每个驻留器实例中都意味着同一"
 "个名字，特殊名字以 `IdentId` 相等比较，绝不按文本比较。"
 
-#: src/reference/frontend.md:200
+#: src/reference/frontend.md:202
 msgid "// items\n"
 msgstr "// items\n"
 
-#: src/reference/frontend.md:204
+#: src/reference/frontend.md:206
 msgid "// fields only\n"
 msgstr "// fields only\n"
 
-#: src/reference/frontend.md:205
+#: src/reference/frontend.md:207
 msgid ""
 "// fields only —\n"
 "                                                           // methods live "
@@ -26452,17 +26503,17 @@ msgstr ""
 "                                                           // methods live "
 "in impls\n"
 
-#: src/reference/frontend.md:207
+#: src/reference/frontend.md:209
 msgid "// signatures only\n"
 msgstr ""
 
-#: src/reference/frontend.md:208
+#: src/reference/frontend.md:210
 msgid ""
 "// inherent only —\n"
 "              // no trait_ref: `impl I for T` does not parse\n"
 msgstr ""
 
-#: src/reference/frontend.md:211
+#: src/reference/frontend.md:213
 msgid ""
 "// .d.rut only\n"
 "    // statements\n"
@@ -26470,23 +26521,27 @@ msgstr ""
 "// .d.rut only\n"
 "    // statements\n"
 
-#: src/reference/frontend.md:214
+#: src/reference/frontend.md:216
 msgid "// expressions\n"
 msgstr "// expressions\n"
 
-#: src/reference/frontend.md:220
+#: src/reference/frontend.md:222
 msgid "// the block value; tail: Option\n"
 msgstr ""
 
-#: src/reference/frontend.md:222
+#: src/reference/frontend.md:224
 msgid "// the if ATOM (statement-if above)\n"
 msgstr ""
 
-#: src/reference/frontend.md:223
+#: src/reference/frontend.md:225
 msgid "// holes are NodeIds\n"
 msgstr "// holes are NodeIds\n"
 
-#: src/reference/frontend.md:228
+#: src/reference/frontend.md:227
+msgid "// `expr as ty` — the one cast\n"
+msgstr "// `expr as ty` — the one cast\n"
+
+#: src/reference/frontend.md:231
 msgid ""
 "Stable `NodeId`s are the rest of the pipeline's currency: the checker keys "
 "side tables by node id, diagnostics reach spans through them, and the LSP, "
@@ -26495,7 +26550,7 @@ msgstr ""
 "稳定的 `NodeId` 是流水线其余部分的通货：检查器以节点 id 为旁表建键，诊断经由"
 "它们抵达 span，而 LSP、格式化器和转储器持有可复制的引用，无需重新挂靠父节点。"
 
-#: src/reference/frontend.md:232
+#: src/reference/frontend.md:235
 msgid ""
 "What the AST does **not** contain: no `new`, no `switch`/`case`, no `?.` or "
 "`??` — the grammar has no such forms (those words are ordinary identifiers, "
@@ -26506,11 +26561,11 @@ msgstr ""
 "法没有这些形式（这些词是普通标识符，游离的后缀 `?` 走普通错误阶梯）。也没有括"
 "号节点：解析的分组_就是_树本身。"
 
-#: src/reference/frontend.md:237
+#: src/reference/frontend.md:240
 msgid "Diagnostics"
 msgstr "诊断"
 
-#: src/reference/frontend.md:244
+#: src/reference/frontend.md:247
 msgid ""
 "One renderer serves every frontend stage: a primary `error:` line, the rustc-"
 "style `--> file:line:col` arrow (1-based line and char column; the label is "
@@ -26532,7 +26587,7 @@ msgstr ""
 "or`pkg` in pub(..)_；类上的结构体字面量提示 _classes have noinstance literal "
 "— construct through a class method (`Circle::new(..)`)_。"
 
-#: src/reference/frontend.md:256
+#: src/reference/frontend.md:259
 msgid ""
 "The compile stops before IR if any diagnostic exists — a module with "
 "diagnostics never produces bytecode. See [Diagnostics, traces, and "
@@ -26541,18 +26596,18 @@ msgstr ""
 "只要存在任何诊断，编译就在 IR 之前停止——带诊断的模块绝不产出字节码。运行时的"
 "那一半故事见[诊断、追踪与符号化](diagnostics.md)。"
 
-#: src/reference/frontend.md:261
+#: src/reference/frontend.md:264
 msgid "The formatter"
 msgstr "格式化器"
 
-#: src/reference/frontend.md:263
+#: src/reference/frontend.md:266
 msgid ""
 "`rut fmt` (crate `rut-fmt`, CLI subcommand) reprints a parsed-clean module "
 "from the AST:"
 msgstr ""
 "`rut fmt`（crate `rut-fmt`，CLI 子命令）从 AST 重排一个解析干净的模块："
 
-#: src/reference/frontend.md:266
+#: src/reference/frontend.md:269
 msgid ""
 "**Comment gap-scan** — comments live in the byte gaps between token spans, "
 "so the formatter recovers every `//` and block comment with zero lexer/"
@@ -26563,7 +26618,7 @@ msgstr ""
 "法/语法分析器的前提下找回每一条 `//` 与块注释：尾随的注释归到所属元素那一行，"
 "独占一行的注释按外围缩进放置。"
 
-#: src/reference/frontend.md:270
+#: src/reference/frontend.md:273
 msgid ""
 "**Parens and literals re-derived** — the printer re-parens only where flat "
 "precedence would invert the tree, re-spells floats shortest round-trip from "
@@ -26574,7 +26629,7 @@ msgstr ""
 "特重新以最短往返形式书写浮点数，并按词法分析器转义集合的精确逆运算重新给字符"
 "串加引号（`0xff` 名正言顺地变成 `255`）。"
 
-#: src/reference/frontend.md:274
+#: src/reference/frontend.md:277
 msgid ""
 "**Tested invariants** — every corpus file formats, reparses clean, and is "
 "idempotent (`fmt(fmt(x)) == fmt(x)`); probe programs run through the full "
@@ -26584,7 +26639,7 @@ msgstr ""
 "（`fmt(fmt(x)) == fmt(x)`）；探针程序在格式化前后各跑一遍完整流水线，并记录到"
 "相同的输出。"
 
-#: src/reference/frontend.md:277
+#: src/reference/frontend.md:280
 msgid ""
 "**Refusal law** — a source with diagnostics is refused: rendered "
 "diagnostics, exit 1, nothing rewritten. The formatter never guesses."
@@ -26592,7 +26647,7 @@ msgstr ""
 "**拒绝法则**——带诊断的源码会被拒绝：渲染诊断、以 1 退出、不重写任何东西。格式"
 "化器从不猜测。"
 
-#: src/reference/frontend.md:279
+#: src/reference/frontend.md:282
 msgid ""
 "**Style is the package's** — the nearest ancestor `rut.jsonc`'s `style` "
 "block sets `indent_width` (1–8, default 4) and `max_width` (≥ 20, default "
@@ -26600,11 +26655,11 @@ msgid ""
 "(project-structure.md)."
 msgstr ""
 
-#: src/reference/frontend.md:284
+#: src/reference/frontend.md:287
 msgid "Testing"
 msgstr "测试"
 
-#: src/reference/frontend.md:286
+#: src/reference/frontend.md:289
 msgid ""
 "The corpus is the conformance suite: every `examples/**/*.rut`, `examples/**/"
 "*.d.rut`, and playground classic must parse with zero diagnostics. Parser "
