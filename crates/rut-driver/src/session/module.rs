@@ -506,7 +506,7 @@ mod srczip_tests {
         let specs: Vec<&str> = walk.pkgs.iter().map(|p| p.spec.as_str()).collect();
         assert_eq!(
             specs,
-            vec!["nmapset", "nmap_host@9d688d1ca40944fd"],
+            vec!["nmapset", "nmap_host@3b7d4dfb7be29a3c"],
             "the embedded group rides with its identity spec"
         );
         let root = &walk.pkgs[0];

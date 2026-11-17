@@ -1,6 +1,6 @@
 /**
  * The playground's std pin table — the SAME pins `rut new` scaffolds
- * (the std-v17 re-cut's `crates/rut-cli/template/rut.lock`),
+ * (the std-v18 re-cut's `crates/rut-cli/template/rut.lock`),
  * baked here because the browser never reads the repo: the shas are
  * the committed `dist/std/*.zip` bytes the lock vouches, and the urls
  * pin the LANDED COMMIT that carries them on jsDelivr's gh lane (an
@@ -15,7 +15,7 @@
  */
 
 /** the landed commit whose `dist/std/` mirror the fetches pin */
-export const PIN_SHA = "b0c7f0fb5bed46e192725abd00ed5ae0f35bf1d9";
+export const PIN_SHA = "59e31344816ceff34fa860001fcfc0707f78795a";
 
 /** the jsDelivr gh-lane url one std zip serves at (the sha-pinned ref) */
 export function stdZipUrl(name: string): string {
@@ -32,12 +32,12 @@ export interface StdPin {
 /** the nine std source pkgs, in lock order (sorted by url) */
 export const STD_PINS: StdPin[] = [
   { name: "calc", url: stdZipUrl("calc"), sha256: "794f823b8af9d1c1bcf4e1c30c51f1c405954b6ffc1be9cbf9b64739faa3fa24" },
-  { name: "flow", url: stdZipUrl("flow"), sha256: "19545c61748bffa057cf6e5bea29bab728417fbcc6b84759216f7f3f68bbebc1" },
-  { name: "futures", url: stdZipUrl("futures"), sha256: "e143211a0a6e9ddb0a3ccb5e3e79796d85b2ee627ee4c63f046dc583a55eb711" },
-  { name: "http", url: stdZipUrl("http"), sha256: "9c6855cd58d7d888515fff691787a42708cef512423dc6040f8e214dbd00cbac" },
-  { name: "ink", url: stdZipUrl("ink"), sha256: "eb2b568316efb77286cc5d94bec24a94f45d528cf244f54b91cb0d619dc53cc1" },
-  { name: "json", url: stdZipUrl("json"), sha256: "653867a4451d8eb991cfdd59c9196d95c92ecc7b3da530519cba15e68951b18a" },
-  { name: "nmapset", url: stdZipUrl("nmapset"), sha256: "1a59e0e4cab803dcd176ac919160cb9dbbc305011fb563dcc1d8bcd82307f5dd" },
-  { name: "pouch", url: stdZipUrl("pouch"), sha256: "5740cb0b874a2c9a81f1e0d9534520fe4067e5ec48320b82cf7147e2d6b34d36" },
-  { name: "strbuild", url: stdZipUrl("strbuild"), sha256: "1eedb374bcb52419b9ec82d9ea6f23fb3534faa0a4c75e4d03afedc6d7dabe33" },
+  { name: "flow", url: stdZipUrl("flow"), sha256: "5987d7691269ea5fbf4a4cdf79733b9339a55ee57daa2d7f9b761acc3999c980" },
+  { name: "futures", url: stdZipUrl("futures"), sha256: "c80977aa16abe61a7b7616703d688a1ae9100836f96806b70cd64e63aef7668e" },
+  { name: "http", url: stdZipUrl("http"), sha256: "e4b4f9d1e4fa3b105d01d949cc57f64b894ed59c1fbfe3d297b9484064fe7317" },
+  { name: "ink", url: stdZipUrl("ink"), sha256: "359a93a2e32f2ef09ae710b81b57ba0a691b588971dcf7110301b39a9ffba11e" },
+  { name: "json", url: stdZipUrl("json"), sha256: "50ac914f50c4903a4c4806381c24ddc7c54370edb7189512906fe01aa3135e15" },
+  { name: "nmapset", url: stdZipUrl("nmapset"), sha256: "959ae7cc249b4b5ccb953487a917edf96b282c29c5a53943c2d060c361421eb5" },
+  { name: "pouch", url: stdZipUrl("pouch"), sha256: "ce5f554cdf6f6dbfe758281e598e18b46158db7be26277b662c9ed3c1a5c71a7" },
+  { name: "strbuild", url: stdZipUrl("strbuild"), sha256: "b1000f1752fd24970c9bb0e519a45fbf7184d98a54318c0a19edccae4a4c273c" },
 ];
