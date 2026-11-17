@@ -38,10 +38,12 @@
  *                                     against the committed
  *                                     dist/<tag>/ envelope, hold the
  *                                     lock pins + the template urls
- *                                     against the same bytes, and
+ *                                     against the same bytes,
  *                                     require the dist/std/ mirror to
- *                                     ride the envelope. Exit 1 on
- *                                     drift.
+ *                                     ride the envelope, and require
+ *                                     the dist/std/myhost.zip fixture
+ *                                     to stay byte-fresh against
+ *                                     rut/myhost. Exit 1 on drift.
  *   -h, --help
  *
  * Retired flags die loudly: --tag (publishing moved to
@@ -314,6 +316,36 @@ if (doCheck) {
       console.error(`  ${green("ok")}: dist/std/${row.pkg}.zip (mirror == dist/${tag}/ bytes)`);
     }
   }
+  // the myhost freshness law: dist/std/myhost.zip is NOT a lock row
+  // and NOT an envelope member — it is the host mod-tree TEST FIXTURE
+  // (consumed by crates/rut-lsp/tests/walk.rs via include_bytes! and
+  // demo/scripts/smoke.mjs), so the mirror/envelope loops above never
+  // see it. rut/myhost must pack to its committed bytes with the SAME
+  // deterministic machinery as every lock row; on drift this gate
+  // FAILS and names both digests — the fix is a deliberate human
+  // repack, never a silent one (the gate exists to catch future drift).
+  const myhostFresh = path.join(tmp, "myhost.zip");
+  packZip("myhost", myhostFresh);
+  const myhostCommitted = path.join(ROOT, "dist", "std", "myhost.zip");
+  if (!fs.existsSync(myhostCommitted)) {
+    console.error(`  ${red("missing")}: dist/std/myhost.zip (the LSP/e2e fixture is committed)`);
+    drift++;
+  } else {
+    const committedBytes = fs.readFileSync(myhostCommitted);
+    const freshBytes = fs.readFileSync(myhostFresh);
+    if (!committedBytes.equals(freshBytes)) {
+      console.error(
+        `  ${red("drift")}: dist/std/myhost.zip (rut/myhost moved, the fixture didn't — ` +
+          `committed sha256 ${sha256(committedBytes)}, fresh sha256 ${sha256(freshBytes)} — ` +
+          "repack the fixture deliberately, the gate never does)"
+      );
+      drift++;
+    } else {
+      console.error(
+        `  ${green("ok")}: dist/std/myhost.zip (${committedBytes.length} bytes, sha256 ${sha256(committedBytes).slice(0, 16)}…)`
+      );
+    }
+  }
   fs.rmSync(tmp, { recursive: true, force: true });
 
   // the two templates tell one story: every manifest url is its lock
@@ -342,7 +374,11 @@ if (doCheck) {
     console.error("");
     die(`${drift} drift row(s) — fix with: node scripts/pack-std.cjs`);
   }
-  info(green(`all ${rows.length} zips byte-fresh at ${tag}, every lock pin + template url matches`));
+  info(
+    green(
+      `all ${rows.length} zips byte-fresh at ${tag}, the myhost fixture byte-fresh, every lock pin + template url matches`
+    )
+  );
   process.exit(0);
 }
 
