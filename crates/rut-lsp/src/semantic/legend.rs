@@ -76,7 +76,7 @@ impl TokenType {
 
 /// The highlighting keyword set: the grammar's reserved words
 /// (`rut_ast::parser::is_reserved_kw`) plus the contextual/statement words the
-/// parser matches by text (`break`, `continue`, `as`, `super`, `default`)
+/// parser matches by text (`break`, `continue`, `as`, `super`)
 /// and the receiver `self`. `entry` joins by TEXT for highlighting only:
 /// contextual before `fn` in the grammar, never an identifier in
 /// practice — but NOT reserved, so a name position may still legally
@@ -86,10 +86,8 @@ impl TokenType {
 /// identifier `entry`, so the tradeoff costs nothing. `true`/`false` lex
 /// as `Tok::Bool` and are classified there (keyword constants).
 pub fn is_keyword(s: &str) -> bool {
-    matches!(
-        s,
-        "self" | "break" | "continue" | "as" | "super" | "default" | "entry"
-    ) || rut_ast::parser::is_reserved_kw(s)
+    matches!(s, "self" | "break" | "continue" | "as" | "super" | "entry")
+        || rut_ast::parser::is_reserved_kw(s)
 }
 
 pub fn is_primitive_ty(s: &str) -> bool {

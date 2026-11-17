@@ -343,6 +343,19 @@ fn colon2_value_paths_classify_by_the_resolution_law() {
 }
 
 #[test]
+fn a_name_spelled_default_is_an_ordinary_variable() {
+    // `default` is no keyword anywhere — the parser never matches it, so
+    // the AST pass owns the name: decl and use both classify as plain
+    // variables
+    let src = "entry fn main() -> nil {\n    let default = 1;\n    let x = default;\n}\n";
+    let spans = classify_src(src);
+    assert_eq!(
+        find(src, &spans, "default"),
+        vec![TokenType::Variable, TokenType::Variable]
+    );
+}
+
+#[test]
 fn use_lines_classify_by_the_capitalization_law() {
     // the use line colors best-effort, without resolution: a path
     // segment reads as its head (lowercase → namespace, capitalized →

@@ -108,5 +108,6 @@ Cross-check notes worth keeping in mind when editing:
 - `break`/`continue` are statement keywords in the parser but NOT in
   `RESERVED_KW` (they don't bare-complete) — highlighted here anyway,
   as the TextMate grammar does.
-- The vscode TextMate grammar still carries `default`, which the
-  parser no longer knows — deliberately not highlighted here.
+- `default` is not a keyword anywhere — not in `RESERVED_KW`, not in
+  the parser, not in the TextMate grammar, not here; a name spelled
+  `default` is an ordinary identifier.

@@ -16,15 +16,14 @@ export interface Diag {
 // ---- the AST tree (one TS shape per Rust `Kind` variant, 1:1) ----
 
 export type Span2 = [number, number];
-export type VisTag = "pub" | "mod" | "super" | "self";
+export type VisTag = "pub" | "super" | "pkg" | "self";
 export type LinkageTag = "host" | "extern";
 export type BinOpTag =
   | "Add" | "Sub" | "Mul" | "Div" | "Mod"
   | "Eq" | "Ne" | "Lt" | "Gt" | "Le" | "Ge"
   | "And" | "Or"
-  | "BitAnd" | "BitOr" | "BitXor" | "Shl" | "Shr"
-  | "WrapAdd" | "WrapSub" | "WrapMul" | "WrapShl";
-export type UnOpTag = "Neg" | "Not" | "BitNot";
+  | "BitAnd" | "BitOr" | "BitXor" | "Shl" | "Shr";
+export type UnOpTag = "Neg" | "Not";
 
 // concrete companions (mirrors of the ast.rs / dump.rs companion types)
 export interface AstSeg { name: string; generics?: AstNode[] }
@@ -42,9 +41,9 @@ export interface AstModule extends Base { kind: "Module"; items: AstNode[] }
 export interface AstUse extends Base { kind: "Use"; pkg: string; names: string[] }
 export interface AstModuleLet extends Base { kind: "ModuleLet"; vis: VisTag; name: string; ty?: AstNode; init: AstNode }
 export interface AstEnum extends Base { kind: "Enum"; vis: VisTag; name: string; members: AstMember[] }
-export interface AstDataclass extends Base { kind: "Dataclass"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
-export interface AstClass extends Base { kind: "Class"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[]; methods: AstNode[] }
-export interface AstInterface extends Base { kind: "Interface"; vis: VisTag; name: string; generics?: string[]; methods: AstNode[] }
+export interface AstStructDecl extends Base { kind: "Struct"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[] }
+export interface AstClass extends Base { kind: "Class"; vis: VisTag; name: string; generics?: string[]; fields: AstNode[] }
+export interface AstInterface extends Base { kind: "Interface"; vis: VisTag; name: string; generics?: string[] }
 export interface AstImpl extends Base { kind: "Impl"; target: AstNode; methods: AstNode[] }
 export interface AstAlias extends Base { kind: "Alias"; vis: VisTag; name: string; target: AstNode }
 export interface AstFn extends Base { kind: "Fn"; vis: VisTag; async?: true; name: string; generics?: string[]; params: AstNode[]; ret?: AstNode; bounds?: AstBound[]; body: AstNode }
@@ -70,7 +69,6 @@ export interface AstExprStmt extends Base { kind: "ExprStmt"; expr: AstNode }
 
 // ---- arms & patterns ----
 export interface AstWhenArm extends Base { kind: "WhenArm"; pats: AstNode[]; body: AstNode }
-export interface AstSelectArm extends Base { kind: "SelectArm"; fut: AstNode; bind?: string; body: AstNode }
 export interface AstPatLit extends Base { kind: "PatLit"; expr: AstNode }
 export interface AstPatPath extends Base { kind: "PatPath"; segs: AstSeg[] }
 export interface AstPatCtor extends Base { kind: "PatCtor"; segs: AstSeg[]; args: (string | null)[] }
@@ -100,21 +98,20 @@ export interface AstStruct extends Base { kind: "Struct"; ty: AstNode; fields: A
 export interface AstArrayLit extends Base { kind: "ArrayLit"; elems: AstNode[] }
 export interface AstWhenExpr extends Base { kind: "WhenExpr"; scrut: AstNode; arms: AstNode[] }
 export interface AstAwait extends Base { kind: "Await"; expr: AstNode }
-export interface AstSelect extends Base { kind: "Select"; arms: AstNode[] }
 export interface AstIs extends Base { kind: "Is"; expr: AstNode; ty: AstNode }
 
 export type AstNode =
-  | AstModule | AstUse | AstAlias | AstModuleLet | AstEnum | AstDataclass | AstClass
+  | AstModule | AstUse | AstAlias | AstModuleLet | AstEnum | AstStructDecl | AstClass
   | AstInterface | AstImpl | AstFn | AstSurfaceFn | AstSurfaceClass
   | AstFieldDecl | AstMethodDecl | AstParam | AstSelfParam | AstBlock
   | AstLetStmt | AstIf | AstWhile | AstForOf | AstForC | AstReturn | AstBreak
   | AstContinue | AstWhenStmt | AstExprStmt
-  | AstWhenArm | AstSelectArm | AstPatLit | AstPatPath | AstPatCtor
+  | AstWhenArm | AstPatLit | AstPatPath | AstPatCtor
   | AstPatWild | AstPatElse
   | AstTyPath | AstTyFn | AstTyConst | AstTyUnion
   | AstLit | AstPath | AstCall | AstMethodCall | AstFieldExpr | AstIndex
   | AstUnary | AstBinary | AstAssign | AstLambda | AstTry | AstFStr
-  | AstStruct | AstArrayLit | AstWhenExpr | AstAwait | AstSelect | AstIs;
+  | AstStruct | AstArrayLit | AstWhenExpr | AstAwait | AstIs;
 
 export interface CompileResult {
   diags: Diag[];

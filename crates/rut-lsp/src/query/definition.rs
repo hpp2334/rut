@@ -29,8 +29,8 @@
 //! disagree about what an ident means. Multiple hits come back as
 //! multiple locations — the LSP-native candidate list (a peek), never a
 //! wrong silent jump. A miss is an empty vector. Honest limits (the
-//! survey §3.3): no visibility checking (the engine's `pub(mod)` rules
-//! are not modeled); generics resolve at the head.
+//! survey §3.3): no visibility checking (the engine's `pub(super)`/
+//! `pub(pkg)` rules are not modeled); generics resolve at the head.
 
 use std::collections::HashMap;
 

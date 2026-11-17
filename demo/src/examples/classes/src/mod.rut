@@ -7,8 +7,8 @@
 // without `self` is a class method — no separate "static" form.
 // Type bodies are FIELDS ONLY; every method lives in the
 // type's inherent `impl` block. Members follow the visibility rules:
-// unannotated = module-private, `pub` (optionally scoped: `pub(mod)`,
-// `pub(super)`, `pub(self)`) exposes them.
+// unannotated = module-private, `pub` (optionally scoped: `pub(pkg)`,
+// `pub(super)`) exposes them.
 
 use core::{ panic };
 use ink::{ Logger };

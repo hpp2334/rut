@@ -18,9 +18,9 @@ import type {
 
 const VIS_LABEL: Record<VisTag, string> = {
   pub: "pub",
-  mod: "pub(mod)",
   super: "pub(super)",
-  self: "pub(self)",
+  pkg: "pub(pkg)",
+  self: "private",
 };
 
 const OP_SYMBOL: Record<BinOpTag | UnOpTag, string> = {
@@ -28,8 +28,7 @@ const OP_SYMBOL: Record<BinOpTag | UnOpTag, string> = {
   Eq: "==", Ne: "!=", Lt: "<", Gt: ">", Le: "<=", Ge: ">=",
   And: "&&", Or: "||",
   BitAnd: "&", BitOr: "|", BitXor: "^", Shl: "<<", Shr: ">>",
-  WrapAdd: "&+", WrapSub: "&-", WrapMul: "&*", WrapShl: "&<<",
-  Neg: "-", Not: "!", BitNot: "~",
+  Neg: "-", Not: "!",
 };
 
 // ---- per-payload textOf helpers (no blob parameters) ----
@@ -86,21 +85,18 @@ function rowsOf(n: AstNode, src: string): Row[] {
         { label: "name", text: n.name },
         { label: "members", items: n.members.map(textOfMember) },
       ];
-    case "Dataclass":
     case "Class":
       return [
         { label: "vis", text: VIS_LABEL[n.vis] },
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
         { label: "fields", list: n.fields },
-        { label: "methods", list: n.methods },
       ];
     case "Interface":
       return [
         { label: "vis", text: VIS_LABEL[n.vis] },
         { label: "name", text: n.name },
         ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
-        { label: "methods", list: n.methods },
       ];
     case "Impl":
       return [
@@ -217,12 +213,6 @@ function rowsOf(n: AstNode, src: string): Row[] {
         { label: "pats", list: n.pats },
         { label: "body", node: n.body },
       ];
-    case "SelectArm":
-      return [
-        { label: "fut", node: n.fut },
-        ...(n.bind ? [{ label: "bind", text: n.bind }] : []),
-        { label: "body", node: n.body },
-      ];
     case "PatLit":
       return [{ label: "expr", node: n.expr }];
     case "PatPath":
@@ -301,9 +291,19 @@ function rowsOf(n: AstNode, src: string): Row[] {
     case "FStr":
       return [{ label: "parts", items: n.parts.map(textOfFPart) }];
     case "Struct":
+      // one wire kind, two shapes: the `{ .. }` literal expression vs
+      // the field-only struct decl
+      if ("ty" in n) {
+        return [
+          { label: "ty", node: n.ty },
+          { label: "fields", fields: n.fields },
+        ];
+      }
       return [
-        { label: "ty", node: n.ty },
-        { label: "fields", fields: n.fields },
+        { label: "vis", text: VIS_LABEL[n.vis] },
+        { label: "name", text: n.name },
+        ...(n.generics ? [{ label: "generics", items: n.generics }] : []),
+        { label: "fields", list: n.fields },
       ];
     case "ArrayLit":
       return [{ label: "elems", list: n.elems }];
@@ -312,8 +312,6 @@ function rowsOf(n: AstNode, src: string): Row[] {
         { label: "scrut", node: n.scrut },
         { label: "arms", list: n.arms },
       ];
-    case "Select":
-      return [{ label: "arms", list: n.arms }];
     case "Is":
       return [
         { label: "expr", node: n.expr },

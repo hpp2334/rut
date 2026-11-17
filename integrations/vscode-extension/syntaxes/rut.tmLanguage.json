@@ -170,7 +170,7 @@
     },
     "control-keyword": {
       "name": "keyword.control.rut",
-      "match": "\\b(if|else|while|for|of|return|when|break|continue|select|await|async)\\b"
+      "match": "\\b(if|else|while|for|of|return|when|break|continue|await|async)\\b"
     },
     "keyword": {
       "name": "keyword.other.rut",

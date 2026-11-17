@@ -6,8 +6,7 @@
  *     contextual words the parser matches by interner text: `entry`,
  *     `host`-lane siblings `builtin`/`primitive` (item.rs), `break`/
  *     `continue` (stmt.rs), `self`/`Self` (expr.rs, item.rs), `super`
- *     (frame.rs), `as` (casts + select arm binds), `type` (the alias
- *     introducer).
+ *     (frame.rs), `as` (casts), `type` (the alias introducer).
  *   - primitive types: `is_primitive_ty` in the same file; `opaque` is
  *     added on top — a real contextual builtin type (the erasure box,
  *     declared `builtin primitive opaque`) that the table doesn't list.
@@ -39,7 +38,7 @@ const KEYWORDS = {
     // RESERVED_KW — the grammar's one canonical reserved set
     'fn let mut if else while for of return when ' +
     'enum class struct interface impl requires use pub ' +
-    'static async await is host select ' +
+    'static async await is host ' +
     // contextual words — ordinary identifiers elsewhere, keywords in
     // their slots
     'entry builtin primitive break continue self Self super as type',
