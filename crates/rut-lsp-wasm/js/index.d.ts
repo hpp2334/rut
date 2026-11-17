@@ -169,7 +169,6 @@ export type DepSource =
 export interface DepRow {
   name: string;
   source: DepSource;
-  optional: boolean;
 }
 
 /** the parsed `rut.jsonc` */

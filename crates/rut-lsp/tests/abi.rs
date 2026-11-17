@@ -12,7 +12,7 @@ use rut_lsp::Lsp;
 /// the CDN url's own cache filename (the URL STRING is hashed, never
 /// the bytes) — the row the BOOT-EMPTY ledger leaves unpinned
 const POUCH_CACHE: &str =
-    ".rut/cache/ce5972cceaaff2517e69195ddaafa8c2cce9816e8b1bd6fb00701d1e38e4d588.zip";
+    ".rut/cache/f86e4246eb9db68920e23d2367d7b8bfee571135ec6913ea51072b0fd8004bd9.zip";
 
 /// parse an export's JSON answer
 fn take(json: String) -> serde_json::Value {
@@ -27,7 +27,7 @@ const PLUGIN_SHAPE: &str = r#"{
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip" }
   }
 }"#;
 
@@ -51,7 +51,10 @@ fn manifest_envelope_spells_the_dep_table() {
         server["source"],
         serde_json::json!({ "kind": "path", "dir": "../server" })
     );
-    assert_eq!(server["optional"], false);
+    assert!(
+        server.get("optional").is_none(),
+        "the retired `optional` key never rides the row: {server}"
+    );
     let pouch = rows.iter().find(|r| r["name"] == "pouch").unwrap();
     assert_eq!(pouch["source"]["kind"], "url");
     assert_eq!(pouch["source"]["cache_path"], POUCH_CACHE);

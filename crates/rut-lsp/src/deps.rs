@@ -67,7 +67,6 @@ pub enum DepSource {
 pub struct DepRow {
     pub name: String,
     pub source: DepSource,
-    pub optional: bool,
 }
 
 /// One parsed manifest, editor-shaped: the module's own identity plus
@@ -122,7 +121,6 @@ fn dep_row(name: &str, desc: &std::collections::BTreeMap<String, String>) -> Dep
     DepRow {
         name: name.to_string(),
         source,
-        optional: desc.get("optional").map(|o| o == "true").unwrap_or(false),
     }
 }
 

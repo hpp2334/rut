@@ -12,7 +12,7 @@ const EXT_ID = 'rut.rut-vscode';
 // the symbol fixture the test asserts on (relative to the extension, so
 // the test runs on every machine) — the fixture's own module dir, its
 // entry source is what the symbol assertions read
-const FIXTURE = join(__dirname, 'fixtures', 'symbols', 'symbols.rut');
+const FIXTURE = join(__dirname, 'fixtures', 'symbols', 'src', 'mod.rut');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function poll(what, fn, tries = 100, gap = 100) {
@@ -117,13 +117,13 @@ async function depWalkChecks(log) {
     const FIXTURES = join(__dirname, 'fixtures', 'dep-walk');
 
     // the url identity + its pin: the committed pouch zip's bytes
-    // hash (the std-v17 lane; nothing reads the artifact here — the
+    // hash (the std-v18 lane; nothing reads the artifact here — the
     // store's meta vouches the pin; install-time verification is the
     // only hash pass). The probe name `VecPouch` exists ONLY in the
     // fixture store tree, so no std-twin can answer for it.
     const bundleBytes = fs.readFileSync(join(REPO, 'dist', 'std', 'pouch.zip'));
     const pin = crypto.createHash('sha256').update(bundleBytes).digest('hex');
-    const url = 'https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip';
+    const url = 'https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip';
 
     // the scratch world: ws/ becomes a workspace folder; outside/ sits
     // beside it — outside the folder boundary by construction; home/

@@ -1,5 +1,5 @@
 // Through-wasm e2e gate — the extension-side twin of
-// crates/rut-lsp-wasm/tests/corpus.rs (the lsp-align survey §3.6 design).
+// crates/rut-lsp/src/tests/corpus.rs (the lsp-align survey §3.6 design).
 // Drives the SHIPPED bin/rut-lsp.wasm over the full repo corpus
 // (rut/ + examples/ + demo/src/examples/ + benches/workloads/) through
 // the extension's OWN ABI binding (src/wasm.ts, bundled to out/wasm.js
@@ -67,7 +67,7 @@ const WASM_PATH = path.join(EXT, 'bin', 'rut-lsp.wasm');
 const BINDING_PATH = path.join(EXT, 'out', 'wasm.js');
 const FIXTURE = path.join(__dirname, 'fixtures', 'symbols', 'src', 'mod.rut');
 
-// corpus roots, mirroring crates/rut-lsp-wasm/tests/corpus.rs and
+// corpus roots, mirroring crates/rut-lsp/src/tests/corpus.rs and
 // test/grammar-corpus.js
 const CORPUS_ROOTS = [
     'rut',
@@ -250,7 +250,7 @@ async function main() {
     }
 
     // ---- member hover/completion through a `?Circle` let-binding ----
-    // (M4's ty_head arm — mirrors crates/rut-lsp-wasm/tests/hover.rs's
+    // (M4's ty_head arm — mirrors crates/rut-lsp/src/tests/hover.rs's
     // nullable_let_binding_resolves_members through the shipped wasm;
     // methods live in impl blocks — RFC 0012 — so the doc analyzes clean)
     {
@@ -1532,7 +1532,6 @@ async function main() {
             {
                 name: 'server',
                 source: { kind: 'path', dir: '../server' },
-                optional: false,
             },
             `path row: ${JSON.stringify(row('server'))}`,
         );
@@ -1576,7 +1575,7 @@ async function main() {
             'the lock pin matches the committed zip bytes',
         );
         // the cache path is computed RUST-side — sha256 of the URL string
-        // plus the url's own artifact ext (crates/rut-lsp-wasm/src/deps.rs
+        // plus the url's own artifact ext (crates/rut-lsp/src/deps.rs
         // cache_path); the binding never hashes, so the gate recomputes
         // the SAME digest over the fixture URL and the row must equal it
         // — derived, never a pinned constant
@@ -2333,7 +2332,7 @@ async function main() {
         assert.ok(!table.error, `manifest parse: ${JSON.stringify(table)}`);
         eqKeys(table, ['name', 'entries', 'deps', 'dev_deps'], 'dep table');
         eqKeys(table.entries[0], ['path', 'mode'], 'entry source');
-        eqKeys(table.deps[0], ['name', 'source', 'optional'], 'dep row');
+        eqKeys(table.deps[0], ['name', 'source'], 'dep row');
         eqKeys(
             table.deps.find((r) => r.source.kind === 'path').source,
             ['kind', 'dir'],
