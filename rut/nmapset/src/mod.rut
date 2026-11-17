@@ -1,4 +1,4 @@
-// nmapset/nmapset.rut — `HashMap`/`HashSet` as a thin wrapper over the
+// nmapset/src/mod.rut — `HashMap`/`HashSet` as a thin wrapper over the
 // `nmap_host` table: the whole state is one `opaque` handle and every
 // method is a single host call. Key admission is the compile-time
 // union bound (no `f32`/`f64` — float keys have no stable equality

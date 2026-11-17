@@ -7,8 +7,7 @@
 //! slim-down: general keys now mean a `bytes` encoding or the
 //! `nmapset` wrapper; the old source lives in git history.)
 //!
-//! Design (nmap-borrow-probe — the survey and the receipts:
-//! `docs/nmapset-borrow-probe-survey.md`):
+//! Design (nmap-borrow-probe):
 //! - the table IS `hashbrown::HashTable<(KeyVal, Entry)>` (the
 //!   workspace's first external runtime dep — already in the lock via
 //!   the LSP chain, wasm-clean): the SwissTable machinery (control
@@ -68,9 +67,11 @@
 //! (the sv lanes stay zero-copy through `sv_range`'s house `Invalid`
 //! checks), and the ONE owned copy left in the whole surface is a
 //! fresh insert. Admission still runs BEFORE the value reference is
-//! taken over (the leak law), and since no iteration surface exists
-//! (`put/get/has/remove/len` + the range twins), bucket internals are
-//! unobservable.
+//! taken over (the leak law). The surface DOES iterate —
+//! `map_iter_new`/`map_iter_next` drive the `for..of` law (the
+//! birth-order snapshot, below) — but bucket internals stay
+//! unobservable: the walk hands out key boxes, never a bucket
+//! address.
 
 use hashbrown::hash_table;
 use hashbrown::HashTable;
@@ -1267,8 +1268,9 @@ mod tests {
     fn the_capacity_law_is_hashmaps_reserve_semantics() {
         // the open-addressing power-of-two law is gone with the probing
         // core; `map_new`'s `cap` is the table's reserve — a lower bound
-        // on capacity, which `map_cap` reads back for the wrapper's
-        // sidecar pre-size (a hint, never a behavior)
+        // on capacity, read back through the test-only `cap()` (the
+        // `map_cap` crossing retired with the wrapper's sidecar
+        // pre-size: nothing rut-side has anything left to size)
         assert_eq!(NativeTable::new(0).cap(), 0);
         assert_eq!(NativeTable::new(-5).cap(), 0);
         assert!(NativeTable::new(4).cap() >= 4);
@@ -1407,8 +1409,7 @@ mod tests {
         assert_eq!(hash_payload(&KeyVal::Bits(1)), mix64(1));
     }
 
-    // ---- the handle-rebased val lanes (the retired column suite's
-    // ---- laws, migrated) -------------------------------------------
+    // ---- the handle-rebased val lanes ---------------------------------
 
     /// Raw-bit round-trips through the handle-rebased lanes: the u64
     /// sign range, f64 bit patterns (`to_bits`), replace at the same
@@ -1472,8 +1473,7 @@ mod tests {
         assert!(err.msg.contains("no live entry"), "{}", err.msg);
     }
 
-    /// THE PARITY LAW (the retired `nmap_valcolumn.rs`'s checksum leg,
-    /// migrated per the survey §7): one churn sequence — puts with
+    /// THE PARITY LAW: one churn sequence — puts with
     /// internal growth, replaces, removes, re-adds — driven through the
     /// h-family + the raw val lanes must agree with a std `HashMap`
     /// reference on every observable: the live set, each key's value,

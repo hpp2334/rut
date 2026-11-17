@@ -124,21 +124,22 @@ prelude builtin primitive bytes {
 }
 // type-methods: bytes::zeroed(n) -> bytes, bytes::from(a: [u8]) -> bytes
 // NOTE: `Option`/`Result`/`own` were removed in v1.1 — absence is
-// `nil` on a `?T` or a `(T, err)` tuple; use sites diagnose
-// with the removal and its replacement.
+// `nil` on a `?T` or a `(T, err)` tuple; a use site diagnoses
+// through the ordinary unknown-name ladder.
 
 // The array `[T]` declares NOTHING here: the type is
 // grammar (`[T]`), construction is the repeat `[v; n]` — a VALUE and a
 // count — and `a[i]`/`a.len()` are compiler-lowered.
-// The `Array` name itself is removed: use sites diagnose with the
-// removal and its replacement.
+// The `Array` name itself is removed: a use site diagnoses
+// through the ordinary unknown-name ladder.
 
 // the erasure box: any value goes in via `opaque(v)`,
 // `opaque::downcast<T>(o)` recovers it (and `x is T` probes it). A
 // boot-table type whose member is the static on the primitive; the free
 // `downcast<T>` fn is gone — the member form is the one surface
 // (builtin-surface phase 2 deleted the engine alias too: a bare
-// `downcast<T>(o)` call diagnoses with the removal). Construction is a
+// `downcast<T>(o)` call hits the ordinary unknown-name ladder).
+// Construction is a
 // CALL of the type name itself — `opaque::new(v)` was folded into
 // `opaque(v)` in the `?T` sweep, there is no `new` static.
 // The recovery is the nullable: a match IS the box's inner

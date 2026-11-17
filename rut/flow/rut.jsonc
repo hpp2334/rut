@@ -9,8 +9,8 @@
   // `str` / `bytes`); only the wrapper families below reach into the
   // deps. No presence gating, no light mount: every consumer gets the
   // whole surface, and the packed bundle is CLOSED — its `deps/`
-  // carries the pouch + nmapset groups under identity dirs (the v11
-  // wire), so the wrappers' `use` heads resolve wherever flow travels.
+  // carries the pouch + nmapset groups under identity dirs, so the
+  // wrappers' `use` heads resolve wherever flow travels.
   //
   // Publishes COMPILED (the linkable-classes phase), mirroring json's
   // manifest shape; the binary carries the generic bodies as templates

@@ -1,9 +1,11 @@
 {
   // nmapset/ — the native-key map/set EXPERIMENT (the mapset-host plan):
   // generic wrapper classes over the `nmap_host` host table. The native side
-  // owns keys (and — since round3 — prim vals); reference values stay
-  // rut-side (the `[?V]` parallel array), so the `get -> ?V` aliasing
-  // semantics are the law. Publishes COMPILED (the linkable-classes
+  // owns keys AND values (nmap-hostvals P5): every value — reference values
+  // included — lives host-side inside the entry as a sealed `opaque(v)` box,
+  // released on replace/remove and at the table's death; `get` answers the
+  // STORED box (nil = absent), so the `get -> ?V` aliasing semantics are the
+  // law. Publishes COMPILED (the linkable-classes
   // phase): the generic classes' methods cross on the surface's inherent
   // rows, and a consumer instantiates + requests the bodies from this pkg
   // (owner-anchored generics).

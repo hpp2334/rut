@@ -1,4 +1,4 @@
-// ink/ink.rut — the logger.
+// ink/src/mod.rut — the logger.
 //
 // The primitives are the host functions `create_logger`/`logger_log` from
 // the host module `ink_host`: the host owns the logger's

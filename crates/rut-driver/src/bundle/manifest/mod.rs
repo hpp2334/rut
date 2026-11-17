@@ -32,10 +32,13 @@
 //! { "deps": { "pouch": { "path": "rut/pouch" } } }
 //! ```
 //!
-//! or by url — a packed `.rutbundle` fetched by the host:
+//! or by url — a remote artifact fetched over http(s), routed by the
+//! url's own extension (`.zip` unpacks a source-zip transport — the
+//! lane the std set ships; anything else loads as a compiled
+//! `.rutbundle`):
 //!
 //! ```json
-//! { "deps": { "pouch": { "url": "https://example.com/pouch.rutbundle" } } }
+//! { "deps": { "pouch": { "url": "https://example.com/pouch.zip" } } }
 //! ```
 //!
 //! The url row carries NO pin: the old `sha256` key is RETIRED — pins
@@ -137,7 +140,9 @@ pub struct Manifest {
     /// knows
     pub format_version: Option<u64>,
     /// `deps` — exact specifier → descriptor: exactly one source key,
-    /// `path` (a directory) or `url` (a remote `.rutbundle`). The old
+    /// `path` (a directory) or `url` (a remote artifact — the url's
+    /// extension routes the lane: `.zip` source transport, anything
+    /// else the compiled `.rutbundle`). The old
     /// `sha256` pin key is retired from the grammar (pins live in
     /// `rut.lock`): the grammar refuses it. Kept for the host to
     /// resolve; the run does not read the filesystem or the network.
@@ -795,7 +800,7 @@ mod tests {
         let err = parse_manifest(r#"{"name": "app", "deps": {"ink": {}}}"#).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "deps.ink: the descriptor has no source — 'path' for a directory, or 'url' for a packed bundle"
+            "deps.ink: the descriptor has no source — 'path' for a directory, or 'url' for a remote artifact"
         );
     }
 
@@ -906,13 +911,13 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             err.to_string(),
-            "deps.pouch: 'path' and 'url' are both set — one descriptor, one source: a directory or a .rutbundle url, never both"
+            "deps.pouch: 'path' and 'url' are both set — one descriptor, one source: a directory or a remote url, never both"
         );
         // neither
         let err = parse_manifest(r#"{"deps": {"pouch": {}}}"#).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "deps.pouch: the descriptor has no source — 'path' for a directory, or 'url' for a packed bundle"
+            "deps.pouch: the descriptor has no source — 'path' for a directory, or 'url' for a remote artifact"
         );
         // non-http(s)
         let err =

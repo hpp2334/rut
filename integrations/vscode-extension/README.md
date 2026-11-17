@@ -165,8 +165,7 @@ delete, and no fetch on it, by construction.
   editor points at the tool that owns the fix), plus a `missing` row
   in the walk's answer. No silent wrong mount, no network, ever.
 - **File modules mount like the loader runs**: a dep package's root
-  module (`src/mod.rut`; the entry lib while the
-  transitional key stands) mounts its `mod NAME;` tree recursively —
+  module (`src/mod.rut`) mounts its `mod NAME;` tree recursively —
   `NAME/mod.rut` beside the declaring file, inside the package's
   `src/` shell — so `use
   gadgets::layout::{ Column }` completes, hovers its segments

@@ -39,8 +39,8 @@ fn classics_run_clean() {
 
         // the classics use the toolchain libs (`ink`+`ink_host`, `pouch`) —
         // third-party pkgs mounted from the tree (the driver doesn't
-        // know them); `nmapset` is the map lane (survey D6: it pulls
-        // `nmap_host` through its `[deps]`)
+        // know them); `nmapset` is the map lane — it pulls `nmap_host`
+        // through its own `[deps]` row, so that pkg mounts with it
         let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         // the classics use the toolchain libs offered from the tree;
         // calc rides beside; the core prelude auto-offers. The root

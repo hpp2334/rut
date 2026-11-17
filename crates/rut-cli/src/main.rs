@@ -29,7 +29,8 @@ enum Cli {
     Install(install::InstallArgs),
     /// the source formatter — canonical house layout, rewrite in place
     Fmt(fmt::FmtArgs),
-    /// pack a package directory into a deterministic `.rutbundle` archive
+    /// pack a package directory into a deterministic archive — the
+    /// source zip by default, the compiled `.rutbundle` with `--mode bin`
     Pack(pack::PackArgs),
     /// the AST + IR readbacks for one file
     Dump(dump::DumpArgs),

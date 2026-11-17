@@ -1,4 +1,4 @@
-// flow/flow.rut — the push pipeline: `Flow<E>` is a chainable wrapper
+// flow/src/mod.rut — the push pipeline: `Flow<E>` is a chainable wrapper
 // over THE push contract. Rut's iteration is push-style, one schema: a
 // type is iterable when an inherent impl marks a member `[iterable]`
 // and a `for..of` calls that ONE designated member (`emit` answering
@@ -7,14 +7,15 @@
 // (a closure per STAGE, never per element). Pipelines are the clarity
 // tier: the fused builtin loops stay the perf tier.
 //
-// The base is pouch-free by law (json.rut's base shape): the entry
+// The base is pouch-free by law (json/src/mod.rut's base shape): the entry
 // adapters for the builtin structural targets (`[T]`, `str`, `bytes`)
 // compile here over nothing but the push contract. The Vec/set
 // wrapper families (`VecFlow`, `SetFlow` — the old `[peer-deps]`
 // group files) folded into this file's foot as flow's OWN source,
 // with `pouch` / `nmapset` as plain deps (the manifest's rows): no
 // presence gating, every consumer gets the whole surface, and the
-// packed bundle carries the deps closed (the v11 `deps/` wire).
+// packed bundle carries the deps closed (its `deps/` holds each dep's
+// groups under identity dirs).
 
 // The entry interface: a source becomes a pipeline. A type satisfies
 // it STRUCTURALLY — by having `into_flow` on its own inherent impl —
@@ -256,8 +257,8 @@ impl BytesFlow {
 // group-nmapset.rut) folded here when the peer key retired: the
 // wrappers are plain root-module source, and `pouch` / `nmapset` are
 // plain deps (the manifest's rows), so every consumer gets the whole
-// surface and the packed bundle carries the deps closed (the v11
-// `deps/` wire).
+// surface and the packed bundle carries the deps closed (its `deps/`
+// holds each dep's groups under identity dirs).
 //
 // THE WRAPPER LAW (the structural-interfaces fork): `Vec` is pouch's
 // class, and satisfaction is having the members on the type's own
@@ -308,12 +309,15 @@ impl<T> VecFlow<T> {
 // The KEY union bound (`K requires i8 | … | bytes`) already admits
 // exactly the legal keys, so the put loop needs no extra admission.
 //
-// IntoFlow for mapset is DEFERRED, not skipped silently: it requires
-// walking the host table, and nmapset ships no iteration surface —
-// the exact gap json documents (its map-encode note at the wrapper
-// families' foot). When that surface lands (a host walk + keys/
-// entries), json's map encode and flow's IntoFlow grow together in
-// one step.
+// IntoFlow for mapset is DEFERRED, not skipped silently: nmapset HAS
+// the walk (its `[iterable] iterate` on both classes), but no
+// `into_flow` member — and the wrapper law puts the member on the
+// type's own inherent impl, so flow cannot grow it on another
+// module's class. Growing it nmapset-side would point nmapset at flow
+// (the `Flow` constructor lives one dep edge up), inverting the
+// direction that today runs flow -> nmapset; until that
+// dependency-direction call is made, a set enters a pipeline only as
+// the SINK below (`SetFlow<T>::from_flow`).
 
 use nmapset::{ HashSet };
 

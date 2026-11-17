@@ -1,7 +1,6 @@
 //! The async host set's bodies — the standard launcher
 //! surface the plan's ruling 8 assigns to the embedder
-//! (the async model: `docs/src/reference/async.md`;
-//! cancellation/tasks: `docs/src/reference/tasks.md`):
+//! (the async model: `docs/src/reference/async.md`):
 //!
 //! ```rut
 //! pub host fn __launch(f: opaque);            // enqueue the frame

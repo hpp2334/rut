@@ -1,4 +1,4 @@
-// strbuild/strbuild.rut — the 10th std pkg: the growable string
+// strbuild/src/mod.rut — the 10th std pkg: the growable string
 // builder, a class over HOST fns (the ink/Logger pattern — the
 // `strbuild_host` decl pkg declares the rows, this pkg is the rut
 // face over them; the bodies live in `rut-std`). Core ships zero

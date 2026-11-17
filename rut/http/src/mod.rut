@@ -1,4 +1,4 @@
-// http/http.rut — the std HTTP lane's rut face (the redesign): an
+// http/src/mod.rut — the std HTTP lane's rut face (the redesign): an
 // ASYNC-ONLY, unsuffixed face over the `http_host` rows. Only the
 // operations that really wait are async points — `send`, `body`,
 // `next` — everything else (the client, the five verbs, the builder
@@ -78,10 +78,9 @@ impl HttpClient {
     pub fn patch(self, url: str, body: bytes) -> RequestBuilder {
         return self.request().method(ClientQueryMethod::Patch).url(url).body(body);
     }
-    /// the DELETE verb — spelled `del` because `delete` is a REMOVED
-    /// word in rut's grammar (the dynamic-property statement; the
-    /// `out`-not-`print` precedent): the same crossing under an honest
-    /// name, the wire still sees the canonical `DELETE`
+    /// the DELETE verb — spelled `del` for brevity at the call site: the
+    /// same crossing under a short name, the wire still sees the
+    /// canonical `DELETE`
     pub fn del(self, url: str) -> RequestBuilder {
         return self.request().method(ClientQueryMethod::Del).url(url);
     }

@@ -22,7 +22,7 @@
     },
     "format_version": {
       "type": "integer",
-      "description": "The bundle layout version (10 today). Refused on load when unknown."
+      "description": "The bundle layout version — 13, the ONE wire this toolchain reads. A bundle stamped with any other version is refused on load (the refusal names the re-pack): re-pack the directory with the current toolchain; there is no compatibility ladder."
     },
     "entry": {
       "type": "object",
@@ -37,7 +37,7 @@
     },
     "deps": {
       "$ref": "#/definitions/depTable",
-      "description": "Transitively mounted dependencies: exact specifier → descriptor. Each descriptor names exactly ONE source — `path` (a module directory) or `url` (a remote `.rutbundle`); url rows are `{ \"url\": ... }` only, the `sha256` key is retired (pins live in the sibling `rut.lock` — the pin is law at the mount door).",
+      "description": "Transitively mounted dependencies: exact specifier → descriptor. Each descriptor names exactly ONE source — `path` (a module directory) or `url` (a remote artifact; the url's own extension routes the lane: `.zip` unpacks a source-zip transport — the lane the std set ships — anything else loads as a compiled `.rutbundle`); url rows are `{ \"url\": ... }` only, the `sha256` key is retired (pins live in the sibling `rut.lock` — the pin is law at the mount door).",
       "propertyNames": {
         "pattern": "^[a-zA-Z0-9_]+$",
         "description": "A bare package name — the specifier a `use` path spells."
@@ -94,7 +94,7 @@
       }
     },
     "depDescriptor": {
-      "description": "Exactly one source: a `path` directory or a `url` bundle — never both, never neither. Url rows are `{ \"url\": ... }` only — the `sha256` key is retired from the manifest grammar; pins live in the sibling `rut.lock` (run `rut install`).",
+      "description": "Exactly one source: a `path` directory or a `url` remote artifact (`.zip` source transport or `.rutbundle` compiled, routed by the url's own extension) — never both, never neither. Url rows are `{ \"url\": ... }` only — the `sha256` key is retired from the manifest grammar; pins live in the sibling `rut.lock` (run `rut install`).",
       "oneOf": [
         {
           "type": "object",
@@ -114,7 +114,7 @@
           "properties": {
             "url": {
               "type": "string",
-              "description": "The packed `.rutbundle` url (http/https). The pin is law at the mount door and lives in the sibling `rut.lock` — the manifest's `sha256` key is retired ('sha256' retired — pins live in rut.lock)."
+              "description": "The remote artifact url (http/https) — the lane routes by the url's own spelling: `.zip` is the source-zip transport (the std lane ships source zips), anything else a compiled `.rutbundle`. The pin is law at the mount door and lives in the sibling `rut.lock` — the manifest's `sha256` key is retired ('sha256' retired — pins live in rut.lock)."
             }
           },
           "required": [

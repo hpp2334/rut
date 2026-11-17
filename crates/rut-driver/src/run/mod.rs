@@ -192,8 +192,9 @@ pub struct RutRun {
 /// The `core` prelude pkg — the erasure primitive (`opaque`), the
 /// engine's builtin surface (`Iterable`, the disposal pair), and the
 /// compiler-lowered functions (`panic`, the `str`/`bytes` natives).
-/// v1.1 removed `Option`/`Result`/`own` — use sites diagnose with the
-/// removal. A native pkg with no body: its surface is
+/// v1.1 removed `Option`/`Result`/`own` — a use site diagnoses
+/// through the ordinary unknown-name ladder. A native pkg with no
+/// body: its surface is
 /// [`rut_core::binary::Surface::core`], the single source of truth
 /// (`rut/core/core.d.rut` mirrors it for the LSP). Builtin names are
 /// ambient except the `pub builtin` spellings (the disposal pair) —

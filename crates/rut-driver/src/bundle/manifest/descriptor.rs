@@ -23,7 +23,9 @@ pub(super) fn check_dep_key(table: &str, key: &str) -> Result<(), ManifestError>
 }
 
 /// A `deps` descriptor: exactly ONE source — `path` (a directory) or
-/// `url` (a remote `.rutbundle`), never both, never neither. The
+/// `url` (a remote artifact: the url's extension routes the lane,
+/// `.zip` source transport vs the compiled `.rutbundle`), never both,
+/// never neither. The
 /// `sha256` pin is RETIRED from the grammar — pins live in `rut.lock`
 /// — so the key refuses loudly (the `host_scope` treatment: a silent
 /// ignore would surface as an unpinned fetch later). `optional` is
@@ -64,12 +66,12 @@ pub(super) fn parse_deps_descriptor(
     match (out.contains_key("path"), out.contains_key("url")) {
         (true, true) => {
             return Err(ManifestError(format!(
-                "{path}: 'path' and 'url' are both set — one descriptor, one source: a directory or a .rutbundle url, never both"
+                "{path}: 'path' and 'url' are both set — one descriptor, one source: a directory or a remote url, never both"
             )));
         }
         (false, false) => {
             return Err(ManifestError(format!(
-                "{path}: the descriptor has no source — 'path' for a directory, or 'url' for a packed bundle"
+                "{path}: the descriptor has no source — 'path' for a directory, or 'url' for a remote artifact"
             )));
         }
         _ => {}

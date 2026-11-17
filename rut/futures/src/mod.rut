@@ -1,4 +1,4 @@
-// futures/futures.rut — the standard launcher surface in rut
+// futures/src/mod.rut — the standard launcher surface in rut
 // (ruling 8: launch_future / LaunchedFutureHandle / sleep are HOST
 // surface — ordinary code over the closed `Future` class, mounted by
 // each embedder by choice; users may write their own launchers the
