@@ -1,7 +1,7 @@
 //! Path loading — module directories (`rut.jsonc`) and `.rutbundle`
-//! archives: a v11 bundle is the COMPILED contract (`mod.rutc` binaries
-//! plus scope ledger plus `deps/` identity groups), and the refusals
-//! gate it (version, corruption, missing groups).
+//! archives: a bundle is the COMPILED contract (wire 13 — `mod.rutc`
+//! binaries plus scope ledger plus `deps/` identity groups), and the
+//! refusals gate it (version, corruption, missing groups).
 
 use std::path::Path;
 
@@ -23,8 +23,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
@@ -57,9 +57,9 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 
 fn make_dir_manifest() -> String {
     // bundle-shaped: the keys a `rut pack` needs are already there,
-    // and directory loading ignores them (layout 13 — the current
-    // wire; the packer emits 13 and the loader reads 13 plus the old
-    // 11 lane forever)
+    // and directory loading ignores them (layout 13 — the packer
+    // stamps 13 and the loader reads 13 ONLY; every other version —
+    // 11, 12, anything — refuses with the re-pack recipe)
     r#"{"name": "mod"}"#.to_string()
 }
 
@@ -539,7 +539,7 @@ fn packs_the_dep_graph_and_loads_it_by_name() {
     assert!(g.graph.diags.is_empty(), "{:?}", g.graph.diags);
     assert!(g.graph.program.is_some());
 
-    // a v11 bundle missing a declared dep group is a load error naming it
+    // a bundle missing a declared dep group is a load error naming it
     let stripped: Vec<(String, Vec<u8>)> = entries
         .iter()
         .filter(|(n, _)| !n.starts_with(&format!("{m_dir}/")))

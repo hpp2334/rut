@@ -365,8 +365,8 @@ impl Surface {
     /// The core prelude surface: the builtin containers,
     /// the builtin ifaces, the compiler-lowered functions, the integer
     /// primitives' `builtin impl` methods, and `NAN`. One
-    /// source of truth — the driver mounts it (`mount_std_core`), the
-    /// compiler hints from it, and `rut/core/core.d.rut` mirrors it
+    /// source of truth — the driver mounts it, the compiler hints from
+    /// it, and `rut/core/core.d.rut` mirrors it
     /// for the LSP (kept true to the implementation by test). Every name
     /// is a well-known symbol — the surface's interner is the table.
     pub fn core() -> Surface {

@@ -33,8 +33,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
@@ -130,7 +130,7 @@ fn entry_names(bytes: &[u8]) -> Vec<String> {
 // the tests
 
 #[test]
-fn host_root_packs_v6_and_loads_back() {
+fn host_root_packs_and_loads_back() {
     let dir = host_world(
         "roundtrip",
         "logger_host",
@@ -138,7 +138,7 @@ fn host_root_packs_v6_and_loads_back() {
         "pub host fn make_logger(tag: str) -> opaque;\npub host fn log(line: str);\n",
     );
 
-    // pack: v6, two entries, the surface riding as source
+    // pack: two entries, the surface riding as source
     let bytes = pack_dir(&dir).expect("pack the host pkg");
     let names = entry_names(&bytes);
     assert_eq!(
@@ -541,10 +541,10 @@ fn url_host_bundle_is_a_leaf_no_fetch_walk() {
 }
 
 #[test]
-fn mount_std_then_a_decl_bundle_consumer_runs_the_pattern() {
-    // the embedder story end to end: mount_std (the engine mounts),
-    // then a consumer that names BOTH the ambient core rows and a
-    // CDN-fetched host surface compiles + links
+fn std_then_a_decl_bundle_consumer_runs_the_pattern() {
+    // the embedder story end to end: the std mount (core auto-rides,
+    // calc offered), then a consumer that names BOTH the ambient core
+    // rows and a CDN-fetched host surface compiles + links
     let dir = host_world(
         "embed",
         "logger_host",

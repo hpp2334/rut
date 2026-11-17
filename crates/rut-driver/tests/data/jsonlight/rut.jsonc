@@ -1,14 +1,9 @@
 {
-  // the light consumer (the rut-json batch phase 1): json mounts with NO
-  // peers in the closure — the base alone (traits, reader/writer, prims,
-  // ?T, [T], entries); the peer-gated container rows never exist here and
-  // a reference to them diagnoses (D2 — asserted in
-  // json_pkg.rs).
-  //
-  // THE LAW this fixture pins: dev-deps mount into the closure exactly
-  // like deps (load_dir_session pass 2), and json's groups are
-  // presence-gated — listing pouch/nmapset in ANY dep table of this
-  // fixture would silently mount the full json. Light means json ALONE.
+  // the light consumer (the rut-json batch phase 1): json mounts ALONE
+  // for the plainest reason — the fixture lists only json, so the
+  // closure is the base alone (traits, reader/writer, prims, ?T, [T],
+  // entries). rut/json declares no presence gating and no light mount:
+  // a listed peer would mount like any dep.
   "name": "jsonlight",
     "deps": {
     "json": {

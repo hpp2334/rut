@@ -1,4 +1,4 @@
-//! The v6 decl root's CLI face: `rut pack <host-dir>` works (the bundle
+//! The decl root's CLI face: `rut pack <host-dir>` works (the bundle
 //! lands), `rut run <host.rutbundle>` refuses with intent (a host
 //! bundle carries a declaration surface — nothing to run), and
 //! `pack --strip` refuses on a host root (no programs, no sidecar).

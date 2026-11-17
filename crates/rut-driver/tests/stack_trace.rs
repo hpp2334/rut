@@ -33,8 +33,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
@@ -402,7 +402,7 @@ fn discarded_capture_releases_cleanly() {
 }
 
 #[test]
-fn version_nine_rejects_stale_artifacts() {
+fn stale_versions_reject_stale_artifacts() {
     // v13 is the weak batch (`TyKind::Weak` + the two Weak
     // ops — new encoded vocabulary, the bump law); v12 was the char
     // exorcism (the nmap-hostvals batch phase 1: the

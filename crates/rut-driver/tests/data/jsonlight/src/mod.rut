@@ -1,10 +1,9 @@
 use json::{encodeJson, decodeJson};
 use json::{JsonI64, JsonStr, JsonBool, JsonF64, JsonArr, SOpt};
 
-// the light consumer: json mounts with NO peers in the closure — the
-// base alone (interfaces, reader/writer, the scalar wrappers, SOpt,
-// JsonArr, entries). The peer-gated container wrappers never exist
-// here; referencing them diagnoses D2. Answers use the same
+// the light consumer: json is the only dep the fixture lists, so the
+// closure is the base alone (interfaces, reader/writer, the scalar
+// wrappers, SOpt, JsonArr, entries). Answers use the same
 // canonical-string convention as the jsonpkg fixture. Primitives cross
 // ONLY inside their wrappers — the spelled constructor is the
 // manufacture, at the call site, forever.

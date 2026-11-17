@@ -1,4 +1,4 @@
-//! v11 compiled bundles: the mixed closure — linked pkgs ride as
+//! Compiled bundles (wire 13): the mixed closure — linked pkgs ride as
 //! `mod.rutc` binaries (bodies + surface, the linking truth; generic
 //! owners also ride their generic bodies as templates INSIDE the
 //! binary, v22), pkgs the graph
@@ -27,8 +27,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
@@ -60,7 +60,7 @@ fn graph_of(c: Result<rut_driver::Compiled, rut_driver::RunError>) -> rut_driver
 }
 
 fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rut-v5-{tag}-{}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("rut-bundle-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d

@@ -28,7 +28,8 @@
 //!    string builder) serves its consumers from the bundle: the
 //!    classes' methods cross on the surface's inherent rows, no
 //!    instantiation required.
-//! 6. **The ambient law** — mount_std + a url-mounted core coexist
+//! 6. **The ambient law** — the tree's auto-riding std face (core +
+//!    calc offered) and a url-mounted core bundle coexist
 //!    (first-mount-wins).
 
 use std::collections::BTreeMap;
@@ -51,8 +52,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
@@ -121,8 +122,9 @@ fn artifact(key: &str) -> (String, Vec<u8>) {
 }
 
 /// Write a consumer app over the given dep rows + source, load it
-/// through the fetcher, mount_std, compile — the CDN-consumer lane end
-/// to end. Answers the graph diags (empty = compiled).
+/// through the fetcher, mount the std face (core auto-rides, calc
+/// offered), compile — the CDN-consumer lane end to end. Answers the
+/// graph diags (empty = compiled).
 fn load_and_compile(
     dir: &Path,
     rows: &str,

@@ -1487,8 +1487,9 @@ fn pouch_vec_via_module_loader_runs() {
     // the real rut/pouch source, mounted as a package (manifest + deps)
     // and used by a consumer; generic Vec is inlined and monomorphized,
     // then linked and executed — ink rides the same mount (with its ink_host).
-    // mount_std (not just core): the run installs calc's bodies too, and
-    // the load-time contract requires mount ↔ bindings to agree
+    // the full std shape (not just core): the run installs calc's
+    // bodies too, and the load-time contract requires mount ↔ bindings
+    // to agree
     let mut world = case_world(); // ink (+ink_host), pouch, calc — from the tree
     world.push(
         rut_driver::Mounted::source(

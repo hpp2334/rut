@@ -1,11 +1,11 @@
-//! The strbuild pkg's gate (the strbuild batch; docs/strbuild-survey.md
-//! is the contract): the six-member class face over the HOST builder
+//! The strbuild pkg's gate (the strbuild batch; this suite is the
+//! contract): the six-member class face over the HOST builder
 //! (`strbuild_host::*` — the ink/Logger pattern; core ships zero
 //! string-building machinery), driven as a real `[deps]` pkg through
 //! the `strbuildpkg` fixture. json_pkg's conventions: canonical-string
 //! answers, plain VM, no DOM.
 //!
-//! The pins (survey §1.1/§1.5/§2 — the host admits nothing new):
+//! The pins (the host admits nothing new):
 //! - append/len/build round trips (ASCII, astral, empty)
 //! - the codepoint rule: astral = ONE codepoint in `len`; a surrogate
 //!   append_code mints U+FFFD at the host fn (the str::from_code rule)
@@ -40,8 +40,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(

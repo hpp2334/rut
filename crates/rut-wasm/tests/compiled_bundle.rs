@@ -8,9 +8,9 @@
 
 use std::rc::Rc;
 
-/// A tiny linkable world (root + one compiled dep), packed v5.
+/// A tiny linkable world (root + one compiled dep), packed.
 fn pack_world() -> Vec<u8> {
-    let base = std::env::temp_dir().join(format!("rut-wasm-v5-{}", std::process::id()));
+    let base = std::env::temp_dir().join(format!("rut-wasm-bundle-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let lib = base.join("lib");
     std::fs::create_dir_all(lib.join("src")).unwrap();

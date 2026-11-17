@@ -35,8 +35,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
@@ -134,7 +134,7 @@ fn linked_binary(loaded: &rut_driver::Walk) -> Vec<u8> {
     rut_core::binary::encode(&g.graph.program.expect("linked program"))
 }
 
-/// Mount + mount_std + compile + flatten + run one entry.
+/// Mount (calc offered) + compile + flatten + run one entry.
 fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R {
     let g = loaded
         .pkgs

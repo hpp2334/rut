@@ -1,7 +1,7 @@
 use strbuild::{ StringBuilder };
 
-// the strbuild pkg's unit pins (docs/strbuild-survey.md §2 is the
-// member contract; §1.5 the share/copy law). Every entry answers a
+// the strbuild pkg's unit pins (this fixture is the member contract;
+// the share/copy law lives here too). Every entry answers a
 // canonical string — `OK...` or `BAD:<claim>` — so the Rust-side suite
 // asserts exact values.
 //

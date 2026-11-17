@@ -1,11 +1,11 @@
-//! The json pkg's phase-1 gate (the rut-json batch; docs/rut-json-survey.md
-//! is the contract). DOM-free and pure — the `store.rs` precedent: every
+//! The json pkg's gate (the rut-json batch; this suite is the
+//! contract). DOM-free and pure — the `store.rs` precedent: every
 //! test drives the pkg through its entry surface on a plain VM and
 //! asserts canonical strings, no DOM, no clock, no host surface.
 //!
 //! The fixtures: `tests/data/jsonpkg` (json — the base surface end to
-//! end) and `tests/data/jsonlight` (json alone — the same base, a
-//! minimal entry set).
+//! end) and `tests/data/jsonlight` (json alone — the fixture lists only
+//! json, a minimal entry set over the same base).
 //!
 //! Entry answer shape:
 //!   successes  ->  `OK:<payload>`
@@ -32,8 +32,8 @@ fn compiled(spec: &str, src: &str) -> rut_driver::GraphOutput {
     )
 }
 
-/// [`compiled`] with calc offered (the old `mount_std` shape: core
-/// auto-rides, `calc` is an ordinary pkg).
+/// [`compiled`] with calc offered: core auto-rides, `calc` is an
+/// ordinary pkg).
 #[allow(dead_code)]
 fn compiled_std(spec: &str, src: &str) -> rut_driver::GraphOutput {
     graph_of(
