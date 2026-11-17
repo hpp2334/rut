@@ -98,7 +98,6 @@ fn run_main(loaded: Walk) -> i64 {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         })
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -726,7 +725,6 @@ fn run_main_pkgs(pkgs: &[rut_driver::Mounted], entry: &str) -> i64 {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         })
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

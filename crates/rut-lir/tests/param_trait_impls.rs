@@ -42,7 +42,6 @@ fn boot(src: &str) -> Result<rut_vm::interp::Vm, String> {
     rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .map_err(|e| format!("{e:?}"))

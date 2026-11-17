@@ -6,8 +6,6 @@ publish = false
 description = "03-plugin — a Rust chat-room server with a rut moderator plugin: the host fires events into subscribed rut exports and rut emits data back through a host opaque box; every emit re-enters rut to format its line"
 
 [dependencies]
-rut-core = { path = "../../crates/rut-core" }
-rut-lexer = { path = "../../crates/rut-lexer" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-native = { path = "../../crates/rut-native" }
 rut-vm = { path = "../../crates/rut-vm" }

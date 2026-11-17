@@ -9,7 +9,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, HostRegistry, Vm};
+use rut_vm::interp::{HostRegistry, Vm};
 use rut_vm::{OpaqueRef, Trap};
 
 use todolist_web::fake_dom::FakeDom;
@@ -38,7 +38,6 @@ fn make_host() -> WebHost<FakeDom> {
     let vm = Vm::builder()
         .compiled(compiled)
         .limits(mount::limits())
-        .hooks(HostHooks::default())
         .build()
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);
@@ -322,7 +321,6 @@ fn rfc0025_declared_but_unbound_is_a_vm_construction_error() {
     let err = match Vm::builder()
         .compiled(compiled)
         .limits(mount::limits())
-        .hooks(HostHooks::default())
         .hosts(HostRegistry::new())
         .build()
     {

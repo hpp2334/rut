@@ -6,13 +6,12 @@
 //! let vm = Vm::builder()
 //!     .compiled(compiled)   // anything IntoVmParts (the driver's Compiled)
 //!     .limits(limits)       // unset ⇒ Limits::default() — uncapped
-//!     .hooks(hooks)
 //!     .hosts(registry)
 //!     .build()?;
 //! ```
 //!
 //! Two construction shapes, one door: `.program(..)` (+ the raw
-//! `.limits`/`.hooks`/`.hosts`) for embedders holding a decoded
+//! `.limits`/`.hosts`) for embedders holding a decoded
 //! [`Program`], and `.compiled(..)` for anything that hands over its
 //! parts as a value — the driver's `RutRun::new()..compile()` product
 //! implements [`IntoVmParts`] (the seam trait is defined HERE, in
@@ -24,7 +23,7 @@ use std::rc::Rc;
 
 use rut_core::binary::Program;
 
-use super::{HostHooks, HostRegistry, Limits, Vm};
+use super::{HostRegistry, Limits, Vm};
 
 /// Why a [`VmBuilder::build`] refused: a boot failure (a declared host
 /// fn never bound, a const that cannot materialize) or a shape failure
@@ -49,12 +48,11 @@ impl std::fmt::Display for VmError {
 
 impl std::error::Error for VmError {}
 
-/// The four construction parts, handed over as one value by anything
+/// The three construction parts, handed over as one value by anything
 /// implementing [`IntoVmParts`].
 pub struct VmParts {
     pub program: Rc<Program>,
     pub limits: Limits,
-    pub hooks: HostHooks,
     pub hosts: HostRegistry,
 }
 
@@ -66,21 +64,20 @@ pub trait IntoVmParts {
 }
 
 /// The fluent builder — `Vm::builder()`. Unset `limits` mean
-/// `Limits::default()` (uncapped — the mechanism law), unset `hooks`/
-/// `hosts` mean their defaults.
+/// `Limits::default()` (uncapped — the mechanism law), unset `hosts`
+/// means its default.
 #[derive(Default)]
 pub struct VmBuilder {
     parts: Option<Result<VmParts, VmError>>,
     program: Option<Rc<Program>>,
     limits: Option<Limits>,
-    hooks: Option<HostHooks>,
     hosts: Option<HostRegistry>,
 }
 
 impl VmBuilder {
-    /// Take the four parts from a value that implements
+    /// Take the three parts from a value that implements
     /// [`IntoVmParts`] (the driver's `Compiled`). Explicit
-    /// `.limits`/`.hooks`/`.hosts` calls override the taken values;
+    /// `.limits`/`.hosts` calls override the taken values;
     /// the program cannot be overridden by `.program` after this (the
     /// compiled product IS the program's owner).
     pub fn compiled(mut self, parts: impl IntoVmParts) -> Self {
@@ -100,12 +97,6 @@ impl VmBuilder {
         self
     }
 
-    /// The host hooks.
-    pub fn hooks(mut self, hooks: HostHooks) -> Self {
-        self.hooks = Some(hooks);
-        self
-    }
-
     /// The host-fn binding table, joined against the program's host
     /// thunks at boot.
     pub fn hosts(mut self, hosts: HostRegistry) -> Self {
@@ -119,7 +110,6 @@ impl VmBuilder {
     pub fn build(self) -> Result<Vm, VmError> {
         let mut program = self.program;
         let mut limits = self.limits;
-        let mut hooks = self.hooks;
         let mut hosts = self.hosts;
         if let Some(parts) = self.parts {
             let parts = parts?;
@@ -128,9 +118,6 @@ impl VmBuilder {
             }
             if limits.is_none() {
                 limits = Some(parts.limits);
-            }
-            if hooks.is_none() {
-                hooks = Some(parts.hooks);
             }
             if hosts.is_none() {
                 hosts = Some(parts.hosts);
@@ -142,7 +129,6 @@ impl VmBuilder {
         Vm::new(
             program,
             &limits.unwrap_or_default(),
-            hooks.unwrap_or_default(),
             hosts.unwrap_or_default(),
         )
         .map_err(|t| VmError { msg: t.msg })

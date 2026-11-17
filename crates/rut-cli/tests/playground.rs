@@ -114,7 +114,6 @@ fn classics_run_clean() {
         let mut vm = match rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(limits)
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(hosts)
             .build()
         {

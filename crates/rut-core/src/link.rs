@@ -66,29 +66,6 @@ pub fn flatten(prog: Program) -> Program {
 // assigns the program a fresh scope and rewrites every scope half
 // through a map; boot ids are global by construction and pass through.
 
-/// The canonical spelling of a type id for instantiation-key comparison.
-/// Boot rows spell their global local; every other row its packed
-/// `(scope, local)` — pre-link — or its global dense id — post-link.
-/// Either way the spelling is stable across every program sharing the
-/// block, which is what makes instantiation keys comparable across
-/// module (and binary) boundaries.
-pub fn canon_type(tt: &TypeTable, id: TypeId) -> String {
-    if id == u32::MAX {
-        return "any".into(); // TY_ANY sentinel — never a real type
-    }
-    if tt.packed {
-        if crate::id::scope_of(id) == crate::id::BOOT_SCOPE {
-            format!("b{}", crate::id::local_of(id))
-        } else {
-            format!("s{}:{}", crate::id::scope_of(id), crate::id::local_of(id))
-        }
-    } else if (id as usize) < tt.boot_len as usize {
-        format!("b{id}")
-    } else {
-        format!("s{id}")
-    }
-}
-
 /// Walk every packed `TypeId` a program carries: the type table's
 /// descriptors, trait methods, consts, function signatures and op
 /// operands, the surface rows, and the instantiation ledger. The scope

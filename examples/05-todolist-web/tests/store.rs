@@ -45,7 +45,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, Vm};
+use rut_vm::interp::Vm;
 use rut_vm::OpaqueRef;
 
 use todolist_web::fake_dom::FakeDom;
@@ -74,7 +74,6 @@ fn vm() -> (Vm, OpaqueRef) {
     let mut v = Vm::builder()
         .compiled(compiled)
         .limits(mount::limits())
-        .hooks(HostHooks::default())
         .build()
         .expect("the vm boots");
     let c: OpaqueRef = v.call("store_new", ()).unwrap();

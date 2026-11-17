@@ -22,7 +22,7 @@
 use std::rc::Rc;
 use std::time::Instant;
 
-use rut_vm::interp::{HostHooks, Limits, Vm};
+use rut_vm::interp::{Limits, Vm};
 
 struct Args {
     workload: String,
@@ -258,7 +258,6 @@ fn main() {
         let mut vm = Vm::builder()
             .program(Rc::clone(&prog))
             .limits(limits.clone())
-            .hooks(HostHooks::default())
             .hosts(hosts)
             .build()
             .unwrap_or_else(|e| fail(format!("boot: {}", e.msg)));

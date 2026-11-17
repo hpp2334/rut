@@ -648,28 +648,12 @@ impl TypeTable {
     pub fn kind(&self, id: TypeId) -> &TyKind {
         &self.types[self.dense(id) as usize].kind
     }
-    pub fn is_prim(&self, id: TypeId) -> Option<PrimTy> {
-        match self.kind(id) {
-            TyKind::Prim(p) => Some(*p),
-            _ => None,
-        }
-    }
     /// True when slots of this type are cell handles.
     pub fn is_ref(&self, id: TypeId) -> bool {
         !matches!(
             self.kind(id),
             TyKind::Nil | TyKind::Prim(_) | TyKind::Fn { .. }
         )
-    }
-
-    /// True when the type is a MUTABLE VALUE. Nothing is (the
-    /// by-reference regime): every cell type — records, arrays, enums,
-    /// `str`/`bytes`, closures, `?T` — shares its cell on assignment and
-    /// parameter passing; only primitives and `fn` values copy (immediate
-    /// slots). Kept as a predicate because the VM's deep-copy paths
-    /// (`own`) still branch on it, and the answer is now uniformly "no".
-    pub fn is_value(&self, _id: TypeId) -> bool {
-        false
     }
 
     /// The baked runtime representation of a type (see [`Repr`]).

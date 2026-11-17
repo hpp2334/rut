@@ -84,7 +84,6 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

@@ -226,7 +226,6 @@ fn same_name_two_identities_one_program() {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         })
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -337,7 +336,6 @@ fn same_identity_via_two_routes_mounts_once() {
             heap_limit_bytes: Some(16 * 1024 * 1024),
             interrupt_every: 1024,
         })
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -378,7 +376,6 @@ fn run_main(loaded: rut_driver::Walk) -> i64 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

@@ -827,7 +827,6 @@ entry fn boot_stream(url: str) -> nil {
         let vm = rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(limits)
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(hosts)
             .build()
             .unwrap();
@@ -1047,7 +1046,6 @@ entry fn boot(url: str) -> nil {
         let mut vm = rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(limits)
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(hosts)
             .build()
             .unwrap();
@@ -1181,7 +1179,6 @@ entry fn boot(url: str) -> nil {
         let mut vm = rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(limits)
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(hosts)
             .build()
             .unwrap();
@@ -1305,7 +1302,6 @@ entry fn boot() -> nil {
         let mut vm = rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(limits)
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(hosts)
             .build()
             .unwrap();
@@ -1478,7 +1474,6 @@ entry fn boot_stream(url: str) -> nil {
         let mut vm = rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(limits)
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(hosts)
             .build()
             .unwrap();

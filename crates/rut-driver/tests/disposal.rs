@@ -104,7 +104,6 @@ fn run_logged(src: &str) -> (rut_vm::interp::Vm, Vec<String>) {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -273,7 +272,6 @@ entry fn main() -> i32 { let a = A { n: 9 }; return a.n; }
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

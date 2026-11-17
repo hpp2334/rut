@@ -1239,7 +1239,6 @@ mod tests {
         rut_vm::interp::Vm::builder()
             .program(Rc::new(prog))
             .limits(rut_vm::interp::Limits::default())
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(rut_vm::interp::HostRegistry::new())
             .build()
             .expect("bare vm")

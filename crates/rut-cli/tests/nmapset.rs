@@ -70,7 +70,6 @@ fn setup(src: &str) -> Vm {
     Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm")

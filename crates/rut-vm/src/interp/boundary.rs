@@ -1008,13 +1008,7 @@ mod fast_lane_tests {
             types: rut_core::types::TypeTable::boot(),
             ..rut_core::binary::Program::default()
         };
-        Vm::new(
-            Rc::new(prog),
-            &Limits::default(),
-            HostHooks::default(),
-            HostRegistry::new(),
-        )
-        .expect("bare vm")
+        Vm::new(Rc::new(prog), &Limits::default(), HostRegistry::new()).expect("bare vm")
     }
 
     /// Drive the adapter itself (the HostSlot code pointer shape): box
@@ -1260,13 +1254,7 @@ mod return_lane_tests {
         thunk.ret = ret;
         thunk.argv = vec![];
         prog.funcs.push(thunk);
-        Vm::new(
-            Rc::new(prog),
-            &Limits::default(),
-            HostHooks::default(),
-            registry,
-        )
-        .expect("vm")
+        Vm::new(Rc::new(prog), &Limits::default(), registry).expect("vm")
     }
 
     #[test]

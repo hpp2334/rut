@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use rut_driver::lower_decl_module;
-use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
+use rut_vm::interp::{HostRegistry, Limits, Vm};
 use rut_vm::Completer;
 
 const INK_HOST_DECL: &str = include_str!("../../../rut/ink_host/src/ink_host.d.rut");
@@ -234,7 +234,6 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>, Rc<Fixture>) {
     let vm = Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -739,7 +738,6 @@ entry fn main() -> nil {
     let mut vm = Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");

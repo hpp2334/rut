@@ -10,7 +10,6 @@ name = "rut-bench-probe"
 path = "src/main.rs"
 
 [dependencies]
-rut-core = { path = "../../crates/rut-core" }
 rut-vm = { path = "../../crates/rut-vm" }
 rut-std = { path = "../../crates/rut-std" }
 rut-lexer = { path = "../../crates/rut-lexer" }

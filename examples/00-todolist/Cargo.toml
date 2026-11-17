@@ -6,8 +6,6 @@ publish = false
 description = "00-todolist — a Rust app embedding rut: the rut side is a todo-list CRUD library, the Rust side compiles, verifies, and runs it under budgets"
 
 [dependencies]
-rut-core = { path = "../../crates/rut-core" }
-rut-lexer = { path = "../../crates/rut-lexer" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-native = { path = "../../crates/rut-native" }
 rut-vm = { path = "../../crates/rut-vm" }

@@ -158,7 +158,6 @@ fn run_entry<R: rut_vm::interp::Ret>(loaded: rut_driver::Walk, entry: &str) -> R
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -289,7 +288,6 @@ fn a_source_group_splices_into_a_consumer_session() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -485,7 +483,6 @@ fn run_compiled<R: rut_vm::interp::Ret>(g: rut_driver::Compiled, entry: &str) ->
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

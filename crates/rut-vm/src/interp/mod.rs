@@ -70,9 +70,6 @@ impl Default for Limits {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct HostHooks {}
-
 /// The payload of an `Opaque` box classified against the closed
 /// native-key set (the nmap host experiment): the integer primitives and
 /// `bool` cross as raw bits, `str`/`bytes` cross as owned copies (short;
@@ -128,7 +125,6 @@ pub struct Vm {
     pub fuel_used: u64,
     interrupt_every: u32,
     since_check: u32,
-    pub hooks: HostHooks,
     /// the dispatch table, dense by func idx — the `Vm::new` join
     /// built it from the registry; the hot path copies one
     /// `HostSlot` (a code pointer, a state word, the declared return)
@@ -246,7 +242,6 @@ impl Vm {
     pub(crate) fn new(
         prog: Rc<Program>,
         limits: &Limits,
-        hooks: HostHooks,
         mut registry: HostRegistry,
     ) -> Result<Vm, Trap> {
         // ---- the host join ----
@@ -410,7 +405,6 @@ impl Vm {
             fuel_used: 0,
             interrupt_every: limits.interrupt_every.max(1),
             since_check: 0,
-            hooks,
             host_slots,
             host_keep,
             host_trap: None,
@@ -830,21 +824,6 @@ impl Vm {
         let slot = self.heap.alloc_str(s)?;
         let p = self.heap.alloc_opaque(slot, rut_core::types::TY_STR)?;
         Ok(self.heap.opaque_handle_take(unsafe { p.r }))
-    }
-
-    /// Mint a rut `str` cell from owned text — the host-side twin of
-    /// the boundary's `String` return: a body answering a `?str`/`str`
-    /// row through its own storage mints here (the store keeps its own
-    /// claim; the caller's lane mints its crossing cell separately).
-    /// The heap is crate-private, so this pub mint is the only road.
-    pub fn alloc_str_cell(&mut self, s: String) -> Result<Slot, Trap> {
-        self.heap.alloc_str(s)
-    }
-
-    /// Mint a rut `bytes` cell from owned octets —
-    /// [`Vm::alloc_str_cell`]'s bytes twin.
-    pub fn alloc_bytes_cell(&mut self, b: Vec<u8>) -> Result<Slot, Trap> {
-        self.heap.alloc_bytes(b)
     }
 
     /// The growth-charge hook for host-owned state: [`Heap::charge_public`]
@@ -1474,13 +1453,7 @@ mod tests {
             template_first_fid: 0,
             template_end_fid: 0,
         };
-        Vm::new(
-            Rc::new(prog),
-            &Limits::default(),
-            HostHooks::default(),
-            HostRegistry::new(),
-        )
-        .unwrap()
+        Vm::new(Rc::new(prog), &Limits::default(), HostRegistry::new()).unwrap()
     }
 
     /// Box `val` as an `Opaque` of static type `ty` — the `opaque(k)`

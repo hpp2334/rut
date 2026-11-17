@@ -192,7 +192,6 @@ fn template_served_shapes_run_the_same_answer() {
                 heap_limit_bytes: Some(64 * 1024 * 1024),
                 interrupt_every: 1024,
             })
-            .hooks(rut_vm::interp::HostHooks::default())
             .build()
             .expect("vm");
         let out: i32 = vm.call("main", ()).expect("main runs");
@@ -271,7 +270,6 @@ fn nmapset_bundle_served_shapes_match_the_directory_lane() {
                 heap_limit_bytes: Some(64 * 1024 * 1024),
                 interrupt_every: 1024,
             })
-            .hooks(rut_vm::interp::HostHooks::default())
             .hosts(hosts)
             .build()
             .unwrap_or_else(|e| panic!("{tag}: vm: {e:?}"));
@@ -466,7 +464,6 @@ entry fn main() -> str {
             heap_limit_bytes: Some(256 * 1024 * 1024),
             interrupt_every: 1024,
         })
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");

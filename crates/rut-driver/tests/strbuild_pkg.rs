@@ -24,7 +24,7 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
+use rut_vm::interp::{HostRegistry, Limits, Vm};
 
 const PKG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/strbuildpkg");
 
@@ -114,7 +114,6 @@ fn vm_with_heap(heap_limit_bytes: u64) -> Vm {
     Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm")

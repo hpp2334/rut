@@ -144,7 +144,6 @@ fn vm_for(app_src: &str) -> rut_vm::interp::Vm {
     rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm")

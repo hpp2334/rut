@@ -132,7 +132,6 @@ fn packed_module_generic_serves_consumer_typed_instantiation() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

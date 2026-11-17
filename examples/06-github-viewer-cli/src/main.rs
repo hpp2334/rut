@@ -205,7 +205,6 @@ fn main() {
     let mut vm = match rut_vm::interp::Vm::builder()
         .compiled(compiled2)
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .build()
     {
         Ok(vm) => vm,

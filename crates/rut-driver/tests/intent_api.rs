@@ -111,7 +111,6 @@ fn run_entry(binary: Vec<u8>) -> i64 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(rut_vm::interp::Limits::default())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("boot");
@@ -162,7 +161,6 @@ fn pkg_host_offers_the_host_bodies() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(compiled.hosts)
         .build()
         .expect("boot");

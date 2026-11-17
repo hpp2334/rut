@@ -54,11 +54,6 @@ futures = { version = "0.3", default-features = false, features = [
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 futures = { version = "0.3", features = ["executor"] }
 
-[dev-dependencies]
-# the mod-carrying bundle fixture is packed through the same writer the
-# CLI uses (wasm32-clean — it rides the main graph already)
-rut-driver = { path = "../rut-driver" }
-
 # opt into the workspace lint gate (warnings = deny)
 [lints]
 workspace = true

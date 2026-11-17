@@ -495,7 +495,6 @@ mod tests {
         crate::interp::Vm::new(
             Rc::new(prog),
             &crate::interp::Limits::default(),
-            crate::interp::HostHooks::default(),
             crate::interp::HostRegistry::new(),
         )
         .expect("bare vm")

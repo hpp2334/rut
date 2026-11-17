@@ -225,7 +225,6 @@ fn run_app(src: &str, some: bool) -> (i64, u64) {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");

@@ -53,7 +53,6 @@ fn run_entry(prog: rut_core::binary::Program, entry: &str) -> i32 {
     rut_vm::verify::verify(&prog).expect("verify");
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

@@ -80,7 +80,6 @@ fn run_main(src: &str) -> i32 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -101,7 +100,6 @@ fn compile_vm(src: &str) -> (rut_core::binary::Program, rut_vm::interp::Vm) {
     let vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat.clone()))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -373,7 +371,6 @@ fn render_degrades_when_stripped() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

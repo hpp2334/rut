@@ -86,12 +86,6 @@ impl Heap {
     pub fn peak_bytes(&self) -> u64 {
         self.acct.peak.get()
     }
-    pub fn limit(&self) -> Option<u64> {
-        self.acct.limit.get()
-    }
-    pub fn set_limit(&self, limit: Option<u64>) {
-        self.acct.limit.set(limit);
-    }
 
     /// Public growth accounting — Vec growth charges the
     /// budget before the write; never refunded on shrink (v1 overcounts
@@ -599,13 +593,6 @@ impl Heap {
     /// and hand it straight back.
     pub fn opaque_handle_take(&self, p: *const CellVal) -> OpaqueRef {
         OpaqueRef::owning(&self.arena, &self.acct, p)
-    }
-
-    /// Deep release of a slot by static type — used when dropping frames.
-    pub fn release_typed(&self, s: Slot, ty: TypeId, table: &TypeTable) {
-        if table.is_ref(ty) {
-            self.release(s);
-        }
     }
 
     /// Clone a value deeply (`own(x)`): shallow for handles —

@@ -1,7 +1,6 @@
 //! irDump — the demo page's IR pane rendering.
 
 use rut_core::ops::{Op, NOREG};
-use rut_core::types::TyKind;
 
 /// irDump — the demo page's IR pane: per-function typed
 /// register tables and op listings. Names resolve through the program's
@@ -302,10 +301,4 @@ fn op_str(op: &Op, f: &rut_core::binary::FuncCode) -> String {
         }
         Op::StrCodeAt { dst, s, idx } => format!("strcodeat r{dst}, r{s}, r{idx}"),
     }
-}
-
-/// Unused-kind helper kept for dump parity.
-#[allow(dead_code)]
-fn is_cell(kind: &TyKind) -> bool {
-    !matches!(kind, TyKind::Nil | TyKind::Prim(_) | TyKind::Fn { .. })
 }

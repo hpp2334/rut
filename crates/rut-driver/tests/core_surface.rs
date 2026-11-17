@@ -303,7 +303,6 @@ fn vm_for(src: &str) -> rut_vm::interp::Vm {
     rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm")
@@ -399,7 +398,6 @@ fn own_strbuf_named_type_still_resolves() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

@@ -77,7 +77,6 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     rut_vm::interp::Vm::builder()
         .compiled(out)
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .build()
         .expect("vm")
 }

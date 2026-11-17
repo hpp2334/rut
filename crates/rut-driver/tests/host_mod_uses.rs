@@ -253,7 +253,6 @@ fn a_qualified_host_call_runs_the_registered_body() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(prog)
         .limits(rut_vm::interp::Limits::default())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(compiled.hosts)
         .build()
         .expect("boots");

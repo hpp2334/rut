@@ -431,7 +431,6 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
     let err = match rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog.clone()))
         .limits(limits.clone())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
     {
@@ -449,7 +448,6 @@ fn the_vm_new_join_refuses_an_unbound_thunk() {
     assert!(rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits.clone())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .is_ok());
@@ -585,7 +583,6 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
     let err = match Vm::builder()
         .program(prog.clone())
         .limits(limits.clone())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
     {
@@ -608,7 +605,6 @@ fn a_missing_installer_panics_naming_the_pkg_and_blanket_installs_boot_clean() {
     let mut vm = Vm::builder()
         .program(prog)
         .limits(limits.clone())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("the blanket install boots");

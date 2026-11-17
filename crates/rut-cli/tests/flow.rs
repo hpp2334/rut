@@ -131,7 +131,6 @@ fn setup(src: &str) -> (Vm, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
     let vm = Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");

@@ -6,8 +6,6 @@ publish = false
 description = "02-digest — a Rust app embedding rut: the rut side is a byte-level library (hex, base64, MD5, SHA-1, SHA-256, SHA-512, CRC-32, FNV-1a, djb2, sdbm, JSON), the Rust side compiles it and verifies every result against the md-5/sha1/sha2/base64/crc32fast/serde_json crates"
 
 [dependencies]
-rut-core = { path = "../../crates/rut-core" }
-rut-lexer = { path = "../../crates/rut-lexer" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-native = { path = "../../crates/rut-native" }
 rut-vm = { path = "../../crates/rut-vm" }

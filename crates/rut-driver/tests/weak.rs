@@ -96,7 +96,6 @@ fn run_main(src: &str) -> i32 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -118,7 +117,6 @@ fn run_trap(src: &str) -> Option<String> {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -183,7 +181,6 @@ fn run_logged(src: &str) -> (Vec<String>, Option<String>) {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -405,7 +402,7 @@ fn weak_over_host_box_dies_with_the_entry() {
     // the D1 host leg: a `Host` store entry (alloc_host_box) weak-
     // referenced from script — the entry arm is shape-blind (Host and
     // Rut entries route through the same release).
-    use rut_vm::interp::{HostHooks, HostRegistry};
+    use rut_vm::interp::HostRegistry;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     // the test's own host pkg (the host_boxes pattern): the decl surface
     // here, the body bound below
@@ -458,7 +455,6 @@ entry fn main() -> i32 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -788,7 +784,6 @@ entry fn main() -> i32 {{
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -824,7 +819,6 @@ entry fn main() -> i32 {{
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

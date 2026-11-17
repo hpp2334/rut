@@ -48,19 +48,6 @@ impl Slots {
             Slots::Heap(v)
         }
     }
-    /// Drain all slots (release-path helper: the release walk reads a
-    /// record's ref-typed fields out before the cell dies). Leaves the
-    /// container empty.
-    pub fn take_slots(&mut self) -> Vec<Slot> {
-        match self {
-            Slots::Heap(v) => std::mem::take(v),
-            Slots::Inline { len, data } => {
-                let n = (*len).min(INLINE_SLOTS as u8) as usize;
-                *len = 0;
-                data[..n].to_vec()
-            }
-        }
-    }
     pub fn len(&self) -> usize {
         match self {
             Slots::Inline { len, .. } => *len as usize,
@@ -701,18 +688,6 @@ impl CellVal {
             _ => None,
         }
     }
-    pub fn as_closure(&self) -> Option<(u32, Vec<Slot>)> {
-        match &self.data {
-            CellData::Closure { func, captures } => Some((*func, captures.clone())),
-            _ => None,
-        }
-    }
-    pub fn seq_len(&self) -> Option<usize> {
-        match &self.data {
-            CellData::Array { items, .. } => Some(items.borrow().len()),
-            _ => None,
-        }
-    }
     pub fn seq_items_copy(&self) -> Option<Vec<Slot>> {
         match &self.data {
             CellData::Array { items, .. } => Some(items.borrow().to_slots()),
@@ -763,12 +738,6 @@ impl CellVal {
     pub fn record_get(&self, field: u32) -> Option<Slot> {
         match &self.data {
             CellData::Record { fields } => fields.borrow().get(field as usize),
-            _ => None,
-        }
-    }
-    pub fn record_set(&self, field: u32, v: Slot) -> Option<Slot> {
-        match &self.data {
-            CellData::Record { fields } => fields.borrow_mut().set(field as usize, v),
             _ => None,
         }
     }

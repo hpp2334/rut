@@ -1639,14 +1639,6 @@ impl<'a> Ctx<'a> {
         self.template_params.iter().any(|(_, row)| *row == t)
     }
 
-    /// The template window's parameter index for placeholder row `t`.
-    pub fn template_param_idx(&self, t: TypeId) -> Option<u32> {
-        self.template_params
-            .iter()
-            .position(|(_, row)| *row == t)
-            .map(|i| i as u32)
-    }
-
     /// Mint a bodyless bound-member stub (the template window's
     /// placeholder call): a FuncCode with no body and no host — the
     /// stub shape the mirror law already uses — recorded for the

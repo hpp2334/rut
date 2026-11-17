@@ -15,7 +15,7 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, Vm};
+use rut_vm::interp::Vm;
 
 const PKG: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonpkg");
 const LIGHT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/jsonlight");
@@ -100,7 +100,6 @@ fn vm_at(dir: &str) -> Vm {
     rut_vm::interp::Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(HostHooks::default())
         .hosts(compiled.hosts)
         .build()
         .expect("vm")

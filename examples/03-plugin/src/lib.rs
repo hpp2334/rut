@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 
-use rut_vm::interp::{CallArg, HostHooks, Limits, Vm};
+use rut_vm::interp::{CallArg, Limits, Vm};
 use rut_vm::{Opaque, OpaqueRef, Trap, TrapKind};
 
 /// The host's server object — handed to rut as an opaque box. All host
@@ -97,7 +97,6 @@ impl Plugin {
         let mut vm = Vm::builder()
             .compiled(compiled)
             .limits(limits.clone())
-            .hooks(HostHooks::default())
             .build()
             .map_err(|e| Trap::new(TrapKind::Invalid, e.msg))?;
 

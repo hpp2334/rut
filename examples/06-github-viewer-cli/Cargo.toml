@@ -6,7 +6,6 @@ publish = false
 description = "06-github-viewer-cli — a GitHub viewer CLI whose brain is rut (rgh.rut): argv carving, the jsDelivr tree JSON decode, and the human-size formatter all run in the VM; the Rust host only mounts packages, binds the HTTP bodies (rut-std's reqwest lane) and the example-local CLI-I/O rows, and exits with the brain's i32"
 
 [dependencies]
-rut-core = { path = "../../crates/rut-core" }
 rut-lexer = { path = "../../crates/rut-lexer" }
 rut-driver = { path = "../../crates/rut-driver" }
 rut-native = { path = "../../crates/rut-native" }

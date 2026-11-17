@@ -126,7 +126,6 @@ fn session(dropped: &Rc<Cell<bool>>) -> rut_vm::interp::Vm {
     rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .unwrap()
@@ -338,7 +337,6 @@ entry fn churn(n: i64) -> nil {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts0)
         .build()
         .unwrap();

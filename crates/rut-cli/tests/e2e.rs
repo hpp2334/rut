@@ -108,7 +108,6 @@ fn run_case_keep_vm(
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -974,7 +973,6 @@ fn entry_vm(src: &str) -> rut_vm::interp::Vm {
     rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm")
@@ -1554,7 +1552,6 @@ entry fn main() -> nil {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -1629,7 +1626,6 @@ entry fn main() -> nil {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -2702,7 +2698,6 @@ entry fn put(c: opaque) -> u32 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog.clone()))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts0)
         .build()
         .unwrap();

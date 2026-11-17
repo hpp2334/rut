@@ -99,7 +99,6 @@ fn run_main(app_src: &str) -> i64 {
     rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm")
@@ -542,7 +541,6 @@ fn nmapset_primitive_values_round_trip_through_the_raw_sidecar() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -589,7 +587,6 @@ fn prim_store_release_walk_skips_element_slots() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

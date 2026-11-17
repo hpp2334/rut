@@ -87,7 +87,6 @@ fn run_returns(src: &str) -> Result<i64, String> {
     let mut vm = Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(HostRegistry::new())
         .build()
         .map_err(|e| format!("{e:?}"))?;
@@ -137,7 +136,6 @@ fn run_graph(g: &rut_driver::GraphOutput) -> Result<i64, String> {
     let mut vm = Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(HostRegistry::new())
         .build()
         .map_err(|e| format!("{e:?}"))?;

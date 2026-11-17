@@ -32,7 +32,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rut_vm::interp::{HostHooks, Vm};
+use rut_vm::interp::Vm;
 use rut_vm::OpaqueRef;
 
 use todolist_web::fake_dom::{FakeDom, Snapshot};
@@ -63,7 +63,6 @@ fn make_host() -> (WebHost<FakeDom>, OpaqueRef) {
     let vm = Vm::builder()
         .compiled(compiled)
         .limits(mount::limits())
-        .hooks(HostHooks::default())
         .build()
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);
@@ -494,7 +493,6 @@ fn make_fixture() -> WebHost<FakeDom> {
     let vm = Vm::builder()
         .compiled(compiled)
         .limits(mount::limits())
-        .hooks(HostHooks::default())
         .build()
         .expect("the vm boots");
     let mut host = WebHost::new(shared, vm);

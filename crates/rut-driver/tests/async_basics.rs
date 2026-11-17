@@ -112,7 +112,6 @@ fn setup(src: &str) -> (Vm, Rc<RefCell<Vec<String>>>) {
     let vm = Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -721,7 +720,6 @@ entry fn main() -> nil {
     let mut vm = Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");

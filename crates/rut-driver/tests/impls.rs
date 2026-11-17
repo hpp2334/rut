@@ -402,7 +402,6 @@ fn run_main(src: &str) -> i32 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -595,7 +594,6 @@ fn class_vtable_fill_survives_the_link() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(linked))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -715,7 +713,6 @@ fn run_main_src(p: rut_core::binary::Program) -> i32 {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(rut_vm::interp::Limits::default())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

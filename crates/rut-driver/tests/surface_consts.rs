@@ -75,7 +75,6 @@ fn run_main(compiled: rut_driver::Compiled, hosts: rut_vm::interp::HostRegistry)
     let mut vm = rut_vm::interp::Vm::builder()
         .program(prog)
         .limits(rut_vm::interp::Limits::default())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("boot");
@@ -255,7 +254,6 @@ fn inf_literals_in_impl_code_compile_and_run() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(rut_vm::interp::Limits::default())
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("boot");

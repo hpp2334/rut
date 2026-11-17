@@ -406,7 +406,6 @@ fn a_consumer_spelled_shape_compiles_from_a_bundle_mounted_pouch() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");
@@ -564,7 +563,6 @@ fn a_concrete_class_lib_serves_from_the_bundle() {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");

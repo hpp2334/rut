@@ -28,7 +28,7 @@ use std::rc::{Rc, Weak};
 
 use wasm_bindgen::prelude::{Closure, JsCast, JsValue};
 
-use rut_vm::interp::{HostHooks, Vm};
+use rut_vm::interp::Vm;
 use rut_vm::OpaqueRef;
 
 use crate::backend::DomBackend;
@@ -259,7 +259,6 @@ fn boot_page(rows: &str) -> Result<(), String> {
     let mut vm = rut_vm::interp::Vm::builder()
         .compiled(compiled)
         .limits(crate::mount::limits())
-        .hooks(HostHooks::default())
         .build()
         .map_err(|e| format!("vm boot: {}", e.msg))?;
     // the boot turn returns the app container; the pump re-passes it on

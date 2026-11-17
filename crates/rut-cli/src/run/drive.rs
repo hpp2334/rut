@@ -4,7 +4,6 @@
 /// Boot the VM, call the designated entry fn, then run the async
 /// driving loop.
 pub(crate) fn run_entry(compiled: rut_driver::Compiled, entry: &str, fuel: Option<u64>) {
-    let hooks = rut_vm::interp::HostHooks::default();
     let limits = rut_vm::interp::Limits {
         fuel,
         heap_limit_bytes: Some(64 * 1024 * 1024),
@@ -15,7 +14,6 @@ pub(crate) fn run_entry(compiled: rut_driver::Compiled, entry: &str, fuel: Optio
     let mut vm = match rut_vm::interp::Vm::builder()
         .compiled(compiled)
         .limits(limits)
-        .hooks(hooks)
         .build()
     {
         Ok(vm) => vm,

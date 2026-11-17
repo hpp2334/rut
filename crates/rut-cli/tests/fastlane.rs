@@ -114,7 +114,6 @@ fn vm_with_surface(kept_str: Rc<RefCell<String>>) -> Vm {
     rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .unwrap()

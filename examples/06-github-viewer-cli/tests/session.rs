@@ -272,7 +272,6 @@ fn boot(
     let vm = Vm::builder()
         .compiled(compiled)
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .build()
         .unwrap();
     (vm, sinks, fx)
@@ -962,7 +961,6 @@ fn the_one_shot_law_degrades_second_takers() {
     let mut vm = Vm::builder()
         .compiled(compiled)
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .build()
         .unwrap();
     vm.call::<_, ()>("boot_oneshot", ("fixture://oneshot",))
@@ -1096,7 +1094,6 @@ fn live_smoke_over_the_real_cdn() {
     let mut vm = Vm::builder()
         .compiled(compiled)
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .build()
         .unwrap();
     vm.call::<_, ()>(

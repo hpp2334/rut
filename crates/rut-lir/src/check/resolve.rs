@@ -5,24 +5,6 @@
 use super::*;
 
 impl<'a> Ctx<'a> {
-    /// Mint (or fetch) the CONCRETE interface instantiation of an
-    /// impl's member set under a target substitution — the template
-    /// re-resolution law's mint half (the dispatch half that
-    /// per-instantiation consumers run: the for-of weave, the vtable
-    /// fills). A local interface instantiates from its AST. The
-    /// `iface_inst` cache is shared, so an instantiation the ordinary
-    /// interface resolution minted earlier is fetched, never duplicated. (The native contracts are
-    /// gone — the markers are designated member slots, not ifaces — so
-    /// there is no `Iterable` arm anymore.)
-    pub fn mint_impl_iface_inst(&mut self, name: IdentId, args: Vec<TypeId>) -> u32 {
-        // a used module's exported GENERIC trait: the carried descriptor
-        // mints the instantiation (no local AST exists)
-        if self.extern_trait(name).is_some() {
-            return self.mint_extern_iface_inst(name, args);
-        }
-        self.mk_iface_inst(name, args)
-    }
-
     /// The FOREIGN generic trait's mint half: one descriptor per
     /// type-argument list, built out of the CARRIED placeholder
     /// descriptor (the declaration crossed the used module's surface
@@ -268,13 +250,6 @@ impl<'a> Ctx<'a> {
         });
         self.run_context_ty = Some(ty);
         ty
-    }
-
-    /// A type in a NAMING position (impl heads, requires lists, is RHS) —
-    /// bare trait name → the trait's object type here means the TYPE;
-    /// for `is` RHS we keep trait vs concrete distinction in the compiler.
-    pub fn resolve_naming_type(&mut self, node: TyRef) -> TypeId {
-        self.resolve_type(node, &[])
     }
 
     /// Resolve a type AST node into the type table. `env` binds generic

@@ -229,7 +229,6 @@ fn load_and_run<R: rut_vm::interp::Ret>(bytes: &[u8], entry: &str, symtab: Optio
     let mut vm = rut_vm::interp::Vm::builder()
         .program(std::rc::Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(rut_vm::interp::HostRegistry::new())
         .build()
         .expect("vm");

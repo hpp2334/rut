@@ -5,7 +5,7 @@
 //! honest compensation for the AST's absent paren nodes: only the VM
 //! can prove the re-paren table preserved meaning.
 
-use rut_vm::interp::{HostHooks, HostRegistry, Limits, Vm};
+use rut_vm::interp::{HostRegistry, Limits, Vm};
 use std::rc::Rc;
 
 /// compile + run `main`, returning the logged lines in order
@@ -68,7 +68,6 @@ fn run(src: &str) -> Result<Vec<String>, String> {
     let mut vm = Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(HostHooks::default())
         .hosts(hosts)
         .build()
         .map_err(|t| format!("boot: {}", t.msg))?;

@@ -192,37 +192,6 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The bare single-segment ident a type node spells, when it does.
-    fn node_head_ident(&self, node: TyRef) -> Option<IdentId> {
-        match node {
-            TyRef::Path(h) => {
-                let segs = &h.get(self.ast).segs;
-                if segs.len() == 1 && segs[0].generics.is_empty() {
-                    Some(segs[0].name)
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
-    /// Is the node's head name a KNOWN type (primitive, declared,
-    /// used)? The impl-row matcher's parameter test — an unknown bare
-    /// name is the impl's own generic.
-    pub fn node_is_known_type(&self, node: TyRef) -> bool {
-        let Some(n) = self.node_head_ident(node) else {
-            return true;
-        };
-        sym::primitive_ty(n).is_some()
-            || self.find_enum(n).is_some()
-            || self.find_data(n).is_some()
-            || self.find_iface(n).is_some()
-            || self.find_alias(n).is_some()
-            || self.extern_native_type(n).is_some()
-            || self.extern_type(n).is_some()
-    }
-
     /// `impl T { .. }` — inherent methods. Local targets attach into the
     /// `DataDecl`; native builtin-class targets register an inherent
     /// `ImplDecl` (dispatch resolves through the native shape). Both

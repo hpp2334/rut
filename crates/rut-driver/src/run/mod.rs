@@ -169,7 +169,6 @@ impl rut_vm::IntoVmParts for Compiled {
         Ok(rut_vm::VmParts {
             program: std::rc::Rc::new(program),
             limits: rut_vm::interp::Limits::default(),
-            hooks: rut_vm::interp::HostHooks::default(),
             hosts: self.hosts,
         })
     }

@@ -96,7 +96,6 @@ fn run_lines(src: &str) -> Vec<String> {
     let mut vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(prog))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
@@ -595,7 +594,6 @@ fn async_setup(src: &str) -> (rut_vm::interp::Vm, Rc<RefCell<Vec<String>>>) {
     let vm = rut_vm::interp::Vm::builder()
         .program(Rc::new(flat))
         .limits(limits)
-        .hooks(rut_vm::interp::HostHooks::default())
         .hosts(hosts)
         .build()
         .expect("vm");
