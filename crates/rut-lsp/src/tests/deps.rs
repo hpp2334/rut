@@ -14,13 +14,13 @@ const PLUGIN_SHAPE: &str = r#"{
   "name": "plugin",
   "deps": {
     "server": { "path": "../server" },
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip" }
   }
 }"#;
 
-const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip";
-/// the real std-v17 pin — rut.lock's row for [`POUCH_URL`]
-const POUCH_PIN: &str = "5740cb0b874a2c9a81f1e0d9534520fe4067e5ec48320b82cf7147e2d6b34d36";
+const POUCH_URL: &str = "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip";
+/// the real std-v18 pin — rut.lock's row for [`POUCH_URL`]
+const POUCH_PIN: &str = "ce5f554cdf6f6dbfe758281e598e18b46158db7be26277b662c9ed3c1a5c71a7";
 
 /// A synthetic COMPILED bundle — the container shape a `--mode bin`
 /// pack writes (the wire-pair-stamped manifest, no entry keys) with a

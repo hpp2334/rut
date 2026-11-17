@@ -5,7 +5,7 @@
   // (`load_path_session_with`) — same host half, new mount lane.
   //
   // THE CDN ROW: `pouch` ships as a COMMITTED source zip
-  // (dist/std-v17/pouch.zip, jsDelivr-served at the tag, pinned in
+  // (dist/std-v18/pouch.zip, jsDelivr-served at the tag, pinned in
   // rut.lock — the pin is law at the mount door on every load). pouch is a
   // GENERIC owner — this app's consumer-spelled `Vec<Todo>` compiles
   // from the source at the link. The embedder names
@@ -15,6 +15,6 @@
   // wire), so the gates never touch the network.
   "name": "todolist",
     "deps": {
-    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/pouch.zip" }
+    "pouch": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/pouch.zip" }
   }
 }

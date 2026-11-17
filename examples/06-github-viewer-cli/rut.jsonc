@@ -4,7 +4,7 @@
   // allows over a CDN artifact.
   //
   // THE CDN ROW: `http` ships as a COMMITTED source zip
-  // (dist/std-v17/http.zip, jsDelivr-served at the tag, pinned in
+  // (dist/std-v18/http.zip, jsDelivr-served at the tag, pinned in
   // rut.lock — the pin is law at the mount door on every load). Its classes
   // are CONCRETE, and its whole closure (http_host, strbuild,
   // strbuild_host) rides inside as embedded source groups.
@@ -40,6 +40,6 @@
     "futures": {
       "path": "../../rut/futures"
     },
-    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v17/dist/std/http.zip" }
+    "http": { "url": "https://cdn.jsdelivr.net/gh/hpp2334/rut@std-v18/dist/std/http.zip" }
   }
 }
