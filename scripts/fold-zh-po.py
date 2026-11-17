@@ -5,10 +5,10 @@ Merge law (the GLOSSARY contract, after the 432ace9 lesson):
 - entries in POT order; the header rides from the existing zh_CN.po;
 - an UNCHANGED msgid keeps its msgstr byte-for-byte;
 - a CHANGED msgid whose diff is exactly the mechanical cutover
-  (rut.json → rut.jsonc, wire v7→v9 / v8→v10, the main convention's
+  (rut.json → rut.jsonc, the main convention's
   `pub fn main` → `entry fn main`) carries the old msgstr
   through the SAME mechanical substitution — the zh text moves with
-  the file name, the wire numbers, and the decl spelling, nothing else;
+  the file name and the decl spelling, nothing else;
 - everything else new/changed: FRESH below (written against
   docs/po/GLOSSARY.md) or "" — the English fallback BY DESIGN, never
   a stale zh sentence. Code blocks fold to "" (the untranslated set
@@ -25,16 +25,16 @@ from fold_po_lib import parse, quote, mech, esc
 POT = 'docs/po/rut.pot'
 PO = 'docs/po/zh_CN.po'
 
-# Fresh translations for the strings this sweep changed (the
-# declaration-entries phase — wire 12): the consolidated inline entry,
-# the universal generated entry, the strip policy's other half, the
-# editor's ladder, the old-lane-reads-forever wire law. Terminology per
-# docs/po/GLOSSARY.md (声明条目 / 编辑的真相 / 旁车 / 内联形式; the
-# `.d.ts` pattern and `mod.d.rut` stay code). Everything not FRESH here
-# either keeps its msgstr byte-for-byte (unchanged msgid) or folds to
-# "" — the English fallback BY DESIGN. Code blocks fold to "" (the
-# untranslated set is code-only). FRESH is pruned after every landed
-# sweep; see the git history of this file.
+# FRESH holds the translations for the strings the CURRENT sweep
+# changed — written against docs/po/GLOSSARY.md (code spans like the
+# `.d.ts` pattern and `mod.d.rut` stay code) — and follows a fixed
+# lifecycle: a sweep adds its entries here, lands, then PRUNES the
+# table back to empty. The fold is idempotent, so an empty FRESH over
+# the stable pot reproduces docs/po/zh_CN.po byte-for-byte: unchanged
+# msgids keep their msgstr, everything new folds to "" — the English
+# fallback BY DESIGN, never a stale zh sentence. Code blocks fold to
+# "" (the untranslated set is code-only). The next sweep's entries
+# start here; history lives in this file's git log.
 FRESH = {}
 
 

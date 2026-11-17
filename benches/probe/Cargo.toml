@@ -3,7 +3,7 @@ name = "rut-bench-probe"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "in-process benchmark probe for the rut VM — compile/verify/exec times, fuel and VM-heap high-water (RFC 0039/0040)"
+description = "in-process benchmark probe for the rut VM — compile/verify/exec times, fuel and VM-heap high-water accounting"
 
 [[bin]]
 name = "rut-bench-probe"

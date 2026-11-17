@@ -5,7 +5,7 @@ repo) against [QuickJS-ng](https://github.com/quickjs-ng/quickjs)
 (vendored) and V8 (the system `node`).
 
 The point is not to win. rut is a research bytecode interpreter with a
-self-managed RC heap (RFC 0016/0039); QuickJS is a mature optimizing
+self-managed RC heap (`docs/src/reference/rc-heap.md`, `vm-heap.md`); QuickJS is a mature optimizing
 interpreter and V8 is a JIT. The suite measures where rut stands today
 and gives every future optimisation a before/after number.
 
@@ -96,7 +96,7 @@ against the reference in `workloads/expected.json`.
 | `crossing-nop` | the rut→host **crossing tax**, isolated: loop A calls the host `nop` (identity), loop B an inline rut fn with the same body; the `4` pair repeats both over a 4-arg sum — every body is deliberately empty, so (A−B) is the crossing and (nop4−nop) the per-param slope | 2M iterations × 4 loops | checksum `20000014000000` |
 | `kmer-view` | the `nmap-knucleotide` k-mer counting keyed through `nmapset::HashMap`'s **range methods** (strings-round1 phase 2 — the sv lanes: keys cross as borrowed byte windows of the sequence, no key cell minted; see the performance log) | seq = 200 000 | checksum `2198604` — the `nmap-knucleotide` pin; parity is the gate, no separate line |
 | `strview` | the `nmapset-str` six-phase churn with keys carved as fixed-width windows of ONE generated parent string (strings-round1 phase 2 — range methods, the shape where the view lever applies; see the performance log) | n = 50 000, parent = 600 000 chars | checksum `1264308351` — disclosed: the SAME value as the `nmapset-str` pin, because the formula reads counters + the value sum only (key content is invisible to it) |
-| `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells, RFC 0044): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the growth is host-internal since the nmapset-hostops takeover — the wrapper-side `[?V]` relocation drain this row was built to stress died there; the sweep still crosses every boundary). K = i64 holds the hash term constant so the row isolates VALUE-side costs. (The refval-exp batch's phase-1 `refcolumn` twin re-spelled this exact op stream over the experimental host val column; phase 2 measured it SLOWER and the experiment was REVERTED — see the verdict log. The `refvals` row and its analysis are permanent.) | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
+| `refvals` | a **record-valued** map `HashMap<i64, Pt>` — the suite's only ref-V row (rut records are shared cells — the sharing regime, `docs/src/reference/by-reference-and-nullable.md`): insert/overwrite churn with a fresh `Pt` per put, hit-heavy gets (5:1), **read-modify-write through the alias** (a field write through the get-returned reference; the checksum depends on the write-through), and a grow-heavy sweep through every load-factor boundary (the growth is host-internal since the nmapset-hostops takeover — the wrapper-side `[?V]` relocation drain this row was built to stress died there; the sweep still crosses every boundary). K = i64 holds the hash term constant so the row isolates VALUE-side costs. (The refval-exp batch's phase-1 `refcolumn` twin re-spelled this exact op stream over the experimental host val column; phase 2 measured it SLOWER and the experiment was REVERTED — see the verdict log. The `refvals` row and its analysis are permanent.) | n = 100 000, grow sweep 200 000 (~1.32 M map ops, ~650 k record mints) | checksum `140052990000` |
 | `checkedadd` | the **`(T, ok)` pair economy**, isolated (err-channel phase 1): a hot loop of `a.checked_add(b)` calls through a helper fn (the callee/caller shape every `(T, err)` return rides — one `makerecord` mint per call), destructured `let (v, ok) = …`; `v` accumulates into an i64 wrapping checksum and the `ok == false` arm is counted separately and folded into the SAME checksum — both lanes are load-bearing, so a lowering that silently drops either moves the pin. Inputs make the overflow arm deterministic and rare-but-nonzero (b = i64::MAX − 1000, a sweeps [−1024, 1023] → 23 of 2048 calls overflow). The value lane is ±2⁶³-scale, so the .js twin accumulates in BigInt (exact i64 wrapping; a double cannot represent one term) | 10M checked ops | checksum `-10015207202` |
 | `strbuild` | the **std strbuild pkg's** row (the strbuild batch, survey §5 pre-registered): the two-phase builder workload — phase A churns ONE builder pre-sized to a 64-byte hint with n = 2²⁰ LCG-drawn fragments (the knucleotide constants, seed 42) of lengths {1,3,5,7,9} — odd sizes straddle the 8-byte class rounding, and the documented geometric grows ride INSIDE the measurement; phase B takes ONE `build()` on the ~5 MB doc (the amortized pattern, json's writer shape) plus m = 2¹⁶ per-fragment `with_cap(hint)` → append → `build()` mints (the `quote_slow` shape, so the materialization cost is visible per call). The checksum folds round-tripped COUNTS + 32 grid-sampled content-exact fragments re-sliced from the BUILT doc + per-build content equality (values-not-lexemes, the json-roundtrip precedent); the .js twin rides `Array#join` (the idiom choice disclosed on the twin's header; a single-piece build answers the piece itself) | 4 rounds × (2²⁰ + 2¹⁶) | checksum `-1259380140398818172` |
 
@@ -691,7 +691,7 @@ callers from reaching the C-builtin floor.
 
 ## Performance log — the byref flip: pass-by-reference + `?T` (Sep 2026)
 
-The byref-nullable batch (RFC 0044) replaced the copy law with
+The byref-nullable batch replaced the copy law with
 pass-by-reference sharing: records and arrays — previously **value**
 types, memcpy'd on binding and on store — are now shared cells (one
 handle retain/release), the `CloneVal`/`MoveVal`/`ArrGetRef`/`ValEq`
@@ -745,7 +745,7 @@ every map row. nmapset-int's −12% is the wrapper profiting from `?V`
 being the absence type (`get` returns the stored cell directly).
 
 Where the cost showed up — honest regressions: a growable `Vec<T>`'s
-backing is `buf: [?T]` under the sharing law (RFC 0044 §5), so every
+backing is `buf: [?T]` under the sharing law (`docs/src/reference/by-reference-and-nullable.md`), so every
 PRIMITIVE element store boxes into a one-slot cell (`MakeOpt` +
 retain) and every load derefs. The `array` workload (1M-element
 `Vec<i32>` push/index/iterate churn) pays **+21% exec on +5% fuel** —
@@ -755,7 +755,7 @@ its primes pushes box). `alloc` +5%: allocation churn pays
 retain/release where a memcpy used to be. Flat `[T]` buffers are
 untouched (`matrix-mul` and the numeric rows are flat). The known
 lever — a flat primitive backing for growable sequences under a
-boxed-only-when-shared scheme (RFC 0044 OQ-1) — is deferred.
+boxed-only-when-shared scheme (an open question of the sharing regime) — is deferred.
 
 Cross-runtime net medians for the flagged rows (rut, wall − startup):
 
@@ -896,12 +896,12 @@ shape, not as saturation.
 - **Peak RSS** is the whole-process high-water from GNU `time -f %M`
   (the largest value over the timed runs). It includes each runtime's
   baseline, so compare against the `empty` row for the same runtime.
-- **rut's VM heap peak** is its own byte accounting (RFC 0039), not
+- **rut's VM heap peak** is its own byte accounting (`docs/src/reference/vm-heap.md`), not
   process memory: the high-water of live cells. It is reported
   separately by the probe.
 - The **rut probe** (`benches/probe`) compiles once, then runs `main`
   on a fresh `Vm` per iteration, splitting `compile` / `decode+verify` /
-  `exec` and reading `fuel_used` (RFC 0040) and `heap_peak_bytes`.
+  `exec` and reading `fuel_used` (the fuel budget — `docs/src/reference/resource-limits.md`) and `heap_peak_bytes`.
 - **Correctness is checked against canonical references, not just
   across runtimes.** Each workload's checksum is compared to
   `workloads/expected.json` (the canonical value, or the value produced
@@ -928,7 +928,7 @@ payloads ≥ 256 B (and ZSTs) bypass, the pool trims at 512 parked blocks
 (~128 KiB worst case), and a dead arena's pool deallocates its remainder
 with the arena. NO repr change, NO surface change, NO module version bump —
 `opaque(v)`/`downcast`/`OpaqueBox<T>` are untouched, and the heap
-accounting (RFC 0040) still charges `size_of::<T>()` per mint.
+accounting — the heap budget, `docs/src/reference/resource-limits.md` — still charges `size_of::<T>()` per mint.
 
 One honest scoping note: the plan expected this row's churn to be
 `OpaqueBox::alloc` mints. It is not — rut-minted `opaque(v)` lowers to
@@ -997,10 +997,11 @@ planned inline-small-payloads repr change was DROPPED (phase 7
 re-scope): rut `opaque(v)` already lowers to an inline
 `CellData::OpaqueBox { val: Slot }` — arena-recycled, no Rust
 allocation — so that optimization targets a cost that does not exist
-(RFC 0014's repr notes record the lowering). Phase 7 is documentation
-only: the RFC 0043 union-bounds amendment (type unions only,
-whole-bound capability resolution, the provenance holes), the RFC 0014
-repr notes, and this section.
+(`docs/src/reference/typed-bytecode.md` records the lowering). Phase 7 is documentation
+only: the union-bounds amendment (type unions only,
+whole-bound capability resolution, the provenance holes —
+`docs/src/reference/type-aliases.md`), the typed-bytecode repr notes
+(`docs/src/reference/typed-bytecode.md`), and this section.
 
 The rows the batch set out to move, at the numbers of record (typed
 lanes from the phase-4 run; the json row from the phase-6 pooled run —
@@ -1038,7 +1039,7 @@ triggered — no typed lane measured slower than its baseline, pooling
 held the json row at parity (fuel and heap bit-identical, exec within
 ±1.1%). Deferred, not forgotten: borrowed crossings (their own
 RFC-level proposal), the str `encode()`-per-hash cost in mapset's own
-rows, and closing the union-provenance holes (RFC 0043 §3).
+rows, and closing the union-provenance holes (`docs/src/reference/type-aliases.md`).
 
 ## Performance log — crossing-nop: the crossing-tax baseline (Sep 2026)
 
@@ -1136,7 +1137,7 @@ debug verification; embedder marshalling (`Vm::call`, `value_in`,
 `Ret::from_slot`) keeps every check — that input is Rust-shaped and
 `value_in` checks it before slots exist. The SAFETY case is in-source:
 the join verified the binding against the mounted `.d.rut` row
-(`verify_against`, RFC 0025, pre-boot panic) and the checker typed the
+(`verify_against`, the load verifier's pre-boot panic — `docs/src/reference/module-binary.md`) and the checker typed the
 call site against the same row, so the shape was **checked once**,
 upstream of every call. No `.d.rut` surface change, no repr change, no
 version bump.
@@ -1218,7 +1219,7 @@ implementation, so one edit covers both; lock-step by construction):
   from the `Rc` (`Rc::as_ptr` + deref, SAFETY case in-source: `prog`
   is assigned once at construction, never reassigned; only immutable
   argv-table words are read — the same trust the threaded loop's raw
-  pointers run on, RFC 0034). No refcount traffic, no new field.
+  pointers run on). No refcount traffic, no new field.
 - **`ret_is_ref: bool` precomputed into `HostSlot` at the join**
   (`crates/rut-vm/src/interp/host.rs`): the write-back refcount law
   used to re-derive `is_ref(slot.ret)` per call (a `type_repr` lookup);
@@ -1566,7 +1567,7 @@ Docs-only record of a skip, per the batch's one-commit-per-phase rule.
 Phase 1 (devirtualize sealed trait impls) was conditional on finding 0a
 showing indirect dispatch at instantiated body-compile; it shows the
 opposite, so there is nothing to build — this note plus an observation
-line in RFC 0031 is the entire phase.
+line on the per-instantiation compilation law (`docs/src/reference/functions-closures-generics.md`) is the entire phase.
 
 Why the lever is dead: the wrapper never reaches the binary as a
 dispatch point. `HashMap::put/get/has/remove` are source-inlined (the
@@ -1576,7 +1577,7 @@ bench row's churn is one 389-op function whose `k.nentry(self.t)` is a
 direct `call` onto the host lane slot (`map_entry_i`; `get`/`has` →
 `map_find_i`, `remove` → `map_remove_i`). Zero `CallI` trait-vtable
 ops in the program; trait dispatch is **0% of the row's fuel**
-(finding 0c). Per-instantiation compilation (RFC 0031 §2) already
+(finding 0c). Per-instantiation compilation (`docs/src/reference/functions-closures-generics.md`) already
 devirtualizes private-trait calls — one step past what a
 devirtualization pass would produce, since the wrapper frame is gone
 along with the vtable hop.
@@ -1616,11 +1617,11 @@ that remove the box from the hot path entirely —
 - **store elision**: `makeopt d, v` feeding only the adjacent
   `arrset{repr: optprim}` is folded to `arrset{repr: optprimraw, val:
   v}` — the store writes the raw payload; the box never exists (sound
-  because a primitive box's identity is unobservable, RFC 0044 §3's
-  payload-compare law). The phase-0 dump's `makeopt r57, r10; arrset
+  because a primitive box's identity is unobservable — the sharing
+  regime's payload-compare law, `docs/src/reference/by-reference-and-nullable.md`). The phase-0 dump's `makeopt r57, r10; arrset
   r54, r13, r57 :12` sequence is now a single `arrset .. :33`.
 - **deref fold**: `arrget{repr: optprim}` feeding only the adjacent
-  `getf d, r, f0` (the exact pair the RFC 0044 auto-deref emits)
+  `getf d, r, f0` (the exact pair the sharing law's auto-deref emits)
   becomes one `arrget{repr: optprimload}` — the payload comes straight
   out of the raw store, a nil tag still traps `NilDeref`, and the
   fresh opt value is never minted.
@@ -1629,7 +1630,7 @@ that remove the box from the hot path entirely —
 1`, tag byte LAST, one fixed-stride region — every block-size
 computation rides `width()` unchanged, payload and tag share a cache
 line for ≤7-byte payloads, and a zeroed block is all-nil (the
-`[nil; cap]` memset law, RFC 0015 §5). A nil store also zeroes the
+`[nil; cap]` memset-class fill law — `docs/src/reference/builtin-generic-types.md`). A nil store also zeroes the
 payload, so raw-byte views of the block stay deterministic. The
 release walk collects no children from these arrays (the plan's
 "drop/release skips slot release" — this is where the heap high-water
@@ -1987,23 +1988,25 @@ per-instantiation on a type param's prim-ness (`HashMap<i32, i32>` routes
 put/get/remove through a val column while `HashMap<str, str>` keeps the
 sidecar)? Searched the RFCs and the compiler honestly:
 
-- **`requires` bounds are admission-only** (RFC 0013 §2, RFC 0043): they
+- **`requires` bounds are admission-only** (`docs/src/reference/functions-closures-generics.md`,
+  `type-aliases.md`): they
   gate which instantiations compile and prove widening to a bound-member
   slot; the union's whole-bound contract requires EVERY member to provide
   every called method — "the gate buys compile-time whole-bound checking,
   not dynamic dispatch" — the opposite of per-member divergence. Static
-  dispatch on a bare `T` is RFC 0013 OQ-1, explicitly **deferred**.
-- **Reflection is runtime** (RFC 0037): `reflect<T>()` / `type_id` are
+  dispatch on a bare `T` is an explicitly **deferred** open question of the
+  admission-only bounds design.
+- **Reflection is runtime** (`docs/src/reference/reified-types.md`): `reflect<T>()` / `type_id` are
   descriptor handles over host fns — a dual-mode body through them is a
   runtime branch paying a check per op, compiling both paths through the
   same ops, and the raw-repr element ops are not surface-reachable.
-- **Templates** (RFC 0027) are `f"..."` carriers, not type-level
-  computation. **No layout introspection exists at all** (RFC 0015:
-  "no `size_of<T>()` / `align_of<T>()`"). **Const generics** exist only
+- **Templates** (`docs/src/reference/templates.md`) are `f"..."` carriers, not type-level
+  computation. **No layout introspection exists at all** — no
+  `size_of<T>()` / `align_of<T>()` exists to call. **Const generics** exist only
   on builtin `Array<T, N>` and N is a value, not a type property
-  (RFC 0013 §2). Generic-target impls (`impl I for Vec<T>`) monomorphize,
+  (`docs/src/reference/builtin-generic-types.md`). Generic-target impls (`impl I for Vec<T>`) monomorphize,
   but impl selection has no conditional-by-bound or specialization-order
-  form (RFC 0012).
+  form (`docs/src/reference/interfaces.md`).
 - What DOES exist is per-instantiation repr keying **inside the engine**:
   `Repr::OptPrim / OptPrimRaw / OptPrimLoad(PrimTy)` are chosen from the
   resolved element type at op-lowering (`rut-core/src/types.rs`), and
@@ -2100,7 +2103,7 @@ build nmap tables (nmapset-int 1,966,527 → 1,966,551; nmapset-str
 nmap-hashset 503 → 551, two sets alive at peak); the other 23 rows are
 bit-identical including heap. DEVIATION, recorded with the mechanism:
 `OpaqueBox::alloc` charges the payload's shallow `size_of::<T>()` to
-the RFC 0040 heap budget (`heap/mod.rs` `alloc_host_box`), and the
+the heap budget (`docs/src/reference/resource-limits.md`; `heap/mod.rs` `alloc_host_box`), and the
 mandated `vals: Vec<u64>` column grows `size_of::<NativeTable>()`
 120 → 144 — exactly one Vec header, charged once per `map_new`. No
 rut-visible allocation changes (the column's backing memory is plain
@@ -2138,8 +2141,8 @@ and recorded in the class header comment:
 - **The get-side reinterpret has no spelling in a V-generic body.** The
   set direction is value-carried (a `v: V` would dispatch a lane method
   exactly like a KeyLane key); get has no `V` value to dispatch
-  through. Rut's no-self trait methods (RFC 0012 §2, "engine
-  contracts") have no call syntax on primitives — type names and type
+  through. Rut's no-self trait methods (the "engine
+  contracts" of `docs/src/reference/interfaces.md`) have no call syntax on primitives — type names and type
   params are not expressions (`V::dec(raw)` / `i64::dec(raw)` both
   diagnose "unknown name"; there is no `::` path syntax), there is no
   `as V` cast to a type param, and the union bound is admission only,
@@ -2148,7 +2151,7 @@ and recorded in the class header comment:
 - **The bool lane is deferred, not dropped silently.** `?bool` cannot
   serve the `get -> ?V` nil law in today's checker: a `?bool` value
   unboxes to `bool` at value reads, so `p == nil` / `p != nil` diagnose
-  "operands must have equal width (RFC 0004 §3): `bool` vs `nil`" —
+  "operands must have equal width: `bool` vs `nil`" —
   verified for direct-call, annotated-local, and inferred-local shapes,
   while the same compares compile and run for `?i64` / `?u64` / `?f64`
   / `?str`. A bool-val map needs that checker fix first; today a bool
@@ -2165,7 +2168,7 @@ write); `with_capacity` via `map_new`, `len` via `map_len`.
 
 **The f64 lane needed the plan's "minimal honest surface": two
 additive crossings.** Rut has no `f64 <-> u64` bitcast — the numeric
-`as` is a VALUE conversion (RFC 0007 §1), so `raw as f64` would round,
+`as` is a VALUE conversion (`docs/src/reference/primitive-types.md`), so `raw as f64` would round,
 not reinterpret, and no builtin exists. `map_val_set_f(m, slot, v:
 f64)` / `map_val_get_f(m, slot) -> f64` read/write the SAME u64 column
 through `f64::to_bits`/`from_bits` — raw bits byte-for-byte both
@@ -2352,7 +2355,7 @@ as ratified in the phase-2 section (three lane classes
 unspellable: no no-self trait call on primitives, no `as V`, union
 bounds admission-only). The **bool lane is DEFERRED, not dropped
 silently**: `?bool` unboxes at value reads, so `p == nil` diagnoses a
-width mismatch (RFC 0004 §3); a checker fix gates `PrimMapBool<K>`, and
+width mismatch (the equal-width diagnostic); a checker fix gates `PrimMapBool<K>`, and
 bool vals ride `PrimMapU64` as 0/1 today. The dead-KeyLane rider stays
 VOID. The `nmap-primmap` workload switch is disclosed per §0.1 (checksum
 equal to the pin, this log records the switch). Four heap pins moved
@@ -2367,7 +2370,7 @@ re-pinned; they hold exactly here.
   json-decode 11.8× (722.39 vs 61.45) — all three copy str payloads
   that this batch's own result shows can stay host-side.
 - **(b) The bool lane** — the `?bool` checker fix (value reads unbox →
-  nil comparison diagnoses a width mismatch, RFC 0004 §3). Unlocks
+  nil comparison diagnoses a width mismatch). Unlocks
   `PrimMapBool<K>` as the fourth lane; the design already prices it
   (vals as 0/1 in the u64 column).
 - **(c) Interleaved column layout** — still priced (above), now with a
@@ -2393,8 +2396,9 @@ Evidence phase for the cheap-strings batch (`views over str`): five
 findings, no engine change, nothing committed but this section. The
 batch's premise — written into the plan's Why — was that k-mer rows
 MINT a fresh str cell per slice (alloc + copy). **The premise is stale
-and this section re-bases the batch on measured terms**: RFC 0042's
-`b2` commit (Sep 17, in the base) already made `s.slice()` an O(1)
+and this section re-bases the batch on measured terms**: the
+string-views batch's `b2` commit (Sep 17, in the base —
+`docs/src/reference/string-views.md`) already made `s.slice()` an O(1)
 `CellData::StrView` — `{parent, off, len, ascii}` over the block
 store, no copy — and the block store (`b1a`) made small str mints a
 bump + flag. What remains on the string rows are smaller, different
@@ -2422,7 +2426,7 @@ workload change (no pin involves json heap).
 
 The k-mer row slices exactly **600,088** times per run (199,989
 12-mer fill + 100 fragment probes + 200,000 1-mer + 199,999 2-mer).
-Post-RFC-0042 each slice mints a ~32-byte view cell (one block-store
+Post-string-views each slice mints a ~32-byte view cell (one block-store
 bump + one parent retain) — no copy. Sizing, two independent ways:
 
 - **Stub bounds (both spellings SLOWER — the mint is cheaper than any
@@ -2510,7 +2514,7 @@ menu.
 ### Finding 0c — the bytes audit: immutability is provable, bytes views are SOUND
 
 `bytes` carries exactly four members (`len`, `decode`, `clone` — the
-one copy escape, RFC 0044 — and the `zeroed(n)`/`from([u8])`
+one copy escape of the sharing law — and the `zeroed(n)`/`from([u8])`
 type-methods; `Vec<u8>::freeze()` mints). Element assignment is a
 **compile-time diagnostic** ("`str`/`bytes` are immutable — element
 assignment is not allowed", `rut-lir/src/lir/slice.rs`), not a trap;
@@ -2523,7 +2527,7 @@ today) — recorded as a menu item with the audit as its evidence.
 ### Finding 0d — the shape spike: (A) wins, and smaller than planned
 
 First, the premise correction that reframes the gate: **shape B is
-already shipped — internally.** `CellData::StrView` exists (RFC 0042);
+already shipped — internally.** `CellData::StrView` exists (`docs/src/reference/string-views.md`);
 `as_str`/`as_bytes`/`char_len`/`str_ascii` read through it; equality,
 iteration, f-strings and the host boundary (`HostParam for &str`)
 cross it zero-copy; `m.get(seq.slice(i, i+12))` works TODAY as a
@@ -2540,7 +2544,7 @@ k-mer hot path:
 | per map-op crossing | 1 crossing, 4 params (t, parent: str, off, len) ≈ +1.4 ns vs today's 2 (crossing-nop slope 0.72 ns/param) | unchanged 2-param `map_find_s` |
 | host body | borrowed probe (fnv + compare over the range), copy ONLY on fresh insert — needs the same `nmap.rs` core either way | borrowed probe for the copy term (orthogonal), slice cell stays |
 | deleted terms (knuc, measured) | slice-mint ~5–6% + to_owned ~2–5% ≈ **−7 to −12% projected** | to_owned only ≈ **−2 to −5%** |
-| surface cost | 3 additive crossings (`nmap.d.rut` + CLI fixture mirror, update-BOTH), no engine repr change, **no VERSION bump** | type-system surface (boot-table type, checker admission into the key union, decls, RFC 0004 amendment), **VERSION 7 risk** |
+| surface cost | 3 additive crossings (`nmap.d.rut` + CLI fixture mirror, update-BOTH), no engine repr change, **no VERSION bump** | type-system surface (boot-table type, checker admission into the key union, decls, the equal-width diagnostic amendment), **VERSION 7 risk** |
 | the `StrView` record part of A | `view()` ctor = one record mint ≈ today's slice cell (no win); eq/index/materialize need NEW crossings; a record is not a str cell — general `&str` acceptance FAILS under A without engine work | reads-as-str acceptance is free (the cell kind is the engine's) |
 
 **Recommendation: (A), reduced to its minimal surface — the three sv
@@ -2890,7 +2894,7 @@ number.
   different decoder shape (Vec<u32> codepoints, int compares,
   slice tokens), i.e. next batch's row, not a view claim.
 - **(c) PrimMapBool's `?bool` checker fix** — value reads unbox, so
-  `p == nil` diagnoses a width mismatch (RFC 0004 §3); the fix gates
+  `p == nil` diagnoses a width mismatch (the equal-width diagnostic); the fix gates
   the fourth prim lane, design already prices it (bool vals as 0/1
   in the u64 column).
 - **(d) Interleaved column layout** — round3's menu item, still open
@@ -3251,9 +3255,9 @@ crossing (`map_val_get_o` — a host frame the sidecar row never pays),
 `TidOf` + const-compare + branch + `Unbox` (+16 fuel ops ≈ 12-16 ns at
 the crossing-nop calibration), and the dominant unpriced term —
 **`opaque::downcast<V>` yields a `(V, bool)` TUPLE, and that tuple is a
-real record cell**: the lowering is `Op::MakeRecord` (RFC 0014 v1.1),
+real record cell**: the lowering is `Op::MakeRecord` (`docs/src/reference/typed-bytecode.md`),
 so every hit-get mints a tuple cell and releases it a few ops later
-(RFC 0040 accounting both ways). Phase-0 priced the sidecar LOAD at
+(heap-budget accounting both ways). Phase-0 priced the sidecar LOAD at
 ~65 ns/get; the column's answer costs ~240 ns/get. That is where the
 experiment died: not the storage — the READ-BACK spelling.
 
@@ -3271,7 +3275,7 @@ IDENTICAL fuel and is recorded as clone noise.
 The phase-0 pre-registration expected heap PARITY ("the peak IS the
 records; refcolumn holds the same records"). Both of its assumptions
 were falsified, and the isolation probes (same binary, deterministic
-RFC 0040 accounting) pin the true cell economics:
+heap-budget accounting) pin the true cell economics:
 
 - record cell `Pt` = **40 B** (24 B `CELL_OVERHEAD` + 2 × 8 B fields —
   `mint` charges 24 + payload); a 4-field record = 56 B (probes:
@@ -3425,7 +3429,7 @@ the multiply); word-FNV lets only each word's LOW BYTES reach the
 probe-index bits. For keys ≤ 8 bytes with a constant first byte
 (`'k'`) the low bits of the hash are CONSTANT across the whole key
 set — 19 slots for 50k keys, linear probing into five ~5.5k-slot
-runs. The RFC 0033 LE law makes this platform-independent fact, not
+runs. The module format's little-endian law (`docs/src/reference/module-binary.md`) makes this platform-independent fact, not
 an accident: a finisher is not optional in any word-bundled design.
 
 ### Path A — same-result batching: closed, with the algebra pinned
@@ -3558,7 +3562,7 @@ this section is the only committed artifact.
 - Workloads are still single files for node + qjs, but the rut side may
   be a module dir (`NAME/{rut.jsonc, src/mod.rut}`): the runner spawns
   `rut run <dir>` and the dir's `[deps]` resolve through the module
-   loader (RFC 0035) — currently the `nmapset`
+   loader (`docs/src/reference/loading.md`) — currently the `nmapset`
   workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
   `nmap-knucleotide`, which pull the `nmap` host pkg through the
   pkg's own `[deps]`; also the dir twins `kmer-view`, `strview`, and
@@ -3570,7 +3574,7 @@ this section is the only committed artifact.
   runtimes install the host halves (math + the logger) as usual;
   `rut-bench-probe` additionally binds the nmap and bench-cross hosts
   only when the program's dep graph declares them (the
-  host-surface check is exact in both directions, RFC 0025).
+  host-surface check is exact in both directions — `docs/src/reference/module-binary.md`).
 - The map rows' JS twins carry small adaptations: JS
   `Map`/`Set` have no insert-or-replace primitive, so the add-vs-
   replace split costs one extra `has` probe per put compared with
@@ -3586,8 +3590,8 @@ this section is the only committed artifact.
   both sides; 12-mer get-or-insert churn fills a `HashMap<str, i32>`,
   plus 1-/2-mer maps and 100 generated 12-mer fragment probes.
 - `binary-trees` is an *adaptation*: it builds recursive structs
-  directly (`left/right: ?Node`, `nil` when absent — RFC 0005 §8,
-  RFC 0044) and counts them, rather than the benchmark-game's
+  directly (`left/right: ?Node`, `nil` when absent — the nullable
+  design of `docs/src/reference/by-reference-and-nullable.md`) and counts them, rather than the benchmark-game's
   varying-depth trees. Each
   node is one RC cell, so the drop at scope exit is still the RC
   allocation/drop path this workload measures.
@@ -4081,7 +4085,7 @@ through the ONE shared cell (the piece's bytes copy once into the
 builder — THE append copy, unchanged); the single-copy finish is the
 MATERIALIZATION copy itself (was two, would be one — the engineered
 point, not a hot-path copy); the rejected restructure moved no copies;
-the factor moved no copies. The RFC 0044 shape (alias and param appends
+the factor moved no copies. The sharing law's shape (alias and param appends
 visible through the original; build-twice; the built str immune) stayed
 pinned green in the 8 `strbuild_pkg` unit tests throughout.
 
@@ -4129,9 +4133,10 @@ names are nmapset-internal now. This section appends; the perf-log
 records above are their batches' history and keep their spellings (the
 strbuild precedent).
 
-**THE THEOREM, MEASURED** (the survey's pick — RFC 0043 alias rows,
-generalized to the per-instantiation row form): the alias resolves to
-the TARGET's TypeId BEFORE any table work (RFC 0043 §4's no-IR law) —
+**THE THEOREM, MEASURED** (the survey's pick — the union-bound alias
+rows, generalized to the per-instantiation row form): the alias resolves to
+the TARGET's TypeId BEFORE any table work (the no-IR law — unions never
+intern a runtime kind, `docs/src/reference/type-aliases.md`) —
 `HashMap<i32, i64>` IS the val-column class the primmap row always ran,
 the same descriptor, the same IR, the same crossings. The
 `nmap-primmap` source re-spelled the val column's direct class name →
