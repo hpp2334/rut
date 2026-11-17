@@ -10,7 +10,7 @@
 // widget::Widget -> Lowered: the tag, the space-joined class tokens, and the
 // event the widget listens to. This table is THE styling contract
 // (design §5) — the one place a tag or a token may be spelled. The
-// five recorded deviations it implements (docs/t1-design.md §0):
+// five recorded deviations it implements (the design's §0):
 // checkbox lowers to a FRAMEWORK-OWNED button (role=checkbox +
 // t1-check--on/--off, never a native input); gap/pad/size lower to a
 // FIXED utility-token ladder (`t1-gap-8`, never arbitrary values,

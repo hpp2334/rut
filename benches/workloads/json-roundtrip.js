@@ -36,7 +36,7 @@ function valText(x) {
 }
 
 // Each record draws in the fixed order: id, name, active, score, six
-// vals, tags, meta (rev + kind) — exactly main.rut's gen_doc.
+// vals, tags, meta (rev + kind) — exactly mod.rut's gen_doc.
 function genDoc(rows, valsN) {
   const parts = [];
   let x = 42;
@@ -74,7 +74,7 @@ function genDoc(rows, valsN) {
   return `[` + parts.join("") + `]`;
 }
 
-// The value fold — the identical discipline main.rut runs over the
+// The value fold — the identical discipline mod.rut runs over the
 // decoded rows. Strings fold codepoints (for..of iterates code points,
 // matching rut's str iteration); i64s fold their value; bools fold 0/1;
 // f64s fold String(v) through the string fold (see the header).

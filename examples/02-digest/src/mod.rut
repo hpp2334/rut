@@ -694,8 +694,8 @@ fn jstr(s: str) -> Json { return Json { tag: JTag::Str, num: "", str: s, arr: no
 fn jarr() -> Json { return Json { tag: JTag::Arr, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 fn jobj() -> Json { return Json { tag: JTag::Obj, num: "", str: "", arr: noopaques(), keys: nostrings(), vals: noopaques() }; }
 
-/// The parser cursor. Strings iterate as `char`s, so the source is
-/// split once into single-char strings and walked by index.
+/// The parser cursor. A `str` is a sequence of codepoints, so the
+/// source is split once into single-char strings and walked by index.
 struct Cur { cs: Vec<str>; pos: i32; depth: i32; }
 
 fn split_chars(s: str) -> Vec<str> {

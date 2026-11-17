@@ -330,14 +330,15 @@ examples/05-todolist-web/
   artifacts (dist/std plays the wire), so the gates never network.
 * **both lanes, one closure.** The wasm lane keeps the run
   I/O-free (wasm hosts mount in memory), so `src/mount.rs` registers
-  the same packages BY HAND — one `register_module` per package, keyed
-  by the pkg's bare name (the registration scope IS the pkg name),
-  everything `include_str!`. The mirror is `rut/biz/rut.json`'s mirror and
+  the same packages BY HAND — one `Mounted` per package in
+  `mirror_pkgs`, keyed by the pkg's bare name (the registration scope
+  IS the pkg name), everything `include_str!`/`include_bytes!`. The
+  mirror is `rut/biz/rut.jsonc`'s mirror and
   nothing more; `tests/mount_lane.rs` (the P3 proof) pins both lanes
   to the same mounted-name set, host surface, and compiled binary.
-  `web/` rides NO manifest path — both lanes register it by hand
-  (the embedder mounts what the closure uses; the `mount_std_core`
-  precedent). `ui` is an ordinary linked package — every module
+  `web/` rides NO manifest path — both lanes offer it by hand
+  (the embedder mounts what the closure uses: `web_pkg` over the
+  include_str!'d source). `ui` is an ordinary linked package — every module
   links, and its generic exports instantiate owner-anchored (a
   consumer's `ctx.get<..>` request compiles into ui's unit, one row
   program-wide; the framework's private tables never leave it).
@@ -438,7 +439,7 @@ retired; freshness is the read's job now.
 | `src/web_dom.rs` | wasm32: web_sys bodies + the raw `rut_web_alloc/boot/pump/last_error` ABI |
 | `src/fake_dom.rs` | the host twin: a HashMap element tree with the same semantics (appendChild moves) + a virtual timer clock |
 | `src/host.rs` | the native page owner (boot/fire/advance/pump) |
-| `src/mount.rs` | the run's mount — TWO LANES over one closure: `load_dir_session` on `rut/biz` (native) and the per-package `register_module` mirror (wasm); both register `web.d.rut` by hand |
+| `src/mount.rs` | the run's mount — TWO LANES over one closure: `rut_native::load_dir_with` on `rut/biz` (native) and the per-package `mirror_pkgs` mirror (wasm); both offer `web.d.rut` by hand (`web_pkg`) |
 | `index.html` / `loader.js` | the page shell: a static `#app` root + ~50 lines of JS that fetch the biz module's tree and hand over the ROWS WIRE (the `rut.mods` codec — the manifest's `mod` declarations, mirrored); the stylesheet keys ONLY lowered tokens |
 | `gen/` | wasm-bindgen's generated browser glue (gitignored) — produced by the build recipe below, never committed |
 | `tests/store.rs` | the store's laws, DOM-free over `tests/store_probe/` (18: the 9 machine laws + the 8 atom twins + the foreign-container guard) |

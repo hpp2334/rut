@@ -2,7 +2,7 @@
   // 02-digest — the app is a module dir, like every rut program: the
   // manifest carries the deps, and the embedder (`src/main.rs`,
   // `tests/session.rs`) loads this dir through the manifest lane
-  // (`load_dir_session_with`) — same host half, new mount lane.
+  // (`load_path_session_with`) — same host half, new mount lane.
   //
   // THE CDN ROWS: pouch, json and nmapset ship as COMMITTED source
   // zips (dist/std-v17/<pkg>.zip, jsDelivr-served at the tag, pinned in

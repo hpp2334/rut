@@ -7,7 +7,7 @@
 // The document generator is the knucleotide LCG (seed 42) run in the
 // identical draw order; every number/string/bool lands as the same
 // JSON text both sides. The fold wraps i64 (BigInt.asIntN) and sums
-// codepoints — mirroring main.rut bit-for-bit; every rep asserts
+// codepoints — mirroring mod.rut bit-for-bit; every rep asserts
 // against the first.
 //
 // Scale: ROWS x VALS values per row, REPS reps (the pre-pooling,
@@ -34,7 +34,7 @@ function valText(x) {
 }
 
 // Each record draws in the fixed order: id, name, active, score, six
-// vals, tags, meta (rev + kind) — exactly main.rut's gen_doc.
+// vals, tags, meta (rev + kind) — exactly mod.rut's gen_doc.
 function genDoc(rows, valsN) {
   const parts = [];
   let x = 42;
@@ -74,7 +74,7 @@ function genDoc(rows, valsN) {
 
 // Downcast fold over the parsed value: string/key codepoint sums,
 // numbers via BigInt(Math.trunc(v)), fixed constants for the scalar
-// tags — the identical fold main.rut runs over the opaque tree.
+// tags — the identical fold mod.rut runs over the opaque tree.
 function foldStr(h, s) {
   for (const ch of s) {
     h = wrap64(h * 31n + BigInt(ch.codePointAt(0)));

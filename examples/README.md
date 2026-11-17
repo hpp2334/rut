@@ -27,7 +27,7 @@ the generic owners, served from the committed bundles' templates);
 program names it (`01`/`02` spell the row; `00` never uses `calc` and
 declares nothing for it), and their embedders
 (`src/main.rs`, `tests/session.rs`) mount through the manifest lane
-(`load_dir_session_with`, the committed artifacts seeding the fetcher
+(`load_path_session_with`, the committed artifacts seeding the fetcher
 — the seed IS the cache, the gates never touch the network) instead of
 in-code `mount_dir` calls — same host half, new mount lane. `03`'s
 plugin pins `pouch` the same way, and its pack lane seeds the same
@@ -57,7 +57,7 @@ bytes re-pack, they are never fetched back.
 The delivery is the engine's instantiation law: a compiled bundle
 carries its pack closure's instantiations in its ledger and its
 generic bodies as templates inside the binaries — so the
-CDN delivers **host surfaces** (the v6 decl bundles), **concrete-class
+CDN delivers **host surfaces**, **concrete-class
 libs** (`http` — 06 rides it), **and the generic owners** (`pouch`,
 `nmapset`, `json`, `futures` — the examples' `Vec<Todo>` and
 `Vec<str>` shapes monomorphize from the templates at the link). And every
@@ -115,11 +115,14 @@ Decisions this batch landed, visible in the examples:
   the todolist-restructure batch — the example's packages mount
   separately under the manifest route, appkit proven dead by
   P1/P2/P3.)
-- **Bundles pack the manifest as-is** — [`03-plugin`](03-plugin/)'s
-  `plugin/rut.jsonc` rides `format_version = 11`
-  ([bundles](../docs/src/reference/bundles.md)):
-  dep groups ride the archive under their identity dirs; an older
-  loader refuses rather than guess.
+- **The pack door stamps the wire** — [`03-plugin`](03-plugin/)'s
+  `plugin/rut.jsonc` is the plain directory grammar: no version pair
+  (the pair retired from directory manifests — the version lives in
+  the bundle container), and `rut pack` stamps
+  `format_version = 13` into the packed manifest at the pack door
+  ([bundles](../docs/src/reference/bundles.md)). Dep groups ride the
+  archive under their identity dirs; the loader accepts exactly 13
+  and refuses anything else.
 
 Not here, on purpose: registry/index deps and version-range selection
 — `[deps]` resolves by exact name, not a package manager.

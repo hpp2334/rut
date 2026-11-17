@@ -1,5 +1,4 @@
-//! THE LAW, ENFORCED (docs/t1-design.md §2.1, the restructure survey
-//! §5.1 contract, the two-package shape): biz code composes WIDGETS and
+//! THE LAW, ENFORCED (the two-package shape): biz code composes WIDGETS and
 //! speaks THROUGH THE HANDLES (tur's law: the app never touches a
 //! store object). It never sinks to the DOM's
 //! vocabulary — no crossing is spelled beyond the one clock name, no
@@ -228,8 +227,8 @@ fn the_biz_layer_never_sinks_to_the_dom_vocabulary() {
     for token in FORBIDDEN {
         assert!(
             !BIZ.contains(token),
-            "biz names {token} — biz code composes widgets \
-             (docs/t1-design.md §2.1); the DOM vocabulary leaked back in"
+            "biz names {token} — biz code composes widgets; \
+             the DOM vocabulary leaked back in"
         );
     }
 }
@@ -356,8 +355,7 @@ fn the_widgets_are_the_whole_ui_story_and_the_pull_is_the_freshness() {
     ] {
         assert!(
             BIZ.contains(pin),
-            "biz lost `{pin}` — the widgets are the whole UI story \
-             (docs/t1-design.md §2.1)"
+            "biz lost `{pin}` — the widgets are the whole UI story"
         );
     }
 }

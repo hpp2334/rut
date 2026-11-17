@@ -3,18 +3,20 @@ use ink::{ Logger };
 use nmapset::{ HashMap };
 
 // refvals — the refval-exp batch's phase-0 row: a record-valued map, the
-// suite's missing ref-V coverage. No bench row today exercises reference
-// values at all — every map row (`nmapset-*`, `nmap-primmap`) stores
-// primitive/str vals — so this row is the measuring stick the host-val-
-// column experiment (`refcolumn`, phase 1) is judged against, and it
-// survives that experiment regardless of its verdict.
+// suite's missing ref-V coverage. No other bench row exercises reference
+// values — every map row (`nmapset-*`) stores primitive/str vals. The
+// host-val-column experiment that once judged itself against this row
+// (`refcolumn`) measured SLOWER and was REVERTED; the row and its
+// checksum are permanent coverage either way.
 //
-// THE SHAPE: `HashMap<i64, Pt>` over the `[?V]` sidecar (ref V = shared
-// cells; the law: `get -> ?V` one-cell aliasing). K = i64 DELIBERATELY —
-// the key lane (`map_entry_i`/`map_find_i`, one mix64 hash per op, the
-// nmapset-int precedent) is held CONSTANT so the row isolates the
-// VALUE-side costs: the record mints, the sidecar cell stores and loads,
-// the grow-time relocation drain, and the aliasing law itself. str keys
+// THE SHAPE: `HashMap<i64, Pt>` with the values living IN the host
+// table's entries (ref V = shared cells; the law: `get -> ?V` one-cell
+// aliasing). K = i64 DELIBERATELY — the key lane (one mix64 hash per op,
+// the nmapset-int precedent) is held CONSTANT so the row isolates the
+// VALUE-side costs: the record mints, the entry boxes, and the aliasing
+// law itself. Each op is ONE fused host crossing (`map_hvput`/
+// `map_hvget`/`map_hvremove` — the key and the value box cross together,
+// the entry retaining the box), and growth is host-internal. str keys
 // would confound every term with the encode()-per-hash cost the
 // strings-round1 rows already price.
 //
@@ -28,22 +30,21 @@ use nmapset::{ HashMap };
 //
 // The phases, in the shapes that matter:
 //   1. insert/overwrite churn — a fresh `Pt` cell minted per put;
-//   2. hit-heavy gets (5:1) — sidecar load + cell deref per hit;
+//   2. hit-heavy gets (5:1) — the entry box recovered per hit;
 //   3. read-modify-write through the alias — the one-cell law pinned by
 //      the checksum itself;
 //   4. grow-heavy sweeps — a fresh map walked from cap 8 through every
-//      load-factor boundary (the `[?V]` relocation drain, largest
-//      drains last), then an overwrite pass and a full read-back.
+//      load-factor boundary (growth is host-internal — the old rut-side
+//      relocation drain died with the nmapset-hostops/nmap-hostvals
+//      batches), then an overwrite pass and a full read-back.
 //
-// CHECKSUM DISCIPLINE (the nmap-primmap precedent, adapted): the churn
+// CHECKSUM DISCIPLINE (the nmapset-int precedent, adapted): the churn
 // accumulates in i64 and prints once, never narrowing; every term is an
 // exact integer below 2^53, so the JS twin's doubles compute the SAME
-// number bit-exactly (twin gate, `expected.json` pins it). The drain
-// term carries a property this row's own A/B stubs rely on (disclosed
-// in-source): every value the checksum READS is written AFTER its map's
-// last grow (the overwrite passes), so dropping the relocation drain in
-// a scratch stub leaves the checksum bit-identical — the stub provably
-// moves only drain traffic.
+// number bit-exactly (twin gate, `expected.json` pins it). One disclosed
+// property: every value the checksum READS is written AFTER its map's
+// last grow (the overwrite passes), so growth traffic never reaches the
+// pin — the sweep exercises every boundary without pricing it.
 // Scale: n = 100000 entries on the main map, gn = 200000 on the grow
 // sweep — ~1.32M map ops and ~650k record mints per run.
 
@@ -70,7 +71,7 @@ fn churn(n: i32, gn: i32) -> i64 {
     }
 
     // (1b) overwrite churn — every key present, fresh cell per put (the
-    // sidecar releases the replaced cell and stores the new one)
+    // entry releases the replaced box and stores the new one)
     let mut replaced: i64 = 0;
     for (let mut i = 0; i < n; i += 1) {
         if (m.put(key(i as i64), Pt { x: i.wrapping_add(7), y: i.wrapping_add(8) }) == false) {
@@ -78,7 +79,7 @@ fn churn(n: i32, gn: i32) -> i64 {
         }
     }
 
-    // (2a) hit gets — the sidecar load: arrget + cell deref, both fields
+    // (2a) hit gets — the entry box recovered, both fields deref'd
     let mut sum_before: i64 = 0;
     let mut hits: i64 = 0;
     for (let mut i = 0; i < n; i += 1) {
@@ -123,9 +124,9 @@ fn churn(n: i32, gn: i32) -> i64 {
     }
 
     // (4) grow-heavy sweep — a fresh map from cap 8 through every
-    // load-factor boundary: 15 grows, the relocation drains moving
-    // ~260k cells, the largest last. Then an overwrite pass (fresh
-    // cells, written after the last grow — the drain-stub invariant
+    // load-factor boundary: 15 host-internal grows (the entries rehash,
+    // the largest last). Then an overwrite pass (fresh
+    // cells, written after the last grow — the checksum invariant
     // above) and a full read-back of y.
     let mut g: HashMap<i64, Pt> = HashMap();
     let mut added_g: i64 = 0;

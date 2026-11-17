@@ -1,7 +1,7 @@
 //! The app's twin gate: the REAL project closure (`rut/` — the app
 //! package, the two view builders, the store, t1 and the components,
-//! mounted through the MANIFEST: `load_dir_session` on the rut/ root,
-//! the four passes for real) driven end to end on the fake
+//! mounted through the MANIFEST: `rut_native::load_dir_with` on the
+//! rut/biz root, the four passes for real) driven end to end on the fake
 //! DOM — scripted sessions asserting the tree AND the turn order, on
 //! the LOWERED DOM (the framework's tags and tokens). The laws checked
 //! here are the phase-1 laws, re-proven through the widgets:

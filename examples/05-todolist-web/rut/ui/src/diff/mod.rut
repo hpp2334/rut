@@ -14,7 +14,7 @@ use web::{ ui_get, ui_create, ui_set_text, ui_attr, ui_append, ui_remove, ui_set
 
 // T1Root — the patch state with its framework-private tables — the
 // mount, the listener registry, the keyed diff, and retirement. The
-// design is docs/t1-design.md (phase 0), authoritative, including its
+// design is the phase-0 t1 design, authoritative, including its
 // five recorded deviations (checkbox-as-button, no ui_unlisten,
 // patch-in-place, no closure Each, enumerable tokens).
 //

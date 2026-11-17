@@ -21,8 +21,8 @@ benches/
 ├── probe/                  # rut-bench-probe: in-process phase/heap probe
 ├── workloads/
 │   ├── NAME/               # the rut program: a module dir (`rut.jsonc` +
-│   │                       # `main.rut`; mounts its own deps when it has
-│   │                       # any), runs as `rut run <dir>`
+│   │                       # `src/mod.rut`; mounts its own deps when it
+│   │                       # has any), runs as `rut run <dir>`
 │   ├── NAME.js             # the identical program for node + qjs
 │   └── expected.json       # canonical reference checksums (verified)
 └── results/                # generated reports (gitignored)
@@ -108,20 +108,22 @@ workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
 `nmap-knucleotide`) stress the keyed collections — once over the removed
 pure-rut `mapset` pkg (see the removal note below), now over
 `rut/nmapset` alone: the rut sides ship as module dirs
-(`NAME/{rut.jsonc, main.rut}` with `[deps] nmapset = …`) and run as
+(`NAME/{rut.jsonc, src/mod.rut}` with `[deps] nmapset = …`) and run as
 `rut run <dir>` — the CLI's single-file auto-mount list stays untouched.
 Honest framing: V8's `Map`/`Set` are inline-cache-optimized and QuickJS
 has its own fast paths — these rows are not expected to be a win. The
 point is rut's number for the RC-heap slots its keyed collections pay.
 The four `nmapset` workloads are line-for-line ports of the removed
 `mapset` workloads over `rut/nmapset` — the **host-implemented** key
-table experiment (the "C builtin" architecture qjs itself uses): keys
-live as owned Rust data behind one `opaque` box per table, values stay
-rut-side in a parallel `[?V]` array, and every map op crosses the host
-boundary once through a typed crossing (`map_{entry,find,remove}_{i,u,b,s,y}`
-— the key crosses directly as its own type, hashed host-side by
-`hash_payload`, which ports the same mix64/FNV-1a constants; `map_entry_*`
-answers `i32::MIN` grow-first, so put is one crossing even on growth). The nmapset pkg
+table (the "C builtin" architecture qjs itself uses): the wrapper is
+pure delegation over one `opaque` handle, keys and values live IN the
+host table's entries, and every map op crosses the host boundary ONCE
+through the fused lanes (`map_hvput`/`map_hvget`/`map_hvremove`; the
+sets ride the key-only `map_h*` trio) — the key seals as its own
+`opaque` box and is hashed host-side by `hash_payload`, which ports
+the same mix64/FNV-1a constants; a prim `V` crosses as the 8 slot
+bytes, a record `V` shares its own cell into the entry, and growth is
+host-internal (no rut-side sidecar, no relocation drain). The nmapset pkg
 ships the mapset-exact mix64/FNV-1a constants, so every key hashes to the
 same bits the original mapset rows produced — the pins in `expected.json`
 (`734932704` / `1264308351` / `21500055` / `2198604`) ARE those values,
@@ -215,8 +217,8 @@ Disclosed on the landing:
 ## Performance log — json-roundtrip: the json-perf batch phase 1, the writer's chunk buffer (Sep 2026)
 
 The json-perf batch's phase 1 (rut-side only, zero engine change —
-`docs/json-perf-survey.md` is the phase-0 survey this batch argues
-from). One change landed, in `rut/json`'s writer alone: per-event
+the phase-0 survey is this batch's pre-registered record). One change
+landed, in `rut/json`'s writer alone: per-event
 output no longer appends the accumulator one field-append each.
 The survey's §4 A/B measured the class-field accumulator shape ~750x
 slower per append than a local (the rc==1 in-place append path does
@@ -537,9 +539,7 @@ new encodings — the landed tree is HEAD's).
 
 ## Performance log — json-roundtrip: the json-perf batch close-out (Sep 2026)
 
-The batch's consolidated record (the full report:
-`docs/json-perf-report.md`; the survey it argues from:
-`docs/json-perf-survey.md`). The four phase sections above each
+The batch's consolidated record. The four phase sections above each
 disclosed their piece — this section is the one table for the whole
 arc, with the no-mover attestations restated in one place. The law
 throughout: json stays rut, the host gained GENERAL machinery only,
@@ -2120,7 +2120,8 @@ Workspace green (76 suite runs, 460 tests, zero failures; was 75/450).
 No consumer changes, no VERSION bump, `expected.json` untouched. Files:
 `crates/rut-std/src/nmap.rs` (column + crossings + unit tests),
 `rut/nmap_host/nmap.d.rut` + the CLI fixture mirror (the two decls),
-`crates/rut-driver/tests/nmap_valcolumn.rs` (new), this section. Tree
+a new `rut-driver` gate test (since removed with the column), this
+section. Tree
 clean apart from those; scratch under
 `/tmp/opencode/batch-nmapset-round3/p1/`.
 
@@ -3555,7 +3556,7 @@ this section is the only committed artifact.
 ## Known limitations / deliberate choices
 
 - Workloads are still single files for node + qjs, but the rut side may
-  be a module dir (`NAME/{rut.jsonc, main.rut}`): the runner spawns
+  be a module dir (`NAME/{rut.jsonc, src/mod.rut}`): the runner spawns
   `rut run <dir>` and the dir's `[deps]` resolve through the module
    loader (RFC 0035) — currently the `nmapset`
   workloads (`nmapset-int`, `nmapset-str`, `nmap-hashset`,
@@ -3601,13 +3602,16 @@ this section is the only committed artifact.
 
 ## Adding a workload
 
-1. Add `benches/workloads/NAME.rut` (`entry fn main`, log `CHECKSUM
-   <value>` via the logger) and `NAME.js` (`console.log("CHECKSUM " + v)`),
+1. Add the rut side as a workload dir — `benches/workloads/NAME/`
+   (`rut.jsonc` + `src/mod.rut`; `entry fn main`, log `CHECKSUM
+   <value>` via the logger) — and `NAME.js` (`console.log("CHECKSUM " + v)`),
    computing identical results with the same integer widths / float
-   order. If the rut side needs a tree package beyond the CLI's
-   single-file auto-mount (`ink`, `pouch`) — e.g. `nmapset` — ship it as
-   a module dir `NAME/{rut.jsonc, main.rut}` with `[deps]` instead; the
-   runner then spawns `rut run <dir>`.
+   order. The runner discovers dir workloads only (`NAME/rut.jsonc` is
+   the marker — a loose `NAME.rut` file is not discovered; that
+   loose-file lane exists only in the probe binary). A tree package
+   beyond the CLI's single-file auto-mount (`ink`, `pouch`) — e.g.
+   `nmapset` — is a `[deps]` row in the dir's `rut.jsonc`; the runner
+   then spawns `rut run <dir>`.
 2. Keep the scale as a named constant in both files.
 3. Verify against an independent implementation and add the value to
    `workloads/expected.json`.
@@ -3818,8 +3822,8 @@ not run — the rule's fork sends the batch to close-out only on KEEP.
 
 ## Performance log — err-channel: the return-position destructure fusion, proven on `checkedadd` (Sep 2026)
 
-The err-channel batch's engine result (`docs/err-channel-report.md`;
-the survey `docs/err-channel-survey.md` is the design record): the
+The err-channel batch's engine result (the batch's own design
+record): the
 `(T, err)` answer pair is a `MakeRecord` heap mint, the census showed
 the mint's survivors are ~69% return-family pairs, and phase 1 deleted
 the hot shape — `ret_round` in `rut-lir`'s SROA family (post-inline):
@@ -3901,7 +3905,7 @@ passed), wasm32 exit 0, foreign stash untouched.
 ## Performance log — strbuild: the std strbuild pkg's landing (Sep 2026)
 
 New row for the strbuild batch's phase 2 (the pkg landed in phase 1,
-`ed5aa29`; docs/strbuild-survey.md §5 is the PRE-REGISTERED design this
+`ed5aa29`; the workload's own header is the PRE-REGISTERED design this
 row implements — written before any run, so the workload is not tuned
 to its own numbers). The row is the pkg's reason to exist, in both
 costs the directive names:
@@ -4154,8 +4158,9 @@ rows they ride the val column — same prim-val semantics (fresh opt per
 hit), the faster lane, no bench row pinned the sidecar-i64 shape. The
 parity tests' cross-storage control legs went vacuous (both sides now
 spell the column) and were retuned, disclosed in the test headers;
-`nmap_valcolumn.rs`'s law now pins the row spelling against the raw
-crossings — the re-seat's own proof.
+`nmap_valcolumn.rs`'s law pinned the row spelling against the raw
+crossings — the re-seat's own proof (the test left the tree with the
+column, in the value-migration batch).
 
 ## Performance log — type-name-law phase 1: the row repeal, the re-seat movers (Sep 2026)
 
@@ -4193,7 +4198,7 @@ verbatim.
 
 ## Performance log — nmapset-hostops: the host takeover (Sep 2026)
 
-The batch (docs/nmapset-hostops-survey.md, phase 0 `a445096`):
+The batch (phase 0 `a445096`):
 the user directive — *"move the impl to hostm, rut part is just a
 wrapper at all"* — landed as 18 additive fused crossings
 (`map_h{put,find,remove}_{i,u,b,s,y,sv}`, phase 1 `2f5ea84`): the host
@@ -4257,7 +4262,7 @@ k-mer rows ride the same effect at −3.4–8.9%.
 
 ## Performance log — nmap-hostvals: the values cross (Sep 2026)
 
-The batch (docs/nmap-hostvals-survey.md, phase 0 `ab9bd9e`): the
+The batch (phase 0 `ab9bd9e`): the
 directives — *"host part impl, I recommend use HashMap"*, *"value can
 cross with opaque"*, *"rename to HostOpaque"*, *"avoid copy and
 allocation"*, *"remove 'char' entirely ... not clean"* — landed as
@@ -4265,8 +4270,7 @@ five code phases: the char exorcism (VERSION 12, phase 1 `8352b50`),
 the Opaque store repr (the anchor cell dies, behavior frozen, phase 2
 `2a4716a`), the any arms (additive, phase 3 `6571549`), the real-
 HashMap core (phase 4 `8340c74`), and the value migration (the
-sidecar dies, phase 5 `365e6c2`). The full record:
-`docs/nmap-hostvals-report.md`. **Checksums IMMOVABLE all batch** —
+sidecar dies, phase 5 `365e6c2`). **Checksums IMMOVABLE all batch** —
 expected.json untouched; the closing gate was ALL 28 rows × {rut,
 node, qjs} = 85 result rows, 0 mismatches (family pins: nmapset-int
 734932704, nmapset-str 1264308351, nmap-hashset 21500055,
@@ -4336,7 +4340,7 @@ revisit.
 
 ## Performance log — nmapset-borrow-probe: the borrowed probe (Sep 2026)
 
-The batch (`docs/nmapset-borrow-probe-survey.md` phase 0 `d1f78de`,
+The batch (phase 0 `d1f78de`,
 the core phase 1 `392fa6a`): every `s`/`sv`/`y`/any-lane probe now
 borrows — `hashbrown::HashTable<(KeyVal, Entry)>` (the runtime's first
 external dep, `default-features = false`: no ahash, no hasher trait at

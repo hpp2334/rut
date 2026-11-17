@@ -10,7 +10,7 @@ use json::{
 fn assert(c: bool, m: str) { if (!c) { panic(m); } }
 
 // json-roundtrip — the std json pkg's bench row (rut-json batch,
-// phase 2; docs/rut-json-survey.md §2.11 is this file's contract).
+// phase 2; this file is its contract — the §2.11 design as written).
 //
 // The document generator is json-decode's gen_doc ported VERBATIM (same
 // LCG, seed 42, same draws, same order — the generator is data, and
@@ -41,7 +41,7 @@ fn assert(c: bool, m: str) { if (!c) { panic(m); } }
 // decimal. Every rep asserts against the first.
 
 // ---------------------------------------------------------------- LCG ---
-// (verbatim from json-decode/main.rut)
+// (verbatim from json-decode/src/mod.rut)
 
 fn lcg(x: u32) -> u32 {
     return x.wrapping_mul(1103515245).wrapping_add(12345);
@@ -70,7 +70,7 @@ fn val_text(sign: u32, mag: u32) -> str {
 }
 
 // ---------------------------------------------------------------- gen ---
-// (verbatim from json-decode/main.rut — every record draws in the fixed
+// (verbatim from json-decode/src/mod.rut — every record draws in the fixed
 // order: id, name, active, score, six vals, tags, meta (rev + kind))
 
 fn gen_doc(rows: i32, vals_n: i32, alpha: Vec<str>) -> str {

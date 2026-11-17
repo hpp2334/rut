@@ -6,10 +6,10 @@
   //
   // The manifest-uniformity law folded this file into a pkg dir; it still
   // rides NO deps row anywhere — BOTH lanes register it by hand
-  // (`register_web_surface` over the include_str!'d source, the
-  // `mount_std_core` precedent), so the two-package law's count is
-  // unchanged: the CONSUMER packages are biz and ui, and the host crossing
-  // is bound, never mounted.
+  // (the embedder's `web_pkg`, built from this include_str!'d source,
+  // plus the consumers' structural presence-only `web` row), so the
+  // two-package law's count is unchanged: the CONSUMER packages are biz
+  // and ui, and the host crossing is bound, never mounted.
   "name": "web",
   "type": "host",
   "entry": {

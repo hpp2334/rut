@@ -21,7 +21,7 @@ function lcgSeq(n) {
 }
 
 // get-or-insert one 12-mer count, then 100 generated fragment probes —
-// the same two-shapes-of-churn as count12 in main.rut.
+// the same two-shapes-of-churn as count12 in mod.rut.
 function count12(m, seq, n) {
   for (let i = 0; i < n - 11; i++) {
     const kmer = seq.slice(i, i + 12);
